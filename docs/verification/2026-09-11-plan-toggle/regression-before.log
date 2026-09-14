@@ -1,0 +1,58 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+____ test_optional_always_stage_can_be_unselected_before_plan_creation[poc] ____
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+P = <module '_aidlc_studio_backend.studio.plan' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/plan.py'>
+deps = namespace(store=<_aidlc_studio_backend.studio.storage.Storage object at 0x10c66b770>, activity=<_aidlc_studio_backend..../folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-497/test_optional_always_stage_can0/denied.log'))
+scope = 'poc'
+
+    @pytest.mark.parametrize("scope", ["poc", "express"])
+    def test_optional_always_stage_can_be_unselected_before_plan_creation(studio, P, deps, scope):
+        repo = engine_only_repo(studio, deps, "payload")
+        baseline = deps.svc.effective_plan(repo, ".kiro", request(P, scope, project_type="Greenfield"))
+        optional = [s.slug for s in baseline.stages if s.execution == "ALWAYS" and not s.enabled]
+        assert optional
+        for slug in optional:
+            selected = deps.svc.effective_plan(
+                repo, ".kiro", request(P, scope, project_type="Greenfield", overrides={slug: True})
+            )
+            assert selected.stage(slug).enabled
+>           assert not selected.stage(slug).locked, (slug, selected.stage(slug).lock_reason)
+E           AssertionError: ('scope-definition', 'always')
+E           assert not True
+E            +  where True = PlanStage(slug='scope-definition', number='1.4', name='Scope Definition', phase='ideation', execution='ALWAYS', in_gri..._on=('intent-capture', 'feasibility'), conditional_on=None, state=None, mode='inline', summary_confirmation='required').locked
+E            +    where PlanStage(slug='scope-definition', number='1.4', name='Scope Definition', phase='ideation', execution='ALWAYS', in_gri..._on=('intent-capture', 'feasibility'), conditional_on=None, state=None, mode='inline', summary_confirmation='required') = stage('scope-definition')
+E            +      where stage = EffectivePlan(request=PlanRequest(repo_id='r_1', space='default', scope='poc', depth='', test_strategy=None, review_ca...lder-map', 'technology-stack', 'traceability', 'unit-test-instructions'), graph_stage_count=33, engine_version='2.6.2').stage
+
+tests/test_plan.py:272: AssertionError
+__ test_optional_always_stage_can_be_unselected_before_plan_creation[express] __
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+P = <module '_aidlc_studio_backend.studio.plan' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/plan.py'>
+deps = namespace(store=<_aidlc_studio_backend.studio.storage.Storage object at 0x10c7c8050>, activity=<_aidlc_studio_backend..../folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-497/test_optional_always_stage_can1/denied.log'))
+scope = 'express'
+
+    @pytest.mark.parametrize("scope", ["poc", "express"])
+    def test_optional_always_stage_can_be_unselected_before_plan_creation(studio, P, deps, scope):
+        repo = engine_only_repo(studio, deps, "payload")
+        baseline = deps.svc.effective_plan(repo, ".kiro", request(P, scope, project_type="Greenfield"))
+        optional = [s.slug for s in baseline.stages if s.execution == "ALWAYS" and not s.enabled]
+        assert optional
+        for slug in optional:
+            selected = deps.svc.effective_plan(
+                repo, ".kiro", request(P, scope, project_type="Greenfield", overrides={slug: True})
+            )
+            assert selected.stage(slug).enabled
+>           assert not selected.stage(slug).locked, (slug, selected.stage(slug).lock_reason)
+E           AssertionError: ('intent-capture', 'always')
+E           assert not True
+E            +  where True = PlanStage(slug='intent-capture', number='1.1', name='Intent Capture & Framing', phase='ideation', execution='ALWAYS', ...estions'), consumes=(), depends_on=(), conditional_on=None, state=None, mode='inline', summary_confirmation='required').locked
+E            +    where PlanStage(slug='intent-capture', number='1.1', name='Intent Capture & Framing', phase='ideation', execution='ALWAYS', ...estions'), consumes=(), depends_on=(), conditional_on=None, state=None, mode='inline', summary_confirmation='required') = stage('intent-capture')
+E            +      where stage = EffectivePlan(request=PlanRequest(repo_id='r_1', space='default', scope='express', depth='', test_strategy=None, revie...logy-stack', 'traceability', 'tracing-config', 'unit-test-instructions'), graph_stage_count=33, engine_version='2.6.2').stage
+
+tests/test_plan.py:272: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_plan.py::test_optional_always_stage_can_be_unselected_before_plan_creation[poc]
+FAILED tests/test_plan.py::test_optional_always_stage_can_be_unselected_before_plan_creation[express]
+2 failed, 73 deselected in 0.99s

@@ -1,0 +1,40 @@
+{
+  "transaction": "tx_151d3af8e82eb619",
+  "receipt": "rc_813d236341ac14bc",
+  "critical_files_unchanged": 18,
+  "changed": [],
+  "approval": {
+    "ok": true,
+    "unit": null,
+    "reason": "approved",
+    "planExists": true,
+    "instructionsExist": true,
+    "approved": true,
+    "contractValid": true,
+    "fingerprintValid": true,
+    "receiptValid": true,
+    "contractHash": "sha256:f7a3d3375d6bbf8501153f796d0b0bed11c44c1505dbc4243d2b67c7703fe4f1",
+    "approvalFingerprint": "sha256:1e4746dd51bf89a8abe43e60555d4892380b12e15e444251e0bec838c79c62c7",
+    "directiveEpoch": "sha256:636daf72bcb71d9ab8548f48e4b6cdadde238abc54239e60349e02be8d7c2207"
+  },
+  "hashes": {
+    "README.md": "942477dbef5d3417eebe1d1a1bb8d50bef39c402e88c1f02197b7ef0bc98bcf4",
+    "AGENTS.md": "b86c7f898a6ad4be703e2fb9ab3c5e11b8604092d2ecb0be23cb660b03005840",
+    ".gitignore": "270fd2c0c40ab2d36dd3b0c24a576da8a030382685d19b9273b7740355500319",
+    "converter.py": "c41cc19021fbeb17c93d81f778abb8a5a750032edff2d155983c9ee3ea44483b",
+    "test_converter.py": "80f28d2cdd62808d9a2f6f14a52915223a2e8aba3a035e240fd5faacc87fc214",
+    "aidlc/spaces/default/intents/260910-precision-fix/aidlc-state.md": "e19f5956da1d2e1775fa7ed7779dd0cefc4673ca98d23dc844e7d82fe518dd48",
+    "aidlc/spaces/default/intents/260910-precision-fix/.aidlc-active-directive.json": "ede5cfea492a74351796509e8973deb70a3125c5eb67a14c9124ee9fa76fc065",
+    "aidlc/spaces/default/intents/260910-precision-fix/runtime-graph.json": "c02b8e2b919e4fbd35855876fb0f451e48a74b524fe37e1d90507d000c0e6c18",
+    "aidlc/spaces/default/intents/260910-precision-fix/construction/code-generation/code-generation-plan.md": "ed13d33063b6dcfc8e665ca2dda7dd0b9b6fde2022daa200f2a78f608de4b902",
+    "aidlc/spaces/default/intents/260910-precision-fix/construction/code-generation/code-generation-questions.md": "022e0e50e935099fbc29d9967e6bb75b7caf44def5c345225639d4ee08ed1336",
+    "aidlc/spaces/default/intents/260910-precision-fix/construction/code-generation/source-manifest.json": "7f5565176db517303fd3d4b0719718e79943acae58b56ff72b5f3b077c9083dd",
+    "aidlc/spaces/default/intents/260910-precision-fix/construction/code-generation/unit-test-instructions.md": "c682186de4ea815869393e643cd2402fe68159e7917cd9a87ba1e26e5fb2c0b0",
+    "aidlc/spaces/default/intents/260910-precision-fix/construction/code-generation/code-summary.md": "c0609fcedf38fdfee7644feccde8c0cc51c27231b0e06ab8b9d9c6dbc986a83a",
+    "aidlc/spaces/default/intents/260910-precision-fix/construction/code-generation/memory.md": "5f4b6e40ee54dff6750d26db657f3610d704f85dc42dca626c4fbef62422bf16",
+    "aidlc/spaces/default/intents/260910-precision-fix/construction/code-generation/traceability.json": "b9a55b5668865b866306759ded7b6cbc3cf93c95dad71dec947b835cc59dc2f1",
+    "aidlc/spaces/default/intents/260910-precision-fix/audit/603e5f4a8072-df32d2b4a302.md": "fc383a79cb2978542cad9e138befc02a40f46924aa613eea0c699e90fb199ba9",
+    "aidlc/.aidlc-sessions/plan-approval/receipt-a54eccda26da93474ac6c16a3bd663b7c29e5f8edc109152a405809337568209.json": "a829d39ce7592b05e20c11ff1023cb2b066ec822365d5324b464b6ef9b1f752a",
+    ".kiro/settings/cli.json": "fe13a8e363a082fecdc7894b63016954fc0298ca762200c7ce7184dba4785d93"
+  }
+}

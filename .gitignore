@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+ui/node_modules/
+.venv/
+.claude/*.local.json
+.env
+.env.*
+!.env.example

@@ -1,0 +1,102 @@
+{
+  "name": "aidlc-studio",
+  "version": "1.0.0",
+  "displayName": "AI-DLC Studio",
+  "description": "The visual operating surface for AI-DLC Workflows: one Action Center for every approval gate, question and recovery decision across your repositories, with the evidence beside each decision. Studio reads AI-DLC's own files and sends every decision through the intent's own conversation; it never edits AI-DLC state.",
+  "author": "ychchen",
+  "license": "Apache-2.0",
+  "minKiroCrewVersion": "0.3.0",
+  "tags": [
+    "aidlc",
+    "developer-tools",
+    "workflows",
+    "automation"
+  ],
+  "jobFamilies": [
+    "software-engineering"
+  ],
+  "highlights": [
+    "One cross-repository queue of everything AI-DLC is waiting on you for",
+    "Every gate decision shown with its artifacts, acceptance criteria and reviewer findings",
+    "Five-phase Workflow Map with a stage inspector, per-unit Construction lanes and dependency overlay",
+    "Transactional install and upgrade of the bundled AI-DLC v2 harness, with receipts and rollback",
+    "Plan composer that shows exact stage, gate and artifact counts before you spend a turn"
+  ],
+  "icon": "GitBranch",
+  "iconPath": "assets/icon-512.png",
+  "heroImage": "assets/hero-light.svg",
+  "heroImageDark": "assets/hero-dark.svg",
+  "heroImageDetail": "assets/hero-detail-light.svg",
+  "heroImageDetailDark": "assets/hero-detail-dark.svg",
+  "screenshots": [
+    "assets/screenshots/action-center-gate.png",
+    "assets/screenshots/workflow-map.png",
+    "assets/screenshots/repos.png"
+  ],
+  "agents": [
+    "agents/advisor.json"
+  ],
+  "backend": {
+    "hooks": {
+      "routes": "backend.routes:register_routes",
+      "on_startup": "backend.hooks:on_startup",
+      "on_shutdown": "backend.hooks:on_shutdown"
+    }
+  },
+  "ui": {
+    "entry": "dist/index.mjs",
+    "pages": [
+      {
+        "route": "/apps/aidlc-studio",
+        "label": "AI-DLC Studio",
+        "icon": "GitBranch",
+        "iconUrl": "icon.svg"
+      }
+    ],
+    "sidebar": {
+      "section": "Apps",
+      "order": 10
+    }
+  },
+  "permissions": {
+    "api": [
+      "/api/apps/aidlc-studio",
+      "/api/chat"
+    ],
+    "events": [
+      "aidlc-studio:action",
+      "aidlc-studio:repo",
+      "aidlc-studio:transaction"
+    ],
+    "mcpTools": [],
+    "storage": true,
+    "spawn": true,
+    "cron": false,
+    "network": false,
+    "memory": ""
+  },
+  "dependencies": {
+    "commands": [],
+    "optionalCommands": [
+      "bun",
+      "git"
+    ]
+  },
+  "platform": {
+    "os": [
+      "macos",
+      "linux"
+    ],
+    "installMode": "server",
+    "requiresDesktopApp": false
+  },
+  "extra": {
+    "bundledAidlc": {
+      "engineVersion": "2.7.1",
+      "harness": "kiro",
+      "manifest": "payload/manifest.json",
+      "license": "MIT-0",
+      "upstream": "https://github.com/awslabs/aidlc-workflows"
+    }
+  }
+}

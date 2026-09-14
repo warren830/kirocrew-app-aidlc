@@ -1,0 +1,208 @@
+FFFFFF                                                                   [100%]
+=================================== FAILURES ===================================
+________ test_uninstall_preserves_changed_mutable_config[False-format] _________
+
+h = <test_installer.Harness object at 0x10a8e5d60>
+installed = (PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-394/test_uninstall_prese...stall_status='installed', installed_engine_version='2.6.2', engine_dir='.kiro', receipt_version='rc_0000000000000001'))
+change = 'format', rollback = False
+
+    @pytest.mark.parametrize("change", ["format", "space_resources", "user_content"])
+    @pytest.mark.parametrize("rollback", [False, True])
+    def test_uninstall_preserves_changed_mutable_config(h, installed, change, rollback):
+        root, repo = installed
+        path = ".kiro/agents/aidlc.json"
+        target = root / path
+        content = json.loads(target.read_bytes())
+        if change == "format":
+            changed = json.dumps(content, indent=2).encode() + b"\n"
+        elif change == "space_resources":
+            content["resources"] = ["aidlc/spaces/team/memory"]
+            changed = json.dumps(content).encode() + b"\n"
+        else:
+            changed = b"User-maintained agent configuration\n"
+        assert changed != target.read_bytes()
+        target.write_bytes(changed)
+        before = tree(root)
+        workflow = tree(root / "aidlc")
+        receipt = h.installer.current_receipt(repo.repo_id)
+    
+        plan = h.installer.preview(repo, "uninstall")
+        entry = next(e for e in plan.entries if e.path == path)
+>       assert not plan.blocking and not entry.blocking
+E       AssertionError: assert (not True)
+E        +  where True = PreviewPlan(repo_id='r_1', kind='uninstall', engine_from='2.6.2', engine_to='', studio_version='1.0.0', payload_digest...id=None, rollback_receipt_digest=None, recovery_transaction_id=None, recovery_kind=None, recovery_evidence_digest=None).blocking
+
+tests/test_installer_uninstall.py:116: AssertionError
+____ test_uninstall_preserves_changed_mutable_config[False-space_resources] ____
+
+h = <test_installer.Harness object at 0x10a8e5610>
+installed = (PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-394/test_uninstall_prese...stall_status='installed', installed_engine_version='2.6.2', engine_dir='.kiro', receipt_version='rc_0000000000000001'))
+change = 'space_resources', rollback = False
+
+    @pytest.mark.parametrize("change", ["format", "space_resources", "user_content"])
+    @pytest.mark.parametrize("rollback", [False, True])
+    def test_uninstall_preserves_changed_mutable_config(h, installed, change, rollback):
+        root, repo = installed
+        path = ".kiro/agents/aidlc.json"
+        target = root / path
+        content = json.loads(target.read_bytes())
+        if change == "format":
+            changed = json.dumps(content, indent=2).encode() + b"\n"
+        elif change == "space_resources":
+            content["resources"] = ["aidlc/spaces/team/memory"]
+            changed = json.dumps(content).encode() + b"\n"
+        else:
+            changed = b"User-maintained agent configuration\n"
+        assert changed != target.read_bytes()
+        target.write_bytes(changed)
+        before = tree(root)
+        workflow = tree(root / "aidlc")
+        receipt = h.installer.current_receipt(repo.repo_id)
+    
+        plan = h.installer.preview(repo, "uninstall")
+        entry = next(e for e in plan.entries if e.path == path)
+>       assert not plan.blocking and not entry.blocking
+E       AssertionError: assert (not True)
+E        +  where True = PreviewPlan(repo_id='r_1', kind='uninstall', engine_from='2.6.2', engine_to='', studio_version='1.0.0', payload_digest...id=None, rollback_receipt_digest=None, recovery_transaction_id=None, recovery_kind=None, recovery_evidence_digest=None).blocking
+
+tests/test_installer_uninstall.py:116: AssertionError
+_____ test_uninstall_preserves_changed_mutable_config[False-user_content] ______
+
+h = <test_installer.Harness object at 0x10a955c10>
+installed = (PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-394/test_uninstall_prese...stall_status='installed', installed_engine_version='2.6.2', engine_dir='.kiro', receipt_version='rc_0000000000000001'))
+change = 'user_content', rollback = False
+
+    @pytest.mark.parametrize("change", ["format", "space_resources", "user_content"])
+    @pytest.mark.parametrize("rollback", [False, True])
+    def test_uninstall_preserves_changed_mutable_config(h, installed, change, rollback):
+        root, repo = installed
+        path = ".kiro/agents/aidlc.json"
+        target = root / path
+        content = json.loads(target.read_bytes())
+        if change == "format":
+            changed = json.dumps(content, indent=2).encode() + b"\n"
+        elif change == "space_resources":
+            content["resources"] = ["aidlc/spaces/team/memory"]
+            changed = json.dumps(content).encode() + b"\n"
+        else:
+            changed = b"User-maintained agent configuration\n"
+        assert changed != target.read_bytes()
+        target.write_bytes(changed)
+        before = tree(root)
+        workflow = tree(root / "aidlc")
+        receipt = h.installer.current_receipt(repo.repo_id)
+    
+        plan = h.installer.preview(repo, "uninstall")
+        entry = next(e for e in plan.entries if e.path == path)
+>       assert not plan.blocking and not entry.blocking
+E       AssertionError: assert (not True)
+E        +  where True = PreviewPlan(repo_id='r_1', kind='uninstall', engine_from='2.6.2', engine_to='', studio_version='1.0.0', payload_digest...id=None, rollback_receipt_digest=None, recovery_transaction_id=None, recovery_kind=None, recovery_evidence_digest=None).blocking
+
+tests/test_installer_uninstall.py:116: AssertionError
+_________ test_uninstall_preserves_changed_mutable_config[True-format] _________
+
+h = <test_installer.Harness object at 0x10a8e6000>
+installed = (PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-394/test_uninstall_prese...stall_status='installed', installed_engine_version='2.6.2', engine_dir='.kiro', receipt_version='rc_0000000000000001'))
+change = 'format', rollback = True
+
+    @pytest.mark.parametrize("change", ["format", "space_resources", "user_content"])
+    @pytest.mark.parametrize("rollback", [False, True])
+    def test_uninstall_preserves_changed_mutable_config(h, installed, change, rollback):
+        root, repo = installed
+        path = ".kiro/agents/aidlc.json"
+        target = root / path
+        content = json.loads(target.read_bytes())
+        if change == "format":
+            changed = json.dumps(content, indent=2).encode() + b"\n"
+        elif change == "space_resources":
+            content["resources"] = ["aidlc/spaces/team/memory"]
+            changed = json.dumps(content).encode() + b"\n"
+        else:
+            changed = b"User-maintained agent configuration\n"
+        assert changed != target.read_bytes()
+        target.write_bytes(changed)
+        before = tree(root)
+        workflow = tree(root / "aidlc")
+        receipt = h.installer.current_receipt(repo.repo_id)
+    
+        plan = h.installer.preview(repo, "uninstall")
+        entry = next(e for e in plan.entries if e.path == path)
+>       assert not plan.blocking and not entry.blocking
+E       AssertionError: assert (not True)
+E        +  where True = PreviewPlan(repo_id='r_1', kind='uninstall', engine_from='2.6.2', engine_to='', studio_version='1.0.0', payload_digest...id=None, rollback_receipt_digest=None, recovery_transaction_id=None, recovery_kind=None, recovery_evidence_digest=None).blocking
+
+tests/test_installer_uninstall.py:116: AssertionError
+____ test_uninstall_preserves_changed_mutable_config[True-space_resources] _____
+
+h = <test_installer.Harness object at 0x10a9997c0>
+installed = (PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-394/test_uninstall_prese...stall_status='installed', installed_engine_version='2.6.2', engine_dir='.kiro', receipt_version='rc_0000000000000001'))
+change = 'space_resources', rollback = True
+
+    @pytest.mark.parametrize("change", ["format", "space_resources", "user_content"])
+    @pytest.mark.parametrize("rollback", [False, True])
+    def test_uninstall_preserves_changed_mutable_config(h, installed, change, rollback):
+        root, repo = installed
+        path = ".kiro/agents/aidlc.json"
+        target = root / path
+        content = json.loads(target.read_bytes())
+        if change == "format":
+            changed = json.dumps(content, indent=2).encode() + b"\n"
+        elif change == "space_resources":
+            content["resources"] = ["aidlc/spaces/team/memory"]
+            changed = json.dumps(content).encode() + b"\n"
+        else:
+            changed = b"User-maintained agent configuration\n"
+        assert changed != target.read_bytes()
+        target.write_bytes(changed)
+        before = tree(root)
+        workflow = tree(root / "aidlc")
+        receipt = h.installer.current_receipt(repo.repo_id)
+    
+        plan = h.installer.preview(repo, "uninstall")
+        entry = next(e for e in plan.entries if e.path == path)
+>       assert not plan.blocking and not entry.blocking
+E       AssertionError: assert (not True)
+E        +  where True = PreviewPlan(repo_id='r_1', kind='uninstall', engine_from='2.6.2', engine_to='', studio_version='1.0.0', payload_digest...id=None, rollback_receipt_digest=None, recovery_transaction_id=None, recovery_kind=None, recovery_evidence_digest=None).blocking
+
+tests/test_installer_uninstall.py:116: AssertionError
+______ test_uninstall_preserves_changed_mutable_config[True-user_content] ______
+
+h = <test_installer.Harness object at 0x10a9564e0>
+installed = (PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-394/test_uninstall_prese...stall_status='installed', installed_engine_version='2.6.2', engine_dir='.kiro', receipt_version='rc_0000000000000001'))
+change = 'user_content', rollback = True
+
+    @pytest.mark.parametrize("change", ["format", "space_resources", "user_content"])
+    @pytest.mark.parametrize("rollback", [False, True])
+    def test_uninstall_preserves_changed_mutable_config(h, installed, change, rollback):
+        root, repo = installed
+        path = ".kiro/agents/aidlc.json"
+        target = root / path
+        content = json.loads(target.read_bytes())
+        if change == "format":
+            changed = json.dumps(content, indent=2).encode() + b"\n"
+        elif change == "space_resources":
+            content["resources"] = ["aidlc/spaces/team/memory"]
+            changed = json.dumps(content).encode() + b"\n"
+        else:
+            changed = b"User-maintained agent configuration\n"
+        assert changed != target.read_bytes()
+        target.write_bytes(changed)
+        before = tree(root)
+        workflow = tree(root / "aidlc")
+        receipt = h.installer.current_receipt(repo.repo_id)
+    
+        plan = h.installer.preview(repo, "uninstall")
+        entry = next(e for e in plan.entries if e.path == path)
+>       assert not plan.blocking and not entry.blocking
+E       AssertionError: assert (not True)
+E        +  where True = PreviewPlan(repo_id='r_1', kind='uninstall', engine_from='2.6.2', engine_to='', studio_version='1.0.0', payload_digest...id=None, rollback_receipt_digest=None, recovery_transaction_id=None, recovery_kind=None, recovery_evidence_digest=None).blocking
+
+tests/test_installer_uninstall.py:116: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_installer_uninstall.py::test_uninstall_preserves_changed_mutable_config[False-format]
+FAILED tests/test_installer_uninstall.py::test_uninstall_preserves_changed_mutable_config[False-space_resources]
+FAILED tests/test_installer_uninstall.py::test_uninstall_preserves_changed_mutable_config[False-user_content]
+FAILED tests/test_installer_uninstall.py::test_uninstall_preserves_changed_mutable_config[True-format]
+FAILED tests/test_installer_uninstall.py::test_uninstall_preserves_changed_mutable_config[True-space_resources]
+FAILED tests/test_installer_uninstall.py::test_uninstall_preserves_changed_mutable_config[True-user_content]
+6 failed, 65 deselected in 4.10s

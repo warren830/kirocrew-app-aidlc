@@ -1,0 +1,100 @@
+FFFFF                                                                    [100%]
+=================================== FAILURES ===================================
+__________ test_h3_question_parser_keeps_all_three_pending_boundaries __________
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+
+    def test_h3_question_parser_keeps_all_three_pending_boundaries(studio):
+        parsed = studio.aidlc_reader.parse_questions_file(UNPARSED_QUESTIONS, "questions.md", "0" * 64)
+>       assert parsed.pending_count == 3
+E       AssertionError: assert 0 == 3
+E        +  where 0 = QuestionsFile(relpath='questions.md', sha256='0000000000000000000000000000000000000000000000000000000000000000', quest...onfirmation=None, plan_approval=None, pending_count=0, pending_checkpoint=None, source_language_hint=None, origin=None).pending_count
+
+tests/test_audit_questions.py:245: AssertionError
+_ test_h3_question_parser_generic_headings_cannot_supply_options_or_answers[# Appendix] _
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+heading = '# Appendix'
+
+    @pytest.mark.parametrize("heading", ["# Appendix", "## Sources", "### Explanation", "#### Rationale"])
+    def test_h3_question_parser_generic_headings_cannot_supply_options_or_answers(studio, heading):
+        text = (
+            "## Q1. First question\n\n- A. First choice\n\n"
+            f"{heading}\n\n- B. Explanatory example, not a choice\n\n[Answer]: Not a real answer\n\n"
+            "### Q2 — Second question\n\n- C. Second choice\n\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1, 2]
+E       assert [1] == [1, 2]
+E         
+E         Right contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:267: AssertionError
+_ test_h3_question_parser_generic_headings_cannot_supply_options_or_answers[## Sources] _
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+heading = '## Sources'
+
+    @pytest.mark.parametrize("heading", ["# Appendix", "## Sources", "### Explanation", "#### Rationale"])
+    def test_h3_question_parser_generic_headings_cannot_supply_options_or_answers(studio, heading):
+        text = (
+            "## Q1. First question\n\n- A. First choice\n\n"
+            f"{heading}\n\n- B. Explanatory example, not a choice\n\n[Answer]: Not a real answer\n\n"
+            "### Q2 — Second question\n\n- C. Second choice\n\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1, 2]
+E       assert [1] == [1, 2]
+E         
+E         Right contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:267: AssertionError
+_ test_h3_question_parser_generic_headings_cannot_supply_options_or_answers[### Explanation] _
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+heading = '### Explanation'
+
+    @pytest.mark.parametrize("heading", ["# Appendix", "## Sources", "### Explanation", "#### Rationale"])
+    def test_h3_question_parser_generic_headings_cannot_supply_options_or_answers(studio, heading):
+        text = (
+            "## Q1. First question\n\n- A. First choice\n\n"
+            f"{heading}\n\n- B. Explanatory example, not a choice\n\n[Answer]: Not a real answer\n\n"
+            "### Q2 — Second question\n\n- C. Second choice\n\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1, 2]
+E       assert [1] == [1, 2]
+E         
+E         Right contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:267: AssertionError
+_ test_h3_question_parser_generic_headings_cannot_supply_options_or_answers[#### Rationale] _
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+heading = '#### Rationale'
+
+    @pytest.mark.parametrize("heading", ["# Appendix", "## Sources", "### Explanation", "#### Rationale"])
+    def test_h3_question_parser_generic_headings_cannot_supply_options_or_answers(studio, heading):
+        text = (
+            "## Q1. First question\n\n- A. First choice\n\n"
+            f"{heading}\n\n- B. Explanatory example, not a choice\n\n[Answer]: Not a real answer\n\n"
+            "### Q2 — Second question\n\n- C. Second choice\n\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1, 2]
+E       assert [1] == [1, 2]
+E         
+E         Right contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:267: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_audit_questions.py::test_h3_question_parser_keeps_all_three_pending_boundaries
+FAILED tests/test_audit_questions.py::test_h3_question_parser_generic_headings_cannot_supply_options_or_answers[# Appendix]
+FAILED tests/test_audit_questions.py::test_h3_question_parser_generic_headings_cannot_supply_options_or_answers[## Sources]
+FAILED tests/test_audit_questions.py::test_h3_question_parser_generic_headings_cannot_supply_options_or_answers[### Explanation]
+FAILED tests/test_audit_questions.py::test_h3_question_parser_generic_headings_cannot_supply_options_or_answers[#### Rationale]
+5 failed, 76 deselected in 0.44s

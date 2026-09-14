@@ -1,0 +1,16 @@
+[
+  {
+    "uuid": "01a00133-9901-7fdf-815d-5ae4e6e4be02",
+    "slug": "review-major-remediation",
+    "dirName": "260814-review-major-remediation",
+    "scope": "review-major-remediation",
+    "status": "in-flight"
+  },
+  {
+    "uuid": "01a047b1-c605-7f76-927a-8193f101d918",
+    "slug": "kiro-impact-poc",
+    "dirName": "260828-kiro-impact-poc",
+    "scope": "poc",
+    "status": "complete"
+  }
+]

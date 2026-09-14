@@ -1,0 +1,22 @@
+[
+  {
+    "slot": "aidlc-studio-r_bf0ffb190bdc-260911-grouped-proof",
+    "old_title": "QA · grouped answer compatibility",
+    "title": "验证已结束 · 260911-grouped-proof"
+  },
+  {
+    "slot": "aidlc-studio-r_bf0ffb190bdc-260911-grouped-proof-v2",
+    "old_title": "QA · grouped answer v2",
+    "title": "验证已结束 · 260911-grouped-proof-v2"
+  },
+  {
+    "slot": "aidlc-studio-r_bf0ffb190bdc-260911-grouped-ui-proof",
+    "old_title": "QA · live grouped answer form",
+    "title": "验证已结束 · 260911-grouped-ui-proof"
+  },
+  {
+    "slot": "aidlc-studio-r_bf0ffb190bdc-260911-grouped-ui-final",
+    "old_title": "QA · live grouped answer form",
+    "title": "验证已结束 · 260911-grouped-ui-final"
+  }
+]

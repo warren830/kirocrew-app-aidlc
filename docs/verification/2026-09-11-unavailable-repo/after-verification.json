@@ -1,0 +1,10 @@
+{
+  "mode": "after",
+  "errors": [],
+  "blocked": [
+    "/api/agents/sync",
+    "/api/instances/kiro-crew-cloud-kc-490c8c/connect",
+    "/api/instances/kiro-crew-cloud-kc-490c8c/connect"
+  ],
+  "approval_sent": false
+}

@@ -1,0 +1,128 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+__ test_other_intent_or_admin_lease_is_busy_not_file_disagreement[execution] ___
+
+world = namespace(S=namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-a...n=<conftest.FakeSpawnSDK object at 0x107b14dd0>, health=AppHealthStatus(status='healthy', issues=[], last_checked='')))
+A = <module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/actions.py'>
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+kind = 'execution'
+
+    @pytest.mark.parametrize("kind", ["execution", "admin"])
+    def test_other_intent_or_admin_lease_is_busy_not_file_disagreement(world, A, studio, kind):
+        async def scenario():
+            await bind(world)
+            gate = pick(await seed(world), "gate")
+            fields = {"repo_id": REPO_ID}
+            if kind == "execution":
+                fields.update(action_id="a_other", intent_uuid="01a00000-0000-7000-8000-000000000002")
+            else:
+                fields.update(operation_type="install", transaction_id="tx_other")
+            held = world.store.lease_acquire(kind, IDENTITY, fields)
+            with pytest.raises(studio.errors.StudioError) as exc:
+                await approve(world, A, rec=gate)
+            assert exc.value.code == "repo_busy"
+            owner = exc.value.details["owner"]
+            assert owner["action_id"] == "a_other" if kind == "execution" else owner["operation_type"] == "install"
+            assert leases_held(world)[0].generation == held.generation
+            assert (await world.broker.get(gate.action_id)).delivery_id is None
+>       run(scenario())
+
+tests/test_actions.py:1377: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_actions.py:54: in run
+    return asyncio.run(coro)
+           ^^^^^^^^^^^^^^^^^
+/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def scenario():
+        await bind(world)
+        gate = pick(await seed(world), "gate")
+        fields = {"repo_id": REPO_ID}
+        if kind == "execution":
+            fields.update(action_id="a_other", intent_uuid="01a00000-0000-7000-8000-000000000002")
+        else:
+            fields.update(operation_type="install", transaction_id="tx_other")
+        held = world.store.lease_acquire(kind, IDENTITY, fields)
+        with pytest.raises(studio.errors.StudioError) as exc:
+            await approve(world, A, rec=gate)
+>       assert exc.value.code == "repo_busy"
+E       AssertionError: assert 'state_inconsistent' == 'repo_busy'
+E         
+E         - repo_busy
+E         + state_inconsistent
+
+tests/test_actions.py:1372: AssertionError
+____ test_other_intent_or_admin_lease_is_busy_not_file_disagreement[admin] _____
+
+world = namespace(S=namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-a...n=<conftest.FakeSpawnSDK object at 0x107901c40>, health=AppHealthStatus(status='healthy', issues=[], last_checked='')))
+A = <module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/actions.py'>
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+kind = 'admin'
+
+    @pytest.mark.parametrize("kind", ["execution", "admin"])
+    def test_other_intent_or_admin_lease_is_busy_not_file_disagreement(world, A, studio, kind):
+        async def scenario():
+            await bind(world)
+            gate = pick(await seed(world), "gate")
+            fields = {"repo_id": REPO_ID}
+            if kind == "execution":
+                fields.update(action_id="a_other", intent_uuid="01a00000-0000-7000-8000-000000000002")
+            else:
+                fields.update(operation_type="install", transaction_id="tx_other")
+            held = world.store.lease_acquire(kind, IDENTITY, fields)
+            with pytest.raises(studio.errors.StudioError) as exc:
+                await approve(world, A, rec=gate)
+            assert exc.value.code == "repo_busy"
+            owner = exc.value.details["owner"]
+            assert owner["action_id"] == "a_other" if kind == "execution" else owner["operation_type"] == "install"
+            assert leases_held(world)[0].generation == held.generation
+            assert (await world.broker.get(gate.action_id)).delivery_id is None
+>       run(scenario())
+
+tests/test_actions.py:1377: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_actions.py:54: in run
+    return asyncio.run(coro)
+           ^^^^^^^^^^^^^^^^^
+/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/lib/python3.12/asyncio/runners.py:195: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    async def scenario():
+        await bind(world)
+        gate = pick(await seed(world), "gate")
+        fields = {"repo_id": REPO_ID}
+        if kind == "execution":
+            fields.update(action_id="a_other", intent_uuid="01a00000-0000-7000-8000-000000000002")
+        else:
+            fields.update(operation_type="install", transaction_id="tx_other")
+        held = world.store.lease_acquire(kind, IDENTITY, fields)
+        with pytest.raises(studio.errors.StudioError) as exc:
+            await approve(world, A, rec=gate)
+>       assert exc.value.code == "repo_busy"
+E       AssertionError: assert 'state_inconsistent' == 'repo_busy'
+E         
+E         - repo_busy
+E         + state_inconsistent
+
+tests/test_actions.py:1372: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_actions.py::test_other_intent_or_admin_lease_is_busy_not_file_disagreement[execution]
+FAILED tests/test_actions.py::test_other_intent_or_admin_lease_is_busy_not_file_disagreement[admin]
+2 failed, 122 deselected in 1.27s

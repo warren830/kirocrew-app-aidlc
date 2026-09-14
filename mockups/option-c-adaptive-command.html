@@ -1,0 +1,1916 @@
+<!DOCTYPE html>
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-DLC Studio — Option C — Adaptive Command</title>
+<style>
+/* ============================================================
+   AI-DLC Studio · Option C — Adaptive Command
+   Self-contained mockup. No network assets. Inline SVG only.
+   KiroCrew-native token surface with AI-DLC phase accents.
+   ============================================================ */
+
+/* ---- KiroCrew design tokens (dark default) ---- */
+:root[data-theme="dark"]{
+  --bg:#12141a; --bg-accent:#14161d; --bg-elevated:#1a1d25; --bg-hover:#262a35;
+  --card:#181b22; --card-fg:#f4f4f5; --card-hl:rgba(255,255,255,.05);
+  --panel:#12141a; --panel-strong:#1a1d25; --chrome:rgba(18,20,26,.95);
+  --text:#e4e4e7; --text-strong:#fafafa; --muted:#7f7f88; --muted-strong:#a1a1aa;
+  --border:#27272a; --border-strong:#3f3f46; --border-hover:#52525b;
+  --accent:#00d492; --accent-fg:#000; --accent-hover:#34d399; --accent-subtle:rgba(4,117,88,.2);
+  --ring:#10b981;
+  --ok:#22c55e; --ok-fg:#000; --ok-subtle:rgba(34,197,94,.12);
+  --warn:#eab308; --warn-fg:#000; --warn-subtle:rgba(234,179,8,.12);
+  --danger:#ef4444; --danger-fg:#000; --danger-subtle:rgba(239,68,68,.12);
+  --info:#22b8cf; --info-fg:#000; --info-subtle:rgba(34,184,207,.14);
+  --aim:#a78bfa; --aim-subtle:rgba(167,139,250,.15);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.2);
+  --shadow-md:0 4px 12px rgba(0,0,0,.25),0 0 0 1px rgba(255,255,255,.03);
+  --shadow-lg:0 12px 28px rgba(0,0,0,.35);
+  --kbd-bg:#22252e;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#fafafa; --bg-accent:#f5f5f5; --bg-elevated:#ffffff; --bg-hover:#f0f0f0;
+  --card:#ffffff; --card-fg:#18181b; --card-hl:rgba(0,0,0,.03);
+  --panel:#fafafa; --panel-strong:#f5f5f5; --chrome:rgba(250,250,250,.95);
+  --text:#3f3f46; --text-strong:#18181b; --muted:#71717a; --muted-strong:#52525b;
+  --border:#e4e4e7; --border-strong:#d4d4d8; --border-hover:#a1a1aa;
+  --accent:#047558; --accent-fg:#fff; --accent-hover:#059669; --accent-subtle:rgba(4,117,88,.12);
+  --ring:#047558;
+  --ok:#16a34a; --ok-fg:#fff; --ok-subtle:rgba(22,163,74,.1);
+  --warn:#a16207; --warn-fg:#fff; --warn-subtle:rgba(161,98,7,.1);
+  --danger:#dc2626; --danger-fg:#fff; --danger-subtle:rgba(220,38,38,.1);
+  --info:#0e7490; --info-fg:#fff; --info-subtle:rgba(14,116,144,.1);
+  --aim:#7c3aed; --aim-subtle:rgba(124,58,237,.12);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.06);
+  --shadow-md:0 4px 12px rgba(0,0,0,.08),0 0 0 1px rgba(0,0,0,.04);
+  --shadow-lg:0 12px 28px rgba(0,0,0,.12);
+  --kbd-bg:#f1f1f3;
+  color-scheme:light;
+}
+:root{
+  --font-body:'Space Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --radius-sm:6px; --radius-md:8px; --radius-lg:12px; --radius-xl:16px;
+
+  /* AI-DLC phase accents — Option C pushes these hardest of the three
+     directions, but only through hue/edge treatment, never shape. */
+  --ph-init:#8b93a7;      --ph-init-subtle:rgba(139,147,167,.16);
+  --ph-ideation:#a78bfa;  --ph-ideation-subtle:rgba(167,139,250,.16);
+  --ph-inception:#38bdf8; --ph-inception-subtle:rgba(56,189,248,.16);
+  --ph-construction:#00d492; --ph-construction-subtle:rgba(0,212,146,.16);
+  --ph-operation:#fb923c; --ph-operation-subtle:rgba(251,146,60,.16);
+}
+:root[data-theme="light"]{
+  --ph-init:#5b6478;      --ph-init-subtle:rgba(91,100,120,.12);
+  --ph-ideation:#7c3aed;  --ph-ideation-subtle:rgba(124,58,237,.12);
+  --ph-inception:#0369a1; --ph-inception-subtle:rgba(3,105,161,.12);
+  --ph-construction:#047558; --ph-construction-subtle:rgba(4,117,88,.12);
+  --ph-operation:#c2410c; --ph-operation-subtle:rgba(194,65,12,.12);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:var(--font-body); font-size:13px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+:focus-visible{outline:2px solid var(--ring); outline-offset:2px; border-radius:4px}
+button,input,select,textarea{font:inherit; color:inherit}
+svg{display:block; flex:none}
+[hidden]{display:none !important}
+@media (prefers-reduced-motion:reduce){*{animation:none !important; transition:none !important}}
+
+/* ---- primitives ---- */
+.mono{font-family:var(--mono)}
+.mut{color:var(--muted)}
+.strong{color:var(--text-strong)}
+.row{display:flex; align-items:center; gap:8px}
+.wrap{flex-wrap:wrap}
+.sp{flex:1 1 auto}
+.tiny{font-size:11px}
+.xs{font-size:12px}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+kbd{
+  font-family:var(--mono); font-size:10px; line-height:1; padding:3px 5px;
+  background:var(--kbd-bg); border:1px solid var(--border-strong);
+  border-bottom-width:2px; border-radius:4px; color:var(--muted-strong);
+  min-width:16px; text-align:center; display:inline-block;
+}
+.btn{
+  display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  font-size:12px; padding:6px 11px; border-radius:var(--radius-md);
+  background:var(--bg-elevated); color:var(--text);
+  border:1px solid var(--border-strong); transition:background .12s,border-color .12s;
+}
+.btn:hover{background:var(--bg-hover); border-color:var(--border-hover)}
+.btn[disabled]{opacity:.45; cursor:not-allowed}
+.btn-primary{background:var(--accent); color:var(--accent-fg); border-color:transparent; font-weight:600}
+.btn-primary:hover{background:var(--accent-hover)}
+.btn-danger{background:var(--danger-subtle); color:var(--danger); border-color:var(--danger)}
+.btn-ghost{background:transparent; border-color:transparent; color:var(--muted-strong)}
+.btn-ghost:hover{background:var(--bg-hover); color:var(--text)}
+.btn-sm{padding:4px 8px; font-size:11px}
+
+.chip{
+  display:inline-flex; align-items:center; gap:5px; font-size:11px;
+  padding:3px 8px; border-radius:999px; border:1px solid var(--border);
+  background:var(--bg-accent); color:var(--muted-strong); white-space:nowrap;
+}
+.chip-on{background:var(--accent-subtle); border-color:var(--accent); color:var(--accent)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+
+.sev{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;
+  letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:4px;border:1px solid}
+.sev-critical{color:var(--danger);background:var(--danger-subtle);border-color:var(--danger)}
+.sev-blocking{color:var(--warn);background:var(--warn-subtle);border-color:var(--warn)}
+.sev-error{color:var(--danger);background:transparent;border-color:var(--border-strong)}
+.sev-notice{color:var(--info);background:var(--info-subtle);border-color:var(--info)}
+
+/* ---- app shell ---- */
+.app{display:flex; flex-direction:column; height:100vh; overflow:hidden}
+
+.topbar{
+  display:flex; align-items:center; gap:10px; padding:8px 12px;
+  background:var(--chrome); border-bottom:1px solid var(--border); flex:none;
+  backdrop-filter:blur(8px);
+}
+.brand{display:flex; align-items:center; gap:8px; min-width:0}
+.brand-mark{
+  width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+  background:linear-gradient(140deg,var(--ph-ideation),var(--ph-construction));
+  color:#04120c;
+}
+.brand-name{font-weight:700; font-size:13px; color:var(--text-strong); white-space:nowrap}
+.opt-tag{
+  font-family:var(--mono); font-size:10px; letter-spacing:.05em; padding:3px 8px;
+  border:1px dashed var(--accent); color:var(--accent); border-radius:999px;
+  background:var(--accent-subtle); white-space:nowrap;
+}
+
+/* command bar: the signature of Option C */
+.cmd{
+  flex:1 1 420px; min-width:0; display:flex; align-items:center; gap:8px;
+  background:var(--bg-elevated); border:1px solid var(--border-strong);
+  border-radius:var(--radius-md); padding:5px 8px; position:relative;
+}
+.cmd:focus-within{border-color:var(--ring); box-shadow:0 0 0 3px var(--accent-subtle)}
+.cmd input{
+  flex:1 1 auto; min-width:60px; background:transparent; border:0; outline:0;
+  font-size:12.5px; font-family:var(--mono);
+}
+.cmd input::placeholder{color:var(--muted)}
+.cmd-token{
+  font-family:var(--mono); font-size:11px; padding:2px 6px; border-radius:5px;
+  background:var(--accent-subtle); color:var(--accent); border:1px solid var(--accent);
+  display:inline-flex; align-items:center; gap:4px; white-space:nowrap;
+}
+.cmd-token button{background:none;border:0;cursor:pointer;color:inherit;padding:0;line-height:1}
+
+.palette{
+  position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:60;
+  background:var(--card); border:1px solid var(--border-strong);
+  border-radius:var(--radius-md); box-shadow:var(--shadow-lg); overflow:hidden;
+  max-height:340px; overflow-y:auto;
+}
+.palette-group{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
+  padding:8px 10px 4px}
+.palette-item{
+  display:flex;align-items:center;gap:9px;padding:7px 10px;cursor:pointer;font-size:12px;
+  border-left:2px solid transparent;
+}
+.palette-item:hover,.palette-item[aria-selected="true"]{background:var(--bg-hover);border-left-color:var(--accent)}
+.palette-item .p-hint{margin-left:auto;display:flex;gap:3px}
+
+.theme-toggle{display:flex;border:1px solid var(--border-strong);border-radius:var(--radius-md);overflow:hidden}
+.theme-toggle button{background:var(--bg-elevated);border:0;padding:6px 8px;cursor:pointer;color:var(--muted)}
+.theme-toggle button[aria-pressed="true"]{background:var(--accent-subtle);color:var(--accent)}
+
+/* scope + filter rail */
+.railbar{
+  display:flex;align-items:center;gap:8px;padding:6px 12px;flex:none;
+  background:var(--bg-accent);border-bottom:1px solid var(--border);overflow-x:auto;
+}
+.scope{display:flex;align-items:center;gap:4px;font-size:11.5px}
+.scope select{
+  background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);
+  border-radius:var(--radius-sm);padding:3px 6px;font-size:11.5px;max-width:190px;
+}
+.scope-sep{color:var(--muted)}
+.filters{display:flex;align-items:center;gap:6px}
+.filters button{cursor:pointer}
+
+/* collapsible status strip */
+.strip{flex:none;background:var(--panel-strong);border-bottom:1px solid var(--border)}
+.strip-head{
+  display:flex;align-items:center;gap:10px;padding:6px 12px;cursor:pointer;
+  background:none;border:0;width:100%;text-align:left;
+}
+.strip-head:hover{background:var(--bg-hover)}
+.strip-caret{transition:transform .15s}
+.strip[data-open="false"] .strip-caret{transform:rotate(-90deg)}
+.strip-body{padding:2px 12px 10px;display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(228px,1fr))}
+.strip[data-open="false"] .strip-body{display:none}
+.lane{
+  border:1px solid var(--border);border-left:3px solid var(--lane-accent,var(--border-strong));
+  border-radius:var(--radius-md);background:var(--card);padding:8px 9px;
+}
+.lane-bar{height:3px;border-radius:2px;background:var(--border);overflow:hidden;margin-top:7px}
+.lane-bar>i{display:block;height:100%;background:var(--lane-accent,var(--accent))}
+.pill-live{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--ok)}
+.pulse{width:6px;height:6px;border-radius:50%;background:var(--ok);animation:pl 1.8s infinite}
+@keyframes pl{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* view switch */
+.views{display:flex;gap:2px;padding:6px 12px 0;flex:none;border-bottom:1px solid var(--border);
+  background:var(--bg)}
+.views button{
+  background:none;border:0;border-bottom:2px solid transparent;padding:6px 10px 8px;
+  cursor:pointer;color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px;
+}
+.views button[aria-selected="true"]{color:var(--text-strong);border-bottom-color:var(--accent);font-weight:600}
+.views button:hover{color:var(--text)}
+
+main{flex:1 1 auto; min-height:0; overflow:hidden}
+.view{height:100%; overflow:hidden}
+
+/* ---- Action Center: master / detail ---- */
+.split{display:grid; grid-template-columns:36% 64%; height:100%; min-height:0}
+.queue{border-right:1px solid var(--border); display:flex; flex-direction:column; min-height:0;
+  background:var(--panel)}
+.queue-head{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);flex:none}
+.queue-list{overflow-y:auto; flex:1 1 auto; padding-bottom:16px}
+.qgroup{border-bottom:1px solid var(--border)}
+.qgroup-head{
+  display:flex;align-items:center;gap:8px;width:100%;text-align:left;cursor:pointer;
+  background:var(--bg-accent);border:0;border-left:3px solid var(--g-accent,var(--border-strong));
+  padding:6px 10px;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--muted-strong);position:sticky;top:0;z-index:2;
+}
+.qgroup-head:hover{background:var(--bg-hover)}
+.qgroup[data-open="false"] .qgroup-items{display:none}
+.qgroup[data-open="false"] .strip-caret{transform:rotate(-90deg)}
+.qcount{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+
+.qitem{
+  display:block;width:100%;text-align:left;cursor:pointer;background:transparent;
+  border:0;border-bottom:1px solid var(--border);border-left:3px solid transparent;
+  padding:8px 10px 9px; position:relative;
+}
+.qitem:hover{background:var(--bg-hover)}
+.qitem[aria-selected="true"]{background:var(--accent-subtle); border-left-color:var(--accent)}
+.qitem[data-phase]::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--q-phase)}
+.qitem[aria-selected="true"][data-phase]::after{background:var(--accent)}
+.qtitle{font-size:12.5px;color:var(--text-strong);font-weight:600;margin:3px 0 2px}
+.qmeta{display:flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:10.5px;color:var(--muted)}
+.qkey{font-family:var(--mono);font-size:10px;padding:1px 4px;border:1px solid var(--border-strong);
+  border-radius:3px;color:var(--muted);background:var(--kbd-bg)}
+.qwait{font-family:var(--mono)}
+
+/* ---- contextual inspector ---- */
+.detail{display:flex;flex-direction:column;min-height:0;background:var(--bg)}
+.detail-head{flex:none;padding:10px 14px 0;border-bottom:1px solid var(--border);background:var(--bg-accent)}
+.crumbs{display:flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:11px;color:var(--muted)}
+.crumbs b{color:var(--text-strong);font-weight:600}
+.detail-title{font-size:15px;font-weight:700;color:var(--text-strong);margin:6px 0 4px}
+.dtabs{display:flex;gap:2px;margin-top:8px}
+.dtabs button{background:none;border:0;border-bottom:2px solid transparent;padding:6px 10px;
+  cursor:pointer;color:var(--muted);font-size:12px}
+.dtabs button[aria-selected="true"]{color:var(--text-strong);border-bottom-color:var(--accent);font-weight:600}
+.detail-body{flex:1 1 auto;overflow-y:auto;padding:14px}
+.detail-foot{
+  flex:none;border-top:1px solid var(--border);background:var(--chrome);
+  padding:9px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  backdrop-filter:blur(8px);
+}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-md);
+  padding:11px 12px;margin-bottom:11px}
+.card-ph{border-left:3px solid var(--ph,var(--border-strong))}
+.card h4{margin:0 0 7px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.card p{margin:0 0 7px}
+.card p:last-child{margin-bottom:0}
+ul.tight{margin:0;padding-left:17px}
+ul.tight li{margin-bottom:4px}
+.crit{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px dashed var(--border)}
+.crit:last-child{border-bottom:0}
+.crit .ok{color:var(--ok)} .crit .no{color:var(--warn)}
+.file{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--border);
+  border-radius:var(--radius-sm);background:var(--bg-elevated);margin-bottom:6px;cursor:pointer;font-size:12px}
+.file:hover{border-color:var(--border-hover);background:var(--bg-hover)}
+.file .mut{margin-left:auto;font-family:var(--mono);font-size:10.5px}
+.finding{border-left:3px solid var(--warn);background:var(--warn-subtle);padding:8px 10px;
+  border-radius:0 var(--radius-sm) var(--radius-sm) 0;margin-bottom:8px}
+.finding.blocking{border-left-color:var(--danger);background:var(--danger-subtle)}
+.finding q{font-style:italic;color:var(--text-strong)}
+.advisor{border:1px solid var(--aim);background:var(--aim-subtle);border-radius:var(--radius-md);
+  padding:11px 12px;margin-bottom:11px}
+.advisor-h{display:flex;align-items:center;gap:7px;color:var(--aim);font-weight:600;font-size:12px;margin-bottom:7px}
+.conf{display:inline-flex;gap:2px;align-items:center}
+.conf i{width:14px;height:5px;border-radius:2px;background:var(--border-strong)}
+.conf i.on{background:var(--aim)}
+.needsyou{color:var(--warn);font-weight:600}
+
+.confirm{border:1px solid var(--accent);background:var(--accent-subtle);border-radius:var(--radius-md);
+  padding:11px 12px;margin-bottom:11px}
+.exact{font-family:var(--mono);font-size:12px;background:var(--bg);border:1px dashed var(--border-strong);
+  border-radius:var(--radius-sm);padding:8px 9px;margin:7px 0;white-space:pre-wrap;color:var(--text-strong)}
+
+/* questions */
+.qq{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--card);
+  padding:11px 12px;margin-bottom:11px}
+.qq-h{font-size:13px;font-weight:600;color:var(--text-strong);margin-bottom:3px}
+.opt{display:flex;gap:9px;align-items:flex-start;padding:7px 9px;border:1px solid var(--border);
+  border-radius:var(--radius-sm);margin-bottom:6px;cursor:pointer;background:var(--bg-elevated)}
+.opt:hover{border-color:var(--border-hover)}
+.opt.sel{border-color:var(--accent);background:var(--accent-subtle)}
+.opt.draft{border-style:dashed;border-color:var(--aim)}
+.opt input{margin-top:2px;accent-color:var(--accent)}
+.opt .od{color:var(--muted);font-size:11.5px}
+.otherbox{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:7px 8px;font-size:12px;resize:vertical;min-height:52px}
+
+/* delivery meter */
+.deliv{display:flex;align-items:center;gap:0;margin:9px 0 2px}
+.deliv-step{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted)}
+.deliv-step .dt{width:9px;height:9px;border-radius:50%;border:2px solid var(--border-strong)}
+.deliv-step.done .dt{background:var(--ok);border-color:var(--ok)}
+.deliv-step.now .dt{background:var(--warn);border-color:var(--warn)}
+.deliv-line{flex:1 1 auto;height:1px;background:var(--border-strong);margin:0 7px}
+
+/* timeline */
+.tl{position:relative;padding-left:16px}
+.tl::before{content:"";position:absolute;left:4px;top:4px;bottom:4px;width:1px;background:var(--border)}
+.tl-i{position:relative;padding:0 0 11px}
+.tl-i::before{content:"";position:absolute;left:-15px;top:5px;width:7px;height:7px;border-radius:50%;
+  background:var(--bg);border:2px solid var(--src,var(--border-strong))}
+.src-tag{font-family:var(--mono);font-size:9.5px;padding:1px 5px;border-radius:3px;border:1px solid var(--src);
+  color:var(--src)}
+
+/* ---- Workflow Map ---- */
+.map{height:100%;overflow:auto;padding:12px 14px}
+.map-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.swim{margin-bottom:10px;border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;
+  background:var(--card)}
+.swim-h{display:flex;align-items:center;gap:9px;padding:7px 10px;background:var(--ph-subtle);
+  border-left:4px solid var(--ph);cursor:pointer}
+.swim-h b{color:var(--text-strong);font-size:12px}
+.swim-body{display:flex;gap:8px;padding:10px;overflow-x:auto}
+.swim[data-open="false"] .swim-body{display:none}
+.st{
+  flex:0 0 152px;border:1px solid var(--border);border-top:3px solid var(--ph);
+  border-radius:var(--radius-sm);background:var(--bg-elevated);padding:8px;cursor:pointer;
+  position:relative;
+}
+.st:hover{border-color:var(--border-hover)}
+.st[aria-selected="true"]{box-shadow:0 0 0 2px var(--accent);border-color:var(--accent)}
+.st[data-state="skipped"]{opacity:.5;border-style:dashed;background:transparent}
+.st[data-state="running"]{box-shadow:0 0 0 2px var(--ok)}
+.st-n{font-size:11.5px;font-weight:600;color:var(--text-strong);margin-bottom:4px;line-height:1.3}
+.st-m{font-size:10px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px}
+.st.up{outline:2px dashed var(--info);outline-offset:1px}
+.st.down{outline:2px dashed var(--ph-operation);outline-offset:1px}
+.units{display:flex;gap:8px;padding:0 10px 10px 26px;overflow-x:auto;border-left:2px dotted var(--ph);
+  margin-left:14px}
+.inspector{border:1px solid var(--accent);border-radius:var(--radius-md);background:var(--card);
+  padding:11px 12px;margin-bottom:12px}
+
+/* ---- wizard ---- */
+.wiz{height:100%;overflow-y:auto;padding:14px 16px;max-width:1080px;margin:0 auto}
+.steps{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.step{flex:1 1 150px;border:1px solid var(--border);border-radius:var(--radius-md);padding:8px 10px;
+  background:var(--card);border-top:3px solid var(--border-strong)}
+.step[data-on="true"]{border-top-color:var(--accent);background:var(--accent-subtle)}
+.step[data-done="true"]{border-top-color:var(--ok)}
+.step-n{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.field{margin-bottom:11px}
+.field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+  margin-bottom:4px}
+.field input,.field select,.field textarea{width:100%;background:var(--bg-elevated);
+  border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 9px;font-size:12.5px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.matrix{display:grid;gap:7px;grid-template-columns:repeat(auto-fill,minmax(158px,1fr))}
+.mstage{border:1px solid var(--border);border-left:3px solid var(--ph);border-radius:var(--radius-sm);
+  padding:7px 8px;background:var(--bg-elevated);font-size:11.5px}
+.mstage.off{opacity:.5;border-style:dashed}
+.mstage.locked{background:var(--bg-accent)}
+.mstage input{accent-color:var(--accent)}
+.mstage .why{font-size:10px;color:var(--muted);margin-top:3px}
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px}
+.kpi>div{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--card);padding:9px 10px}
+.kpi .v{font-size:19px;font-weight:700;color:var(--text-strong);font-family:var(--mono)}
+.kpi .l{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.exact-tag{color:var(--ok);font-size:9.5px;border:1px solid var(--ok);border-radius:3px;padding:0 4px}
+.range-tag{color:var(--warn);font-size:9.5px;border:1px solid var(--warn);border-radius:3px;padding:0 4px}
+.na-tag{color:var(--muted);font-size:9.5px;border:1px dashed var(--border-strong);border-radius:3px;padding:0 4px}
+table.diff{width:100%;border-collapse:collapse;font-size:12px}
+table.diff th,table.diff td{text-align:left;padding:5px 7px;border-bottom:1px solid var(--border)}
+table.diff th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+
+/* ---- toast + modal ---- */
+.toasts{position:fixed;right:14px;bottom:14px;z-index:200;display:flex;flex-direction:column;gap:8px;
+  max-width:340px}
+.toast{background:var(--card);border:1px solid var(--border-strong);border-left:3px solid var(--accent);
+  border-radius:var(--radius-md);box-shadow:var(--shadow-lg);padding:9px 11px;font-size:12px}
+.toast.warnt{border-left-color:var(--warn)}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:150;display:grid;place-items:center;padding:16px}
+.modal{background:var(--card);border:1px solid var(--border-strong);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-lg);max-width:560px;width:100%;padding:14px 15px;max-height:86vh;overflow-y:auto}
+.help-k{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:12px;align-items:center}
+
+/* ---- mobile / 390px ---- */
+.back-btn{display:none}
+@media (max-width:900px){
+  .split{grid-template-columns:1fr}
+  .detail{display:none}
+  .split[data-mobile="detail"] .queue{display:none}
+  .split[data-mobile="detail"] .detail{display:flex}
+  .back-btn{display:inline-flex}
+  .cmd{flex:1 1 auto}
+  .brand-name,.opt-tag{display:none}
+  .grid2{grid-template-columns:1fr}
+  .swim-body,.units{flex-direction:column}
+  .st{flex:1 1 auto}
+  .detail-body{padding:11px}
+  .views{overflow-x:auto}
+}
+@media (max-width:420px){
+  body{font-size:12.5px}
+  .railbar{gap:6px}
+  .scope select{max-width:112px}
+  .kpi{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ══ top bar: brand + adaptive command surface ══ -->
+  <div class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
+      </span>
+      <span class="brand-name">AI-DLC Studio</span>
+      <span class="opt-tag">Option C — Adaptive Command</span>
+    </div>
+
+    <div class="cmd" id="cmd">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="mut" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <span id="cmdTokens" class="row" style="gap:4px"></span>
+      <input id="cmdInput" type="text" placeholder="Command or filter…  try  gate   repo:payments-api   run   map"
+             aria-label="Command and filter bar" aria-expanded="false" aria-controls="palette" role="combobox" autocomplete="off">
+      <kbd>/</kbd><kbd>K</kbd>
+      <div class="palette" id="palette" role="listbox" hidden></div>
+    </div>
+
+    <div class="theme-toggle" role="group" aria-label="Theme">
+      <button id="thDark" aria-pressed="true" title="Dark theme">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      </button>
+      <button id="thLight" aria-pressed="false" title="Light theme">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6L19 19M19 5l-1.4 1.4M6.4 17.6L5 19"/></svg>
+      </button>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="btnHelp" title="Keyboard reference">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg>
+      <kbd>?</kbd>
+    </button>
+  </div>
+
+  <!-- ══ scope + filter rail ══ -->
+  <div class="railbar">
+    <div class="scope" aria-label="Repository scope">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="mut"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <select id="scopeRepo" aria-label="Repo">
+        <option value="all">All repos (3 registered)</option>
+        <option value="studio">kirocrew-app-aidlc</option>
+        <option value="payments">payments-api</option>
+        <option value="edge">edge-telemetry</option>
+      </select>
+      <span class="scope-sep">/</span>
+      <select id="scopeSpace" aria-label="Space"><option>default</option></select>
+      <span class="scope-sep">/</span>
+      <select id="scopeIntent" aria-label="Intent">
+        <option>All intents</option>
+        <option>studio-action-center</option>
+        <option>checkout-idempotency</option>
+        <option>refund-ledger</option>
+        <option>otel-span-budget</option>
+      </select>
+    </div>
+    <span class="sp"></span>
+    <div class="filters" id="filters" role="group" aria-label="Quick filters"></div>
+    <label class="chip" style="cursor:pointer" title="Group the queue">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h7"/></svg>
+      <select id="groupBy" style="background:none;border:0;font-size:11px;color:inherit" aria-label="Group by">
+        <option value="priority">Priority</option>
+        <option value="repo">Repo</option>
+        <option value="type">Type</option>
+        <option value="oldest">Oldest</option>
+      </select>
+    </label>
+  </div>
+
+  <!-- ══ collapsible execution status strip ══ -->
+  <section class="strip" id="strip" data-open="true" aria-label="Execution status">
+    <button class="strip-head" id="stripToggle" aria-expanded="true" aria-controls="stripBody">
+      <svg class="strip-caret" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      <b class="xs strong">Execution</b>
+      <span class="pill-live"><i class="pulse"></i>2 repo leases active</span>
+      <span class="chip tiny">3 waiting on you</span>
+      <span class="chip tiny" style="border-color:var(--danger);color:var(--danger)">1 recovery</span>
+      <span class="chip tiny">Night window 23:00–06:30 · off</span>
+      <span class="sp"></span>
+      <span class="tiny mut">Global concurrency 2 · per repo 1</span>
+      <kbd>E</kbd>
+    </button>
+    <div class="strip-body" id="stripBody"></div>
+  </section>
+
+  <!-- ══ primary views ══ -->
+  <nav class="views" id="views" role="tablist" aria-label="Primary navigation"></nav>
+
+  <main>
+    <section class="view" id="view-actions" role="tabpanel" aria-label="Action Center">
+      <div class="split" id="split" data-mobile="list">
+        <div class="queue">
+          <div class="queue-head">
+            <b class="xs strong">Action queue</b>
+            <span class="tiny mut" id="queueCount"></span>
+            <span class="sp"></span>
+            <span class="tiny mut">Move</span><kbd>J</kbd><kbd>K</kbd>
+            <span class="tiny mut">Open</span><kbd>↵</kbd>
+          </div>
+          <div class="queue-list" id="queueList" role="listbox" aria-label="Blocking actions" tabindex="0"></div>
+        </div>
+        <div class="detail" id="detail" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-map" role="tabpanel" aria-label="Workflow Map" hidden>
+      <div class="map" id="mapRoot"></div>
+    </section>
+
+    <section class="view" id="view-new" role="tabpanel" aria-label="New intent wizard" hidden>
+      <div class="wiz" id="wizRoot"></div>
+    </section>
+
+    <section class="view" id="view-repos" role="tabpanel" aria-label="Repos" hidden>
+      <div class="map" id="reposRoot"></div>
+    </section>
+  </main>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div id="modalRoot"></div>
+
+<script>
+/* ================= Option C — Adaptive Command · mock state ================= */
+const PHASES = [
+  {id:'initialization', label:'Initialization', v:'--ph-init'},
+  {id:'ideation',       label:'Ideation',       v:'--ph-ideation'},
+  {id:'inception',      label:'Inception',      v:'--ph-inception'},
+  {id:'construction',   label:'Construction',   v:'--ph-construction'},
+  {id:'operation',      label:'Operation',      v:'--ph-operation'}
+];
+const phVar = p => `var(${(PHASES.find(x=>x.id===p)||PHASES[0]).v})`;
+const phSub = p => `var(${(PHASES.find(x=>x.id===p)||PHASES[0]).v}-subtle)`;
+
+const ICON = {
+  gate:'<path d="M12 3l8 4v6c0 4.4-3.4 7.4-8 8-4.6-.6-8-3.6-8-8V7z"/>',
+  question:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.9-.9 1.6v.4M12 17h.01"/>',
+  recovery:'<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>',
+  failure:'<path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L2.5 17a2 2 0 0 0 1.7 3h15.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  install:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/>',
+  budget:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
+};
+const icon = (k,s=14) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]||ICON.gate}</svg>`;
+
+/* Sample scenario is shared verbatim with Option A and Option B so the three
+   directions can be compared on layout and interaction, not on content.
+   Three registered repos, eight actions spread across the FR-ACT-003 tiers. */
+const REPOS = {
+  all:      {label:'All repos', sub:'3 registered'},
+  studio:   {label:'kirocrew-app-aidlc', sub:'~/warren_ws/kirocrew-app-aidlc'},
+  payments: {label:'payments-api', sub:'~/src/payments-api'},
+  edge:     {label:'edge-telemetry', sub:'~/src/edge-telemetry'}
+};
+const TYPE = {
+  recovery:{n:'Recovery required', i:'recovery'}, delivery:{n:'Delivery uncertain', i:'recovery'},
+  gate:{n:'Gate approval', i:'gate'}, questions:{n:'AI questions', i:'question'},
+  failure:{n:'Execution failure', i:'failure'}, install:{n:'Install conflict', i:'install'},
+  budget:{n:'Budget stop', i:'budget'}
+};
+const SEV = {1:'critical', 2:'blocking', 3:'error', 4:'notice'};
+
+const ACTIONS = [
+{ id:'A-7741', key:'1', type:'recovery', tier:1, repo:'payments', space:'default',
+  intent:'checkout-idempotency', intentId:'b41d90cc', stage:'3.2 code-generation', phase:'construction',
+  unit:'unit-2 ledger-writer', wait:'4h 12m', mins:252, hot:true,
+  title:'Interrupted mid-stage — reconciliation required', next:'Reconcile boundary',
+  st:'Interrupted', session:'payments-checkout-7 (lost)', delivery:'idle',
+  boundary:'Gate cleared at 3.1 contract-design · 06:14 local',
+  evidence:[['State file','cursor on 3.2 code-generation, marker [R]'],
+    ['Audit shard','last event STAGE_STARTED, no STAGE_COMPLETED'],
+    ['Active directive','open — artifact write was in progress'],
+    ['Canonical session','lost (gateway restart 10:02)'],
+    ['Delivery record','no human action pending']],
+  contra:[{s:'bad', t:'Runtime marker claims unit-2 complete; no produced artifact on disk',
+      d:'Blocks progression. Studio will not pick a convenient source as truth.'},
+    {s:'warn', t:'Stage elapsed timer still accruing against a dead session',
+      d:'Cosmetic only once the session binding is replaced.'}],
+  risk:'Mid-stage with an open directive — automatic failover is not eligible. Manual takeover required.',
+  choices:[{t:'Replace canonical session from last stable boundary (3.1)', rec:true,
+      d:'Context is reconstructed from disk. Unconfirmed model output is discarded, not trusted.'},
+    {t:'Ask the engine to re-run 3.2 for unit-2 only',
+      d:'Idempotent per the installed graph; previews affected paths before it runs.'},
+    {t:'Park the intent and decide later', d:'Keeps state untouched; the item stays in this queue.'}]},
+
+{ id:'A-7738', key:'2', type:'delivery', tier:1, repo:'edge', space:'default',
+  intent:'otel-span-budget', intentId:'5ce02f77', stage:'1.4 nfr-requirements', phase:'ideation',
+  wait:'58m', mins:58, title:'Answers may have been delivered — no acknowledgement',
+  next:'Reconcile delivery', st:'Delivery uncertain', session:'edge-otel-3', delivery:'uncertain',
+  boundary:'Question wait at 1.4 nfr-requirements',
+  evidence:[['Action id','A-7738 · one submit, one digest'],
+    ['Session status','unreachable at time of submit'],
+    ['AI-DLC state','still shows [?] at 1.4'],
+    ['Audit','no HUMAN_TURN after the prior resolution boundary'],
+    ['Question digest','unchanged']],
+  contra:[{s:'bad', t:'Delivered without acknowledgement — the answer may or may not have landed',
+      d:'At-most-once applies. Studio never auto-replays a human decision.'}],
+  risk:'Unknown delivery. Reconciliation must read session status, state, audit, directive and turn marker before anything is resent.',
+  choices:[{t:'Reconcile now', rec:true, d:'Read-only evidence match across all five sources.'},
+    {t:'Resend the answers', d:'Disabled until Studio proves non-delivery or you accept the stated risk.', off:true}]},
+
+{ id:'A-7732', key:'3', type:'gate', tier:2, repo:'studio', space:'default',
+  intent:'studio-action-center', intentId:'8f2c41ab', stage:'1.3 functional-design', phase:'ideation',
+  wait:'2h 05m', mins:125, title:'Approve functional design for Action Center',
+  next:'Approve or request changes', st:'Waiting for you', session:'studio-ac-2', delivery:'idle',
+  agent:'design', review:'adversarial', gateText:'approved',
+  brief:'The stage produced the Action Center functional design: queue ordering, the shared detail shell, and five type-specific decision templates. Approving clears the [?] marker and lets the conductor begin 1.4 nfr-requirements.',
+  consequence:'Next: 1.4 nfr-requirements (agent: architect, review: advisory). No artifact is deleted by approving.',
+  criteria:[{ok:true, t:'Every blocking action type has a decision template', s:'5 of 5 templates present with evidence slots'},
+    {ok:true, t:'Queue ordering matches the priority contract', s:'4 tiers, equal priority sorted oldest first'},
+    {ok:true, t:'Detail shell defines breadcrumb, source, delivery state and evidence access', s:'documented in §8.5'},
+    {ok:false, t:'Mobile decision loop is described but not yet enumerated per template', s:'Reviewer flagged this — see finding R-2'}],
+  artifacts:[{n:'functional-design.md', s:'18.4 KB · rev 3', c:'+312 −44'},
+    {n:'action-templates.md', s:'9.1 KB · rev 3', c:'+147 −8'},
+    {n:'queue-ordering.md', s:'4.6 KB · rev 1', c:'new'},
+    {n:'open-questions.md', s:'1.9 KB · rev 2', c:'+11 −19'}],
+  findings:[{s:'warn', who:'architecture-reviewer · adversarial · R-2',
+      t:'Mobile section states the loop is complete without listing which controls each template exposes at 390px.',
+      a:'action-templates.md › Mobile behaviour'},
+    {s:'ok', who:'architecture-reviewer · adversarial · R-1',
+      t:'Delivery-state model is consistent with the at-most-once requirement; no replay path found.',
+      a:'functional-design.md › Delivery'},
+    {s:'warn', who:'product-lead · advisory · P-4',
+      t:'Empty states are named but their copy is unwritten; risk of shipping "No data" placeholders.',
+      a:'functional-design.md › Empty states'}],
+  risks:[{t:'Unresolved: reviewer finding R-2 is open in revision 3', d:'Approving accepts it as out of scope for this stage.'},
+    {t:'Prior revisions: 2 rejections (R1 template gaps, R2 ordering contract)', d:'Both were addressed in revision 3.'}],
+  adv:{rec:'Approvable with a noted follow-up', conf:3,
+    why:'Acceptance criteria 1–3 are satisfied by revision 3. Criterion 4 is not, and reviewer finding R-2 names the same gap. Because 1.4 nfr-requirements does not consume the mobile enumeration, the gap is unlikely to block the next stage.',
+    assume:'The mobile enumeration is expected in 2.1, not here; no later stage consumes action-templates.md › Mobile behaviour.',
+    alt:'Request changes so the mobile table lands in this artifact instead.',
+    undec:'Whether shipping the enumeration later is acceptable for your review bar is your decision.'}},
+
+{ id:'A-7739', key:'4', type:'questions', tier:2, repo:'studio', space:'default',
+  intent:'studio-action-center', intentId:'8f2c41ab', stage:'1.2 requirements-analysis', phase:'ideation',
+  wait:'1h 47m', mins:107, title:'3 structured questions from one turn', next:'Send answers',
+  st:'Waiting for you', session:'studio-ac-2', delivery:'idle', agent:'product', turn:'HUMAN_TURN 4 pending'},
+
+{ id:'A-7728', key:'5', type:'gate', tier:2, repo:'payments', space:'default',
+  intent:'refund-ledger', intentId:'c07ba318', stage:'2.2 contract-design', phase:'inception',
+  wait:'6h 31m', mins:391, hot:true, title:'Approve refund contract and idempotency keys',
+  next:'Approve or request changes', st:'Waiting for you', session:'payments-refund-1', delivery:'idle',
+  agent:'architect', review:'advisory', gateText:'approved',
+  brief:'Stage 2.2 produced the refund contract, the idempotency key scheme and the compensating-transaction envelope. Approving unblocks 2.3 nfr-design.',
+  consequence:'Next: 2.3 nfr-design (agent: architect, review: advisory). Construction units are derived after 2.4.',
+  criteria:[{ok:true, t:'Every mutating endpoint declares an idempotency key', s:'6 of 6 endpoints'},
+    {ok:true, t:"Partial-refund arithmetic is specified with a rounding rule", s:"banker's rounding, documented"},
+    {ok:true, t:'Failure envelope covers timeout, duplicate and stale-amount cases', s:'3 of 3'}],
+  artifacts:[{n:'contract-design.md', s:'22.7 KB · rev 2', c:'+418 −96'},
+    {n:'refund-openapi.yaml', s:'31.2 KB · rev 2', c:'+205 −12'},
+    {n:'idempotency-keys.md', s:'6.8 KB · rev 1', c:'new'}],
+  findings:[{s:'ok', who:'architecture-reviewer · advisory · A-1',
+      t:'Key scheme is collision-safe across merchant and attempt dimensions.', a:'idempotency-keys.md › Scheme'},
+    {s:'warn', who:'architecture-reviewer · advisory · A-2',
+      t:'Stale-amount rejection returns 409 without a retry-after hint; clients may hot-loop.',
+      a:'refund-openapi.yaml › components.responses.Conflict'}],
+  risks:[{t:'Unresolved: A-2 has no retry-after hint', d:'Low severity; can be handled in 2.3 nfr-design.'}],
+  adv:null},
+
+{ id:'A-7725', key:'6', type:'failure', tier:3, repo:'edge', space:'default',
+  intent:'otel-span-budget', intentId:'5ce02f77', stage:'1.4 nfr-requirements', phase:'ideation',
+  wait:'3h 04m', mins:184, title:'Circuit open — ACP transport reset three times',
+  next:'Retry now or diagnose', st:'Circuit open', session:'edge-otel-3', delivery:'failed',
+  fingerprint:'acp.transport.reset · peer closed during prompt',
+  retries:[['Attempt 1','09:41','backoff 30s'],['Attempt 2','09:43','backoff 2m'],['Attempt 3','09:47','breaker opened']],
+  errsum:"The canonical session's ACP peer closed the stream mid-prompt three consecutive times with the same fingerprint. Transient class, so the breaker opened after the third match rather than immediately.",
+  logs:'10:02:14  acp  prompt sent  (session edge-otel-3, 4.1 KB)\n10:02:19  acp  peer closed stream, code 1006\n10:02:19  brk  fingerprint acp.transport.reset  count 3/3\n10:02:19  brk  OPEN  keep-moving disabled for 5ce02f77\n10:02:19  sch  dispatch suppressed  reason breaker-open',
+  effects:['Keep moving is disabled for this intent only.',
+    'One queue item and one Slack notification were created, not three.',
+    'payments-api and kirocrew-app-aidlc are unaffected and still dispatching.']},
+
+{ id:'A-7719', key:'7', type:'install', tier:3, repo:'edge', space:'default',
+  intent:'—', intentId:'—', stage:'repo installation', phase:'initialization',
+  wait:'1d 02h', mins:1560, title:'Receipt-owned files were modified in the repo',
+  next:'Review drift', st:'Install blocked', session:'—', delivery:'idle',
+  receipt:[['Receipt version','studio 0.4.1 · engine 2.3.0'],['Managed files','46 recorded with SHA-256'],
+    ['Drifted','2 files'],['Unrelated dirty files','7 — not considered']],
+  drift:[{f:'.kiro/hooks/aidlc-continue-workflow.ts', s:'local edit · 14 lines changed',
+      w:'A user-modified managed file stops install and upgrade. Studio never silently overwrites it.'},
+    {f:'.kiro/tools/aidlc-orchestrate.ts', s:'local edit · 3 lines changed',
+      w:'Same rule. Resolve by reverting locally or retiring the file from receipt ownership.'}],
+  effects:['Upgrade to engine 2.4.0 is blocked for edge-telemetry only.',
+    'The prior complete installation and its receipt remain intact.',
+    'There is no overwrite shortcut, by design.']},
+
+{ id:'A-7702', key:'8', type:'budget', tier:4, repo:'payments', space:'default',
+  intent:'checkout-idempotency', intentId:'b41d90cc', stage:'3.2 code-generation', phase:'construction',
+  wait:'9h 18m', mins:558, title:'Turn cap reached — next dispatch prevented',
+  next:'Raise cap or resume manually', st:'Paused by budget', session:'payments-checkout-7', delivery:'idle',
+  budget:[['Turn cap','40 turns per window'],['Used','40 turns'],
+    ['Credit cap','Unavailable — not observable on this host'],['Window','22:00 – 06:00 local']],
+  effects:['The running turn was allowed to finish; budgets never cut off an active turn.',
+    'Keep moving stays on, but no new turn is dispatched until the cap changes.',
+    'Raising the cap does not resume automatically — you start the next turn.']}
+];
+
+const GROUPS = [
+  {id:'g1', label:'Tier 1 · recovery required and delivery uncertain', accent:'var(--danger)', tier:1},
+  {id:'g2', label:'Tier 2 · blocking gates and questions',             accent:'var(--warn)',   tier:2},
+  {id:'g3', label:'Tier 3 · breakers, failures, install conflicts',    accent:'var(--danger)', tier:3},
+  {id:'g4', label:'Tier 4 · budget stops and pauses',                  accent:'var(--info)',   tier:4}
+];
+
+const state = {
+  view:'actions', sel:'A-7732', tab:'decision', groupBy:'priority',
+  filters:new Set(), tokens:[], collapsed:new Set(),
+  answers:{q1:null, q2:new Set(), q3:''}, advisor:{}, confirmGate:false,
+  mapSel:'1.3', mapDensity:'overview', wizStep:1, resolved:new Set(),
+  planOff:new Set(['1.5','2.4','3.5','4.3'])
+};
+
+const $  = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function toast(msg, kind){
+  const t = document.createElement('div');
+  t.className = 'toast' + (kind==='warn' ? ' warnt' : '');
+  t.innerHTML = msg;
+  $('#toasts').appendChild(t);
+  setTimeout(()=>t.remove(), 5200);
+}
+
+/* ---------------- theme ---------------- */
+$('#thDark').onclick  = () => setTheme('dark');
+$('#thLight').onclick = () => setTheme('light');
+function setTheme(t){
+  document.documentElement.dataset.theme = t;
+  $('#thDark').setAttribute('aria-pressed', String(t==='dark'));
+  $('#thLight').setAttribute('aria-pressed', String(t==='light'));
+}
+
+/* ---------------- status strip ---------------- */
+const LANES = [
+  {repo:'kirocrew-app-aidlc', phase:'ideation', intent:'studio-action-center', st:'Waiting for you',
+   detail:'Gate [?] at 1.3 functional-design · lease idle', pct:38, live:false},
+  {repo:'payments-api', phase:'construction', intent:'checkout-idempotency', st:'Interrupted',
+   detail:'3.2 code-generation · unit-2 · session lost 10:02', pct:61, live:false},
+  {repo:'payments-api', phase:'inception', intent:'refund-ledger', st:'Running',
+   detail:'2.2 contract-design · turn 22 · holds the repo lease', pct:47, live:true},
+  {repo:'edge-telemetry', phase:'ideation', intent:'otel-span-budget', st:'Circuit open',
+   detail:'1.4 nfr-requirements · acp.transport.reset 3/3', pct:24, live:false}
+];
+function renderStrip(){
+  $('#stripBody').innerHTML = LANES.map(l => `
+    <div class="lane" style="--lane-accent:${phVar(l.phase)}">
+      <div class="row"><b class="xs strong mono">${esc(l.repo)}</b>
+        <span class="sp"></span>
+        ${l.live ? '<span class="pill-live"><i class="pulse"></i>live turn</span>'
+                 : `<span class="tiny mut">${esc(l.st)}</span>`}</div>
+      <div class="tiny mut" style="margin-top:2px">${esc(l.intent)}</div>
+      <div class="tiny" style="margin-top:2px">${esc(l.detail)}</div>
+      <div class="lane-bar"><i style="width:${l.pct}%"></i></div>
+    </div>`).join('');
+}
+$('#stripToggle').onclick = () => {
+  const s = $('#strip'), open = s.dataset.open === 'true';
+  s.dataset.open = String(!open);
+  $('#stripToggle').setAttribute('aria-expanded', String(!open));
+};
+
+/* ---------------- primary views ---------------- */
+const VIEWS = [
+  {id:'actions', label:'Action Center', k:'1', badge:()=>ACTIONS.filter(a=>!state.resolved.has(a.id)).length},
+  {id:'map',     label:'Workflow Map',  k:'2'},
+  {id:'new',     label:'New intent',    k:'3'},
+  {id:'repos',   label:'Repos',         k:'4'}
+];
+function renderViews(){
+  $('#views').innerHTML = VIEWS.map(v => `
+    <button role="tab" data-view="${v.id}" aria-selected="${state.view===v.id}">
+      ${esc(v.label)}${v.badge ? `<span class="chip tiny">${v.badge()}</span>` : ''}<kbd>${v.k}</kbd>
+    </button>`).join('');
+  $$('#views button').forEach(b => b.onclick = () => go(b.dataset.view));
+  ['actions','map','new','repos'].forEach(v => $('#view-'+v).hidden = state.view !== v);
+}
+function go(v){
+  state.view = v; renderViews();
+  if(v==='map') renderMap();
+  if(v==='new') renderWizard();
+  if(v==='repos') renderRepos();
+}
+
+/* ---------------- quick filters ---------------- */
+const FILTERS = [
+  {id:'gate', label:'Gates'}, {id:'questions', label:'Questions'},
+  {id:'recovery', label:'Recovery'}, {id:'delivery', label:'Delivery'},
+  {id:'failure', label:'Failures'}, {id:'install', label:'Install'}
+];
+function renderFilters(){
+  $('#filters').innerHTML = FILTERS.map(f =>
+    `<button class="chip ${state.filters.has(f.id)?'chip-on':''}" data-f="${f.id}"
+       aria-pressed="${state.filters.has(f.id)}">${esc(f.label)}</button>`).join('');
+  $$('#filters [data-f]').forEach(b => b.onclick = () => {
+    const id = b.dataset.f;
+    state.filters.has(id) ? state.filters.delete(id) : state.filters.add(id);
+    renderFilters(); renderQueue();
+  });
+}
+
+/* ---------------- queue ---------------- */
+function visibleActions(){
+  let list = ACTIONS.filter(a => !state.resolved.has(a.id));
+  const repo = $('#scopeRepo').value;
+  if(repo !== 'all') list = list.filter(a => a.repo === repo);
+  const intent = $('#scopeIntent').value;
+  if(intent !== 'All intents') list = list.filter(a => a.intent === intent);
+  if(state.filters.size) list = list.filter(a => state.filters.has(a.type));
+  state.tokens.forEach(t => {
+    if(t.k === 'repo') list = list.filter(a => a.repo === t.v);
+    if(t.k === 'type') list = list.filter(a => a.type === t.v);
+    if(t.k === 'text') list = list.filter(a =>
+      [REPOS[a.repo].label, a.intent, a.stage, TYPE[a.type].n, a.title, a.id]
+        .join(' ').toLowerCase().includes(t.v.toLowerCase()));
+  });
+  return list.sort((x,y) => x.tier - y.tier || y.mins - x.mins);
+}
+function groupsFor(list){
+  if(state.groupBy === 'priority')
+    return GROUPS.map(g => ({...g, items:list.filter(a => a.tier === g.tier)}))
+                 .filter(g => g.items.length);
+  if(state.groupBy === 'repo')
+    return ['studio','payments','edge'].map(r =>
+      ({id:'r_'+r, label:REPOS[r].label, accent:'var(--accent)', items:list.filter(a => a.repo === r)}))
+      .filter(g => g.items.length);
+  if(state.groupBy === 'type')
+    return Object.keys(TYPE).map(t =>
+      ({id:'t_'+t, label:TYPE[t].n, accent:'var(--info)', items:list.filter(a => a.type === t)}))
+      .filter(g => g.items.length);
+  return [{id:'oldest', label:'Oldest first, tier ignored', accent:'var(--muted)',
+           items:[...list].sort((a,b) => b.mins - a.mins)}];
+}
+function renderQueue(){
+  const list = visibleActions(), groups = groupsFor(list);
+  $('#queueCount').textContent = `${list.length} item${list.length===1?'':'s'}`;
+  if(!list.length){
+    $('#queueList').innerHTML = `<div style="padding:22px 14px" class="mut xs">
+      <b class="strong">Nothing is waiting on you in this scope.</b><br>
+      Widen the scope bar to <span class="mono">All repos</span>, clear the command tokens,
+      or open <b>New intent</b> to plan the next piece of work.</div>`;
+    renderDetail(); return;
+  }
+  $('#queueList').innerHTML = groups.map(g => `
+    <section class="qgroup" data-g="${g.id}" data-open="${!state.collapsed.has(g.id)}">
+      <button class="qgroup-head" style="--g-accent:${g.accent}" aria-expanded="${!state.collapsed.has(g.id)}">
+        <svg class="strip-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        ${esc(g.label)}<span class="qcount">${g.items.length}</span>
+      </button>
+      <div class="qgroup-items">${g.items.map(qrow).join('')}</div>
+    </section>`).join('');
+  $$('#queueList .qgroup-head').forEach(h => h.onclick = () => {
+    const id = h.closest('.qgroup').dataset.g;
+    state.collapsed.has(id) ? state.collapsed.delete(id) : state.collapsed.add(id);
+    renderQueue();
+  });
+  $$('#queueList .qitem').forEach(b => b.onclick = () => select(b.dataset.id));
+  renderDetail();
+}
+function qrow(a){
+  const on = state.sel === a.id, sev = SEV[a.tier];
+  return `<button class="qitem" role="option" data-id="${a.id}" data-phase="${a.phase}"
+    style="--q-phase:${phVar(a.phase)}" aria-selected="${on}"
+    aria-label="${esc(TYPE[a.type].n)} · ${esc(REPOS[a.repo].label)} · ${esc(a.intent)} · ${esc(a.stage)} · waiting ${esc(a.wait)}">
+    <div class="qmeta">
+      <span class="sev sev-${sev}">${icon(TYPE[a.type].i,11)}${esc(TYPE[a.type].n)}</span>
+      <span class="mono">${esc(REPOS[a.repo].label)}</span>
+      ${a.hot ? '<span class="chip tiny" style="border-color:var(--danger);color:var(--danger)">oldest in tier</span>' : ''}
+      <span class="sp"></span><span class="qkey">${a.key}</span>
+    </div>
+    <div class="qtitle">${esc(a.title)}</div>
+    <div class="qmeta">
+      <span style="color:${phVar(a.phase)}">${esc(a.stage)}</span>
+      <span>·</span><span>${esc(a.intent)}</span>
+      <span class="sp"></span><span class="qwait">${esc(a.wait)}</span>
+    </div>
+    <div class="qmeta" style="margin-top:3px"><span class="mut">→ ${esc(a.next)}</span>
+      <span class="sp"></span><span class="mono tiny mut">${esc(a.id)}</span></div>
+  </button>`;
+}
+function select(id){
+  state.sel = id; state.tab = 'decision'; state.confirmGate = false;
+  $('#split').dataset.mobile = 'detail';
+  renderQueue();
+}
+</script>
+<script>
+/* ================= contextual inspector ================= */
+const DTABS = [
+  {id:'decision', label:'Decision', k:'D'},
+  {id:'artifacts', label:'Artifacts', k:'A'},
+  {id:'review', label:'Review', k:'R'},
+  {id:'activity', label:'Activity', k:'V'}
+];
+
+function deliveryMeter(stage){
+  const steps = ['Queued','Delivered','Agent processing','State changed'];
+  const idx = {idle:-1, uncertain:1, failed:0}[stage] ?? -1;
+  return `<div class="deliv" aria-label="Action delivery state">` + steps.map((s,i) => `
+    <div class="deliv-step ${i<idx?'done':''} ${i===idx?'now':''}"><i class="dt"></i>${s}</div>
+    ${i<steps.length-1?'<span class="deliv-line"></span>':''}`).join('') + `</div>`;
+}
+
+function renderDetail(){
+  const a = ACTIONS.find(x => x.id === state.sel && !state.resolved.has(x.id)) || visibleActions()[0];
+  const d = $('#detail');
+  if(!a){
+    d.innerHTML = `<div class="detail-body"><div class="card"><h4>Queue clear</h4>
+      <p>Every blocking item in this scope is resolved. Studio keeps watching disk and session
+      evidence — an item only leaves the queue after AI-DLC state confirms it.</p>
+      <p class="mut xs">Next useful action: open <b>Workflow Map</b> to see where each intent now sits.</p>
+      </div></div>`;
+    return;
+  }
+  state.sel = a.id;
+  const TPL = {gate:tplGate, questions:tplQuestions, recovery:tplRecovery, delivery:tplRecovery,
+               failure:tplFailure, install:tplInstall, budget:tplBudget};
+  const body = TPL[a.type](a);
+
+  d.innerHTML = `
+    <div class="detail-head">
+      <div class="crumbs">
+        <button class="btn btn-ghost btn-sm back-btn" id="btnBack">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg>Queue</button>
+        <b>${esc(REPOS[a.repo].label)}</b><span>/</span><span>${esc(a.space)}</span><span>/</span>
+        <b>${esc(a.intent)}</b><span class="mono tiny">${esc(a.intentId)}</span><span>/</span>
+        <span style="color:${phVar(a.phase)}">${esc(a.stage)}</span>
+        ${a.unit ? `<span class="chip tiny mono">${esc(a.unit)}</span>` : ''}
+        <span class="sp"></span>
+        <span class="chip tiny mono" title="Studio action id">${esc(a.id)}</span>
+      </div>
+      <div class="detail-title">${icon(TYPE[a.type].i,17)} ${esc(a.title)}</div>
+      <div class="row wrap tiny mut">
+        <span class="sev sev-${SEV[a.tier]}">${esc(TYPE[a.type].n)}</span>
+        <span class="chip tiny">${esc(a.st)}</span>
+        <span>waiting <b class="strong mono">${esc(a.wait)}</b></span>
+        <span>·</span><span>session <span class="mono">${esc(a.session)}</span></span>
+        <span>·</span><span>source: AI-DLC disk state</span>
+        ${a.turn ? `<span>·</span><span class="mono">${esc(a.turn)}</span>` : ''}
+      </div>
+      ${deliveryMeter(a.delivery)}
+      <div class="dtabs" role="tablist">${DTABS.map(t =>
+        `<button role="tab" data-tab="${t.id}" aria-selected="${state.tab===t.id}">${t.label}<kbd>${t.k}</kbd></button>`).join('')}</div>
+    </div>
+    <div class="detail-body" id="detailBody">
+      ${state.tab==='decision' ? body
+        : state.tab==='artifacts' ? tabArtifacts(a)
+        : state.tab==='review' ? tabReview(a) : tabActivity(a)}
+    </div>
+    ${footFor(a)}`;
+
+  $('#btnBack') && ($('#btnBack').onclick = () => $('#split').dataset.mobile = 'list');
+  $$('#detail .dtabs button').forEach(b => b.onclick = () => { state.tab = b.dataset.tab; renderDetail(); });
+  wireDetail(a);
+}
+
+/* ---- Gate ---- */
+function tplGate(a){
+  const adv = state.advisor[a.id] || (a.adv && state.advisor[a.id+'_shown'] ? a.adv : null);
+  const shown = state.advisor[a.id];
+  return `
+  <div class="card card-ph" style="--ph:${phVar(a.phase)}">
+    <h4>Decision brief</h4>
+    <p>${esc(a.brief)}</p>
+    <p class="tiny mut">${esc(a.consequence)}</p>
+    <div class="row wrap tiny mut" style="margin-top:6px">
+      <span class="chip tiny">agent: ${esc(a.agent)}</span>
+      <span class="chip tiny">review class: ${esc(a.review)}</span>
+      <span class="chip tiny">gate marker <span class="mono">[?]</span></span>
+    </div>
+  </div>
+
+  <div class="card"><h4>Stage acceptance criteria · ${a.criteria.filter(c=>c.ok).length} of ${a.criteria.length} met</h4>
+    ${a.criteria.map(c => `<div class="crit">
+      <span class="${c.ok?'ok':'no'}">${icon(c.ok?'gate':'failure',13)}</span>
+      <div><b class="strong">${c.ok?'':'Not met: '}${esc(c.t)}</b>
+        <div class="tiny mut">${esc(c.s)}</div></div></div>`).join('')}
+  </div>
+
+  <div class="card"><h4>Produced artifacts</h4>
+    ${a.artifacts.map(f => `<div class="file" tabindex="0" role="button">
+      ${icon('install',13)}<span>${esc(f.n)}</span>
+      <span class="mut">${esc(f.s)} · ${esc(f.c)}</span></div>`).join('')}
+    <p class="tiny mut">Rendered read-only. Studio never edits AI-DLC artifacts; changes are requested
+      through the canonical conversation.</p>
+  </div>
+
+  <div class="card"><h4>Reviewer findings · ${esc(a.review)} pass</h4>
+    ${a.findings.map(f => `<div class="finding ${f.s==='ok'?'':'blocking'}"
+      style="${f.s==='ok'?'border-left-color:var(--ok);background:var(--ok-subtle)':''}">
+      <div class="tiny mut">${esc(f.who)}</div><q>${esc(f.t)}</q>
+      <div class="tiny mut" style="margin-top:4px">anchored to ${esc(f.a)}</div></div>`).join('')}
+  </div>
+
+  ${shown ? advisorBlock(shown) : `<div class="card"><h4>AI Advisor</h4>
+    <p class="tiny mut">Advisor runs only when you ask, in a separate read-only session. It drafts;
+      it never approves, never preselects Approve, and never creates human-turn evidence.</p>
+    <button class="btn" data-adv="gate">${icon('question',13)} Analyse this gate <kbd>G</kbd></button></div>`}
+
+  ${state.confirmGate ? `
+  <div class="confirm" id="gateConfirm">
+    <div class="row"><b class="strong xs">Confirm approval</b><span class="sp"></span>
+      <span class="chip tiny">at-most-once</span></div>
+    <p class="tiny mut" style="margin-top:6px">This exact text is injected as a real user turn into
+      <span class="mono">${esc(a.session)}</span>. The Kiro hook records the protected
+      <span class="mono">HUMAN_TURN</span>; AI-DLC's own engine commits the transition.</p>
+    <div class="exact">${esc(a.gateText)}</div>
+    <div class="row wrap">
+      <button class="btn btn-primary" data-do="approve-confirm">${icon('gate',13)} Send approval</button>
+      <button class="btn" data-do="approve-cancel">Cancel <kbd>Esc</kbd></button>
+      <span class="tiny mut">Studio never shells to <span class="mono">report</span> directly.</span>
+    </div>
+  </div>` : ''}
+
+  <div class="card"><h4>Unresolved risk and prior revisions</h4>
+    ${a.risks.map(r => `<p><b class="strong">${esc(r.t)}</b><br><span class="tiny mut">${esc(r.d)}</span></p>`).join('')}
+  </div>`;
+}
+
+function advisorBlock(adv){
+  return `<div class="advisor">
+    <div class="advisor-h">${icon('question',14)} AI Advisor draft — not a decision
+      <span class="sp"></span>
+      <span class="tiny">confidence <span class="conf">${[1,2,3,4].map(i =>
+        `<i class="${i<=adv.conf?'on':''}"></i>`).join('')}</span></span></div>
+    <p><b class="strong">${esc(adv.rec)}</b></p>
+    <p class="xs">${esc(adv.why)}</p>
+    <p class="xs"><b>Assumptions:</b> ${esc(adv.assume)}</p>
+    <p class="xs"><b>Alternative:</b> ${esc(adv.alt)}</p>
+    ${adv.undec ? `<p class="xs needsyou">Needs your decision: ${esc(adv.undec)}</p>` : ''}
+    <div class="row wrap"><button class="btn btn-sm" data-do="changes">Draft "request changes" text</button>
+      <span class="tiny mut">Recorded in Studio Activity, never in AI-DLC audit.</span></div>
+  </div>`;
+}
+
+/* ---- Questions (exact payload shared with Options A and B) ---- */
+const QSET = [
+  {id:'q1', mode:'single', req:true, head:'Queue default',
+   prompt:'Which organization should the Action Center open with on a fresh install?',
+   why:'Drives FR-ACT-005 and the persisted local preference.',
+   opts:[
+     {v:'unified', l:'Unified priority', d:'Single list across all repos, tiered by operational severity.'},
+     {v:'byrepo',  l:'Grouped by repo',  d:'One section per registered repo, priority inside each.'},
+     {v:'bytype',  l:'Grouped by type',  d:'Gates, questions, recovery and failures as separate sections.'}
+   ], other:true, draft:['unified']},
+  {id:'q2', mode:'multi', req:true, head:'Blocking sources',
+   prompt:'Which sources must produce a blocking queue item in v1? Select all that apply.',
+   why:'FR-ACT-002 lists the sources; FR-ACT-008 keeps maintenance out of the blocking queue.',
+   opts:[
+     {v:'gates',    l:'Gate approvals', d:'Engine [?] markers.'},
+     {v:'questions',l:'Structured AI questions', d:'Live AskUserQuestion payloads and persisted question artifacts.'},
+     {v:'recovery', l:'Recovery incidents', d:'Interrupted intents and contradictory state.'},
+     {v:'delivery', l:'Delivery uncertainty', d:'Submitted actions with no acknowledgement.'},
+     {v:'upgrades', l:'Maintenance upgrades', d:'Available AI-DLC payload upgrades per repo.'}
+   ], other:false, draft:['gates','questions','recovery','delivery']},
+  {id:'q3', mode:'single', req:false, head:'Advisor default',
+   prompt:'Should the Advisor pre-fetch its analysis when a Gate item is opened?',
+   why:'FR-ADV-001 requires explicit user request, so option 2 would need a scoped exception.',
+   opts:[
+     {v:'never', l:'Never — run only on request', d:'Matches FR-ADV-001; zero cost until asked.'},
+     {v:'gates', l:'Pre-fetch for Gates only',   d:'Faster, but spends model usage on items you may skip.'}
+   ], other:true, draft:['never']}
+];
+function tplQuestions(a){
+  const adv = state.advisor[a.id];
+  return `
+  <div class="card card-ph" style="--ph:${phVar(a.phase)}">
+    <h4>Question group · one atomic submission</h4>
+    <p class="tiny mut">Exact prompt, header, order, option labels, descriptions and select semantics are
+      preserved from the live AI-DLC turn. All three answers travel as one action id
+      <span class="mono">${esc(a.id)}</span> and one digest. Studio never edits
+      <span class="mono">*-questions.md</span>.</p>
+    <div class="row wrap tiny mut" style="margin-top:6px">
+      <span class="chip tiny">agent: ${esc(a.agent)}</span>
+      <span class="chip tiny mono">${esc(a.turn)}</span>
+    </div>
+  </div>
+
+  ${adv ? advisorBlock(adv) : `<div class="card"><h4>AI Advisor</h4>
+    <div class="row wrap"><button class="btn btn-sm" data-adv="q">${icon('question',13)} Draft all <kbd>G</kbd></button>
+      <button class="btn btn-sm" data-adv="explain">Explain question 1</button>
+      <span class="tiny mut">Drafts appear as dashed suggestions you must accept.</span></div></div>`}
+
+  ${QSET.map((q,i) => `
+  <div class="qq">
+    <div class="row wrap"><span class="chip tiny mono">${i+1} of 3</span>
+      <span class="chip tiny">${q.mode==='single'?'single select':'multi select'}</span>
+      ${q.req ? '<span class="chip tiny" style="border-color:var(--danger);color:var(--danger)">required</span>'
+              : '<span class="chip tiny">optional</span>'}
+      ${q.other ? '<span class="chip tiny">Other allowed</span>' : ''}
+    </div>
+    <div class="qq-h" style="margin-top:6px">${esc(q.head)}</div>
+    <p class="xs mut">${esc(q.prompt)}</p>
+    ${q.opts.map(o => {
+      const sel = q.mode==='single' ? state.answers[q.id]===o.v : (state.answers[q.id]||new Set()).has(o.v);
+      const drafted = adv && q.draft.includes(o.v) && !sel;
+      return `<label class="opt ${sel?'sel':''} ${drafted?'draft':''}">
+        <input type="${q.mode==='single'?'radio':'checkbox'}" name="${q.id}" value="${o.v}" ${sel?'checked':''}
+          data-qid="${q.id}" data-mode="${q.mode}" aria-describedby="${q.id}-${o.v}-d">
+        <span><b class="strong">${esc(o.l)}</b>
+          <span class="od" id="${q.id}-${o.v}-d"> — ${esc(o.d)}</span>
+          ${drafted?'<span class="chip tiny" style="border-color:var(--aim);color:var(--aim)">advisor draft</span>':''}</span>
+      </label>`; }).join('')}
+    ${q.other ? `<label class="opt">
+      <input type="${q.mode==='single'?'radio':'checkbox'}" name="${q.id}" value="__other"
+        data-qid="${q.id}" data-mode="${q.mode}">
+      <span><b class="strong">Other</b><span class="od"> — free text, preserved verbatim.</span></span></label>
+      <textarea class="otherbox" data-other="${q.id}" placeholder="Other, for question ${i+1}">${esc(state.answers[q.id+'_other']||'')}</textarea>` : ''}
+    <p class="tiny mut" style="margin-top:5px">Why it is asked: ${esc(q.why)}</p>
+  </div>`).join('')}
+
+  <div class="card"><h4>Submission preview</h4>
+    <div class="exact" id="qPreview"></div>
+    <p class="tiny mut">Both required answers must be present before submit. The item stays in the queue
+      until delivery and state evidence prove it was accepted or superseded.</p>
+  </div>`;
+}
+
+/* ---- Recovery and delivery uncertainty ---- */
+function tplRecovery(a){
+  return `
+  <div class="card" style="border-color:var(--danger)">
+    <h4 style="color:var(--danger)">${a.type==='delivery' ? 'Delivery uncertain — no acknowledgement' : 'Contradiction — execution blocked'}</h4>
+    <p>${esc(a.risk)}</p>
+    <p class="tiny mut">Studio shows the contradiction rather than selecting a convenient source as truth.</p>
+  </div>
+  <div class="card card-ph" style="--ph:${phVar(a.phase)}"><h4>Last stable boundary</h4>
+    <p class="mono xs">${esc(a.boundary)}</p>
+  </div>
+  <div class="card"><h4>Evidence, by source</h4>
+    <table class="diff"><thead><tr><th>Source</th><th>Reading</th></tr></thead><tbody>
+      ${a.evidence.map(e => `<tr><td>${esc(e[0])}</td><td class="mono xs">${esc(e[1])}</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="card"><h4>Contradictions and risk</h4>
+    ${a.contra.map(c => `<div class="finding ${c.s==='bad'?'blocking':''}">
+      <b class="strong">${esc(c.t)}</b><div class="tiny mut" style="margin-top:3px">${esc(c.d)}</div></div>`).join('')}
+  </div>
+  <div class="card"><h4>Choices</h4>
+    ${a.choices.map(c => `<div class="file" style="cursor:${c.off?'not-allowed':'pointer'};opacity:${c.off?.55:1}"
+      ${c.off?'aria-disabled="true"':'tabindex="0" role="button"'}>
+      <div><b class="strong">${esc(c.t)}</b>${c.rec?' <span class="chip tiny chip-on">recommended</span>':''}
+        <div class="tiny mut">${esc(c.d)}</div></div></div>`).join('')}
+  </div>`;
+}
+
+/* ---- Failure ---- */
+function tplFailure(a){
+  return `
+  <div class="card" style="border-color:var(--danger)"><h4 style="color:var(--danger)">Circuit open</h4>
+    <p>${esc(a.errsum)}</p>
+  </div>
+  <div class="card"><h4>Normalized error and fingerprint</h4>
+    <div class="exact">${esc(a.fingerprint)}</div>
+    <table class="diff"><thead><tr><th>Attempt</th><th>At</th><th>Backoff</th></tr></thead><tbody>
+      ${a.retries.map(r => `<tr><td>${esc(r[0])}</td><td class="mono">${esc(r[1])}</td><td class="mono">${esc(r[2])}</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="card"><h4>Session log excerpt</h4>
+    <div class="exact">${esc(a.logs)}</div>
+  </div>
+  <div class="card"><h4>Blast radius</h4>
+    <ul class="tight">${a.effects.map(e => `<li>${esc(e)}</li>`).join('')}</ul>
+    <p class="tiny mut">Deterministic guard, validation, permission and dependency failures open the
+      breaker immediately instead of retrying.</p>
+  </div>`;
+}
+
+/* ---- Install conflict ---- */
+function tplInstall(a){
+  return `
+  <div class="card" style="border-color:var(--danger)"><h4 style="color:var(--danger)">Install stopped — managed file drift</h4>
+    <p>Receipt-owned framework files differ from their recorded SHA-256. Studio never silently
+      overwrites a user-modified managed file, and offers no overwrite shortcut.</p>
+  </div>
+  <div class="card"><h4>Receipt</h4>
+    <table class="diff"><tbody>
+      ${a.receipt.map(r => `<tr><td>${esc(r[0])}</td><td class="mono xs">${esc(r[1])}</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="card"><h4>Drifted managed files</h4>
+    ${a.drift.map(d => `<div class="finding blocking">
+      <b class="strong mono xs">${esc(d.f)}</b>
+      <div class="tiny mut">${esc(d.s)}</div>
+      <div class="xs" style="margin-top:4px">${esc(d.w)}</div></div>`).join('')}
+  </div>
+  <div class="card"><h4>Consequences</h4>
+    <ul class="tight">${a.effects.map(e => `<li>${esc(e)}</li>`).join('')}</ul>
+  </div>`;
+}
+
+/* ---- Budget stop ---- */
+function tplBudget(a){
+  return `
+  <div class="card card-ph" style="--ph:${phVar(a.phase)}"><h4>Budget stop</h4>
+    <p>The turn cap for this work window is spent, so the scheduler prevented the next dispatch.</p>
+  </div>
+  <div class="card"><h4>Budget state</h4>
+    <table class="diff"><tbody>
+      ${a.budget.map(b => `<tr><td>${esc(b[0])}</td><td class="mono xs">${esc(b[1])}</td></tr>`).join('')}
+    </tbody></table>
+  </div>
+  <div class="card"><h4>What this did and did not do</h4>
+    <ul class="tight">${a.effects.map(e => `<li>${esc(e)}</li>`).join('')}</ul>
+    <p class="tiny mut">Maintenance and budget notices never displace a blocking gate or question in the queue.</p>
+  </div>`;
+}
+
+/* ---- shared tabs ---- */
+function tabArtifacts(a){
+  const files = a.artifacts || [{n:'(no artifacts produced at this stage)', s:'—', c:'—'}];
+  return `<div class="card"><h4>Artifacts · read-only</h4>
+    <div class="row wrap" style="margin-bottom:8px">
+      ${files.map(f => `<span class="chip tiny">${esc(f.n)}</span>`).join('')}
+      <span class="sp"></span><button class="btn btn-sm" data-do="diffview">Show diff vs prior</button></div>
+    <div class="exact"># ${esc(files[0].n)}
+
+## Mobile behaviour
+The decision loop is complete at 390px.
+- list to detail navigation
+- sticky action bar clears the final evidence block
+&lt;-- reviewer finding R-2 anchors here: per-template controls are not enumerated</div>
+    <p class="tiny mut">Sanitized render, bounded size, no embedded scripts or active content.
+      Path reveal follows KiroCrew policy; opening in a local editor uses an existing approved affordance.</p>
+  </div>
+  <div class="card"><h4>Table of contents</h4>
+    <ul class="tight"><li>Purpose and scope</li><li>Queue ordering</li><li>Detail shell</li>
+      <li>Type-specific templates</li><li>Mobile behaviour</li><li>Empty states</li></ul></div>`;
+}
+function tabReview(a){
+  if(!a.findings) return `<div class="card"><h4>No reviewer pass at this stage</h4>
+    <p class="tiny mut">This item is not stage output, so there is no advisory or adversarial finding set.
+      Review class is derived per stage from the installed graph and the plan's review cap.</p></div>`;
+  return `<div class="card"><h4>Review class · ${esc(a.review)}</h4>
+    ${a.findings.map(f => `<div class="finding ${f.s==='ok'?'':'blocking'}"
+      style="${f.s==='ok'?'border-left-color:var(--ok);background:var(--ok-subtle)':''}">
+      <div class="tiny mut">${esc(f.who)}</div><q>${esc(f.t)}</q>
+      <div class="tiny mut" style="margin-top:4px">anchored to ${esc(f.a)}</div></div>`).join('')}
+    <p class="tiny mut">Findings are quoted from the reviewer artifact and anchored where evidence permits.
+      <b>Request changes</b> sends feedback to the canonical session; it does not edit the artifact.</p>
+  </div>`;
+}
+function tabActivity(a){
+  const ev = [
+    {s:'AI-DLC', c:'var(--accent)', t:`STAGE_STARTED · ${a.stage}`, w:'earlier today'},
+    {s:'AI-DLC', c:'var(--accent)', t:'ARTIFACT_WRITTEN · revision 3', w:'2h 40m ago'},
+    {s:'AI-DLC', c:'var(--accent)', t:`REVIEW_COMPLETED · ${a.review||'n/a'}`, w:'2h 20m ago'},
+    {s:'Studio', c:'var(--aim)',    t:`action ${a.id} projected into Action Center`, w:a.wait+' ago'},
+    {s:'KiroCrew', c:'var(--info)', t:`session ${a.session} · ${a.st}`, w:a.wait+' ago'},
+    {s:'Git', c:'var(--warn)',      t:'branch observed read-only · no Studio Git write exists', w:'12m ago'}
+  ];
+  return `<div class="card"><h4>Timeline · source preserved</h4><div class="tl">
+    ${ev.map(e => `<div class="tl-i" style="--src:${e.c}">
+      <div class="row wrap"><span class="src-tag">${e.s}</span><span class="xs strong">${esc(e.t)}</span>
+        <span class="sp"></span><span class="tiny mut">${esc(e.w)}</span></div></div>`).join('')}
+  </div>
+  <p class="tiny mut">Studio never presents a derived event as an original AI-DLC audit event.
+    The evidence drawer exposes raw audit blocks subject to redaction policy.</p></div>`;
+}
+
+/* ---- sticky action bar ---- */
+function footFor(a){
+  const F = {
+    gate: `<button class="btn btn-primary" data-do="approve">${icon('gate',13)} Approve <kbd>⌘↵</kbd></button>
+           <button class="btn" data-do="changes">Request changes</button>
+           <button class="btn btn-ghost" data-do="snooze">Keep in queue</button>`,
+    questions: `<button class="btn btn-primary" data-do="send">${icon('question',13)} Send answers <kbd>⌘↵</kbd></button>
+           <button class="btn btn-ghost" data-do="snooze">Keep draft</button>`,
+    recovery: `<button class="btn btn-primary" data-do="reconcile">${icon('recovery',13)} Reconcile boundary</button>
+           <button class="btn" data-do="replace">Replace session</button>
+           <button class="btn" disabled title="Blocked until non-delivery is proven">Resend action</button>`,
+    delivery: `<button class="btn btn-primary" data-do="reconcile">${icon('recovery',13)} Reconcile delivery</button>
+           <button class="btn" disabled title="Blocked until non-delivery is proven">Resend answers</button>`,
+    failure: `<button class="btn btn-primary" data-do="retry">${icon('recovery',13)} Retry now</button>
+           <button class="btn" data-adv="diagnose">Diagnose with AI</button>
+           <button class="btn btn-danger" data-do="pause">Pause intent</button>`,
+    install: `<button class="btn btn-primary" data-do="rescan">Re-run preflight</button>
+           <button class="btn" data-do="diffview">Open full drift diff</button>
+           <button class="btn" disabled title="No overwrite shortcut exists, by design">Overwrite</button>`,
+    budget: `<button class="btn btn-primary" data-do="resume">Resume manually</button>
+           <button class="btn" data-do="cap">Raise turn cap</button>`
+  }[a.type];
+  return `<div class="detail-foot">${F}<span class="sp"></span>
+    <span class="tiny mut">At-most-once after possible delivery · a 2xx receipt alone never means AI-DLC state changed.</span></div>`;
+}
+</script>
+<script>
+/* ================= interactions ================= */
+function labelOf(q, v){
+  if(v === '__other') return 'Other: ' + (state.answers[q.id+'_other'] || '(empty)');
+  const o = q.opts.find(x => x.v === v);
+  return o ? o.l : v;
+}
+function qPreviewText(){
+  return QSET.map((q,i) => {
+    const a = state.answers[q.id];
+    let val = '—';
+    if(q.mode === 'single' && a) val = labelOf(q, a);
+    if(q.mode === 'multi' && a && a.size) val = [...a].map(v => labelOf(q, v)).join(', ');
+    return `${i+1}. ${q.head}: ${val}`;
+  }).join('\n');
+}
+function refreshPreview(){
+  const p = $('#qPreview'); if(p) p.textContent = qPreviewText();
+}
+
+function wireDetail(a){
+  const bind = (sel, fn) => $$('#detail ' + sel).forEach(el => el.onclick = fn);
+
+  $$('#detail [data-qid]').forEach(inp => inp.onchange = () => {
+    const qid = inp.dataset.qid;
+    if(inp.dataset.mode === 'single') state.answers[qid] = inp.value;
+    else {
+      const set = state.answers[qid] instanceof Set ? state.answers[qid] : new Set();
+      inp.checked ? set.add(inp.value) : set.delete(inp.value);
+      state.answers[qid] = set;
+    }
+    renderDetail();
+  });
+  $$('#detail [data-other]').forEach(t => t.oninput = () => {
+    state.answers[t.dataset.other + '_other'] = t.value; refreshPreview();
+  });
+  refreshPreview();
+
+  $$('#detail [data-adv]').forEach(b => b.onclick = () => {
+    const kind = b.dataset.adv;
+    if(kind === 'gate'){
+      state.advisor[a.id] = a.adv || {conf:2, rec:'No blocking defect found in this revision.',
+        why:'Every acceptance criterion is satisfied and the single open finding is advisory.',
+        assume:'The advisory finding is acceptable to carry into the next stage.',
+        alt:'Request changes to close the finding inside this stage instead.',
+        undec:'whether the open advisory finding meets your review bar.'};
+    } else if(kind === 'diagnose'){
+      state.advisor[a.id] = {conf:2, rec:'Transport-level fault, not a code defect.',
+        why:'All three failures share one fingerprint and no artifact changed between them, which is the transient signature rather than a deterministic guard.',
+        assume:'The ACP peer was restarted or rate-limited during the window.',
+        alt:'Retry once now; if a fourth attempt matches the same fingerprint, pause the intent instead of retrying again.',
+        undec:'whether to spend another turn on a retry before pausing.'};
+      renderDetail(); toast('Advisor diagnosis ready. It is a draft — you still decide.'); return;
+    } else if(kind === 'explain'){
+      toast('Advisor: question 1 sets FR-ACT-005\u2019s default. Unified priority matches the tier contract; the grouped options trade cross-repo urgency for per-repo focus.');
+      return;
+    } else {
+      state.advisor[a.id] = {conf:3, rec:'Drafted: unified priority · four blocking sources · Advisor on request only.',
+        why:'Unified priority matches the FR-ACT-003 tier contract. Maintenance upgrades are excluded because FR-ACT-008 keeps them out of the blocking queue. Pre-fetching the Advisor would contradict FR-ADV-001.',
+        assume:'Maintenance notices are acceptable on Repos and in notifications only.',
+        alt:'Group by repo, if you routinely work one repository at a time.',
+        undec:'whether excluding maintenance from the queue matches how your team triages.'};
+    }
+    renderDetail();
+    toast('Advisor draft ready. It is a draft — nothing is submitted and Approve is not preselected.');
+  });
+
+  bind('[data-do="approve"]', () => { state.confirmGate = true; renderDetail();
+    $('#gateConfirm') && $('#gateConfirm').scrollIntoView({block:'center'}); });
+  bind('[data-do="approve-cancel"]', () => { state.confirmGate = false; renderDetail(); });
+  bind('[data-do="approve-confirm"]', () => {
+    state.resolved.add(a.id); state.confirmGate = false;
+    toast('Sent <b>'+esc(a.gateText)+'</b> into <span class="mono">'+esc(a.session)+'</span> as a real user turn. Waiting for AI-DLC state movement before this item clears.');
+    setTimeout(()=>toast('State changed: <span class="mono">HUMAN_TURN</span> minted, gate <span class="mono">'+esc(a.stage)+'</span> cleared by the engine.'), 900);
+    renderViews(); renderQueue(); renderStrip();
+  });
+  bind('[data-do="changes"]', () => {
+    if($('#changesBox')){ $('#changesBox textarea').focus(); return; }
+    const div = document.createElement('div');
+    div.className = 'confirm'; div.id = 'changesBox';
+    div.innerHTML = `<b class="strong xs">Request changes</b>
+      <p class="tiny mut" style="margin:6px 0">Feedback cannot be blank. It is sent to the canonical
+        session as a real user turn; the gate becomes <span class="mono">[R]</span> and the same session
+        revises the artifact.</p>
+      <textarea class="otherbox" placeholder="What must change before you can approve?"></textarea>
+      <div class="row" style="margin-top:8px"><button class="btn btn-primary btn-sm" id="sendChanges" disabled>Send feedback</button>
+        <span class="tiny mut">Studio does not edit the artifact.</span></div>`;
+    $('#detailBody').appendChild(div); div.scrollIntoView({block:'center'});
+    const ta = div.querySelector('textarea'), btn = div.querySelector('#sendChanges');
+    ta.oninput = () => btn.disabled = !ta.value.trim();
+    ta.focus();
+    btn.onclick = () => { state.resolved.add(a.id);
+      toast('Feedback delivered. Gate is now <span class="mono">[R]</span> — the same session will revise the artifact and the gate reopens.', 'warn');
+      renderViews(); renderQueue(); };
+  });
+  bind('[data-do="send"]', () => {
+    const missing = QSET.filter(q => q.req).filter(q => {
+      const v = state.answers[q.id];
+      return q.mode === 'single' ? !v : !(v && v.size);
+    });
+    if(missing.length){
+      toast('Required answer missing: <b>'+esc(missing.map(m=>m.head).join(', '))+'</b>. All required answers must be present before submit.', 'warn');
+      return;
+    }
+    state.resolved.add(a.id);
+    toast('One atomic submission sent under action id <span class="mono">'+esc(a.id)+'</span> — three answers, one digest, one human turn.');
+    renderViews(); renderQueue();
+  });
+  bind('[data-do="reconcile"]', () => toast('Reconciling: session status, AI-DLC state, audit events, active directive, turn marker and the action timeline. Read-only — nothing is replayed.'));
+  bind('[data-do="replace"]', () => toast('Session replacement needs your confirmation: the directive is still open mid-stage, so automatic failover is not eligible.', 'warn'));
+  bind('[data-do="retry"]', () => toast('Retry dispatched under the repo lease. The fingerprint count resets only after a relevant change or this explicit retry.'));
+  bind('[data-do="pause"]', () => toast('Pause after current turn: no future dispatch, the current turn finishes. Force stop is separate and needs confirmation.', 'warn'));
+  bind('[data-do="rescan"]', () => toast('Preflight re-run: 2 managed files still drifted. Install stays blocked and the prior installation is untouched.', 'warn'));
+  bind('[data-do="diffview"]', () => { state.tab = 'artifacts'; renderDetail(); });
+  bind('[data-do="resume"]', () => toast('Manual resume queued. Raising a cap never resumes automatically — you start the next turn.'));
+  bind('[data-do="cap"]', () => toast('Turn cap is editable in Settings. Credit caps stay disabled while credits are not observable on this host.'));
+  bind('[data-do="snooze"]', () => toast('Kept in the queue. Unsent drafts are preserved locally and you are warned before discarding them.'));
+}
+
+/* ================= Workflow Map ================= */
+/* 33 known stages · 21 selected · 12 skipped — the same graph Options A and B show,
+   for intent studio-action-center in kirocrew-app-aidlc. */
+const MAP = {
+  initialization:[
+    {id:'0.1', n:'select-plugins',   st:'done', ag:'composer', rev:'none'},
+    {id:'0.2', n:'practices-discovery', st:'done', ag:'composer', rev:'none'},
+    {id:'0.3', n:'intent-record',    st:'done', ag:'composer', rev:'none'}
+  ],
+  ideation:[
+    {id:'1.1', n:'intent-capture',        st:'done',    ag:'product',   rev:'advisory', gate:true},
+    {id:'1.2', n:'requirements-analysis', st:'waiting', ag:'product',   rev:'advisory', gate:true},
+    {id:'1.3', n:'functional-design',     st:'gate',    ag:'design',    rev:'adversarial', gate:true},
+    {id:'1.4', n:'nfr-requirements',      st:'pending', ag:'architect', rev:'advisory', gate:true},
+    {id:'1.5', n:'market-research',       st:'skipped', ag:'product',   rev:'none', why:'Scope preset: internal tool'},
+    {id:'1.6', n:'rough-mockups',         st:'skipped', ag:'design',    rev:'none', why:'Covered by the mockup review outside AI-DLC'},
+    {id:'1.7', n:'feasibility',           st:'done',    ag:'architect', rev:'advisory'}
+  ],
+  inception:[
+    {id:'2.1', n:'scope-definition',       st:'pending', ag:'product',      rev:'advisory', gate:true},
+    {id:'2.2', n:'contract-design',        st:'pending', ag:'architect',    rev:'advisory', gate:true},
+    {id:'2.3', n:'nfr-design',             st:'pending', ag:'architect',    rev:'advisory', gate:true},
+    {id:'2.4', n:'domain-design',          st:'skipped', ag:'architect',    rev:'none', why:'No new domain model in this intent'},
+    {id:'2.5', n:'infrastructure-design',  st:'pending', ag:'aws-platform', rev:'advisory'},
+    {id:'2.6', n:'team-formation',         st:'skipped', ag:'delivery',     rev:'none', why:'Single-operator intent'},
+    {id:'2.7', n:'units-generation',       st:'pending', ag:'delivery',     rev:'advisory', gate:true}
+  ],
+  construction:[
+    {id:'3.1', n:'delivery-planning', st:'pending', ag:'delivery',        rev:'advisory', gate:true},
+    {id:'3.2', n:'code-generation',   st:'pending', ag:'developer',       rev:'advisory', units:true},
+    {id:'3.3', n:'contract-tests',    st:'pending', ag:'quality',         rev:'advisory', units:true},
+    {id:'3.4', n:'build-and-test',    st:'pending', ag:'quality',         rev:'advisory', units:true},
+    {id:'3.5', n:'ci-pipeline',       st:'skipped', ag:'pipeline-deploy', rev:'none', why:'Existing pipeline is reused'},
+    {id:'3.6', n:'refined-mockups',   st:'skipped', ag:'design',          rev:'none', why:'Skipped in plan'},
+    {id:'3.7', n:'security-patch',    st:'skipped', ag:'devsecops',       rev:'none', why:'Conditional — no advisory in scope'},
+    {id:'3.8', n:'bugfix',            st:'skipped', ag:'developer',       rev:'none', why:'Conditional — no defect in scope'},
+    {id:'3.9', n:'reverse-engineering', st:'skipped', ag:'developer',     rev:'none', why:'Conditional — greenfield App code'},
+    {id:'3.10', n:'compliance-review', st:'pending', ag:'compliance',     rev:'adversarial', gate:true}
+  ],
+  operation:[
+    {id:'4.1', n:'environment-provisioning', st:'pending', ag:'aws-platform',   rev:'advisory', gate:true},
+    {id:'4.2', n:'deployment-pipeline',      st:'pending', ag:'pipeline-deploy', rev:'adversarial', gate:true},
+    {id:'4.3', n:'deployment-execution',     st:'pending', ag:'pipeline-deploy', rev:'advisory', gate:true},
+    {id:'4.4', n:'observability-setup',      st:'pending', ag:'operations',      rev:'advisory'},
+    {id:'4.5', n:'performance-validation',   st:'skipped', ag:'quality',         rev:'none', why:'Deferred to a follow-up intent'},
+    {id:'4.6', n:'incident-response',        st:'skipped', ag:'operations',      rev:'none', why:'Conditional — runbook already exists'}
+  ]
+};
+const REL = {
+  '1.3':{up:['1.2','1.1'], down:['1.4','2.1','2.2']},
+  '1.2':{up:['1.1'],        down:['1.3','1.4']},
+  '2.2':{up:['2.1','1.3'],  down:['2.3','2.7','3.1']},
+  '3.2':{up:['3.1','2.7'],  down:['3.3','3.4']}
+};
+const ST_LABEL = {done:'Complete', running:'Running', gate:'Gate open [?]', waiting:'Waiting for you',
+  pending:'Pending', skipped:'Skipped', blocked:'Blocked'};
+
+function renderMap(){
+  const sel = state.mapSel, rel = (state.mapDensity==='dependencies' ? REL[sel] : null) || {up:[],down:[]};
+  const st = Object.values(MAP).flat().find(s => s.id === sel);
+  const phaseOf = id => Object.keys(MAP).find(p => MAP[p].some(s => s.id === id));
+
+  $('#mapRoot').innerHTML = `
+    <div class="map-toolbar">
+      <b class="strong">Workflow Map</b>
+      <span class="chip tiny mono">kirocrew-app-aidlc / default / studio-action-center · 8f2c41ab</span>
+      <span class="chip tiny">21 selected · 12 skipped · 33 known</span>
+      <span class="sp"></span>
+      ${['overview','detailed','dependencies'].map(d =>
+        `<button class="chip ${state.mapDensity===d?'chip-on':''}" data-den="${d}">${d}</button>`).join('')}
+      <span class="tiny mut">Density</span><kbd>M</kbd>
+    </div>
+    ${st ? `<div class="inspector">
+      <div class="row wrap"><b class="strong">${esc(st.id)} ${esc(st.n)}</b>
+        <span class="chip tiny" style="border-color:${phVar(phaseOf(st.id))};color:${phVar(phaseOf(st.id))}">${esc(phaseOf(st.id))}</span>
+        <span class="chip tiny">${esc(ST_LABEL[st.st])}</span>
+        <span class="chip tiny">agent: ${esc(st.ag)}</span>
+        <span class="chip tiny">review: ${esc(st.rev)}</span>
+        ${st.gate?'<span class="chip tiny" style="border-color:var(--warn);color:var(--warn)">human gate</span>':''}
+        <span class="sp"></span>
+        ${st.st==='gate'?'<button class="btn btn-sm btn-primary" data-jump="A-7732">Open the gate decision</button>':''}
+        ${st.st==='waiting'?'<button class="btn btn-sm btn-primary" data-jump="A-7739">Open the questions</button>':''}
+      </div>
+      ${st.why?`<p class="tiny" style="color:var(--warn);margin-top:6px">Skipped, position retained — ${esc(st.why)}</p>`:''}
+      <div class="grid2" style="margin-top:9px">
+        <div><div class="tiny mut">Consumes</div><ul class="tight xs">
+          ${(REL[st.id]?.up||['—']).map(u=>`<li class="mono">${esc(u)}</li>`).join('')}</ul></div>
+        <div><div class="tiny mut">Produces</div><ul class="tight xs">
+          <li>contract-design.md</li><li>openapi-refunds-v2.yaml</li></ul></div>
+      </div>
+      ${state.mapDensity==='dependencies'
+        ? `<p class="tiny mut" style="margin-top:7px">Dependency overlay on: upstream stages are outlined in
+            <span style="color:var(--info)">cyan</span>, downstream in
+            <span style="color:var(--ph-operation)">orange</span>.</p>`
+        : `<p class="tiny mut" style="margin-top:7px">Default view draws no edges. Switch density to
+            <b>dependencies</b> to overlay this stage's relationships.</p>`}
+    </div>` : ''}
+
+    ${PHASES.map(p => {
+      const stages = MAP[p.id], open = !state.collapsed.has('sw_'+p.id);
+      return `<section class="swim" data-sw="${p.id}" data-open="${open}"
+        style="--ph:var(${p.v});--ph-subtle:var(${p.v}-subtle)">
+        <div class="swim-h" role="button" tabindex="0" aria-expanded="${open}">
+          <svg class="strip-caret" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          <b>${esc(p.label)}</b>
+          <span class="tiny mut">${stages.filter(s=>s.st==='done').length}/${stages.length} complete</span>
+          <span class="sp"></span>
+          ${stages.some(s=>s.st==='running')?'<span class="pill-live"><i class="pulse"></i>live</span>':''}
+          ${stages.some(s=>s.st==='gate')?'<span class="chip tiny" style="border-color:var(--warn);color:var(--warn)">gate open</span>':''}
+        </div>
+        <div class="swim-body">${stages.map(s => `
+          <div class="st ${rel.up.includes(s.id)?'up':''} ${rel.down.includes(s.id)?'down':''}"
+            data-st="${s.id}" data-state="${s.st}" role="button" tabindex="0"
+            aria-selected="${state.mapSel===s.id}"
+            aria-label="${esc(s.id)} ${esc(s.n)} · ${esc(ST_LABEL[s.st])} · agent ${esc(s.ag)}">
+            <div class="st-n"><span class="mono tiny mut">${esc(s.id)}</span><br>${esc(s.n)}</div>
+            <div class="st-m">
+              <span>${esc(ST_LABEL[s.st])}</span>
+              ${s.gate?'<span style="color:var(--warn)">gate</span>':''}
+              ${state.mapDensity!=='overview'?`<span>${esc(s.ag)}</span><span>${esc(s.rev)}</span>`:''}
+            </div>
+          </div>`).join('')}</div>
+        ${p.id==='construction' && open ? `<div class="units" aria-label="Construction unit sub-lanes">
+          ${['unit-1 queue-projection','unit-2 detail-shell','unit-3 action-broker','unit-4 slack-quick-actions']
+            .map((u,i) => `<div class="st" data-state="pending" style="--ph:var(--ph-construction)">
+              <div class="st-n">${esc(u)}</div>
+              <div class="st-m"><span>Pending</span><span>3.2 · 3.3 · 3.4</span></div></div>`).join('')}
+        </div>` : ''}
+      </section>`;
+    }).join('')}
+    <p class="tiny mut">A list/table alternative to these swimlanes is available for assistive technology;
+      mobile uses phase accordions rather than a shrink-to-fit canvas.</p>`;
+
+  $$('#mapRoot [data-den]').forEach(b => b.onclick = () => { state.mapDensity = b.dataset.den; renderMap(); });
+  $$('#mapRoot [data-st]').forEach(el => {
+    el.onclick = () => { state.mapSel = el.dataset.st; renderMap(); };
+    el.onkeydown = e => { if(e.key==='Enter'||e.key===' '){ e.preventDefault(); el.click(); } };
+  });
+  $$('#mapRoot .swim-h').forEach(h => {
+    const toggle = () => {
+      const id = 'sw_' + h.closest('.swim').dataset.sw;
+      state.collapsed.has(id) ? state.collapsed.delete(id) : state.collapsed.add(id);
+      renderMap();
+    };
+    h.onclick = toggle;
+    h.onkeydown = e => { if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggle(); } };
+  });
+  const jump = $('#mapRoot [data-jump]');
+  if(jump) jump.onclick = () => { go('actions'); select(jump.dataset.jump); };
+}
+</script>
+<script>
+/* ================= four-step new-intent wizard ================= */
+const WSTEPS = [
+  {n:1, t:'Work', d:'repo · space · objective'},
+  {n:2, t:'Preset', d:'scope · depth · review · tests'},
+  {n:3, t:'Plan', d:'five-phase stage matrix'},
+  {n:4, t:'Review', d:'diff · counts · estimates'}
+];
+function planCounts(){
+  const all = Object.values(MAP).flat();
+  const on = all.filter(s => !state.planOff.has(s.id));
+  return {stages:on.length, gates:on.filter(s=>s.gate).length, artifacts:on.length*2 - 3, total:all.length};
+}
+function renderWizard(){
+  const c = planCounts();
+  $('#wizRoot').innerHTML = `
+    <div class="row wrap" style="margin-bottom:10px">
+      <b class="strong" style="font-size:15px">New intent</b>
+      <span class="chip tiny">created paused — never auto-runs</span>
+      <span class="sp"></span>
+      <span class="tiny mut">Step</span><kbd>←</kbd><kbd>→</kbd>
+    </div>
+    <div class="steps">${WSTEPS.map(s => `
+      <div class="step" data-on="${state.wizStep===s.n}" data-done="${state.wizStep>s.n}">
+        <div class="step-n">STEP ${s.n}</div>
+        <b class="strong xs">${esc(s.t)}</b>
+        <div class="tiny mut">${esc(s.d)}</div>
+      </div>`).join('')}</div>
+
+    ${state.wizStep===1 ? `
+    <div class="card"><h4>Step 1 · Work</h4>
+      <div class="grid2">
+        <div class="field"><label>Repository</label>
+          <select><option>kirocrew-app-aidlc</option><option>payments-api</option><option>edge-telemetry</option></select></div>
+        <div class="field"><label>Space</label><select><option>default</option></select></div>
+      </div>
+      <div class="field"><label>Objective</label>
+        <input value="Add Slack quick actions for simple gates with deep links back to the exact decision card">
+      </div>
+      <div class="field"><label>Context the agent should not have to guess</label>
+        <textarea class="otherbox">Slack replies must reuse the same action id and canonical session as Studio. Multi-select question groups deep-link instead of answering inline. Owner DM is the default delivery target.</textarea></div>
+      <div class="field"><label>Project type signals (detected, read-only)</label>
+        <div class="row wrap"><span class="chip tiny">Python App backend</span><span class="chip tiny">React UI</span>
+          <span class="chip tiny">AppManifest present</span><span class="chip tiny">AI-DLC 2.4.0 installed</span></div></div>
+    </div>` : ''}
+
+    ${state.wizStep===2 ? `
+    <div class="card"><h4>Step 2 · Preset</h4>
+      <div class="grid2">
+        <div class="field"><label>Scope</label>
+          <select><option>feature</option><option>mvp</option><option>bugfix</option><option>security-patch</option></select></div>
+        <div class="field"><label>Depth</label>
+          <select><option>standard</option><option>light</option><option>deep</option></select></div>
+        <div class="field"><label>Review cap</label>
+          <select><option>advisory</option><option>adversarial</option><option>none</option></select></div>
+        <div class="field"><label>Test strategy</label>
+          <select><option>balanced</option><option>minimal</option><option>thorough</option></select></div>
+      </div>
+      <p class="tiny mut">The preset only proposes; the plan matrix in step 3 is where stages are actually
+        selected, and the engine refuses any selection it does not permit.</p>
+    </div>` : ''}
+
+    ${state.wizStep===3 ? `
+    <div class="card"><h4>Step 3 · Plan — every known stage, including excluded ones</h4>
+      ${PHASES.map(p => `
+        <div style="margin-bottom:11px">
+          <div class="row" style="margin-bottom:6px">
+            <span class="dot" style="color:var(${p.v})"></span><b class="strong xs">${esc(p.label)}</b>
+            <span class="tiny mut">${MAP[p.id].length} stages</span></div>
+          <div class="matrix">${MAP[p.id].map(s => {
+            const off = state.planOff.has(s.id);
+            const locked = ['0.1','0.2','0.3','2.1','2.2','2.3'].includes(s.id);
+            return `<label class="mstage ${off?'off':''} ${locked?'locked':''}" style="--ph:var(${p.v})">
+              <span class="row"><input type="checkbox" ${off?'':'checked'} ${locked?'disabled':''}
+                data-plan="${s.id}" aria-label="${esc(s.id)} ${esc(s.n)}">
+                <span><span class="mono tiny mut">${esc(s.id)}</span> ${esc(s.n)}</span></span>
+              <div class="why">${locked ? 'Locked — required or already at/behind the cursor'
+                : s.gate ? 'human gate' : 'optional in this scope'}</div>
+            </label>`; }).join('')}</div>
+        </div>`).join('')}
+      <p class="tiny mut">Dependency validation runs on every change. v1 does not author new stage
+        definitions and does not reorder the DAG.</p>
+    </div>` : ''}
+
+    ${state.wizStep===4 ? `
+    <div class="card"><h4>Step 4 · Review</h4>
+      <div class="kpi" style="margin-bottom:11px">
+        <div><div class="l">Stages <span class="exact-tag">exact</span></div><div class="v">${c.stages}</div>
+          <div class="tiny mut">of ${c.total} known</div></div>
+        <div><div class="l">Human gates <span class="exact-tag">exact</span></div><div class="v">${c.gates}</div></div>
+        <div><div class="l">Artifacts <span class="exact-tag">exact</span></div><div class="v">${c.artifacts}</div></div>
+        <div><div class="l">Turns <span class="range-tag">range</span></div><div class="v">58–96</div>
+          <div class="tiny mut">rule-based · low confidence</div></div>
+        <div><div class="l">Active time <span class="range-tag">range</span></div><div class="v">6–11h</div>
+          <div class="tiny mut">calibrated from 3 local runs</div></div>
+        <div><div class="l">Credits <span class="na-tag">unavailable</span></div><div class="v mut">—</div>
+          <div class="tiny mut">not observable on this host</div></div>
+      </div>
+      <h4>Plan diff vs preset default</h4>
+      <table class="diff"><thead><tr><th>Change</th><th>Effect</th></tr></thead><tbody>
+        <tr><td class="mono">1.4 rough-mockups → skipped</td><td>Removes 1 stage, 0 gates. Loses early UI validation.</td></tr>
+        <tr><td class="mono">3.6 refined-mockups → skipped</td><td>Removes 1 stage. Acceptable for an API-only change.</td></tr>
+        <tr><td class="mono">2.4 nfr-design review → adversarial</td><td>Adds 1 reviewer cycle; dominates the upper estimate.</td></tr>
+      </tbody></table>
+      <p class="tiny mut" style="margin-top:8px"><b class="strong">Dominant cost:</b> 3.2 code-generation and
+        3.4 build-and-test across 4 units account for roughly 60% of the range. Removing 3.3 contract-tests
+        would cut ~1.5h and lose contract regression coverage.</p>
+      <h4 style="margin-top:11px">Gates you will be asked to decide</h4>
+      <div class="row wrap">${Object.values(MAP).flat().filter(s=>s.gate && !state.planOff.has(s.id))
+        .map(s=>`<span class="chip tiny mono">${esc(s.id)}</span>`).join('')}</div>
+    </div>` : ''}
+
+    <div class="row wrap" style="margin:4px 0 24px">
+      <button class="btn" id="wizPrev" ${state.wizStep===1?'disabled':''}>Back</button>
+      ${state.wizStep<4
+        ? `<button class="btn btn-primary" id="wizNext">Continue to step ${state.wizStep+1}</button>`
+        : `<button class="btn btn-primary" id="wizCreate">Create intent (paused)</button>
+           <button class="btn" id="wizRun" disabled title="Available after the intent exists on disk">Run to next checkpoint</button>`}
+      <span class="sp"></span>
+      <span class="tiny mut">Create verifies the new intent on disk before reporting success.</span>
+    </div>`;
+
+  $$('#wizRoot [data-plan]').forEach(cb => cb.onchange = () => {
+    cb.checked ? state.planOff.delete(cb.dataset.plan) : state.planOff.add(cb.dataset.plan);
+    renderWizard();
+  });
+  const prev = $('#wizPrev'), next = $('#wizNext');
+  if(prev) prev.onclick = () => { state.wizStep = Math.max(1, state.wizStep-1); renderWizard(); };
+  if(next) next.onclick = () => { state.wizStep = Math.min(4, state.wizStep+1); renderWizard(); };
+  const cr = $('#wizCreate');
+  if(cr) cr.onclick = () => {
+    toast('Intent created through the canonical conversation and verified on disk. It is paused — nothing runs until you press <b>Run to next checkpoint</b>.');
+    toast('It inherits no <span class="mono">Keep moving</span>, no budgets and no Advisor drafts from another intent.');
+  };
+}
+
+/* ================= repos ================= */
+function renderRepos(){
+  const rows = [
+    {r:'kirocrew-app-aidlc', p:'~/warren_ws/kirocrew-app-aidlc', s:'Healthy · engine 2.4.0',
+     e:'2.4.0', i:'1 intent · waiting for you', g:'main · 4 files dirty', c:'var(--ok)'},
+    {r:'payments-api', p:'~/src/payments-api', s:'Healthy · engine 2.4.0',
+     e:'2.4.0', i:'2 intents · lease held by refund-ledger', g:'feat/refund-ledger · clean', c:'var(--ok)'},
+    {r:'edge-telemetry', p:'~/src/edge-telemetry', s:'Install blocked · receipt drift',
+     e:'2.3.0 → 2.4.0 blocked', i:'1 intent · circuit open', g:'main · 7 files dirty', c:'var(--danger)'}
+  ];
+  $('#reposRoot').innerHTML = `
+    <div class="map-toolbar"><b class="strong">Registered repositories</b>
+      <span class="chip tiny">manual registration only · no filesystem discovery</span>
+      <span class="sp"></span><button class="btn btn-sm" data-r="add">Add repository…</button>
+      <button class="btn btn-sm" data-r="upg">Batch upgrade preview</button></div>
+    <div class="card"><table class="diff"><thead><tr>
+      <th>Repo</th><th>Install health</th><th>Engine</th><th>In flight</th><th>Git (read-only)</th></tr></thead><tbody>
+      ${rows.map(x=>`<tr><td class="mono">${esc(x.r)}<div class="tiny mut">${esc(x.p)}</div></td>
+        <td style="color:${x.c}">${esc(x.s)}</td><td class="mono xs">${esc(x.e)}</td>
+        <td class="xs">${esc(x.i)}</td><td class="mono tiny">${esc(x.g)}</td></tr>`).join('')}
+    </tbody></table>
+    <p class="tiny mut">Maintenance upgrades live here and in notifications — they never enter the blocking
+      Action Center queue. Removing a repo unregisters it and never edits repo content. Studio performs no
+      Git writes; <b>Ask AI to prepare commit</b> is a canonical-session request.</p></div>`;
+  $$('#reposRoot [data-r]').forEach(b => b.onclick = () => toast(b.dataset.r === 'add'
+    ? 'Desktop-only flow: pick an absolute path, run the read-only preflight, then confirm the managed-path preview before install.'
+    : 'Batch upgrade preview: kirocrew-app-aidlc and payments-api are already at 2.4.0; edge-telemetry is blocked by receipt drift and is excluded.'));
+}
+
+/* ================= command palette ================= */
+const CMDS = [
+  {g:'Go',     l:'Action Center',        h:['1'], run:()=>go('actions')},
+  {g:'Go',     l:'Workflow Map',         h:['2'], run:()=>go('map')},
+  {g:'Go',     l:'New intent wizard',    h:['3'], run:()=>go('new')},
+  {g:'Go',     l:'Repos',                h:['4'], run:()=>go('repos')},
+  {g:'Filter', l:'type:gate',            h:['G'], run:()=>addToken('type','gate')},
+  {g:'Filter', l:'type:questions',       h:[],    run:()=>addToken('type','questions')},
+  {g:'Filter', l:'type:recovery',        h:[],    run:()=>addToken('type','recovery')},
+  {g:'Filter', l:'repo:payments-api',    h:[],    run:()=>addToken('repo','payments')},
+  {g:'Filter', l:'repo:edge-telemetry',  h:[],    run:()=>addToken('repo','edge')},
+  {g:'Filter', l:'repo:kirocrew-app-aidlc', h:[], run:()=>addToken('repo','studio')},
+  {g:'Run',    l:'Run to next checkpoint (kirocrew-app-aidlc)', h:['R'],
+   run:()=>toast('Queued under the repo lease. It advances unattended until a gate, question, failure, budget stop or completion.')},
+  {g:'Run',    l:'Pause after current turn (payments-api)', h:[],
+   run:()=>toast('Pause armed. The current turn finishes; no further dispatch.', 'warn')},
+  {g:'Run',    l:'Force stop now (payments-api)', h:[],
+   run:()=>toast('Force stop needs a separate confirmation and marks the intent Interrupted. The scheduler never calls it.', 'warn')},
+  {g:'View',   l:'Toggle execution strip', h:['E'], run:()=>$('#stripToggle').click()},
+  {g:'View',   l:'Switch theme',           h:['T'], run:()=>setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark')}
+];
+function addToken(k,v){
+  if(!state.tokens.some(t=>t.k===k&&t.v===v)) state.tokens.push({k,v});
+  renderTokens(); go('actions'); renderQueue();
+}
+function renderTokens(){
+  $('#cmdTokens').innerHTML = state.tokens.map((t,i) =>
+    `<span class="cmd-token">${esc(t.k)}:${esc(t.v)}<button data-tok="${i}" aria-label="Remove filter">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg></button></span>`).join('');
+  $$('#cmdTokens [data-tok]').forEach(b => b.onclick = () => {
+    state.tokens.splice(+b.dataset.tok,1); renderTokens(); renderQueue(); });
+}
+let palIdx = 0;
+function openPalette(q){
+  const items = CMDS.filter(c => (c.g+' '+c.l).toLowerCase().includes((q||'').toLowerCase()));
+  const pal = $('#palette');
+  if(!items.length){ pal.hidden = true; $('#cmdInput').setAttribute('aria-expanded','false'); return; }
+  palIdx = Math.min(palIdx, items.length-1);
+  let html = '', last = '';
+  items.forEach((c,i) => {
+    if(c.g !== last){ html += `<div class="palette-group">${esc(c.g)}</div>`; last = c.g; }
+    html += `<div class="palette-item" role="option" data-i="${i}" aria-selected="${i===palIdx}">
+      <span>${esc(c.l)}</span><span class="p-hint">${c.h.map(k=>`<kbd>${k}</kbd>`).join('')}</span></div>`;
+  });
+  pal.innerHTML = html; pal.hidden = false;
+  $('#cmdInput').setAttribute('aria-expanded','true');
+  $$('#palette .palette-item').forEach(el => el.onclick = () => { items[+el.dataset.i].run(); closePalette(); });
+  pal._items = items;
+}
+function closePalette(){
+  $('#palette').hidden = true; $('#cmdInput').value = ''; palIdx = 0;
+  $('#cmdInput').setAttribute('aria-expanded','false');
+}
+const ci = $('#cmdInput');
+ci.oninput = () => {
+  const v = ci.value;
+  const m = v.match(/^(repo|type):(\S+)\s$/);
+  if(m){ addToken(m[1], m[2]); ci.value = ''; closePalette(); return; }
+  palIdx = 0; openPalette(v);
+};
+ci.onfocus = () => openPalette(ci.value);
+ci.onkeydown = e => {
+  const pal = $('#palette'), items = pal._items || [];
+  if(e.key === 'ArrowDown'){ e.preventDefault(); palIdx = Math.min(items.length-1, palIdx+1); openPalette(ci.value); }
+  else if(e.key === 'ArrowUp'){ e.preventDefault(); palIdx = Math.max(0, palIdx-1); openPalette(ci.value); }
+  else if(e.key === 'Enter'){
+    e.preventDefault();
+    if(items[palIdx]) items[palIdx].run();
+    else if(ci.value.trim()){ addToken('text', ci.value.trim()); }
+    closePalette();
+  } else if(e.key === 'Escape'){ e.preventDefault(); closePalette(); ci.blur(); }
+  else if(e.key === 'Backspace' && !ci.value && state.tokens.length){
+    state.tokens.pop(); renderTokens(); renderQueue();
+  }
+};
+document.addEventListener('click', e => {
+  if(!$('#cmd').contains(e.target)) $('#palette').hidden = true;
+});
+
+/* ================= keyboard layer ================= */
+function helpModal(){
+  const rows = [
+    ['/ or ⌘K','Focus the command bar'],['1 – 4','Switch primary view'],
+    ['J / K','Move down / up the queue'],['↵','Open the selected item'],
+    ['1 – 7 (queue)','Jump to the numbered item'],['D A R V','Decision · Artifacts · Review · Activity tab'],
+    ['G','Ask the Advisor for a draft'],['⌘↵','Primary action (Approve / Send answers)'],
+    ['E','Collapse or expand the execution strip'],['M','Cycle Workflow Map density'],
+    ['T','Switch light / dark theme'],['Esc','Close palette, modal, or confirmation'],['?','This reference']
+  ];
+  $('#modalRoot').innerHTML = `<div class="modal-bg" id="mb"><div class="modal" role="dialog" aria-modal="true" aria-label="Keyboard reference">
+    <div class="row"><b class="strong">Keyboard reference</b><span class="sp"></span>
+      <button class="btn btn-ghost btn-sm" id="mClose">Close <kbd>Esc</kbd></button></div>
+    <p class="tiny mut" style="margin:8px 0 11px">Option C is keyboard-first: every control is also reachable
+      by Tab in a predictable order, and focus rings use KiroCrew tokens.</p>
+    <div class="help-k">${rows.map(r=>`<kbd>${esc(r[0])}</kbd><span class="xs">${esc(r[1])}</span>`).join('')}</div>
+  </div></div>`;
+  const close = () => $('#modalRoot').innerHTML = '';
+  $('#mClose').onclick = close;
+  $('#mb').onclick = e => { if(e.target.id === 'mb') close(); };
+}
+document.addEventListener('keydown', e => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+  if((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)){ e.preventDefault(); ci.focus(); return; }
+  if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)){
+    const b = $('#detail .detail-foot .btn-primary'); if(b){ e.preventDefault(); b.click(); } return;
+  }
+  if(e.key === 'Escape'){
+    if($('#modalRoot').innerHTML) $('#modalRoot').innerHTML = '';
+    else if(state.confirmGate){ state.confirmGate = false; renderDetail(); }
+    return;
+  }
+  if(typing) return;
+  if(e.key === '/'){ e.preventDefault(); ci.focus(); return; }
+  if(e.key === '?'){ e.preventDefault(); helpModal(); return; }
+  if('1234'.includes(e.key) && !e.shiftKey && state.view !== 'actions'){ go(VIEWS[+e.key-1].id); return; }
+  if(state.view === 'actions'){
+    const list = visibleActions();
+    const hit = list.find(a => a.key === e.key);
+    if(hit){ select(hit.id); return; }
+    if(e.key === 'j' || e.key === 'k'){
+      e.preventDefault();
+      const i = list.findIndex(a => a.id === state.sel);
+      const n = e.key === 'j' ? Math.min(list.length-1, i+1) : Math.max(0, i-1);
+      if(list[n]) select(list[n].id);
+      return;
+    }
+    const tab = {d:'decision', a:'artifacts', r:'review', v:'activity'}[e.key];
+    if(tab){ state.tab = tab; renderDetail(); return; }
+    if(e.key === 'g'){ const b = $('#detail [data-adv]'); if(b) b.click(); return; }
+  }
+  if(e.key === 'e'){ $('#stripToggle').click(); return; }
+  if(e.key === 't'){ setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); return; }
+  if(e.key === 'm' && state.view === 'map'){
+    const order = ['overview','detailed','dependencies'];
+    state.mapDensity = order[(order.indexOf(state.mapDensity)+1) % 3]; renderMap(); return;
+  }
+  if('1234'.includes(e.key) && e.shiftKey) go(VIEWS[+e.key-1].id);
+});
+
+/* ================= init ================= */
+$('#btnHelp').onclick = helpModal;
+$('#groupBy').onchange = e => { state.groupBy = e.target.value; renderQueue(); };
+['#scopeRepo','#scopeSpace','#scopeIntent'].forEach(s => $(s).onchange = () => { renderQueue(); renderStrip(); });
+renderStrip(); renderViews(); renderFilters(); renderTokens(); renderQueue();
+</script>
+</body>
+</html>

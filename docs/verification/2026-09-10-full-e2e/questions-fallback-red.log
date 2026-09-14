@@ -1,0 +1,208 @@
+FFF.......FFF...                                                         [100%]
+=================================== FAILURES ===================================
+_ test_unparsed_file_uses_audited_routing_question_through_api_and_reconcile[A-Guide me] _
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10bedb100>), AppRoute(method='GET', path='/p...ttings at 0x10bf36ca0>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10bf36d40>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10bcf71d0>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+letter = 'A', label = 'Guide me'
+
+    @pytest.mark.parametrize("letter,label", zip("ABC", ROUTING_LABELS))
+    def test_unparsed_file_uses_audited_routing_question_through_api_and_reconcile(
+        sv, routes, fake_host, scene, letter, label
+    ):
+        path = unparsed_questions(scene)
+        original = _tree_digest(scene.root)
+        endpoint = f"/repos/{scene.repo_id}/intents/{INTENT}/questions"
+        status, body = _get(sv, routes, fake_host, endpoint)
+        assert status == 200
+        assert body["host_cards"] == []
+>       assert body["mode"] == "structured"
+E       AssertionError: assert 'degraded' == 'structured'
+E         
+E         - structured
+E         + degraded
+
+tests/test_audit_questions.py:263: AssertionError
+_ test_unparsed_file_uses_audited_routing_question_through_api_and_reconcile[B-I'll edit the file] _
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10c060f40>), AppRoute(method='GET', path='/p...ttings at 0x10c04fa60>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10c04f9c0>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10bed6450>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+letter = 'B', label = "I'll edit the file"
+
+    @pytest.mark.parametrize("letter,label", zip("ABC", ROUTING_LABELS))
+    def test_unparsed_file_uses_audited_routing_question_through_api_and_reconcile(
+        sv, routes, fake_host, scene, letter, label
+    ):
+        path = unparsed_questions(scene)
+        original = _tree_digest(scene.root)
+        endpoint = f"/repos/{scene.repo_id}/intents/{INTENT}/questions"
+        status, body = _get(sv, routes, fake_host, endpoint)
+        assert status == 200
+        assert body["host_cards"] == []
+>       assert body["mode"] == "structured"
+E       AssertionError: assert 'degraded' == 'structured'
+E         
+E         - structured
+E         + degraded
+
+tests/test_audit_questions.py:263: AssertionError
+_ test_unparsed_file_uses_audited_routing_question_through_api_and_reconcile[C-Chat] _
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10c099da0>), AppRoute(method='GET', path='/p...ttings at 0x10c098b80>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10c0985e0>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10c034140>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+letter = 'C', label = 'Chat'
+
+    @pytest.mark.parametrize("letter,label", zip("ABC", ROUTING_LABELS))
+    def test_unparsed_file_uses_audited_routing_question_through_api_and_reconcile(
+        sv, routes, fake_host, scene, letter, label
+    ):
+        path = unparsed_questions(scene)
+        original = _tree_digest(scene.root)
+        endpoint = f"/repos/{scene.repo_id}/intents/{INTENT}/questions"
+        status, body = _get(sv, routes, fake_host, endpoint)
+        assert status == 200
+        assert body["host_cards"] == []
+>       assert body["mode"] == "structured"
+E       AssertionError: assert 'degraded' == 'structured'
+E         
+E         - structured
+E         + degraded
+
+tests/test_audit_questions.py:263: AssertionError
+_________ test_unparsed_file_audit_submit_rechecks_the_file[file_edit] _________
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10c09b880>), AppRoute(method='GET', path='/p...ttings at 0x10c09bc40>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10c09be20>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10c035670>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c034200>
+change = 'file_edit'
+
+    @pytest.mark.parametrize("change", ["file_edit", "structured_replacement", "read_failed"])
+    def test_unparsed_file_audit_submit_rechecks_the_file(sv, routes, fake_host, scene, monkeypatch, change):
+        path = unparsed_questions(scene)
+>       card = question_card(sv, routes, fake_host, scene)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_audit_questions.py:323: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10c09b880>), AppRoute(method='GET', path='/p...ttings at 0x10c09bc40>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10c09be20>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10c035670>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+
+    def question_card(sv, routes, fake_host, scene):
+        _rescan(sv, routes, fake_host, scene)
+        cards = [card for card in _queue(sv, routes, fake_host) if card["type"] == "question"]
+>       assert len(cards) == 1, cards
+E       AssertionError: []
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_audit_questions.py:68: AssertionError
+__ test_unparsed_file_audit_submit_rechecks_the_file[structured_replacement] ___
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10c061c60>), AppRoute(method='GET', path='/p...ttings at 0x10c061da0>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10c061a80>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10bfb47a0>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10bfb48f0>
+change = 'structured_replacement'
+
+    @pytest.mark.parametrize("change", ["file_edit", "structured_replacement", "read_failed"])
+    def test_unparsed_file_audit_submit_rechecks_the_file(sv, routes, fake_host, scene, monkeypatch, change):
+        path = unparsed_questions(scene)
+>       card = question_card(sv, routes, fake_host, scene)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_audit_questions.py:323: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10c061c60>), AppRoute(method='GET', path='/p...ttings at 0x10c061da0>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10c061a80>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10bfb47a0>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+
+    def question_card(sv, routes, fake_host, scene):
+        _rescan(sv, routes, fake_host, scene)
+        cards = [card for card in _queue(sv, routes, fake_host) if card["type"] == "question"]
+>       assert len(cards) == 1, cards
+E       AssertionError: []
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_audit_questions.py:68: AssertionError
+________ test_unparsed_file_audit_submit_rechecks_the_file[read_failed] ________
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10bf376a0>), AppRoute(method='GET', path='/p...ttings at 0x10bf37920>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10bf379c0>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10c0755b0>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10c075c10>
+change = 'read_failed'
+
+    @pytest.mark.parametrize("change", ["file_edit", "structured_replacement", "read_failed"])
+    def test_unparsed_file_audit_submit_rechecks_the_file(sv, routes, fake_host, scene, monkeypatch, change):
+        path = unparsed_questions(scene)
+>       card = question_card(sv, routes, fake_host, scene)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_audit_questions.py:323: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10bf376a0>), AppRoute(method='GET', path='/p...ttings at 0x10bf37920>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10bf379c0>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10c0755b0>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+
+    def question_card(sv, routes, fake_host, scene):
+        _rescan(sv, routes, fake_host, scene)
+        cards = [card for card in _queue(sv, routes, fake_host) if card["type"] == "question"]
+>       assert len(cards) == 1, cards
+E       AssertionError: []
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_audit_questions.py:68: AssertionError
+=============================== warnings summary ===============================
+tests/test_audit_questions.py: 16 warnings
+  /Users/ychchen/warren_ws/kirocrew-app-aidlc/tests/conftest.py:903: NotAppKeyWarning: It is recommended to use web.AppKey instances for keys.
+  https://docs.aiohttp.org/en/stable/web_advanced.html#application-s-config
+    application["state"] = host
+
+tests/test_audit_questions.py: 16 warnings
+  /Users/ychchen/warren_ws/kirocrew-app-aidlc/tests/conftest.py:904: NotAppKeyWarning: It is recommended to use web.AppKey instances for keys.
+  https://docs.aiohttp.org/en/stable/web_advanced.html#application-s-config
+    application["local_secret"] = "test-internal-secret"
+
+tests/test_audit_questions.py::test_unparsed_file_uses_audited_routing_question_through_api_and_reconcile[A-Guide me]
+  /Users/ychchen/warren_ws/kirocrew-app-aidlc/tests/conftest.py:907: NotAppKeyWarning: It is recommended to use web.RequestKey instances for keys.
+  https://docs.aiohttp.org/en/stable/web_advanced.html#request-s-storage
+    request["user"] = user
+
+tests/test_audit_questions.py::test_unparsed_file_uses_audited_routing_question_through_api_and_reconcile[A-Guide me]
+  /Users/ychchen/warren_ws/kirocrew-app-aidlc/tests/conftest.py:909: NotAppKeyWarning: It is recommended to use web.RequestKey instances for keys.
+  https://docs.aiohttp.org/en/stable/web_advanced.html#request-s-storage
+    request["app"] = app
+
+tests/test_audit_questions.py: 16 warnings
+  /Users/ychchen/warren_ws/kirocrew-app-aidlc/tests/test_handlers_auth.py:147: NotAppKeyWarning: It is recommended to use web.AppKey instances for keys.
+  https://docs.aiohttp.org/en/stable/web_advanced.html#application-s-config
+    request.app["ctx"] = sv.ctx
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_audit_questions.py::test_unparsed_file_uses_audited_routing_question_through_api_and_reconcile[A-Guide me]
+FAILED tests/test_audit_questions.py::test_unparsed_file_uses_audited_routing_question_through_api_and_reconcile[B-I'll edit the file]
+FAILED tests/test_audit_questions.py::test_unparsed_file_uses_audited_routing_question_through_api_and_reconcile[C-Chat]
+FAILED tests/test_audit_questions.py::test_unparsed_file_audit_submit_rechecks_the_file[file_edit]
+FAILED tests/test_audit_questions.py::test_unparsed_file_audit_submit_rechecks_the_file[structured_replacement]
+FAILED tests/test_audit_questions.py::test_unparsed_file_audit_submit_rechecks_the_file[read_failed]
+6 failed, 10 passed, 60 deselected, 50 warnings in 24.05s

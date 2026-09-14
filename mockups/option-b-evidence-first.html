@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-DLC Studio — Option B: Evidence First</title>
+<style>
+/* ============================================================
+   Option B — Evidence First
+   Tokens mirrored from KiroCrew website/src/index.css so the mockup
+   previews inside the real dashboard palette. Light + dark only.
+   ============================================================ */
+:root{
+  --font-body:'Space Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --radius-sm:6px;--radius-md:8px;--radius-lg:12px;--radius-xl:16px;
+}
+html[data-theme="dark"]{
+  --bg:#12141a;--bg-accent:#14161d;--bg-elevated:#1a1d25;--bg-hover:#262a35;
+  --card:#181b22;--card-fg:#f4f4f5;--card-hl:rgba(255,255,255,.05);
+  --panel:#12141a;--panel-strong:#1a1d25;--chrome:rgba(18,20,26,.95);
+  --text:#e4e4e7;--text-strong:#fafafa;--muted:#7f7f88;--muted-strong:#a1a1aa;
+  --border:#27272a;--border-strong:#3f3f46;--border-hover:#52525b;
+  --accent:#00d492;--accent-fg:#000;--accent-hover:#34d399;--accent-subtle:rgba(4,117,88,.2);
+  --ring:#10b981;
+  --ok:#22c55e;--ok-fg:#000;--ok-subtle:rgba(34,197,94,.12);
+  --warn:#eab308;--warn-fg:#000;--warn-subtle:rgba(234,179,8,.12);
+  --danger:#ef4444;--danger-fg:#000;--danger-subtle:rgba(239,68,68,.12);
+  --info:#38bdf8;--info-fg:#000;--info-subtle:rgba(56,189,248,.12);
+  --aim:#a78bfa;--aim-subtle:rgba(167,139,250,.15);
+  --diff-add:rgba(46,160,67,.15);--diff-add-text:#7ee787;
+  --diff-del:rgba(248,81,73,.15);--diff-del-text:#ffa198;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.2);
+  --shadow-md:0 4px 12px rgba(0,0,0,.25),0 0 0 1px rgba(255,255,255,.03);
+  --shadow-lg:0 12px 28px rgba(0,0,0,.35);
+  /* restrained AI-DLC phase accents */
+  --ph-init:#94a3b8;--ph-idea:#a78bfa;--ph-incep:#38bdf8;--ph-constr:#00d492;--ph-oper:#eab308;
+}
+html[data-theme="light"]{
+  --bg:#fafafa;--bg-accent:#f5f5f5;--bg-elevated:#ffffff;--bg-hover:#f0f0f0;
+  --card:#ffffff;--card-fg:#18181b;--card-hl:rgba(0,0,0,.03);
+  --panel:#fafafa;--panel-strong:#ffffff;--chrome:rgba(255,255,255,.95);
+  --text:#3f3f46;--text-strong:#18181b;--muted:#71717a;--muted-strong:#52525b;
+  --border:#e4e4e7;--border-strong:#d4d4d8;--border-hover:#a1a1aa;
+  --accent:#047558;--accent-fg:#fff;--accent-hover:#059669;--accent-subtle:rgba(4,117,88,.12);
+  --ring:#047558;
+  --ok:#16a34a;--ok-fg:#fff;--ok-subtle:rgba(22,163,74,.1);
+  --warn:#a16207;--warn-fg:#fff;--warn-subtle:rgba(161,98,7,.1);
+  --danger:#dc2626;--danger-fg:#fff;--danger-subtle:rgba(220,38,38,.1);
+  --info:#0e7490;--info-fg:#fff;--info-subtle:rgba(14,116,144,.1);
+  --aim:#7c3aed;--aim-subtle:rgba(124,58,237,.12);
+  --diff-add:rgba(22,163,74,.12);--diff-add-text:#15803d;
+  --diff-del:rgba(220,38,38,.1);--diff-del-text:#b91c1c;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.06);
+  --shadow-md:0 4px 12px rgba(0,0,0,.08),0 0 0 1px rgba(0,0,0,.04);
+  --shadow-lg:0 12px 28px rgba(0,0,0,.12);
+  --ph-init:#64748b;--ph-idea:#7c3aed;--ph-incep:#0e7490;--ph-constr:#047558;--ph-oper:#a16207;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:var(--font-body);font-size:14px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--ring);outline-offset:2px;border-radius:var(--radius-sm)}
+[hidden]{display:none !important}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+@media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
+
+/* ---------- primitives ---------- */
+.mono{font-family:var(--mono);font-variant-ligatures:none}
+.ico{width:15px;height:15px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.ico-sm{width:13px;height:13px}
+.ico-lg{width:18px;height:18px}
+.muted{color:var(--muted)}
+.strong{color:var(--text-strong)}
+.row{display:flex;align-items:center;gap:8px}
+.col{display:flex;flex-direction:column}
+.spread{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.grow{flex:1 1 auto;min-width:0}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wrap-any{overflow-wrap:anywhere}
+
+.btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:7px 13px;border-radius:var(--radius-md);
+  background:var(--bg-elevated);border:1px solid var(--border);
+  color:var(--text);cursor:pointer;font-size:13px;
+  transition:background .12s,border-color .12s;min-height:34px;
+}
+.btn:hover{background:var(--bg-hover);border-color:var(--border-hover)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+.btn-primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+.btn-danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--border))}
+.btn-danger:hover{background:var(--danger-subtle)}
+.btn-ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn-ghost:hover{background:var(--bg-hover);color:var(--text)}
+.btn-sm{padding:4px 9px;min-height:28px;font-size:12px}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border-radius:var(--radius-md);background:transparent;border:1px solid transparent;color:var(--muted);cursor:pointer}
+.icon-btn:hover{background:var(--bg-hover);color:var(--text)}
+
+.chip{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:2px 8px;border-radius:999px;font-size:11.5px;line-height:1.7;
+  border:1px solid var(--border);background:var(--bg-elevated);color:var(--muted-strong);
+  white-space:nowrap;
+}
+.chip svg{width:11px;height:11px;stroke-width:2}
+.chip-danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,var(--border));background:var(--danger-subtle)}
+.chip-warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 35%,var(--border));background:var(--warn-subtle)}
+.chip-ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 35%,var(--border));background:var(--ok-subtle)}
+.chip-info{color:var(--info);border-color:color-mix(in srgb,var(--info) 35%,var(--border));background:var(--info-subtle)}
+.chip-accent{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,var(--border));background:var(--accent-subtle)}
+.chip-aim{color:var(--aim);border-color:color-mix(in srgb,var(--aim) 40%,var(--border));background:var(--aim-subtle)}
+
+.card{background:var(--card);color:var(--card-fg);border:1px solid var(--border);border-radius:var(--radius-lg)}
+.kbd{font-family:var(--mono);font-size:11px;padding:1px 5px;border:1px solid var(--border-strong);border-bottom-width:2px;border-radius:5px;background:var(--bg-elevated);color:var(--muted-strong)}
+
+/* ---------- app frame ---------- */
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.topbar{
+  display:flex;align-items:center;gap:14px;padding:0 16px;height:52px;flex:0 0 auto;
+  background:var(--chrome);border-bottom:1px solid var(--border);backdrop-filter:blur(8px);
+}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;color:var(--text-strong);letter-spacing:-.01em}
+.brand-mark{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;background:var(--accent-subtle);border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border));color:var(--accent)}
+.variant-tag{
+  font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 9px;border-radius:999px;color:var(--aim);
+  background:var(--aim-subtle);border:1px solid color-mix(in srgb,var(--aim) 45%,var(--border));
+}
+.nav{display:flex;gap:2px;margin-left:8px}
+.nav button{
+  display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:var(--radius-md);
+  background:transparent;border:1px solid transparent;color:var(--muted);cursor:pointer;font-size:13px;
+}
+.nav button:hover{background:var(--bg-hover);color:var(--text)}
+.nav button[aria-current="page"]{background:var(--bg-elevated);border-color:var(--border);color:var(--text-strong);font-weight:600}
+.nav .count{font-family:var(--mono);font-size:10.5px;padding:0 5px;border-radius:999px;background:var(--danger);color:var(--danger-fg);font-weight:700}
+
+/* scope bar */
+.scopebar{
+  display:flex;align-items:center;gap:10px;padding:8px 16px;flex:0 0 auto;
+  background:var(--bg-accent);border-bottom:1px solid var(--border);font-size:12.5px;
+}
+.scope-select{
+  display:flex;align-items:center;gap:7px;padding:5px 10px;border-radius:var(--radius-md);
+  background:var(--bg-elevated);border:1px solid var(--border);cursor:pointer;color:var(--text)
+}
+.scope-select:hover{border-color:var(--border-hover)}
+.crumb{display:flex;align-items:center;gap:7px;color:var(--muted);min-width:0}
+.crumb .sep{opacity:.5}
+.crumb b{color:var(--text);font-weight:600}
+.exec-strip{display:flex;align-items:center;gap:8px;margin-left:auto}
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-subtle);animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+.view{flex:1 1 auto;min-height:0;overflow:hidden;display:flex}
+.view-scroll{flex:1 1 auto;min-height:0;overflow:auto}
+
+/* ============================================================
+   ACTION CENTER — evidence-first master/detail
+   Queue is deliberately narrow and visually quiet: no severity fills,
+   no competing color blocks. Weight goes to the decision brief.
+   ============================================================ */
+.ac{display:grid;grid-template-columns:300px minmax(0,1fr);flex:1 1 auto;min-height:0}
+
+/* ---- quiet queue ---- */
+.queue{
+  display:flex;flex-direction:column;min-height:0;
+  background:var(--panel);border-right:1px solid var(--border);
+}
+.queue-head{padding:12px 14px 10px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:9px}
+.queue-title{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.queue-title h2{margin:0;font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.queue-title .n{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.search{display:flex;align-items:center;gap:7px;padding:5px 9px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-elevated);color:var(--muted)}
+.search input{flex:1;min-width:0;background:transparent;border:0;outline:none;font-size:12.5px;color:var(--text)}
+.search input::placeholder{color:var(--muted)}
+.seg{display:flex;gap:2px;padding:2px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md)}
+.seg button{flex:1;padding:4px 6px;border:0;border-radius:5px;background:transparent;color:var(--muted);cursor:pointer;font-size:11.5px}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed="true"]{background:var(--card);color:var(--text-strong);font-weight:600;box-shadow:var(--shadow-sm)}
+
+.queue-list{flex:1 1 auto;min-height:0;overflow:auto;padding:6px}
+.qgroup{padding:11px 8px 4px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:7px}
+.qgroup::after{content:"";flex:1;height:1px;background:var(--border)}
+
+.qitem{
+  display:grid;grid-template-columns:12px minmax(0,1fr);gap:9px;
+  width:100%;text-align:left;padding:9px 10px;margin-bottom:2px;
+  background:transparent;border:1px solid transparent;border-radius:var(--radius-md);
+  cursor:pointer;color:var(--text);
+}
+.qitem:hover{background:var(--bg-hover)}
+.qitem[aria-current="true"]{background:var(--card);border-color:var(--border-strong);box-shadow:var(--shadow-sm)}
+/* severity = a 2px rule + icon + text label. Never fill alone. */
+.qrule{width:2px;border-radius:2px;background:var(--border-strong);align-self:stretch}
+.qitem[data-sev="critical"] .qrule{background:var(--danger)}
+.qitem[data-sev="blocking"] .qrule{background:var(--accent)}
+.qitem[data-sev="attention"] .qrule{background:var(--warn)}
+.qitem[data-sev="info"] .qrule{background:var(--muted)}
+.qtop{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-bottom:2px}
+.qtop .type{display:inline-flex;align-items:center;gap:4px;color:var(--text);font-weight:600}
+.qtop .dot{opacity:.45}
+.qtitle{font-size:13px;color:var(--text-strong);font-weight:500;margin-bottom:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.qmeta{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);font-family:var(--mono)}
+.qmeta .wait{color:var(--muted-strong)}
+.qitem[data-sev="critical"] .qmeta .wait{color:var(--danger)}
+
+/* ---- detail: spacious, single reading column ---- */
+.detail{display:flex;flex-direction:column;min-height:0;background:var(--bg)}
+.detail-head{padding:20px 32px 0;flex:0 0 auto}
+.dbreadcrumb{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);font-family:var(--mono);margin-bottom:10px;flex-wrap:wrap}
+.dtitle{margin:0 0 8px;font-size:23px;line-height:1.28;font-weight:600;letter-spacing:-.015em;color:var(--text-strong);max-width:62ch}
+.dfacts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.tabs{display:flex;gap:20px;border-bottom:1px solid var(--border)}
+.tabs button{
+  position:relative;padding:9px 1px 11px;background:transparent;border:0;cursor:pointer;
+  color:var(--muted);font-size:13px;display:inline-flex;align-items:center;gap:7px;
+}
+.tabs button:hover{color:var(--text)}
+.tabs button[aria-selected="true"]{color:var(--text-strong);font-weight:600}
+.tabs button[aria-selected="true"]::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--accent);border-radius:2px 2px 0 0}
+.tabs .tc{font-family:var(--mono);font-size:10.5px;padding:0 5px;border-radius:999px;background:var(--bg-elevated);border:1px solid var(--border);color:var(--muted)}
+
+.detail-body{flex:1 1 auto;min-height:0;overflow:auto;padding:22px 32px 30px}
+.reading{max-width:820px}
+
+/* calm section blocks */
+.block{margin-bottom:22px}
+.block > h3{
+  margin:0 0 10px;font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--muted);display:flex;align-items:center;gap:8px;
+}
+.block > h3::after{content:"";flex:1;height:1px;background:var(--border)}
+.brief{
+  padding:18px 20px;border-radius:var(--radius-lg);background:var(--card);
+  border:1px solid var(--border);border-left:3px solid var(--accent);box-shadow:var(--shadow-sm);
+}
+.brief p{margin:0 0 10px;font-size:15px;line-height:1.68;color:var(--card-fg)}
+.brief p:last-child{margin-bottom:0}
+.consequence{
+  margin-top:14px;padding:11px 13px;border-radius:var(--radius-md);
+  background:var(--info-subtle);border:1px solid color-mix(in srgb,var(--info) 30%,var(--border));
+  font-size:13px;display:flex;gap:9px;align-items:flex-start;color:var(--text)
+}
+.consequence svg{color:var(--info);margin-top:2px}
+
+.crit{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+.crit li{display:flex;gap:10px;align-items:flex-start;padding:9px 11px;border-radius:var(--radius-md);background:var(--card);border:1px solid var(--border)}
+.crit li + li{margin-top:5px}
+.crit svg{margin-top:3px;flex:0 0 auto}
+.crit .met{color:var(--ok)}
+.crit .unmet{color:var(--warn)}
+.crit .txt{font-size:13.5px}
+.crit .why{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+
+/* artifact / reviewer comparison — the centerpiece of Option B */
+.compare{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}
+.pane{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);display:flex;flex-direction:column;overflow:hidden}
+.pane-head{display:flex;align-items:center;gap:8px;padding:9px 13px;border-bottom:1px solid var(--border);background:var(--bg-accent);font-size:12px}
+.pane-head .nm{font-weight:600;color:var(--text-strong);font-family:var(--mono);font-size:12px}
+.pane-body{padding:13px 15px;font-size:13px;max-height:340px;overflow:auto}
+.pane-body h4{margin:0 0 7px;font-size:13.5px;color:var(--text-strong)}
+.pane-body h5{margin:14px 0 5px;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.pane-body p{margin:0 0 9px;line-height:1.62}
+.pane-body ul{margin:0 0 9px;padding-left:18px}
+.pane-body li{margin-bottom:4px}
+.pane-body table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px}
+.pane-body th,.pane-body td{text-align:left;padding:5px 7px;border-bottom:1px solid var(--border)}
+.pane-body th{color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+.pane-body code{font-family:var(--mono);font-size:11.5px;background:var(--bg-elevated);padding:1px 4px;border-radius:4px}
+.diffline{display:block;font-family:var(--mono);font-size:11.5px;padding:1px 6px;border-radius:3px;white-space:pre-wrap}
+.diffline.add{background:var(--diff-add);color:var(--diff-add-text)}
+.diffline.del{background:var(--diff-del);color:var(--diff-del-text)}
+
+.finding{padding:11px 13px;border-radius:var(--radius-md);background:var(--bg-elevated);border:1px solid var(--border);border-left:3px solid var(--border-strong)}
+.finding + .finding{margin-top:8px}
+.finding[data-lvl="blocker"]{border-left-color:var(--danger)}
+.finding[data-lvl="advisory"]{border-left-color:var(--warn)}
+.finding[data-lvl="resolved"]{border-left-color:var(--ok)}
+.finding .fh{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:12px}
+.finding .fq{margin:6px 0 0;padding-left:11px;border-left:2px solid var(--border-strong);font-size:12.5px;color:var(--muted-strong);font-style:italic}
+.anchor-link{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:var(--accent);background:none;border:0;padding:0;cursor:pointer;font-family:var(--mono)}
+.anchor-link:hover{text-decoration:underline}
+.hl{background:var(--warn-subtle);box-shadow:0 0 0 2px var(--warn-subtle);border-radius:3px;transition:background .3s}
+
+/* advisor */
+.advisor{border:1px dashed color-mix(in srgb,var(--aim) 55%,var(--border));background:var(--aim-subtle);border-radius:var(--radius-lg);padding:14px 16px}
+.advisor-head{display:flex;align-items:center;gap:9px;margin-bottom:4px}
+.advisor-head .t{font-weight:600;color:var(--text-strong);font-size:13.5px}
+.advisor dl{display:grid;grid-template-columns:118px minmax(0,1fr);gap:6px 14px;margin:10px 0 0;font-size:13px}
+.advisor dt{color:var(--muted);font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;padding-top:2px}
+.advisor dd{margin:0;line-height:1.6}
+.advisor .disclaim{margin-top:12px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--aim) 30%,var(--border));font-size:11.5px;color:var(--muted);display:flex;gap:7px;align-items:flex-start}
+
+/* questions */
+.q{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px}
+.q + .q{margin-top:12px}
+.q-prompt{font-size:15px;font-weight:600;color:var(--text-strong);margin:0 0 3px;line-height:1.5}
+.q-sub{font-size:12px;color:var(--muted);margin:0 0 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.opt{display:flex;gap:11px;align-items:flex-start;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-md);cursor:pointer;background:var(--bg-elevated)}
+.opt + .opt{margin-top:7px}
+.opt:hover{border-color:var(--border-hover)}
+.opt input{margin-top:3px;accent-color:var(--accent);width:15px;height:15px}
+.opt.sel{border-color:var(--accent);background:var(--accent-subtle)}
+.opt .ol{font-size:13.5px;color:var(--text-strong);font-weight:500}
+.opt .od{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.55}
+.opt .drafted{margin-left:auto;flex:0 0 auto}
+textarea.free{width:100%;margin-top:8px;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-elevated);color:var(--text);resize:vertical;min-height:64px;font-size:13px}
+textarea.free:focus{outline:2px solid var(--ring);outline-offset:1px}
+
+/* recovery evidence grid */
+.evgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(228px,1fr));gap:10px}
+.ev{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-md);padding:11px 13px}
+.ev .src{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.ev .val{font-family:var(--mono);font-size:12.5px;color:var(--text-strong);overflow-wrap:anywhere}
+.ev .sub{font-size:11.5px;color:var(--muted);margin-top:4px}
+.ev[data-conflict="true"]{border-color:color-mix(in srgb,var(--danger) 45%,var(--border));background:var(--danger-subtle)}
+.choice{display:flex;gap:12px;align-items:flex-start;padding:13px 15px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--card);cursor:pointer}
+.choice + .choice{margin-top:9px}
+.choice:hover{border-color:var(--border-hover)}
+.choice.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.choice input{margin-top:4px;accent-color:var(--accent)}
+.choice .cl{font-size:13.5px;font-weight:600;color:var(--text-strong)}
+.choice .cd{font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.55}
+
+/* sticky action bar — never covers the last evidence block (body has pad-bottom) */
+.actionbar{
+  flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:12px 32px;background:var(--chrome);border-top:1px solid var(--border);
+  backdrop-filter:blur(8px);
+}
+.actionbar .hint{font-size:11.5px;color:var(--muted);margin-right:auto;display:flex;align-items:center;gap:7px}
+.confirm{
+  margin:0 32px 12px;padding:14px 16px;border-radius:var(--radius-lg);
+  background:var(--card);border:1px solid var(--accent);box-shadow:var(--shadow-md);flex:0 0 auto
+}
+.confirm .ch{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text-strong);margin-bottom:9px}
+.sendtext{
+  font-family:var(--mono);font-size:12.5px;padding:10px 12px;border-radius:var(--radius-md);
+  background:var(--bg-elevated);border:1px solid var(--border);color:var(--text-strong);
+  white-space:pre-wrap;overflow-wrap:anywhere
+}
+.route{font-size:11.5px;color:var(--muted);margin-top:9px;display:flex;gap:7px;align-items:flex-start;line-height:1.55}
+.confirm-actions{display:flex;gap:9px;margin-top:12px;flex-wrap:wrap}
+
+/* delivery progress */
+.delivery{display:flex;align-items:center;gap:0;margin:0 0 18px;padding:11px 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);flex-wrap:wrap}
+.dstep{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
+.dstep .b{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--border-strong);display:grid;place-items:center;flex:0 0 auto}
+.dstep.done{color:var(--text)}
+.dstep.done .b{background:var(--ok);border-color:var(--ok);color:var(--ok-fg)}
+.dstep.now{color:var(--text-strong);font-weight:600}
+.dstep.now .b{border-color:var(--accent);background:var(--accent-subtle);color:var(--accent)}
+.dsep{flex:1;min-width:16px;height:1px;background:var(--border);margin:0 9px}
+
+/* ============================================================
+   WORKFLOW MAP — five phase swimlanes
+   ============================================================ */
+.map-wrap{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.map-bar{display:flex;align-items:center;gap:10px;padding:10px 20px;border-bottom:1px solid var(--border);background:var(--bg-accent);flex-wrap:wrap}
+.map-scroll{flex:1 1 auto;min-height:0;overflow:auto;padding:16px 20px 26px}
+.lane{display:grid;grid-template-columns:158px minmax(0,1fr);gap:14px;padding:14px 0;border-bottom:1px solid var(--border)}
+.lane:last-child{border-bottom:0}
+.lane-h{display:flex;flex-direction:column;gap:5px;position:sticky;left:0}
+.lane-h .nm{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--text-strong)}
+.lane-h .bar{height:3px;border-radius:2px;background:var(--ph)}
+.lane-h .sub{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.stages{display:flex;gap:9px;flex-wrap:wrap}
+.stage{
+  position:relative;width:154px;text-align:left;padding:9px 11px;cursor:pointer;
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius-md);
+  border-top:2px solid var(--ph);color:var(--text)
+}
+.stage:hover{border-color:var(--border-hover);box-shadow:var(--shadow-sm)}
+.stage[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.stage .sn{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.stage .st{font-size:12.5px;font-weight:600;color:var(--text-strong);line-height:1.35;margin:1px 0 5px}
+.stage .sm{display:flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:10.5px;color:var(--muted)}
+.stage[data-state="done"] .st{color:var(--muted-strong);font-weight:500}
+.stage[data-state="skipped"]{opacity:.62;border-style:dashed;background:transparent}
+.stage[data-state="current"]{background:var(--accent-subtle);border-color:var(--accent)}
+.stage[data-state="gate"]{border-color:var(--warn);background:var(--warn-subtle)}
+.stage .rel{position:absolute;top:-7px;right:-7px;font-size:9.5px;font-family:var(--mono);padding:1px 5px;border-radius:999px;border:1px solid var(--border-strong);background:var(--bg-elevated);color:var(--muted-strong)}
+.stage.up .rel{border-color:var(--info);color:var(--info);background:var(--info-subtle)}
+.stage.down .rel{border-color:var(--aim);color:var(--aim);background:var(--aim-subtle)}
+.units{margin-top:9px;padding-left:12px;border-left:2px dashed var(--border-strong);display:flex;flex-direction:column;gap:6px}
+.unit{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);font-family:var(--mono)}
+.inspector{width:340px;flex:0 0 auto;border-left:1px solid var(--border);background:var(--panel-strong);overflow:auto;padding:16px 18px}
+
+/* ============================================================
+   WIZARD — four steps
+   ============================================================ */
+.wiz{max-width:940px;margin:0 auto;padding:24px 24px 40px}
+.steps{display:flex;align-items:center;gap:0;margin-bottom:22px;flex-wrap:wrap}
+.step{display:flex;align-items:center;gap:9px;padding:6px 10px;border-radius:var(--radius-md);background:transparent;border:1px solid transparent;color:var(--muted);cursor:pointer;font-size:13px}
+.step .n{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--border-strong);display:grid;place-items:center;font-family:var(--mono);font-size:11px;flex:0 0 auto}
+.step.done{color:var(--text)}
+.step.done .n{background:var(--ok);border-color:var(--ok);color:var(--ok-fg)}
+.step.now{color:var(--text-strong);font-weight:600;background:var(--bg-elevated);border-color:var(--border)}
+.step.now .n{border-color:var(--accent);background:var(--accent-subtle);color:var(--accent)}
+.step-sep{flex:1;min-width:14px;height:1px;background:var(--border)}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--text-strong);margin-bottom:5px}
+.field .help{font-size:11.5px;color:var(--muted);margin-bottom:6px}
+.field input[type=text],.field textarea,.field select{
+  width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius-md);
+  background:var(--bg-elevated);color:var(--text);font-size:13px
+}
+.field textarea{min-height:86px;resize:vertical}
+.picks{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:9px}
+.pick{padding:11px 13px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--card);cursor:pointer;text-align:left;color:var(--text)}
+.pick:hover{border-color:var(--border-hover)}
+.pick.sel{border-color:var(--accent);background:var(--accent-subtle)}
+.pick .pl{font-size:13px;font-weight:600;color:var(--text-strong)}
+.pick .pd{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5}
+.matrix{display:flex;flex-direction:column;gap:10px}
+.mrow{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-md);padding:11px 13px}
+.mrow .mh{display:flex;align-items:center;gap:9px;margin-bottom:9px;font-size:12.5px;font-weight:600;color:var(--text-strong)}
+.mstages{display:flex;flex-wrap:wrap;gap:7px}
+.ms{display:flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid var(--border);border-radius:999px;background:var(--bg-elevated);font-size:11.5px;cursor:pointer;color:var(--text)}
+.ms input{accent-color:var(--accent);width:13px;height:13px;margin:0}
+.ms.on{border-color:color-mix(in srgb,var(--accent) 50%,var(--border));background:var(--accent-subtle)}
+.ms.locked{opacity:.6;cursor:not-allowed}
+.stat{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+.stat .s{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-md);padding:11px 13px}
+.stat .s .k{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:5px}
+.stat .s .v{font-family:var(--mono);font-size:19px;color:var(--text-strong);margin-top:3px}
+.stat .s .q{font-size:11px;color:var(--muted);margin-top:2px}
+.wiz-bar{display:flex;gap:10px;align-items:center;margin-top:22px;padding-top:16px;border-top:1px solid var(--border);flex-wrap:wrap}
+
+/* generic simple pages */
+.page{padding:22px 28px 34px;max-width:1080px}
+.page h1{margin:0 0 4px;font-size:20px;font-weight:600;color:var(--text-strong);letter-spacing:-.01em}
+.page .lede{color:var(--muted);font-size:13px;margin:0 0 20px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+.tbl th{text-align:left;padding:9px 13px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);background:var(--bg-accent)}
+.tbl td{padding:11px 13px;border-bottom:1px solid var(--border);vertical-align:top}
+.tbl tr:last-child td{border-bottom:0}
+.tl{list-style:none;margin:0;padding:0}
+.tl li{display:grid;grid-template-columns:78px 20px minmax(0,1fr);gap:11px;padding:9px 0;border-bottom:1px solid var(--border)}
+.tl .t{font-family:var(--mono);font-size:11.5px;color:var(--muted);padding-top:2px}
+.tl .m{display:grid;place-items:center;padding-top:2px}
+.tl .src{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:3px}
+.empty{padding:34px;text-align:center;color:var(--muted)}
+.empty .et{font-size:14px;color:var(--text-strong);font-weight:600;margin:9px 0 4px}
+
+.back-btn{display:none}
+
+/* ============================================================
+   RESPONSIVE — 390px list -> detail
+   ============================================================ */
+@media (max-width:1180px){
+  .compare{grid-template-columns:minmax(0,1fr)}
+  .inspector{width:294px}
+}
+@media (max-width:900px){
+  .ac{grid-template-columns:minmax(0,1fr)}
+  /* nav moves to its own scrollable row rather than disappearing — mobile still
+     needs to reach Repos / Intents / Map / Activity / Settings. */
+  .topbar{flex-wrap:wrap;height:auto;min-height:52px;padding:8px 12px;row-gap:8px}
+  .nav{order:10;flex-basis:100%;margin-left:0;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+  .nav button{flex:0 0 auto}
+  .queue{border-right:0}
+  body[data-pane="detail"] .queue{display:none}
+  body[data-pane="list"] .detail{display:none}
+  body[data-pane="detail"] .back-btn{display:inline-flex}
+  .detail-head{padding:14px 16px 0}
+  .detail-body{padding:16px 16px 26px}
+  .actionbar,.confirm{padding-left:16px;padding-right:16px}
+  .confirm{margin-left:16px;margin-right:16px}
+  .dtitle{font-size:19px}
+  .inspector{display:none}
+  .lane{grid-template-columns:minmax(0,1fr)}
+  .lane-h{position:static}
+  .stage{width:100%}
+  .page{padding:16px}
+  .wiz{padding:16px 16px 34px}
+  .brand-hide{display:none}
+  .scopebar{overflow-x:auto}
+}
+@media (max-width:430px){
+  .topbar{padding:0 12px;gap:9px;padding-top:8px;padding-bottom:8px}
+  #newIntentBtn .nlbl{display:none}
+  .variant-tag{font-size:10px;padding:3px 7px}
+  .dfacts{gap:6px}
+  .tabs{gap:14px;overflow-x:auto}
+  .actionbar .hint{display:none}
+  .actionbar .btn{flex:1 1 auto;justify-content:center}
+  .stat{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .advisor dl{grid-template-columns:minmax(0,1fr)}
+  .advisor dt{padding-top:6px}
+}
+</style>
+</head>
+<body data-pane="list">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="i-logo" viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/><circle cx="18.5" cy="12" r="2"/></symbol>
+<symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 12h5l2 3h4l2-3h5"/><path d="M5 4h14l2 8v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-6z"/></symbol>
+<symbol id="i-repo" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2z"/><path d="M8 3v18"/></symbol>
+<symbol id="i-intent" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="18" cy="18" r="2.5"/></symbol>
+<symbol id="i-map" viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="6" rx="1.5"/><rect x="14" y="4" width="7" height="6" rx="1.5"/><rect x="3" y="14" width="7" height="6" rx="1.5"/><rect x="14" y="14" width="7" height="6" rx="1.5"/><path d="M10 7h4M10 17h4"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l3 7 4-14 3 7h4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+<symbol id="i-gate" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+<symbol id="i-question" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 1 1 3.6 2.4c-.7.3-1.1.9-1.1 1.7v.4"/><path d="M12 17.2h.01"/></symbol>
+<symbol id="i-recovery" viewBox="0 0 24 24"><path d="M12 3v4M12 10v5M12 18.5h.01"/><path d="M10.3 3.9 2.6 17.2A1.6 1.6 0 0 0 4 19.6h16a1.6 1.6 0 0 0 1.4-2.4L13.7 3.9a1.6 1.6 0 0 0-2.8 0z"/></symbol>
+<symbol id="i-fail" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></symbol>
+<symbol id="i-install" viewBox="0 0 24 24"><path d="M12 3v10m0 0 3.5-3.5M12 13 8.5 9.5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 8v5M12 16.5h.01"/><circle cx="12" cy="12" r="9"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.8h.01"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3.2 2"/></symbol>
+<symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+<symbol id="i-review" viewBox="0 0 24 24"><path d="M3 12s3.4-6 9-6 9 6 9 6-3.4 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.6"/></symbol>
+<symbol id="i-advisor" viewBox="0 0 24 24"><path d="M12 3l1.9 4.4L18.5 9l-4.6 1.6L12 15l-1.9-4.4L5.5 9l4.6-1.6z"/><path d="M18 16l.9 2.1 2.1.9-2.1.9L18 22l-.9-2.1-2.1-.9 2.1-.9z"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-6z"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+<symbol id="i-chevd" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+<symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5l12 7.5-12 7.5z"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M3.5 12H6M18 12h2.5M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></symbol>
+<symbol id="i-slack" viewBox="0 0 24 24"><rect x="4" y="9.5" width="6" height="3" rx="1.5"/><rect x="11.5" y="4" width="3" height="6" rx="1.5"/><rect x="14" y="11.5" width="6" height="3" rx="1.5"/><rect x="9.5" y="14" width="3" height="6" rx="1.5"/></symbol>
+<symbol id="i-git" viewBox="0 0 24 24"><circle cx="6.5" cy="6" r="2.5"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="12" r="2.5"/><path d="M6.5 8.5v7M9 6h4a2.5 2.5 0 0 1 2.5 2.5v1M9 18h4a2.5 2.5 0 0 0 2.5-2.5v-1"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1 1"/><path d="M14 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1-1"/></symbol>
+</defs></svg>
+
+<div class="app">
+  <header class="topbar">
+    <button class="icon-btn back-btn" id="backBtn" aria-label="Back to queue"><svg class="ico"><use href="#i-back"/></svg></button>
+    <div class="brand">
+      <span class="brand-mark"><svg class="ico"><use href="#i-logo"/></svg></span>
+      <span class="brand-hide">AI-DLC Studio</span>
+    </div>
+    <span class="variant-tag">Option B &mdash; Evidence First</span>
+    <nav class="nav" id="nav" aria-label="Primary">
+      <button data-route="actions" aria-current="page"><svg class="ico"><use href="#i-inbox"/></svg>Action Center<span class="count">6</span></button>
+      <button data-route="repos"><svg class="ico"><use href="#i-repo"/></svg>Repos</button>
+      <button data-route="intents"><svg class="ico"><use href="#i-intent"/></svg>Intents</button>
+      <button data-route="map"><svg class="ico"><use href="#i-map"/></svg>Workflow Map</button>
+      <button data-route="activity"><svg class="ico"><use href="#i-activity"/></svg>Activity</button>
+      <button data-route="settings"><svg class="ico"><use href="#i-settings"/></svg>Settings</button>
+    </nav>
+    <div class="row" style="margin-left:auto;gap:6px">
+      <button class="btn btn-sm" data-route="wizard" id="newIntentBtn"><svg class="ico ico-sm"><use href="#i-plus"/></svg><span class="nlbl">New intent</span></button>
+      <button class="icon-btn" id="themeBtn" aria-label="Toggle light or dark theme" title="Toggle theme"><svg class="ico"><use href="#i-sun" id="themeIcon"/></svg></button>
+    </div>
+  </header>
+
+  <div class="scopebar">
+    <button class="scope-select" id="scopeBtn" aria-haspopup="listbox" aria-expanded="false">
+      <svg class="ico ico-sm"><use href="#i-repo"/></svg>
+      <span id="scopeLabel">All repos</span>
+      <span class="muted mono" id="scopeCount" style="font-size:11px">3 registered</span>
+      <svg class="ico ico-sm"><use href="#i-chevd"/></svg>
+    </button>
+    <div class="crumb" id="crumb"></div>
+    <div class="exec-strip" id="execStrip"></div>
+  </div>
+
+  <main class="view" id="view" aria-live="polite"></main>
+</div>
+
+<script>
+/* =====================================================================
+   Sample data. Fixtures modelled on AI-DLC v2 disk shapes described in
+   the PRD (5 phases / 33 stages, Gates, structured questions, receipts).
+   Counts labelled exact are exact; durations/credits are ranges (FR-EST).
+   ===================================================================== */
+const REPOS = [
+  {id:'r1', label:'checkout-web',  path:'~/work/checkout-web',  space:'default', install:'ok',      engine:'2.4.1', intents:2, queue:1},
+  {id:'r2', label:'payments-api',  path:'~/work/payments-api',  space:'default', install:'ok',      engine:'2.4.1', intents:3, queue:2},
+  {id:'r3', label:'infra-platform',path:'~/work/infra-platform',space:'platform',install:'drift',   engine:'2.3.0', intents:1, queue:0}
+];
+
+const ACTIONS = [
+  /* ---------- 1. recovery / delivery uncertain (top priority) ---------- */
+  {
+    id:'a-001', type:'recovery', sev:'critical', group:'Recovery required and delivery uncertain',
+    repo:'payments-api', space:'default', intent:'idempotent-refunds', stage:'3.4 code-generation',
+    typeLabel:'Recovery', icon:'i-recovery', wait:'41m', delivery:'uncertain',
+    title:'Approval may have been delivered before the gateway restarted',
+    primary:'Reconcile evidence',
+    lede:'Studio sent a Gate approval to the canonical session at 19:42:07. The gateway restarted at 19:42:09 before an acknowledgement was recorded. AI-DLC state has not moved, so it is not yet provable whether the human turn landed.',
+    consequence:'Nothing is replayed automatically. A duplicate approval could advance stage 3.4 twice, so this intent stays blocked until the evidence agrees.',
+    boundary:{stage:'3.4 code-generation', marker:'[?] awaiting human', at:'19:41:55'},
+    evidence:[
+      {src:'AI-DLC state', icon:'i-doc', val:'stage 3.4 · [?]', sub:'aidlc-state.md hash 8c41…d2, unchanged since 19:41:55'},
+      {src:'AI-DLC audit', icon:'i-doc', val:'last HUMAN_TURN = 7', sub:'shard 0002, no event after 19:41:55'},
+      {src:'KiroCrew session', icon:'i-activity', val:'session replaced', sub:'old key ses_9f2a… terminated by restart', conflict:true},
+      {src:'Studio action', icon:'i-send', val:'act_7712 · Delivered?', sub:'POST accepted, no ACP acknowledgement', conflict:true},
+      {src:'Turn marker', icon:'i-clock', val:'turn 12', sub:'unchanged — suggests the turn did not start'},
+      {src:'Git observation', icon:'i-git', val:'clean · main', sub:'no artifact write after 19:41:55'}
+    ],
+    contradiction:'Studio recorded a possible delivery, but neither the turn counter nor the audit shard shows a new HUMAN_TURN. A turn that truly landed would have advanced both.',
+    choices:[
+      {id:'c1', label:'Rebind the intent to a fresh canonical session and re-verify from the last stable boundary', desc:'Reconstructs context from disk at 3.4 [?]. Does not resend the approval. Recommended: the boundary is stable and no artifact write is in flight.', rec:true},
+      {id:'c2', label:'Treat the approval as not delivered and let me resubmit it', desc:'Only offered because the turn counter and audit both show no movement. Studio will still ask for a second confirmation showing the exact text.'},
+      {id:'c3', label:'Park the intent and keep the evidence for manual review', desc:'No transition. Intent moves to Parked and leaves the blocking queue.'}
+    ]
+  },
+  /* ---------- 2. gate ---------- */
+  {
+    id:'a-002', type:'gate', sev:'blocking', group:'Blocking Gates and questions',
+    repo:'checkout-web', space:'default', intent:'guest-checkout', stage:'2.3 functional-design',
+    typeLabel:'Gate', icon:'i-gate', wait:'2h 14m', delivery:'delivered',
+    title:'Approve the functional design for guest checkout',
+    primary:'Review and decide',
+    reviewClass:'adversarial', agent:'design', revision:2,
+    lede:'Stage 2.3 produced a functional design covering the guest checkout flow, the address capture contract, and the fallback when the payment provider declines. The adversarial reviewer ran twice; revision 2 answered three of four findings.',
+    consequence:'Approving unlocks stage 2.4 (NFR design) and stage 3.1 (contract design). The design becomes the input those two stages consume, so a change requested later costs a re-run of both.',
+    criteria:[
+      {met:true,  txt:'Every user story in scope has a documented happy path and at least one failure path', why:'12 of 12 stories covered · source: acceptance block of 2.3'},
+      {met:true,  txt:'External contracts name their owner service and version', why:'3 contracts, all versioned'},
+      {met:true,  txt:'Reviewer findings from the prior revision are answered or explicitly deferred', why:'3 answered, 1 deferred with a recorded reason'},
+      {met:false, txt:'Non-functional constraints referenced by the design exist in the NFR set', why:'The design cites a 400 ms p95 budget that stage 2.4 has not produced yet — deferred by the author, not resolved'}
+    ],
+    artifact:{
+      name:'functional-design.md', path:'aidlc/spaces/default/intents/guest-checkout-4a91c7e2/inception/functional-design/',
+      rev:'revision 2', bytes:'18.4 KB', updated:'17:02',
+      toc:['Scope and non-goals','Guest identity model','Address capture','Payment decline fallback','Contracts','Open questions'],
+      body:`<h4>Guest identity model</h4>
+<p>A guest session is keyed by an opaque <code>guest_token</code> minted at first cart write and valid for 30 days. No account record is created. Order history is reachable only through the order id plus the email used at checkout.</p>
+<h5 id="anchor-decline">Payment decline fallback</h5>
+<p>When the provider declines, the flow retains the cart and the captured address, then offers one alternate instrument. After a second decline the session is preserved and the user is routed to support.</p>
+<table><thead><tr><th>Path</th><th>Retains cart</th><th>p95 budget</th></tr></thead>
+<tbody><tr><td>First decline</td><td>Yes</td><td>400 ms</td></tr><tr><td>Second decline</td><td>Yes</td><td>400 ms</td></tr>
+<tr><td>Provider timeout</td><td id="anchor-timeout">Unspecified</td><td>Unspecified</td></tr></tbody></table>
+<h5>Contracts</h5>
+<ul><li><code>cart-service v3</code> — read and write guest carts</li><li><code>address-validation v2</code> — normalize and verify</li><li><code>payments-api v5</code> — authorize, retry once</li></ul>`,
+      diff:[
+        {k:'del', t:'- After a decline the cart is cleared and the user restarts checkout.'},
+        {k:'add', t:'+ When the provider declines, the flow retains the cart and the captured address,'},
+        {k:'add', t:'+ then offers one alternate instrument.'},
+        {k:'add', t:'+ | Provider timeout | Unspecified | Unspecified |'}
+      ]
+    },
+    findings:[
+      {lvl:'resolved', by:'architecture-reviewer', cls:'adversarial', txt:'Cart loss on decline made the flow unrecoverable.', quote:'A declined authorization must not destroy captured user input. The design cleared the cart, which forces re-entry of the address.', fix:'Answered in revision 2 — the cart and address are retained.', anchor:'anchor-decline'},
+      {lvl:'resolved', by:'architecture-reviewer', cls:'adversarial', txt:'Guest token lifetime was unbounded.', quote:'An opaque token with no stated expiry becomes a durable identifier without a retention policy.', fix:'Answered in revision 2 — 30-day expiry recorded.'},
+      {lvl:'advisory', by:'product-lead', cls:'advisory', txt:'Order-history access via order id plus email is weaker than the account path.', quote:'Consider whether an emailed magic link is warranted. Not blocking for guest scope.', fix:'Acknowledged; owner deferred to operation phase.'},
+      {lvl:'blocker', by:'architecture-reviewer', cls:'adversarial', txt:'Provider timeout has no defined behaviour.', quote:'The decline table leaves the timeout row unspecified. A timeout is not a decline, and the retry contract with payments-api v5 says "retry once" without saying who retries.', fix:'Open. The author deferred this to stage 3.1 contract design; the reviewer did not accept the deferral.', anchor:'anchor-timeout'}
+    ],
+    risks:['Provider timeout behaviour is undefined and the reviewer did not accept the deferral.','The design cites a 400 ms p95 budget that stage 2.4 has not yet produced.'],
+    advisor:{
+      verdict:'Request changes',
+      reason:'Three of four acceptance criteria are met, but the one open blocker is an undefined provider-timeout path, and stages 3.1 and 2.4 both consume this document. Resolving it now costs one revision; resolving it after 3.1 costs a re-run of 3.1 plus contract rework.',
+      evidence:['Acceptance criterion 4 unmet: the cited 400 ms budget has no source in the NFR set.','Adversarial finding 4 is open and the reviewer explicitly rejected the deferral.','Prior revision history shows the author does respond to findings within one turn.'],
+      assumptions:['The provider timeout is materially different from a decline for this payment provider.','Stage 3.1 will not be re-scoped to absorb the timeout contract.'],
+      alternatives:['Approve and file the timeout path as a stage 3.1 input, accepting a possible 3.1 re-run.','Approve with the deferral recorded, if the provider contract genuinely guarantees no timeouts.'],
+      confidence:'Medium — the timeout frequency for this provider is not observable from repo evidence.',
+      needsYou:'Whether a 3.1 re-run is cheaper than a 2.3 revision in your schedule. Studio cannot see your delivery dates.',
+      draftFeedback:'Define the provider-timeout path in the decline table before this design is approved. State (a) whether a timeout retains the cart, (b) which side performs the single retry named in the payments-api v5 contract, and (c) the p95 budget for the timeout path. Also cite the source for the 400 ms budget or mark it as pending stage 2.4 rather than as a constraint.'
+    },
+    approveText:'Approve',
+    rejectHint:'Request changes requires nonblank feedback (FR-GATE-002).'
+  },
+  /* ---------- 3. structured questions ---------- */
+  {
+    id:'a-003', type:'questions', sev:'blocking', group:'Blocking Gates and questions',
+    repo:'payments-api', space:'default', intent:'idempotent-refunds', stage:'2.4 nfr-requirements',
+    typeLabel:'Questions', icon:'i-question', wait:'38m', delivery:'delivered',
+    title:'Answer 3 questions from the NFR requirements stage',
+    primary:'Answer 3 questions',
+    lede:'The conductor asked one ordered group of three questions during stage 2.4. All three are submitted together as one atomic action; Studio never edits the questions file or its digest.',
+    consequence:'Answers become the recorded NFR inputs for stages 2.4 and 3.1. Sending advances the turn immediately.',
+    questions:[
+      {id:'q1', prompt:'What retention window applies to refund idempotency keys?', header:'Durability', multi:false, required:true,
+       opts:[
+        {id:'o1', l:'24 hours', d:'Matches the provider retry window. Cheapest storage, but a client retrying the next day creates a duplicate refund.'},
+        {id:'o2', l:'7 days', d:'Covers weekend batch reconciliation. Recommended by the drafted analysis.'},
+        {id:'o3', l:'90 days', d:'Aligns with the dispute window. Requires a partitioned key store.'}
+       ], other:true},
+      {id:'q2', prompt:'Which failure modes must the refund path degrade gracefully for?', header:'Resilience', multi:true, required:true,
+       opts:[
+        {id:'o1', l:'Provider timeout', d:'Authorization call exceeds the budget with no verdict.'},
+        {id:'o2', l:'Ledger write conflict', d:'Concurrent refund on the same payment.'},
+        {id:'o3', l:'Partial provider success', d:'Provider recorded the refund; our write failed.'},
+        {id:'o4', l:'Currency service unavailable', d:'Cross-currency refunds only.'}
+       ], other:true},
+      {id:'q3', prompt:'Is a p99 latency target required for refund submission, or is p95 sufficient?', header:'Performance', multi:false, required:false,
+       opts:[
+        {id:'o1', l:'p95 only', d:'Consistent with the rest of payments-api.'},
+        {id:'o2', l:'p95 and p99', d:'Adds a tail-latency test to stage 3.3 and lengthens the test stage.'}
+       ], other:true}
+    ],
+    advisor:{
+      verdict:'Draft prepared for 3 questions',
+      reason:'Drafted from the existing NFR set in this repo, the provider contract in aidlc/…/inception/contract-design, and the two prior refund incidents in Activity.',
+      picks:{q1:'o2', q2:['o1','o2','o3'], q3:'o1'},
+      evidence:['payments-api already stores authorization keys for 7 days; a shorter refund window would be inconsistent.','Both prior refund incidents were partial provider success, not currency failures.','No existing payments-api SLO names p99.'],
+      assumptions:['Weekend batch reconciliation still runs on Sundays.','Cross-currency refunds remain out of scope for this intent.'],
+      alternatives:['90 days if the dispute window is a compliance requirement rather than a preference.'],
+      confidence:'Medium-high for q1 and q3, medium for q2.',
+      needsYou:'Whether cross-currency refunds are in scope. The repo shows no cross-currency refund path, but scope is your decision.'
+    }
+  },
+  /* ---------- 4. execution failure / circuit breaker ---------- */
+  {
+    id:'a-004', type:'failure', sev:'attention', group:'Circuit breakers, failures, and install conflicts',
+    repo:'infra-platform', space:'platform', intent:'observability-baseline', stage:'3.3 build-and-test',
+    typeLabel:'Circuit open', icon:'i-fail', wait:'1h 06m', delivery:'failed',
+    title:'Circuit open after 3 matching transport failures',
+    primary:'Retry now or diagnose',
+    lede:'Three consecutive turns failed with the same fingerprint while dispatching stage 3.3. The breaker opened and disabled Keep moving for this intent only; the other two repos continued.',
+    consequence:'No further dispatch happens for this intent until the fingerprint is reset by a relevant change or by an explicit Retry now.',
+    fingerprint:'acp.transport.stream_closed · 5f2c9a',
+    errorSummary:'The ACP stream closed mid-turn while the agent was writing test output. Transport class: transient. Backoff sequence 4s, 16s, 64s — all three attempts produced the same fingerprint.',
+    retries:[
+      {n:1, at:'18:12:40', wait:'4s',  out:'stream closed after 22s'},
+      {n:2, at:'18:13:06', wait:'16s', out:'stream closed after 19s'},
+      {n:3, at:'18:14:26', wait:'64s', out:'stream closed after 25s — breaker opened'}
+    ],
+    logs:`19:14:26  turn dispatch  intent=observability-baseline stage=3.3
+19:14:51  agent  writing build/test output (bun test)
+19:14:51  acp    stream closed by peer (no close frame)
+19:14:51  broker fingerprint acp.transport.stream_closed:5f2c9a count=3
+19:14:51  breaker open  keep_moving disabled for this intent`,
+    note:'This repo also reports installed engine 2.3.0 against bundled 2.4.1. Version drift is shown on Repos as maintenance and is not assumed to be the cause.'
+  },
+  /* ---------- 5. install conflict ---------- */
+  {
+    id:'a-005', type:'install', sev:'attention', group:'Circuit breakers, failures, and install conflicts',
+    repo:'infra-platform', space:'platform', intent:'—', stage:'installation',
+    typeLabel:'Install conflict', icon:'i-install', wait:'3h 22m', delivery:'blocked',
+    title:'Upgrade stopped: two receipt-owned files were modified locally',
+    primary:'Review the drift',
+    lede:'Upgrading infra-platform from engine 2.3.0 to the bundled 2.4.1 was stopped before the repo lease was acquired. Two files listed in the current receipt no longer match their recorded SHA-256, so Studio will not overwrite them.',
+    consequence:'Nothing was written. The repo keeps its complete 2.3.0 installation and receipt. There is no overwrite shortcut.',
+    receipt:{version:'2.3.0', studio:'1.0.0', files:41, at:'2026-08-12 09:14'},
+    drift:[
+      {path:'.kiro/hooks/aidlc-continue-workflow.ts', owner:'receipt-owned', state:'modified locally', hash:'recorded 3f9a…c1 · found 71bd…04'},
+      {path:'.kiro/tools/aidlc-orchestrate.ts',        owner:'receipt-owned', state:'modified locally', hash:'recorded 9c02…7e · found a4e1…bb'},
+      {path:'aidlc/spaces/platform/intents/',          owner:'not owned',     state:'user data — never touched by the installer', hash:'—'}
+    ],
+    remedy:['Revert the two files to their recorded 2.3.0 content, then re-run the upgrade preview.','Or keep the local edits and stay on 2.3.0; the intent continues to run against the installed engine.','Studio cannot merge these for you — an installer that silently resolved this would violate the receipt contract.']
+  },
+  /* ---------- 6. budget stop ---------- */
+  {
+    id:'a-006', type:'budget', sev:'info', group:'Budget stops and pauses',
+    repo:'payments-api', space:'default', intent:'refund-webhooks', stage:'3.2 units-generation',
+    typeLabel:'Budget stop', icon:'i-clock', wait:'6h 41m', delivery:'held',
+    title:'Night window turn cap reached before this intent advanced',
+    primary:'Raise the cap or run manually',
+    lede:'The night work window ended at 06:00 with 40 of 40 turns used. This intent was next in the round-robin and never dispatched. No running turn was interrupted — budgets are checked before dispatch only.',
+    consequence:'The intent stays Queued. Raising the cap, or running it manually now, is the only way it advances today.',
+    budget:{turnsUsed:40, turnsCap:40, credits:'Unavailable', window:'22:00 – 06:00 local', creditNote:'Credit consumption is not observable from the available Kiro signals, so a credit cap cannot be enforced and is disabled rather than estimated (FR-NIGHT-007).'}
+  }
+];
+
+/* five-phase stage graph for the Workflow Map (FR-MAP-001..007) */
+const PHASES = [
+  {id:'initialization', name:'Initialization', accent:'var(--ph-init)', stages:[
+    {n:'0.1', t:'select-plugins',     s:'done', agent:'adaptive-workflows', gate:false, rev:'none',        el:'2m'},
+    {n:'0.2', t:'practices-discovery',s:'done', agent:'delivery',           gate:false, rev:'none',        el:'6m'},
+    {n:'0.3', t:'intent-capture',     s:'done', agent:'product',            gate:true,  rev:'advisory',    el:'11m'}
+  ]},
+  {id:'ideation', name:'Ideation', accent:'var(--ph-idea)', stages:[
+    {n:'1.1', t:'scope-definition',   s:'done',    agent:'product',   gate:true,  rev:'advisory',    el:'14m'},
+    {n:'1.2', t:'market-research',    s:'skipped', agent:'product',   gate:false, rev:'none',        el:'—', why:'Scope preset "feature" excludes market research. Position retained (FR-MAP-003).'},
+    {n:'1.3', t:'user-stories',       s:'done',    agent:'product',   gate:true,  rev:'adversarial', el:'22m'},
+    {n:'1.4', t:'rough-mockups',      s:'done',    agent:'design',    gate:false, rev:'advisory',    el:'9m'}
+  ]},
+  {id:'inception', name:'Inception', accent:'var(--ph-incep)', stages:[
+    {n:'2.1', t:'requirements-analysis', s:'done',    agent:'product',  gate:true,  rev:'advisory',    el:'18m'},
+    {n:'2.2', t:'refined-mockups',       s:'done',    agent:'design',   gate:false, rev:'advisory',    el:'12m'},
+    {n:'2.3', t:'functional-design',     s:'gate',    agent:'design',   gate:true,  rev:'adversarial', el:'31m', action:'a-002'},
+    {n:'2.4', t:'nfr-requirements',      s:'current', agent:'architect',gate:true,  rev:'advisory',    el:'7m',  action:'a-003'},
+    {n:'2.5', t:'domain-design',         s:'pending', agent:'architect',gate:true,  rev:'adversarial', el:'—'},
+    {n:'2.6', t:'infrastructure-design', s:'skipped', agent:'aws-platform', gate:false, rev:'none',    el:'—', why:'No infrastructure change declared in the intent. Engine permits enabling it while ahead of the cursor.'},
+    {n:'2.7', t:'feasibility',           s:'pending', agent:'architect',gate:false, rev:'advisory',    el:'—'}
+  ]},
+  {id:'construction', name:'Construction', accent:'var(--ph-constr)', stages:[
+    {n:'3.1', t:'contract-design',   s:'pending', agent:'architect', gate:true,  rev:'adversarial', el:'—'},
+    {n:'3.2', t:'units-generation',  s:'pending', agent:'developer',  gate:false, rev:'none',        el:'—'},
+    {n:'3.3', t:'code-generation',   s:'pending', agent:'developer',  gate:true,  rev:'adversarial', el:'—', perUnit:true,
+      units:[{u:'unit-1 guest-cart', s:'pending'},{u:'unit-2 address-capture', s:'pending'},{u:'unit-3 decline-fallback', s:'pending'}]},
+    {n:'3.4', t:'build-and-test',    s:'pending', agent:'quality',    gate:true,  rev:'advisory',    el:'—', perUnit:true,
+      units:[{u:'unit-1 guest-cart', s:'pending'},{u:'unit-2 address-capture', s:'pending'},{u:'unit-3 decline-fallback', s:'pending'}]},
+    {n:'3.5', t:'ci-pipeline',       s:'pending', agent:'pipeline-deploy', gate:false, rev:'advisory', el:'—'}
+  ]},
+  {id:'operation', name:'Operation', accent:'var(--ph-oper)', stages:[
+    {n:'4.1', t:'deployment-pipeline',   s:'pending', agent:'pipeline-deploy', gate:true,  rev:'advisory', el:'—'},
+    {n:'4.2', t:'observability-setup',   s:'pending', agent:'operations',      gate:false, rev:'advisory', el:'—'},
+    {n:'4.3', t:'performance-validation',s:'skipped', agent:'quality',         gate:false, rev:'none',     el:'—', why:'Test strategy "standard" excludes performance validation. Raise the test strategy to include it.'},
+    {n:'4.4', t:'feedback-optimization', s:'pending', agent:'product',         gate:false, rev:'advisory', el:'—'}
+  ]}
+];
+/* upstream / downstream overlay for the selected stage (FR-MAP-005) */
+const RELATIONS = {
+  '2.3':{up:['2.1','2.2'], down:['2.4','2.5','3.1'], consumes:['requirements-analysis.md','refined-mockups/'], produces:['functional-design.md']},
+  '2.4':{up:['2.1','2.3'], down:['3.1','3.3'], consumes:['functional-design.md','nfr-requirements-questions.md'], produces:['nfr-requirements.md']},
+  '3.1':{up:['2.3','2.4','2.5'], down:['3.2','3.3'], consumes:['functional-design.md','domain-design.md'], produces:['contract-design.md']}
+};
+</script>
+
+<script>
+/* ===================== state + helpers ===================== */
+const S = {
+  route:'actions', scope:'all', sel:'a-002', tab:'decision',
+  confirm:null,              // 'approve' | 'reject' | 'answers' | 'recovery'
+  advisor:{},                // actionId -> 'loading' | 'ready'
+  answers:{}, feedback:'', recoveryChoice:'c1',
+  sent:{},                   // actionId -> delivery step index
+  order:'priority', query:'',
+  mapSel:'2.3', mapDensity:'overview', mapUnits:false,
+  wizStep:1, wiz:{repo:'r1', space:'default', objective:'', context:'', kind:'feature', scope:'feature', depth:'standard', review:'adversarial', test:'standard', off:{}}
+};
+const $  = (s,r)=>(r||document).querySelector(s);
+const $$ = (s,r)=>Array.from((r||document).querySelectorAll(s));
+const ico = (id,cls)=>`<svg class="ico ${cls||''}" aria-hidden="true"><use href="#${id}"/></svg>`;
+const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const act = id => ACTIONS.find(a=>a.id===id);
+const repoOf = label => REPOS.find(r=>r.label===label);
+const visible = () => ACTIONS.filter(a=>{
+  if(S.scope!=='all' && a.repo!==REPOS.find(r=>r.id===S.scope).label) return false;
+  if(!S.query) return true;
+  const q=S.query.toLowerCase();
+  return (a.title+a.repo+a.intent+a.stage+a.typeLabel).toLowerCase().includes(q);
+});
+const SEV_ORDER = {critical:0, blocking:1, attention:2, info:3};
+
+/* ===================== chrome ===================== */
+function renderChrome(){
+  $$('#nav button').forEach(b=>{
+    const on = b.dataset.route===S.route;
+    on ? b.setAttribute('aria-current','page') : b.removeAttribute('aria-current');
+  });
+  const n = visible().length;
+  $('#nav .count').textContent = n;
+  $('#nav .count').hidden = n===0;
+  const r = S.scope==='all' ? null : REPOS.find(x=>x.id===S.scope);
+  $('#scopeLabel').textContent = r ? r.label : 'All repos';
+  $('#scopeCount').textContent = r ? r.path : REPOS.length+' registered';
+
+  const a = act(S.sel);
+  $('#crumb').innerHTML = (S.route==='actions' && a)
+    ? `${ico('i-chev','ico-sm')}<b>${esc(a.repo)}</b><span class="sep">/</span>${a.space!=='default'?`<span>${esc(a.space)}</span><span class="sep">/</span>`:''}<b>${esc(a.intent)}</b><span class="sep">/</span><span>${esc(a.stage)}</span>`
+    : `${ico('i-chev','ico-sm')}<span>Registered repositories only &mdash; Studio never scans the filesystem</span>`;
+
+  $('#execStrip').innerHTML =
+    `<span class="chip"><span class="pulse"></span>1 turn running</span>
+     <span class="chip">${ico('i-lock')}2 repo leases held</span>
+     <span class="chip chip-warn">${ico('i-clock')}1 circuit open</span>
+     <span class="chip">${ico('i-moon')}Night window off</span>`;
+  $('#themeIcon').setAttribute('href', document.documentElement.dataset.theme==='dark' ? '#i-sun' : '#i-moon');
+  $('#backBtn').hidden = !(S.route==='actions');
+}
+
+/* ===================== quiet queue ===================== */
+function queueHTML(){
+  let items = visible().slice();
+  if(S.order==='priority') items.sort((a,b)=>SEV_ORDER[a.sev]-SEV_ORDER[b.sev]);
+  if(S.order==='repo')     items.sort((a,b)=>a.repo.localeCompare(b.repo)||SEV_ORDER[a.sev]-SEV_ORDER[b.sev]);
+  if(S.order==='oldest')   items.sort((a,b)=>parseWait(b.wait)-parseWait(a.wait));
+
+  let out='', lastGroup='';
+  items.forEach(a=>{
+    const g = S.order==='repo' ? a.repo : (S.order==='oldest' ? 'Oldest first' : a.group);
+    if(g!==lastGroup){ out += `<div class="qgroup">${esc(g)}</div>`; lastGroup=g; }
+    out += `<button class="qitem" data-id="${a.id}" data-sev="${a.sev}" aria-current="${a.id===S.sel}">
+      <span class="qrule" aria-hidden="true"></span>
+      <span class="grow">
+        <span class="qtop"><span class="type">${ico(a.icon,'ico-sm')}${esc(a.typeLabel)}</span><span class="dot">&middot;</span><span class="trunc">${esc(a.repo)}</span></span>
+        <span class="qtitle">${esc(a.title)}</span>
+        <span class="qmeta"><span class="wait">${esc(a.wait)}</span><span class="dot">&middot;</span><span class="trunc">${esc(a.stage)}</span></span>
+      </span>
+    </button>`;
+  });
+  if(!items.length) out = `<div class="empty">${ico('i-check','ico-lg')}<div class="et">Nothing needs your judgment</div>
+    <div style="font-size:12.5px">Two intents are running unattended. The next stop will be a Gate in <span class="mono">checkout-web</span>.</div>
+    <button class="btn btn-sm" style="margin-top:12px" data-route="map">${ico('i-map','ico-sm')}Watch the Workflow Map</button></div>`;
+
+  return `<aside class="queue" aria-label="Action queue">
+    <div class="queue-head">
+      <div class="queue-title"><h2>Needs you</h2><span class="n">${items.length} of ${ACTIONS.length}</span></div>
+      <label class="search">${ico('i-search','ico-sm')}<input id="qSearch" type="search" placeholder="Filter by repo, intent, stage" value="${esc(S.query)}" aria-label="Filter the queue"></label>
+      <div class="seg" role="group" aria-label="Queue organization">
+        ${['priority','repo','type','oldest'].map(k=>`<button data-order="${k}" aria-pressed="${S.order===k}">${k[0].toUpperCase()+k.slice(1)}</button>`).join('')}
+      </div>
+    </div>
+    <div class="queue-list">${out}</div>
+  </aside>`;
+}
+function parseWait(w){ const m=/(?:(\d+)h)?\s*(?:(\d+)m)?/.exec(w)||[]; return (+(m[1]||0))*60 + (+(m[2]||0)); }
+
+/* ===================== detail shell ===================== */
+const TABS = [
+  {id:'decision', label:'Decision', icon:'i-inbox'},
+  {id:'artifacts', label:'Artifacts', icon:'i-doc'},
+  {id:'review', label:'Review', icon:'i-review'},
+  {id:'activity', label:'Activity', icon:'i-activity'}
+];
+function detailHTML(){
+  const a = act(S.sel);
+  if(!a) return `<section class="detail"><div class="empty">${ico('i-inbox','ico-lg')}<div class="et">Select an item</div><div style="font-size:12.5px">Pick anything in the queue to see its evidence.</div></div></section>`;
+
+  const tabCounts = {artifacts: a.artifact?1:(a.drift?a.drift.length:0), review: a.findings?a.findings.length:0, activity:4};
+  const tabs = TABS.filter(t=>{
+    if(t.id==='artifacts') return !!(a.artifact||a.drift||a.evidence);
+    if(t.id==='review')    return !!a.findings;
+    return true;
+  }).map(t=>`<button role="tab" data-tab="${t.id}" aria-selected="${S.tab===t.id}">${ico(t.icon,'ico-sm')}${t.label}${tabCounts[t.id]?`<span class="tc">${tabCounts[t.id]}</span>`:''}</button>`).join('');
+
+  return `<section class="detail">
+    <div class="detail-head">
+      <div class="dbreadcrumb">${ico(a.icon,'ico-sm')}<span>${esc(a.typeLabel)}</span><span class="sep">/</span>
+        <span>${esc(a.repo)}</span><span class="sep">/</span><span>${esc(a.intent)}</span><span class="sep">/</span><span>${esc(a.stage)}</span>
+        <button class="anchor-link" data-copy="deeplink" title="Copy deep link">${ico('i-link','ico-sm')}deep link</button></div>
+      <h1 class="dtitle">${esc(a.title)}</h1>
+      <div class="dfacts">
+        ${sevChip(a.sev)}
+        <span class="chip">${ico('i-clock')}waiting ${esc(a.wait)}</span>
+        ${a.reviewClass?`<span class="chip chip-info">${ico('i-review')}${esc(a.reviewClass)} review</span>`:''}
+        ${a.agent?`<span class="chip">${ico('i-intent')}agent ${esc(a.agent)}</span>`:''}
+        ${a.revision?`<span class="chip">revision ${a.revision}</span>`:''}
+        <span class="chip mono" style="font-size:11px">${esc(a.id)}</span>
+      </div>
+      <div class="tabs" role="tablist">${tabs}</div>
+    </div>
+    <div class="detail-body"><div class="reading">${bodyHTML(a)}</div></div>
+    ${S.confirm ? confirmHTML(a) : ''}
+    ${actionbarHTML(a)}
+  </section>`;
+}
+function sevChip(sev){
+  const map={critical:['chip-danger','i-recovery','Recovery required'],blocking:['chip-accent','i-gate','Blocking'],attention:['chip-warn','i-warn','Needs attention'],info:['chip','i-info','Informational']};
+  const [c,i,l]=map[sev]; return `<span class="chip ${c}">${ico(i)}${l}</span>`;
+}
+
+/* delivery strip shared by every template */
+function deliveryHTML(a){
+  const steps=['Queued','Delivered','Agent processing','State changed'];
+  const sentIdx = S.sent[a.id];
+  let now = sentIdx!==undefined ? sentIdx : ({delivered:1,uncertain:1,failed:1,blocked:0,held:0}[a.delivery] ?? 0);
+  const uncertain = a.delivery==='uncertain' && sentIdx===undefined;
+  return `<div class="delivery" role="group" aria-label="Delivery state">
+    ${steps.map((s,i)=>`${i?'<span class="dsep"></span>':''}
+      <span class="dstep ${i<now?'done':(i===now?'now':'')}">
+        <span class="b">${i<now?ico('i-check','ico-sm'):(i===now?ico('i-clock','ico-sm'):'')}</span>${s}</span>`).join('')}
+    ${uncertain?`<span class="chip chip-danger" style="margin-left:12px">${ico('i-warn')}Delivery uncertain &mdash; not replayed automatically</span>`:''}
+    ${sentIdx!==undefined?`<span class="chip chip-ok" style="margin-left:12px">${ico('i-check')}Studio is watching disk state, not the HTTP receipt</span>`:''}
+  </div>`;
+}
+
+/* ===================== sticky action bar ===================== */
+function actionbarHTML(a){
+  const sent = S.sent[a.id]!==undefined;
+  if(sent) return `<div class="actionbar"><span class="hint">${ico('i-check','ico-sm')}Submitted as <span class="mono">${esc(a.id)}</span>. The item clears only after AI-DLC state moves (FR-ACT-007).</span>
+    <button class="btn" data-act="undo">Show the queue</button></div>`;
+  const H = t=>`<span class="hint">${ico('i-info','ico-sm')}${t}</span>`;
+  switch(a.type){
+    case 'gate': return `<div class="actionbar">${H('Approve opens an inline confirmation showing the exact text sent.')}
+      <button class="btn" data-act="advisor">${ico('i-advisor','ico-sm')}Ask the Advisor</button>
+      <button class="btn btn-danger" data-act="reject">Request changes</button>
+      <button class="btn btn-primary" data-act="approve">${ico('i-check','ico-sm')}Approve</button></div>`;
+    case 'questions': {
+      const need = a.questions.filter(q=>q.required && !answered(a,q)).length;
+      return `<div class="actionbar">${H(need?`${need} required answer${need>1?'s':''} still missing &mdash; all three send as one action.`:'All required answers present. One atomic submit.')}
+        <button class="btn" data-act="draftall">${ico('i-advisor','ico-sm')}Draft all</button>
+        <button class="btn btn-primary" data-act="answers" ${need?'disabled':''}>${ico('i-send','ico-sm')}Send answers</button></div>`;
+    }
+    case 'recovery': return `<div class="actionbar">${H('No transition happens until you choose. Studio never picks a convenient source of truth.')}
+      <button class="btn" data-act="advisor">${ico('i-advisor','ico-sm')}Diagnose with AI</button>
+      <button class="btn btn-primary" data-act="recovery">${ico('i-check','ico-sm')}Apply the selected recovery</button></div>`;
+    case 'failure': return `<div class="actionbar">${H('Retry now resets the fingerprint count for this intent.')}
+      <button class="btn" data-act="advisor">${ico('i-advisor','ico-sm')}Diagnose with AI</button>
+      <button class="btn">${ico('i-pause','ico-sm')}Keep paused</button>
+      <button class="btn btn-primary" data-act="retry">${ico('i-play','ico-sm')}Retry now</button></div>`;
+    case 'install': return `<div class="actionbar">${H('There is no overwrite shortcut. The 2.3.0 installation stays complete.')}
+      <button class="btn">${ico('i-doc','ico-sm')}Open the receipt</button>
+      <button class="btn btn-primary">Re-run the upgrade preview</button></div>`;
+    default: return `<div class="actionbar">${H('Budgets never interrupt a running turn; they only prevent the next dispatch.')}
+      <button class="btn">Raise the turn cap</button>
+      <button class="btn btn-primary" data-act="retry">${ico('i-play','ico-sm')}Run to next checkpoint</button></div>`;
+  }
+}
+function answered(a,q){
+  const v = S.answers[a.id+'/'+q.id];
+  return q.multi ? (Array.isArray(v)&&v.length>0) : !!v;
+}
+
+/* ===================== inline confirmation (FR-GATE-001) ===================== */
+function confirmHTML(a){
+  const C = S.confirm;
+  let text='', head='', warn='';
+  if(C==='approve'){ head='Confirm the exact text sent to the canonical session'; text=a.approveText; }
+  if(C==='reject'){
+    head='Confirm the change request sent to the canonical session';
+    text = `Request changes\n\n${S.feedback.trim()}`;
+    if(!S.feedback.trim()) warn='Feedback cannot be blank.';
+  }
+  if(C==='answers'){
+    head='Confirm the answer group sent as one action';
+    text = a.questions.map((q,i)=>{
+      const v=S.answers[a.id+'/'+q.id];
+      const lbl = Array.isArray(v) ? v.map(id=>q.opts.find(o=>o.id===id)?.l||id).join(', ')
+                 : (v==='__other' ? 'Other: '+(S.answers[a.id+'/'+q.id+'/other']||'').trim() : (q.opts.find(o=>o.id===v)?.l||'(no answer)'));
+      return `${i+1}. ${q.prompt}\n   ${lbl}`;
+    }).join('\n');
+  }
+  if(C==='recovery'){
+    const ch=a.choices.find(c=>c.id===S.recoveryChoice);
+    head='Confirm the recovery you selected'; text=ch.label;
+  }
+  return `<div class="confirm" role="group" aria-label="Confirmation">
+    <div class="ch">${ico('i-send','ico-sm')}${head}</div>
+    <div class="sendtext">${esc(text)}</div>
+    <div class="route">${ico('i-info','ico-sm')}<span>Injected as a real user turn into canonical session
+      <span class="mono">ses_${a.id.replace('a-','')}c4</span> for <span class="mono">${esc(a.repo)}/${esc(a.intent)}</span>.
+      The Kiro <span class="mono">userPromptSubmit</span> hook mints the protected <span class="mono">HUMAN_TURN</span>; the AI-DLC engine commits the transition.
+      Studio does not call <span class="mono">report</span>, edit <span class="mono">aidlc-state.md</span>, or set any bypass variable.</span></div>
+    ${warn?`<div class="route" style="color:var(--danger)">${ico('i-warn','ico-sm')}${warn}</div>`:''}
+    <div class="confirm-actions">
+      <button class="btn btn-primary" data-act="send" ${warn?'disabled':''}>${ico('i-check','ico-sm')}Yes, send this exact text</button>
+      <button class="btn" data-act="cancel">Cancel</button>
+      <span class="hint" style="font-size:11.5px;color:var(--muted)">At-most-once: after this point Studio will reconcile rather than resend.</span>
+    </div>
+  </div>`;
+}
+</script>
+
+<script>
+/* ===================== tab bodies ===================== */
+function bodyHTML(a){
+  if(S.tab==='artifacts') return artifactsTab(a);
+  if(S.tab==='review')    return reviewTab(a);
+  if(S.tab==='activity')  return activityTab(a);
+  return decisionTab(a);
+}
+const B=(title,icon,inner)=>`<section class="block"><h3>${icon?ico(icon,'ico-sm'):''}${title}</h3>${inner}</section>`;
+
+function decisionTab(a){
+  let out = deliveryHTML(a);
+  out += B('Decision brief','i-inbox', `<div class="brief"><p>${esc(a.lede)}</p>
+    <div class="consequence">${ico('i-info','ico-sm')}<span><b>Next consequence.</b> ${esc(a.consequence)}</span></div></div>`);
+
+  if(a.criteria) out += B('Stage acceptance criteria &mdash; '+a.criteria.filter(c=>c.met).length+' of '+a.criteria.length+' met','i-check',
+    `<ul class="crit">${a.criteria.map(c=>`<li>${ico(c.met?'i-check':'i-warn', 'ico-sm '+(c.met?'met':'unmet'))}
+      <span class="txt">${esc(c.txt)}<span class="why">${esc(c.why)}</span></span></li>`).join('')}</ul>`);
+
+  if(a.type==='gate') out += B('Artifact and reviewer, side by side','i-review', compareHTML(a)) +
+    B('Unresolved risks','i-warn', `<ul class="crit">${a.risks.map(r=>`<li>${ico('i-warn','ico-sm unmet')}<span class="txt">${esc(r)}</span></li>`).join('')}</ul>`);
+
+  if(a.type==='questions') out += B('Question group &mdash; answered together','i-question', questionsHTML(a));
+
+  if(a.type==='recovery'){
+    out += B('Last stable boundary','i-clock', `<div class="ev"><div class="src">${ico('i-check','ico-sm')}Boundary</div>
+      <div class="val">${esc(a.boundary.stage)} &middot; ${esc(a.boundary.marker)}</div>
+      <div class="sub">Recorded at ${esc(a.boundary.at)}. Context can be reconstructed from disk at this point.</div></div>`);
+    out += B('Evidence from every source','i-doc', `<div class="evgrid">${a.evidence.map(e=>`
+      <div class="ev" data-conflict="${!!e.conflict}"><div class="src">${ico(e.icon,'ico-sm')}${esc(e.src)}${e.conflict?' &middot; conflict':''}</div>
+      <div class="val">${esc(e.val)}</div><div class="sub">${esc(e.sub)}</div></div>`).join('')}</div>`);
+    out += B('The contradiction','i-warn', `<div class="brief" style="border-left-color:var(--danger)"><p>${esc(a.contradiction)}</p></div>`);
+    out += B('Recovery choices','i-recovery', a.choices.map(c=>`
+      <label class="choice ${S.recoveryChoice===c.id?'sel':''}">
+        <input type="radio" name="rec" value="${c.id}" ${S.recoveryChoice===c.id?'checked':''}>
+        <span><span class="cl">${esc(c.label)}${c.rec?' <span class="chip chip-ok" style="margin-left:6px">Advisor recommends</span>':''}</span>
+        <span class="cd">${esc(c.desc)}</span></span></label>`).join(''));
+  }
+
+  if(a.type==='failure'){
+    out += B('Normalized error','i-fail', `<div class="brief" style="border-left-color:var(--danger)">
+      <p>${esc(a.errorSummary)}</p><p class="mono" style="font-size:12.5px;color:var(--muted)">fingerprint ${esc(a.fingerprint)}</p></div>`);
+    out += B('Retry and backoff history','i-clock', `<table class="tbl"><thead><tr><th>#</th><th>At</th><th>Backoff</th><th>Outcome</th></tr></thead>
+      <tbody>${a.retries.map(r=>`<tr><td class="mono">${r.n}</td><td class="mono">${r.at}</td><td class="mono">${r.wait}</td><td>${esc(r.out)}</td></tr>`).join('')}</tbody></table>`);
+    out += B('Session log excerpt','i-activity', `<div class="pane"><div class="pane-body"><pre class="mono" style="margin:0;font-size:11.5px;white-space:pre-wrap">${esc(a.logs)}</pre></div></div>
+      <div class="consequence" style="margin-top:12px">${ico('i-info','ico-sm')}<span>${esc(a.note)}</span></div>`);
+  }
+
+  if(a.type==='install'){
+    out += B('Receipt ownership','i-lock', `<div class="evgrid">
+      <div class="ev"><div class="src">${ico('i-doc','ico-sm')}Installed engine</div><div class="val">${esc(a.receipt.version)}</div><div class="sub">receipt written ${esc(a.receipt.at)}</div></div>
+      <div class="ev"><div class="src">${ico('i-install','ico-sm')}Bundled with Studio</div><div class="val">2.4.1</div><div class="sub">Studio ${esc(a.receipt.studio)}</div></div>
+      <div class="ev"><div class="src">${ico('i-doc','ico-sm')}Managed files</div><div class="val">${a.receipt.files} exact</div><div class="sub">each recorded with version, path and SHA-256</div></div></div>`);
+    out += B('Managed-file drift','i-git', `<table class="tbl"><thead><tr><th>Path</th><th>Ownership</th><th>State</th><th>Hash</th></tr></thead><tbody>
+      ${a.drift.map(d=>`<tr><td class="mono wrap-any">${esc(d.path)}</td><td>${esc(d.owner)}</td>
+        <td>${d.state.includes('modified')?`<span class="chip chip-danger">${ico('i-warn')}${esc(d.state)}</span>`:esc(d.state)}</td>
+        <td class="mono" style="font-size:11.5px">${esc(d.hash)}</td></tr>`).join('')}</tbody></table>`);
+    out += B('Remediation','i-check', `<ul class="crit">${a.remedy.map(r=>`<li>${ico('i-chev','ico-sm')}<span class="txt">${esc(r)}</span></li>`).join('')}</ul>`);
+  }
+
+  if(a.type==='budget'){
+    out += B('Budget state','i-clock', `<div class="stat">
+      <div class="s"><div class="k">${ico('i-check','ico-sm')}Turns used</div><div class="v">${a.budget.turnsUsed} / ${a.budget.turnsCap}</div><div class="q">exact</div></div>
+      <div class="s"><div class="k">${ico('i-moon','ico-sm')}Window</div><div class="v" style="font-size:14px">${esc(a.budget.window)}</div><div class="q">local time</div></div>
+      <div class="s"><div class="k">${ico('i-warn','ico-sm')}Credits</div><div class="v" style="font-size:14px">${esc(a.budget.credits)}</div><div class="q">not observable</div></div></div>
+      <div class="consequence">${ico('i-info','ico-sm')}<span>${esc(a.budget.creditNote)}</span></div>`);
+  }
+
+  if(a.advisor) out += advisorHTML(a);
+  if(a.type==='gate') out += B('Feedback for Request changes','i-doc',
+    `<textarea class="free" id="fb" placeholder="Nonblank feedback is required before a change request can be sent." aria-label="Change request feedback">${esc(S.feedback)}</textarea>
+     <div class="route" style="margin-top:7px">${ico('i-info','ico-sm')}<span>${esc(a.rejectHint)} Studio sends this to the canonical session; it never edits the artifact.</span></div>`);
+  return out;
+}
+
+/* ---- artifact vs reviewer comparison: Option B centrepiece ---- */
+function compareHTML(a){
+  const ar=a.artifact;
+  return `<div class="compare">
+    <div class="pane">
+      <div class="pane-head">${ico('i-doc','ico-sm')}<span class="nm">${esc(ar.name)}</span>
+        <span class="chip" style="margin-left:auto">${esc(ar.rev)}</span></div>
+      <div class="pane-body" id="artBody">
+        <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          ${ar.toc.map(t=>`<span class="chip" style="font-size:10.5px">${esc(t)}</span>`).join('')}
+        </div>
+        ${ar.body}
+        <h5>Change since revision 1</h5>
+        ${ar.diff.map(d=>`<span class="diffline ${d.k}">${esc(d.t)}</span>`).join('')}
+      </div>
+      <div class="pane-head" style="border-top:1px solid var(--border);border-bottom:0">
+        <span class="muted mono wrap-any" style="font-size:10.5px">${esc(ar.path)}</span>
+        <span class="chip" style="margin-left:auto">read-only</span></div>
+    </div>
+    <div class="pane">
+      <div class="pane-head">${ico('i-review','ico-sm')}<span class="nm">reviewer findings</span>
+        <span class="chip chip-danger" style="margin-left:auto">1 open</span></div>
+      <div class="pane-body">${a.findings.map(findingHTML).join('')}</div>
+      <div class="pane-head" style="border-top:1px solid var(--border);border-bottom:0">
+        <span class="muted" style="font-size:11px">Quoted verbatim from the stage review block</span></div>
+    </div>
+  </div>`;
+}
+function findingHTML(f){
+  const badge={blocker:['chip-danger','i-warn','Blocker'],advisory:['chip-warn','i-info','Advisory'],resolved:['chip-ok','i-check','Answered']}[f.lvl];
+  return `<div class="finding" data-lvl="${f.lvl}">
+    <div class="fh"><span class="chip ${badge[0]}">${ico(badge[1])}${badge[2]}</span>
+      <span class="muted mono" style="font-size:11px">${esc(f.by)} &middot; ${esc(f.cls)}</span>
+      ${f.anchor?`<button class="anchor-link" data-anchor="${f.anchor}" style="margin-left:auto">${ico('i-link','ico-sm')}in artifact</button>`:''}</div>
+    <div style="font-size:13px;color:var(--text-strong);font-weight:500">${esc(f.txt)}</div>
+    <p class="fq">${esc(f.quote)}</p>
+    <div class="muted" style="font-size:12px;margin-top:6px">${esc(f.fix)}</div>
+  </div>`;
+}
+
+function artifactsTab(a){
+  if(a.artifact) return B('Produced artifact','i-doc',
+    `<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <span class="chip">${esc(a.artifact.bytes)}</span><span class="chip">updated ${esc(a.artifact.updated)}</span>
+      <span class="chip">${esc(a.artifact.rev)}</span><span class="chip chip-info">${ico('i-git')}prior version derived from Git</span></div>`) + compareHTML(a);
+  if(a.drift) return B('Files considered by this action','i-doc', `<table class="tbl"><thead><tr><th>Path</th><th>Ownership</th><th>State</th></tr></thead>
+    <tbody>${a.drift.map(d=>`<tr><td class="mono wrap-any">${esc(d.path)}</td><td>${esc(d.owner)}</td><td>${esc(d.state)}</td></tr>`).join('')}</tbody></table>`);
+  return B('Evidence files','i-doc', `<div class="evgrid">${(a.evidence||[]).map(e=>`
+    <div class="ev"><div class="src">${ico(e.icon,'ico-sm')}${esc(e.src)}</div><div class="val">${esc(e.val)}</div><div class="sub">${esc(e.sub)}</div></div>`).join('')}</div>
+    <div class="consequence" style="margin-top:12px">${ico('i-info','ico-sm')}<span>Raw audit blocks and payloads open in the Evidence drawer, subject to redaction policy.</span></div>`);
+}
+function reviewTab(a){
+  const groups=[['blocker','Open blockers'],['advisory','Advisory'],['resolved','Answered in this revision']];
+  return groups.map(([k,label])=>{
+    const f=a.findings.filter(x=>x.lvl===k);
+    return f.length? B(`${label} &mdash; ${f.length}`, k==='resolved'?'i-check':(k==='blocker'?'i-warn':'i-info'), f.map(findingHTML).join('')) : '';
+  }).join('') + B('Review contract','i-lock', `<div class="evgrid">
+    <div class="ev"><div class="src">Review class</div><div class="val">${esc(a.reviewClass)}</div><div class="sub">configured for this stage &mdash; exact</div></div>
+    <div class="ev"><div class="src">Reviewer</div><div class="val">architecture-reviewer</div><div class="sub">review-only agent, cannot author artifacts</div></div>
+    <div class="ev"><div class="src">Revisions</div><div class="val">${a.revision}</div><div class="sub">each revision re-ran the reviewer</div></div></div>`);
+}
+function activityTab(a){
+  const rows=[
+    {t:'19:41:55', src:'AI-DLC', i:'i-gate',    m:`Stage ${a.stage} reached <span class="mono">[?]</span> and is awaiting a human decision.`},
+    {t:'19:41:12', src:'AI-DLC', i:'i-review',  m:'Reviewer pass completed. 1 blocker, 1 advisory, 2 answered.'},
+    {t:'19:38:04', src:'AI-DLC', i:'i-doc',     m:'Artifact written by the stage agent.'},
+    {t:'19:37:41', src:'Studio', i:'i-send',    m:`Action <span class="mono">${esc(a.id)}</span> created and queued for your decision.`},
+    {t:'19:36:58', src:'KiroCrew', i:'i-activity', m:'Turn 12 dispatched into the canonical session under the repo lease.'},
+    {t:'19:36:50', src:'Git',    i:'i-git',     m:'Observed <span class="mono">main</span>, working tree clean. No Git write was performed.'}
+  ];
+  return B('Timeline','i-activity', `<ul class="tl">${rows.map(r=>`<li>
+    <span class="t">${r.t}</span><span class="m">${ico(r.i,'ico-sm')}</span>
+    <span><span>${r.m}</span><span class="src">source: ${r.src}</span></span></li>`).join('')}</ul>
+    <div class="consequence" style="margin-top:14px">${ico('i-info','ico-sm')}<span>Studio-derived events are labelled Studio. They are never presented as original AI-DLC audit events.</span></div>`);
+}
+
+/* ===================== advisor ===================== */
+function advisorHTML(a){
+  const st = S.advisor[a.id];
+  if(!st) return B('AI Advisor','i-advisor', `<div class="advisor">
+    <div class="advisor-head">${ico('i-advisor','ico-sm')}<span class="t">Advisor has not run</span></div>
+    <p class="muted" style="margin:0;font-size:13px">The Advisor runs only when you ask. It uses a separate read-only session, cannot write files or move the workflow, and never produces human-turn evidence.</p>
+    <div class="row" style="margin-top:11px"><button class="btn btn-sm" data-act="advisor">${ico('i-advisor','ico-sm')}${a.type==='questions'?'Draft all answers':'Analyze this decision'}</button>
+    ${a.type==='questions'?'':`<button class="btn btn-sm" data-act="advisor">Draft change-request feedback</button>`}</div></div>`);
+
+  const v=a.advisor;
+  const L=(k,val)=>`<dt>${k}</dt><dd>${val}</dd>`;
+  return B('AI Advisor &mdash; draft only','i-advisor', `<div class="advisor">
+    <div class="advisor-head">${ico('i-advisor','ico-sm')}<span class="t">${esc(v.verdict)}</span>
+      <span class="chip chip-aim">draft, not a decision</span></div>
+    <p style="margin:0;font-size:13.5px;line-height:1.65">${esc(v.reason)}</p>
+    <dl>
+      ${L('Evidence', `<ul style="margin:0;padding-left:17px">${v.evidence.map(e=>`<li>${esc(e)}</li>`).join('')}</ul>`)}
+      ${L('Assumptions', `<ul style="margin:0;padding-left:17px">${v.assumptions.map(e=>`<li>${esc(e)}</li>`).join('')}</ul>`)}
+      ${L('Alternatives', `<ul style="margin:0;padding-left:17px">${v.alternatives.map(e=>`<li>${esc(e)}</li>`).join('')}</ul>`)}
+      ${L('Confidence', esc(v.confidence))}
+      ${L('Needs your decision', `<span class="chip chip-warn">${ico('i-warn')}unresolvable from evidence</span> ${esc(v.needsYou)}`)}
+    </dl>
+    ${v.draftFeedback?`<div class="row" style="margin-top:12px;flex-wrap:wrap"><button class="btn btn-sm" data-act="usefeedback">${ico('i-doc','ico-sm')}Put the drafted feedback in the box</button>
+      <span class="muted" style="font-size:11.5px">You can edit it before anything is sent.</span></div>`:''}
+    ${v.picks?`<div class="row" style="margin-top:12px;flex-wrap:wrap"><button class="btn btn-sm" data-act="applypicks">${ico('i-check','ico-sm')}Apply the drafted selections</button>
+      <span class="muted" style="font-size:11.5px">Nothing is submitted. Approve is never preselected.</span></div>`:''}
+    <div class="disclaim">${ico('i-lock','ico-sm')}<span>Advisor activity is recorded in Studio Activity only. It is never written into the AI-DLC audit trail, and it cannot mint a <span class="mono">HUMAN_TURN</span>.</span></div>
+  </div>`);
+}
+
+/* ===================== questions ===================== */
+function questionsHTML(a){
+  return a.questions.map((q,qi)=>{
+    const key=a.id+'/'+q.id, v=S.answers[key];
+    const drafted = S.advisor[a.id]==='ready' ? a.advisor.picks[q.id] : null;
+    const isSel = o => q.multi ? (Array.isArray(v)&&v.includes(o.id)) : v===o.id;
+    return `<div class="q">
+      <p class="q-prompt">${qi+1}. ${esc(q.prompt)}</p>
+      <p class="q-sub"><span class="chip">${esc(q.header)}</span>
+        <span class="chip">${q.multi?'select any':'select one'}</span>
+        <span class="chip ${q.required?'chip-accent':''}">${q.required?'required':'optional'}</span></p>
+      ${q.opts.map(o=>`<label class="opt ${isSel(o)?'sel':''}">
+        <input type="${q.multi?'checkbox':'radio'}" name="${key}" value="${o.id}" ${isSel(o)?'checked':''} data-qkey="${key}" data-multi="${q.multi}">
+        <span class="grow"><span class="ol">${esc(o.l)}</span><span class="od">${esc(o.d)}</span></span>
+        ${drafted && (Array.isArray(drafted)?drafted.includes(o.id):drafted===o.id) ? `<span class="drafted chip chip-aim">${ico('i-advisor')}drafted</span>`:''}
+      </label>`).join('')}
+      ${q.other?`<label class="opt ${v==='__other'?'sel':''}"><input type="${q.multi?'checkbox':'radio'}" name="${key}" value="__other" ${v==='__other'?'checked':''} data-qkey="${key}" data-multi="${q.multi}">
+        <span class="grow"><span class="ol">Other</span><span class="od">Free text, preserved exactly as the conductor offered it.</span></span></label>
+        ${v==='__other'?`<textarea class="free" data-other="${key}" placeholder="Your answer">${esc(S.answers[key+'/other']||'')}</textarea>`:''}`:''}
+    </div>`;
+  }).join('') + `<div class="consequence" style="margin-top:12px">${ico('i-lock','ico-sm')}<span>Studio never edits <span class="mono">nfr-requirements-questions.md</span> or its digest. The group stays visible until delivery and state evidence prove it was accepted.</span></div>`;
+}
+</script>
+
+<script>
+/* ===================== workflow map ===================== */
+function mapView(){
+  const rel = RELATIONS[S.mapSel];
+  const lanes = PHASES.map(p=>`
+    <div class="lane" style="--ph:${p.accent}">
+      <div class="lane-h"><div class="bar"></div><div class="nm">${esc(p.name)}</div>
+        <div class="sub">${p.stages.length} stages &middot; ${p.stages.filter(s=>s.s==='skipped').length} skipped</div></div>
+      <div>
+        <div class="stages">${p.stages.map(s=>stageCard(s,rel)).join('')}</div>
+        ${S.mapUnits && p.stages.some(s=>s.perUnit) ? unitLanes(p) : ''}
+      </div>
+    </div>`).join('');
+
+  return `<div class="map-wrap">
+    <div class="map-bar">
+      <span class="chip chip-accent">${ico('i-intent')}checkout-web / guest-checkout</span>
+      <span class="chip">33 stages known &middot; exact</span>
+      <span class="chip">27 selected &middot; exact</span>
+      <span class="chip">11 Gates &middot; exact</span>
+      <div class="seg" role="group" aria-label="Density" style="margin-left:auto">
+        ${['overview','detailed','dependencies'].map(d=>`<button data-density="${d}" aria-pressed="${S.mapDensity===d}">${d[0].toUpperCase()+d.slice(1)}</button>`).join('')}
+      </div>
+      <button class="btn btn-sm" data-act="units" aria-pressed="${S.mapUnits}">${ico('i-chevd','ico-sm')}${S.mapUnits?'Hide':'Expand'} Construction units</button>
+    </div>
+    <div style="display:flex;flex:1 1 auto;min-height:0">
+      <div class="map-scroll">${lanes}
+        <div class="consequence" style="margin-top:16px;max-width:820px">${ico('i-info','ico-sm')}<span>Dependency edges are not drawn by default. Selecting a stage overlays its upstream, downstream, consumes and produces relationships. Skipped stages keep their position and their reason.</span></div>
+      </div>
+      ${inspectorHTML()}
+    </div></div>`;
+}
+function stageCard(s,rel){
+  const cls = rel && rel.up.includes(s.n) ? 'up' : (rel && rel.down.includes(s.n) ? 'down' : '');
+  const relTag = cls==='up' ? 'upstream' : (cls==='down' ? 'downstream' : '');
+  const state = s.s==='gate' ? 'gate' : s.s;
+  const badge = {done:['chip-ok','i-check','done'],current:['chip-accent','i-play','running'],gate:['chip-warn','i-gate','Gate open'],skipped:['chip','i-warn','skipped'],pending:['chip','i-clock','pending']}[state];
+  return `<button class="stage ${cls}" data-stage="${s.n}" data-state="${state}" aria-pressed="${S.mapSel===s.n}">
+    ${relTag?`<span class="rel">${relTag}</span>`:''}
+    <span class="sn">${s.n}</span><span class="st">${esc(s.t)}</span>
+    <span class="sm"><span class="chip ${badge[0]}" style="font-size:10px">${ico(badge[1])}${badge[2]}</span>
+      ${S.mapDensity!=='overview'?`<span class="chip" style="font-size:10px">${esc(s.agent)}</span>
+      ${s.rev!=='none'?`<span class="chip" style="font-size:10px">${esc(s.rev)}</span>`:''}
+      <span class="chip" style="font-size:10px">${ico('i-clock')}${esc(s.el)}</span>`:''}
+      ${s.gate?`<span class="chip" style="font-size:10px">${ico('i-gate')}Gate</span>`:''}</span>
+  </button>`;
+}
+function unitLanes(p){
+  const st = p.stages.filter(s=>s.perUnit);
+  return `<div class="units">${st.map(s=>`<div><div class="unit">${ico('i-chev','ico-sm')}${esc(s.n)} ${esc(s.t)} &mdash; per unit</div>
+    <div class="stages" style="margin:6px 0 4px 14px">${s.units.map(u=>`<button class="stage" data-state="pending" style="width:auto;min-width:150px">
+      <span class="sn">${esc(s.n)}</span><span class="st">${esc(u.u)}</span>
+      <span class="sm"><span class="chip" style="font-size:10px">${ico('i-clock')}pending</span></span></button>`).join('')}</div></div>`).join('')}</div>`;
+}
+function inspectorHTML(){
+  const all = PHASES.flatMap(p=>p.stages.map(s=>({...s,phase:p.name,accent:p.accent})));
+  const s = all.find(x=>x.n===S.mapSel); if(!s) return '';
+  const rel = RELATIONS[s.n];
+  const a = s.action ? act(s.action) : null;
+  return `<aside class="inspector" aria-label="Stage inspector">
+    <div class="row" style="gap:7px;margin-bottom:8px"><span class="chip" style="border-color:${s.accent};color:${s.accent}">${esc(s.phase)}</span>
+      <span class="chip mono">${esc(s.n)}</span></div>
+    <h2 style="margin:0 0 10px;font-size:16px;color:var(--text-strong)">${esc(s.t)}</h2>
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:14px">
+      <span class="chip">${ico('i-intent')}${esc(s.agent)}</span>
+      ${s.gate?`<span class="chip chip-warn">${ico('i-gate')}Gate</span>`:''}
+      ${s.rev!=='none'?`<span class="chip chip-info">${ico('i-review')}${esc(s.rev)}</span>`:''}
+      <span class="chip">${ico('i-clock')}${esc(s.el)}</span></div>
+    ${s.why?`<div class="consequence" style="margin-bottom:14px">${ico('i-info','ico-sm')}<span><b>Why it is skipped.</b> ${esc(s.why)}</span></div>`:''}
+    ${rel?`<div class="block"><h3>Relationships</h3>
+      <div class="ev"><div class="src">Upstream</div><div class="val">${rel.up.join(', ')}</div></div>
+      <div class="ev" style="margin-top:7px"><div class="src">Downstream</div><div class="val">${rel.down.join(', ')}</div></div>
+      <div class="ev" style="margin-top:7px"><div class="src">Consumes</div><div class="val wrap-any">${rel.consumes.join('<br>')}</div></div>
+      <div class="ev" style="margin-top:7px"><div class="src">Produces</div><div class="val wrap-any">${rel.produces.join('<br>')}</div></div></div>`:''}
+    ${a?`<button class="btn btn-primary" data-open="${a.id}" style="width:100%;justify-content:center">${ico(a.icon,'ico-sm')}Open the ${esc(a.typeLabel.toLowerCase())} in Action Center</button>`:
+      `<button class="btn" style="width:100%;justify-content:center" disabled>${ico('i-lock','ico-sm')}No eligible operation at this stage</button>`}
+  </aside>`;
+}
+
+/* ===================== four-step wizard ===================== */
+const SCOPES=[
+  {id:'bugfix',  l:'Bug fix',  d:'12 stages. Skips ideation and most of inception.'},
+  {id:'feature', l:'Feature',  d:'27 of 33 stages. The default for scoped product work.'},
+  {id:'mvp',     l:'MVP',      d:'31 stages. Adds market research and refined mockups.'},
+  {id:'security',l:'Security patch', d:'9 stages. Adds compliance review, skips design exploration.'}
+];
+const DEPTHS=[{id:'light',l:'Light',d:'One pass per stage, fewer questions.'},{id:'standard',l:'Standard',d:'Recommended. Questions where the engine needs input.'},{id:'deep',l:'Deep',d:'More questions and longer artifacts.'}];
+const REVIEWS=[{id:'none',l:'None',d:'No reviewer pass. Gates still require you.'},{id:'advisory',l:'Advisory',d:'Reviewer comments, does not block.'},{id:'adversarial',l:'Adversarial',d:'Reviewer must be answered before a Gate can pass.'}];
+const TESTS=[{id:'minimal',l:'Minimal',d:'Smoke coverage only.'},{id:'standard',l:'Standard',d:'Unit plus integration for generated units.'},{id:'thorough',l:'Thorough',d:'Adds performance validation in operation.'}];
+function wizardView(){
+  const W=S.wiz;
+  const steps=['Work','Preset','Plan','Review'];
+  const bar = steps.map((s,i)=>`${i?'<span class="step-sep"></span>':''}
+    <button class="step ${S.wizStep>i+1?'done':(S.wizStep===i+1?'now':'')}" data-wizstep="${i+1}">
+      <span class="n">${S.wizStep>i+1?'&#10003;':i+1}</span>${s}</button>`).join('');
+  let body='';
+  if(S.wizStep===1) body=`
+    <div class="field"><label>Repository</label><div class="help">Only registered repositories appear here.</div>
+      <select id="wRepo">${REPOS.map(r=>`<option value="${r.id}" ${W.repo===r.id?'selected':''}>${esc(r.label)} &mdash; ${esc(r.path)}</option>`).join('')}</select></div>
+    <div class="field"><label>Space</label><div class="help">Single-team installs only ever see <span class="mono">default</span>.</div>
+      <select id="wSpace"><option>default</option><option>platform</option></select></div>
+    <div class="field"><label>Objective</label><div class="help">One sentence. This becomes the intent slug and the ideation input.</div>
+      <input type="text" id="wObj" value="${esc(W.objective)}" placeholder="Let signed-out shoppers complete a purchase"></div>
+    <div class="field"><label>Context the engine should know</label>
+      <textarea id="wCtx" placeholder="Existing cart service is v3. Payment provider retries once. No account creation is allowed in this flow.">${esc(W.context)}</textarea></div>
+    <div class="field"><label>Project type signals</label><div class="help">Detected read-only from the repo; never edited.</div>
+      <div class="row" style="gap:7px;flex-wrap:wrap"><span class="chip chip-ok">${ico('i-check')}TypeScript + Bun detected</span>
+      <span class="chip chip-ok">${ico('i-check')}Existing test runner</span><span class="chip">${ico('i-git')}branch main, clean</span>
+      <span class="chip chip-ok">${ico('i-check')}AI-DLC 2.4.1 installed</span></div></div>`;
+  if(S.wizStep===2) body=`
+    ${pickRow('Scope','Determines which of the 33 stages are eligible.','scope',SCOPES)}
+    ${pickRow('Depth','Controls question volume and artifact detail.','depth',DEPTHS)}
+    ${pickRow('Review cap','The strongest review class any stage may use.','review',REVIEWS)}
+    ${pickRow('Test strategy','Controls test volume and whether performance validation is eligible.','test',TESTS)}`;
+  if(S.wizStep===3) body=`
+    <div class="consequence" style="margin-bottom:16px">${ico('i-info','ico-sm')}<span>Every known stage is listed, including the ones your preset excludes. Stages the engine will not let you change are disabled with a reason.</span></div>
+    <div class="matrix">${PHASES.map(p=>`<div class="mrow" style="border-left:3px solid ${p.accent}">
+      <div class="mh"><span>${esc(p.name)}</span><span class="chip">${p.stages.filter(s=>!S.wiz.off[s.n] && s.s!=='skipped').length} of ${p.stages.length} on</span></div>
+      <div class="mstages">${p.stages.map(s=>{
+        const locked = s.s==='done'||s.s==='current'||s.s==='gate';
+        const on = !S.wiz.off[s.n] && s.s!=='skipped';
+        return `<label class="ms ${on?'on':''} ${locked?'locked':''}" ${locked?`title="Immutable: ${s.s==='current'?'this is the current stage':'already completed or at its Gate'}"`:''}>
+          <input type="checkbox" data-toggle="${s.n}" ${on?'checked':''} ${locked?'disabled':''}>
+          <span class="mono">${s.n}</span><span>${esc(s.t)}</span>${s.gate?ico('i-gate','ico-sm'):''}${locked?ico('i-lock','ico-sm'):''}</label>`;
+      }).join('')}</div></div>`).join('')}</div>
+    <div class="consequence" style="margin-top:14px">${ico('i-warn','ico-sm')}<span>Turning off <span class="mono">2.4 nfr-requirements</span> would leave <span class="mono">3.1 contract-design</span> without its declared input, so the engine rejects that combination.</span></div>`;
+  if(S.wizStep===4){
+    const off=Object.keys(S.wiz.off).length;
+    body=`
+    <div class="stat">
+      <div class="s"><div class="k">${ico('i-check','ico-sm')}Stages selected</div><div class="v">${27-off}</div><div class="q">exact, from the installed graph</div></div>
+      <div class="s"><div class="k">${ico('i-gate','ico-sm')}Gates</div><div class="v">${11-Math.min(off,3)}</div><div class="q">exact</div></div>
+      <div class="s"><div class="k">${ico('i-doc','ico-sm')}Artifacts produced</div><div class="v">${34-off*2}</div><div class="q">exact</div></div>
+      <div class="s"><div class="k">${ico('i-review','ico-sm')}Review intensity</div><div class="v" style="font-size:14px">${esc(S.wiz.review)}</div><div class="q">exact, as configured</div></div>
+    </div>
+    <div class="stat">
+      <div class="s"><div class="k">${ico('i-clock','ico-sm')}Turns</div><div class="v" style="font-size:16px">70 &ndash; 110</div><div class="q">range &middot; rule-based band &middot; low confidence, no local history yet</div></div>
+      <div class="s"><div class="k">${ico('i-clock','ico-sm')}Active execution</div><div class="v" style="font-size:16px">4 &ndash; 7 h</div><div class="q">range &middot; medium confidence</div></div>
+      <div class="s"><div class="k">${ico('i-clock','ico-sm')}Elapsed with your Gates</div><div class="v" style="font-size:16px">2 &ndash; 4 days</div><div class="q">range &middot; depends on your response time</div></div>
+      <div class="s"><div class="k">${ico('i-warn','ico-sm')}Credits</div><div class="v" style="font-size:16px">Unavailable</div><div class="q">not observable from Kiro signals &mdash; not zero, not inferred</div></div>
+    </div>
+    ${B('What dominates the estimate','i-info',`<ul class="crit">
+      <li>${ico('i-warn','ico-sm unmet')}<span class="txt">3.3 code-generation across 3 units &mdash; roughly 40% of the estimated turns<span class="why">Removing it removes all generated implementation. Not advisable for this objective.</span></span></li>
+      <li>${ico('i-warn','ico-sm unmet')}<span class="txt">Adversarial review on 4 stages &mdash; roughly 18%<span class="why">Lowering the review cap to advisory saves time and drops the requirement that findings be answered before a Gate passes.</span></span></li></ul>`)}
+    ${B('Plan diff against the preset default','i-doc', off?`${Object.keys(S.wiz.off).map(n=>`<span class="diffline del">- ${n} disabled by you</span>`).join('')}`:'<span class="diffline add">+ no changes &mdash; this is the unmodified feature preset</span>')}
+    ${B('Products this plan will create','i-doc',`<div class="row" style="gap:7px;flex-wrap:wrap">
+      ${['scope-definition.md','user-stories.md','requirements-analysis.md','functional-design.md','nfr-requirements.md','domain-design.md','contract-design.md','units/','build-and-test report','ci-pipeline.md'].map(f=>`<span class="chip mono" style="font-size:11px">${esc(f)}</span>`).join('')}</div>`)}
+    <div class="consequence">${ico('i-info','ico-sm')}<span>Create does not run anything. The intent is created paused; you start it with <b>Run to next checkpoint</b>. Keep moving, budgets and Advisor drafts are never inherited from another intent.</span></div>`;
+  }
+  return `<div class="view-scroll"><div class="wiz">
+    <h1 style="margin:0 0 4px;font-size:20px;color:var(--text-strong)">New intent</h1>
+    <p class="lede">Four steps. Nothing is written to the repository until you press Create, and Create never starts execution.</p>
+    <div class="steps">${bar}</div>
+    ${body}
+    <div class="wiz-bar">
+      <button class="btn" data-wiznav="-1" ${S.wizStep===1?'disabled':''}>Back</button>
+      ${S.wizStep<4?`<button class="btn btn-primary" data-wiznav="1">Continue</button>`
+        :`<button class="btn btn-primary" data-act="create">${ico('i-check','ico-sm')}Create the intent, paused</button>`}
+      <span class="muted" style="font-size:11.5px;margin-left:auto">Step ${S.wizStep} of 4</span>
+    </div>
+  </div></div>`;
+}
+function pickRow(label,help,key,list){
+  return `<div class="field"><label>${label}</label><div class="help">${help}</div>
+    <div class="picks">${list.map(o=>`<button class="pick ${S.wiz[key]===o.id?'sel':''}" data-pick="${key}" data-val="${o.id}">
+      <div class="pl">${esc(o.l)}</div><div class="pd">${esc(o.d)}</div></button>`).join('')}</div></div>`;
+}
+
+/* ===================== secondary pages ===================== */
+function reposView(){
+  return `<div class="view-scroll"><div class="page"><h1>Repos</h1>
+    <p class="lede">Three registered paths. Studio never scans the home directory; every entry here was added deliberately.</p>
+    <table class="tbl"><thead><tr><th>Repository</th><th>AI-DLC</th><th>Engine</th><th>Intents</th><th>Queue</th><th>Git</th><th></th></tr></thead><tbody>
+    ${REPOS.map(r=>`<tr><td><div class="strong">${esc(r.label)}</div><div class="muted mono" style="font-size:11.5px">${esc(r.path)}</div></td>
+      <td>${r.install==='ok'?`<span class="chip chip-ok">${ico('i-check')}installed</span>`:`<span class="chip chip-warn">${ico('i-warn')}drift &middot; upgrade stopped</span>`}</td>
+      <td class="mono">${esc(r.engine)}${r.engine!=='2.4.1'?`<div class="muted" style="font-size:11px">bundled 2.4.1</div>`:''}</td>
+      <td class="mono">${r.intents}</td><td class="mono">${r.queue}</td>
+      <td><span class="chip">${ico('i-git')}main &middot; clean</span></td>
+      <td>${r.install==='ok'?`<button class="btn btn-sm">Maintenance</button>`:`<button class="btn btn-sm" data-open="a-005">Review conflict</button>`}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="consequence" style="margin-top:16px;max-width:820px">${ico('i-info','ico-sm')}<span>Maintenance upgrades live here and in notifications; they never enter the blocking workflow queue. Removing a repository unregisters it and changes no bytes on disk.</span></div>
+  </div></div>`;
+}
+function intentsView(){
+  const rows=[
+    ['checkout-web','guest-checkout','Waiting for you','2.3 functional-design','chip-accent','a-002'],
+    ['checkout-web','cart-persistence','Running','3.3 code-generation &middot; unit 2','chip-ok',null],
+    ['payments-api','idempotent-refunds','Waiting for you','2.4 nfr-requirements','chip-accent','a-003'],
+    ['payments-api','refund-webhooks','Queued','3.2 units-generation','chip','a-006'],
+    ['payments-api','ledger-audit','Parked','2.1 requirements-analysis','chip',null],
+    ['infra-platform','observability-baseline','Circuit open','3.3 build-and-test','chip-warn','a-004']
+  ];
+  return `<div class="view-scroll"><div class="page"><h1>Intents</h1>
+    <p class="lede">Multiple intents may be in flight in one repository. Turns serialize per repository; different repositories run in parallel.</p>
+    <table class="tbl"><thead><tr><th>Repo</th><th>Intent</th><th>State</th><th>Stage</th><th>Keep moving</th><th></th></tr></thead><tbody>
+    ${rows.map(r=>`<tr><td class="mono">${r[0]}</td><td class="strong">${r[1]}</td>
+      <td><span class="chip ${r[4]}">${r[2]}</span></td><td class="mono" style="font-size:12px">${r[3]}</td>
+      <td>${r[2]==='Circuit open'?`<span class="chip chip-warn">disabled by breaker</span>`:(r[2]==='Running'?`<span class="chip chip-ok">${ico('i-check')}on</span>`:'<span class="muted">off</span>')}</td>
+      <td>${r[5]?`<button class="btn btn-sm" data-open="${r[5]}">Open action</button>`:`<button class="btn btn-sm">Details</button>`}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+function activityView(){
+  const rows=[
+    ['19:42:09','Studio','i-warn','Gateway restart detected. Action <span class="mono">act_7712</span> delivery became uncertain; automatic replay was suppressed.'],
+    ['19:41:55','AI-DLC','i-gate','<span class="mono">payments-api/idempotent-refunds</span> reached <span class="mono">[?]</span> at stage 3.4.'],
+    ['19:37:41','Studio','i-send','Action <span class="mono">a-002</span> created for <span class="mono">checkout-web/guest-checkout</span>.'],
+    ['19:14:51','KiroCrew','i-fail','ACP stream closed. Fingerprint <span class="mono">acp.transport.stream_closed:5f2c9a</span> reached 3; breaker opened.'],
+    ['18:02:10','Studio','i-advisor','Advisor draft requested for a-002. Read-only session, no workflow effect.'],
+    ['16:20:00','AI-DLC','i-check','Stage 2.2 refined-mockups approved by human turn 6.'],
+    ['09:14:00','Studio','i-install','Upgrade preview for <span class="mono">infra-platform</span> stopped on receipt drift. Nothing was written.']
+  ];
+  return `<div class="view-scroll"><div class="page"><h1>Activity</h1>
+    <p class="lede">Human-readable timeline. Every event names its source, and a Studio-derived event is never shown as an AI-DLC audit event.</p>
+    <div class="row" style="gap:7px;flex-wrap:wrap;margin-bottom:14px">
+      ${['All sources','AI-DLC','Studio','KiroCrew','Git'].map((f,i)=>`<span class="chip ${i===0?'chip-accent':''}">${esc(f)}</span>`).join('')}</div>
+    <ul class="tl">${rows.map(r=>`<li><span class="t">${r[0]}</span><span class="m">${ico(r[2],'ico-sm')}</span>
+      <span><span>${r[3]}</span><span class="src">source: ${r[1]}</span></span></li>`).join('')}</ul>
+    <div class="consequence" style="margin-top:16px;max-width:820px">${ico('i-lock','ico-sm')}<span>The Evidence drawer exposes raw audit blocks and file locations. Diagnostic export redacts credentials, protected paths and prompt bodies by default.</span></div>
+  </div></div>`;
+}
+function settingsView(){
+  const row=(t,d,ctl)=>`<div class="mrow"><div class="spread"><div><div class="strong" style="font-size:13.5px">${t}</div><div class="muted" style="font-size:12px;margin-top:2px">${d}</div></div>${ctl}</div></div>`;
+  return `<div class="view-scroll"><div class="page"><h1>Settings</h1>
+    <p class="lede">Studio-owned preferences. Nothing here changes AI-DLC files.</p>
+    <div class="matrix">
+      ${row('Language','English and Simplified Chinese ship complete and parity-tested.','<select style="padding:6px 9px;border-radius:8px;background:var(--bg-elevated);border:1px solid var(--border)"><option>English (en-US)</option><option>&#31616;&#20307;&#20013;&#25991; (zh-CN)</option></select>')}
+      ${row('Theme','Follows KiroCrew tokens in light and dark.','<button class="btn btn-sm" id="themeBtn2">'+ico('i-moon','ico-sm')+'Toggle</button>')}
+      ${row('Night work window','Off by default. Only intents with Keep moving participate.','<span class="chip">22:00 &ndash; 06:00 &middot; off</span>')}
+      ${row('Turn cap per window','Checked before dispatch; never interrupts a running turn.','<span class="chip mono">40</span>')}
+      ${row('Credit cap','Disabled because credit consumption is not observable from the available signals.','<span class="chip chip-warn">'+ico('i-warn')+'unavailable</span>')}
+      ${row('Global concurrency','Per-repo execution is always one and cannot be raised.','<span class="chip mono">3 repos</span>')}
+      ${row('Slack quick actions','Blocking events only. Complex question groups deep-link back here.','<span class="chip chip-ok">'+ico('i-slack')+'owner DM</span>')}
+      ${row('Advisor model','Inherited through KiroCrew role resolution. No model id is hardcoded.','<span class="chip">'+ico('i-advisor')+'inherited</span>')}
+      ${row('Versions','App version and bundled AI-DLC version are separately visible.','<span class="chip mono">Studio 1.0.0 &middot; AI-DLC 2.4.1</span>')}
+    </div></div></div>`;
+}
+
+/* ===================== router ===================== */
+function render(){
+  renderChrome();
+  const v=$('#view');
+  if(S.route==='actions')       v.innerHTML = `<div class="ac">${queueHTML()}${detailHTML()}</div>`;
+  else if(S.route==='map')      v.innerHTML = mapView();
+  else if(S.route==='wizard')   v.innerHTML = wizardView();
+  else if(S.route==='repos')    v.innerHTML = reposView();
+  else if(S.route==='intents')  v.innerHTML = intentsView();
+  else if(S.route==='activity') v.innerHTML = activityView();
+  else                          v.innerHTML = settingsView();
+  const fb=$('#fb'); if(fb) fb.addEventListener('input',e=>{S.feedback=e.target.value;});
+}
+function go(route){ S.route=route; if(route!=='actions') document.body.dataset.pane='list'; render(); }
+
+/* ===================== events ===================== */
+document.addEventListener('click', e=>{
+  const t = e.target;
+  const nav = t.closest('[data-route]');        if(nav){ go(nav.dataset.route); return; }
+  if(t.closest('#backBtn')){ document.body.dataset.pane='list'; return; }
+  if(t.closest('#themeBtn, #themeBtn2')){ const d=document.documentElement; d.dataset.theme = d.dataset.theme==='dark'?'light':'dark'; render(); return; }
+
+  const q = t.closest('.qitem');
+  if(q){ S.sel=q.dataset.id; S.tab='decision'; S.confirm=null; document.body.dataset.pane='detail'; render(); return; }
+  const open = t.closest('[data-open]');
+  if(open){ S.sel=open.dataset.open; S.tab='decision'; S.confirm=null; S.route='actions'; document.body.dataset.pane='detail'; render(); return; }
+  const ord = t.closest('[data-order]');        if(ord){ S.order=ord.dataset.order; render(); return; }
+  const tab = t.closest('[data-tab]');          if(tab){ S.tab=tab.dataset.tab; render(); return; }
+  if(t.closest('#scopeBtn')){
+    const i=REPOS.findIndex(r=>r.id===S.scope);
+    S.scope = S.scope==='all' ? REPOS[0].id : (i>=REPOS.length-1 ? 'all' : REPOS[i+1].id);
+    const vis=visible(); if(!vis.find(a=>a.id===S.sel)) S.sel = vis[0]?vis[0].id:null;
+    render(); return;
+  }
+  const anchor = t.closest('[data-anchor]');
+  if(anchor){ const id=anchor.dataset.anchor;
+    if(S.tab!=='artifacts'){ S.tab='artifacts'; render(); }
+    const el=document.getElementById(id);
+    if(el){ el.classList.add('hl'); el.scrollIntoView({block:'center', behavior:'smooth'}); setTimeout(()=>el.classList.remove('hl'),2200); }
+    return; }
+  const copy = t.closest('[data-copy]');
+  if(copy){ copy.innerHTML = ico('i-check','ico-sm')+'copied'; return; }
+
+  const stage = t.closest('[data-stage]');      if(stage){ S.mapSel=stage.dataset.stage; render(); return; }
+  const dens = t.closest('[data-density]');     if(dens){ S.mapDensity=dens.dataset.density; render(); return; }
+  const pick = t.closest('[data-pick]');        if(pick){ S.wiz[pick.dataset.pick]=pick.dataset.val; render(); return; }
+  const wstep = t.closest('[data-wizstep]');    if(wstep){ S.wizStep=+wstep.dataset.wizstep; render(); return; }
+  const wnav = t.closest('[data-wiznav]');      if(wnav){ S.wizStep=Math.min(4,Math.max(1,S.wizStep + +wnav.dataset.wiznav)); render(); return; }
+
+  const ab = t.closest('[data-act]'); if(!ab) return;
+  const a = act(S.sel);
+  switch(ab.dataset.act){
+    case 'units':    S.mapUnits=!S.mapUnits; render(); break;
+    case 'advisor':
+    case 'draftall': S.advisor[a.id]='ready'; render();
+                     { const p=$('.advisor'); if(p) p.scrollIntoView({block:'center',behavior:'smooth'}); } break;
+    case 'usefeedback': S.feedback=a.advisor.draftFeedback; render();
+                     { const f=$('#fb'); if(f){ f.focus(); f.scrollIntoView({block:'center',behavior:'smooth'}); } } break;
+    case 'applypicks': Object.entries(a.advisor.picks).forEach(([qid,v])=>{ S.answers[a.id+'/'+qid]=v; }); render(); break;
+    case 'approve':  S.confirm='approve'; render(); break;
+    case 'reject':   S.confirm='reject';  render(); { const f=$('#fb'); if(f && !S.feedback.trim()) f.focus(); } break;
+    case 'answers':  S.confirm='answers'; render(); break;
+    case 'recovery': S.confirm='recovery'; render(); break;
+    case 'cancel':   S.confirm=null; render(); break;
+    case 'send':     S.confirm=null; S.sent[a.id]=3; render(); break;
+    case 'retry':    S.sent[a.id]=2; render(); break;
+    case 'undo':     document.body.dataset.pane='list'; break;
+    case 'create':   S.route='actions'; document.body.dataset.pane='list'; render();
+                     window.alert('Intent created and left paused.\n\nNothing has run yet. Start it from Intents with "Run to next checkpoint".'); break;
+  }
+});
+document.addEventListener('input', e=>{
+  const t=e.target;
+  if(t.id==='qSearch'){
+    S.query=t.value; const vis=visible(); if(!vis.find(x=>x.id===S.sel)) S.sel=vis[0]?vis[0].id:null;
+    render(); const f=$('#qSearch'); if(f){ f.focus(); f.setSelectionRange(f.value.length,f.value.length); } return;
+  }
+  if(t.dataset.other){ S.answers[t.dataset.other+'/other']=t.value; return; }
+  if(t.id==='wObj'){ S.wiz.objective=t.value; return; }
+  if(t.id==='wCtx'){ S.wiz.context=t.value; return; }
+  if(t.id==='wRepo'){ S.wiz.repo=t.value; return; }
+  if(t.dataset.qkey){
+    const key=t.dataset.qkey, multi=t.dataset.multi==='true';
+    if(multi){
+      const cur=Array.isArray(S.answers[key])?S.answers[key].slice():[];
+      const i=cur.indexOf(t.value);
+      if(t.checked){ if(i<0) cur.push(t.value); } else if(i>=0) cur.splice(i,1);
+      S.answers[key]=cur;
+    } else S.answers[key]=t.value;
+    render(); return;
+  }
+  if(t.dataset.toggle){ const n=t.dataset.toggle; if(t.checked) delete S.wiz.off[n]; else S.wiz.off[n]=true; render(); return; }
+  if(t.name==='rec'){ S.recoveryChoice=t.value; render(); return; }
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && S.confirm){ S.confirm=null; render(); } });
+
+render();
+</script>
+</body>
+</html>

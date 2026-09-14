@@ -1,0 +1,12 @@
+{
+  "settings.bun.title": "Bun executable",
+  "settings.bun.desc": "Choose the Bun executable on the gateway computer, or detect an installation again. Changes take effect without restarting Studio.",
+  "settings.bun.path": "Absolute path to Bun",
+  "settings.bun.save": "Save and verify path",
+  "settings.bun.probe": "Detect Bun again",
+  "settings.bun.auto": "Use automatic detection",
+  "settings.bun.checking": "Checking Bun…",
+  "settings.bun.ready": "Bun is ready.",
+  "settings.bun.missing": "Bun was not found. Set its path or install it, then detect again.",
+  "settings.bun.searched": "Checked: {paths}"
+}

@@ -1,0 +1,42 @@
+{
+  "$comment": "Pinned Studio protocol wire text (PRD FR-GATE-002; research 05 addendum A8). backend/studio/constants.py and ui/src/lib/wire.ts are both tested for byte equality against this file; docs/design/architecture.md §3.1 and docs/design/contracts.md §1.1/§3.4 are derived from it. Casing is load-bearing: the stage gate and plan approval use 'Request Changes'; the summary confirmation uses 'Request changes'.",
+  "version": 2,
+  "constants": {
+    "WIRE_APPROVE": "Approve",
+    "WIRE_REQUEST_CHANGES_PREFIX": "Request Changes: ",
+    "WIRE_ACCEPT_AS_IS": "Accept as-is",
+    "WIRE_APPROVE_PLAN": "Approve Plan",
+    "WIRE_LOOKS_CORRECT": "Looks correct",
+    "WIRE_SUMMARY_REQUEST_CHANGES_PREFIX": "Request changes: ",
+    "WIRE_ANSWER_LINE": "Q{index}: {answer}",
+    "WIRE_ANSWER_JOINER": "\n",
+    "WIRE_MULTI_SELECT_JOINER": ", ",
+    "WIRE_RUN": "/aidlc",
+    "WIRE_RESUME": "/aidlc --resume",
+    "WIRE_SCOPE_PREFIX": "/aidlc --scope ",
+    "WIRE_PREPARE_COMMIT": "Please prepare a commit for the current AI-DLC changes. Do not push.",
+    "WIRE_GROUPED_ANSWER_SUFFIX": "\n\nStudio grouped-answer delivery: this is one human reply. Apply each Q<n> answer to its matching [Answer] tag. Record all Q<n> answers together in ONE aidlc-log.ts answer --details call, preserving their text; do not record separate answer receipts for each question. Then present the next human checkpoint and wait."
+  },
+  "decisions": {
+    "approve": "Approve",
+    "request_changes": "Request Changes: <feedback>",
+    "accept_as_is": "Accept as-is",
+    "approve_plan": "Approve Plan",
+    "request_plan_changes": "Request Changes: <feedback>",
+    "confirm_summary.looks_correct": "Looks correct",
+    "confirm_summary.request_changes": "Request changes: <feedback>",
+    "answers.single": "<label>[, <label>...] | <free text when X. Other>",
+    "answers.grouped": "Q<n>: <answer>\\nQ<m>: <answer> + WIRE_GROUPED_ANSWER_SUFFIX (file-backed group; one audit receipt)",
+    "provide_input.scope": "/aidlc --scope <scope>",
+    "provide_input.free_text": "<text>",
+    "run": "/aidlc",
+    "resume": "/aidlc --resume",
+    "prepare_commit": "Please prepare a commit for the current AI-DLC changes. Do not push.",
+    "force_stop": null,
+    "pick_intent": null
+  },
+  "golden": {
+    "request_changes_example": "Request Changes: The acceptance criteria for C3 are not covered.",
+    "grouped_answers_example": "Q1: B\nQ2: A, C\nQ3: Use the existing worker queue.\n\nStudio grouped-answer delivery: this is one human reply. Apply each Q<n> answer to its matching [Answer] tag. Record all Q<n> answers together in ONE aidlc-log.ts answer --details call, preserving their text; do not record separate answer receipts for each question. Then present the next human checkpoint and wait."
+  }
+}

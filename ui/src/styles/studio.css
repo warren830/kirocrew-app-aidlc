@@ -1,0 +1,2437 @@
+/*
+ * AI-DLC Studio layout and semantics.
+ *
+ * The host compiles Tailwind from ITS OWN sources with no safelist and no runtime JIT, so a utility
+ * class the dashboard never uses simply does not exist in the served stylesheet. Anything structural
+ * therefore lives here, in a real stylesheet loaded from the app's ui/ directory.
+ *
+ * Colour rules, in order of importance:
+ *   1. Never a literal colour. Every value is a host token, so all 30+ KiroCrew themes stay coherent
+ *      and light/dark needs no branching in JS.
+ *   2. Two host tokens cannot be used as the mockup used them, and both have an app-local alias here:
+ *      `--muted-strong` is DARKER than `--muted` in the host's dark theme (the mockup used it as a
+ *      brighter emphasis, so using it verbatim would fail contrast on every chip), and `--info` in the
+ *      host's light theme is ~3.7:1 on white, below AA for 11.5px text.
+ *   3. Colour never carries meaning alone: every severity and state pairs a token with an icon and a
+ *      text label, and the queue additionally encodes severity as a left rule width.
+ *
+ * Scoped under `.studio` so nothing here can leak into the dashboard around it.
+ */
+
+.studio {
+  /* ---- app-local aliases (the two host tokens that cannot be used directly) ---- */
+  --aidlc-emph: color-mix(in srgb, var(--text) 75%, var(--muted));
+  --aidlc-info-text: color-mix(in srgb, var(--info) 78%, var(--text-strong));
+  --info-subtle: color-mix(in srgb, var(--info) 12%, transparent);
+
+  /* ---- phase accents: aliased to host tokens so a theme change carries them ---- */
+  --ph-init: color-mix(in srgb, var(--muted) 70%, var(--text));
+  --ph-idea: var(--aim);
+  --ph-incep: var(--info);
+  --ph-constr: var(--accent);
+  --ph-oper: var(--warn);
+
+  /* ---- layout constants ---- */
+  --studio-topbar-h: 52px;
+  --studio-queue-min: 300px;
+  --studio-queue-max: 460px;
+  --studio-reading: 820px;
+
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- chrome ---------- */
+
+.studio-topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: var(--studio-topbar-h);
+  padding: 0 16px;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+  flex: 0 0 auto;
+}
+.studio-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-strong);
+}
+.studio-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--accent-subtle);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  color: var(--accent);
+}
+.studio-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.studio-nav button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  font-size: 13px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.studio-nav button:hover { color: var(--text); }
+.studio-nav button[aria-current='page'] {
+  background: var(--bg-elevated);
+  border-color: var(--border);
+  color: var(--text-strong);
+  font-weight: 600;
+}
+.studio-nav .studio-count {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: var(--danger-fg);
+}
+.studio-topbar-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+
+.studio-scopebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  background: var(--bg-accent);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.studio-crumb { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-crumb b { color: var(--text); font-weight: 600; }
+.studio-crumb .sep { opacity: 0.5; padding: 0 4px; }
+.studio-strip { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+/* ---------- the view: master-detail, then everything else ---------- */
+
+.studio-view { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; overflow: hidden; }
+.studio-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+
+.studio-ac {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  /* PRD asks for ~36%, the mockup for a fixed 300px: a clamped fraction satisfies both and stops the
+     queue from becoming a third of an ultra-wide screen. */
+  grid-template-columns: minmax(var(--studio-queue-min), min(36%, var(--studio-queue-max))) minmax(0, 1fr);
+}
+.studio-queue {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+}
+.studio-queue-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.studio-detail { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+/* The decision body scrolls on its own so the queue keeps its position, and the sticky action bar
+   never covers the last evidence block (hence the bottom padding). */
+.studio-detail-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 16px 24px 96px; }
+.studio-reading { max-width: var(--studio-reading); }
+.studio-actionbar {
+  position: sticky;
+  bottom: 0;
+  flex: 0 0 auto;
+  padding: 12px 24px;
+  background: var(--chrome);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ---------- queue rows ---------- */
+
+.studio-qitem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 11px 13px 11px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  /* Severity is a left rule as well as a colour and an icon: three encodings, so colour alone never
+     carries the meaning (WCAG + PRD §10.1). */
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.studio-qitem:hover { background: var(--bg-hover); }
+.studio-qitem[aria-selected='true'] {
+  background: var(--bg-elevated);
+  border-left-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+.studio-qitem[data-severity='critical'] { border-left-color: var(--danger); }
+.studio-qitem[data-severity='blocking'] { border-left-color: var(--warn); }
+.studio-qitem[data-severity='attention'] { border-left-color: var(--info); }
+.studio-qitem[data-severity='info'] { border-left-color: var(--border-strong); }
+.studio-qitem[aria-selected='true'][data-severity] { border-left-width: 3px; }
+.studio-qtop { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--muted); }
+.studio-qtitle { font-size: 13px; font-weight: 600; color: var(--text-strong); margin: 3px 0 2px; }
+.studio-qmeta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--aidlc-emph); }
+.studio-qgroup {
+  padding: 7px 13px 5px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  background: var(--bg-accent);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* ---------- primitives the host does not provide ---------- */
+
+.studio-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--aidlc-emph);
+  white-space: nowrap;
+}
+.studio-chip svg { width: 11px; height: 11px; stroke-width: 2; }
+.studio-chip[data-tone='danger'] { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 38%, var(--border)); background: var(--danger-subtle); }
+.studio-chip[data-tone='warn']   { color: var(--warn);   border-color: color-mix(in srgb, var(--warn) 38%, var(--border));   background: var(--warn-subtle); }
+.studio-chip[data-tone='ok']     { color: var(--ok);     border-color: color-mix(in srgb, var(--ok) 38%, var(--border));     background: var(--ok-subtle); }
+.studio-chip[data-tone='info']   { color: var(--aidlc-info-text); border-color: color-mix(in srgb, var(--info) 38%, var(--border)); background: var(--info-subtle); }
+.studio-chip[data-tone='accent'] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 38%, var(--border)); background: var(--accent-subtle); }
+.studio-chip[data-tone='aim']    { color: var(--aim);    border-color: color-mix(in srgb, var(--aim) 38%, var(--border));    background: var(--aim-subtle); }
+
+.studio-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+  animation: studio-pulse 2.4s ease-in-out infinite;
+}
+@keyframes studio-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.35 } }
+
+.studio-kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--bg-elevated);
+}
+.studio-mono { font-family: var(--mono); font-variant-ligatures: none; }
+
+.studio-block { margin-bottom: 22px; }
+.studio-block > h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+.studio-block > h3::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.studio-brief {
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+.studio-brief p { font-size: 15px; line-height: 1.68; margin: 0 0 8px; }
+
+/* A reviewer finding: its severity is a left rule plus an icon plus the word. */
+.studio-finding {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  margin-bottom: 8px;
+}
+.studio-finding[data-severity='blocking'] { border-left-color: var(--danger); }
+.studio-finding[data-severity='warn'] { border-left-color: var(--warn); }
+.studio-finding[data-severity='info'] { border-left-color: var(--info); }
+
+/* The confirmation panel: the one place the exact wire text is shown before it is sent. */
+.studio-confirm {
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-md);
+  padding: 14px 16px;
+}
+.studio-sendtext {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-accent);
+  overflow-wrap: anywhere;
+}
+
+/* Evidence that is being re-read cannot authorise a decision, and must look like it. */
+.studio-refreshing {
+  opacity: 0.6;
+  outline: 1px dashed var(--warn);
+  outline-offset: 2px;
+}
+
+/* ---------- workflow map ---------- */
+
+.studio-lane { display: grid; grid-template-columns: 158px minmax(0, 1fr); gap: 14px; align-items: start; margin-bottom: 14px; }
+.studio-lane-h { position: sticky; top: 0; padding-left: 10px; border-left: 3px solid var(--border-strong); }
+.studio-lane[data-phase='initialization'] .studio-lane-h { border-left-color: var(--ph-init); }
+.studio-lane[data-phase='ideation'] .studio-lane-h { border-left-color: var(--ph-idea); }
+.studio-lane[data-phase='inception'] .studio-lane-h { border-left-color: var(--ph-incep); }
+.studio-lane[data-phase='construction'] .studio-lane-h { border-left-color: var(--ph-constr); }
+.studio-lane[data-phase='operation'] .studio-lane-h { border-left-color: var(--ph-oper); }
+.studio-stages { display: flex; flex-wrap: wrap; gap: 8px; }
+.studio-stage {
+  width: 154px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+.studio-stage:hover { box-shadow: var(--shadow-sm); }
+.studio-stage[aria-pressed='true'] { box-shadow: 0 0 0 1px var(--accent); }
+.studio-stage[data-state='skipped'] { opacity: 0.55; border-style: dashed; }
+.studio-stage[data-state='awaiting_approval'] { border-color: color-mix(in srgb, var(--warn) 50%, var(--border)); }
+.studio-stage[data-state='revising'] { border-color: color-mix(in srgb, var(--aim) 50%, var(--border)); }
+.studio-stage[data-state='in_progress'] { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
+.studio-inspector { width: 340px; flex: 0 0 auto; border-left: 1px solid var(--border); background: var(--panel-strong); overflow-y: auto; min-height: 0; }
+
+/* ---------- simple pages, tables, timeline ---------- */
+
+.studio-page { padding: 22px 28px 34px; max-width: 1080px; }
+.studio-page h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 14px; }
+.studio-tbl { width: 100%; border-collapse: collapse; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.studio-tbl th {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  background: var(--bg-accent);
+  text-align: left;
+  padding: 8px 13px;
+}
+.studio-tbl td { padding: 11px 13px; border-top: 1px solid var(--border); font-size: 13px; vertical-align: top; }
+.studio-tl { display: grid; grid-template-columns: 78px 20px minmax(0, 1fr); gap: 11px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.studio-tl .src { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+
+/* ---------- utilities ---------- */
+
+.studio-row { display: flex; align-items: center; gap: 8px; }
+.studio-col { display: flex; flex-direction: column; gap: 8px; }
+.studio-spread { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.studio-grow { flex: 1 1 auto; min-width: 0; }
+.studio-trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-wrap-any { overflow-wrap: anywhere; }
+.studio-muted { color: var(--muted); }
+.studio-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.studio [hidden] { display: none !important; }
+.studio :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: var(--radius-sm); }
+
+/* ---------- responsive: list -> detail below the host's own mobile breakpoint ---------- */
+
+@media (max-width: 1180px) {
+  .studio-inspector { width: 294px; }
+  .studio-compare { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 900px) {
+  .studio-topbar { flex-wrap: wrap; height: auto; padding: 8px 12px; row-gap: 8px; }
+  .studio-nav { order: 10; flex-basis: 100%; margin-left: 0; overflow-x: auto; }
+  .studio-ac { grid-template-columns: minmax(0, 1fr); }
+  .studio-queue { border-right: 0; }
+  .studio[data-pane='detail'] .studio-queue { display: none; }
+  .studio[data-pane='list'] .studio-detail { display: none; }
+  .studio-detail-body { padding: 16px 16px 26px; }
+  .studio-actionbar { padding: 12px 16px; }
+  .studio-inspector { display: none; }
+  .studio-lane { grid-template-columns: minmax(0, 1fr); }
+  .studio-lane-h { position: static; }
+  .studio-stage { width: 100%; }
+  .studio-page { padding: 16px; }
+  .studio-scopebar { overflow-x: auto; }
+}
+
+@media (max-width: 430px) {
+  .studio-topbar { gap: 9px; }
+  .studio-actionbar { flex-wrap: wrap; }
+  .studio-actionbar button { flex: 1 1 auto; justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio *,
+  .studio *::before,
+  .studio *::after { transition: none !important; animation: none !important; }
+}
+
+/* ==========================================================================
+ * SHELL (top bar controls, scope bar, execution strip, banners, placeholders)
+ * Added by the shell area. Tokens only; every rule below is layout the host's
+ * Tailwind build does not contain (it scans only its own sources).
+ * ========================================================================== */
+
+/* The skip link is the only way to reach the decision pane without tabbing the whole rail. */
+.studio-skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 20;
+  padding: 8px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--ring);
+  border-radius: var(--radius-md);
+  color: var(--text-strong);
+}
+.studio-skip:focus-visible { left: 8px; top: 8px; }
+
+.studio-brand-name { white-space: nowrap; }
+.studio-nav-label { white-space: nowrap; }
+
+/* A 32x32 icon-only control: the minimum that stays hittable on a touch screen at 390px. */
+.studio-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.studio-icon-btn:hover { background: var(--bg-hover); color: var(--text); }
+
+/* Back exists only where the queue is hidden, i.e. exactly where it is the only way to the list. */
+.studio-back { display: none; }
+
+/* Mirrors the host's own `Btn` metrics so a Studio-owned button next to a host one lines up. */
+.studio-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 13px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.studio-btn:hover { background: var(--bg-hover); border-color: var(--border-hover); }
+.studio-btn:disabled { opacity: 0.45; cursor: default; }
+
+/* ---------- scope bar ---------- */
+
+.studio-scope-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  max-width: 46%;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+.studio-scope-select:hover { border-color: var(--border-hover); }
+.studio-scope-select select {
+  font: inherit;
+  font-size: 12.5px;
+  min-height: 26px;
+  max-width: 180px;
+  border: 0;
+  background: transparent;
+  color: var(--text-strong);
+  cursor: pointer;
+}
+.studio-scope-count {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A chip that is also a control: same paint, plus a pointer and a hover. */
+button.studio-chip { cursor: pointer; font: inherit; font-size: 11.5px; }
+button.studio-chip:hover { border-color: var(--border-hover); }
+
+/* ---------- execution strip ---------- */
+
+.studio-strip { flex: 0 0 auto; flex-wrap: wrap; }
+.studio-strip[data-open='false'] { gap: 6px; }
+.studio-strip-toggle { width: 24px; height: 24px; }
+.studio-strip-summary { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---------- banners ---------- */
+
+.studio-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding: 9px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+.studio-banner[data-tone='danger'] {
+  background: var(--danger-subtle);
+  border-bottom-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+  color: var(--danger);
+}
+.studio-banner[data-tone='warn'] {
+  background: var(--warn-subtle);
+  border-bottom-color: color-mix(in srgb, var(--warn) 40%, var(--border));
+  color: var(--warn);
+}
+.studio-banner .studio-btn { background: transparent; }
+
+/* ---------- placeholder and failure pages ---------- */
+
+.studio-placeholder h1,
+.studio-failure h1 { display: flex; align-items: center; gap: 9px; }
+.studio-placeholder p,
+.studio-failure p { max-width: 62ch; margin: 0 0 12px; }
+.studio-failure-detail {
+  padding: 10px 12px;
+  font-size: 12.5px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  border-radius: var(--radius-md);
+  background: var(--danger-subtle);
+}
+
+@media (max-width: 900px) {
+  .studio-brand-name { display: none; }
+  .studio-scope-select { max-width: none; }
+  .studio[data-pane='detail'] .studio-back { display: inline-flex; }
+}
+
+@media (max-width: 430px) {
+  .studio-nav-label { display: none; }
+  .studio-scope-select select { max-width: 120px; }
+}
+
+/* ==========================================================================
+ * ARTIFACTS AND REVIEWER EVIDENCE
+ * Added by the artifacts area. Includes four primitives the visual spec §5.2 shares with other
+ * templates and which no area had defined yet: `.studio-pane*`, `.studio-consequence`,
+ * `.studio-ev*`/`.studio-evgrid` and `.studio-btn-sm`.
+ * ========================================================================== */
+
+/* ---------- shared primitives (visual spec §2.5, §5.2) ---------- */
+
+.studio-btn-sm { padding: 4px 9px; min-height: 28px; font-size: 12px; }
+
+/* A bordered card with a hairline header: artifact body, reviewer pane, log excerpt. */
+.studio-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  color: var(--card-fg);
+  overflow: hidden;
+}
+.studio-pane-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 13px;
+  font-size: 12px;
+  background: var(--bg-accent);
+  border-bottom: 1px solid var(--border);
+}
+.studio-pane-nm { font-weight: 600; color: var(--text-strong); min-width: 0; }
+.studio-pane-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0;
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--border);
+}
+.studio-pane-facts > div { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.studio-pane-facts dt {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.studio-pane-facts dd { margin: 0; font-size: 12.5px; color: var(--text-strong); max-width: 22ch; }
+.studio-pane-body {
+  padding: 13px 15px;
+  font-size: 13px;
+  max-height: 460px;
+  overflow: auto;
+  min-width: 0;
+}
+.studio-pane-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 13px;
+  font-size: 10.5px;
+  color: var(--muted);
+  background: var(--bg-accent);
+  border-top: 1px solid var(--border);
+}
+
+/* A consequence callout: what happens next, or what Studio will not do. */
+.studio-consequence {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 10px 0 0;
+  padding: 11px 13px;
+  font-size: 13px;
+  border: 1px solid color-mix(in srgb, var(--info) 30%, var(--border));
+  border-radius: var(--radius-md);
+  background: var(--info-subtle);
+}
+.studio-consequence svg { color: var(--aidlc-info-text); flex: 0 0 auto; margin-top: 2px; }
+
+/* One labelled fact from one source. `data-conflict` marks a source that disagrees with the others. */
+.studio-evgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(228px, 1fr)); gap: 10px; }
+.studio-ev {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  min-width: 0;
+}
+.studio-ev[data-conflict='true'] {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: var(--danger-subtle);
+}
+.studio-ev-src { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.studio-ev-val { font-size: 12.5px; color: var(--text-strong); overflow-wrap: anywhere; }
+.studio-ev-sub { font-size: 11.5px; color: var(--muted); }
+
+/* ---------- artifacts tab ---------- */
+
+.studio-artifacts { min-width: 0; }
+.studio-compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.studio-compare[data-panes='one'] { grid-template-columns: minmax(0, 1fr); }
+
+.studio-artlist {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  padding: 4px 0 6px;
+}
+.studio-artlist-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--border);
+}
+.studio-artlist-head h4 { margin: 0; font-size: 12px; font-weight: 600; color: var(--text-strong); }
+.studio-artlist-head input { font-size: 12.5px; }
+.studio-artlist-note { display: flex; align-items: center; gap: 7px; font-size: 11.5px; padding: 8px 13px; margin: 0; }
+.studio-artgroup { padding: 6px 0 2px; }
+.studio-artgroup-h {
+  margin: 0;
+  padding: 6px 13px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.studio-artgroup ul { list-style: none; margin: 0; padding: 0; }
+.studio-artrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 13px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.studio-artrow:hover { background: var(--bg-hover); }
+.studio-artrow[aria-current='true'] {
+  background: var(--bg-elevated);
+  border-left-color: var(--accent);
+  color: var(--text-strong);
+}
+.studio-artrow-nm { min-width: 0; flex: 1 1 auto; }
+.studio-artrow-size { color: var(--muted); font-size: 11.5px; flex: 0 0 auto; }
+
+/* ---------- artifact body ---------- */
+
+.studio-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--border);
+}
+.studio-toc-item {
+  /* 24px, not the mockup's chip height: a table-of-contents entry is a touch target at 390px. */
+  min-height: 24px;
+  padding: 3px 9px;
+  font: inherit;
+  font-size: 10.5px;
+  color: var(--aidlc-emph);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  max-width: 30ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.studio-toc-item:hover { border-color: var(--border-hover); color: var(--text-strong); }
+.studio-toc-item[data-level='1'],
+.studio-toc-item[data-level='2'] { font-weight: 600; }
+
+.studio-md { min-width: 0; overflow-wrap: anywhere; }
+.studio-plain {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.studio-notrendered {
+  padding: 12px 13px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-accent);
+}
+.studio-notrendered-t {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.studio-notrendered-t svg { color: var(--warn); }
+.studio-artifact-error { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--danger); }
+
+/* A revealed anchor: a brief warn-tinted flash, no motion of its own. */
+.studio-hl {
+  background: var(--warn-subtle);
+  box-shadow: 0 0 0 2px var(--warn-subtle);
+  border-radius: 3px;
+  transition: background 0.3s;
+}
+
+/* ---------- diff ---------- */
+
+.studio-diff { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 11px; }
+.studio-diff-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.studio-diff-head h5 { margin: 0; font-size: 12px; font-weight: 600; color: var(--text-strong); }
+.studio-diff-note { display: flex; align-items: center; gap: 7px; font-size: 12px; margin: 0; }
+.studio-difflines {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.studio-diffline {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  padding: 0 9px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.studio-diffline[data-kind='add'] { background: var(--diff-add); color: var(--diff-add-text); }
+.studio-diffline[data-kind='del'] { background: var(--diff-del); color: var(--diff-del-text); }
+.studio-diffline[data-kind='hunk'] { color: var(--aidlc-info-text); background: var(--bg-accent); }
+.studio-diffline[data-kind='meta'] { color: var(--muted); }
+
+/* ---------- reviewer findings ---------- */
+
+.studio-findings { min-width: 0; }
+.studio-finding-group { margin-bottom: 14px; }
+.studio-finding-group h4 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.studio-finding[data-level='blocker'] { border-left-color: var(--danger); }
+.studio-finding[data-level='advisory'] { border-left-color: var(--warn); }
+.studio-finding[data-level='resolved'] { border-left-color: var(--ok); }
+.studio-finding[data-level='unknown'] { border-left-color: var(--border-strong); }
+.studio-finding-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 5px; }
+.studio-finding-meta { font-size: 11px; color: var(--aidlc-emph); }
+.studio-finding-title { margin: 0 0 4px; font-size: 13px; font-weight: 500; color: var(--text-strong); }
+.studio-finding-quote {
+  margin: 0;
+  padding-left: 9px;
+  border-left: 2px solid var(--border-strong);
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--aidlc-emph);
+  overflow-wrap: anywhere;
+}
+.studio-finding-noanchor { margin: 6px 0 0; font-size: 11.5px; }
+.studio-finding-source { display: flex; align-items: flex-start; gap: 7px; font-size: 11.5px; margin: 4px 0 0; }
+.studio-anchor-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 2px 4px;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--aidlc-info-text);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.studio-anchor-link:hover { text-decoration: underline; }
+
+/* ---------- review tab ---------- */
+
+.studio-review { min-width: 0; }
+.studio-review-verdict { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 16px; font-size: 12px; }
+.studio-reviewpane .studio-pane-body { max-height: 460px; }
+
+/* ---------- evidence drawer ---------- */
+
+.studio-drawer-wrap { position: fixed; inset: 0; z-index: 60; display: flex; justify-content: flex-end; }
+/* Token-only scrim: `--bg` mixed toward transparent dims the page in every host theme, where a
+   literal black would be wrong under the light and high-contrast ones. */
+.studio-drawer-scrim { position: absolute; inset: 0; background: color-mix(in srgb, var(--bg) 72%, transparent); }
+.studio-drawer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(720px, 100%);
+  max-height: 100%;
+  background: var(--panel-strong);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+}
+.studio-drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.studio-drawer-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-strong);
+  flex: 1 1 auto;
+}
+.studio-drawer-sub { margin: 0; padding: 10px 16px 0; font-size: 12.5px; }
+.studio-drawer-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 14px 16px 20px; }
+.studio-drawer-sec {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  padding: 11px 13px;
+  margin-bottom: 12px;
+}
+.studio-drawer-sec[data-conflict='true'] {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  background: var(--danger-subtle);
+}
+.studio-drawer-sec-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 7px; }
+.studio-drawer-sec-head h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--text-strong); }
+.studio-drawer-ref { margin: 0 0 6px; font-size: 11.5px; color: var(--muted); }
+.studio-drawer-facts { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0 0 8px; }
+.studio-drawer-facts > div { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.studio-drawer-facts dt {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.studio-drawer-facts dd { margin: 0; font-size: 12.5px; color: var(--text-strong); overflow-wrap: anywhere; }
+.studio-drawer-sec pre {
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-accent);
+  max-height: 320px;
+  overflow: auto;
+}
+.studio-drawer-foot { flex: 0 0 auto; padding: 0 16px 14px; }
+.studio-drawer-foot .studio-consequence { margin-top: 0; }
+
+@media (max-width: 900px) {
+  .studio-compare { grid-template-columns: minmax(0, 1fr); }
+  .studio-pane-body { max-height: none; }
+  .studio-drawer { width: 100%; border-left: 0; }
+  .studio-toc-item { min-height: 30px; padding: 6px 10px; }
+  .studio-artrow { min-height: 40px; }
+  .studio-artlist-head { flex-wrap: wrap; }
+}
+
+/* ==========================================================================
+ * WORKFLOW MAP (swimlanes, density, dependency overlay, unit lanes, inspector,
+ * phase accordions, table alternative)
+ * Added by the map area. Extends the `.studio-lane` / `.studio-stage` /
+ * `.studio-inspector` skeleton already in the base section; also defines three
+ * primitives no area had yet: `.studio-btn-primary`, `.studio-seg`,
+ * `.studio-link`.
+ * ========================================================================== */
+
+/* ---------- shared primitives (visual spec §2.5) ---------- */
+
+.studio-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+.studio-btn-primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.studio-full { width: 100%; justify-content: center; }
+
+/* A segmented control as an `aria-pressed` button group: pressed state is exposed, not only painted. */
+.studio-seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.studio-seg button {
+  padding: 4px 9px;
+  min-height: 28px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.studio-seg button:hover { color: var(--text); }
+.studio-seg button[aria-pressed='true'] {
+  background: var(--card);
+  color: var(--text-strong);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Text that navigates. Underlined, so it is not a link by colour alone. */
+.studio-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  text-align: left;
+}
+.studio-link:hover { color: var(--accent-hover); }
+
+/* ---------- the map frame ---------- */
+
+.studio-map { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; min-width: 0; }
+.studio-map-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--bg-accent);
+  border-bottom: 1px solid var(--border);
+}
+.studio-map-exec { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.studio-map-bar-controls { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.studio-map-main { display: flex; flex: 1 1 auto; min-height: 0; min-width: 0; }
+.studio-map-scroll { flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto; padding: 16px 20px 26px; }
+/* The positioning context the dependency overlay measures against and is drawn into. */
+.studio-map-canvas { position: relative; }
+.studio-lanes { list-style: none; margin: 0; padding: 0; }
+
+/* ---------- lanes ---------- */
+
+/* The lane's phase accent is the base section's `border-left` on `.studio-lane-h`, already coloured per
+   `[data-phase]`; only the stacking of name / counts / status is added here. */
+.studio-lane { padding: 14px 0; border-bottom: 1px solid var(--border); }
+.studio-lane:last-child { border-bottom: 0; }
+.studio-lane-h { display: flex; flex-direction: column; gap: 3px; }
+.studio-lane-name { font-size: 13px; font-weight: 600; color: var(--text-strong); }
+.studio-lane-sub { font-size: 11px; color: var(--muted); }
+.studio-lane-status { margin-top: 2px; }
+.studio-lane-body { min-width: 0; }
+.studio-stages { list-style: none; display: flex; flex-wrap: wrap; gap: 9px; margin: 0; padding: 0; }
+
+/* ---------- stage cards ---------- */
+
+.studio-stage { position: relative; display: flex; flex-direction: column; gap: 4px; }
+.studio-stage[data-phase='initialization'] { border-top-color: var(--ph-init); }
+.studio-stage[data-phase='ideation'] { border-top-color: var(--ph-idea); }
+.studio-stage[data-phase='inception'] { border-top-color: var(--ph-incep); }
+.studio-stage[data-phase='construction'] { border-top-color: var(--ph-constr); }
+.studio-stage[data-phase='operation'] { border-top-color: var(--ph-oper); }
+.studio-stage:hover { border-color: var(--border-hover); }
+.studio-stage[data-current='true'] { background: var(--accent-subtle); border-color: var(--accent); }
+/* `excluded` = the plan never selected it. Same dashed treatment as `skipped`, and its own word. */
+.studio-stage[data-state='excluded'] { opacity: 0.55; border-style: dashed; background: transparent; }
+.studio-stage[data-relation='upstream'] { border-color: color-mix(in srgb, var(--info) 55%, var(--border)); }
+.studio-stage[data-relation='downstream'] { border-color: color-mix(in srgb, var(--aim) 55%, var(--border)); }
+.studio-stage[data-variant='unit'] { width: auto; min-width: 150px; }
+.studio-stage-num { font-size: 10.5px; color: var(--muted); letter-spacing: 0.08em; }
+.studio-stage-name { font-size: 12.5px; font-weight: 600; color: var(--text-strong); overflow-wrap: anywhere; }
+.studio-stage[data-state='completed'] .studio-stage-name { font-weight: 500; color: var(--aidlc-emph); }
+.studio-stage-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.studio-stage-why {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.studio-stage-rel {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+.studio-stage-rel[data-relation='upstream'] {
+  color: var(--aidlc-info-text);
+  border-color: color-mix(in srgb, var(--info) 45%, var(--border));
+  background: var(--info-subtle);
+}
+.studio-stage-rel[data-relation='downstream'] {
+  color: var(--aim);
+  border-color: color-mix(in srgb, var(--aim) 45%, var(--border));
+  background: var(--aim-subtle);
+}
+
+/* ---------- unit sub-lanes ---------- */
+
+.studio-units { margin-top: 9px; padding-left: 12px; border-left: 2px dashed var(--border-strong); }
+.studio-unit-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.studio-unit-row { display: flex; flex-direction: column; gap: 5px; }
+.studio-unit-label { display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--muted); }
+.studio-unit-note { margin: 8px 0 0; font-size: 11.5px; max-width: 62ch; }
+
+/* ---------- dependency overlay (decoration; the words are in the inspector) ---------- */
+
+.studio-map-edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.studio-map-edge path { stroke-width: 1.5; opacity: 0.75; }
+.studio-map-edge[data-relation='upstream'] path { stroke: var(--info); }
+.studio-map-edge[data-relation='upstream'] circle { fill: var(--info); }
+.studio-map-edge[data-relation='downstream'] path { stroke: var(--aim); stroke-dasharray: 4 3; }
+.studio-map-edge[data-relation='downstream'] circle { fill: var(--aim); }
+
+/* ---------- inspector ---------- */
+
+.studio-inspector-body { padding: 16px 18px 26px; }
+.studio-inspector-body h2 { font-size: 16px; color: var(--text-strong); margin: 6px 0 2px; }
+.studio-inspector-head { margin-bottom: 4px; }
+.studio-inspector-unit { margin: 0 0 4px; font-size: 12.5px; }
+.studio-inspector-chips { flex-wrap: wrap; margin: 8px 0 10px; }
+.studio-inspector-note { margin: 8px 0 0; font-size: 11.5px; max-width: 62ch; }
+.studio-phase-chip[data-phase='initialization'] .studio-chip { color: var(--ph-init); border-color: var(--ph-init); }
+.studio-phase-chip[data-phase='ideation'] .studio-chip { color: var(--ph-idea); border-color: var(--ph-idea); }
+.studio-phase-chip[data-phase='inception'] .studio-chip { color: var(--ph-incep); border-color: var(--ph-incep); }
+.studio-phase-chip[data-phase='construction'] .studio-chip { color: var(--ph-constr); border-color: var(--ph-constr); }
+.studio-phase-chip[data-phase='operation'] .studio-chip { color: var(--ph-oper); border-color: var(--ph-oper); }
+.studio-ev-name { display: block; }
+.studio-ev-val .studio-link { display: block; }
+
+.studio-file-list,
+.studio-audit-list,
+.studio-finding-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.studio-file {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+}
+.studio-file:hover { background: var(--bg-hover); border-color: var(--border-hover); }
+.studio-file-meta { font-size: 10.5px; white-space: nowrap; }
+.studio-audit { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.studio-audit-event { font-size: 11.5px; color: var(--text-strong); }
+.studio-audit-fields { display: flex; flex-direction: column; gap: 1px; font-size: 11px; color: var(--muted); }
+.studio-audit-field b { font-weight: 600; color: var(--aidlc-emph); }
+.studio-review-summary { gap: 8px; }
+.studio-review-summary .studio-row { flex-wrap: wrap; }
+
+/* ---------- phase accordions (≤900px) and the table alternative ---------- */
+
+.studio-accordions { display: flex; flex-direction: column; gap: 10px; }
+.studio-accordion { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); overflow: hidden; }
+.studio-accordion-h { margin: 0; font-size: inherit; font-weight: inherit; }
+.studio-accordion-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 13px;
+  border: 0;
+  border-left: 3px solid var(--border-strong);
+  background: var(--bg-accent);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.studio-accordion[data-phase='initialization'] .studio-accordion-toggle { border-left-color: var(--ph-init); }
+.studio-accordion[data-phase='ideation'] .studio-accordion-toggle { border-left-color: var(--ph-idea); }
+.studio-accordion[data-phase='inception'] .studio-accordion-toggle { border-left-color: var(--ph-incep); }
+.studio-accordion[data-phase='construction'] .studio-accordion-toggle { border-left-color: var(--ph-constr); }
+.studio-accordion[data-phase='operation'] .studio-accordion-toggle { border-left-color: var(--ph-oper); }
+.studio-accordion-sub { font-size: 11px; font-weight: 400; }
+.studio-accordion-body { padding: 11px 13px 13px; }
+/* The inspector, inline under the phase that holds the selection: its own class, so the 900px rule that
+   hides `aside.studio-inspector` cannot hide it too. */
+.studio-map-sheet { margin-top: 11px; border-top: 1px solid var(--border); background: var(--panel-strong); }
+.studio-map-sheet .studio-inspector-body { padding: 12px 0 4px; }
+.studio-map-table { overflow-x: auto; }
+.studio-map-table tr[data-selected='true'] td { background: var(--accent-subtle); }
+
+@media (max-width: 900px) {
+  .studio-map-bar { padding: 9px 12px; }
+  .studio-map-scroll { padding: 12px 12px 22px; }
+  .studio-map-bar-controls { margin-left: 0; }
+  .studio-accordion-body .studio-stage { width: 100%; }
+}
+
+@media (max-width: 430px) {
+  /* Compact by default, hittable on a phone (PRD §10.1). */
+  .studio-seg button { padding: 8px 10px; min-height: 34px; }
+  .studio-map-exec { width: 100%; }
+}
+
+/* ==========================================================================
+   Repos, preflight and the transactional install / upgrade / recovery flows
+   (ui/src/repos/*). Colour is always a host token, and every state that uses
+   one also carries an icon and a word — the chips and step rows below are the
+   places that would otherwise be legible only in colour.
+   ========================================================================== */
+
+/* ---------- text roles ---------- */
+
+.studio-lede { font-size: 13px; color: var(--muted); max-width: 74ch; margin: 0 0 14px; }
+.studio-strong { color: var(--text-strong); font-weight: 600; }
+.studio-help { font-size: 11.5px; color: var(--muted); margin: 4px 0 0; }
+.studio-subhead {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+  margin: 12px 0 6px;
+}
+/* A path or a digest: monospaced so two of them can be compared by eye, and breakable so a long one
+   cannot push the card wider than the page. */
+.studio-subpath {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  margin: 2px 0 0;
+}
+.studio-note {
+  display: block;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 74ch;
+  margin: 8px 0 0;
+}
+.studio-note[data-tone='warn'] { color: var(--warn); }
+.studio-note[data-tone='danger'] { color: var(--danger); }
+.studio-note svg { vertical-align: -2px; }
+
+.studio-plain-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.studio-plain-list > li { margin-bottom: 6px; }
+.studio-chiplist { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.studio-finding-text { margin: 6px 0 0; font-size: 12.5px; }
+
+/* An attention box that is not a failure: `moved` needs remediation, not an apology. */
+.studio-failure-detail[data-tone='warn'] {
+  border-color: color-mix(in srgb, var(--warn) 35%, var(--border));
+  background: var(--warn-subtle);
+}
+.studio-failure-detail[data-tone='info'] {
+  border-color: color-mix(in srgb, var(--info) 35%, var(--border));
+  background: var(--info-subtle);
+}
+.studio-failure-detail p { margin: 6px 0 0; }
+.studio-failure-detail p:first-child { margin-top: 0; }
+.studio-recovery { margin: 12px 0; }
+.studio-desktop-only { margin: 0 0 14px; }
+
+/* ---------- label / value grid ---------- */
+
+.studio-facts {
+  display: grid;
+  grid-template-columns: minmax(120px, 190px) minmax(0, 1fr);
+  gap: 6px 14px;
+  font-size: 12.5px;
+  margin: 0;
+}
+.studio-facts .studio-fact { display: contents; }
+.studio-facts dt {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  padding-top: 3px;
+}
+.studio-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+/* ---------- buttons: the two variants the host's own Btn has and .studio-btn did not ---------- */
+
+.studio-btn[data-variant='primary'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+.studio-btn[data-variant='primary']:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.studio-btn[data-variant='danger'] { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.studio-btn[data-variant='danger']:hover:not(:disabled) { background: var(--danger-subtle); }
+/* Still 28px tall, which stays hittable at 390px where these are the only controls on a card. */
+.studio-btn-sm { min-height: 28px; padding: 4px 9px; font-size: 12px; }
+.studio-repo-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.studio-directory-list { list-style: none; padding: 0; margin: 10px 0; max-height: 240px; overflow: auto; }
+.studio-directory-list li { margin: 4px 0; }
+.studio-directory-list button { width: 100%; justify-content: flex-start; text-align: left; overflow-wrap: anywhere; }
+.studio-maintenance-table { max-height: 360px; overflow: auto; }
+
+/* ---------- repo list and card ---------- */
+
+.studio-repotbl td, .studio-repotbl th { vertical-align: top; }
+.studio-rowhead { font-weight: 400; text-align: left; background: transparent; text-transform: none; letter-spacing: normal; font-size: 13px; padding: 11px 13px; border-top: 1px solid var(--border); }
+.studio-repotbl tbody tr[data-attention='true'] { background: var(--warn-subtle); }
+
+.studio-cardlist { display: flex; flex-direction: column; gap: 12px; }
+.studio-repocard {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  color: var(--card-fg);
+}
+.studio-repocard[data-attention='true'] { border-left-color: var(--warn); }
+.studio-repocard[data-attention='blocked'] { border-left-color: var(--danger); }
+.studio-repocard-head { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.studio-repocard-title { font-size: 15px; font-weight: 600; color: var(--text-strong); margin: 0; }
+.studio-repocard-chips { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+
+.studio-empty {
+  padding: 34px;
+  text-align: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+.studio-empty p { margin: 0 0 6px; }
+
+/* ---------- preview, drawer, dialog ---------- */
+
+.studio-preview,
+.studio-drawer {
+  margin: 14px 0;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  color: var(--card-fg);
+  box-shadow: var(--shadow-sm);
+}
+.studio-preview-head h2 { font-size: 16px; font-weight: 600; color: var(--text-strong); margin: 0; }
+.studio-preview-head { margin-bottom: 8px; }
+.studio-counts { margin-top: 10px; }
+
+.studio-modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+  overflow: auto;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+}
+.studio-modal {
+  width: min(760px, 100%);
+  padding: 18px 20px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  color: var(--card-fg);
+  box-shadow: var(--shadow-lg);
+}
+.studio-modal h2 { font-size: 17px; font-weight: 600; color: var(--text-strong); margin: 0; }
+.studio-modal-actions { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 14px; }
+
+.studio-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.studio-field > label { font-size: 12px; font-weight: 600; color: var(--text-strong); }
+.studio-input {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+.studio-input[aria-invalid='true'] { border-color: var(--danger); }
+
+.studio details > summary {
+  cursor: pointer;
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 3px 0;
+}
+.studio details > summary:hover { color: var(--text); }
+
+/* ---------- diffs ---------- */
+
+.studio-diff {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  overflow-x: auto;
+}
+.studio-diffline {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: 3px;
+  padding: 0 3px;
+}
+/* The leading + / - is kept in the text, so the classification is never colour-only. */
+.studio-diffline[data-kind='add'] { background: var(--diff-add); color: var(--diff-add-text); }
+.studio-diffline[data-kind='del'] { background: var(--diff-del); color: var(--diff-del-text); }
+.studio-diffline[data-kind='meta'] { color: var(--muted); }
+
+/* ---------- transaction steps ---------- */
+
+.studio-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.studio-step { display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; }
+.studio-step-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--muted);
+}
+.studio-step[data-state='ok'] .studio-step-dot { background: var(--ok); border-color: var(--ok); color: var(--ok-fg); }
+.studio-step[data-state='running'] .studio-step-dot { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent); }
+.studio-step[data-state='failed'] .studio-step-dot { background: var(--danger); border-color: var(--danger); color: var(--danger-fg); }
+.studio-step-state { font-size: 11.5px; color: var(--muted); }
+.studio-step[data-state='failed'] .studio-step-state { color: var(--danger); }
+
+@media (max-width: 900px) {
+  .studio-facts { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .studio-facts dd { margin-bottom: 8px; }
+  .studio-modal-scrim { padding: 12px; }
+  .studio-preview, .studio-drawer { padding: 14px; }
+}
+
+/* ==========================================================================
+ * ACTION CENTER (queue header, rows, detail head, tabs, delivery strip, confirm)
+ * Added by the actions area. Tokens only; nothing here is a literal colour, and
+ * every severity/state is paired with an icon and a word in the markup.
+ * ========================================================================== */
+
+/* ---------- queue header ---------- */
+
+.studio-queue-head {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.studio-queue-title { display: flex; align-items: baseline; gap: 8px; }
+.studio-queue-title h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+.studio-queue-n { margin-left: auto; font-size: 12px; color: var(--aidlc-emph); }
+/* A refetch in flight dims the counter rather than replacing it: the old number is still true. */
+.studio-queue-n[data-stale='true'] { opacity: 0.55; }
+.studio-queue-search { width: 100%; }
+.studio-queue-organize { min-width: 0; overflow-x: auto; }
+
+/* ---------- queue rows ---------- */
+
+.studio-qsection { display: block; }
+.studio-qlist { list-style: none; margin: 0; padding: 0; }
+.studio-qrow { display: block; }
+.studio-qgroup { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 600; }
+.studio-qgroup-n { flex: 0 0 auto; opacity: 0.75; }
+
+/* `aria-current` is the accessible spelling of "this is the one you are looking at"; the existing
+   `[aria-selected]` rule stays for anything that renders rows inside a real listbox. */
+.studio-qitem[aria-current='true'] {
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-sm);
+}
+.studio-qitem[aria-current='true'][data-severity] { border-left-width: 3px; }
+/* Evidence that is being re-read cannot authorise a decision, so the row says so before it is opened. */
+.studio-qitem[data-refreshing='true'] { border-left-style: dashed; }
+
+.studio-qtype { display: inline-flex; align-items: center; gap: 5px; color: var(--text); font-weight: 600; }
+.studio-qdot { opacity: 0.45; }
+.studio-qrefresh { margin-left: auto; }
+.studio-qtitle {
+  display: block;
+  /* Two lines, then ellipsis: a headline naming three stages must not push the metadata off the row. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.studio-qwait { color: var(--aidlc-emph); }
+.studio-qwait[data-severity='critical'] { color: var(--danger); }
+.studio-qnext {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--accent);
+}
+.studio-queue-empty { display: flex; align-items: center; justify-content: center; }
+.studio-queue-more { padding: 10px 13px; font-size: 11.5px; text-align: center; }
+
+/* A modifier, not a redefinition: `.studio-empty` is the Repos area's dashed card, and overriding it here
+   would restyle every empty state in the app from a file that only owns two of them. */
+.studio-empty[data-layout='stack'] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 20px;
+}
+.studio-empty[data-layout='stack'] .studio-empty-title { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-strong); }
+.studio-empty[data-layout='stack'] p { margin: 0; max-width: 44ch; font-size: 12.5px; }
+.studio-detail-empty { margin: auto; }
+
+/* ---------- detail header and tabs ---------- */
+
+.studio-detail-head { flex: 0 0 auto; padding: 16px 24px 0; }
+.studio-dbreadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.studio-drumb { display: inline-flex; align-items: center; gap: 5px; max-width: 22ch; }
+.studio-dsep { opacity: 0.45; }
+.studio-anchor-link {
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+}
+.studio-dtitle { margin: 8px 0 10px; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-strong); }
+.studio-dfacts { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+
+.studio-tabs { display: flex; align-items: stretch; gap: 18px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.studio-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 1px 11px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  position: relative;
+}
+.studio-tab:hover { color: var(--text); }
+.studio-tab[aria-selected='true'] { color: var(--text-strong); font-weight: 600; }
+.studio-tab[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+}
+.studio-tc {
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  font-size: 10.5px;
+}
+
+/* ---------- delivery strip ---------- */
+
+.studio-delivery { margin-bottom: 20px; }
+.studio-dsteps { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0 0 9px; padding: 0; }
+.studio-dstep { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); }
+/* The hairline between steps is decorative; the step's own state is a word in the markup. */
+.studio-dstep + .studio-dstep::before {
+  content: '';
+  width: 22px;
+  height: 1px;
+  margin: 0 5px;
+  background: var(--border-strong);
+}
+.studio-dbullet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border-strong);
+  color: transparent;
+}
+.studio-dstep[data-state='done'] .studio-dbullet { background: var(--ok); border-color: var(--ok); color: var(--ok-fg); }
+.studio-dstep[data-state='done'] .studio-dstep-label { color: var(--text); }
+.studio-dstep[data-state='now'] .studio-dbullet { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent); }
+.studio-dstep[data-state='now'] .studio-dstep-label { color: var(--text-strong); font-weight: 600; }
+.studio-dstep[data-state='failed'] .studio-dbullet { background: var(--danger-subtle); border-color: var(--danger); color: var(--danger); }
+.studio-dstep[data-state='failed'] .studio-dstep-label { color: var(--danger); font-weight: 600; }
+
+.studio-drow { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.studio-dat { font-size: 11px; }
+.studio-dwarn { margin: 10px 0 0; align-items: flex-start; }
+.studio-dwarn-title { margin: 0 0 2px; font-weight: 600; }
+.studio-dwarn p { margin: 0; font-size: 12.5px; }
+
+.studio-dproof {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(212px, 1fr));
+  gap: 9px;
+  margin: 10px 0 0;
+}
+.studio-dproof > div { padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); }
+.studio-dproof dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.studio-dproof dd { margin: 3px 0 0; font-size: 12.5px; color: var(--text-strong); }
+
+.studio-dsent { margin-top: 12px; }
+.studio-dsent-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 5px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+/* ---------- confirmation ---------- */
+
+.studio-ch { display: flex; align-items: center; gap: 7px; margin: 0 0 9px; font-size: 13px; font-weight: 600; color: var(--text-strong); }
+.studio-ch:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.studio-confirm-label { margin: 0 0 7px; font-size: 12.5px; color: var(--text); }
+.studio-route { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 0; font-size: 11.5px; line-height: 1.6; }
+.studio-route[data-tone='danger'] { color: var(--danger); }
+.studio-ack { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; font-size: 12.5px; }
+.studio-ack input { accent-color: var(--accent); width: 15px; height: 15px; margin-top: 2px; }
+.studio-confirm-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-top: 12px; }
+.studio-confirm-actions .studio-hint { flex: 1 1 100%; }
+.studio-hint { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; }
+.studio-actionbar .studio-hint { margin-right: auto; }
+.studio-refusal-details { margin: 6px 0 0; padding-left: 18px; font-size: 11.5px; }
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 900px) {
+  .studio-detail-head { padding: 14px 16px 0; }
+  .studio-dproof { grid-template-columns: minmax(0, 1fr); }
+  .studio-confirm { margin-left: 16px; margin-right: 16px; }
+}
+
+@media (max-width: 430px) {
+  /* The hint would push the buttons off a 390px screen; the same words stay on the confirmation. */
+  .studio-actionbar .studio-hint { display: none; }
+  .studio-dstep + .studio-dstep::before { width: 10px; margin: 0 2px; }
+  .studio-drumb { max-width: 14ch; }
+  /* Touch targets: 32px minimum on the row's own control. */
+  .studio-qitem { padding-top: 13px; padding-bottom: 13px; }
+}
+
+/* ==========================================================================
+ * ACTIVITY, SETTINGS, THE ADVISOR DRAWER AND MIGRATION
+ *
+ * Namespaced away from `.studio-drawer` and `.studio-field`, which two other areas already define with
+ * different meanings: a third meaning on the same selector would silently restyle their panels.
+ * Everything here is host tokens plus the two app-local aliases declared on `.studio`.
+ * ========================================================================== */
+
+/* ---------- small shared pieces this area needed ---------- */
+
+.studio-small { font-size: 11.5px; }
+.studio-error { color: var(--danger); margin: 6px 0 0; font-size: 12.5px; }
+.studio-wrapchips { flex-wrap: wrap; }
+.studio-list { margin: 0 0 8px; padding-left: 18px; font-size: 12.5px; }
+.studio-list li { margin-bottom: 4px; }
+.studio-pre {
+  margin: 0 0 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-accent);
+  font-size: 12.5px;
+  max-height: 340px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+/* One dt/dd pair as a block, so an `.studio-evgrid` column keeps its label above its value. */
+.studio-evgrid-pair { min-width: 0; }
+.studio-evgrid-pair dt,
+.studio-evgrid > dt {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.studio-evgrid-pair dd,
+.studio-evgrid > dd { margin: 2px 0 0; font-size: 12.5px; color: var(--text-strong); min-width: 0; }
+
+/* A label wrapping its own control: the whole thing is the hit target, which is what keeps a select or a
+   number box usable at 390px without growing the row. */
+.studio-sfield { display: inline-flex; flex-direction: column; gap: 4px; min-width: 0; }
+.studio-sfield > span:not(.studio-sr) { font-size: 11.5px; color: var(--muted); }
+.studio-sfield select,
+.studio-sfield input {
+  font: inherit;
+  font-size: 12.5px;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+.studio-sfield select:hover,
+.studio-sfield input:hover { border-color: var(--border-hover); }
+.studio-sfield input:disabled,
+.studio-sfield select:disabled { opacity: 0.5; }
+.studio-num { width: 6.5em; }
+
+/* A checkbox and its words in one target. 30px keeps it hittable on touch without a jumbo row. */
+.studio-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.studio-check input { width: 15px; height: 15px; accent-color: var(--accent); flex: 0 0 auto; }
+.studio-check input:disabled { cursor: default; }
+.studio-check input:disabled + span { color: var(--muted); }
+.studio-check > span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+
+/* ---------- Activity page ---------- */
+
+.studio-activity-body { display: flex; align-items: flex-start; gap: 18px; min-width: 0; }
+.studio-activity-count { margin: 0 0 8px; font-size: 12px; color: var(--muted); min-height: 1.2em; }
+
+.studio-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+  padding: 11px 13px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-accent);
+}
+.studio-filters-foot { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+
+/* The timeline. Grid columns match the mockup's `.tl` (78px time, 20px glyph, rest), and the row's
+   severity and source are each carried by a word AND a glyph AND a rule — never colour alone. */
+.studio-timeline { list-style: none; margin: 0 0 14px; padding: 0; }
+.studio-timeline-day { margin-bottom: 14px; }
+.studio-timeline-date {
+  margin: 0 0 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+}
+.studio-timeline-rows { list-style: none; margin: 0; padding: 0; }
+.studio-tlrow {
+  display: grid;
+  grid-template-columns: 78px 20px minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: start;
+  padding: 9px 0 9px 9px;
+  border-bottom: 1px solid var(--border);
+  border-left: 2px solid var(--border-strong);
+  font-size: 12px;
+}
+.studio-tlrow[aria-current='true'] { background: var(--bg-accent); border-left-width: 3px; }
+.studio-tlrow[data-source='aidlc'] { border-left-color: var(--accent); }
+.studio-tlrow[data-source='studio'] { border-left-color: var(--border-strong); }
+.studio-tlrow[data-source='kirocrew'] { border-left-color: var(--info); }
+.studio-tlrow[data-source='git'] { border-left-color: var(--aim); }
+.studio-tlrow[data-source='slack'] { border-left-color: var(--muted); }
+.studio-tlrow[data-severity='critical'] { border-left-color: var(--danger); }
+.studio-tlrow-time { color: var(--muted); font-size: 11px; padding-top: 1px; }
+.studio-tlrow-icon { color: var(--muted); padding-top: 1px; }
+.studio-tlrow-body { min-width: 0; }
+.studio-tlrow-msg { margin: 0 0 4px; color: var(--text); }
+.studio-tlrow-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.studio-tlrow-kindword {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.studio-tlrow-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.studio-pager { gap: 10px; margin: 4px 0 14px; }
+
+/* ---------- Evidence and Advisor drawer (inline, non-modal) ---------- */
+
+.studio-evdrawer {
+  flex: 0 0 auto;
+  width: 360px;
+  max-height: calc(100vh - 200px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel-strong);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 0;
+}
+.studio-evdrawer-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--border);
+}
+.studio-evdrawer-head h2 {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.studio-evdrawer-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 12px 13px 18px; }
+.studio-evdrawer-body .studio-block { margin-bottom: 16px; }
+.studio-advisor-drawer { border-color: color-mix(in srgb, var(--aim) 40%, var(--border)); }
+/* Presented as a right-hand overlay when it arrives from `?draft=<id>` (the shell mounts it there, so
+   the link works on every view). `sticky` + a viewport-relative max-height are for the inline case
+   beside the Activity timeline; inside the fixed wrapper they would leave a gap under the panel. */
+.studio-drawer-wrap > .studio-evdrawer { position: relative; max-height: none; border-radius: 0; }
+.studio-advisor-verdict { margin: 8px 0 4px; font-size: 13.5px; font-weight: 600; color: var(--text-strong); }
+.studio-advisor-summary { margin: 0 0 10px; font-size: 13px; line-height: 1.65; }
+
+/* ---------- diagnostic export ---------- */
+
+.studio-export-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.studio-export-opt { margin: 10px 0; }
+.studio-export-result { min-height: 1.2em; margin-top: 8px; }
+
+/* ---------- Settings matrix ---------- */
+
+.studio-settings-status { min-height: 1.2em; margin: 0 0 10px; font-size: 12.5px; color: var(--aidlc-emph); }
+.studio-matrix { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.studio-mrow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 15px;
+  border-top: 1px solid var(--border);
+}
+.studio-mrow:first-child { border-top: 0; }
+.studio-mrow-title { font-size: 13.5px; font-weight: 600; color: var(--text-strong); }
+.studio-mrow-desc { margin: 3px 0 0; font-size: 12px; color: var(--muted); max-width: 68ch; }
+.studio-mrow-ctl { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.studio-mrow-ctl .studio-evgrid { text-align: left; }
+
+.studio-mutelist { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; }
+.studio-mutelist li { padding: 2px 0; }
+.studio-mutelist .studio-mono { max-width: 26ch; }
+
+/* ---------- migration ---------- */
+
+.studio-migration-explain {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin: 10px 0;
+}
+.studio-migration .studio-tbl { margin: 8px 0; }
+.studio-migration .studio-banner { margin: 0 0 12px; }
+
+@media (max-width: 1180px) {
+  .studio-evdrawer { width: 320px; }
+}
+
+@media (max-width: 900px) {
+  /* The drawer becomes a block under the timeline: at this width a 320px column would leave the rows
+     unreadable, and the evidence is what the reader came for. */
+  .studio-activity-body { flex-direction: column; }
+  .studio-evdrawer { width: 100%; max-height: none; position: static; }
+  .studio-tlrow { grid-template-columns: 60px 18px minmax(0, 1fr); }
+  .studio-tlrow-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .studio-mrow { flex-direction: column; gap: 10px; }
+  .studio-mrow-ctl { align-items: flex-start; }
+  .studio-filters-foot { margin-left: 0; }
+}
+
+
+/* ==========================================================================
+ * DECISION TEMPLATES (the six decision bodies)
+ * Added by the templates area. Only rules no other area had: the block
+ * primitives shared with the templates (`.studio-pane*`, `.studio-consequence`,
+ * `.studio-ev*`, `.studio-diffline*`, `.studio-toc*`, `.studio-btn-sm`) are the
+ * artifacts area's and are reused, not redefined — a second definition of the
+ * same class would silently repaint that area's panes. Tokens only.
+ * ========================================================================== */
+
+.studio-template { display: block; }
+
+/* ---------- criteria, risks, steps ---------- */
+
+.studio-crit,
+.studio-steplist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.studio-crit > li,
+.studio-steplist > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+.studio-crit > li > svg,
+.studio-steplist > li > svg { flex: 0 0 auto; margin-top: 3px; }
+.studio-steplist > li > svg { color: var(--muted); }
+.studio-crit-txt { display: block; font-size: 13.5px; color: var(--text-strong); }
+.studio-crit-why { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.studio-met { color: var(--ok); }
+.studio-unmet { color: var(--warn); }
+.studio-unknown { color: var(--muted); }
+
+/* The one assertive line inside a decision body: a delivery nobody can prove. */
+.studio-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
+  border-radius: var(--radius-lg);
+  background: var(--danger-subtle);
+  color: var(--danger);
+}
+.studio-alert > svg { flex: 0 0 auto; margin-top: 1px; }
+
+/* ---------- questions ---------- */
+
+.studio-q {
+  padding: 16px 18px;
+  margin-bottom: 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+}
+.studio-q[data-answered='true'] { background: var(--bg-accent); }
+.studio-q-prompt { margin: 0 0 9px; font-size: 15px; font-weight: 600; color: var(--text-strong); line-height: 1.5; }
+.studio-q-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 11px; }
+.studio-q-advisor { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.studio-q-recorded { margin: 0; font-size: 13px; }
+.studio-q-recorded-label {
+  display: block;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.studio-qmetas { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 11px; }
+.studio-optionlist { list-style: none; margin: 9px 0 0; padding: 0; font-size: 12.5px; color: var(--text-strong); }
+
+/* Options and choices: a 15px control, a 44px-tall row, and no default selection anywhere. */
+.studio-opt,
+.studio-choicerow {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 10px 12px;
+  margin-bottom: 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  cursor: pointer;
+}
+.studio-opt input,
+.studio-choicerow input {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  margin: 3px 0 0;
+  accent-color: var(--accent);
+}
+.studio-opt[data-selected='true'],
+.studio-choicerow[data-selected='true'] { border-color: var(--accent); background: var(--accent-subtle); }
+.studio-choicerow[data-selected='true'] { box-shadow: 0 0 0 1px var(--accent); }
+.studio-opt[data-disabled='true'] { opacity: 0.55; cursor: default; }
+.studio-opt-body,
+.studio-choice-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.studio-opt-letter { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.studio-opt-label,
+.studio-choice-label { font-size: 13.5px; font-weight: 500; color: var(--text-strong); }
+.studio-opt-desc,
+.studio-choice-desc { font-size: 12.5px; color: var(--muted); }
+.studio-choicelist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.studio-choicelist > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+.studio-choicelist > li > svg { flex: 0 0 auto; margin-top: 3px; color: var(--muted); }
+
+/* ---------- free text ---------- */
+
+.studio-free {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.55;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text);
+  resize: vertical;
+}
+.studio-free:focus { outline: 2px solid var(--ring); outline-offset: 1px; }
+.studio-freecount { display: block; margin-top: 5px; font-size: 11px; color: var(--muted); }
+
+/* ---------- failure, install, budget ---------- */
+
+.studio-log {
+  display: block;
+  margin: 0;
+  padding: 9px 11px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  max-height: 340px;
+  overflow: auto;
+}
+.studio-fingerprint { margin: 9px 0; font-size: 12px; color: var(--muted); }
+.studio-hashline { display: block; font-size: 11.5px; }
+.studio-details > summary { font-size: 12.5px; color: var(--muted); cursor: pointer; padding: 7px 0; }
+.studio-details > summary:hover { color: var(--text); }
+.studio-tbl tr[data-conflict='true'] > td { background: var(--danger-subtle); }
+
+/* A value Studio cannot observe must not look like a value that is still loading, which is what the
+   host's own StatCard renders for `null`. Hence Studio's own stat card. */
+.studio-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.studio-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+.studio-stat-k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.studio-stat-v { font-size: 19px; color: var(--text-strong); }
+.studio-stat-q { font-size: 11px; color: var(--muted); }
+
+/* ---------- the advisor block ---------- */
+
+.studio-advisor {
+  padding: 14px 16px;
+  border: 1px dashed color-mix(in srgb, var(--aim) 55%, var(--border));
+  border-radius: var(--radius-lg);
+  background: var(--aim-subtle);
+}
+.studio-advisor-head { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-bottom: 7px; }
+.studio-advisor-title { margin: 0 0 5px; font-size: 13.5px; font-weight: 600; color: var(--text-strong); }
+.studio-advisor-copy { display: flex; align-items: flex-start; gap: 7px; margin: 0; font-size: 12.5px; color: var(--muted); }
+.studio-advisor-copy > svg { flex: 0 0 auto; margin-top: 2px; }
+.studio-advisor-copy[data-tone='warn'] { color: var(--warn); }
+.studio-advisor-dl {
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 11px 0;
+  font-size: 12.5px;
+}
+.studio-advisor-dl dt { color: var(--muted); }
+.studio-advisor-dl dd { margin: 0; color: var(--text); min-width: 0; }
+.studio-advisor-ul { list-style: disc; margin: 0; padding-left: 16px; }
+.studio-advisor-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 11px; }
+.studio-advisor-apply { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 7px; }
+.studio-advisor-note { font-size: 11.5px; color: var(--muted); }
+.studio-disclaim {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 11px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.studio-disclaim > svg { flex: 0 0 auto; margin-top: 1px; }
+
+/* ---------- two button variants the shell did not need ---------- */
+
+.studio-btn-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.studio-btn-danger:hover { background: var(--danger-subtle); border-color: var(--danger); }
+.studio-btn-ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.studio-btn-ghost:hover { background: var(--bg-hover); color: var(--text); }
+
+@media (max-width: 700px) {
+  .studio-advisor-dl { grid-template-columns: minmax(0, 1fr); gap: 2px 0; }
+  .studio-advisor-dl dt { margin-top: 7px; }
+  .studio-q-advisor { margin-left: 0; }
+}
+
+@media (max-width: 430px) {
+  .studio-q { padding: 13px 14px; }
+  .studio-opt,
+  .studio-choicerow { padding: 12px; }
+}
+
+/* ==========================================================================
+ * INTENTS, NEW-INTENT WIZARD, PLAN COMPOSER
+ * Added by the intents/wizard/plan area. Every class here is namespaced
+ * (`studio-plan-*`, `studio-wiz-*`, `studio-intent-*`) because `.studio-matrix`,
+ * `.studio-mrow` and `.studio-steps` were already taken by Settings and by the
+ * installer with different meanings; reusing them would have restyled two other
+ * pages. The generic primitives this area shares rather than redefines:
+ * `.studio-block`, `.studio-crit*`, `.studio-stats`/`.studio-stat*`,
+ * `.studio-consequence`, `.studio-diffline*`, `.studio-confirm`,
+ * `.studio-sendtext`, `.studio-help`, `.studio-empty*`, `.studio-lede`.
+ * ========================================================================== */
+
+/* ---------- shared additions (attribute variants nothing else sets) ---------- */
+
+.studio-wrap { flex-wrap: wrap; }
+.studio-banner[data-tone='info'] {
+  border-color: color-mix(in srgb, var(--info) 35%, var(--border));
+  background: var(--info-subtle);
+  color: var(--aidlc-info-text);
+}
+.studio-banner[data-tone='ok'] {
+  border-color: color-mix(in srgb, var(--ok) 35%, var(--border));
+  background: var(--ok-subtle);
+  color: var(--ok);
+}
+.studio-crit > li[data-tone='warn'] > svg { color: var(--warn); }
+.studio-crit > li[data-tone='danger'] > svg { color: var(--danger); }
+.studio-crit > li[data-tone='ok'] > svg { color: var(--ok); }
+/* A long text value (a review-intensity breakdown, a duration range) at 19px mono wraps into three
+   lines on a phone; the estimate cards ask for the smaller size explicitly. */
+.studio-stat-v[data-small='true'] { font-size: 15px; }
+.studio-field-label { font-size: 12px; font-weight: 600; color: var(--text-strong); }
+
+/* ---------- a bordered working surface (recompose, created-intent) ---------- */
+
+.studio-panel {
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+}
+.studio-panel-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 4px; }
+.studio-panel-head h1,
+.studio-panel-head h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; font-weight: 600; color: var(--text-strong); }
+.studio-panel > h1 { display: flex; align-items: center; gap: 9px; margin: 0 0 6px; font-size: 18px; font-weight: 600; color: var(--text-strong); }
+.studio-panel-actions { margin-left: auto; }
+.studio-subblock { margin-top: 12px; }
+.studio-subblock > h4 { margin: 0 0 7px; font-size: 12px; font-weight: 600; color: var(--text); }
+.studio-digest { margin: 0; font-size: 12px; color: var(--muted); }
+
+/* ---------- the wizard ---------- */
+
+.studio-wiz { max-width: 940px; margin: 0 auto; padding: 24px 24px 40px; }
+.studio-wiz > h1 { margin: 0 0 4px; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-strong); }
+.studio-wiz-steps {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 0 0 22px;
+  padding: 0;
+}
+.studio-wiz-steps > li { display: flex; align-items: center; flex: 1 1 auto; min-width: 0; }
+.studio-wiz-step {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.studio-wiz-step-n {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  font-size: 11px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+}
+.studio-wiz-step[data-state='done'] { color: var(--text); }
+.studio-wiz-step[data-state='done'] .studio-wiz-step-n { background: var(--ok); border-color: var(--ok); color: var(--ok-fg); }
+.studio-wiz-step[data-state='now'] {
+  color: var(--text-strong);
+  font-weight: 600;
+  background: var(--bg-elevated);
+  border-color: var(--border);
+}
+.studio-wiz-step[data-state='now'] .studio-wiz-step-n { border-color: var(--accent); background: var(--accent-subtle); color: var(--accent); }
+.studio-wiz-step-sep { flex: 1 1 auto; min-width: 14px; height: 1px; background: var(--border); }
+.studio-wiz-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.studio-wiz-count { margin-left: auto; font-size: 11.5px; }
+
+.studio-wiz-fields { display: flex; flex-direction: column; }
+/* The inputs the wizard owns. Sized for a 390px touch target, not for a mouse. */
+.studio-wiz-fields input[type='text'],
+.studio-wiz-fields input[type='search'],
+.studio-wiz-fields select,
+.studio-wiz-fields textarea {
+  width: 100%;
+  min-height: 36px;
+  padding: 9px 11px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.studio-wiz-fields textarea { min-height: 86px; resize: vertical; }
+.studio-wiz-fields select:disabled { opacity: 0.7; }
+.studio-wiz-fields .studio-help:empty { display: none; }
+.studio-wiz-fields input[aria-invalid='true'] { border-color: color-mix(in srgb, var(--danger) 55%, var(--border)); }
+
+.studio-picks { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 9px; }
+.studio-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 13px;
+  text-align: left;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.studio-pick:hover { border-color: var(--border-hover); }
+.studio-pick[aria-pressed='true'] { border-color: var(--accent); background: var(--accent-subtle); }
+.studio-pick-l { font-size: 13px; font-weight: 600; color: var(--text-strong); }
+.studio-pick-d { font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+.studio-plan-summary { margin-bottom: 12px; }
+
+/* ---------- the stage matrix ---------- */
+
+.studio-plan-matrix { display: flex; flex-direction: column; gap: 10px; }
+.studio-plan-phase {
+  min-width: 0;
+  margin: 0;
+  padding: 11px 13px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-md);
+}
+.studio-plan-phase[data-phase='initialization'] { border-left-color: var(--ph-init); }
+.studio-plan-phase[data-phase='ideation'] { border-left-color: var(--ph-idea); }
+.studio-plan-phase[data-phase='inception'] { border-left-color: var(--ph-incep); }
+.studio-plan-phase[data-phase='construction'] { border-left-color: var(--ph-constr); }
+.studio-plan-phase[data-phase='operation'] { border-left-color: var(--ph-oper); }
+.studio-plan-phase-h {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 0;
+  margin-bottom: 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+.studio-plan-stages { display: flex; flex-wrap: wrap; gap: 8px; }
+.studio-plan-ms {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 11.5px;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.studio-plan-ms-label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.studio-plan-ms[data-locked='true'] .studio-plan-ms-label { cursor: not-allowed; }
+.studio-plan-ms input { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); }
+.studio-plan-ms[data-on='true'] {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: var(--accent-subtle);
+}
+/* A locked stage stays legible: dimming it to .6 would put its reason below AA, and the reason is the
+   only thing that makes the disabled control understandable. */
+.studio-plan-ms[data-locked='true'] { border-style: dashed; background: var(--bg-accent); }
+.studio-plan-ms[data-locked='true'][data-on='true'] { background: color-mix(in srgb, var(--accent-subtle) 55%, var(--bg-accent)); }
+.studio-plan-ms-n { color: var(--muted); }
+.studio-plan-ms-slug { color: var(--text-strong); }
+.studio-plan-ms-why { color: var(--muted); font-size: 11px; }
+.studio-plan-ms > svg { color: var(--muted); flex: 0 0 auto; }
+
+/* ---------- the intents page ---------- */
+
+.studio-filter { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--muted); }
+.studio-filter > select,
+.studio-filter > input {
+  min-height: 32px;
+  padding: 5px 9px;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.studio-filter-check { flex-direction: row; align-items: center; gap: 7px; min-height: 32px; }
+.studio-filter-check > input { width: 15px; height: 15px; accent-color: var(--accent); }
+
+.studio-intent-table td { vertical-align: top; }
+.studio-row-sub { display: block; margin-top: 2px; font-size: 11.5px; color: var(--muted); }
+.studio-row-chips { margin-top: 5px; gap: 5px; }
+.studio-intent-actions { align-items: flex-start; gap: 6px; }
+.studio-intent-table tr[data-tone='warn'] > td { background: var(--warn-subtle); }
+
+.studio-intent-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.studio-intent-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 13px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.studio-intent-card-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 11.5px; }
+.studio-intent-card[data-tone='warn'] { border-color: color-mix(in srgb, var(--warn) 40%, var(--border)); background: var(--warn-subtle); }
+
+@media (max-width: 900px) {
+  .studio-wiz { padding: 16px 16px 34px; }
+  .studio-wiz-steps > li { flex: 0 0 auto; }
+  .studio-wiz-step-sep { min-width: 8px; }
+}
+
+@media (max-width: 430px) {
+  .studio-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .studio-picks { grid-template-columns: minmax(0, 1fr); }
+  .studio-wiz-bar > button { flex: 1 1 auto; justify-content: center; }
+  .studio-wiz-count { margin-left: 0; flex-basis: 100%; }
+}
+
+/* The diagnostic export is a whole block, not a preference row, and Settings renders it inside the
+   matrix. Give it the row's gutters and drop its own bottom margin so the card keeps one rhythm. */
+.studio-matrix > .studio-block { padding: 13px 15px; margin-bottom: 0; border-top: 1px solid var(--border); }
+.studio-matrix > .studio-block:first-child { border-top: 0; }
+
+/* ---------- action detail: Studio's own transition log and the embedded conversation ---------- */
+
+.studio-translist { list-style: none; margin: 0; padding: 0; }
+.studio-translist li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.studio-translist .studio-mono { font-size: 11px; }
+.studio-conv-note { margin: 0 0 8px; font-size: 12px; max-width: 62ch; }
+/* Bounded: the transcript scrolls inside the decision pane rather than pushing the action bar away. */
+.studio-conv { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; max-height: 520px; }

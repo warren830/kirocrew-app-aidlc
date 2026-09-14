@@ -1,0 +1,31 @@
+test_cli_default_precision (test_converter.ConverterCliTests)
+No `--precision` flag keeps the two-decimal default (FR2.1). ... ok
+test_cli_negative_value (test_converter.ConverterCliTests)
+A leading-dash positional parses without a `--` separator (FR1.4). ... ok
+test_cli_out_of_range_precision_fails (test_converter.ConverterCliTests)
+Out-of-range precision still fails loudly (FR3.1). ... ok
+test_cli_precision_six (test_converter.ConverterCliTests)
+Upper boundary through the CLI, trailing zeros preserved (FR1.2). ... ok
+test_cli_precision_zero (test_converter.ConverterCliTests)
+Lower boundary through the CLI (FR1.3). ... ok
+test_regression_precision_three_is_honoured (test_converter.ConverterCliTests)
+Targeted bugfix regression: `--precision 3` prints `1.234` (FR4.4). ... ok
+test_default_precision (test_converter.FormatNumberTests)
+Omitting precision keeps the two-decimal default (FR2.1). ... ok
+test_every_supported_precision (test_converter.FormatNumberTests)
+Literal expected output for every precision 0 through 6 (FR1.1-FR1.3, FR2.2). ... ok
+test_negative_value_at_default_precision (test_converter.FormatNumberTests)
+Negative values honour the default precision (FR1.4, FR2.1). ... ok
+test_negative_value_at_precision_three (test_converter.FormatNumberTests)
+Negative values honour the requested precision (FR1.4). ... ok
+test_precision_above_upper_bound_rejected (test_converter.FormatNumberTests)
+Precision above 6 is rejected (FR2.3). ... ok
+test_precision_below_lower_bound_rejected (test_converter.FormatNumberTests)
+Precision below 0 is rejected (FR2.3). ... ok
+test_whole_number_keeps_requested_decimals (test_converter.FormatNumberTests)
+A whole number is padded to the requested decimals (FR1.2, FR1.5). ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.316s
+
+OK

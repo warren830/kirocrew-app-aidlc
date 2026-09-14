@@ -1,0 +1,17 @@
+{
+  "native_transport_verified": true,
+  "question_answers": [
+    "B. 中文",
+    "A. Compact JSON",
+    "A, C",
+    "X. Note with commas, \"quotes\", 中文.\nSecond line stays with Q4."
+  ],
+  "human_group_messages": 1,
+  "answer_audit_events": 1,
+  "all_four_audit_mappings": true,
+  "audit_error_events": 0,
+  "pending_checkpoint": "summary_confirmation",
+  "user_question_file_unchanged": true,
+  "summary_approval_sent": false,
+  "running_at_capture": false
+}

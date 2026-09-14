@@ -1,0 +1,17 @@
+{
+  "activity.repo.updated": "Repository label or archive state updated.",
+  "repos.action.rename": "Rename repository",
+  "repos.action.archive": "Archive repository",
+  "repos.action.unarchive": "Restore repository",
+  "repos.metadata.label": "Repository label",
+  "repos.metadata.save": "Save label",
+  "repos.metadata.archiveBody": "Hide this repository from the active registry. Its files, session bindings and history are preserved. Restore it from “Show archived repositories” at any time.",
+  "repos.metadata.showArchived": "Show archived repositories",
+  "repos.metadata.archived": "Archived",
+  "repos.directory.open": "Browse directories",
+  "repos.directory.help": "Choose a directory on the machine running KiroCrew.",
+  "repos.directory.parent": "Parent directory",
+  "repos.directory.select": "Use this directory",
+  "repos.directory.list": "Directories",
+  "repos.directory.truncated": "This list is limited. Enter a more specific path to open a directory that is not shown."
+}

@@ -1,0 +1,1876 @@
+<!DOCTYPE html>
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Option A — Dense Operations · AI-DLC Studio</title>
+<style>
+/* ─────────────────────────────────────────────────────────────
+   Tokens mirrored from KiroCrew website/src/index.css so this
+   mockup previews accurately inside the dashboard shell.
+   ───────────────────────────────────────────────────────────── */
+:root{
+  --radius-sm:6px;--radius-md:8px;--radius-lg:12px;
+  --font-body:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,'JetBrains Mono',Menlo,monospace;
+}
+[data-theme="dark"]{
+  --bg:#12141a;--bg-accent:#14161d;--bg-elevated:#1a1d25;--bg-hover:#262a35;
+  --card:#181b22;--card-fg:#f4f4f5;--panel:#12141a;--chrome:rgba(18,20,26,.95);
+  --text:#e4e4e7;--text-strong:#fafafa;--muted:#7f7f88;--muted-strong:#a1a1aa;
+  --border:#27272a;--border-strong:#3f3f46;--border-hover:#52525b;
+  --accent:#00d492;--accent-fg:#000;--accent-hover:#34d399;--accent-subtle:rgba(4,117,88,.2);
+  --ring:#10b981;
+  --ok:#22c55e;--ok-subtle:rgba(34,197,94,.12);
+  --warn:#eab308;--warn-subtle:rgba(234,179,8,.12);
+  --danger:#ef4444;--danger-subtle:rgba(239,68,68,.12);
+  --info:#38bdf8;--info-subtle:rgba(56,189,248,.12);
+  --aim:#a78bfa;--aim-subtle:rgba(167,139,250,.15);
+  --shadow-md:0 4px 12px rgba(0,0,0,.25),0 0 0 1px rgba(255,255,255,.03);
+  --shadow-lg:0 12px 28px rgba(0,0,0,.45);
+  color-scheme:dark;
+}
+[data-theme="light"]{
+  --bg:#fafafa;--bg-accent:#f5f5f5;--bg-elevated:#ffffff;--bg-hover:#f0f0f0;
+  --card:#ffffff;--card-fg:#18181b;--panel:#fafafa;--chrome:rgba(250,250,250,.95);
+  --text:#3f3f46;--text-strong:#18181b;--muted:#71717a;--muted-strong:#52525b;
+  --border:#e4e4e7;--border-strong:#d4d4d8;--border-hover:#a1a1aa;
+  --accent:#047558;--accent-fg:#fff;--accent-hover:#059669;--accent-subtle:rgba(4,117,88,.12);
+  --ring:#047558;
+  --ok:#16a34a;--ok-subtle:rgba(22,163,74,.1);
+  --warn:#a16207;--warn-subtle:rgba(161,98,7,.1);
+  --danger:#dc2626;--danger-subtle:rgba(220,38,38,.1);
+  --info:#0e7490;--info-subtle:rgba(14,116,144,.1);
+  --aim:#7c3aed;--aim-subtle:rgba(124,58,237,.12);
+  --shadow-md:0 4px 12px rgba(0,0,0,.08),0 0 0 1px rgba(0,0,0,.04);
+  --shadow-lg:0 12px 28px rgba(0,0,0,.12);
+  color-scheme:light;
+}
+/* Restrained AI-DLC phase accents (colour is never the only signal — every
+   phase also carries its ordinal label and shape). */
+:root{
+  --ph-init:var(--muted-strong);
+  --ph-idea:var(--info);
+  --ph-inc:var(--aim);
+  --ph-con:var(--accent);
+  --ph-ops:var(--warn);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font:400 13px/1.45 var(--font-body);
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--ring);outline-offset:2px;border-radius:4px}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+svg.i{width:14px;height:14px;flex:0 0 auto;stroke:currentColor;fill:none;
+  stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+svg.i.sm{width:12px;height:12px}
+svg.i.lg{width:16px;height:16px}
+
+/* ── shell ─────────────────────────────────────────────── */
+.app{display:flex;flex-direction:column;height:100%;min-height:100vh}
+.topbar{
+  display:flex;align-items:center;gap:14px;height:44px;padding:0 12px;
+  background:var(--chrome);border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:40;backdrop-filter:blur(8px);
+}
+.brand{display:flex;align-items:center;gap:7px;font-weight:650;color:var(--text-strong);
+  font-size:13px;letter-spacing:-.01em;white-space:nowrap}
+.brand .mark{width:20px;height:20px;border-radius:6px;background:var(--accent-subtle);
+  color:var(--accent);display:grid;place-items:center}
+.pagetag{font:600 10px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;
+  padding:4px 7px;border-radius:999px;border:1px dashed var(--border-strong);color:var(--muted-strong)}
+nav.mainnav{display:flex;gap:1px;margin-left:6px;overflow-x:auto;scrollbar-width:none}
+nav.mainnav::-webkit-scrollbar{display:none}
+.navbtn{
+  display:flex;align-items:center;gap:6px;background:none;border:0;cursor:pointer;
+  padding:6px 9px;border-radius:var(--radius-sm);color:var(--muted-strong);
+  font-size:12.5px;white-space:nowrap;
+}
+.navbtn:hover{background:var(--bg-hover);color:var(--text)}
+.navbtn[aria-current="page"]{background:var(--accent-subtle);color:var(--accent);font-weight:600}
+.navbtn .cnt{font:600 10px/1 var(--mono);background:var(--danger);color:#fff;
+  padding:2px 4px;border-radius:999px}
+.topright{margin-left:auto;display:flex;align-items:center;gap:6px}
+.iconbtn{display:grid;place-items:center;width:28px;height:28px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--bg-elevated);color:var(--muted-strong);cursor:pointer}
+.iconbtn:hover{border-color:var(--border-hover);color:var(--text)}
+
+/* ── scope bar + exec strip ─────────────────────────────── */
+.scopebar{display:flex;align-items:center;gap:8px;padding:6px 12px;flex-wrap:wrap;
+  background:var(--bg-accent);border-bottom:1px solid var(--border)}
+.scopepick{position:relative}
+.scopebtn{display:flex;align-items:center;gap:7px;padding:5px 9px;border-radius:var(--radius-sm);
+  border:1px solid var(--border-strong);background:var(--card);color:var(--text-strong);
+  font-size:12.5px;font-weight:600;cursor:pointer}
+.scopebtn:hover{border-color:var(--border-hover)}
+.scopebtn .sub{font-weight:400;color:var(--muted);font-family:var(--mono);font-size:11px}
+.menu{position:absolute;top:calc(100% + 5px);left:0;z-index:60;min-width:290px;
+  background:var(--card);border:1px solid var(--border-strong);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-lg);padding:5px;display:none}
+.menu.open{display:block}
+.menu .mhead{font:600 10px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;
+  color:var(--muted);padding:7px 8px 5px}
+.mitem{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;
+  border:0;cursor:pointer;padding:6px 8px;border-radius:var(--radius-sm);color:var(--text);font-size:12.5px}
+.mitem:hover{background:var(--bg-hover)}
+.mitem[aria-selected="true"]{background:var(--accent-subtle);color:var(--accent)}
+.mitem .path{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.mitem .dot{width:6px;height:6px;border-radius:50%;background:var(--muted-strong)}
+.mitem .dot.ok{background:var(--ok)}.mitem .dot.warn{background:var(--warn)}
+.breadcrumb{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);
+  font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.breadcrumb b{color:var(--text);font-weight:600}
+.execstrip{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:3px 7px;border-radius:999px;
+  font:600 10.5px/1.5 var(--mono);border:1px solid var(--border);background:var(--bg-elevated);color:var(--muted-strong)}
+.chip.run{border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-subtle);color:var(--accent)}
+.chip.wait{border-color:color-mix(in srgb,var(--warn) 45%,transparent);background:var(--warn-subtle);color:var(--warn)}
+.chip.bad{border-color:color-mix(in srgb,var(--danger) 45%,transparent);background:var(--danger-subtle);color:var(--danger)}
+.chip.info{border-color:color-mix(in srgb,var(--info) 45%,transparent);background:var(--info-subtle);color:var(--info)}
+.chip.aim{border-color:color-mix(in srgb,var(--aim) 45%,transparent);background:var(--aim-subtle);color:var(--aim)}
+.chip .pulse{width:6px;height:6px;border-radius:50%;background:currentColor;
+  animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.ghostbtn{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:var(--radius-sm);
+  border:1px solid var(--border);background:var(--bg-elevated);color:var(--muted-strong);
+  font-size:11.5px;cursor:pointer}
+.ghostbtn:hover{border-color:var(--border-hover);color:var(--text)}
+.ghostbtn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+.ghostbtn.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover);color:var(--accent-fg)}
+
+/* ── page frame ─────────────────────────────────────────── */
+main{flex:1;min-height:0;display:flex;flex-direction:column}
+.page{display:none;flex:1;min-height:0}
+.page.active{display:flex}
+.split{display:grid;grid-template-columns:36% 64%;flex:1;min-height:0;width:100%}
+.pane{min-width:0;display:flex;flex-direction:column;min-height:0}
+.pane.queue{border-right:1px solid var(--border);background:var(--panel)}
+
+/* ── queue ──────────────────────────────────────────────── */
+.qtools{padding:7px 8px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+.qsearch{display:flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid var(--border);
+  background:var(--bg-elevated);border-radius:var(--radius-sm);color:var(--muted)}
+.qsearch input{flex:1;min-width:0;background:none;border:0;outline:0;font-size:12.5px;color:var(--text)}
+.qsearch input::placeholder{color:var(--muted)}
+.seg{display:flex;background:var(--bg-elevated);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:2px;gap:2px;overflow-x:auto;scrollbar-width:none}
+.seg::-webkit-scrollbar{display:none}
+.seg button{flex:1;background:none;border:0;cursor:pointer;padding:4px 7px;border-radius:4px;
+  font-size:11.5px;color:var(--muted-strong);white-space:nowrap}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed="true"]{background:var(--card);color:var(--text-strong);font-weight:600;box-shadow:var(--shadow-md)}
+.qcount{display:flex;align-items:center;justify-content:space-between;
+  font:600 10px/1 var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:0 2px}
+.qlist{flex:1;overflow-y:auto;min-height:0}
+.qgroup{position:sticky;top:0;z-index:2;background:var(--bg-accent);
+  border-bottom:1px solid var(--border);border-top:1px solid var(--border);
+  padding:4px 9px;font:600 9.5px/1.5 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.qgroup:first-child{border-top:0}
+/* table-like dense row: 3px severity rail + 2 lines of packed metadata */
+.qrow{display:grid;grid-template-columns:3px 16px 1fr auto;gap:0 8px;align-items:start;
+  width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--border);
+  padding:7px 9px 7px 0;cursor:pointer;color:var(--text)}
+.qrow:hover{background:var(--bg-hover)}
+.qrow[aria-selected="true"]{background:var(--bg-elevated)}
+.qrow .rail{align-self:stretch;border-radius:0 2px 2px 0;background:var(--border-strong);min-height:34px}
+.qrow[aria-selected="true"] .rail{background:var(--accent)}
+.qrow .rail.p1{background:var(--danger)}.qrow .rail.p2{background:var(--warn)}
+.qrow .rail.p3{background:var(--info)}.qrow .rail.p4{background:var(--muted-strong)}
+.qrow .tico{margin-top:1px;color:var(--muted-strong)}
+.qrow[aria-selected="true"] .tico{color:var(--accent)}
+.qrow .l1{display:flex;align-items:baseline;gap:6px;min-width:0}
+.qrow .ttl{font-weight:600;font-size:12.5px;color:var(--text-strong);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qrow .l2{display:flex;align-items:center;gap:6px;margin-top:2px;
+  font:400 11px/1.4 var(--mono);color:var(--muted);min-width:0;flex-wrap:wrap}
+.qrow .l2 .sep{opacity:.4}
+.qrow .l2 .repo{color:var(--muted-strong);font-weight:600}
+.qrow .right{display:flex;flex-direction:column;align-items:flex-end;gap:3px;padding-top:1px}
+.qrow .wait{font:600 11px/1 var(--mono);color:var(--warn)}
+.qrow .wait.hot{color:var(--danger)}
+.qrow .next{font-size:10.5px;color:var(--muted);white-space:nowrap}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:1px 5px;border-radius:3px;
+  font:600 9.5px/1.6 var(--mono);letter-spacing:.04em;text-transform:uppercase;
+  border:1px solid var(--border-strong);color:var(--muted-strong);background:var(--bg-elevated)}
+.tag.gate{border-color:color-mix(in srgb,var(--warn) 50%,transparent);color:var(--warn);background:var(--warn-subtle)}
+.tag.q{border-color:color-mix(in srgb,var(--info) 50%,transparent);color:var(--info);background:var(--info-subtle)}
+.tag.rec{border-color:color-mix(in srgb,var(--danger) 50%,transparent);color:var(--danger);background:var(--danger-subtle)}
+.tag.fail{border-color:color-mix(in srgb,var(--danger) 50%,transparent);color:var(--danger);background:var(--danger-subtle)}
+.tag.inst{border-color:color-mix(in srgb,var(--aim) 50%,transparent);color:var(--aim);background:var(--aim-subtle)}
+.tag.bud{border-color:var(--border-strong);color:var(--muted-strong)}
+.tag.ok{border-color:color-mix(in srgb,var(--ok) 50%,transparent);color:var(--ok);background:var(--ok-subtle)}
+.qfoot{border-top:1px solid var(--border);padding:7px 9px;font-size:11.5px;color:var(--muted);
+  display:flex;align-items:center;gap:6px;background:var(--bg-accent)}
+.qfoot a{color:var(--accent);text-decoration:none}
+.qfoot a:hover{text-decoration:underline}
+.qempty{padding:26px 16px;text-align:center;color:var(--muted);font-size:12.5px}
+
+/* ── detail ─────────────────────────────────────────────── */
+.pane.detail{background:var(--bg)}
+.dhead{padding:9px 14px 0;border-bottom:1px solid var(--border);background:var(--bg-accent)}
+.dcrumb{display:flex;align-items:center;gap:6px;font:400 11px/1.4 var(--mono);color:var(--muted);flex-wrap:wrap}
+.dcrumb b{color:var(--text-strong);font-weight:600}
+.dtitle{display:flex;align-items:center;gap:8px;margin:5px 0 2px;flex-wrap:wrap}
+.dtitle h1{margin:0;font-size:15px;font-weight:650;color:var(--text-strong);letter-spacing:-.01em}
+.dmeta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.tabs{display:flex;gap:2px;margin-top:2px}
+.tab{background:none;border:0;border-bottom:2px solid transparent;cursor:pointer;
+  padding:7px 10px;color:var(--muted-strong);font-size:12.5px;display:flex;align-items:center;gap:6px}
+.tab:hover:not([disabled]){color:var(--text)}
+.tab[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+.tab[disabled]{opacity:.42;cursor:not-allowed}
+.tab .n{font:600 10px/1 var(--mono);background:var(--bg-hover);padding:2px 4px;border-radius:3px}
+.dbody{flex:1;overflow-y:auto;min-height:0;padding:12px 14px 118px}
+.mobback{display:none}
+
+/* dense evidence blocks */
+.blk{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--card);margin-bottom:10px}
+.blk>h2{margin:0;padding:7px 10px;border-bottom:1px solid var(--border);
+  font:600 10px/1.5 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted-strong);
+  display:flex;align-items:center;gap:7px}
+.blk>h2 .rt{margin-left:auto;display:flex;gap:5px;align-items:center;text-transform:none;letter-spacing:0}
+.blk .bd{padding:9px 10px}
+.blk .bd p{margin:0 0 7px}.blk .bd p:last-child{margin-bottom:0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12px}
+.kv dt{color:var(--muted);font:400 11px/1.5 var(--mono)}
+.kv dd{margin:0;color:var(--text);min-width:0;overflow-wrap:anywhere}
+.kv dd code,code.m{font-family:var(--mono);font-size:11px;background:var(--bg-elevated);
+  border:1px solid var(--border);border-radius:3px;padding:1px 4px}
+.dl{list-style:none;margin:0;padding:0}
+.dl li{display:flex;gap:7px;padding:5px 0;border-bottom:1px dashed var(--border);font-size:12px}
+.dl li:last-child{border-bottom:0}
+.dl li .ic{margin-top:2px}
+.dl li .g{min-width:0}
+.dl li .g .t{font-weight:600;color:var(--text-strong)}
+.dl li .g .s{color:var(--muted);font-size:11.5px}
+.ok-i{color:var(--ok)}.warn-i{color:var(--warn)}.bad-i{color:var(--danger)}.info-i{color:var(--info)}.aim-i{color:var(--aim)}
+.filerow{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--border);font-size:12px}
+.filerow:last-child{border-bottom:0}
+.filerow .nm{font-family:var(--mono);font-size:11.5px;color:var(--text-strong);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.filerow .sz{margin-left:auto;font:400 10.5px/1 var(--mono);color:var(--muted);white-space:nowrap}
+.quote{border-left:2px solid var(--warn);background:var(--warn-subtle);
+  padding:6px 9px;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:12px;margin:0 0 7px}
+.quote.bad{border-left-color:var(--danger);background:var(--danger-subtle)}
+.quote.ok{border-left-color:var(--ok);background:var(--ok-subtle)}
+.quote .who{font:600 10px/1.6 var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted-strong);display:block}
+.pre{font-family:var(--mono);font-size:11.5px;white-space:pre-wrap;background:var(--bg-elevated);
+  border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 9px;margin:0;overflow-x:auto}
+.note{display:flex;gap:7px;align-items:flex-start;padding:7px 9px;border-radius:var(--radius-sm);
+  font-size:11.5px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--muted-strong)}
+.note.warn{border-color:color-mix(in srgb,var(--warn) 40%,transparent);background:var(--warn-subtle);color:var(--text)}
+.note.bad{border-color:color-mix(in srgb,var(--danger) 40%,transparent);background:var(--danger-subtle);color:var(--text)}
+.note.aim{border-color:color-mix(in srgb,var(--aim) 40%,transparent);background:var(--aim-subtle);color:var(--text)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+table.dt{width:100%;border-collapse:collapse;font-size:12px}
+table.dt th{text-align:left;font:600 9.5px/1.6 var(--mono);letter-spacing:.07em;text-transform:uppercase;
+  color:var(--muted);border-bottom:1px solid var(--border);padding:4px 6px}
+table.dt td{padding:5px 6px;border-bottom:1px dashed var(--border);vertical-align:top}
+table.dt tr:last-child td{border-bottom:0}
+table.dt td.num{font-family:var(--mono);text-align:right;white-space:nowrap}
+
+/* ── questions form ─────────────────────────────────────── */
+.qgroupbox{border:1px solid var(--border);border-radius:var(--radius-md);background:var(--card);margin-bottom:9px}
+.qgh{padding:7px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px}
+.qgh .ix{font:600 10px/1 var(--mono);color:var(--muted);border:1px solid var(--border-strong);
+  border-radius:3px;padding:2px 4px}
+.qgh .hd{font-weight:600;font-size:12.5px;color:var(--text-strong)}
+.qgb{padding:8px 10px}
+.qprompt{font-size:12.5px;margin:0 0 8px;color:var(--text)}
+.opt{display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border:1px solid var(--border);
+  border-radius:var(--radius-sm);margin-bottom:5px;cursor:pointer;background:var(--bg-elevated)}
+.opt:hover{border-color:var(--border-hover)}
+.opt:has(input:checked){border-color:var(--accent);background:var(--accent-subtle)}
+.opt input{margin:2px 0 0;accent-color:var(--accent)}
+.opt .ot{font-weight:600;font-size:12px;color:var(--text-strong)}
+.opt .od{font-size:11.5px;color:var(--muted);margin-top:1px}
+.opt .drafted{margin-left:auto;flex:0 0 auto}
+.otherbox{display:flex;gap:6px;align-items:center;margin-top:4px}
+.otherbox input[type=text]{flex:1;min-width:0;padding:5px 8px;border:1px solid var(--border);
+  background:var(--bg-elevated);border-radius:var(--radius-sm);outline:0}
+.otherbox input[type=text]:focus{border-color:var(--ring)}
+.req{color:var(--danger);font:600 9.5px/1 var(--mono);letter-spacing:.05em}
+
+/* ── advisor ────────────────────────────────────────────── */
+.advisor{border:1px solid color-mix(in srgb,var(--aim) 40%,transparent);
+  border-radius:var(--radius-md);background:var(--aim-subtle);margin-bottom:10px}
+.advisor>h2{margin:0;padding:7px 10px;font:600 10px/1.5 var(--mono);letter-spacing:.08em;
+  text-transform:uppercase;color:var(--aim);display:flex;align-items:center;gap:7px;
+  border-bottom:1px solid color-mix(in srgb,var(--aim) 25%,transparent)}
+.advisor>h2 .rt{margin-left:auto;display:flex;gap:5px;text-transform:none;letter-spacing:0}
+.advisor .bd{padding:9px 10px;font-size:12px}
+.advbtn{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:var(--radius-sm);
+  border:1px solid color-mix(in srgb,var(--aim) 55%,transparent);background:transparent;
+  color:var(--aim);font-size:11.5px;font-weight:600;cursor:pointer}
+.advbtn:hover{background:color-mix(in srgb,var(--aim) 16%,transparent)}
+.advbtn[disabled]{opacity:.5;cursor:progress}
+.conf{display:inline-flex;align-items:center;gap:4px;font:600 10px/1 var(--mono)}
+.conf .bars{display:flex;gap:2px}
+.conf .bars i{width:4px;height:9px;border-radius:1px;background:var(--border-strong);display:block}
+.conf .bars i.on{background:var(--aim)}
+
+/* ── sticky action bar ──────────────────────────────────── */
+.actionbar{position:sticky;bottom:0;margin-top:2px;padding:9px 14px;
+  background:var(--chrome);border-top:1px solid var(--border-strong);backdrop-filter:blur(8px);
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pane.detail{position:relative}
+.abwrap{position:absolute;left:0;right:0;bottom:0;z-index:20}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--radius-sm);
+  border:1px solid var(--border-strong);background:var(--bg-elevated);color:var(--text);
+  font-size:12.5px;font-weight:600;cursor:pointer}
+.btn:hover{border-color:var(--border-hover)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.pri:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+.btn.dgr{border-color:color-mix(in srgb,var(--danger) 55%,transparent);color:var(--danger);background:var(--danger-subtle)}
+.btn.dgr:hover{background:color-mix(in srgb,var(--danger) 22%,transparent)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:5px 9px;font-size:11.5px;font-weight:500}
+.abhint{font-size:11px;color:var(--muted);margin-left:auto;text-align:right;max-width:46%}
+.confirm{border:1px solid var(--accent);border-radius:var(--radius-md);background:var(--card);
+  padding:9px 10px;margin-bottom:9px}
+.confirm h3{margin:0 0 6px;font:600 10px/1.5 var(--mono);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--accent);display:flex;align-items:center;gap:6px}
+.confirm .sent{font-family:var(--mono);font-size:11.5px;white-space:pre-wrap;
+  background:var(--bg-elevated);border:1px solid var(--border-strong);border-radius:var(--radius-sm);
+  padding:8px 9px;margin:0 0 8px;color:var(--text-strong)}
+.confirm .row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.feedback{width:100%;min-height:66px;resize:vertical;padding:7px 9px;border:1px solid var(--border);
+  background:var(--bg-elevated);border-radius:var(--radius-sm);outline:0;font-size:12.5px;margin-bottom:7px}
+.feedback:focus{border-color:var(--ring)}
+.deliv{display:flex;align-items:center;gap:0;margin:2px 0 9px;flex-wrap:wrap}
+.deliv .st{display:flex;align-items:center;gap:5px;font:600 10px/1 var(--mono);
+  letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:4px 8px;
+  border:1px solid var(--border);background:var(--bg-elevated)}
+.deliv .st:first-child{border-radius:var(--radius-sm) 0 0 var(--radius-sm)}
+.deliv .st:last-child{border-radius:0 var(--radius-sm) var(--radius-sm) 0}
+.deliv .st+.st{border-left:0}
+.deliv .st.done{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,transparent);background:var(--ok-subtle)}
+.deliv .st.now{color:var(--accent);border-color:var(--accent);background:var(--accent-subtle)}
+.deliv .st.unk{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 45%,transparent);background:var(--danger-subtle)}
+
+/* ── workflow map ───────────────────────────────────────── */
+.maptools{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);
+  background:var(--bg-accent);flex-wrap:wrap}
+.mapwrap{flex:1;min-height:0;display:grid;grid-template-columns:1fr 320px}
+.mapscroll{overflow:auto;min-width:0;padding:10px 14px 20px}
+.lane{margin-bottom:9px;border:1px solid var(--border);border-radius:var(--radius-md);
+  background:var(--card);overflow:hidden}
+.lanehd{display:flex;align-items:center;gap:8px;padding:6px 9px;border-bottom:1px solid var(--border);
+  background:var(--bg-accent)}
+.lanehd .ord{width:17px;height:17px;border-radius:4px;display:grid;place-items:center;
+  font:700 10px/1 var(--mono);color:var(--bg);background:var(--ph);flex:0 0 auto}
+.lanehd .nm{font-weight:650;font-size:12.5px;color:var(--text-strong)}
+.lanehd .st{margin-left:auto;font:400 10.5px/1 var(--mono);color:var(--muted)}
+.lanebd{display:flex;gap:6px;padding:8px 9px;overflow-x:auto;align-items:stretch}
+.stage{flex:0 0 auto;min-width:132px;max-width:190px;text-align:left;cursor:pointer;
+  border:1px solid var(--border-strong);border-left:3px solid var(--ph);border-radius:var(--radius-sm);
+  background:var(--bg-elevated);padding:6px 8px;color:var(--text)}
+.stage:hover{border-color:var(--border-hover)}
+.stage[aria-selected="true"]{box-shadow:0 0 0 2px var(--ring) inset;background:var(--card)}
+.stage .sid{font:600 9.5px/1.4 var(--mono);color:var(--muted)}
+.stage .snm{font-weight:600;font-size:12px;color:var(--text-strong);margin-top:1px;line-height:1.25}
+.stage .srow{display:flex;align-items:center;gap:4px;margin-top:4px;flex-wrap:wrap}
+.stage.skipped{opacity:.55;border-style:dashed;background:transparent}
+.stage.current{border-left-width:5px;background:var(--accent-subtle)}
+.stage.dim{opacity:.28}
+.stage .det{display:none}
+.mapwrap[data-density="detailed"] .stage .det,
+.mapwrap[data-density="deps"] .stage .det{display:block;margin-top:4px;
+  font:400 10.5px/1.45 var(--mono);color:var(--muted);border-top:1px dashed var(--border);padding-top:4px}
+.stage .rel{display:none}
+.mapwrap[data-density="deps"] .stage.up .rel,
+.mapwrap[data-density="deps"] .stage.down .rel{display:inline-flex}
+.mapwrap[data-density="deps"] .stage.up{border-color:var(--info)}
+.mapwrap[data-density="deps"] .stage.down{border-color:var(--aim)}
+.units{border-top:1px dashed var(--border);margin:0 9px 8px;padding-top:6px;display:none}
+.units.open{display:block}
+.unitlane{display:flex;align-items:center;gap:6px;padding:3px 0}
+.unitlane .un{font:600 10.5px/1 var(--mono);color:var(--muted-strong);min-width:74px}
+.inspector{border-left:1px solid var(--border);background:var(--panel);overflow-y:auto;padding:10px 12px}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--muted);
+  padding:2px 14px 10px;align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:9px;height:9px;border-radius:2px;display:block;background:var(--border-strong)}
+
+/* ── wizard ─────────────────────────────────────────────── */
+.wizwrap{flex:1;min-height:0;overflow-y:auto;padding:14px 16px 30px}
+.wizinner{max-width:980px;margin:0 auto}
+.steps{display:flex;gap:0;margin-bottom:14px;border:1px solid var(--border);
+  border-radius:var(--radius-md);overflow:hidden;background:var(--card)}
+.steps button{flex:1;background:none;border:0;cursor:pointer;padding:8px 10px;text-align:left;
+  border-right:1px solid var(--border);color:var(--muted-strong);min-width:0}
+.steps button:last-child{border-right:0}
+.steps button:hover{background:var(--bg-hover)}
+.steps button[aria-current="step"]{background:var(--accent-subtle)}
+.steps .sn{display:flex;align-items:center;gap:6px;font:600 10px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.steps button[aria-current="step"] .sn{color:var(--accent)}
+.steps .sl{font-size:12.5px;font-weight:600;color:var(--text-strong);margin-top:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.steps .done .sn{color:var(--ok)}
+.wstep{display:none}.wstep.active{display:block}
+.fld{margin-bottom:10px}
+.fld label{display:block;font:600 10px/1.6 var(--mono);letter-spacing:.07em;text-transform:uppercase;
+  color:var(--muted-strong);margin-bottom:4px}
+.fld input[type=text],.fld textarea,.fld select{width:100%;padding:7px 9px;border:1px solid var(--border);
+  background:var(--bg-elevated);border-radius:var(--radius-sm);outline:0;font-size:12.5px}
+.fld input:focus,.fld textarea:focus,.fld select:focus{border-color:var(--ring)}
+.fld textarea{min-height:64px;resize:vertical}
+.hint{font-size:11px;color:var(--muted);margin-top:3px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:7px}
+.pcard{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-elevated);
+  padding:7px 9px;cursor:pointer;display:block}
+.pcard:hover{border-color:var(--border-hover)}
+.pcard:has(input:checked){border-color:var(--accent);background:var(--accent-subtle)}
+.pcard input{position:absolute;opacity:0;pointer-events:none}
+.pcard .pt{font-weight:650;font-size:12.5px;color:var(--text-strong);display:flex;align-items:center;gap:6px}
+.pcard .pd{font-size:11px;color:var(--muted);margin-top:2px}
+.matrix{border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;background:var(--card)}
+.mrow{display:grid;grid-template-columns:26px 1fr auto;gap:8px;align-items:center;
+  padding:5px 9px;border-bottom:1px solid var(--border);font-size:12px}
+.mrow:last-child{border-bottom:0}
+.mrow.phase{background:var(--bg-accent);grid-template-columns:1fr;
+  font:600 9.5px/1.6 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.mrow input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px}
+.mrow .sname{font-weight:600;color:var(--text-strong)}
+.mrow .why{font:400 10.5px/1.4 var(--mono);color:var(--muted);display:block}
+.why{font:400 10.5px/1.4 var(--mono);color:var(--muted)}
+.qrow>span{min-width:0}
+.qrow .l1cell{display:block;min-width:0}
+.dl li .g,.opt>span{display:block;min-width:0}
+.opt>span .ot,.opt>span .od{display:block}
+.mrow.locked{opacity:.72}
+.mrow.off .sname{color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
+.counters{display:flex;gap:7px;flex-wrap:wrap;margin:9px 0}
+.counter{border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--card);
+  padding:6px 10px;min-width:88px}
+.counter .cn{font:700 17px/1.1 var(--mono);color:var(--text-strong)}
+.counter .cl{font:600 9.5px/1.6 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.counter.est .cn{color:var(--warn)}
+.wizbar{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:11px;
+  border-top:1px solid var(--border);flex-wrap:wrap}
+
+/* ── generic pages ──────────────────────────────────────── */
+.simple{flex:1;overflow-y:auto;padding:16px}
+.simple .inner{max-width:1000px;margin:0 auto}
+.h2{font-size:15px;font-weight:650;color:var(--text-strong);margin:0 0 3px}
+.sub{font-size:12px;color:var(--muted);margin:0 0 12px}
+
+/* ── toast ──────────────────────────────────────────────── */
+.toast{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:200;
+  background:var(--card);border:1px solid var(--accent);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-lg);padding:9px 13px;font-size:12.5px;color:var(--text-strong);
+  display:none;align-items:center;gap:8px;max-width:min(560px,92vw)}
+.toast.show{display:flex}
+
+/* ── responsive: 390px list → detail ────────────────────── */
+@media (max-width:900px){
+  .split{grid-template-columns:1fr}
+  .pane.detail{display:none}
+  .pane.queue{border-right:0}
+  body[data-mob="detail"] .pane.queue{display:none}
+  body[data-mob="detail"] .pane.detail{display:flex}
+  .mobback{display:inline-flex}
+  .mapwrap{grid-template-columns:1fr}
+  .inspector{border-left:0;border-top:1px solid var(--border)}
+  .grid2{grid-template-columns:1fr}
+  .abhint{max-width:100%;margin-left:0;text-align:left}
+  .lanebd{flex-direction:column}
+  .stage{max-width:none;width:100%}
+  .steps{flex-direction:column}
+  .steps button{border-right:0;border-bottom:1px solid var(--border)}
+  .steps .sl{white-space:normal}
+  .topbar{height:auto;padding:6px 8px;flex-wrap:wrap;gap:8px}
+  .dbody{padding:10px 11px 132px}
+  .dhead{padding:8px 11px 0}
+}
+</style>
+</head>
+<body data-mob="list">
+<svg class="vh" aria-hidden="true"><defs>
+<symbol id="i-brand" viewBox="0 0 24 24"><path d="M12 2 3 7l9 5 9-5-9-5Z"/><path d="M3 12l9 5 9-5"/><path d="M3 17l9 5 9-5"/></symbol>
+<symbol id="i-gate" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6l8-3Z"/><path d="M9 12l2 2 4-4"/></symbol>
+<symbol id="i-quest" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a2.8 2.8 0 1 1 3.9 2.6c-.7.3-1.1 1-1.1 1.8v.4"/><path d="M12 17.3h.01"/></symbol>
+<symbol id="i-recover" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 8v4l3 2"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 2.5 17.2A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.8L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 16.5h.01"/></symbol>
+<symbol id="i-pkg" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="M3 8l9 5 9-5"/><path d="M12 21V13"/></symbol>
+<symbol id="i-gauge" viewBox="0 0 24 24"><path d="M12 14 15.5 9"/><circle cx="12" cy="14" r="8"/><path d="M4 14h2M18 14h2M12 6V4"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4.3-4.3"/></symbol>
+<symbol id="i-chev-d" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-chev-r" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+<symbol id="i-arrow-l" viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></symbol>
+<symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8L12 3Z"/><path d="M18.5 16.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2Z"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12.5 5 5L20 6.5"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M6 4l14 8-14 8V4Z"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 4v16M15 4v16"/></symbol>
+<symbol id="i-map" viewBox="0 0 24 24"><path d="M3 6h7v5H3zM14 6h7v5h-7zM3 14h7v4H3zM14 14h7v4h-7z"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></symbol>
+<symbol id="i-cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+<symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2.5-6 4 12L16 12h5"/></symbol>
+<symbol id="i-git" viewBox="0 0 24 24"><circle cx="6" cy="5" r="2.5"/><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 7.5v9M8.5 19h4a3 3 0 0 0 3-3v-2"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="2.6"/></symbol>
+<symbol id="i-repo" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v18H6.5A2.5 2.5 0 0 1 4 18.5v-13Z"/><path d="M4 17h15"/></symbol>
+</defs></svg>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="mark"><svg class="i" aria-hidden="true"><use href="#i-brand"/></svg></span>AI-DLC Studio</div>
+    <span class="pagetag">Option A — Dense Operations</span>
+    <nav class="mainnav" aria-label="Primary">
+      <button class="navbtn" data-page="action" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg>Action Center<span class="cnt" id="navCount">8</span></button>
+      <button class="navbtn" data-page="repos"><svg class="i" aria-hidden="true"><use href="#i-repo"/></svg>Repos</button>
+      <button class="navbtn" data-page="intents"><svg class="i" aria-hidden="true"><use href="#i-file"/></svg>Intents</button>
+      <button class="navbtn" data-page="map"><svg class="i" aria-hidden="true"><use href="#i-map"/></svg>Workflow Map</button>
+      <button class="navbtn" data-page="activity"><svg class="i" aria-hidden="true"><use href="#i-pulse"/></svg>Activity</button>
+      <button class="navbtn" data-page="settings"><svg class="i" aria-hidden="true"><use href="#i-cog"/></svg>Settings</button>
+    </nav>
+    <div class="topright">
+      <button class="ghostbtn" data-page="wizard"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>New intent</button>
+      <button class="iconbtn" id="themeBtn" title="Toggle light / dark" aria-label="Toggle light or dark theme">
+        <svg class="i" aria-hidden="true"><use href="#i-moon" id="themeIcon"/></svg></button>
+    </div>
+  </header>
+
+  <div class="scopebar">
+    <div class="scopepick">
+      <button class="scopebtn" id="scopeBtn" aria-haspopup="listbox" aria-expanded="false">
+        <svg class="i" aria-hidden="true"><use href="#i-repo"/></svg>
+        <span id="scopeLabel">All repos</span>
+        <span class="sub" id="scopeSub">3 registered</span>
+        <svg class="i sm" aria-hidden="true"><use href="#i-chev-d"/></svg>
+      </button>
+      <div class="menu" id="scopeMenu" role="listbox" aria-label="Repository scope">
+        <div class="mhead">Virtual namespace</div>
+        <button class="mitem" role="option" data-repo="all" aria-selected="true"><span class="dot ok"></span>All repos<span class="path">registry only · no scan</span></button>
+        <div class="mhead">Registered repositories</div>
+        <button class="mitem" role="option" data-repo="studio"><span class="dot ok"></span>kirocrew-app-aidlc<span class="path">~/warren_ws/kirocrew-app-aidlc</span></button>
+        <button class="mitem" role="option" data-repo="payments"><span class="dot ok"></span>payments-api<span class="path">~/src/payments-api</span></button>
+        <button class="mitem" role="option" data-repo="edge"><span class="dot warn"></span>edge-telemetry<span class="path">~/src/edge-telemetry</span></button>
+      </div>
+    </div>
+    <div class="breadcrumb" id="scopeCrumb">All repos <span>›</span> <b>space: default</b> <span>›</span> 5 intents in flight</div>
+    <div class="execstrip">
+      <span class="chip run"><span class="pulse"></span>payments-api · turn running</span>
+      <span class="chip info">edge-telemetry · queued 1</span>
+      <span class="chip wait">3 waiting for you</span>
+      <span class="chip">Night window off</span>
+      <button class="ghostbtn" id="pauseAll"><svg class="i sm" aria-hidden="true"><use href="#i-pause"/></svg>Pause after current turn</button>
+    </div>
+  </div>
+
+  <main>
+    <!-- ══ ACTION CENTER ══ -->
+    <section class="page active" id="page-action" aria-label="Action Center">
+      <div class="split">
+        <div class="pane queue">
+          <div class="qtools">
+            <label class="qsearch"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
+              <input type="search" id="qSearch" placeholder="Filter repo, intent, stage, type…" aria-label="Filter queue">
+            </label>
+            <div class="seg" role="group" aria-label="Queue organization">
+              <button data-org="priority" aria-pressed="true">Priority</button>
+              <button data-org="repo" aria-pressed="false">Repo</button>
+              <button data-org="type" aria-pressed="false">Type</button>
+              <button data-org="oldest" aria-pressed="false">Oldest</button>
+            </div>
+            <div class="qcount"><span id="qCount">8 blocking items</span><span id="qOrgNote">sorted by priority, oldest first</span></div>
+          </div>
+          <div class="qlist" id="qList" role="listbox" aria-label="Blocking action queue"></div>
+          <div class="qfoot">
+            <svg class="i sm" aria-hidden="true"><use href="#i-info"/></svg>
+            1 maintenance upgrade available — kept out of this queue, see <a href="#" data-page="repos">Repos</a>.
+          </div>
+        </div>
+        <div class="pane detail" id="detailPane">
+          <div class="dhead" id="dHead"></div>
+          <div class="dbody" id="dBody"></div>
+          <div class="abwrap"><div class="actionbar" id="dBar"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ WORKFLOW MAP ══ -->
+    <section class="page" id="page-map" aria-label="Workflow Map">
+      <div class="maptools">
+        <div class="breadcrumb"><b>kirocrew-app-aidlc</b> <span>›</span> default <span>›</span> <b>studio-action-center</b> <span>·</span> 8f2c41ab</div>
+        <div class="seg" role="group" aria-label="Map density" style="max-width:330px">
+          <button data-density="overview" aria-pressed="true">Overview</button>
+          <button data-density="detailed" aria-pressed="false">Detailed</button>
+          <button data-density="deps" aria-pressed="false">Dependencies</button>
+        </div>
+        <button class="ghostbtn" id="unitToggle" aria-pressed="false"><svg class="i sm" aria-hidden="true"><use href="#i-chev-r"/></svg>Expand Construction units</button>
+        <span class="chip aim" style="margin-left:auto">21 selected · 12 skipped · 33 known</span>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--ph-init)"></i>0 Initialization</span>
+        <span><i style="background:var(--ph-idea)"></i>1 Ideation</span>
+        <span><i style="background:var(--ph-inc)"></i>2 Inception</span>
+        <span><i style="background:var(--ph-con)"></i>3 Construction</span>
+        <span><i style="background:var(--ph-ops)"></i>4 Operation</span>
+        <span style="color:var(--muted)">dashed = skipped (position and reason retained)</span>
+      </div>
+      <div class="mapwrap" id="mapWrap" data-density="overview">
+        <div class="mapscroll" id="mapScroll"></div>
+        <aside class="inspector" id="inspector" aria-live="polite"></aside>
+      </div>
+    </section>
+
+    <!-- ══ NEW INTENT WIZARD ══ -->
+    <section class="page" id="page-wizard" aria-label="New intent"><div class="wizwrap"><div class="wizinner" id="wizRoot"></div></div></section>
+
+    <!-- ══ SECONDARY PAGES ══ -->
+    <section class="page" id="page-repos" aria-label="Repos"><div class="simple"><div class="inner" id="reposRoot"></div></div></section>
+    <section class="page" id="page-intents" aria-label="Intents"><div class="simple"><div class="inner" id="intentsRoot"></div></div></section>
+    <section class="page" id="page-activity" aria-label="Activity"><div class="simple"><div class="inner" id="activityRoot"></div></div></section>
+    <section class="page" id="page-settings" aria-label="Settings"><div class="simple"><div class="inner" id="settingsRoot"></div></div></section>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ═══════════════════════════════════════════════════════════
+   Sample data. Fair, plausible, and deliberately mixed across
+   the FR-ACT-003 priority tiers and three registered repos.
+   Nothing here implies a capability the PRD forbids: no Git
+   writes, no direct engine transitions, Advisor output is
+   always labelled a draft.
+   ═══════════════════════════════════════════════════════════ */
+var REPOS = {
+  all:      {label:"All repos", sub:"3 registered", crumb:"All repos"},
+  studio:   {label:"kirocrew-app-aidlc", sub:"~/warren_ws/kirocrew-app-aidlc", crumb:"kirocrew-app-aidlc"},
+  payments: {label:"payments-api", sub:"~/src/payments-api", crumb:"payments-api"},
+  edge:     {label:"edge-telemetry", sub:"~/src/edge-telemetry", crumb:"edge-telemetry"}
+};
+var TYPE = {
+  recovery: {tag:"rec",  icon:"i-recover", name:"Recovery required"},
+  delivery: {tag:"rec",  icon:"i-recover", name:"Delivery uncertain"},
+  gate:     {tag:"gate", icon:"i-gate",    name:"Gate approval"},
+  questions:{tag:"q",    icon:"i-quest",   name:"AI questions"},
+  failure:  {tag:"fail", icon:"i-alert",   name:"Execution failure"},
+  install:  {tag:"inst", icon:"i-pkg",     name:"Install conflict"},
+  budget:   {tag:"bud",  icon:"i-gauge",   name:"Budget stop"}
+};
+var TIERS = [
+  "Tier 1 · recovery required and delivery uncertain",
+  "Tier 2 · blocking gates and questions",
+  "Tier 3 · breakers, failures, install conflicts",
+  "Tier 4 · budget stops and pauses"
+];
+
+var ACTIONS = [
+{ id:"A-7741", type:"recovery", tier:1, repo:"payments", space:"default",
+  intent:"checkout-idempotency", intentId:"b41d90cc", stage:"3.2 code-generation", unit:"unit-2 ledger-writer",
+  waited:"4h 12m", mins:252, hot:true, title:"Interrupted mid-stage — reconciliation required",
+  next:"Reconcile boundary", state:"Interrupted", tabs:{artifacts:3, review:0, activity:14},
+  boundary:"Gate cleared at 3.1 contract-design · 06:14 local",
+  evidence:[
+    ["State file", "cursor on 3.2 code-generation, marker [R]"],
+    ["Audit shard", "last event STAGE_STARTED, no STAGE_COMPLETED"],
+    ["Active directive", "open — artifact write was in progress"],
+    ["Canonical session", "lost (gateway restart 10:02)"],
+    ["Delivery record", "no human action pending"]
+  ],
+  contradictions:[
+    {sev:"bad", t:"Runtime marker claims unit-2 complete; no produced artifact on disk",
+     s:"Blocks progression. Studio will not pick a convenient source as truth."},
+    {sev:"warn", t:"Stage elapsed timer still accruing against a dead session",
+     s:"Cosmetic only once the session binding is replaced."}
+  ],
+  risk:"Mid-stage with an open directive — automatic failover is not eligible. Manual takeover required.",
+  choices:[
+    {t:"Replace canonical session from last stable boundary (3.1)", s:"Context is reconstructed from disk. Unconfirmed model output is discarded, not trusted.", rec:true},
+    {t:"Ask the engine to re-run 3.2 for unit-2 only", s:"Idempotent per the installed graph; previews affected paths before it runs."},
+    {t:"Park the intent and decide later", s:"Keeps state untouched; the item stays in this queue."}
+  ]},
+
+{ id:"A-7738", type:"delivery", tier:1, repo:"edge", space:"default",
+  intent:"otel-span-budget", intentId:"5ce02f77", stage:"1.4 nfr-requirements",
+  waited:"58m", mins:58, hot:false, title:"Answers may have been delivered — no acknowledgement",
+  next:"Reconcile delivery", state:"Delivery uncertain", tabs:{artifacts:1, review:0, activity:9},
+  boundary:"Question wait at 1.4 nfr-requirements",
+  deliveryChain:["Queued","Delivering","Delivered","Agent processing","State changed"], deliveryAt:3, deliveryUnknown:true,
+  evidence:[
+    ["Action id", "A-7738 · one submit, one digest"],
+    ["Session status", "unreachable at time of submit"],
+    ["AI-DLC state", "still shows [?] at 1.4"],
+    ["Audit", "no HUMAN_TURN after the prior resolution boundary"],
+    ["Question digest", "unchanged"]
+  ],
+  contradictions:[
+    {sev:"warn", t:"Transport acknowledged the prompt but no HUMAN_TURN was minted",
+     s:"Human decisions are at-most-once after possible delivery, so nothing is replayed automatically."}
+  ],
+  risk:"Auto-replay is disabled for this class. Resend only after non-delivery is proven, or with explicit risk acceptance.",
+  choices:[
+    {t:"Re-read evidence and reconcile now", s:"Reads session status, state, audit, marker and the action timeline again.", rec:true},
+    {t:"Resend the same answers with the same action id", s:"Allowed only if reconciliation proves non-delivery."},
+    {t:"Open the exact question card and decide manually", s:"Deep-links to A-7739 with the original payload."}
+  ]},
+
+{ id:"A-7732", type:"gate", tier:2, repo:"studio", space:"default",
+  intent:"studio-action-center", intentId:"8f2c41ab", stage:"1.3 functional-design",
+  waited:"2h 05m", mins:125, hot:false, title:"Approve functional design for Action Center",
+  next:"Approve or request changes", state:"Waiting for you", tabs:{artifacts:4, review:3, activity:22},
+  agent:"design", review:"adversarial", gateText:"approved",
+  brief:"The stage produced the Action Center functional design: queue ordering, the shared detail shell, and five type-specific decision templates. Approving clears the [?] marker and lets the conductor begin 1.4 nfr-requirements.",
+  consequence:"Next: 1.4 nfr-requirements (agent: architect, review: advisory). No artifact is deleted by approving.",
+  criteria:[
+    {ok:true,  t:"Every blocking action type has a decision template", s:"5 of 5 templates present with evidence slots"},
+    {ok:true,  t:"Queue ordering matches the priority contract", s:"4 tiers, equal priority sorted oldest first"},
+    {ok:true,  t:"Detail shell defines breadcrumb, source, delivery state and evidence access", s:"documented in §8.5"},
+    {ok:false, t:"Mobile decision loop is described but not yet enumerated per template", s:"Reviewer flagged this — see finding R-2"}
+  ],
+  artifacts:[
+    {n:"functional-design.md", s:"18.4 KB · rev 3", chg:"+312 −44"},
+    {n:"action-templates.md", s:"9.1 KB · rev 3", chg:"+147 −8"},
+    {n:"queue-ordering.md", s:"4.6 KB · rev 1", chg:"new"},
+    {n:"open-questions.md", s:"1.9 KB · rev 2", chg:"+11 −19"}
+  ],
+  findings:[
+    {sev:"warn", who:"architecture-reviewer · adversarial · R-2",
+     t:"Mobile section states the loop is complete without listing which controls each template exposes at 390px.",
+     anchor:"action-templates.md › Mobile behaviour"},
+    {sev:"ok", who:"architecture-reviewer · adversarial · R-1",
+     t:"Delivery-state model is consistent with the at-most-once requirement; no replay path found.",
+     anchor:"functional-design.md › Delivery"},
+    {sev:"warn", who:"product-lead · advisory · P-4",
+     t:"Empty states are named but their copy is unwritten; risk of shipping \"No data\" placeholders.",
+     anchor:"functional-design.md › Empty states"}
+  ],
+  risks:[
+    {t:"Unresolved: reviewer finding R-2 is open in revision 3", s:"Approving accepts it as out of scope for this stage."},
+    {t:"Prior revisions: 2 rejections (R1 template gaps, R2 ordering contract)", s:"Both were addressed in revision 3."}
+  ],
+  advisor:{verdict:"Approvable with a noted follow-up", conf:3,
+    body:"Acceptance criteria 1–3 are satisfied by revision 3. Criterion 4 is not, and reviewer finding R-2 names the same gap. Because 1.4 nfr-requirements does not consume the mobile enumeration, the gap is unlikely to block the next stage.",
+    assume:["The mobile enumeration is expected in 2.1, not here.","No later stage consumes action-templates.md › Mobile behaviour."],
+    alts:["Request changes so the mobile table lands in this artifact instead."],
+    undec:"Whether shipping the enumeration later is acceptable for your review bar is your decision."}},
+
+{ id:"A-7739", type:"questions", tier:2, repo:"studio", space:"default",
+  intent:"studio-action-center", intentId:"8f2c41ab", stage:"1.2 requirements-analysis",
+  waited:"1h 47m", mins:107, hot:false, title:"3 structured questions from one turn",
+  next:"Send answers", state:"Waiting for you", tabs:{artifacts:2, review:0, activity:11},
+  agent:"product", turn:"HUMAN_TURN 4 pending",
+  questions:[
+    {h:"Queue default", multi:false, req:true,
+     p:"Which organization should the Action Center open with on a fresh install?",
+     o:[{t:"Unified priority", d:"Single list across all repos, tiered by operational severity."},
+        {t:"Grouped by repo", d:"One section per registered repo, priority inside each."},
+        {t:"Grouped by type", d:"Gates, questions, recovery and failures as separate sections."}],
+     other:true, draft:0,
+     why:"Drives FR-ACT-005 and the persisted local preference."},
+    {h:"Blocking sources", multi:true, req:true,
+     p:"Which sources must produce a blocking queue item in v1? Select all that apply.",
+     o:[{t:"Gate approvals", d:"Engine [?] markers."},
+        {t:"Structured AI questions", d:"Live AskUserQuestion payloads and persisted question artifacts."},
+        {t:"Recovery incidents", d:"Interrupted intents and contradictory state."},
+        {t:"Delivery uncertainty", d:"Submitted actions with no acknowledgement."},
+        {t:"Maintenance upgrades", d:"Available AI-DLC payload upgrades per repo."}],
+     other:false, draft:[0,1,2,3],
+     why:"FR-ACT-002 lists the sources; FR-ACT-008 keeps maintenance out of the blocking queue."},
+    {h:"Advisor default", multi:false, req:false,
+     p:"Should the Advisor pre-fetch its analysis when a Gate item is opened?",
+     o:[{t:"Never — run only on request", d:"Matches FR-ADV-001; zero cost until asked."},
+        {t:"Pre-fetch for Gates only", d:"Faster, but spends model usage on items you may skip."}],
+     other:true, draft:0,
+     why:"FR-ADV-001 requires explicit user request, so option 2 would need a scoped exception."}
+  ]},
+
+{ id:"A-7728", type:"gate", tier:2, repo:"payments", space:"default",
+  intent:"refund-ledger", intentId:"c07ba318", stage:"2.2 contract-design",
+  waited:"6h 31m", mins:391, hot:true, title:"Approve refund contract and idempotency keys",
+  next:"Approve or request changes", state:"Waiting for you", tabs:{artifacts:3, review:2, activity:31},
+  agent:"architect", review:"advisory", gateText:"approved",
+  brief:"Stage 2.2 produced the refund contract, the idempotency key scheme and the compensating-transaction envelope. Approving unblocks 2.3 nfr-design.",
+  consequence:"Next: 2.3 nfr-design (agent: architect, review: advisory). Construction units are derived after 2.4.",
+  criteria:[
+    {ok:true, t:"Every mutating endpoint declares an idempotency key", s:"6 of 6 endpoints"},
+    {ok:true, t:"Partial-refund arithmetic is specified with a rounding rule", s:"banker's rounding, documented"},
+    {ok:true, t:"Failure envelope covers timeout, duplicate and stale-amount cases", s:"3 of 3"}
+  ],
+  artifacts:[
+    {n:"contract-design.md", s:"22.7 KB · rev 2", chg:"+418 −96"},
+    {n:"refund-openapi.yaml", s:"31.2 KB · rev 2", chg:"+205 −12"},
+    {n:"idempotency-keys.md", s:"6.8 KB · rev 1", chg:"new"}
+  ],
+  findings:[
+    {sev:"ok", who:"architecture-reviewer · advisory · A-1",
+     t:"Key scheme is collision-safe across merchant and attempt dimensions.", anchor:"idempotency-keys.md › Scheme"},
+    {sev:"warn", who:"architecture-reviewer · advisory · A-2",
+     t:"Stale-amount rejection returns 409 without a retry-after hint; clients may hot-loop.",
+     anchor:"refund-openapi.yaml › components.responses.Conflict"}
+  ],
+  risks:[{t:"Unresolved: A-2 has no retry-after hint", s:"Low severity; can be handled in 2.3 nfr-design."}],
+  advisor:null},
+
+{ id:"A-7725", type:"failure", tier:3, repo:"edge", space:"default",
+  intent:"otel-span-budget", intentId:"5ce02f77", stage:"1.4 nfr-requirements",
+  waited:"3h 04m", mins:184, hot:false, title:"Circuit open — ACP transport reset three times",
+  next:"Retry now or diagnose", state:"Circuit open", tabs:{artifacts:0, review:0, activity:18},
+  fingerprint:"acp.transport.reset · peer closed during prompt",
+  retries:[["Attempt 1","09:41","backoff 30s"],["Attempt 2","09:43","backoff 2m"],["Attempt 3","09:47","breaker opened"]],
+  errsum:"The canonical session's ACP peer closed the stream mid-prompt three consecutive times with the same fingerprint. Transient class, so the breaker opened after the third match rather than immediately.",
+  logs:"10:02:14  acp  prompt sent  (session edge-otel-3, 4.1 KB)\n10:02:19  acp  peer closed stream, code 1006\n10:02:19  brk  fingerprint acp.transport.reset  count 3/3\n10:02:19  brk  OPEN  keep-moving disabled for 5ce02f77\n10:02:19  sch  dispatch suppressed  reason breaker-open",
+  effects:["Keep moving is disabled for this intent only.","One queue item and one Slack notification were created, not three.","payments-api and kirocrew-app-aidlc are unaffected and still dispatching."]},
+
+{ id:"A-7719", type:"install", tier:3, repo:"edge", space:"default",
+  intent:"—", intentId:"—", stage:"repo installation",
+  waited:"1d 02h", mins:1560, hot:false, title:"Receipt-owned files were modified in the repo",
+  next:"Review drift", state:"Install blocked", tabs:{artifacts:0, review:0, activity:6},
+  receipt:[["Receipt version","studio 0.4.1 · engine 2.3.0"],["Managed files","46 recorded with SHA-256"],["Drifted","2 files"],["Unrelated dirty files","7 — not considered"]],
+  drift:[
+    {f:".kiro/hooks/aidlc-continue-workflow.ts", s:"local edit · 14 lines changed", w:"A user-modified managed file stops install and upgrade. Studio never silently overwrites it."},
+    {f:".kiro/tools/aidlc-orchestrate.ts", s:"local edit · 3 lines changed", w:"Same rule. Resolve by reverting locally or retiring the file from receipt ownership."}
+  ],
+  effects:["Upgrade to engine 2.4.0 is blocked for edge-telemetry only.","The prior complete installation and its receipt remain intact.","There is no overwrite shortcut, by design."]},
+
+{ id:"A-7702", type:"budget", tier:4, repo:"payments", space:"default",
+  intent:"checkout-idempotency", intentId:"b41d90cc", stage:"3.2 code-generation",
+  waited:"9h 18m", mins:558, hot:false, title:"Turn cap reached — next dispatch prevented",
+  next:"Raise cap or resume manually", state:"Paused by budget", tabs:{artifacts:0, review:0, activity:4},
+  budget:[["Turn cap","40 turns per window"],["Used","40 turns"],["Credit cap","Unavailable — not observable on this host"],["Window","22:00 – 06:00 local"]],
+  effects:["The running turn was allowed to finish; budgets never cut off an active turn.","Keep moving stays on, but no new turn is dispatched until the cap changes.","Raising the cap does not resume automatically — you start the next turn."]}
+];
+
+/* ── helpers ───────────────────────────────────────────── */
+function h(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;")
+  .replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function el(id){return document.getElementById(id);}
+function ico(n,cls){return '<svg class="i '+(cls||"")+'" aria-hidden="true"><use href="#'+n+'"/></svg>';}
+var toastT=null;
+function toast(msg){
+  var t=el("toast"); t.innerHTML=ico("i-info")+"<span>"+h(msg)+"</span>";
+  t.classList.add("show"); clearTimeout(toastT);
+  toastT=setTimeout(function(){t.classList.remove("show");},4200);
+}
+
+var state={repo:"all", org:"priority", q:"", sel:"A-7741", tab:"decision",
+  confirming:false, rejecting:false, advised:{}, drafted:{}, answers:{}, resolved:{}};
+
+function visible(){
+  var q=state.q.trim().toLowerCase();
+  return ACTIONS.filter(function(a){
+    if(state.resolved[a.id]) return false;
+    if(state.repo!=="all" && a.repo!==state.repo) return false;
+    if(!q) return true;
+    var hay=[REPOS[a.repo].label,a.intent,a.stage,TYPE[a.type].name,a.title,a.id].join(" ").toLowerCase();
+    return hay.indexOf(q)>=0;
+  });
+}
+
+/* ── queue ─────────────────────────────────────────────── */
+function renderQueue(){
+  var items=visible().slice();
+  var groups=[], note="";
+  if(state.org==="priority"){
+    items.sort(function(a,b){return a.tier-b.tier || b.mins-a.mins;});
+    note="tier order, oldest first within a tier";
+    [1,2,3,4].forEach(function(t){
+      var g=items.filter(function(a){return a.tier===t;});
+      if(g.length) groups.push([TIERS[t-1],g]);
+    });
+  } else if(state.org==="repo"){
+    note="grouped by repo, priority inside";
+    ["studio","payments","edge"].forEach(function(r){
+      var g=items.filter(function(a){return a.repo===r;})
+        .sort(function(a,b){return a.tier-b.tier || b.mins-a.mins;});
+      if(g.length) groups.push([REPOS[r].label+" · "+g.length,g]);
+    });
+  } else if(state.org==="type"){
+    note="grouped by action type";
+    Object.keys(TYPE).forEach(function(k){
+      var g=items.filter(function(a){return a.type===k;}).sort(function(a,b){return b.mins-a.mins;});
+      if(g.length) groups.push([TYPE[k].name+" · "+g.length,g]);
+    });
+  } else {
+    note="oldest waiting first, across every tier";
+    items.sort(function(a,b){return b.mins-a.mins;});
+    groups.push(["Longest waiting first",items]);
+  }
+
+  el("qCount").textContent=items.length+(items.length===1?" blocking item":" blocking items");
+  el("qOrgNote").textContent=note;
+  el("navCount").textContent=items.length;
+
+  if(!items.length){
+    el("qList").innerHTML='<div class="qempty"><p><strong>Nothing is waiting on you.</strong></p>'+
+      '<p>Running intents will surface their next Gate or question here. Start work from '+
+      '<em>New intent</em>, or widen the scope above.</p></div>';
+    return;
+  }
+  var out="";
+  groups.forEach(function(g){
+    out+='<div class="qgroup">'+h(g[0])+"</div>";
+    g[1].forEach(function(a){
+      var t=TYPE[a.type], sel=a.id===state.sel;
+      out+='<button class="qrow" role="option" data-id="'+a.id+'" aria-selected="'+(sel?"true":"false")+'">'+
+        '<span class="rail p'+a.tier+'"></span>'+
+        '<span class="tico">'+ico(t.icon)+'</span>'+
+        '<span class="l1cell"><span class="l1">'+
+          '<span class="tag '+t.tag+'">'+h(t.name)+'</span>'+
+          '<span class="ttl">'+h(a.title)+'</span></span>'+
+        '<span class="l2"><span class="repo">'+h(REPOS[a.repo].label)+'</span>'+
+          (a.space!=="default"&&a.space?'<span class="sep">/</span>'+h(a.space):"")+
+          '<span class="sep">›</span>'+h(a.intent)+
+          '<span class="sep">›</span>'+h(a.stage)+
+          (a.unit?'<span class="sep">›</span>'+h(a.unit):"")+
+          '<span class="sep">·</span>'+h(a.id)+'</span></span>'+
+        '<span class="right"><span class="wait'+(a.hot?" hot":"")+'">'+ico("i-clock","sm")+" "+h(a.waited)+'</span>'+
+          '<span class="next">'+h(a.next)+'</span></span></button>';
+    });
+  });
+  el("qList").innerHTML=out;
+  Array.prototype.forEach.call(document.querySelectorAll(".qrow"),function(r){
+    r.addEventListener("click",function(){
+      state.sel=r.dataset.id; state.tab="decision"; state.confirming=false; state.rejecting=false;
+      document.body.dataset.mob="detail"; renderQueue(); renderDetail();
+    });
+  });
+}
+
+/* ── shared detail shell ───────────────────────────────── */
+function current(){
+  var v=visible();
+  var a=v.filter(function(x){return x.id===state.sel;})[0];
+  return a || v[0] || null;
+}
+function tabsFor(a){
+  return [
+    {k:"decision", l:"Decision", n:null, on:true},
+    {k:"artifacts",l:"Artifacts",n:a.tabs.artifacts, on:a.tabs.artifacts>0,
+     off:"This action type produces no artifacts."},
+    {k:"review",   l:"Review",   n:a.tabs.review,    on:a.tabs.review>0,
+     off:"No reviewer ran for this stage."},
+    {k:"activity", l:"Activity", n:a.tabs.activity,  on:a.tabs.activity>0, off:"No events yet."}
+  ];
+}
+function renderDetail(){
+  var a=current();
+  if(!a){ el("dHead").innerHTML=""; el("dBody").innerHTML=""; el("dBar").innerHTML=""; return; }
+  var t=TYPE[a.type];
+  var tabs=tabsFor(a), th="";
+  tabs.forEach(function(x){
+    th+='<button class="tab" data-tab="'+x.k+'" aria-selected="'+(state.tab===x.k?"true":"false")+'"'+
+      (x.on?"":' disabled title="'+h(x.off)+'"')+'>'+h(x.l)+
+      (x.n!=null?'<span class="n">'+x.n+'</span>':"")+'</button>';
+  });
+  el("dHead").innerHTML=
+    '<button class="ghostbtn mobback" id="mobBack" style="margin-bottom:7px">'+ico("i-arrow-l","sm")+'Queue</button>'+
+    '<div class="dcrumb"><b>'+h(REPOS[a.repo].label)+'</b><span>›</span>'+h(a.space)+
+      '<span>›</span><b>'+h(a.intent)+'</b><span>·</span>'+h(a.intentId)+
+      '<span>›</span>'+h(a.stage)+(a.unit?'<span>›</span>'+h(a.unit):"")+'</div>'+
+    '<div class="dtitle"><span class="tag '+t.tag+'">'+h(t.name)+'</span><h1>'+h(a.title)+'</h1></div>'+
+    '<div class="dmeta"><span class="chip">'+ico("i-link","sm")+h(a.id)+'</span>'+
+      '<span class="chip '+(a.tier===1?"bad":a.tier===2?"wait":"")+'">'+h(a.state)+'</span>'+
+      '<span class="chip">'+ico("i-clock","sm")+'waiting '+h(a.waited)+'</span>'+
+      (a.agent?'<span class="chip aim">agent: '+h(a.agent)+'</span>':"")+
+      (a.review?'<span class="chip info">review: '+h(a.review)+'</span>':"")+
+      '<span class="chip">source: AI-DLC disk state</span></div>'+
+    '<div class="tabs" role="tablist">'+th+'</div>';
+  el("dBody").innerHTML=
+    (state.tab==="decision" ? decisionBody(a)
+    :state.tab==="artifacts"? artifactsBody(a)
+    :state.tab==="review"   ? reviewBody(a)
+    :                         activityBody(a));
+  el("dBar").innerHTML=barFor(a);
+  wireDetail(a);
+}
+function wireDetail(a){
+  Array.prototype.forEach.call(document.querySelectorAll(".tab:not([disabled])"),function(b){
+    b.addEventListener("click",function(){state.tab=b.dataset.tab;renderDetail();});
+  });
+  var mb=el("mobBack");
+  if(mb) mb.addEventListener("click",function(){document.body.dataset.mob="list";});
+  Array.prototype.forEach.call(document.querySelectorAll("[data-act]"),function(b){
+    b.addEventListener("click",function(){act(b.dataset.act,a,b);});
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-ans]"),function(inp){
+    inp.addEventListener("change",function(){
+      var qi=inp.dataset.ans;
+      if(inp.type==="checkbox"){
+        state.answers[a.id]=state.answers[a.id]||{};
+        var set=state.answers[a.id][qi]=state.answers[a.id][qi]||{};
+        set[inp.value]=inp.checked;
+      } else {
+        state.answers[a.id]=state.answers[a.id]||{};
+        state.answers[a.id][qi]=inp.value;
+      }
+      el("dBar").innerHTML=barFor(a); wireDetail(a);
+    });
+  });
+}
+/* ── decision bodies ──────────────────────────────────── */
+function advisorBlock(a){
+  var adv=a.advisor, shown=state.advised[a.id];
+  var out='<div class="advisor"><h2>'+ico("i-spark")+'AI Advisor — draft only, never a decision'+
+    '<span class="rt">'+(shown?'<span class="chip aim">read-only session</span>':
+      '<button class="advbtn" data-act="advise">'+ico("i-spark","sm")+'Analyse this gate</button>')+'</span></h2>';
+  if(!shown){
+    out+='<div class="bd">Runs only when you ask. It uses a separate read-only App session that cannot write files, '+
+      'transition the workflow, touch Git, or create HUMAN_TURN evidence. Its output never preselects Approve.</div></div>';
+    return out;
+  }
+  if(!adv){
+    out+='<div class="bd"><span class="chip">Needs your decision</span><p style="margin-top:7px">'+
+      'The Advisor could not reach a supported conclusion from the available evidence for this stage. '+
+      'The reviewer findings and acceptance criteria above are the full evidence set.</p></div></div>';
+    return out;
+  }
+  var bars=""; for(var i=1;i<=4;i++) bars+='<i class="'+(i<=adv.conf?"on":"")+'"></i>';
+  out+='<div class="bd"><div class="kv" style="margin-bottom:7px">'+
+    '<dt>verdict</dt><dd><strong>'+h(adv.verdict)+'</strong></dd>'+
+    '<dt>confidence</dt><dd><span class="conf"><span class="bars">'+bars+'</span>medium-high</span></dd></div>'+
+    '<p>'+h(adv.body)+'</p>'+
+    '<div class="grid2"><div><div class="kv"><dt>assumes</dt><dd></dd></div><ul class="dl">'+
+    adv.assume.map(function(s){return '<li><span class="ic info-i">'+ico("i-info","sm")+'</span><span class="g">'+h(s)+'</span></li>';}).join("")+
+    '</ul></div><div><div class="kv"><dt>alternatives</dt><dd></dd></div><ul class="dl">'+
+    adv.alts.map(function(s){return '<li><span class="ic aim-i">'+ico("i-chev-r","sm")+'</span><span class="g">'+h(s)+'</span></li>';}).join("")+
+    '</ul></div></div>'+
+    '<div class="note aim" style="margin-top:8px">'+ico("i-info","sm")+'<span><strong>Needs your decision.</strong> '+h(adv.undec)+'</span></div>'+
+    '</div></div>';
+  return out;
+}
+function gateBody(a){
+  var out="";
+  if(state.confirming){
+    out+='<div class="confirm"><h3>'+ico("i-check","sm")+'Confirm — this exact text is injected into the canonical AI-DLC session</h3>'+
+      '<pre class="sent">'+h(a.gateText)+'</pre>'+
+      '<div class="kv" style="margin-bottom:8px">'+
+      '<dt>session</dt><dd><code>aidlc · '+h(a.intent)+' · '+h(a.intentId)+'</code></dd>'+
+      '<dt>action id</dt><dd><code>'+h(a.id)+'</code></dd>'+
+      '<dt>mints</dt><dd>a real user turn, so the Kiro hook records the protected <code>HUMAN_TURN</code></dd>'+
+      '<dt>then</dt><dd>the engine clears <code>[?]</code>. Studio never calls <code>report</code> or edits state itself.</dd></div>'+
+      '<div class="row"><button class="btn pri" data-act="submit-approve">'+ico("i-check","sm")+'Send "'+h(a.gateText)+'"</button>'+
+      '<button class="btn sm" data-act="cancel">Cancel</button>'+
+      '<span class="hint" style="margin:0">Success is judged by observed state and audit movement, not by the HTTP response.</span></div></div>';
+  }
+  if(state.rejecting){
+    out+='<div class="confirm"><h3>'+ico("i-x","sm")+'Request changes — feedback is required</h3>'+
+      '<textarea class="feedback" id="fb" placeholder="What must change before you can approve? This is sent to the canonical session; it does not edit the artifact."></textarea>'+
+      '<div class="row"><button class="btn" data-act="submit-reject">'+ico("i-x","sm")+'Send feedback</button>'+
+      '<button class="btn sm" data-act="cancel">Cancel</button>'+
+      '<button class="advbtn" data-act="draft-fb">'+ico("i-spark","sm")+'Draft with Advisor</button>'+
+      '<span class="hint" style="margin:0">Marker becomes <code class="m">[R]</code>; the stage revises and the Gate reopens.</span></div></div>';
+  }
+  out+='<div class="blk"><h2>'+ico("i-gate")+'Decision brief and consequence</h2><div class="bd">'+
+    '<p>'+h(a.brief)+'</p><div class="note">'+ico("i-chev-r","sm")+'<span>'+h(a.consequence)+'</span></div></div></div>';
+  out+='<div class="blk"><h2>'+ico("i-check")+'Stage acceptance criteria'+
+    '<span class="rt"><span class="chip '+(a.criteria.filter(function(c){return !c.ok;}).length?"wait":"run")+'">'+
+    a.criteria.filter(function(c){return c.ok;}).length+' / '+a.criteria.length+' met</span></span></h2>'+
+    '<div class="bd"><ul class="dl">'+a.criteria.map(function(c){
+      return '<li><span class="ic '+(c.ok?"ok-i":"warn-i")+'">'+ico(c.ok?"i-check":"i-alert","sm")+'</span>'+
+        '<span class="g"><span class="t">'+h(c.t)+'</span><span class="s">'+h(c.s)+'</span></span></li>';
+    }).join("")+'</ul></div></div>';
+  out+='<div class="blk"><h2>'+ico("i-file")+'Produced artifacts'+
+    '<span class="rt"><button class="ghostbtn" data-act="tab-artifacts">Open Artifacts tab</button></span></h2><div class="bd">'+
+    a.artifacts.map(function(f){
+      return '<div class="filerow">'+ico("i-file","sm")+'<span class="nm">'+h(f.n)+'</span>'+
+        '<span class="tag">'+h(f.chg)+'</span><span class="sz">'+h(f.s)+'</span></div>';
+    }).join("")+'</div></div>';
+  out+='<div class="blk"><h2>'+ico("i-eye")+'Reviewer findings <span class="rt"><span class="chip info">'+h(a.review)+'</span></span></h2><div class="bd">'+
+    a.findings.map(function(f){
+      return '<blockquote class="quote '+(f.sev==="ok"?"ok":f.sev==="bad"?"bad":"")+'">'+
+        '<span class="who">'+h(f.who)+'</span>'+h(f.t)+
+        '<div style="margin-top:4px"><code class="m">'+h(f.anchor)+'</code></div></blockquote>';
+    }).join("")+'</div></div>';
+  out+='<div class="blk"><h2>'+ico("i-alert")+'Unresolved risks and prior revisions</h2><div class="bd"><ul class="dl">'+
+    a.risks.map(function(r){return '<li><span class="ic warn-i">'+ico("i-alert","sm")+'</span>'+
+      '<span class="g"><span class="t">'+h(r.t)+'</span><span class="s">'+h(r.s)+'</span></span></li>';}).join("")+
+    '</ul></div></div>';
+  out+=advisorBlock(a);
+  return out;
+}
+function questionsBody(a){
+  var mine=state.answers[a.id]||{}, drafted=state.drafted[a.id];
+  var out='<div class="note">'+ico("i-info","sm")+'<span>The exact prompt, order, option labels, descriptions and select semantics are preserved. '+
+    'All three questions came from one turn and are sent as <strong>one atomic group</strong> under action id <code class="m">'+h(a.id)+'</code>. '+
+    'Studio never edits the questions file or its digest.</span></div><div style="height:10px"></div>';
+  a.questions.forEach(function(q,qi){
+    var chosen=mine[qi];
+    out+='<div class="qgroupbox"><div class="qgh"><span class="ix">Q'+(qi+1)+'/'+a.questions.length+'</span>'+
+      '<span class="hd">'+h(q.h)+'</span>'+
+      '<span class="tag '+(q.multi?"q":"")+'">'+(q.multi?"multi-select":"single-select")+'</span>'+
+      (q.req?'<span class="req">REQUIRED</span>':'<span class="tag">optional</span>')+'</div><div class="qgb">'+
+      '<p class="qprompt">'+h(q.p)+'</p>';
+    q.o.forEach(function(o,oi){
+      var isDraft=drafted && (q.multi ? (q.draft.indexOf(oi)>=0) : q.draft===oi);
+      var on=q.multi ? !!(chosen && chosen[oi]) : (chosen===String(oi));
+      out+='<label class="opt"><input type="'+(q.multi?"checkbox":"radio")+'" name="q'+a.id+"_"+qi+'" '+
+        'value="'+oi+'" data-ans="'+qi+'"'+(on?" checked":"")+'>'+
+        '<span style="min-width:0"><span class="ot">'+h(o.t)+'</span><span class="od">'+h(o.d)+'</span></span>'+
+        (isDraft?'<span class="drafted"><span class="chip aim">'+ico("i-spark","sm")+'Advisor draft</span></span>':"")+
+        '</label>';
+    });
+    if(q.other){
+      out+='<label class="opt"><input type="'+(q.multi?"checkbox":"radio")+'" name="q'+a.id+"_"+qi+'" value="other" data-ans="'+qi+'"'+
+        (chosen==="other"?" checked":"")+'>'+
+        '<span style="flex:1;min-width:0"><span class="ot">Other</span>'+
+        '<input type="text" placeholder="Free text — sent verbatim" style="margin-top:4px;width:100%;padding:4px 7px;border:1px solid var(--border);background:var(--card);border-radius:4px;outline:0" aria-label="Other answer for question '+(qi+1)+'"></span></label>';
+    }
+    out+='<div class="note" style="margin-top:7px">'+ico("i-info","sm")+'<span>'+h(q.why)+'</span>'+
+      '<span style="margin-left:auto;display:flex;gap:5px">'+
+      '<button class="advbtn" data-act="explain">Explain</button>'+
+      '<button class="advbtn" data-act="draft-one">'+ico("i-spark","sm")+'Draft this</button></span></div>';
+    out+='</div></div>';
+  });
+  out+='<div class="advisor"><h2>'+ico("i-spark")+'AI Advisor'+
+    '<span class="rt"><button class="advbtn" data-act="draft-all">'+ico("i-spark","sm")+
+    (drafted?"Re-draft all":"Draft all")+'</button></span></h2><div class="bd">'+
+    (drafted
+      ? 'Drafts are marked on the options above with evidence, assumptions and confidence. Nothing is selected for you and '+
+        'nothing is submitted — a draft is not a human decision, and it creates no <code class="m">HUMAN_TURN</code> evidence.'
+      : 'On request the Advisor proposes an answer per question with its evidence, assumptions, alternatives and confidence. '+
+        'It runs in a separate read-only session and can never submit.')+
+    '</div></div>';
+  return out;
+}
+function recoveryBody(a){
+  var out='<div class="blk"><h2>'+ico("i-recover")+'Last stable boundary</h2><div class="bd">'+
+    '<div class="kv"><dt>boundary</dt><dd><strong>'+h(a.boundary)+'</strong></dd>'+
+    '<dt>class</dt><dd>'+h(TYPE[a.type].name)+'</dd></div></div></div>';
+  if(a.deliveryChain){
+    var ch="";
+    a.deliveryChain.forEach(function(s,i){
+      var cls=i<a.deliveryAt?"done":i===a.deliveryAt?(a.deliveryUnknown?"unk":"now"):"";
+      ch+='<span class="st '+cls+'">'+h(s)+(i===a.deliveryAt&&a.deliveryUnknown?" ?":"")+'</span>';
+    });
+    out+='<div class="blk"><h2>'+ico("i-link")+'Delivery state</h2><div class="bd"><div class="deliv">'+ch+'</div>'+
+      '<div class="note bad">'+ico("i-alert","sm")+'<span>Stopped at <strong>Delivered</strong> with no acknowledgement. '+
+      'At-most-once applies from this point on, so nothing is replayed automatically.</span></div></div></div>';
+  }
+  out+='<div class="blk"><h2>'+ico("i-eye")+'Evidence</h2><div class="bd"><div class="kv">'+
+    a.evidence.map(function(e){return '<dt>'+h(e[0])+'</dt><dd>'+h(e[1])+'</dd>';}).join("")+
+    '</div></div></div>';
+  out+='<div class="blk"><h2>'+ico("i-alert")+'Contradictions and risk</h2><div class="bd"><ul class="dl">'+
+    a.contradictions.map(function(c){
+      return '<li><span class="ic '+(c.sev==="bad"?"bad-i":"warn-i")+'">'+ico("i-alert","sm")+'</span>'+
+        '<span class="g"><span class="t">'+h(c.t)+'</span><span class="s">'+h(c.s)+'</span></span></li>';
+    }).join("")+'</ul>'+
+    '<div class="note bad" style="margin-top:8px">'+ico("i-lock","sm")+'<span>'+h(a.risk)+'</span></div></div></div>';
+  out+='<div class="blk"><h2>'+ico("i-chev-r")+'Recovery choices</h2><div class="bd"><ul class="dl">'+
+    a.choices.map(function(c){
+      return '<li><span class="ic '+(c.rec?"ok-i":"info-i")+'">'+ico(c.rec?"i-check":"i-chev-r","sm")+'</span>'+
+        '<span class="g"><span class="t">'+h(c.t)+(c.rec?' <span class="tag ok">suggested</span>':"")+'</span>'+
+        '<span class="s">'+h(c.s)+'</span></span></li>';
+    }).join("")+'</ul></div></div>';
+  return out;
+}
+function failureBody(a){
+  return '<div class="blk"><h2>'+ico("i-alert")+'Normalized error summary</h2><div class="bd">'+
+    '<p>'+h(a.errsum)+'</p><div class="kv"><dt>fingerprint</dt><dd><code>'+h(a.fingerprint)+'</code></dd>'+
+    '<dt>breaker</dt><dd>open · per intent and fingerprint · <code>Keep moving</code> disabled for this intent only</dd></div></div></div>'+
+    '<div class="blk"><h2>'+ico("i-clock")+'Retry and backoff history</h2><div class="bd">'+
+    '<table class="dt"><thead><tr><th>Attempt</th><th>At</th><th>Outcome</th></tr></thead><tbody>'+
+    a.retries.map(function(r){return '<tr><td>'+h(r[0])+'</td><td class="num">'+h(r[1])+'</td><td>'+h(r[2])+'</td></tr>';}).join("")+
+    '</tbody></table></div></div>'+
+    '<div class="blk"><h2>'+ico("i-file")+'Relevant log tail</h2><div class="bd"><pre class="pre">'+h(a.logs)+'</pre></div></div>'+
+    '<div class="blk"><h2>'+ico("i-info")+'Blast radius</h2><div class="bd"><ul class="dl">'+
+    a.effects.map(function(s){return '<li><span class="ic info-i">'+ico("i-info","sm")+'</span><span class="g">'+h(s)+'</span></li>';}).join("")+
+    '</ul></div></div>';
+}
+function installBody(a){
+  return '<div class="blk"><h2>'+ico("i-pkg")+'Receipt ownership and version</h2><div class="bd"><div class="kv">'+
+    a.receipt.map(function(r){return '<dt>'+h(r[0])+'</dt><dd>'+h(r[1])+'</dd>';}).join("")+'</div></div></div>'+
+    '<div class="blk"><h2>'+ico("i-alert")+'Managed-file drift</h2><div class="bd">'+
+    a.drift.map(function(d){
+      return '<blockquote class="quote bad"><span class="who">'+h(d.f)+' · '+h(d.s)+'</span>'+h(d.w)+'</blockquote>';
+    }).join("")+'</div></div>'+
+    '<div class="blk"><h2>'+ico("i-lock")+'Safe stop</h2><div class="bd"><ul class="dl">'+
+    a.effects.map(function(s){return '<li><span class="ic ok-i">'+ico("i-check","sm")+'</span><span class="g">'+h(s)+'</span></li>';}).join("")+
+    '</ul><div class="note bad" style="margin-top:8px">'+ico("i-lock","sm")+
+    '<span>There is no overwrite shortcut. Revert the local edits, or retire the file from receipt ownership, then re-run the preview.</span></div></div></div>';
+}
+function budgetBody(a){
+  return '<div class="blk"><h2>'+ico("i-gauge")+'Budget state</h2><div class="bd"><div class="kv">'+
+    a.budget.map(function(r){return '<dt>'+h(r[0])+'</dt><dd>'+h(r[1])+'</dd>';}).join("")+'</div>'+
+    '<div class="note" style="margin-top:8px">'+ico("i-info","sm")+
+    '<span>Credit caps are disabled here because credit usage is not observable on this host. Turn caps remain available.</span></div></div></div>'+
+    '<div class="blk"><h2>'+ico("i-info")+'What this changed</h2><div class="bd"><ul class="dl">'+
+    a.effects.map(function(s){return '<li><span class="ic info-i">'+ico("i-info","sm")+'</span><span class="g">'+h(s)+'</span></li>';}).join("")+
+    '</ul></div></div>';
+}
+function decisionBody(a){
+  if(a.type==="gate") return gateBody(a);
+  if(a.type==="questions") return questionsBody(a);
+  if(a.type==="recovery"||a.type==="delivery") return recoveryBody(a);
+  if(a.type==="failure") return failureBody(a);
+  if(a.type==="install") return installBody(a);
+  return budgetBody(a);
+}
+function artifactsBody(a){
+  var f=a.artifacts||[];
+  return '<div class="blk"><h2>'+ico("i-file")+'Artifacts — rendered read-only'+
+    '<span class="rt"><span class="chip">no editing in Studio</span></span></h2><div class="bd">'+
+    f.map(function(x){return '<div class="filerow">'+ico("i-file","sm")+'<span class="nm">'+h(x.n)+
+      '</span><span class="tag">'+h(x.chg)+'</span><span class="sz">'+h(x.s)+'</span></div>';}).join("")+
+    '</div></div>'+
+    '<div class="blk"><h2>'+ico("i-eye")+'functional-design.md — current vs revision 2</h2><div class="bd">'+
+    '<pre class="pre">  ## Queue ordering\n- Items are ordered by arrival time.\n+ Items are ordered by four operational tiers.\n+ Equal-priority items sort oldest first.\n\n  ## Empty states\n- No data.\n+ Explain the next useful action.</pre>'+
+    '<div class="note" style="margin-top:8px">'+ico("i-info","sm")+
+    '<span>Prior version derived from Git observation. Request changes sends feedback to the canonical session; it never edits the file.</span></div></div></div>';
+}
+function reviewBody(a){
+  return '<div class="blk"><h2>'+ico("i-eye")+'Reviewer findings anchored to artifacts'+
+    '<span class="rt"><span class="chip info">'+h(a.review||"—")+'</span></span></h2><div class="bd">'+
+    (a.findings||[]).map(function(f){
+      return '<blockquote class="quote '+(f.sev==="ok"?"ok":"")+'"><span class="who">'+h(f.who)+'</span>'+h(f.t)+
+        '<div style="margin-top:4px"><code class="m">'+h(f.anchor)+'</code></div></blockquote>';
+    }).join("")+'</div></div>';
+}
+function activityBody(a){
+  var rows=[
+    ["10:02:19","Studio","Breaker and queue projections refreshed"],
+    ["10:02:14","KiroCrew","Session status polled for "+a.intentId],
+    ["09:58:41","AI-DLC","STAGE_STARTED "+a.stage],
+    ["09:58:40","AI-DLC","HUMAN_TURN 3 recorded by the Kiro userPromptSubmit hook"],
+    ["09:58:39","Studio","Action delivered to the canonical session"],
+    ["09:41:02","Git","Observed branch feat/"+a.intent+", 7 dirty files"]
+  ];
+  return '<div class="blk"><h2>'+ico("i-pulse")+'Timeline — every event names its source'+
+    '<span class="rt"><span class="chip">'+a.tabs.activity+' events</span></span></h2><div class="bd">'+
+    '<table class="dt"><thead><tr><th>Time</th><th>Source</th><th>Event</th></tr></thead><tbody>'+
+    rows.map(function(r){
+      var cls=r[1]==="AI-DLC"?"run":r[1]==="Studio"?"aim":r[1]==="Git"?"":"info";
+      return '<tr><td class="num">'+h(r[0])+'</td><td><span class="chip '+cls+'">'+h(r[1])+'</span></td><td>'+h(r[2])+'</td></tr>';
+    }).join("")+'</tbody></table>'+
+    '<div class="note" style="margin-top:8px">'+ico("i-info","sm")+
+    '<span>Studio-derived events are never presented as original AI-DLC audit events. The evidence drawer exposes raw audit blocks, subject to redaction.</span></div></div></div>';
+}
+
+/* ── sticky action bar + actions ───────────────────────── */
+function answeredCount(a){
+  var mine=state.answers[a.id]||{}, done=0;
+  a.questions.forEach(function(q,qi){
+    if(!q.req) { done++; return; }
+    var v=mine[qi];
+    if(q.multi){ if(v && Object.keys(v).some(function(k){return v[k];})) done++; }
+    else if(v!=null && v!=="") done++;
+  });
+  return done;
+}
+function barFor(a){
+  var b="";
+  if(a.type==="gate"){
+    b='<button class="btn pri" data-act="approve"'+(state.confirming?" disabled":"")+'>'+ico("i-check","sm")+'Approve</button>'+
+      '<button class="btn dgr" data-act="reject"'+(state.rejecting?" disabled":"")+'>'+ico("i-x","sm")+'Request changes</button>'+
+      '<button class="btn sm" data-act="park">'+ico("i-pause","sm")+'Park intent</button>'+
+      '<span class="abhint">Approve opens a compact inline confirmation above the bar showing the exact text sent. '+
+      'Evidence stays reachable — the bar never covers the last block.</span>';
+  } else if(a.type==="questions"){
+    var need=a.questions.filter(function(q){return q.req;}).length, got=answeredCount(a)-(a.questions.length-need);
+    var ready=got>=need;
+    b='<button class="btn pri" data-act="send"'+(ready?"":" disabled")+'>'+ico("i-check","sm")+'Send answers</button>'+
+      '<span class="chip '+(ready?"run":"wait")+'">'+got+' / '+need+' required answered</span>'+
+      '<button class="btn sm" data-act="park">'+ico("i-pause","sm")+'Park intent</button>'+
+      '<span class="abhint">One atomic submit for all '+a.questions.length+' questions under '+h(a.id)+'. '+
+      'Switching queue items keeps this draft locally and warns before discarding.</span>';
+  } else if(a.type==="recovery"||a.type==="delivery"){
+    b='<button class="btn pri" data-act="reconcile">'+ico("i-recover","sm")+'Reconcile from evidence</button>'+
+      '<button class="btn" data-act="advise-diag">'+ico("i-spark","sm")+'Diagnose with AI</button>'+
+      '<button class="btn sm dgr" data-act="stop">'+ico("i-x","sm")+'Force stop now</button>'+
+      '<span class="abhint">Force stop needs a second confirmation and marks the intent Interrupted. '+
+      'The scheduler never force-stops on its own.</span>';
+  } else if(a.type==="failure"){
+    b='<button class="btn pri" data-act="retry">'+ico("i-play","sm")+'Retry now</button>'+
+      '<button class="btn" data-act="advise-diag">'+ico("i-spark","sm")+'Diagnose with AI</button>'+
+      '<button class="btn sm" data-act="park">'+ico("i-pause","sm")+'Keep paused</button>'+
+      '<span class="abhint">Retry now resets the fingerprint count for this intent only.</span>';
+  } else if(a.type==="install"){
+    b='<button class="btn" data-act="preview">'+ico("i-eye","sm")+'Re-run install preview</button>'+
+      '<button class="btn sm" data-act="repos">'+ico("i-repo","sm")+'Open repo maintenance</button>'+
+      '<span class="abhint">No overwrite action exists here. Upgrade stays blocked until the drift is resolved.</span>';
+  } else {
+    b='<button class="btn" data-act="settings">'+ico("i-cog","sm")+'Adjust budget</button>'+
+      '<button class="btn pri" data-act="run">'+ico("i-play","sm")+'Run to next checkpoint</button>'+
+      '<span class="abhint">Budgets prevent the next dispatch; they never cut off a running turn.</span>';
+  }
+  return b;
+}
+function act(kind,a,btn){
+  if(kind==="approve"){ state.confirming=true; state.rejecting=false; renderDetail();
+    el("dBody").scrollTop=0; return; }
+  if(kind==="reject"){ state.rejecting=true; state.confirming=false; renderDetail();
+    el("dBody").scrollTop=0; var f=el("fb"); if(f) f.focus(); return; }
+  if(kind==="cancel"){ state.confirming=false; state.rejecting=false; renderDetail(); return; }
+  if(kind==="submit-approve"){
+    state.confirming=false; state.resolved[a.id]=true;
+    toast('Injected "'+a.gateText+'" as a real user turn. Watching for HUMAN_TURN and state movement before this item clears.');
+    state.sel=null; renderQueue(); renderDetail(); return;
+  }
+  if(kind==="submit-reject"){
+    var v=(el("fb")&&el("fb").value||"").trim();
+    if(!v){ toast("Feedback is required before requesting changes."); el("fb").focus(); return; }
+    state.rejecting=false; state.resolved[a.id]=true;
+    toast("Feedback sent to the canonical session. Marker moves to [R]; the artifact is not edited by Studio.");
+    state.sel=null; renderQueue(); renderDetail(); return;
+  }
+  if(kind==="advise"){ btn.disabled=true; btn.textContent="Analysing…";
+    setTimeout(function(){ state.advised[a.id]=true; renderDetail(); },520); return; }
+  if(kind==="draft-fb"){ var t=el("fb");
+    if(t){ t.value="Please enumerate, per action template, which controls are exposed at 390px, and add the table to action-templates.md › Mobile behaviour. Reviewer finding R-2 tracks the same gap.";
+      toast("Advisor drafted feedback. Edit it freely — sending it is your decision."); } return; }
+  if(kind==="draft-all"||kind==="draft-one"){
+    state.drafted[a.id]=true; renderDetail();
+    toast("Advisor drafts marked on the options. Nothing is selected or submitted for you."); return; }
+  if(kind==="explain"){ toast("Advisor explanation opens in the read-only session; it cannot change the question or its digest."); return; }
+  if(kind==="send"){
+    state.resolved[a.id]=true;
+    toast("All "+a.questions.length+" answers submitted once under "+a.id+". The item stays until delivery and state evidence confirm acceptance.");
+    state.sel=null; renderQueue(); renderDetail(); return; }
+  if(kind==="reconcile"){ toast("Reconciling: session status, AI-DLC state, audit events, turn marker and the action timeline."); return; }
+  if(kind==="advise-diag"){ toast("Read-only Advisor session opened. It can read evidence; it cannot repair anything."); return; }
+  if(kind==="stop"){ toast("Force stop needs a second confirmation. It cancels the current turn and marks the intent Interrupted."); return; }
+  if(kind==="retry"){ toast("Retry queued behind the repo execution lease. Fingerprint count reset for this intent."); return; }
+  if(kind==="preview"){ toast("Preview re-run: 2 managed files still drift. Install stays blocked and the old receipt is intact."); return; }
+  if(kind==="run"){ toast("Run to next checkpoint: advances unattended until a Gate, question, failure, budget stop or completion."); return; }
+  if(kind==="tab-artifacts"){ state.tab="artifacts"; renderDetail(); return; }
+  if(kind==="repos"){ go("repos"); return; }
+  if(kind==="settings"){ go("settings"); return; }
+  if(kind==="park"){ toast("Intent parked. AI-DLC files are untouched; the item remains visible here."); return; }
+}
+/* ═══ WORKFLOW MAP ═══════════════════════════════════════ */
+var PHASES=[
+{k:"init",ord:0,name:"Initialization",accent:"var(--ph-init)",stages:[
+ {id:"0.1",n:"intent-capture",st:"done",ag:"product",gate:false,rv:"none",el:"2m",art:1},
+ {id:"0.2",n:"practices-discovery",st:"done",ag:"delivery",gate:false,rv:"none",el:"4m",art:2},
+ {id:"0.3",n:"team-formation",st:"done",ag:"delivery",gate:false,rv:"none",el:"1m",art:1},
+ {id:"0.4",n:"select-plugins",st:"skip",why:"Resolved at install time; the compiled stage graph is already fixed.",ag:"—",gate:false,rv:"none"}]},
+{k:"idea",ord:1,name:"Ideation",accent:"var(--ph-idea)",stages:[
+ {id:"1.1",n:"scope-definition",st:"done",ag:"product",gate:true,rv:"advisory",el:"11m",art:2},
+ {id:"1.2",n:"requirements-analysis",st:"quest",ag:"product",gate:false,rv:"none",el:"1h 47m",art:2,
+  produces:["requirements.md","requirements-questions.md"]},
+ {id:"1.3",n:"functional-design",st:"gate",ag:"design",gate:true,rv:"adversarial",el:"2h 05m",art:4,
+  consumes:["requirements.md","scope.md"],produces:["functional-design.md","action-templates.md","queue-ordering.md"],
+  up:["1.1","1.2"],down:["1.4","1.8","2.1"]},
+ {id:"1.4",n:"nfr-requirements",st:"pend",ag:"architect",gate:true,rv:"advisory",art:2,up:["1.3"],down:["2.3"]},
+ {id:"1.5",n:"user-stories",st:"pend",ag:"product",gate:true,rv:"advisory",art:1,up:["1.3"],down:["2.5"]},
+ {id:"1.6",n:"market-research",st:"skip",why:"Internal-team scope: no external market input required.",ag:"product",gate:false,rv:"none"},
+ {id:"1.7",n:"feasibility",st:"skip",why:"Depth preset 'standard' excludes it when the technical basis is already verified.",ag:"architect",gate:false,rv:"none"},
+ {id:"1.8",n:"rough-mockups",st:"pend",ag:"design",gate:true,rv:"advisory",art:3,up:["1.3"],down:["1.9"]},
+ {id:"1.9",n:"refined-mockups",st:"skip",why:"Test strategy 'lean': one mockup round only.",ag:"design",gate:false,rv:"none"}]},
+{k:"inc",ord:2,name:"Inception",accent:"var(--ph-inc)",stages:[
+ {id:"2.1",n:"domain-design",st:"pend",ag:"architect",gate:true,rv:"adversarial",art:3,up:["1.3"],down:["2.2"]},
+ {id:"2.2",n:"contract-design",st:"pend",ag:"architect",gate:true,rv:"advisory",art:3,up:["2.1"],down:["2.6"]},
+ {id:"2.3",n:"nfr-design",st:"pend",ag:"architect",gate:true,rv:"advisory",art:2,up:["1.4"],down:["2.6"]},
+ {id:"2.4",n:"infrastructure-design",st:"skip",why:"No new infrastructure in this intent; the App runs inside KiroCrew.",ag:"aws-platform",gate:false,rv:"none"},
+ {id:"2.5",n:"delivery-planning",st:"skip",why:"Depth preset 'standard' folds planning into units-generation.",ag:"delivery",gate:false,rv:"none"},
+ {id:"2.6",n:"units-generation",st:"pend",ag:"delivery",gate:true,rv:"advisory",art:1,up:["2.2","2.3"],down:["3.1"]}]},
+{k:"con",ord:3,name:"Construction",accent:"var(--ph-con)",stages:[
+ {id:"3.1",n:"code-generation",st:"pend",ag:"developer",gate:true,rv:"adversarial",art:6,perUnit:true,up:["2.6"],down:["3.2"]},
+ {id:"3.2",n:"build-and-test",st:"pend",ag:"quality",gate:true,rv:"advisory",art:4,perUnit:true,up:["3.1"],down:["3.3"]},
+ {id:"3.3",n:"ci-pipeline",st:"pend",ag:"pipeline-deploy",gate:true,rv:"advisory",art:2,up:["3.2"]},
+ {id:"3.4",n:"deployment-pipeline",st:"pend",ag:"pipeline-deploy",gate:true,rv:"advisory",art:2},
+ {id:"3.5",n:"environment-provisioning",st:"pend",ag:"aws-platform",gate:true,rv:"advisory",art:1},
+ {id:"3.6",n:"bugfix",st:"skip",why:"Scope 'feature': the bugfix stage is not part of this plan.",ag:"developer",gate:false,rv:"none"},
+ {id:"3.7",n:"reverse-engineering",st:"skip",why:"Greenfield App directory; nothing to reverse-engineer.",ag:"architect",gate:false,rv:"none"}]},
+{k:"ops",ord:4,name:"Operation",accent:"var(--ph-ops)",stages:[
+ {id:"4.1",n:"observability-setup",st:"pend",ag:"operations",gate:true,rv:"advisory",art:2},
+ {id:"4.2",n:"performance-validation",st:"pend",ag:"quality",gate:true,rv:"advisory",art:2},
+ {id:"4.3",n:"deployment-execution",st:"pend",ag:"pipeline-deploy",gate:true,rv:"advisory",art:1},
+ {id:"4.4",n:"incident-response",st:"skip",why:"Enabled only for the operation scope; kept in position for reference.",ag:"operations",gate:false,rv:"none"},
+ {id:"4.5",n:"security-patch",st:"skip",why:"Not selected. devsecops review still runs inside 3.1.",ag:"devsecops",gate:false,rv:"none"},
+ {id:"4.6",n:"feedback-optimization",st:"skip",why:"Requires production telemetry that does not exist yet.",ag:"operations",gate:false,rv:"none"},
+ {id:"4.7",n:"approval-handoff",st:"skip",why:"Single-operator install: no external handoff required.",ag:"delivery",gate:false,rv:"none"}]}
+];
+var UNITS=[["unit-1","read model + parsers"],["unit-2","action broker"],["unit-3","queue and detail UI"]];
+var mapSel="1.3", unitsOpen=false;
+
+function stateChip(st){
+  if(st==="done")  return '<span class="tag ok">'+"done"+'</span>';
+  if(st==="gate")  return '<span class="tag gate">gate [?]</span>';
+  if(st==="quest") return '<span class="tag q">questions</span>';
+  if(st==="skip")  return '<span class="tag">skipped</span>';
+  return '<span class="tag">pending</span>';
+}
+function allStages(){
+  var out=[]; PHASES.forEach(function(p){p.stages.forEach(function(s){out.push([p,s]);});}); return out;
+}
+function findStage(id){
+  var f=allStages().filter(function(x){return x[1].id===id;})[0]; return f?f[1]:null;
+}
+function renderMap(){
+  var dens=el("mapWrap").dataset.density, sel=findStage(mapSel);
+  var up=(sel&&sel.up)||[], down=(sel&&sel.down)||[];
+  var out="";
+  PHASES.forEach(function(p){
+    var sel1=p.stages.filter(function(s){return s.st!=="skip";}).length;
+    out+='<div class="lane" style="--ph:'+p.accent+'"><div class="lanehd">'+
+      '<span class="ord">'+p.ord+'</span><span class="nm">'+h(p.name)+'</span>'+
+      '<span class="st">'+sel1+' selected · '+(p.stages.length-sel1)+' skipped · '+p.stages.length+' known</span></div>'+
+      '<div class="lanebd">';
+    p.stages.forEach(function(s){
+      var cls="stage";
+      if(s.st==="skip") cls+=" skipped";
+      if(s.st==="gate"||s.st==="quest") cls+=" current";
+      if(dens==="deps"){
+        if(up.indexOf(s.id)>=0) cls+=" up";
+        else if(down.indexOf(s.id)>=0) cls+=" down";
+        else if(s.id!==mapSel) cls+=" dim";
+      }
+      out+='<button class="'+cls+'" data-stage="'+s.id+'" aria-selected="'+(s.id===mapSel?"true":"false")+'">'+
+        '<span class="sid">'+h(s.id)+'</span><span class="snm">'+h(s.n)+'</span>'+
+        '<span class="srow">'+stateChip(s.st)+
+          (s.gate?'<span class="tag gate">gate</span>':"")+
+          (s.el?'<span class="tag">'+h(s.el)+'</span>':"")+
+        '</span>'+
+        '<span class="det">agent '+h(s.ag)+'<br>review '+h(s.rv)+(s.art?'<br>'+s.art+' artifacts':"")+
+          (s.perUnit?'<br>per-unit stage':"")+'</span>'+
+        (up.indexOf(s.id)>=0?'<span class="rel"><span class="tag q">upstream</span></span>':"")+
+        (down.indexOf(s.id)>=0?'<span class="rel"><span class="tag inst">downstream</span></span>':"")+
+        '</button>';
+    });
+    out+='</div>';
+    if(p.k==="con"){
+      out+='<div class="units'+(unitsOpen?" open":"")+'">';
+      UNITS.forEach(function(u){
+        out+='<div class="unitlane"><span class="un">'+h(u[0])+'</span>'+
+          '<span class="tag">'+h(u[1])+'</span>'+
+          '<span class="tag">3.1 code-generation</span><span class="tag">3.2 build-and-test</span>'+
+          '<span class="tag">'+(u[0]==="unit-1"?"2 gates":"2 gates")+'</span></div>';
+      });
+      out+='<div class="hint" style="padding:4px 0 2px">Only 3.1 and 3.2 are per-unit in this plan. Unit lanes reuse the parent stage state.</div></div>';
+    }
+    out+='</div>';
+  });
+  el("mapScroll").innerHTML=out;
+  Array.prototype.forEach.call(document.querySelectorAll("[data-stage]"),function(b){
+    b.addEventListener("click",function(){mapSel=b.dataset.stage;renderMap();});
+  });
+  renderInspector();
+}
+function renderInspector(){
+  var s=findStage(mapSel);
+  if(!s){el("inspector").innerHTML="";return;}
+  var out='<div class="blk" style="margin-bottom:9px"><h2>'+ico("i-map")+'Stage inspector</h2><div class="bd">'+
+    '<div class="dtitle" style="margin:0 0 6px"><h1 style="font-size:14px">'+h(s.id)+" "+h(s.n)+'</h1></div>'+
+    '<div class="dmeta">'+stateChip(s.st)+(s.gate?'<span class="tag gate">gate</span>':"")+
+      '<span class="tag">'+h(s.rv)+'</span></div>'+
+    '<div class="kv"><dt>agent</dt><dd>'+h(s.ag)+'</dd>'+
+    '<dt>review class</dt><dd>'+h(s.rv)+'</dd>'+
+    '<dt>elapsed</dt><dd>'+h(s.el||"—")+'</dd>'+
+    '<dt>artifacts</dt><dd>'+(s.art||0)+'</dd>'+
+    '<dt>per-unit</dt><dd>'+(s.perUnit?"yes — expands into unit sub-lanes":"no")+'</dd></div></div></div>';
+  if(s.st==="skip"){
+    out+='<div class="note warn" style="margin-bottom:9px">'+ico("i-info","sm")+
+      '<span><strong>Skipped, position retained.</strong> '+h(s.why)+'</span></div>';
+  }
+  if(s.consumes||s.produces){
+    out+='<div class="blk" style="margin-bottom:9px"><h2>'+ico("i-link")+'Consumes and produces</h2><div class="bd">'+
+      (s.consumes?'<div class="kv"><dt>consumes</dt><dd>'+s.consumes.map(function(x){return '<code>'+h(x)+'</code>';}).join(" ")+'</dd></div>':"")+
+      (s.produces?'<div class="kv"><dt>produces</dt><dd>'+s.produces.map(function(x){return '<code>'+h(x)+'</code>';}).join(" ")+'</dd></div>':"")+
+      '</div></div>';
+  }
+  out+='<div class="blk"><h2>'+ico("i-chev-r")+'Eligible operations</h2><div class="bd"><ul class="dl">';
+  if(s.st==="gate") out+='<li><span class="ic warn-i">'+ico("i-gate","sm")+'</span><span class="g"><span class="t">Open the Gate decision</span><span class="s">Jumps to A-7732 in the Action Center</span></span></li>';
+  if(s.st==="quest") out+='<li><span class="ic info-i">'+ico("i-quest","sm")+'</span><span class="g"><span class="t">Answer the question group</span><span class="s">Jumps to A-7739</span></span></li>';
+  out+='<li><span class="ic">'+ico("i-file","sm")+'</span><span class="g"><span class="t">Read artifacts</span><span class="s">Read-only render with anchors</span></span></li>'+
+    '<li><span class="ic">'+ico("i-pulse","sm")+'</span><span class="g"><span class="t">Open audit for this stage</span><span class="s">Raw blocks, subject to redaction</span></span></li>'+
+    (s.st==="pend"?'<li><span class="ic">'+ico("i-cog","sm")+'</span><span class="g"><span class="t">Recompose ahead of the cursor</span><span class="s">Only pending stages may change</span></span></li>':"")+
+    '</ul>'+
+    (s.st==="gate"?'<div style="margin-top:8px"><button class="btn sm pri" id="goGate">'+ico("i-chev-r","sm")+'Open in Action Center</button></div>':"")+
+    '</div></div>';
+  el("inspector").innerHTML=out;
+  var g=el("goGate");
+  if(g) g.addEventListener("click",function(){
+    state.sel="A-7732"; state.tab="decision"; go("action"); renderQueue(); renderDetail();
+  });
+}
+/* ═══ NEW INTENT WIZARD ══════════════════════════════════ */
+var WSTEPS=[["01","Work","repo, space, objective"],["02","Preset","scope, depth, review, tests"],
+            ["03","Plan","five-phase stage matrix"],["04","Review","diff, counts, estimates"]];
+var LOCKED={"0.1":"Required bootstrap stage — always runs.","0.2":"Required bootstrap stage — always runs.",
+  "0.3":"Required bootstrap stage — always runs.","0.4":"Resolved at install time; not selectable per intent.",
+  "1.2":"Required by the selected scope.","3.1":"Required: units-generation produces work this stage consumes.",
+  "2.6":"Dependency of 3.1 code-generation."};
+var PRESETS={
+  scope:[["feature","Feature","One capability end to end. Ideation → Construction."],
+         ["mvp","MVP","Full five-phase path including Operation."],
+         ["bugfix","Bugfix","Narrow: reproduce, fix, verify."],
+         ["security-patch","Security patch","Adds devsecops review to every code stage."]],
+  depth:[["light","Light","Fewest stages that still produce evidence."],
+         ["standard","Standard","Balanced. The default."],
+         ["deep","Deep","Adds feasibility, delivery planning and mockup refinement."]],
+  review:[["none","None","No reviewer pass. Gates still require you."],
+          ["advisory","Advisory","Reviewer comments; you decide."],
+          ["adversarial","Adversarial","Reviewer argues against the artifact."]],
+  tests:[["lean","Lean","Happy path plus the named risks."],
+         ["standard","Standard","Unit and integration per unit."],
+         ["thorough","Thorough","Adds performance validation and negative cases."]]
+};
+var DEPTH_OFF={
+  light:["1.5","1.6","1.7","1.8","1.9","2.4","2.5","3.4","3.5","3.6","3.7","4.2","4.4","4.5","4.6","4.7","0.4"],
+  standard:["1.6","1.7","1.9","2.4","2.5","3.6","3.7","4.4","4.5","4.6","4.7","0.4"],
+  deep:["3.6","3.7","4.5","4.6","4.7","0.4"]
+};
+var wiz={step:0,repo:"studio",space:"default",objective:"Add a cross-repo Action Center that aggregates every human-blocking AI-DLC decision.",
+  ctx:"TypeScript + React App inside KiroCrew. Read-only parsers already exist with 66 passing tests.",
+  ptype:"App feature",scope:"feature",depth:"standard",review:"adversarial",tests:"standard",off:null,created:false};
+function wizOff(){ if(!wiz.off) wiz.off=DEPTH_OFF[wiz.depth].slice(); return wiz.off; }
+function wizOn(id){ return wizOff().indexOf(id)<0; }
+function wizCounts(){
+  var st=0,g=0,art=0,ph={};
+  allStages().forEach(function(x){
+    var p=x[0], s=x[1];
+    if(!wizOn(s.id)) return;
+    st++; if(s.gate) g++; art+=(s.art||0); ph[p.k]=(ph[p.k]||0)+1;
+  });
+  return {stages:st,gates:g,artifacts:art,phases:Object.keys(ph).length};
+}
+function estimates(){
+  var c=wizCounts(), lo=Math.round(c.stages*1.6), hi=Math.round(c.stages*3.4);
+  return [
+    ["Turns", lo+" – "+hi, "rule-based band, no local history yet", "low"],
+    ["Active execution time", Math.round(c.stages*7)+" – "+Math.round(c.stages*16)+" min", "rule-based band by stage class", "low"],
+    ["Elapsed time", "2 – 6 days", "assumes gates answered within a working day", "low"],
+    ["Credits", "Unavailable", "not observable on this host", "—"]
+  ];
+}
+function renderWizard(){
+  var sh="";
+  WSTEPS.forEach(function(s,i){
+    sh+='<button data-wstep="'+i+'"'+(i===wiz.step?' aria-current="step"':"")+' class="'+(i<wiz.step?"done":"")+'">'+
+      '<span class="sn">'+(i<wiz.step?ico("i-check","sm"):"")+"Step "+s[0]+'</span>'+
+      '<span class="sl">'+h(s[1])+'</span><span class="hint">'+h(s[2])+'</span></button>';
+  });
+  var body="";
+  /* 1 — Work */
+  body+='<div class="wstep'+(wiz.step===0?" active":"")+'">'+
+    '<div class="blk"><h2>'+ico("i-repo")+'Where the work lands</h2><div class="bd">'+
+    '<div class="grid2"><div class="fld"><label for="wRepo">Repository</label><select id="wRepo">'+
+      Object.keys(REPOS).filter(function(k){return k!=="all";}).map(function(k){
+        return '<option value="'+k+'"'+(wiz.repo===k?" selected":"")+'>'+h(REPOS[k].label)+'</option>';}).join("")+
+      '</select><div class="hint">Registered repositories only. Studio never scans the filesystem to find more.</div></div>'+
+    '<div class="fld"><label for="wSpace">Space</label><select id="wSpace"><option>default</option><option>platform</option></select>'+
+      '<div class="hint">Single-team installs only ever use <code class="m">default</code>.</div></div></div>'+
+    '<div class="fld"><label for="wObj">Objective</label><textarea id="wObj">'+h(wiz.objective)+'</textarea></div>'+
+    '<div class="fld"><label for="wCtx">Context and project-type signals</label><textarea id="wCtx">'+h(wiz.ctx)+'</textarea>'+
+      '<div class="hint">Detected type: <strong>'+h(wiz.ptype)+'</strong> · TypeScript · existing tests found</div></div>'+
+    '</div></div></div>';
+  /* 2 — Preset */
+  function cardSet(key,cur,id){
+    return '<div class="cards">'+PRESETS[key].map(function(p){
+      return '<label class="pcard"><input type="radio" name="'+id+'" value="'+p[0]+'"'+(cur===p[0]?" checked":"")+'>'+
+        '<span class="pt">'+h(p[1])+(cur===p[0]?' <span class="tag ok">selected</span>':"")+'</span>'+
+        '<span class="pd">'+h(p[2])+'</span></label>';}).join("")+'</div>';
+  }
+  var c=wizCounts();
+  body+='<div class="wstep'+(wiz.step===1?" active":"")+'">'+
+    '<div class="blk"><h2>'+ico("i-cog")+'Scope</h2><div class="bd">'+cardSet("scope",wiz.scope,"wScope")+'</div></div>'+
+    '<div class="blk"><h2>'+ico("i-cog")+'Depth</h2><div class="bd">'+cardSet("depth",wiz.depth,"wDepth")+
+      '<div class="note" style="margin-top:8px">'+ico("i-info","sm")+
+      '<span>Changing depth resets the stage matrix to that preset. Your manual toggles in step 3 are re-applied on top.</span></div></div></div>'+
+    '<div class="blk"><h2>'+ico("i-eye")+'Review cap</h2><div class="bd">'+cardSet("review",wiz.review,"wReview")+'</div></div>'+
+    '<div class="blk"><h2>'+ico("i-check")+'Test strategy</h2><div class="bd">'+cardSet("tests",wiz.tests,"wTests")+'</div></div>'+
+    '<div class="counters"><div class="counter"><div class="cn">'+c.stages+'</div><div class="cl">stages · exact</div></div>'+
+    '<div class="counter"><div class="cn">'+c.gates+'</div><div class="cl">gates · exact</div></div>'+
+    '<div class="counter"><div class="cn">'+c.artifacts+'</div><div class="cl">artifacts · exact</div></div></div></div>';
+  /* 3 — Plan */
+  var m="";
+  PHASES.forEach(function(p){
+    m+='<div class="mrow phase">'+p.ord+" "+h(p.name)+'</div>';
+    p.stages.forEach(function(s){
+      var on=wizOn(s.id), lock=LOCKED[s.id];
+      m+='<div class="mrow'+(lock?" locked":"")+(on?"":" off")+'">'+
+        '<input type="checkbox" data-plan="'+s.id+'"'+(on?" checked":"")+(lock?" disabled":"")+
+          ' aria-label="'+h(s.id+" "+s.n)+'">'+
+        '<span><span class="sname">'+h(s.id)+" "+h(s.n)+'</span>'+
+          (lock?'<span class="why">'+ico("i-lock","sm")+" "+h(lock)+'</span>':
+            (on?'<span class="why">agent '+h(s.ag)+' · review '+h(s.rv)+(s.art?" · "+s.art+" artifacts":"")+'</span>'
+               :'<span class="why">excluded'+(s.why?" — "+h(s.why):"")+'</span>'))+
+        '</span>'+
+        '<span>'+(s.gate&&on?'<span class="tag gate">gate</span>':"")+
+          (s.perUnit?'<span class="tag inst">per unit</span>':"")+'</span></div>';
+    });
+  });
+  body+='<div class="wstep'+(wiz.step===2?" active":"")+'">'+
+    '<div class="note" style="margin-bottom:9px">'+ico("i-info","sm")+
+    '<span>Every known stage is listed, including excluded and conditional ones. Only stages the engine permits are toggleable; '+
+    'the rest are disabled with a reason. v1 does not author stage definitions or reorder the graph.</span></div>'+
+    '<div class="matrix">'+m+'</div>'+
+    '<div class="counters"><div class="counter"><div class="cn">'+c.stages+'</div><div class="cl">stages · exact</div></div>'+
+    '<div class="counter"><div class="cn">'+c.gates+'</div><div class="cl">gates · exact</div></div>'+
+    '<div class="counter"><div class="cn">'+c.artifacts+'</div><div class="cl">artifacts · exact</div></div>'+
+    '<div class="counter est"><div class="cn">'+estimates()[0][1]+'</div><div class="cl">turns · estimate</div></div></div></div>';
+  /* 4 — Review */
+  var base=DEPTH_OFF[wiz.depth], added=base.filter(function(id){return wizOn(id);}),
+      removed=wizOff().filter(function(id){return base.indexOf(id)<0;});
+  body+='<div class="wstep'+(wiz.step===3?" active":"")+'">'+
+    '<div class="blk"><h2>'+ico("i-eye")+'Plan diff vs the '+h(wiz.depth)+' preset</h2><div class="bd">'+
+    (added.length||removed.length
+      ? '<ul class="dl">'+
+        added.map(function(id){var s=findStage(id);return '<li><span class="ic ok-i">'+ico("i-plus","sm")+'</span><span class="g"><span class="t">enabled '+h(id)+" "+h(s.n)+'</span><span class="s">Adds its gate and artifacts to the exact counts.</span></span></li>';}).join("")+
+        removed.map(function(id){var s=findStage(id);return '<li><span class="ic warn-i">'+ico("i-x","sm")+'</span><span class="g"><span class="t">skipped '+h(id)+" "+h(s.n)+'</span><span class="s">Coverage lost: this stage produces no evidence for this intent.</span></span></li>';}).join("")+
+        '</ul>'
+      : '<p>No manual changes. The plan is exactly the '+h(wiz.depth)+' preset for scope <code class="m">'+h(wiz.scope)+'</code>.</p>')+
+    '</div></div>'+
+    '<div class="grid2"><div class="blk"><h2>'+ico("i-check")+'Exact facts</h2><div class="bd">'+
+      '<table class="dt"><tbody>'+
+      '<tr><td>Stages selected</td><td class="num">'+c.stages+'</td></tr>'+
+      '<tr><td>Phases touched</td><td class="num">'+c.phases+' / 5</td></tr>'+
+      '<tr><td>Human gates</td><td class="num">'+c.gates+'</td></tr>'+
+      '<tr><td>Artifacts produced</td><td class="num">'+c.artifacts+'</td></tr>'+
+      '<tr><td>Review intensity</td><td class="num">'+h(wiz.review)+'</td></tr>'+
+      '</tbody></table><div class="note" style="margin-top:8px">'+ico("i-check","sm")+
+      '<span>These come from the installed stage graph and are labelled <strong>exact</strong>.</span></div></div></div>'+
+    '<div class="blk"><h2>'+ico("i-clock")+'Estimates — ranges with source</h2><div class="bd">'+
+      '<table class="dt"><thead><tr><th>Metric</th><th>Range</th><th>Confidence</th></tr></thead><tbody>'+
+      estimates().map(function(e){
+        return '<tr><td>'+h(e[0])+'<span class="why" style="display:block">'+h(e[2])+'</span></td>'+
+          '<td class="num">'+h(e[1])+'</td><td class="num">'+h(e[3])+'</td></tr>';}).join("")+
+      '</tbody></table><div class="note warn" style="margin-top:8px">'+ico("i-alert","sm")+
+      '<span>Credits are <strong>Unavailable</strong>, not zero. Estimated vs actual is recorded after the run and calibrates later estimates locally.</span></div></div></div></div>'+
+    '<div class="blk"><h2>'+ico("i-gauge")+'What dominates the estimate</h2><div class="bd"><ul class="dl">'+
+      '<li><span class="ic aim-i">'+ico("i-chev-r","sm")+'</span><span class="g"><span class="t">3.1 code-generation — per unit, adversarial review</span><span class="s">Removing it loses all implementation evidence; not recommended.</span></span></li>'+
+      '<li><span class="ic aim-i">'+ico("i-chev-r","sm")+'</span><span class="g"><span class="t">1.3 functional-design — adversarial review</span><span class="s">Dropping the adversarial cap here cuts an estimated 4–7 turns and loses the contradiction check.</span></span></li>'+
+      '</ul></div></div>'+
+    (wiz.created
+      ? '<div class="note" style="border-color:var(--accent);background:var(--accent-subtle)">'+ico("i-check","sm")+
+        '<span><strong>Intent created and left paused.</strong> Verified on disk at '+
+        '<code class="m">aidlc/spaces/'+h(wiz.space)+'/intents/action-center-9d3f10c2/</code>. It inherits no '+
+        '<code class="m">Keep moving</code>, budget or Advisor draft from another intent. Start it with '+
+        '<strong>Run to next checkpoint</strong>.</span></div>'
+      : '<div class="note">'+ico("i-info","sm")+
+        '<span>Create uses the canonical conversation path and then verifies the intent on disk. It never auto-runs.</span></div>');
+  body+='</div>';
+
+  var bar='<div class="wizbar">'+
+    '<button class="btn sm" data-wnav="-1"'+(wiz.step===0?" disabled":"")+'>'+ico("i-arrow-l","sm")+'Back</button>'+
+    (wiz.step<3
+      ? '<button class="btn pri" data-wnav="1">Continue'+ico("i-chev-r","sm")+'</button>'
+      : (wiz.created
+          ? '<button class="btn pri" data-wnav="run">'+ico("i-play","sm")+'Run to next checkpoint</button>'
+          : '<button class="btn pri" data-wnav="create">'+ico("i-check","sm")+'Create intent (paused)</button>'))+
+    '<span class="abhint" style="margin-left:auto">Step '+(wiz.step+1)+' of 4 · '+h(REPOS[wiz.repo].label)+' · scope '+h(wiz.scope)+' · depth '+h(wiz.depth)+'</span></div>';
+
+  el("wizRoot").innerHTML='<div class="h2">New intent</div>'+
+    '<p class="sub">Four steps. Nothing runs until you explicitly start it.</p>'+
+    '<div class="steps">'+sh+'</div>'+body+bar;
+
+  Array.prototype.forEach.call(document.querySelectorAll("[data-wstep]"),function(b){
+    b.addEventListener("click",function(){wiz.step=+b.dataset.wstep;renderWizard();});
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-wnav]"),function(b){
+    b.addEventListener("click",function(){
+      var v=b.dataset.wnav;
+      if(v==="create"){ wiz.created=true; toast("Intent created through the canonical conversation and verified on disk. It is paused."); }
+      else if(v==="run"){ toast("Run to next checkpoint: advances unattended until a Gate, question, failure, budget stop or completion."); }
+      else wiz.step=Math.max(0,Math.min(3,wiz.step+ +v));
+      renderWizard();
+    });
+  });
+  ["wScope","wDepth","wReview","wTests"].forEach(function(nm){
+    Array.prototype.forEach.call(document.getElementsByName(nm),function(inp){
+      inp.addEventListener("change",function(){
+        var key=nm.slice(1).toLowerCase();
+        if(key==="depth"){ wiz.depth=inp.value; wiz.off=DEPTH_OFF[wiz.depth].slice(); }
+        else if(key==="scope") wiz.scope=inp.value;
+        else if(key==="review") wiz.review=inp.value;
+        else wiz.tests=inp.value;
+        renderWizard();
+      });
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-plan]"),function(cb){
+    cb.addEventListener("change",function(){
+      var id=cb.dataset.plan, o=wizOff(), i=o.indexOf(id);
+      if(cb.checked){ if(i>=0) o.splice(i,1); } else if(i<0) o.push(id);
+      renderWizard();
+    });
+  });
+  var r=el("wRepo"); if(r) r.addEventListener("change",function(){wiz.repo=r.value;renderWizard();});
+  var o=el("wObj"); if(o) o.addEventListener("input",function(){wiz.objective=o.value;});
+}
+/* ═══ SECONDARY PAGES ════════════════════════════════════ */
+function renderRepos(){
+  var rows=[
+    ["kirocrew-app-aidlc","~/warren_ws/kirocrew-app-aidlc","Installed","2.3.0","2.3.0","ok","2 active","feat/action-center · 7 dirty","—"],
+    ["payments-api","~/src/payments-api","Installed","2.3.0","2.3.0","ok","2 active","feat/refund-ledger · clean","—"],
+    ["edge-telemetry","~/src/edge-telemetry","Install blocked","2.3.0","2.4.0","warn","1 active","main · 7 dirty","2 managed files drifted"]
+  ];
+  el("reposRoot").innerHTML='<div class="h2">Repos</div>'+
+    '<p class="sub">Explicitly registered repositories only. Adding a repo runs a read-only preflight; nothing is discovered by scanning.</p>'+
+    '<div class="blk"><h2>'+ico("i-repo")+'Registry'+
+    '<span class="rt"><span class="chip">desktop-only management</span><button class="ghostbtn">'+ico("i-plus","sm")+'Add repository</button></span></h2><div class="bd">'+
+    '<table class="dt"><thead><tr><th>Repo</th><th>Path</th><th>Install</th><th>Installed</th><th>Bundled</th><th>Intents</th><th>Git observation</th><th>Maintenance</th></tr></thead><tbody>'+
+    rows.map(function(r){
+      return '<tr><td><strong>'+h(r[0])+'</strong></td><td><code class="m">'+h(r[1])+'</code></td>'+
+        '<td><span class="chip '+(r[5]==="ok"?"run":"bad")+'">'+h(r[2])+'</span></td>'+
+        '<td class="num">'+h(r[3])+'</td><td class="num">'+h(r[4])+'</td><td>'+h(r[6])+'</td>'+
+        '<td>'+ico("i-git","sm")+" "+h(r[7])+'</td><td>'+h(r[8])+'</td></tr>';}).join("")+
+    '</tbody></table></div></div>'+
+    '<div class="blk"><h2>'+ico("i-pkg")+'Maintenance — engine 2.4.0 available</h2><div class="bd">'+
+    '<p>Upgrades are batch-previewed and confirmed here, never mixed into the blocking queue.</p>'+
+    '<ul class="dl"><li><span class="ic ok-i">'+ico("i-check","sm")+'</span><span class="g"><span class="t">kirocrew-app-aidlc · ready</span><span class="s">46 managed files match their recorded SHA-256.</span></span></li>'+
+    '<li><span class="ic ok-i">'+ico("i-check","sm")+'</span><span class="g"><span class="t">payments-api · ready</span><span class="s">46 managed files match.</span></span></li>'+
+    '<li><span class="ic bad-i">'+ico("i-alert","sm")+'</span><span class="g"><span class="t">edge-telemetry · blocked</span><span class="s">2 user-modified managed files. Upgrade stops rather than overwriting; the prior receipt stays complete.</span></span></li></ul>'+
+    '<div style="margin-top:9px"><button class="btn sm">'+ico("i-eye","sm")+'Preview batch upgrade (2 of 3)</button></div></div></div>';
+}
+function renderIntents(){
+  var rows=[
+    ["kirocrew-app-aidlc","studio-action-center","8f2c41ab","Waiting for you","1.3 functional-design","wait"],
+    ["kirocrew-app-aidlc","studio-workflow-map","3ab77e51","Idle","—",""],
+    ["payments-api","refund-ledger","c07ba318","Waiting for you","2.2 contract-design","wait"],
+    ["payments-api","checkout-idempotency","b41d90cc","Interrupted","3.2 code-generation","bad"],
+    ["edge-telemetry","otel-span-budget","5ce02f77","Circuit open","1.4 nfr-requirements","bad"],
+    ["edge-telemetry","span-sampling-audit","77c1d0e9","Archived","—",""]
+  ];
+  el("intentsRoot").innerHTML='<div class="h2">Intents</div>'+
+    '<p class="sub">Multiple intents may be in flight per repo. Turns serialize inside a repo and run in parallel across repos. '+
+    'Archive changes Studio visibility only — there is no permanent delete.</p>'+
+    '<div class="blk"><h2>'+ico("i-file")+'Inventory · All repos</h2><div class="bd">'+
+    '<table class="dt"><thead><tr><th>Repo</th><th>Intent</th><th>Id</th><th>State</th><th>Stage</th><th></th></tr></thead><tbody>'+
+    rows.map(function(r){
+      return '<tr><td>'+h(r[0])+'</td><td><strong>'+h(r[1])+'</strong></td><td class="num">'+h(r[2])+'</td>'+
+        '<td><span class="chip '+r[5]+'">'+h(r[3])+'</span></td><td>'+h(r[4])+'</td>'+
+        '<td><button class="btn sm">'+(r[3]==="Archived"?"Restore":"Archive")+'</button></td></tr>';}).join("")+
+    '</tbody></table></div></div>';
+}
+function renderActivity(){
+  var rows=[
+    ["10:02:19","Studio","edge-telemetry","Breaker opened for 5ce02f77 · fingerprint acp.transport.reset","bad"],
+    ["09:58:40","AI-DLC","kirocrew-app-aidlc","HUMAN_TURN 3 recorded · turn counter 3 → 4","run"],
+    ["09:58:39","Studio","kirocrew-app-aidlc","Action A-7731 delivered to canonical session","aim"],
+    ["09:58:12","AI-DLC","kirocrew-app-aidlc","GATE_CLEARED 1.1 scope-definition","run"],
+    ["09:41:02","Git","payments-api","Branch feat/refund-ledger observed clean","" ],
+    ["09:12:44","KiroCrew","payments-api","Repo execution lease acquired by c07ba318","info"]
+  ];
+  el("activityRoot").innerHTML='<div class="h2">Activity</div>'+
+    '<p class="sub">Human-readable timeline. Every event names its source, and a Studio-derived event is never shown as an AI-DLC audit event.</p>'+
+    '<div class="blk"><h2>'+ico("i-pulse")+'Timeline'+
+    '<span class="rt"><button class="ghostbtn">'+ico("i-eye","sm")+'Evidence drawer</button>'+
+    '<button class="ghostbtn">'+ico("i-file","sm")+'Redacted export</button></span></h2><div class="bd">'+
+    '<table class="dt"><thead><tr><th>Time</th><th>Source</th><th>Repo</th><th>Event</th></tr></thead><tbody>'+
+    rows.map(function(r){return '<tr><td class="num">'+h(r[0])+'</td><td><span class="chip '+r[4]+'">'+h(r[1])+
+      '</span></td><td>'+h(r[2])+'</td><td>'+h(r[3])+'</td></tr>';}).join("")+
+    '</tbody></table></div></div>';
+}
+function renderSettings(){
+  el("settingsRoot").innerHTML='<div class="h2">Settings</div><p class="sub">Local to this KiroCrew install.</p>'+
+    '<div class="grid2">'+
+    '<div class="blk"><h2>'+ico("i-cog")+'Display and locale</h2><div class="bd"><div class="kv">'+
+      '<dt>Language</dt><dd>English (en-US) · 简体中文 available</dd>'+
+      '<dt>Density</dt><dd>Compact (this layout)</dd>'+
+      '<dt>Queue organization</dt><dd>Priority · persisted locally</dd>'+
+      '<dt>Reduced motion</dt><dd>Follows the OS setting</dd></div></div></div>'+
+    '<div class="blk"><h2>'+ico("i-clock")+'Night work window</h2><div class="bd"><div class="kv">'+
+      '<dt>Automation</dt><dd>Off — the default</dd>'+
+      '<dt>Window</dt><dd>22:00 – 06:00 local</dd>'+
+      '<dt>Turn cap</dt><dd>40 per window</dd>'+
+      '<dt>Credit cap</dt><dd>Disabled — credits are not observable here</dd>'+
+      '<dt>Participation</dt><dd>Only intents with explicit <code>Keep moving</code></dd></div></div></div>'+
+    '<div class="blk"><h2>'+ico("i-link")+'Slack and concurrency</h2><div class="bd"><div class="kv">'+
+      '<dt>Delivery</dt><dd>Configured owner DM</dd>'+
+      '<dt>Notify on</dt><dd>Gate, question, failure or breaker, delivery uncertainty, completion digest</dd>'+
+      '<dt>Global concurrency</dt><dd>3 repos in parallel · 1 turn per repo, always</dd>'+
+      '<dt>Per-repo mute</dt><dd>edge-telemetry muted</dd></div></div></div>'+
+    '<div class="blk"><h2>'+ico("i-info")+'About</h2><div class="bd"><div class="kv">'+
+      '<dt>App version</dt><dd>aidlc-studio 0.4.1</dd>'+
+      '<dt>Bundled AI-DLC</dt><dd>2.4.0 (payload) · installed 2.3.0</dd>'+
+      '<dt>Advisor model</dt><dd>Inherited through KiroCrew role resolution — no hardcoded model id</dd>'+
+      '<dt>Platforms</dt><dd>macOS and Linux · Windows pending real end-to-end validation</dd>'+
+      '<dt>Trust</dt><dd>Narrow per-App trust only</dd></div></div></div></div>';
+}
+
+/* ═══ NAVIGATION AND CHROME ══════════════════════════════ */
+var PAGES=["action","repos","intents","map","activity","settings","wizard"];
+function go(p){
+  PAGES.forEach(function(k){
+    var s=el("page-"+k); if(s) s.classList.toggle("active",k===p);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".navbtn"),function(b){
+    if(b.dataset.page===p) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
+  });
+  if(p==="map") renderMap();
+  if(p==="wizard") renderWizard();
+  if(p==="repos") renderRepos();
+  if(p==="intents") renderIntents();
+  if(p==="activity") renderActivity();
+  if(p==="settings") renderSettings();
+}
+Array.prototype.forEach.call(document.querySelectorAll("[data-page]"),function(b){
+  b.addEventListener("click",function(e){e.preventDefault();go(b.dataset.page);});
+});
+el("themeBtn").addEventListener("click",function(){
+  var dark=document.documentElement.dataset.theme==="dark";
+  document.documentElement.dataset.theme=dark?"light":"dark";
+  el("themeIcon").setAttribute("href",dark?"#i-sun":"#i-moon");
+});
+el("scopeBtn").addEventListener("click",function(e){
+  e.stopPropagation();
+  var m=el("scopeMenu"), open=m.classList.toggle("open");
+  el("scopeBtn").setAttribute("aria-expanded",open?"true":"false");
+});
+document.addEventListener("click",function(){
+  el("scopeMenu").classList.remove("open");
+  el("scopeBtn").setAttribute("aria-expanded","false");
+});
+Array.prototype.forEach.call(document.querySelectorAll("#scopeMenu .mitem"),function(b){
+  b.addEventListener("click",function(){
+    state.repo=b.dataset.repo;
+    Array.prototype.forEach.call(document.querySelectorAll("#scopeMenu .mitem"),function(x){
+      x.setAttribute("aria-selected",x===b?"true":"false");});
+    var r=REPOS[state.repo];
+    el("scopeLabel").textContent=r.label;
+    el("scopeSub").textContent=state.repo==="all"?r.sub:r.sub;
+    var n=visible().length;
+    el("scopeCrumb").innerHTML=h(r.crumb)+' <span>›</span> <b>space: default</b> <span>›</span> '+n+' blocking item'+(n===1?"":"s");
+    state.sel=null; renderQueue(); renderDetail();
+  });
+});
+Array.prototype.forEach.call(document.querySelectorAll(".seg [data-org]"),function(b){
+  b.addEventListener("click",function(){
+    state.org=b.dataset.org;
+    Array.prototype.forEach.call(document.querySelectorAll(".seg [data-org]"),function(x){
+      x.setAttribute("aria-pressed",x===b?"true":"false");});
+    renderQueue();
+  });
+});
+Array.prototype.forEach.call(document.querySelectorAll(".seg [data-density]"),function(b){
+  b.addEventListener("click",function(){
+    el("mapWrap").dataset.density=b.dataset.density;
+    Array.prototype.forEach.call(document.querySelectorAll(".seg [data-density]"),function(x){
+      x.setAttribute("aria-pressed",x===b?"true":"false");});
+    renderMap();
+  });
+});
+el("unitToggle").addEventListener("click",function(){
+  unitsOpen=!unitsOpen;
+  el("unitToggle").setAttribute("aria-pressed",unitsOpen?"true":"false");
+  el("unitToggle").innerHTML=ico("i-chev-r","sm")+(unitsOpen?"Collapse Construction units":"Expand Construction units");
+  renderMap();
+});
+el("qSearch").addEventListener("input",function(){state.q=el("qSearch").value;renderQueue();});
+el("pauseAll").addEventListener("click",function(){
+  toast("Pause after current turn: no new dispatch, and the running turn is allowed to finish.");
+});
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape"){
+    if(state.confirming||state.rejecting){state.confirming=false;state.rejecting=false;renderDetail();}
+    el("scopeMenu").classList.remove("open");
+  }
+});
+
+/* ═══ INIT ═══════════════════════════════════════════════ */
+renderQueue();
+renderDetail();
+</script>
+</body>
+</html>

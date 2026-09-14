@@ -1,0 +1,88 @@
+MUTATION: ignore_attempt_floor (memory only; source files untouched)
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_closed_sheet_never_resurrects_unproven_audit[old_attempt_receipt] ____
+
+closed_sheet_scene = namespace(root=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-413/test_closed_sheet_never_resurr0/repo'), reader=<_aidlc_studio_backend.studio.aidlc_reader.AidlcReader object at 0x107977d70>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107973d40>
+case = 'old_attempt_receipt'
+
+    @pytest.mark.parametrize("case", [
+        "missing_receipt", "old_attempt_receipt", "newer_bad_receipt",
+        "same_second_cross_shard", "ambiguous_receipts", "edited_file",
+        "pending_question", "pending_checkpoint", "rejected_checkpoint",
+        "scoped_excluded_section", "answered", "new_attempt", "partial",
+        "unreadable_file", "unreadable_second_read", "changed_second_read", "protected",
+    ])
+    def test_closed_sheet_never_resurrects_unproven_audit(closed_sheet_scene, monkeypatch, case):
+        scene = closed_sheet_scene
+        path = _record_dir(scene.root) / QUESTIONS_REL
+        if case == "missing_receipt":
+            _shard(scene.root).write_text(start_audit() + decision())
+        elif case == "old_attempt_receipt":
+            _shard(scene.root).write_text(
+                closed_sheet_receipt(scene, "2026-09-04T08:59:59Z") + start_audit() + decision()
+            )
+        elif case == "newer_bad_receipt":
+            _shard(scene.root).write_text(
+                start_audit() + closed_sheet_receipt(scene)
+                + closed_sheet_receipt(scene, "2026-09-04T09:59:20Z", **{"Questions SHA-256": "0" * 64})
+                + decision()
+            )
+        elif case == "same_second_cross_shard":
+            _shard(scene.root).write_text(start_audit() + decision())
+            append(scene, closed_sheet_receipt(scene, ASKED), shard="zz-receipt.md")
+        elif case == "ambiguous_receipts":
+            append(scene, closed_sheet_receipt(scene), shard="zz-receipt.md")
+        elif case in ("edited_file", "pending_question", "pending_checkpoint", "rejected_checkpoint"):
+            old, new = {
+                "edited_file": ("[Answer]: A", "[Answer]: B"),
+                "pending_question": ("[Answer]: A", "[Answer]:"),
+                "pending_checkpoint": ("[Answer]: Looks correct", "[Answer]:"),
+                "rejected_checkpoint": ("[Answer]: Looks correct", "[Answer]: Request changes"),
+            }[case]
+            text = ANSWERED_H3_QUESTIONS.replace(old, new, 1)
+            path.write_text(text)
+            if case != "edited_file":
+                # Even a receipt bound to these bytes cannot close a still-pending/rejected sheet.
+                _shard(scene.root).write_text(
+                    start_audit() + closed_sheet_receipt(scene, scope=None, **{"Questions SHA-256": F.sha256(text)})
+                    + decision()
+                )
+        elif case == "scoped_excluded_section":
+            path.write_text(ANSWERED_H3_QUESTIONS + "## Assumption Confirmation\n\n[Answer]: Confirmed\n")
+        elif case == "answered":
+            append(scene, F.audit_block("QUESTION_ANSWERED", ANSWERED, Stage=STAGE, Details=LABELS[0]))
+        elif case == "new_attempt":
+            append(scene, F.audit_block("STAGE_STARTED", ANSWERED, Stage=STAGE))
+        elif case == "partial":
+            append(scene, F.audit_block("NOTE", ASKED, Details="x" * 2000), shard="zz-large.md")
+            read = scene.reader.read_audit
+            monkeypatch.setattr(scene.reader, "read_audit", lambda *a, **kw: read(*a, tail_bytes=1500))
+        elif case == "protected":
+            _shard(scene.root).write_text(
+                start_audit() + closed_sheet_receipt(scene) + decision(Options="[protected exact choices]")
+            )
+        else:
+            security = __import__(scene.reader.__module__.rsplit(".", 1)[0] + ".security", fromlist=["bounded_read"])
+            read = security.bounded_read
+            calls = 0
+    
+            def bounded_read(candidate, cap):
+                nonlocal calls
+                if candidate == path:
+                    calls += 1
+                    if case == "unreadable_file" or calls > 1:
+                        return b"changed bytes" if case == "changed_second_read" else None
+                return read(candidate, cap)
+    
+            monkeypatch.setattr(security, "bounded_read", bounded_read)
+        questions = closed_sheet_questions(scene)
+>       assert questions is None or questions.origin is None
+E       AssertionError: assert (QuestionsFile(relpath='aidlc/spaces/default/intents/260904-gate-demo/audit/fixture-host-0f1e2d3c4b5a.md', sha256='b0e3...ne, 'attempt_generation': None, 'decision_sha256': 'be8611fcb155e27b123712ea09e451dd227ffc8769e42893d2fbefa7e5877307'}) is None or {'attempt_generation': None, 'decision_sha256': 'be8611fcb155e27b123712ea09e451dd227ffc8769e42893d2fbefa7e5877307', 'event': 'DECISION_RECORDED', 'kind': 'audit', ...} is None)
+E        +  where {'attempt_generation': None, 'decision_sha256': 'be8611fcb155e27b123712ea09e451dd227ffc8769e42893d2fbefa7e5877307', 'event': 'DECISION_RECORDED', 'kind': 'audit', ...} = QuestionsFile(relpath='aidlc/spaces/default/intents/260904-gate-demo/audit/fixture-host-0f1e2d3c4b5a.md', sha256='b0e3...ne, 'attempt_generation': None, 'decision_sha256': 'be8611fcb155e27b123712ea09e451dd227ffc8769e42893d2fbefa7e5877307'}).origin
+
+tests/test_audit_questions.py:464: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_audit_questions.py::test_closed_sheet_never_resurrects_unproven_audit[old_attempt_receipt]
+1 failed, 152 deselected in 0.19s

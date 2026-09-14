@@ -1,0 +1,10 @@
+# size_bytes	relpath (aidlc/spaces/default/codekb/**; reverse-engineering artifacts live here, not in the intent record)
+7205	DevDelta/api-documentation.md
+20153	DevDelta/architecture.md
+5759	DevDelta/business-overview.md
+12938	DevDelta/code-quality-assessment.md
+8134	DevDelta/code-structure.md
+10280	DevDelta/component-inventory.md
+9262	DevDelta/dependencies.md
+5562	DevDelta/reverse-engineering-timestamp.md
+4829	DevDelta/technology-stack.md

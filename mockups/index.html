@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI-DLC Studio — Visual directions</title>
+<style>
+:root{color-scheme:dark;--bg:#12141a;--panel:#181b22;--text:#e4e4e7;--strong:#fafafa;--muted:#a1a1aa;--border:#27272a;--accent:#00d492;--hover:#262a35;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}html,body{height:100%;margin:0}body{background:var(--bg);color:var(--text);display:flex;flex-direction:column;overflow:hidden}
+header{display:flex;align-items:center;gap:16px;min-height:64px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--panel)}
+.title{min-width:230px}.title strong{display:block;color:var(--strong);font-size:14px}.title span{font-size:11px;color:var(--muted)}
+nav{display:flex;gap:8px;overflow:auto}button{border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);padding:9px 12px;text-align:left;cursor:pointer;white-space:nowrap}button:hover{background:var(--hover)}button[aria-selected="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}button b{display:block;font-size:12px}button small{color:var(--muted)}
+main{flex:1;min-height:0;padding:10px}iframe{width:100%;height:100%;border:1px solid var(--border);border-radius:10px;background:#12141a}
+@media(max-width:760px){header{align-items:flex-start;flex-direction:column}.title{min-width:0}main{padding:0}iframe{border:0;border-radius:0}}
+</style>
+</head>
+<body>
+<header>
+  <div class="title"><strong>AI-DLC Studio visual directions</strong><span>Three PRD-grounded interactive mockups · switch below</span></div>
+  <nav aria-label="Visual options">
+    <button data-file="option-a-dense-operations.html" aria-selected="true"><b>Option A · Dense Operations</b><small>Maximum scan speed and information density</small></button>
+    <button data-file="option-b-evidence-first.html" aria-selected="false"><b>Option B · Evidence First</b><small>Calm hierarchy and decision evidence</small></button>
+    <button data-file="option-c-adaptive-command.html" aria-selected="false"><b>Option C · Adaptive Command</b><small>Keyboard-oriented and phase-forward</small></button>
+  </nav>
+</header>
+<main><iframe id="preview" title="Selected AI-DLC Studio mockup" src="option-a-dense-operations.html"></iframe></main>
+<script>
+const frame=document.getElementById('preview');
+document.querySelectorAll('button[data-file]').forEach(button=>button.addEventListener('click',()=>{
+  document.querySelectorAll('button[data-file]').forEach(item=>item.setAttribute('aria-selected','false'));
+  button.setAttribute('aria-selected','true');
+  frame.src=button.dataset.file;
+}));
+</script>
+</body>
+</html>

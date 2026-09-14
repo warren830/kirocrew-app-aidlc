@@ -1,0 +1,34 @@
+MUTATION: omit_receipt_identity (memory only; source files untouched)
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_____ test_closed_sheet_submit_rechecks_closure_evidence[receipt_replaced] _____
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x1082044a0>), AppRoute(method='GET', path='/p...ttings at 0x10825c040>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10825c0e0>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x108289430>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+change = 'receipt_replaced'
+
+    @pytest.mark.parametrize("change", ["receipt_removed", "receipt_replaced", "file_edited"])
+    def test_closed_sheet_submit_rechecks_closure_evidence(sv, routes, fake_host, scene, change):
+        path = install_closed_sheet(scene)
+        card = question_card(sv, routes, fake_host, scene)
+        if change == "file_edited":
+            path.write_text(ANSWERED_H3_QUESTIONS.replace("[Answer]: A", "[Answer]: B", 1))
+        else:
+            # Keep the decision at the same append position while modifying its closure evidence.
+            text = _shard(scene.root).read_text()
+            text = text.replace(
+                "SUMMARY_CONFIRMATION_RECORDED" if change == "receipt_removed" else CLOSED_AT,
+                "NOTE" if change == "receipt_removed" else "2026-09-04T09:59:11Z",
+            )
+            _shard(scene.root).write_text(text)
+        status, body = _submit(sv, routes, fake_host, card, payload=answer_payload(), wire_text=LABELS[0])
+>       assert status == 409 and body["code"] == "action_stale", body
+E       AssertionError: {'action_id': 'a_0000000000000001', 'delivery_id': 'dl_0000000000000001', 'expires_at': '2026-09-04T10:01:30Z', 'host'...000000001'}, 'slot': 'aidlc-studio-r_000000000001-260904-gate-demo'}, 'method': 'POST', 'path': '/api/chat?ws=1'}, ...}
+E       assert (200 == 409)
+
+tests/test_audit_questions.py:488: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_audit_questions.py::test_closed_sheet_submit_rechecks_closure_evidence[receipt_replaced]
+1 failed, 152 deselected in 2.50s

@@ -1,0 +1,29 @@
+# size_bytes	relpath	copied_into_fixture
+# every regular file under this intent record dir at harvest time (dotfiles included); contents were copied only where the third column says yes
+139	.aidlc-active-directive.json	yes
+21	.aidlc-engine-touch	yes
+20	.aidlc-hooks-health/.first-fired	no
+7938	.aidlc-hooks-health/continue-workflow.drops	no
+20	.aidlc-hooks-health/continue-workflow.last	no
+20	.aidlc-hooks-health/log-subagent.last	no
+20	.aidlc-hooks-health/plan-approval-guard.last	no
+20	.aidlc-hooks-health/rebuild-stage-graph.last	no
+20	.aidlc-hooks-health/review-freeze.last	no
+20	.aidlc-hooks-health/reviewer-scope.last	no
+20	.aidlc-hooks-health/run-sensors.last	no
+20	.aidlc-hooks-health/session-end.last	no
+20	.aidlc-hooks-health/session-start.last	no
+20	.aidlc-hooks-health/validate-state.last	no
+20	.aidlc-hooks-health/write-audit-log.last	no
+21	.aidlc-human-turn	yes
+162	.aidlc-recovery.md	yes
+418	.aidlc-sensors/reverse-engineering/required-sections-3288f16f.md	no
+415	.aidlc-sensors/reverse-engineering/required-sections-ee64c52f.md	no
+44	.aidlc-steering-token-key	no
+3314	aidlc-state.md	yes
+82768	audit/603e5f4a8072-26e77d17b1cd.md	yes
+303	audit/603e5f4a8072-747664ca2c41.md	yes
+7149	inception/reverse-engineering/memory.md	yes
+56505	inception/reverse-engineering/scan-backend.md	no
+53000	inception/reverse-engineering/scan-client-web.md	no
+2149	runtime-graph.json	no

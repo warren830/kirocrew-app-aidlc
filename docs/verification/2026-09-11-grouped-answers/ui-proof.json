@@ -1,0 +1,19 @@
+{
+  "status": "ResolvedNoTransition",
+  "question_answers": [
+    "中文",
+    "Compact JSON",
+    "Alpha check, Gamma check, Extra check, 中文.",
+    "Note with commas, \"quotes\", 中文.\nSecond line stays with Q4."
+  ],
+  "preview_matches_sent": true,
+  "host_group_messages": 1,
+  "audit_answer_receipts": 1,
+  "audit_error_events": 2,
+  "premature_failure": false,
+  "pending_checkpoint": null,
+  "conversation_summary_offered": true,
+  "checkpoint_note": "This UI-only fixture began with a seeded question file; its final reply offered a summary in chat without persisting a summary section. Persisted summary handoff was verified separately by the normally started v2 fixture.",
+  "user_question_file_unchanged": true,
+  "summary_approval_sent": false
+}

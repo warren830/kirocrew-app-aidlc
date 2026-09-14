@@ -1,0 +1,37 @@
+# size_bytes	relpath	copied_into_fixture
+# every regular file under this intent record dir at harvest time (dotfiles included); contents were copied only where the third column says yes
+20	.aidlc-hooks-health/.first-fired	no
+20	.aidlc-hooks-health/audit-logger.last	no
+20	.aidlc-hooks-health/log-subagent.last	no
+20	.aidlc-hooks-health/runtime-compile.last	no
+20	.aidlc-hooks-health/sensor-fire.last	no
+20	.aidlc-hooks-health/session-end.last	no
+20	.aidlc-hooks-health/session-start.last	no
+7686	.aidlc-hooks-health/stop.drops	no
+20	.aidlc-hooks-health/stop.last	no
+20	.aidlc-hooks-health/sync-statusline.last	no
+20	.aidlc-hooks-health/validate-state.last	no
+425	.aidlc-learnings-selections-intent-capture.json	yes
+1043	.aidlc-learnings-selections-market-research.json	no
+154	.aidlc-recovery.md	yes
+520	.aidlc-sensors/feasibility/upstream-coverage-23bbbdb3.md	no
+374	.aidlc-sensors/intent-capture/required-sections-7ce2e961.md	no
+376	.aidlc-sensors/market-research/required-sections-bb35e9db.md	no
+433	.aidlc-sensors/market-research/upstream-coverage-2a65ef9e.md	no
+419	.aidlc-sensors/market-research/upstream-coverage-4874e600.md	no
+419	.aidlc-sensors/market-research/upstream-coverage-d3c85523.md	no
+3014	aidlc-state.md	yes
+68579	audit/603e5f4a8072-4c59c6cec037.md	yes
+2136	ideation/feasibility/feasibility-questions.md	yes
+921	ideation/feasibility/memory.md	no
+3657	ideation/intent-capture/intent-capture-questions.md	yes
+3525	ideation/intent-capture/intent-statement.md	no
+1720	ideation/intent-capture/memory.md	no
+2075	ideation/intent-capture/stakeholder-map.md	no
+3628	ideation/market-research/build-vs-buy.md	no
+4591	ideation/market-research/competitive-analysis.md	no
+4010	ideation/market-research/market-research-questions.md	yes
+4010	ideation/market-research/market-trends.md	no
+1734	ideation/market-research/memory.md	no
+1564	inception/reverse-engineering/memory.md	no
+10093	runtime-graph.json	no

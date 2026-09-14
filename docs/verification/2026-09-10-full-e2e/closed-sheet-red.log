@@ -1,0 +1,321 @@
+FFFF...........................FFFFFF...                                 [100%]
+=================================== FAILURES ===================================
+_ test_closed_sheet_yields_to_newer_audit_through_api_submit_and_reconcile[scoped] _
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10a0d11c0>), AppRoute(method='GET', path='/p...ttings at 0x10a138d60>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10a138e00>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10a0ae900>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+scope = 'confirmed-content-v1'
+
+    @pytest.mark.parametrize("scope", ["confirmed-content-v1", None], ids=["scoped", "legacy_whole_file"])
+    def test_closed_sheet_yields_to_newer_audit_through_api_submit_and_reconcile(
+        sv, routes, fake_host, scene, scope
+    ):
+        path = install_closed_sheet(scene, scope=scope)
+        original = _tree_digest(scene.root)
+>       card = question_card(sv, routes, fake_host, scene)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_audit_questions.py:345: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10a0d11c0>), AppRoute(method='GET', path='/p...ttings at 0x10a138d60>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10a138e00>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10a0ae900>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+
+    def question_card(sv, routes, fake_host, scene):
+        _rescan(sv, routes, fake_host, scene)
+        cards = [card for card in _queue(sv, routes, fake_host) if card["type"] == "question"]
+>       assert len(cards) == 1, cards
+E       AssertionError: []
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_audit_questions.py:69: AssertionError
+_ test_closed_sheet_yields_to_newer_audit_through_api_submit_and_reconcile[legacy_whole_file] _
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10a283880>), AppRoute(method='GET', path='/p...ttings at 0x10a283ba0>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10a283c40>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10a0d55b0>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+scope = None
+
+    @pytest.mark.parametrize("scope", ["confirmed-content-v1", None], ids=["scoped", "legacy_whole_file"])
+    def test_closed_sheet_yields_to_newer_audit_through_api_submit_and_reconcile(
+        sv, routes, fake_host, scene, scope
+    ):
+        path = install_closed_sheet(scene, scope=scope)
+        original = _tree_digest(scene.root)
+>       card = question_card(sv, routes, fake_host, scene)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_audit_questions.py:345: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10a283880>), AppRoute(method='GET', path='/p...ttings at 0x10a283ba0>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10a283c40>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10a0d55b0>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+
+    def question_card(sv, routes, fake_host, scene):
+        _rescan(sv, routes, fake_host, scene)
+        cards = [card for card in _queue(sv, routes, fake_host) if card["type"] == "question"]
+>       assert len(cards) == 1, cards
+E       AssertionError: []
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_audit_questions.py:69: AssertionError
+________ test_closed_sheet_scoped_hash_uses_engine_normalization[crlf] _________
+
+closed_sheet_scene = namespace(root=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-408/test_closed_sheet_scoped_hash_0/repo'), reader=<_aidlc_studio_backend.studio.aidlc_reader.AidlcReader object at 0x10a1eac00>)
+text = '# Requirements Analysis — Questions\r\n\r\nStage: `requirements-analysis` (2.3) · Intent: `260910-precision-fix` · De...generate the requirements artifact?\r\n\r\n- Looks correct\r\n- Request changes\r\n\r\n[Answer]: Looks correct\r\n\r\n'
+
+    @pytest.mark.parametrize("text", [
+        ANSWERED_H3_QUESTIONS.replace("\n", "\r\n"),
+        ANSWERED_H3_QUESTIONS.rstrip() + " \t\n\ufeff",
+    ], ids=["crlf", "ecmascript_trailing_whitespace"])
+    def test_closed_sheet_scoped_hash_uses_engine_normalization(closed_sheet_scene, text):
+        path = _record_dir(closed_sheet_scene.root) / QUESTIONS_REL
+        path.write_bytes(text.encode("utf-8"))
+        assert F.sha256(text) != CLOSED_SHEET_SHA
+>       assert closed_sheet_questions(closed_sheet_scene).origin["kind"] == "audit"
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+tests/test_audit_questions.py:372: TypeError
+_ test_closed_sheet_scoped_hash_uses_engine_normalization[ecmascript_trailing_whitespace] _
+
+closed_sheet_scene = namespace(root=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-408/test_closed_sheet_scoped_hash_1/repo'), reader=<_aidlc_studio_backend.studio.aidlc_reader.AidlcReader object at 0x10a31a0c0>)
+text = '# Requirements Analysis — Questions\n\nStage: `requirements-analysis` (2.3) · Intent: `260910-precision-fix` · Depth:...fore I generate the requirements artifact?\n\n- Looks correct\n- Request changes\n\n[Answer]: Looks correct \t\n\ufeff'
+
+    @pytest.mark.parametrize("text", [
+        ANSWERED_H3_QUESTIONS.replace("\n", "\r\n"),
+        ANSWERED_H3_QUESTIONS.rstrip() + " \t\n\ufeff",
+    ], ids=["crlf", "ecmascript_trailing_whitespace"])
+    def test_closed_sheet_scoped_hash_uses_engine_normalization(closed_sheet_scene, text):
+        path = _record_dir(closed_sheet_scene.root) / QUESTIONS_REL
+        path.write_bytes(text.encode("utf-8"))
+        assert F.sha256(text) != CLOSED_SHEET_SHA
+>       assert closed_sheet_questions(closed_sheet_scene).origin["kind"] == "audit"
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+tests/test_audit_questions.py:372: TypeError
+____ test_closed_sheet_same_shard_order_proves_freshness_within_one_second _____
+
+closed_sheet_scene = namespace(root=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-408/test_closed_sheet_same_shard_o0/repo'), reader=<_aidlc_studio_backend.studio.aidlc_reader.AidlcReader object at 0x10a2e9ee0>)
+
+    def test_closed_sheet_same_shard_order_proves_freshness_within_one_second(closed_sheet_scene):
+        scene = closed_sheet_scene
+        _shard(scene.root).write_text(start_audit() + closed_sheet_receipt(scene, ASKED) + decision())
+>       assert closed_sheet_questions(scene).origin["kind"] == "audit"
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+tests/test_audit_questions.py:470: TypeError
+_____ test_closed_sheet_submit_rechecks_closure_evidence[receipt_removed] ______
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10a2d2480>), AppRoute(method='GET', path='/p...ttings at 0x10a29f380>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10a29f740>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10a31af30>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+change = 'receipt_removed'
+
+    @pytest.mark.parametrize("change", ["receipt_removed", "receipt_replaced", "file_edited"])
+    def test_closed_sheet_submit_rechecks_closure_evidence(sv, routes, fake_host, scene, change):
+        path = install_closed_sheet(scene)
+>       card = question_card(sv, routes, fake_host, scene)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_audit_questions.py:476: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10a2d2480>), AppRoute(method='GET', path='/p...ttings at 0x10a29f380>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10a29f740>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10a31af30>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+
+    def question_card(sv, routes, fake_host, scene):
+        _rescan(sv, routes, fake_host, scene)
+        cards = [card for card in _queue(sv, routes, fake_host) if card["type"] == "question"]
+>       assert len(cards) == 1, cards
+E       AssertionError: []
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_audit_questions.py:69: AssertionError
+_____ test_closed_sheet_submit_rechecks_closure_evidence[receipt_replaced] _____
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10a29c680>), AppRoute(method='GET', path='/p...ttings at 0x10a29c5e0>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10a29c9a0>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10a2e8a10>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+change = 'receipt_replaced'
+
+    @pytest.mark.parametrize("change", ["receipt_removed", "receipt_replaced", "file_edited"])
+    def test_closed_sheet_submit_rechecks_closure_evidence(sv, routes, fake_host, scene, change):
+        path = install_closed_sheet(scene)
+>       card = question_card(sv, routes, fake_host, scene)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_audit_questions.py:476: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10a29c680>), AppRoute(method='GET', path='/p...ttings at 0x10a29c5e0>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10a29c9a0>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10a2e8a10>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+
+    def question_card(sv, routes, fake_host, scene):
+        _rescan(sv, routes, fake_host, scene)
+        cards = [card for card in _queue(sv, routes, fake_host) if card["type"] == "question"]
+>       assert len(cards) == 1, cards
+E       AssertionError: []
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_audit_questions.py:69: AssertionError
+_______ test_closed_sheet_submit_rechecks_closure_evidence[file_edited] ________
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10a1509a0>), AppRoute(method='GET', path='/p...ttings at 0x10a2fa660>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10a2f9760>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10a319820>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+change = 'file_edited'
+
+    @pytest.mark.parametrize("change", ["receipt_removed", "receipt_replaced", "file_edited"])
+    def test_closed_sheet_submit_rechecks_closure_evidence(sv, routes, fake_host, scene, change):
+        path = install_closed_sheet(scene)
+>       card = question_card(sv, routes, fake_host, scene)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_audit_questions.py:476: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+routes = [AppRoute(method='GET', path='/health', handler=<function get_health at 0x10a1509a0>), AppRoute(method='GET', path='/p...ttings at 0x10a2fa660>), AppRoute(method='PUT', path='/settings', handler=<function put_settings at 0x10a2f9760>), ...]
+fake_host = <conftest.FakeDashboardState object at 0x10a319820>
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+
+    def question_card(sv, routes, fake_host, scene):
+        _rescan(sv, routes, fake_host, scene)
+        cards = [card for card in _queue(sv, routes, fake_host) if card["type"] == "question"]
+>       assert len(cards) == 1, cards
+E       AssertionError: []
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+tests/test_audit_questions.py:69: AssertionError
+__________ test_closed_sheet_plan_checkpoint_requires_its_own_receipt __________
+
+closed_sheet_scene = namespace(root=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-408/test_closed_sheet_plan_checkpo0/repo'), reader=<_aidlc_studio_backend.studio.aidlc_reader.AidlcReader object at 0x1099be8a0>)
+
+    def test_closed_sheet_plan_checkpoint_requires_its_own_receipt(closed_sheet_scene):
+        scene = closed_sheet_scene
+        path = _record_dir(scene.root) / QUESTIONS_REL
+        text = "## Plan Approval\n\n- Approve Plan\n- Request changes\n\n[Answer]: Approve Plan\n"
+        path.write_text(text)
+        assert closed_sheet_questions(scene).origin is None
+        receipt = F.audit_block("PLAN_APPROVAL_RECORDED", CLOSED_AT, **{
+            "Stage": STAGE, "Details": "Approve Plan", "Checkpoint": "Plan Approval",
+            "Questions File": str(path.relative_to(scene.root)), "Questions SHA-256": F.sha256(text),
+        })
+        _shard(scene.root).write_text(start_audit() + receipt + decision())
+>       assert closed_sheet_questions(scene).origin["kind"] == "audit"
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+tests/test_audit_questions.py:504: TypeError
+________ test_closed_sheet_unit_receipt_must_match_current_claim[none] _________
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+change = 'none'
+
+    @pytest.mark.parametrize("change", ["none", "old_receipt_generation", "claim_advanced", "claim_unreadable"])
+    def test_closed_sheet_unit_receipt_must_match_current_claim(sv, scene, change):
+        install_closed_sheet(scene)
+        generations, key = activate_unit(sv, scene)
+        generation = "1" if change == "old_receipt_generation" else "2"
+        _shard(scene.root).write_text(
+            start_audit() + closed_sheet_receipt(scene, Unit="unit-a", Attempt_Generation=generation)
+            + decision(Unit="unit-a", Attempt_Generation="2")
+        )
+        if change == "claim_advanced":
+            generations.write_text(json.dumps({key: 3}))
+        elif change == "claim_unreadable":
+            generations.write_text("{broken")
+        questions = snap(sv, scene).questions
+>       assert (questions is not None and questions.origin is not None) is (change == "none")
+E       AssertionError: assert ((QuestionsFile(relpath='aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis/requirements-anal...quest changes')), plan_approval=None, pending_count=0, pending_checkpoint=None, source_language_hint=None, origin=None) is not None and None is not None)) is ('none' == 'none'
+E        +  where None = QuestionsFile(relpath='aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis/requirements-anal...quest changes')), plan_approval=None, pending_count=0, pending_checkpoint=None, source_language_hint=None, origin=None).origin
+E         
+E           none)
+
+tests/test_audit_questions.py:521: AssertionError
+=============================== warnings summary ===============================
+tests/test_audit_questions.py::test_closed_sheet_yields_to_newer_audit_through_api_submit_and_reconcile[scoped]
+tests/test_audit_questions.py::test_closed_sheet_yields_to_newer_audit_through_api_submit_and_reconcile[legacy_whole_file]
+tests/test_audit_questions.py::test_closed_sheet_submit_rechecks_closure_evidence[receipt_removed]
+tests/test_audit_questions.py::test_closed_sheet_submit_rechecks_closure_evidence[receipt_replaced]
+tests/test_audit_questions.py::test_closed_sheet_submit_rechecks_closure_evidence[file_edited]
+tests/test_audit_questions.py::test_closed_sheet_unit_receipt_must_match_current_claim[none]
+tests/test_audit_questions.py::test_closed_sheet_unit_receipt_must_match_current_claim[old_receipt_generation]
+tests/test_audit_questions.py::test_closed_sheet_unit_receipt_must_match_current_claim[claim_advanced]
+tests/test_audit_questions.py::test_closed_sheet_unit_receipt_must_match_current_claim[claim_unreadable]
+  /Users/ychchen/warren_ws/kirocrew-app-aidlc/tests/conftest.py:903: NotAppKeyWarning: It is recommended to use web.AppKey instances for keys.
+  https://docs.aiohttp.org/en/stable/web_advanced.html#application-s-config
+    application["state"] = host
+
+tests/test_audit_questions.py::test_closed_sheet_yields_to_newer_audit_through_api_submit_and_reconcile[scoped]
+tests/test_audit_questions.py::test_closed_sheet_yields_to_newer_audit_through_api_submit_and_reconcile[legacy_whole_file]
+tests/test_audit_questions.py::test_closed_sheet_submit_rechecks_closure_evidence[receipt_removed]
+tests/test_audit_questions.py::test_closed_sheet_submit_rechecks_closure_evidence[receipt_replaced]
+tests/test_audit_questions.py::test_closed_sheet_submit_rechecks_closure_evidence[file_edited]
+tests/test_audit_questions.py::test_closed_sheet_unit_receipt_must_match_current_claim[none]
+tests/test_audit_questions.py::test_closed_sheet_unit_receipt_must_match_current_claim[old_receipt_generation]
+tests/test_audit_questions.py::test_closed_sheet_unit_receipt_must_match_current_claim[claim_advanced]
+tests/test_audit_questions.py::test_closed_sheet_unit_receipt_must_match_current_claim[claim_unreadable]
+  /Users/ychchen/warren_ws/kirocrew-app-aidlc/tests/conftest.py:904: NotAppKeyWarning: It is recommended to use web.AppKey instances for keys.
+  https://docs.aiohttp.org/en/stable/web_advanced.html#application-s-config
+    application["local_secret"] = "test-internal-secret"
+
+tests/test_audit_questions.py::test_closed_sheet_yields_to_newer_audit_through_api_submit_and_reconcile[scoped]
+  /Users/ychchen/warren_ws/kirocrew-app-aidlc/tests/conftest.py:907: NotAppKeyWarning: It is recommended to use web.RequestKey instances for keys.
+  https://docs.aiohttp.org/en/stable/web_advanced.html#request-s-storage
+    request["user"] = user
+
+tests/test_audit_questions.py::test_closed_sheet_yields_to_newer_audit_through_api_submit_and_reconcile[scoped]
+  /Users/ychchen/warren_ws/kirocrew-app-aidlc/tests/conftest.py:909: NotAppKeyWarning: It is recommended to use web.RequestKey instances for keys.
+  https://docs.aiohttp.org/en/stable/web_advanced.html#request-s-storage
+    request["app"] = app
+
+tests/test_audit_questions.py::test_closed_sheet_yields_to_newer_audit_through_api_submit_and_reconcile[scoped]
+tests/test_audit_questions.py::test_closed_sheet_yields_to_newer_audit_through_api_submit_and_reconcile[legacy_whole_file]
+tests/test_audit_questions.py::test_closed_sheet_submit_rechecks_closure_evidence[receipt_removed]
+tests/test_audit_questions.py::test_closed_sheet_submit_rechecks_closure_evidence[receipt_replaced]
+tests/test_audit_questions.py::test_closed_sheet_submit_rechecks_closure_evidence[file_edited]
+tests/test_audit_questions.py::test_closed_sheet_unit_receipt_must_match_current_claim[none]
+tests/test_audit_questions.py::test_closed_sheet_unit_receipt_must_match_current_claim[old_receipt_generation]
+tests/test_audit_questions.py::test_closed_sheet_unit_receipt_must_match_current_claim[claim_advanced]
+tests/test_audit_questions.py::test_closed_sheet_unit_receipt_must_match_current_claim[claim_unreadable]
+  /Users/ychchen/warren_ws/kirocrew-app-aidlc/tests/test_handlers_auth.py:147: NotAppKeyWarning: It is recommended to use web.AppKey instances for keys.
+  https://docs.aiohttp.org/en/stable/web_advanced.html#application-s-config
+    request.app["ctx"] = sv.ctx
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_audit_questions.py::test_closed_sheet_yields_to_newer_audit_through_api_submit_and_reconcile[scoped]
+FAILED tests/test_audit_questions.py::test_closed_sheet_yields_to_newer_audit_through_api_submit_and_reconcile[legacy_whole_file]
+FAILED tests/test_audit_questions.py::test_closed_sheet_scoped_hash_uses_engine_normalization[crlf]
+FAILED tests/test_audit_questions.py::test_closed_sheet_scoped_hash_uses_engine_normalization[ecmascript_trailing_whitespace]
+FAILED tests/test_audit_questions.py::test_closed_sheet_same_shard_order_proves_freshness_within_one_second
+FAILED tests/test_audit_questions.py::test_closed_sheet_submit_rechecks_closure_evidence[receipt_removed]
+FAILED tests/test_audit_questions.py::test_closed_sheet_submit_rechecks_closure_evidence[receipt_replaced]
+FAILED tests/test_audit_questions.py::test_closed_sheet_submit_rechecks_closure_evidence[file_edited]
+FAILED tests/test_audit_questions.py::test_closed_sheet_plan_checkpoint_requires_its_own_receipt
+FAILED tests/test_audit_questions.py::test_closed_sheet_unit_receipt_must_match_current_claim[none]
+10 failed, 30 passed, 113 deselected, 29 warnings in 14.41s

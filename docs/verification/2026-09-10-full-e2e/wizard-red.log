@@ -1,0 +1,133 @@
+
+ RUN  v5.0.0 /Users/ychchen/warren_ws/kirocrew-app-aidlc/ui
+
+ ❯ src/wizard/wizard.test.tsx (37 tests | 6 failed | 30 skipped) 4450ms
+   ❯ async scope previews (7)
+     × preserves explicit Minimal depth and Standard strategy when late scope strategy is null 636ms
+     × preserves explicit Minimal depth and Standard strategy when late scope strategy is Minimal 547ms
+     × preserves explicit From scope choices even while their current value is already null 511ms
+     × ignores an older scope response arriving after the current scope and explicit choices 727ms
+     × does not confirm a previous plan during the next preview debounce 488ms
+     × does not confirm a previous plan during the next preview failure 686ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/wizard/wizard.test.tsx > async scope previews > preserves explicit Minimal depth and Standard strategy when late scope strategy is null
+AssertionError: expected { space: 'default', …(10) } to match object { scope: 'bugfix', …(3) }
+(7 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "depth": "Minimal",
++   "depth": "Comprehensive",
+    "review_cap": "advisory",
+    "scope": "bugfix",
+-   "test_strategy": "Standard",
++   "test_strategy": null,
+  }
+
+ ❯ src/wizard/wizard.test.tsx:559:32
+    557|     await screen.findByText('Intent created and left paused')
+    558|     expect(creates()).toHaveLength(1)
+    559|     expect(creates()[0]?.body).toMatchObject({
+       |                                ^
+    560|       scope: 'bugfix', depth: 'Minimal', test_strategy: 'Standard', re…
+    561|     })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/wizard/wizard.test.tsx > async scope previews > preserves explicit Minimal depth and Standard strategy when late scope strategy is Minimal
+AssertionError: expected { space: 'default', …(10) } to match object { scope: 'bugfix', …(3) }
+(7 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "depth": "Minimal",
++   "depth": "Comprehensive",
+    "review_cap": "advisory",
+    "scope": "bugfix",
+-   "test_strategy": "Standard",
++   "test_strategy": "Minimal",
+  }
+
+ ❯ src/wizard/wizard.test.tsx:559:32
+    557|     await screen.findByText('Intent created and left paused')
+    558|     expect(creates()).toHaveLength(1)
+    559|     expect(creates()[0]?.body).toMatchObject({
+       |                                ^
+    560|       scope: 'bugfix', depth: 'Minimal', test_strategy: 'Standard', re…
+    561|     })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  src/wizard/wizard.test.tsx > async scope previews > preserves explicit From scope choices even while their current value is already null
+AssertionError: expected { space: 'default', …(10) } to match object { depth: 'Minimal', …(2) }
+(8 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "depth": "Minimal",
+-   "review_cap": null,
+-   "test_strategy": null,
++   "review_cap": "adversarial",
++   "test_strategy": "Comprehensive",
+  }
+
+ ❯ src/wizard/wizard.test.tsx:586:32
+    584|     await act(async () => pending.resolve())
+    585|     await continueToCreate()
+    586|     expect(creates()[0]?.body).toMatchObject({
+       |                                ^
+    587|       depth: 'Minimal', test_strategy: null, review_cap: null,
+    588|     })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  src/wizard/wizard.test.tsx > async scope previews > ignores an older scope response arriving after the current scope and explicit choices
+Error: expect(element).toHaveAttribute("aria-pressed", "true") // element.getAttribute("aria-pressed") === "true"
+
+Expected the element to have attribute:
+  aria-pressed="true"
+Received:
+  aria-pressed="false"
+ ❯ src/wizard/wizard.test.tsx:641:36
+    639|     await act(async () => old.resolve())
+    640|     expect(scopeButton('bugfix')).toHaveAttribute('aria-pressed', 'tru…
+    641|     expect(depthButton('Minimal')).toHaveAttribute('aria-pressed', 'tr…
+       |                                    ^
+    642|     expect(strategyButton('Standard')).toHaveAttribute('aria-pressed',…
+    643|     expect(capButton('advisory')).toHaveAttribute('aria-pressed', 'tru…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  src/wizard/wizard.test.tsx > async scope previews > does not confirm a previous plan during the next preview debounce
+ FAIL  src/wizard/wizard.test.tsx > async scope previews > does not confirm a previous plan during the next preview failure
+Error: expect(element).toBeDisabled()
+
+Received element is not disabled:
+  <button
+  class="studio-btn studio-btn-primary"
+  type="button"
+/>
+ ❯ src/wizard/wizard.test.tsx:669:20
+    667|     }
+    668|     const create = screen.getByRole('button', { name: /Create the inte…
+    669|     expect(create).toBeDisabled()
+       |                    ^
+    670|     fireEvent.click(create)
+    671|     expect(creates()).toHaveLength(0)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 1 passed | 30 skipped (37)
+   Start at  21:15:38
+   Duration  5.48s (tests 83%, environment 8%, transform 5%, setup 2%, import 2%)
+

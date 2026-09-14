@@ -1,0 +1,12 @@
+{
+  "settings.bun.title": "Bun 可执行文件",
+  "settings.bun.desc": "指定 gateway 所在电脑上的 Bun 路径，或重新探测已安装的 Bun。修改立即生效，无需重启 Studio。",
+  "settings.bun.path": "Bun 的绝对路径",
+  "settings.bun.save": "保存并校验路径",
+  "settings.bun.probe": "重新探测 Bun",
+  "settings.bun.auto": "使用自动探测",
+  "settings.bun.checking": "正在检查 Bun…",
+  "settings.bun.ready": "Bun 已就绪。",
+  "settings.bun.missing": "未找到 Bun。请指定路径，或安装后重新探测。",
+  "settings.bun.searched": "已检查：{paths}"
+}

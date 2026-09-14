@@ -1,0 +1,51 @@
+{
+  "repo": {
+    "repo_id": "r_64f5e18ef18f",
+    "label": "ledger-export (scratch)",
+    "canonical_path": "/private/tmp/aidlc-studio-e2e",
+    "resolved_identity": "16777229:211677626",
+    "git_common_dir_identity": "/private/tmp/aidlc-studio-e2e/.git",
+    "platform": "darwin",
+    "added_at": "2026-09-04T22:51:30Z",
+    "last_seen": "2026-09-06T06:02:18Z",
+    "availability": "unavailable",
+    "availability_detail": "path_missing",
+    "archived": false,
+    "legacy_console_id": null,
+    "install_status": "installed",
+    "installed_engine_version": "2.6.2",
+    "engine_dir": ".kiro",
+    "receipt_version": null,
+    "install": {
+      "status": "installed",
+      "engine_dir": ".kiro",
+      "engine_version": "2.6.2",
+      "own_engine_version": "2.6.2",
+      "engine_state_version": null,
+      "stage_count": null,
+      "harness_dirs": [],
+      "receipt": null,
+      "bundled_engine_version": "2.7.1",
+      "upgrade_available": true,
+      "newer_installed": false,
+      "state_version_blocked": false,
+      "drift_count": 0,
+      "rollback_target": null
+    },
+    "counts": {
+      "intents": 0,
+      "in_flight": 0,
+      "open_actions": 1,
+      "blocking_findings": 0
+    },
+    "leases": {
+      "execution": null,
+      "admin": null
+    },
+    "git": null,
+    "findings": [],
+    "scanned_at": "2026-09-11T05:21:07Z"
+  },
+  "intents": [],
+  "transactions": []
+}

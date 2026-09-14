@@ -1,0 +1,167 @@
+{
+  "source_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087",
+  "results": [
+    {
+      "mutation": "01_original_baseline",
+      "test": "tests/test_installer_open_defects.py",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "54 failed, 11 passed in 2.52s",
+      "log": "/tmp/aidlc-installer-mutation-01_original_baseline.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "02_skip_abandoned_archive",
+      "test": "tests/test_installer_open_defects.py::test_abandoned_has_own_evidence_and_no_orphan",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "21 failed in 1.09s",
+      "log": "/tmp/aidlc-installer-mutation-02_skip_abandoned_archive.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "03_omit_failed_dir",
+      "test": "tests/test_installer_open_defects.py::test_abandoned_has_own_evidence_and_no_orphan",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "21 failed in 1.16s",
+      "log": "/tmp/aidlc-installer-mutation-03_omit_failed_dir.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "04_disable_deduplication",
+      "test": "tests/test_installer_open_defects.py::test_identical_failures_keep_only_a_log",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "3 failed in 0.60s",
+      "log": "/tmp/aidlc-installer-mutation-04_disable_deduplication.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "05_discard_without_tree_proof",
+      "test": "tests/test_installer_open_defects.py::test_informative_candidates_survive_even_after_successful_verification",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "8 failed in 0.93s",
+      "log": "/tmp/aidlc-installer-mutation-05_discard_without_tree_proof.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "06_ignore_verify_staging_failure",
+      "test": "tests/test_installer_open_defects.py::test_verify_staging_failure_is_retained_even_if_bytes_now_match",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "1 failed in 0.57s",
+      "log": "/tmp/aidlc-installer-mutation-06_ignore_verify_staging_failure.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "07_ignore_original_payload_digest",
+      "test": "tests/test_installer_open_defects.py::test_abandoned_other_payload_is_not_deduplicated",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "1 failed in 0.53s",
+      "log": "/tmp/aidlc-installer-mutation-07_ignore_original_payload_digest.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "08_ignore_file_hashes",
+      "test": "tests/test_installer_open_defects.py::test_informative_candidates_survive_even_after_successful_verification[same_size]",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "1 failed in 0.53s",
+      "log": "/tmp/aidlc-installer-mutation-08_ignore_file_hashes.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "09_ignore_extra_directories",
+      "test": "tests/test_installer_open_defects.py::test_informative_candidates_survive_even_after_successful_verification[empty_directory]",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "1 failed in 0.51s",
+      "log": "/tmp/aidlc-installer-mutation-09_ignore_extra_directories.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "10_ignore_missing_files",
+      "test": "tests/test_installer_open_defects.py::test_informative_candidates_survive_even_after_successful_verification[missing]",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "1 failed in 0.56s",
+      "log": "/tmp/aidlc-installer-mutation-10_ignore_missing_files.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "11_follow_archive_parent_symlink",
+      "test": "tests/test_installer_open_defects.py::test_archive_refuses_symlink_boundaries_without_touching_target[failed]",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "1 failed in 0.47s",
+      "log": "/tmp/aidlc-installer-mutation-11_follow_archive_parent_symlink.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "12_overwrite_prior_candidate",
+      "test": "tests/test_installer_open_defects.py::test_reentry_never_overwrites_existing_evidence",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "1 failed in 0.54s",
+      "log": "/tmp/aidlc-installer-mutation-12_overwrite_prior_candidate.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "13_drop_prior_journal",
+      "test": "tests/test_installer_open_defects.py::test_reentry_never_overwrites_existing_evidence",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "1 failed in 0.49s",
+      "log": "/tmp/aidlc-installer-mutation-13_drop_prior_journal.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "14_settle_before_archive",
+      "test": "tests/test_installer_open_defects.py::test_archive_write_failure_is_retryable_without_losing_candidate",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "4 failed in 0.61s",
+      "log": "/tmp/aidlc-installer-mutation-14_settle_before_archive.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "15_delete_before_durable_log",
+      "test": "tests/test_installer_open_defects.py::test_archive_write_failure_is_retryable_without_losing_candidate[replace-identical]",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "1 failed in 0.52s",
+      "log": "/tmp/aidlc-installer-mutation-15_delete_before_durable_log.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "16_reuse_stale_identical_label",
+      "test": "tests/test_installer_open_defects.py::test_restart_after_move_does_not_reuse_an_old_identical_label",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "1 failed in 0.50s",
+      "log": "/tmp/aidlc-installer-mutation-16_reuse_stale_identical_label.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "17_leave_identical_staging_orphan",
+      "test": "tests/test_installer_open_defects.py::test_abandoned_has_own_evidence_and_no_orphan[identical-written-recovery_required]",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "1 failed in 0.55s",
+      "log": "/tmp/aidlc-installer-mutation-17_leave_identical_staging_orphan.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    },
+    {
+      "mutation": "18_skip_comparison_bound",
+      "test": "tests/test_installer_open_defects.py::test_incomplete_comparison_keeps_candidate",
+      "exit_code": 1,
+      "killed": true,
+      "summary": "1 failed in 0.48s",
+      "log": "/tmp/aidlc-installer-mutation-18_skip_comparison_bound.log",
+      "restored_sha256": "a251a14d160ac844f4b887c90a90f4949998d5cae3c49ee7709a535366cbd087"
+    }
+  ]
+}

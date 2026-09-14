@@ -1,0 +1,29 @@
+{
+  "name": "aidlc-studio-ui",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AI-DLC Studio dashboard UI for KiroCrew (host provides React, lucide-react and @kirocrew/app-sdk at runtime via the import map).",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^5.0.0",
+    "jsdom": "^26.0.0",
+    "typescript": "^5.9.0",
+    "vite": "^8.2.0",
+    "vitest": "^5.0.0"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

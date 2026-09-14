@@ -1,0 +1,117 @@
+[
+  {
+    "path": "backend/studio/aidlc_reader.py",
+    "before": "8eaaaae9354d214fe038481fc1510134c881e9008fdfcef6037f4787e2a47281",
+    "after": "d6eaa770ae217c71d62a7f948603c7cecbf0b3c84ffbcf1e958aef8f9c696561"
+  },
+  {
+    "path": "backend/studio/consistency.py",
+    "before": "59952b0671a11846e2d4014af7c675c9ef25acc5a23c5e45a8eff3d998a7d88a",
+    "after": "8e9fb5dcea638aa1273475d4ef3f5f41a447e8c0b2fca2b23ab162a4d3f628d3"
+  },
+  {
+    "path": "backend/studio/constants.py",
+    "before": "6cd1c3c64f4d4c9b5d8ae0251e1bdcbf54518408401c96d37db8713bc02445c2",
+    "after": "e0747edfc67e3cbf0bd99effd6761bc988a2b0c9d8b2de8098e8d0f656b0fcde"
+  },
+  {
+    "path": "backend/studio/handlers/repos.py",
+    "before": "283931c17957999caf8a20bcaa12b24f031da7398fbe9c8a9b2dc9f35ef4413c",
+    "after": "547f1f047817155872bc054f05dc3ab59eb38f89847a80ebf4399690b4c4e7ff"
+  },
+  {
+    "path": "backend/studio/installer.py",
+    "before": "a932aeef23acd4e0af9573ee6a00b74cd2824cec666cb4a51315fb8847e9696c",
+    "after": "6edb24a7ad9cd95e4c8cd86b3473900003c9d7517fa4aa8aafcc99312a5ab491"
+  },
+  {
+    "path": "backend/studio/projection.py",
+    "before": "44434978d5929904bed1786128bc1a416d772613707484706f34a33ec75f9ce7",
+    "after": "d3fea218adad5138693269a0a56d1895afb6ca149d44f8082d9cd59fda485427"
+  },
+  {
+    "path": "payload/manifest.json",
+    "before": "943acfbc20495296965e3e71d0d64351daadf26b8fc1444274b5581bf0c1a446",
+    "after": "0f8a7362dae01486f118f39a644f4bd97575e3d1167d670689d6ca69fe664b68"
+  },
+  {
+    "path": "scripts/build_payload_manifest.py",
+    "before": "1690584f2f83c53370dbe0a4c6219ab19e70495c958c6fe3fd70135b5ee44e8b",
+    "after": "16284d566226b5b7aa742771c02f2413f782d42b9c71a751d85609d967fd7d3c"
+  },
+  {
+    "path": "tests/test_artifact_locations.py",
+    "before": "66e045bf555003e66d0aea04376c359dd4344ac9486c697d1f49df1ee3e8203a",
+    "after": "34e54522db8c5d3b1a5e5b2fd2a2a7d6b4710400e3bab7e2fa992bcfc3ec2e12"
+  },
+  {
+    "path": "tests/test_audit_questions.py",
+    "before": "c60360d00ec7316fcd1d562f01156c506708f8e2ccf36738891a256e92cc1f79",
+    "after": "fdbf62b0f1d8dc91afb03e26e1b19d70059bd3a7cbe7a8d22a99d2e43b87e7cd"
+  },
+  {
+    "path": "tests/test_error_burst_lifecycle.py",
+    "before": null,
+    "after": "dc0b374116afc6d8c09f1aa17caca418b66fab887d8db2b1b8b05b023f1b6947"
+  },
+  {
+    "path": "tests/test_installer.py",
+    "before": "eec8bb9533a2d194202f22b4955131362d6c0beb7200a49c1b8260dbd0894890",
+    "after": "265408132466ae90a9e865afb5ba15bc2e05224c08ae84ea2916c0353f9814a6"
+  },
+  {
+    "path": "tests/test_installer_uninstall.py",
+    "before": "2b72678d367808d95273f451dfdcb2e1b0693c7887abbfbd042666bdf67c95c1",
+    "after": "6ad9dc2da3fb67e7663bd9b347b7d5805db0516e8526b96ee6ce621fee2a0169"
+  },
+  {
+    "path": "tests/test_model_defaults_merge.py",
+    "before": null,
+    "after": "d15b3993ca4e8552cbe0785e42fca5b988e8e17ab9671a75c2bf7a70aa2d93cb"
+  },
+  {
+    "path": "tests/test_payload_refresh.py",
+    "before": null,
+    "after": "42764fccbae068d320f8cdfcdb88b9d02ec59f7bb1493643d77b7e1f83274f6c"
+  },
+  {
+    "path": "tests/test_plan_progress_fingerprint.py",
+    "before": null,
+    "after": "dec42c24ee6968d55dc7c6db9a401762c8208fcd6564b10edf34236eb93c0122"
+  },
+  {
+    "path": "ui/dist/index.mjs",
+    "before": "a1680d3c062391721cd219adc763b3e0284257da967b36d7741b9f3535f809fb",
+    "after": "f6ab9b4ca4a7314c0a2d6f53976544e94af86ec350f6034269c6fdb7920aad86"
+  },
+  {
+    "path": "ui/src/actions/ActionsView.tsx",
+    "before": "d5f7ef40691a3d7956d97fe72e98842427e33c5a7186015bfca35f40a1fac6f8",
+    "after": "91842777c74a91de2cf77558b253e0c5759f8a213ad7be9e2eb16cbb3f678099"
+  },
+  {
+    "path": "ui/src/intents/IntentsView.tsx",
+    "before": "e39f4f9245e531869819c61d82819e19be7ae429c5e802d7e5567d59def0e01c",
+    "after": "3409c60677d7cf3832be4670276b6e62dbdb08e144a4057efe6983bbe0a60430"
+  },
+  {
+    "path": "ui/src/intents/intents.test.tsx",
+    "before": "70093302d5aa3f96868914171f7f88a0532f5c7373d5468bcfa04f3477afb415",
+    "after": "a6dea13063600e99cae4c84fe0419c84ef714869c481ce383f8fbf7f126437ed"
+  },
+  {
+    "path": "ui/src/map/ArtifactView.tsx",
+    "before": null,
+    "after": "1df0538b349355efb8586620817038bc3ce1709312525669115503733257908e"
+  },
+  {
+    "path": "ui/src/map/MapView.tsx",
+    "before": "0c2e90c386765107d435f1ed0d7be0a37f6414021b35e34392c3ec99a0e5c4d9",
+    "after": "767366b70b4d70cb1837e09e752ee27bfb190039e15e665a5188c7c82af6c5b4"
+  },
+  {
+    "path": "ui/src/map/artifactNavigation.test.tsx",
+    "before": null,
+    "after": "81ab13b66a76616daeb48ae82143534381a59d04f09cf98b64226c88713b0455"
+  }
+]

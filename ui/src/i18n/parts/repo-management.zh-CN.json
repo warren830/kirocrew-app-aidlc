@@ -1,0 +1,17 @@
+{
+  "activity.repo.updated": "已更新仓库标签或归档状态。",
+  "repos.action.rename": "重命名仓库",
+  "repos.action.archive": "归档仓库",
+  "repos.action.unarchive": "恢复仓库",
+  "repos.metadata.label": "仓库标签",
+  "repos.metadata.save": "保存标签",
+  "repos.metadata.archiveBody": "将仓库从活跃列表中隐藏，保留文件、会话绑定与历史。随时勾选“显示已归档仓库”恢复。",
+  "repos.metadata.showArchived": "显示已归档仓库",
+  "repos.metadata.archived": "已归档",
+  "repos.directory.open": "浏览目录",
+  "repos.directory.help": "选择运行 KiroCrew 的机器上的目录。",
+  "repos.directory.parent": "上一级目录",
+  "repos.directory.select": "使用此目录",
+  "repos.directory.list": "目录列表",
+  "repos.directory.truncated": "目录列表已限量显示。可填写更具体的路径，打开未显示的目录。"
+}

@@ -1,0 +1,13 @@
+{
+  "backend_tests": 2717,
+  "frontend_tests": 387,
+  "installed_files_match": 47,
+  "gateway_boot": "a23b108c2e83ff89",
+  "current_leases": 0,
+  "qa_repository_registered": false,
+  "actual_browser_gone_notice_verified": true,
+  "old_confirmation_visible": false,
+  "return_to_current_actions_verified": true,
+  "actual_native_queue_items": 4,
+  "business_confirmations_sent": 0
+}

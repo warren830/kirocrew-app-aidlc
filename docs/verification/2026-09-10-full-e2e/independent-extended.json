@@ -1,0 +1,95 @@
+{
+  "at": "2026-09-10T19:34:01.155465+00:00",
+  "root": "/tmp/aidlc-precision-screenshots-CHDuUU",
+  "python": "/Library/Developer/CommandLineTools/usr/bin/python3",
+  "extended_cases": [
+    {
+      "case": "precision-0",
+      "expected": "1",
+      "function": "1",
+      "cli": "1",
+      "returncode": 0,
+      "pass": true
+    },
+    {
+      "case": "precision-1",
+      "expected": "1.2",
+      "function": "1.2",
+      "cli": "1.2",
+      "returncode": 0,
+      "pass": true
+    },
+    {
+      "case": "precision-2",
+      "expected": "1.25",
+      "function": "1.25",
+      "cli": "1.25",
+      "returncode": 0,
+      "pass": true
+    },
+    {
+      "case": "precision-3",
+      "expected": "1.250",
+      "function": "1.250",
+      "cli": "1.250",
+      "returncode": 0,
+      "pass": true
+    },
+    {
+      "case": "precision-4",
+      "expected": "1.2500",
+      "function": "1.2500",
+      "cli": "1.2500",
+      "returncode": 0,
+      "pass": true
+    },
+    {
+      "case": "precision-5",
+      "expected": "1.25000",
+      "function": "1.25000",
+      "cli": "1.25000",
+      "returncode": 0,
+      "pass": true
+    },
+    {
+      "case": "precision-6",
+      "expected": "1.250000",
+      "function": "1.250000",
+      "cli": "1.250000",
+      "returncode": 0,
+      "pass": true
+    },
+    {
+      "case": "out-of-range--1",
+      "function_error": "precision must be between 0 and 6",
+      "cli_returncode": 1,
+      "pass": true
+    },
+    {
+      "case": "out-of-range-7",
+      "function_error": "precision must be between 0 and 6",
+      "cli_returncode": 1,
+      "pass": true
+    },
+    {
+      "case": "argparse-invalid",
+      "args": [
+        "invalid"
+      ],
+      "returncode": 2,
+      "pass": true
+    },
+    {
+      "case": "argparse-invalid",
+      "args": [
+        "1.25",
+        "--precision",
+        "3.5"
+      ],
+      "returncode": 2,
+      "pass": true
+    }
+  ],
+  "unittest_returncode": 0,
+  "pass": true
+}

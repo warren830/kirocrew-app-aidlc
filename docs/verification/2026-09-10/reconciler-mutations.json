@@ -1,0 +1,160 @@
+{
+  "fixed_sha256": "edc95d617aa8ca8bf7978421566d3318e3b75c07200cc1dec54c620bea7eb540",
+  "backup": "/tmp/aidlc-reconciler-open-defects-fixed.py",
+  "runs": [
+    {
+      "mutant": "M1_exact_count_restored",
+      "command": "/Users/ychchen/warren_ws/kirocrew/.venv/bin/python -m pytest tests/test_reconciler_open_defects.py -k confirmed_presence_anomaly -q -o addopts= -p no:cacheprovider --tb=short",
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "exit_code": 1,
+      "summary": "2 failed, 24 deselected in 2.71s",
+      "killed": true,
+      "restored_sha256": "edc95d617aa8ca8bf7978421566d3318e3b75c07200cc1dec54c620bea7eb540",
+      "log": "/tmp/aidlc-reconciler-M1_exact_count_restored.log",
+      "failure_evidence": [
+        "E   AssertionError: assert 'ReconciliationRequired' == 'StateChanged'",
+        "E     ",
+        "E     - StateChanged",
+        "E     + ReconciliationRequired",
+        "E   AssertionError: assert 'ReconciliationRequired' == 'StateChanged'",
+        "E     ",
+        "E     - StateChanged",
+        "E     + ReconciliationRequired",
+        "FAILED tests/test_reconciler_open_defects.py::test_confirmed_presence_anomaly_can_finish_without_rebasing_or_replay[2]",
+        "FAILED tests/test_reconciler_open_defects.py::test_confirmed_presence_anomaly_can_finish_without_rebasing_or_replay[3]"
+      ]
+    },
+    {
+      "mutant": "M2_original_absence_proof",
+      "command": "/Users/ychchen/warren_ws/kirocrew/.venv/bin/python -m pytest tests/test_reconciler_open_defects.py -k failed_transcript_read -q -o addopts= -p no:cacheprovider --tb=short",
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "exit_code": 1,
+      "summary": "6 failed, 20 deselected in 5.61s",
+      "killed": true,
+      "restored_sha256": "edc95d617aa8ca8bf7978421566d3318e3b75c07200cc1dec54c620bea7eb540",
+      "log": "/tmp/aidlc-reconciler-M2_original_absence_proof.log",
+      "failure_evidence": [
+        "E   assert True is False",
+        "E   assert True is False",
+        "E   assert True is False",
+        "E   assert True is False",
+        "E   assert True is False",
+        "E   assert True is False",
+        "FAILED tests/test_reconciler_open_defects.py::test_failed_transcript_read_cannot_authorize_not_delivered[bound_only-missing]",
+        "FAILED tests/test_reconciler_open_defects.py::test_failed_transcript_read_cannot_authorize_not_delivered[bound_only-unreadable]",
+        "FAILED tests/test_reconciler_open_defects.py::test_failed_transcript_read_cannot_authorize_not_delivered[bound_before_healthy-missing]",
+        "FAILED tests/test_reconciler_open_defects.py::test_failed_transcript_read_cannot_authorize_not_delivered[bound_before_healthy-unreadable]",
+        "FAILED tests/test_reconciler_open_defects.py::test_failed_transcript_read_cannot_authorize_not_delivered[other_before_healthy-missing]",
+        "FAILED tests/test_reconciler_open_defects.py::test_failed_transcript_read_cannot_authorize_not_delivered[other_before_healthy-unreadable]"
+      ]
+    },
+    {
+      "mutant": "M3_only_last_read_counts",
+      "command": "/Users/ychchen/warren_ws/kirocrew/.venv/bin/python -m pytest tests/test_reconciler_open_defects.py -k failed_transcript_read -q -o addopts= -p no:cacheprovider --tb=short",
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "exit_code": 1,
+      "summary": "4 failed, 2 passed, 20 deselected in 4.86s",
+      "killed": true,
+      "restored_sha256": "edc95d617aa8ca8bf7978421566d3318e3b75c07200cc1dec54c620bea7eb540",
+      "log": "/tmp/aidlc-reconciler-M3_only_last_read_counts.log",
+      "failure_evidence": [
+        "E   assert True is False",
+        "E   assert True is False",
+        "E   assert True is False",
+        "E   assert True is False",
+        "FAILED tests/test_reconciler_open_defects.py::test_failed_transcript_read_cannot_authorize_not_delivered[bound_before_healthy-missing]",
+        "FAILED tests/test_reconciler_open_defects.py::test_failed_transcript_read_cannot_authorize_not_delivered[bound_before_healthy-unreadable]",
+        "FAILED tests/test_reconciler_open_defects.py::test_failed_transcript_read_cannot_authorize_not_delivered[other_before_healthy-missing]",
+        "FAILED tests/test_reconciler_open_defects.py::test_failed_transcript_read_cannot_authorize_not_delivered[other_before_healthy-unreadable]"
+      ]
+    },
+    {
+      "mutant": "M4_marker_guard_removed",
+      "command": "/Users/ychchen/warren_ws/kirocrew/.venv/bin/python -m pytest tests/test_reconciler_open_defects.py -k confirmed_recovery -q -o addopts= -p no:cacheprovider --tb=short",
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "exit_code": 1,
+      "summary": "3 failed, 6 passed, 17 deselected in 6.79s",
+      "killed": true,
+      "restored_sha256": "edc95d617aa8ca8bf7978421566d3318e3b75c07200cc1dec54c620bea7eb540",
+      "log": "/tmp/aidlc-reconciler-M4_marker_guard_removed.log",
+      "failure_evidence": [
+        "E   AssertionError: assert 'StateChanged' == 'ReconciliationRequired'",
+        "E     ",
+        "E     - ReconciliationRequired",
+        "E     + StateChanged",
+        "E   AssertionError: assert 'StateChanged' == 'ReconciliationRequired'",
+        "E     ",
+        "E     - ReconciliationRequired",
+        "E     + StateChanged",
+        "E   AssertionError: assert 'StateChanged' == 'ReconciliationRequired'",
+        "E     ",
+        "E     - ReconciliationRequired",
+        "E     + StateChanged",
+        "FAILED tests/test_reconciler_open_defects.py::test_confirmed_recovery_still_requires_presence_and_resolution_proofs[marker]",
+        "FAILED tests/test_reconciler_open_defects.py::test_confirmed_recovery_still_requires_presence_and_resolution_proofs[marker_advance]",
+        "FAILED tests/test_reconciler_open_defects.py::test_confirmed_recovery_still_requires_presence_and_resolution_proofs[marker_monotonicity]"
+      ]
+    },
+    {
+      "mutant": "M5_partial_uses_total_count",
+      "command": "/Users/ychchen/warren_ws/kirocrew/.venv/bin/python -m pytest tests/test_reconciler_open_defects.py -k partial_audit -q -o addopts= -p no:cacheprovider --tb=short",
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "exit_code": 1,
+      "summary": "3 failed, 1 passed, 22 deselected in 3.21s",
+      "killed": true,
+      "restored_sha256": "edc95d617aa8ca8bf7978421566d3318e3b75c07200cc1dec54c620bea7eb540",
+      "log": "/tmp/aidlc-reconciler-M5_partial_uses_total_count.log",
+      "failure_evidence": [
+        "E   AssertionError: assert 'ReconciliationRequired' == 'StateChanged'",
+        "E     ",
+        "E     - StateChanged",
+        "E     + ReconciliationRequired",
+        "E   AssertionError: assert 'StateChanged' == 'ReconciliationRequired'",
+        "E     ",
+        "E     - ReconciliationRequired",
+        "E     + StateChanged",
+        "E   AssertionError: assert 'StateChanged' == 'ReconciliationRequired'",
+        "E     ",
+        "E     - ReconciliationRequired",
+        "E     + StateChanged",
+        "FAILED tests/test_reconciler_open_defects.py::test_partial_audit_keeps_dispatch_order_and_marker_requirements[new_with_smaller_tail]",
+        "FAILED tests/test_reconciler_open_defects.py::test_partial_audit_keeps_dispatch_order_and_marker_requirements[old_timestamp]",
+        "FAILED tests/test_reconciler_open_defects.py::test_partial_audit_keeps_dispatch_order_and_marker_requirements[before_boundary]"
+      ]
+    },
+    {
+      "mutant": "M6_inflight_count_relaxed",
+      "command": "/Users/ychchen/warren_ws/kirocrew/.venv/bin/python -m pytest tests/test_reconciler_open_defects.py -k confirmed_presence_anomaly -q -o addopts= -p no:cacheprovider --tb=short",
+      "environment": {
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "exit_code": 1,
+      "summary": "2 failed, 24 deselected in 1.84s",
+      "killed": true,
+      "restored_sha256": "edc95d617aa8ca8bf7978421566d3318e3b75c07200cc1dec54c620bea7eb540",
+      "log": "/tmp/aidlc-reconciler-M6_inflight_count_relaxed.log",
+      "failure_evidence": [
+        "E   AssertionError: assert 'StateChanged' == 'DeliveryUncertain'",
+        "E     ",
+        "E     - DeliveryUncertain",
+        "E     + StateChanged",
+        "E   AssertionError: assert 'StateChanged' == 'DeliveryUncertain'",
+        "E     ",
+        "E     - DeliveryUncertain",
+        "E     + StateChanged",
+        "FAILED tests/test_reconciler_open_defects.py::test_confirmed_presence_anomaly_can_finish_without_rebasing_or_replay[2]",
+        "FAILED tests/test_reconciler_open_defects.py::test_confirmed_presence_anomaly_can_finish_without_rebasing_or_replay[3]"
+      ]
+    }
+  ]
+}

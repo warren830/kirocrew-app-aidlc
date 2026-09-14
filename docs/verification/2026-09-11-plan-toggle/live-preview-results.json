@@ -1,0 +1,1036 @@
+[
+  {
+    "overrides": {},
+    "valid": true,
+    "exact": {
+      "stages": 10,
+      "gates": 7,
+      "artifacts": 37,
+      "review_intensity": {
+        "none": 10,
+        "advisory": 0,
+        "adversarial": 0
+      },
+      "assumes_units": 1
+    },
+    "stages": [
+      {
+        "slug": "intent-capture",
+        "number": "1.1",
+        "name": "Intent Capture & Framing",
+        "phase": "ideation",
+        "execution": "ALWAYS",
+        "in_grid": false,
+        "enabled": false,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-product-lead-agent",
+        "per_unit": false,
+        "produces": [
+          "intent-statement",
+          "stakeholder-map",
+          "intent-capture-questions"
+        ],
+        "consumes": [],
+        "depends_on": [],
+        "conditional_on": null,
+        "state": null
+      },
+      {
+        "slug": "reverse-engineering",
+        "number": "2.1",
+        "name": "Reverse Engineering",
+        "phase": "inception",
+        "execution": "CONDITIONAL",
+        "in_grid": true,
+        "enabled": true,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": null,
+        "per_unit": false,
+        "produces": [
+          "business-overview",
+          "architecture",
+          "code-structure",
+          "api-documentation",
+          "component-inventory",
+          "technology-stack",
+          "dependencies",
+          "code-quality-assessment",
+          "reverse-engineering-timestamp"
+        ],
+        "consumes": [],
+        "depends_on": [
+          "state-init"
+        ],
+        "conditional_on": "Execute when project is brownfield. On rerun the Step 1 guard checks store freshness (codekb-scope-diff) - verified-CURRENT stores may be reused by human choice, anything else rescans. Skip for greenfield projects.",
+        "state": null
+      },
+      {
+        "slug": "units-generation",
+        "number": "2.7",
+        "name": "Units Generation",
+        "phase": "inception",
+        "execution": "ALWAYS",
+        "in_grid": false,
+        "enabled": false,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-architecture-reviewer-agent",
+        "per_unit": false,
+        "produces": [
+          "unit-of-work",
+          "unit-of-work-dependency",
+          "unit-of-work-story-map",
+          "traceability"
+        ],
+        "consumes": [
+          "components",
+          "decisions",
+          "requirements",
+          "stories"
+        ],
+        "depends_on": [
+          "domain-design"
+        ],
+        "conditional_on": null,
+        "state": null
+      },
+      {
+        "slug": "code-generation",
+        "number": "3.5",
+        "name": "Code Generation",
+        "phase": "construction",
+        "execution": "ALWAYS",
+        "in_grid": true,
+        "enabled": true,
+        "locked": true,
+        "lock_reason": "always",
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-architecture-reviewer-agent",
+        "per_unit": true,
+        "produces": [
+          "code-generation-plan",
+          "unit-test-instructions",
+          "code-summary",
+          "traceability"
+        ],
+        "consumes": [
+          "functional-spec",
+          "rules",
+          "entities",
+          "contract-summary",
+          "performance-design",
+          "security-design",
+          "infrastructure-specification",
+          "unit-of-work",
+          "requirements"
+        ],
+        "depends_on": [
+          "units-generation",
+          "functional-design",
+          "nfr-requirements",
+          "nfr-design",
+          "infrastructure-design"
+        ],
+        "conditional_on": null,
+        "state": null
+      }
+    ]
+  },
+  {
+    "overrides": {
+      "intent-capture": true
+    },
+    "valid": true,
+    "exact": {
+      "stages": 11,
+      "gates": 8,
+      "artifacts": 40,
+      "review_intensity": {
+        "none": 11,
+        "advisory": 0,
+        "adversarial": 0
+      },
+      "assumes_units": 1
+    },
+    "stages": [
+      {
+        "slug": "intent-capture",
+        "number": "1.1",
+        "name": "Intent Capture & Framing",
+        "phase": "ideation",
+        "execution": "ALWAYS",
+        "in_grid": false,
+        "enabled": true,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-product-lead-agent",
+        "per_unit": false,
+        "produces": [
+          "intent-statement",
+          "stakeholder-map",
+          "intent-capture-questions"
+        ],
+        "consumes": [],
+        "depends_on": [],
+        "conditional_on": null,
+        "state": null
+      },
+      {
+        "slug": "reverse-engineering",
+        "number": "2.1",
+        "name": "Reverse Engineering",
+        "phase": "inception",
+        "execution": "CONDITIONAL",
+        "in_grid": true,
+        "enabled": true,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": null,
+        "per_unit": false,
+        "produces": [
+          "business-overview",
+          "architecture",
+          "code-structure",
+          "api-documentation",
+          "component-inventory",
+          "technology-stack",
+          "dependencies",
+          "code-quality-assessment",
+          "reverse-engineering-timestamp"
+        ],
+        "consumes": [],
+        "depends_on": [
+          "state-init"
+        ],
+        "conditional_on": "Execute when project is brownfield. On rerun the Step 1 guard checks store freshness (codekb-scope-diff) - verified-CURRENT stores may be reused by human choice, anything else rescans. Skip for greenfield projects.",
+        "state": null
+      },
+      {
+        "slug": "units-generation",
+        "number": "2.7",
+        "name": "Units Generation",
+        "phase": "inception",
+        "execution": "ALWAYS",
+        "in_grid": false,
+        "enabled": false,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-architecture-reviewer-agent",
+        "per_unit": false,
+        "produces": [
+          "unit-of-work",
+          "unit-of-work-dependency",
+          "unit-of-work-story-map",
+          "traceability"
+        ],
+        "consumes": [
+          "components",
+          "decisions",
+          "requirements",
+          "stories"
+        ],
+        "depends_on": [
+          "domain-design"
+        ],
+        "conditional_on": null,
+        "state": null
+      },
+      {
+        "slug": "code-generation",
+        "number": "3.5",
+        "name": "Code Generation",
+        "phase": "construction",
+        "execution": "ALWAYS",
+        "in_grid": true,
+        "enabled": true,
+        "locked": true,
+        "lock_reason": "always",
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-architecture-reviewer-agent",
+        "per_unit": true,
+        "produces": [
+          "code-generation-plan",
+          "unit-test-instructions",
+          "code-summary",
+          "traceability"
+        ],
+        "consumes": [
+          "functional-spec",
+          "rules",
+          "entities",
+          "contract-summary",
+          "performance-design",
+          "security-design",
+          "infrastructure-specification",
+          "unit-of-work",
+          "requirements"
+        ],
+        "depends_on": [
+          "units-generation",
+          "functional-design",
+          "nfr-requirements",
+          "nfr-design",
+          "infrastructure-design"
+        ],
+        "conditional_on": null,
+        "state": null
+      }
+    ]
+  },
+  {
+    "overrides": {
+      "intent-capture": false
+    },
+    "valid": true,
+    "exact": {
+      "stages": 10,
+      "gates": 7,
+      "artifacts": 37,
+      "review_intensity": {
+        "none": 10,
+        "advisory": 0,
+        "adversarial": 0
+      },
+      "assumes_units": 1
+    },
+    "stages": [
+      {
+        "slug": "intent-capture",
+        "number": "1.1",
+        "name": "Intent Capture & Framing",
+        "phase": "ideation",
+        "execution": "ALWAYS",
+        "in_grid": false,
+        "enabled": false,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-product-lead-agent",
+        "per_unit": false,
+        "produces": [
+          "intent-statement",
+          "stakeholder-map",
+          "intent-capture-questions"
+        ],
+        "consumes": [],
+        "depends_on": [],
+        "conditional_on": null,
+        "state": null
+      },
+      {
+        "slug": "reverse-engineering",
+        "number": "2.1",
+        "name": "Reverse Engineering",
+        "phase": "inception",
+        "execution": "CONDITIONAL",
+        "in_grid": true,
+        "enabled": true,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": null,
+        "per_unit": false,
+        "produces": [
+          "business-overview",
+          "architecture",
+          "code-structure",
+          "api-documentation",
+          "component-inventory",
+          "technology-stack",
+          "dependencies",
+          "code-quality-assessment",
+          "reverse-engineering-timestamp"
+        ],
+        "consumes": [],
+        "depends_on": [
+          "state-init"
+        ],
+        "conditional_on": "Execute when project is brownfield. On rerun the Step 1 guard checks store freshness (codekb-scope-diff) - verified-CURRENT stores may be reused by human choice, anything else rescans. Skip for greenfield projects.",
+        "state": null
+      },
+      {
+        "slug": "units-generation",
+        "number": "2.7",
+        "name": "Units Generation",
+        "phase": "inception",
+        "execution": "ALWAYS",
+        "in_grid": false,
+        "enabled": false,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-architecture-reviewer-agent",
+        "per_unit": false,
+        "produces": [
+          "unit-of-work",
+          "unit-of-work-dependency",
+          "unit-of-work-story-map",
+          "traceability"
+        ],
+        "consumes": [
+          "components",
+          "decisions",
+          "requirements",
+          "stories"
+        ],
+        "depends_on": [
+          "domain-design"
+        ],
+        "conditional_on": null,
+        "state": null
+      },
+      {
+        "slug": "code-generation",
+        "number": "3.5",
+        "name": "Code Generation",
+        "phase": "construction",
+        "execution": "ALWAYS",
+        "in_grid": true,
+        "enabled": true,
+        "locked": true,
+        "lock_reason": "always",
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-architecture-reviewer-agent",
+        "per_unit": true,
+        "produces": [
+          "code-generation-plan",
+          "unit-test-instructions",
+          "code-summary",
+          "traceability"
+        ],
+        "consumes": [
+          "functional-spec",
+          "rules",
+          "entities",
+          "contract-summary",
+          "performance-design",
+          "security-design",
+          "infrastructure-specification",
+          "unit-of-work",
+          "requirements"
+        ],
+        "depends_on": [
+          "units-generation",
+          "functional-design",
+          "nfr-requirements",
+          "nfr-design",
+          "infrastructure-design"
+        ],
+        "conditional_on": null,
+        "state": null
+      }
+    ]
+  },
+  {
+    "overrides": {
+      "units-generation": true
+    },
+    "valid": false,
+    "exact": {
+      "stages": 11,
+      "gates": 8,
+      "artifacts": 41,
+      "review_intensity": {
+        "none": 11,
+        "advisory": 0,
+        "adversarial": 0
+      },
+      "assumes_units": 1
+    },
+    "stages": [
+      {
+        "slug": "intent-capture",
+        "number": "1.1",
+        "name": "Intent Capture & Framing",
+        "phase": "ideation",
+        "execution": "ALWAYS",
+        "in_grid": false,
+        "enabled": false,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-product-lead-agent",
+        "per_unit": false,
+        "produces": [
+          "intent-statement",
+          "stakeholder-map",
+          "intent-capture-questions"
+        ],
+        "consumes": [],
+        "depends_on": [],
+        "conditional_on": null,
+        "state": null
+      },
+      {
+        "slug": "reverse-engineering",
+        "number": "2.1",
+        "name": "Reverse Engineering",
+        "phase": "inception",
+        "execution": "CONDITIONAL",
+        "in_grid": true,
+        "enabled": true,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": null,
+        "per_unit": false,
+        "produces": [
+          "business-overview",
+          "architecture",
+          "code-structure",
+          "api-documentation",
+          "component-inventory",
+          "technology-stack",
+          "dependencies",
+          "code-quality-assessment",
+          "reverse-engineering-timestamp"
+        ],
+        "consumes": [],
+        "depends_on": [
+          "state-init"
+        ],
+        "conditional_on": "Execute when project is brownfield. On rerun the Step 1 guard checks store freshness (codekb-scope-diff) - verified-CURRENT stores may be reused by human choice, anything else rescans. Skip for greenfield projects.",
+        "state": null
+      },
+      {
+        "slug": "units-generation",
+        "number": "2.7",
+        "name": "Units Generation",
+        "phase": "inception",
+        "execution": "ALWAYS",
+        "in_grid": false,
+        "enabled": true,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-architecture-reviewer-agent",
+        "per_unit": false,
+        "produces": [
+          "unit-of-work",
+          "unit-of-work-dependency",
+          "unit-of-work-story-map",
+          "traceability"
+        ],
+        "consumes": [
+          "components",
+          "decisions",
+          "requirements",
+          "stories"
+        ],
+        "depends_on": [
+          "domain-design"
+        ],
+        "conditional_on": null,
+        "state": null
+      },
+      {
+        "slug": "code-generation",
+        "number": "3.5",
+        "name": "Code Generation",
+        "phase": "construction",
+        "execution": "ALWAYS",
+        "in_grid": true,
+        "enabled": true,
+        "locked": true,
+        "lock_reason": "always",
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-architecture-reviewer-agent",
+        "per_unit": true,
+        "produces": [
+          "code-generation-plan",
+          "unit-test-instructions",
+          "code-summary",
+          "traceability"
+        ],
+        "consumes": [
+          "functional-spec",
+          "rules",
+          "entities",
+          "contract-summary",
+          "performance-design",
+          "security-design",
+          "infrastructure-specification",
+          "unit-of-work",
+          "requirements"
+        ],
+        "depends_on": [
+          "units-generation",
+          "functional-design",
+          "nfr-requirements",
+          "nfr-design",
+          "infrastructure-design"
+        ],
+        "conditional_on": null,
+        "state": null
+      }
+    ]
+  },
+  {
+    "overrides": {
+      "units-generation": false
+    },
+    "valid": true,
+    "exact": {
+      "stages": 10,
+      "gates": 7,
+      "artifacts": 37,
+      "review_intensity": {
+        "none": 10,
+        "advisory": 0,
+        "adversarial": 0
+      },
+      "assumes_units": 1
+    },
+    "stages": [
+      {
+        "slug": "intent-capture",
+        "number": "1.1",
+        "name": "Intent Capture & Framing",
+        "phase": "ideation",
+        "execution": "ALWAYS",
+        "in_grid": false,
+        "enabled": false,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-product-lead-agent",
+        "per_unit": false,
+        "produces": [
+          "intent-statement",
+          "stakeholder-map",
+          "intent-capture-questions"
+        ],
+        "consumes": [],
+        "depends_on": [],
+        "conditional_on": null,
+        "state": null
+      },
+      {
+        "slug": "reverse-engineering",
+        "number": "2.1",
+        "name": "Reverse Engineering",
+        "phase": "inception",
+        "execution": "CONDITIONAL",
+        "in_grid": true,
+        "enabled": true,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": null,
+        "per_unit": false,
+        "produces": [
+          "business-overview",
+          "architecture",
+          "code-structure",
+          "api-documentation",
+          "component-inventory",
+          "technology-stack",
+          "dependencies",
+          "code-quality-assessment",
+          "reverse-engineering-timestamp"
+        ],
+        "consumes": [],
+        "depends_on": [
+          "state-init"
+        ],
+        "conditional_on": "Execute when project is brownfield. On rerun the Step 1 guard checks store freshness (codekb-scope-diff) - verified-CURRENT stores may be reused by human choice, anything else rescans. Skip for greenfield projects.",
+        "state": null
+      },
+      {
+        "slug": "units-generation",
+        "number": "2.7",
+        "name": "Units Generation",
+        "phase": "inception",
+        "execution": "ALWAYS",
+        "in_grid": false,
+        "enabled": false,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-architecture-reviewer-agent",
+        "per_unit": false,
+        "produces": [
+          "unit-of-work",
+          "unit-of-work-dependency",
+          "unit-of-work-story-map",
+          "traceability"
+        ],
+        "consumes": [
+          "components",
+          "decisions",
+          "requirements",
+          "stories"
+        ],
+        "depends_on": [
+          "domain-design"
+        ],
+        "conditional_on": null,
+        "state": null
+      },
+      {
+        "slug": "code-generation",
+        "number": "3.5",
+        "name": "Code Generation",
+        "phase": "construction",
+        "execution": "ALWAYS",
+        "in_grid": true,
+        "enabled": true,
+        "locked": true,
+        "lock_reason": "always",
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-architecture-reviewer-agent",
+        "per_unit": true,
+        "produces": [
+          "code-generation-plan",
+          "unit-test-instructions",
+          "code-summary",
+          "traceability"
+        ],
+        "consumes": [
+          "functional-spec",
+          "rules",
+          "entities",
+          "contract-summary",
+          "performance-design",
+          "security-design",
+          "infrastructure-specification",
+          "unit-of-work",
+          "requirements"
+        ],
+        "depends_on": [
+          "units-generation",
+          "functional-design",
+          "nfr-requirements",
+          "nfr-design",
+          "infrastructure-design"
+        ],
+        "conditional_on": null,
+        "state": null
+      }
+    ]
+  },
+  {
+    "overrides": {
+      "reverse-engineering": false
+    },
+    "valid": true,
+    "exact": {
+      "stages": 9,
+      "gates": 6,
+      "artifacts": 28,
+      "review_intensity": {
+        "none": 9,
+        "advisory": 0,
+        "adversarial": 0
+      },
+      "assumes_units": 1
+    },
+    "stages": [
+      {
+        "slug": "intent-capture",
+        "number": "1.1",
+        "name": "Intent Capture & Framing",
+        "phase": "ideation",
+        "execution": "ALWAYS",
+        "in_grid": false,
+        "enabled": false,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-product-lead-agent",
+        "per_unit": false,
+        "produces": [
+          "intent-statement",
+          "stakeholder-map",
+          "intent-capture-questions"
+        ],
+        "consumes": [],
+        "depends_on": [],
+        "conditional_on": null,
+        "state": null
+      },
+      {
+        "slug": "reverse-engineering",
+        "number": "2.1",
+        "name": "Reverse Engineering",
+        "phase": "inception",
+        "execution": "CONDITIONAL",
+        "in_grid": true,
+        "enabled": false,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": null,
+        "per_unit": false,
+        "produces": [
+          "business-overview",
+          "architecture",
+          "code-structure",
+          "api-documentation",
+          "component-inventory",
+          "technology-stack",
+          "dependencies",
+          "code-quality-assessment",
+          "reverse-engineering-timestamp"
+        ],
+        "consumes": [],
+        "depends_on": [
+          "state-init"
+        ],
+        "conditional_on": "Execute when project is brownfield. On rerun the Step 1 guard checks store freshness (codekb-scope-diff) - verified-CURRENT stores may be reused by human choice, anything else rescans. Skip for greenfield projects.",
+        "state": null
+      },
+      {
+        "slug": "units-generation",
+        "number": "2.7",
+        "name": "Units Generation",
+        "phase": "inception",
+        "execution": "ALWAYS",
+        "in_grid": false,
+        "enabled": false,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-architecture-reviewer-agent",
+        "per_unit": false,
+        "produces": [
+          "unit-of-work",
+          "unit-of-work-dependency",
+          "unit-of-work-story-map",
+          "traceability"
+        ],
+        "consumes": [
+          "components",
+          "decisions",
+          "requirements",
+          "stories"
+        ],
+        "depends_on": [
+          "domain-design"
+        ],
+        "conditional_on": null,
+        "state": null
+      },
+      {
+        "slug": "code-generation",
+        "number": "3.5",
+        "name": "Code Generation",
+        "phase": "construction",
+        "execution": "ALWAYS",
+        "in_grid": true,
+        "enabled": true,
+        "locked": true,
+        "lock_reason": "always",
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-architecture-reviewer-agent",
+        "per_unit": true,
+        "produces": [
+          "code-generation-plan",
+          "unit-test-instructions",
+          "code-summary",
+          "traceability"
+        ],
+        "consumes": [
+          "functional-spec",
+          "rules",
+          "entities",
+          "contract-summary",
+          "performance-design",
+          "security-design",
+          "infrastructure-specification",
+          "unit-of-work",
+          "requirements"
+        ],
+        "depends_on": [
+          "units-generation",
+          "functional-design",
+          "nfr-requirements",
+          "nfr-design",
+          "infrastructure-design"
+        ],
+        "conditional_on": null,
+        "state": null
+      }
+    ]
+  },
+  {
+    "overrides": {
+      "reverse-engineering": true
+    },
+    "valid": true,
+    "exact": {
+      "stages": 10,
+      "gates": 7,
+      "artifacts": 37,
+      "review_intensity": {
+        "none": 10,
+        "advisory": 0,
+        "adversarial": 0
+      },
+      "assumes_units": 1
+    },
+    "stages": [
+      {
+        "slug": "intent-capture",
+        "number": "1.1",
+        "name": "Intent Capture & Framing",
+        "phase": "ideation",
+        "execution": "ALWAYS",
+        "in_grid": false,
+        "enabled": false,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-product-lead-agent",
+        "per_unit": false,
+        "produces": [
+          "intent-statement",
+          "stakeholder-map",
+          "intent-capture-questions"
+        ],
+        "consumes": [],
+        "depends_on": [],
+        "conditional_on": null,
+        "state": null
+      },
+      {
+        "slug": "reverse-engineering",
+        "number": "2.1",
+        "name": "Reverse Engineering",
+        "phase": "inception",
+        "execution": "CONDITIONAL",
+        "in_grid": true,
+        "enabled": true,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": null,
+        "per_unit": false,
+        "produces": [
+          "business-overview",
+          "architecture",
+          "code-structure",
+          "api-documentation",
+          "component-inventory",
+          "technology-stack",
+          "dependencies",
+          "code-quality-assessment",
+          "reverse-engineering-timestamp"
+        ],
+        "consumes": [],
+        "depends_on": [
+          "state-init"
+        ],
+        "conditional_on": "Execute when project is brownfield. On rerun the Step 1 guard checks store freshness (codekb-scope-diff) - verified-CURRENT stores may be reused by human choice, anything else rescans. Skip for greenfield projects.",
+        "state": null
+      },
+      {
+        "slug": "units-generation",
+        "number": "2.7",
+        "name": "Units Generation",
+        "phase": "inception",
+        "execution": "ALWAYS",
+        "in_grid": false,
+        "enabled": false,
+        "locked": false,
+        "lock_reason": null,
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-architecture-reviewer-agent",
+        "per_unit": false,
+        "produces": [
+          "unit-of-work",
+          "unit-of-work-dependency",
+          "unit-of-work-story-map",
+          "traceability"
+        ],
+        "consumes": [
+          "components",
+          "decisions",
+          "requirements",
+          "stories"
+        ],
+        "depends_on": [
+          "domain-design"
+        ],
+        "conditional_on": null,
+        "state": null
+      },
+      {
+        "slug": "code-generation",
+        "number": "3.5",
+        "name": "Code Generation",
+        "phase": "construction",
+        "execution": "ALWAYS",
+        "in_grid": true,
+        "enabled": true,
+        "locked": true,
+        "lock_reason": "always",
+        "gate": true,
+        "review_class": "none",
+        "reviewer": "aidlc-architecture-reviewer-agent",
+        "per_unit": true,
+        "produces": [
+          "code-generation-plan",
+          "unit-test-instructions",
+          "code-summary",
+          "traceability"
+        ],
+        "consumes": [
+          "functional-spec",
+          "rules",
+          "entities",
+          "contract-summary",
+          "performance-design",
+          "security-design",
+          "infrastructure-specification",
+          "unit-of-work",
+          "requirements"
+        ],
+        "depends_on": [
+          "units-generation",
+          "functional-design",
+          "nfr-requirements",
+          "nfr-design",
+          "infrastructure-design"
+        ],
+        "conditional_on": null,
+        "state": null
+      }
+    ]
+  }
+]

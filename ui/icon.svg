@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AI-DLC Studio">
+  <title>AI-DLC Studio</title>
+  <!-- Five stacked phase lanes (initialization → operation) with a decision marker on the
+       third lane: the product is a lane view whose point is the pending human decision. -->
+  <g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round">
+    <path d="M10 14h30" opacity=".9"/>
+    <path d="M10 24h38" opacity=".75"/>
+    <path d="M10 34h22" opacity=".6"/>
+    <path d="M10 44h30" opacity=".45"/>
+    <path d="M10 54h18" opacity=".3"/>
+  </g>
+  <circle cx="46" cy="34" r="8" fill="currentColor"/>
+  <path d="M42.5 34.2l2.6 2.6 5-5.4" fill="none" stroke="#fff" stroke-width="2.6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

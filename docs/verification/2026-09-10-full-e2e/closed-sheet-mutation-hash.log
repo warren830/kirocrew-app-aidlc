@@ -1,0 +1,59 @@
+MUTATION: ignore_receipt_hash (memory only; source files untouched)
+.FF.......                                                               [100%]
+=================================== FAILURES ===================================
+________ test_closed_sheet_requires_a_matching_closure_receipt[fields1] ________
+
+closed_sheet_scene = namespace(root=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-412/test_closed_sheet_requires_a_m1/repo'), reader=<_aidlc_studio_backend.studio.aidlc_reader.AidlcReader object at 0x10bd34530>)
+fields = {'Questions SHA-256': '0000000000000000000000000000000000000000000000000000000000000000'}
+
+    @pytest.mark.parametrize("fields", [
+        {"Questions File": "another-intent/requirements-analysis-questions.md"},
+        {"Questions SHA-256": "0" * 64},
+        {"Questions SHA-256": CLOSED_SHEET_SHA},
+        {"Hash Scope": "unknown-v2"},
+        {"Details": "Request changes"},
+        {"Checkpoint": "Plan Approval"},
+        {"Stage": "user-stories"},
+        {"Unit": "unit-other"},
+        {"Workflow": f"single-stage:{STAGE}"},
+        {"Attempt Generation": "2"},
+    ])
+    def test_closed_sheet_requires_a_matching_closure_receipt(closed_sheet_scene, fields):
+        scene = closed_sheet_scene
+        _shard(scene.root).write_text(start_audit() + closed_sheet_receipt(scene, **fields) + decision())
+>       assert closed_sheet_questions(scene).origin is None
+E       AssertionError: assert {'attempt_generation': None, 'decision_sha256': 'be8611fcb155e27b123712ea09e451dd227ffc8769e42893d2fbefa7e5877307', 'event': 'DECISION_RECORDED', 'kind': 'audit', ...} is None
+E        +  where {'attempt_generation': None, 'decision_sha256': 'be8611fcb155e27b123712ea09e451dd227ffc8769e42893d2fbefa7e5877307', 'event': 'DECISION_RECORDED', 'kind': 'audit', ...} = QuestionsFile(relpath='aidlc/spaces/default/intents/260904-gate-demo/audit/fixture-host-0f1e2d3c4b5a.md', sha256='ca1b...ne, 'attempt_generation': None, 'decision_sha256': 'be8611fcb155e27b123712ea09e451dd227ffc8769e42893d2fbefa7e5877307'}).origin
+E        +    where QuestionsFile(relpath='aidlc/spaces/default/intents/260904-gate-demo/audit/fixture-host-0f1e2d3c4b5a.md', sha256='ca1b...ne, 'attempt_generation': None, 'decision_sha256': 'be8611fcb155e27b123712ea09e451dd227ffc8769e42893d2fbefa7e5877307'}) = closed_sheet_questions(namespace(root=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-412/test_closed_sheet_requires_a_m1/repo'), reader=<_aidlc_studio_backend.studio.aidlc_reader.AidlcReader object at 0x10bd34530>))
+
+tests/test_audit_questions.py:390: AssertionError
+________ test_closed_sheet_requires_a_matching_closure_receipt[fields2] ________
+
+closed_sheet_scene = namespace(root=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-412/test_closed_sheet_requires_a_m2/repo'), reader=<_aidlc_studio_backend.studio.aidlc_reader.AidlcReader object at 0x10bd359d0>)
+fields = {'Questions SHA-256': 'd39610aafad7ed5d41279d5e43cabc7bf4373661b01b41315238917c17085bd0'}
+
+    @pytest.mark.parametrize("fields", [
+        {"Questions File": "another-intent/requirements-analysis-questions.md"},
+        {"Questions SHA-256": "0" * 64},
+        {"Questions SHA-256": CLOSED_SHEET_SHA},
+        {"Hash Scope": "unknown-v2"},
+        {"Details": "Request changes"},
+        {"Checkpoint": "Plan Approval"},
+        {"Stage": "user-stories"},
+        {"Unit": "unit-other"},
+        {"Workflow": f"single-stage:{STAGE}"},
+        {"Attempt Generation": "2"},
+    ])
+    def test_closed_sheet_requires_a_matching_closure_receipt(closed_sheet_scene, fields):
+        scene = closed_sheet_scene
+        _shard(scene.root).write_text(start_audit() + closed_sheet_receipt(scene, **fields) + decision())
+>       assert closed_sheet_questions(scene).origin is None
+E       AssertionError: assert {'attempt_generation': None, 'decision_sha256': 'be8611fcb155e27b123712ea09e451dd227ffc8769e42893d2fbefa7e5877307', 'event': 'DECISION_RECORDED', 'kind': 'audit', ...} is None
+E        +  where {'attempt_generation': None, 'decision_sha256': 'be8611fcb155e27b123712ea09e451dd227ffc8769e42893d2fbefa7e5877307', 'event': 'DECISION_RECORDED', 'kind': 'audit', ...} = QuestionsFile(relpath='aidlc/spaces/default/intents/260904-gate-demo/audit/fixture-host-0f1e2d3c4b5a.md', sha256='be69...ne, 'attempt_generation': None, 'decision_sha256': 'be8611fcb155e27b123712ea09e451dd227ffc8769e42893d2fbefa7e5877307'}).origin
+E        +    where QuestionsFile(relpath='aidlc/spaces/default/intents/260904-gate-demo/audit/fixture-host-0f1e2d3c4b5a.md', sha256='be69...ne, 'attempt_generation': None, 'decision_sha256': 'be8611fcb155e27b123712ea09e451dd227ffc8769e42893d2fbefa7e5877307'}) = closed_sheet_questions(namespace(root=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000gq/T/pytest-of-ychchen/pytest-412/test_closed_sheet_requires_a_m2/repo'), reader=<_aidlc_studio_backend.studio.aidlc_reader.AidlcReader object at 0x10bd359d0>))
+
+tests/test_audit_questions.py:390: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_audit_questions.py::test_closed_sheet_requires_a_matching_closure_receipt[fields1]
+FAILED tests/test_audit_questions.py::test_closed_sheet_requires_a_matching_closure_receipt[fields2]
+2 failed, 8 passed, 143 deselected in 0.31s

@@ -1,0 +1,23 @@
+{
+  "chat.defaultAgent": "aidlc",
+  "chat.modelDefaults": {
+    "claude-opus-4.8": {
+      "output_config": {
+        "effort": "xhigh"
+      }
+    },
+    "gpt-5.6-sol": {
+      "reasoning": {
+        "effort": "max"
+      }
+    },
+    "claude-opus-5": {
+      "output_config": {
+        "effort": "max"
+      }
+    }
+  },
+  "toolSearch.enabled": true,
+  "toolSearch.minPct": 5,
+  "toolSearch.minTokens": 50000
+}

@@ -1,0 +1,9 @@
+
+ RUN  v5.0.0 /Users/ychchen/warren_ws/kirocrew-app-aidlc/ui
+
+
+ Test Files  1 passed (1)
+      Tests  37 passed (37)
+   Start at  21:18:40
+   Duration  20.34s (tests 96%, environment 2%, transform 1%, setup 1%)
+

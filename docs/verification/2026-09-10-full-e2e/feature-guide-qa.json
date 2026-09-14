@@ -1,0 +1,122 @@
+{
+  "passed": true,
+  "checked_at": "2026-09-10T19:54:29.215Z",
+  "browser": "Bundled Playwright Chromium; Browser plugin not available",
+  "flow": "open local HTML → navigate feature → open screenshot → save/close → reload offline",
+  "desktop": {
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "images": [
+      {
+        "alt": "项目详情与运行状态",
+        "width": 1024,
+        "loaded": true
+      },
+      {
+        "alt": "任务范围与执行深度",
+        "width": 930,
+        "loaded": true
+      },
+      {
+        "alt": "工作流图与阶段详情",
+        "width": 1364,
+        "loaded": true
+      },
+      {
+        "alt": "审批卡与修改反馈",
+        "width": 904,
+        "loaded": true
+      },
+      {
+        "alt": "代码摘要与测试结果",
+        "width": 1100,
+        "loaded": true
+      },
+      {
+        "alt": "任务的内嵌会话",
+        "width": 904,
+        "loaded": true
+      }
+    ],
+    "modal": {
+      "open": true,
+      "text": "审批卡与修改反馈\n保存截图\n关闭 ×",
+      "image": 904
+    },
+    "closedByButton": true,
+    "closedByEscape": true,
+    "navigation": {
+      "hash": "#artifact",
+      "top": 95.515625,
+      "overflow": false
+    },
+    "downloadBytes": 67328
+  },
+  "mobile": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "sections": [
+      {
+        "id": "project",
+        "left": 12,
+        "right": 378,
+        "pageWidth": 390,
+        "viewport": 390,
+        "imgLoaded": true
+      },
+      {
+        "id": "intent",
+        "left": 12,
+        "right": 378,
+        "pageWidth": 390,
+        "viewport": 390,
+        "imgLoaded": true
+      },
+      {
+        "id": "workflow",
+        "left": 12,
+        "right": 378,
+        "pageWidth": 390,
+        "viewport": 390,
+        "imgLoaded": true
+      },
+      {
+        "id": "decision",
+        "left": 12,
+        "right": 378,
+        "pageWidth": 390,
+        "viewport": 390,
+        "imgLoaded": true
+      },
+      {
+        "id": "artifact",
+        "left": 12,
+        "right": 378,
+        "pageWidth": 390,
+        "viewport": 390,
+        "imgLoaded": true
+      },
+      {
+        "id": "conversation",
+        "left": 12,
+        "right": 378,
+        "pageWidth": 390,
+        "viewport": 390,
+        "imgLoaded": true
+      }
+    ],
+    "modal": {
+      "open": true,
+      "left": 7.796875,
+      "right": 382.1875,
+      "viewport": 390
+    }
+  },
+  "offline_all_images_loaded": true,
+  "page_errors": [],
+  "external_requests": []
+}

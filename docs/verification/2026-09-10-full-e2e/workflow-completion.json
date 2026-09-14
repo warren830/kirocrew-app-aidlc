@@ -1,0 +1,44 @@
+{
+  "completed": true,
+  "fixes_verified": true,
+  "final_regression": "passed",
+  "repo_id": "r_4576f9a08dad",
+  "intent": "260910-precision-fix",
+  "selected_count": 9,
+  "completed_stages": [
+    "workspace-scaffold",
+    "workspace-detection",
+    "state-init",
+    "reverse-engineering",
+    "requirements-analysis",
+    "code-generation",
+    "build-and-test"
+  ],
+  "skipped_stages": [
+    "deployment-pipeline",
+    "deployment-execution"
+  ],
+  "blocking_findings": 0,
+  "remaining_actions": 0,
+  "independent_fixture_validation": "passed",
+  "captured_at": "2026-09-10T19:50:10.809Z",
+  "regression": {
+    "passed": true,
+    "command": "bash scripts/check.sh",
+    "exit_code": 0,
+    "backend_passed": 2680,
+    "backend_seconds": 749.04,
+    "ui_passed": 362,
+    "ui_test_files": 26,
+    "i18n_keys_per_locale": 2227,
+    "locales": 2,
+    "payload_files": 293,
+    "source_file_count": 486,
+    "source_aggregate_sha256": "f1d00b9f84105362fe6dde97dd771a6789ba42080166211573527b5101335eb2",
+    "log_sha256": "8582f80ab455e85eb5105472496edbc1da38954916f381efa478fba47da2a906",
+    "log": "full-check-final.log",
+    "checked_at": "2026-09-10T19:57:14.825293+00:00"
+  },
+  "feature_guide_qa": "passed",
+  "screenshots": 173
+}

@@ -1,0 +1,46 @@
+{
+  "historical_pending": {
+    "relpath": "aidlc/spaces/default/intents/260909-precision/audit/603e5f4a8072-298b1845c480.md",
+    "sha256": "b4932617237c6dbe1e294feb70c7cb96a8f238ad052125734f32ec0629b45d69",
+    "questions": [
+      {
+        "index": 1,
+        "prompt": "Learnings: anything to add?",
+        "options": [
+          {
+            "letter": "A",
+            "text": "Nothing to add",
+            "is_other": false
+          },
+          {
+            "letter": "B",
+            "text": "Add a note",
+            "is_other": false
+          }
+        ],
+        "multi_select": false,
+        "answer": null,
+        "answered": false,
+        "raw": "## Decision Recorded\n**Timestamp**: 2026-09-09T14:59:34Z\n**Event**: DECISION_RECORDED\n**Stage**: reverse-engineering\n**Decision**: Learnings: anything to add?\n**Options**: Nothing to add,Add a note"
+      }
+    ],
+    "summary_confirmation": null,
+    "plan_approval": null,
+    "pending_count": 1,
+    "pending_checkpoint": null,
+    "source_language_hint": null,
+    "origin": {
+      "kind": "audit",
+      "event": "DECISION_RECORDED",
+      "shard": "603e5f4a8072-298b1845c480.md",
+      "pos": 43,
+      "timestamp": "2026-09-09T14:59:34Z",
+      "stage": "reverse-engineering",
+      "unit": null,
+      "workflow": null,
+      "attempt_generation": null,
+      "decision_sha256": "43af65cff3bbd01f0c714656bb0794ced7e99eb40edb1ac37023f152efe7a83e"
+    }
+  },
+  "after_recorded_answer": null
+}

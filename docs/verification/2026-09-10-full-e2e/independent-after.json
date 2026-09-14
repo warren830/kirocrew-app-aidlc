@@ -1,0 +1,55 @@
+[
+  {
+    "args": [
+      "1.2345"
+    ],
+    "expected": "1.23",
+    "actual": "1.23",
+    "returncode": 0,
+    "pass": true
+  },
+  {
+    "args": [
+      "1.2345",
+      "--precision",
+      "3"
+    ],
+    "expected": "1.234",
+    "actual": "1.234",
+    "returncode": 0,
+    "pass": true
+  },
+  {
+    "args": [
+      "1.2345",
+      "--precision",
+      "0"
+    ],
+    "expected": "1",
+    "actual": "1",
+    "returncode": 0,
+    "pass": true
+  },
+  {
+    "args": [
+      "-2.3456",
+      "--precision",
+      "3"
+    ],
+    "expected": "-2.346",
+    "actual": "-2.346",
+    "returncode": 0,
+    "pass": true
+  },
+  {
+    "args": [
+      "1.25",
+      "--precision",
+      "6"
+    ],
+    "expected": "1.250000",
+    "actual": "1.250000",
+    "returncode": 0,
+    "pass": true
+  }
+]

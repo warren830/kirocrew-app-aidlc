@@ -1,0 +1,11 @@
+--- before/converter.py
++++ after/converter.py
+@@ -4,7 +4,7 @@
+ def format_number(value: float, precision: int = 2) -> str:
+     if not 0 <= precision <= 6:
+         raise ValueError("precision must be between 0 and 6")
+-    return f"{value:.2f}"
++    return f"{value:.{precision}f}"
+ 
+ def main() -> None:
+     parser = argparse.ArgumentParser(description=__doc__)

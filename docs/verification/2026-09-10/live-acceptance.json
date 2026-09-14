@@ -1,0 +1,107 @@
+{
+  "repo_id": "r_a9a1b50d4618",
+  "path": "/tmp/aidlc-studio-acceptance-20260910-bs8qjrqc",
+  "install": "committed",
+  "receipt_id": "rc_10dc5eed2afa0156",
+  "intent": "260910-delivery-proof",
+  "runtime_graph": true,
+  "scope": "feature",
+  "depth": "Standard",
+  "test_strategy": "Comprehensive",
+  "no_human_turn": true,
+  "ui": [
+    "directory_picker",
+    "preflight",
+    "register",
+    "install_preview_293",
+    "install_commit",
+    "intent_wizard",
+    "settings_preview_apply",
+    "uninstall_preview_explicit_preservation",
+    "uninstall_confirm_commit",
+    "maintenance_select_preview_delete",
+    "archive_repository",
+    "bun_settings_display"
+  ],
+  "spaces": {
+    "created": "acceptance-team",
+    "create_kept_default": true,
+    "switch_verified": true
+  },
+  "runtime_repair_existing_intent": {
+    "ok": true,
+    "intent_key": "260910-delivery-proof",
+    "runtime_graph_present": true
+  },
+  "metadata": {
+    "rename": true,
+    "archive_hidden": true,
+    "restore_same_identity": true,
+    "repository_bytes_unchanged": true
+  },
+  "bun": {
+    "configure": true,
+    "reprobe": true,
+    "original_configuration_restored": true
+  },
+  "protected_current_backup": true,
+  "uninstall": {
+    "status": "committed",
+    "transaction_id": "tx_40ea72e0b126c003",
+    "removed_owned_files": 277,
+    "removed_owned_fragments": 6,
+    "preserved_changed_config": ".kiro/agents/aidlc.json",
+    "workflow_files_unchanged": 23,
+    "user_files_unchanged": true,
+    "user_agents_paragraph_unchanged": true,
+    "agents_retained_separator_newline": true
+  },
+  "cleanup": {
+    "removed_directories": 2,
+    "removed_bytes": 5678085,
+    "history_retained": {
+      "tx_40ea72e0b126c003": "committed",
+      "tx_c46d23b3a63fc240": "committed"
+    },
+    "remaining_entries": 0,
+    "workflow_unchanged": true
+  },
+  "fixture_archived": true,
+  "brownfield_reported_repository": {
+    "repo_id": "r_efc5c63de739",
+    "intent": "260909-precision",
+    "blocking_findings": 0,
+    "missing_required_artifact": false,
+    "remaining_finding_codes": [
+      "directive_state_digest_mismatch"
+    ],
+    "modified_by_acceptance": false
+  },
+  "browser_errors": [],
+  "verified_at": "2026-09-10T12:22:37.442776+00:00",
+  "health": {
+    "status": "healthy",
+    "issues": [],
+    "boot_id": "9ed49f003ab384eb",
+    "host_version": "0.6.0-insider.6",
+    "version": "1.0.0",
+    "bundled_engine_version": "2.7.1",
+    "payload": {
+      "ok": true,
+      "engine_version": "2.7.1",
+      "file_count": 293,
+      "mismatches": 0
+    },
+    "storage_integrity": "ok",
+    "active_execution_leases": 0,
+    "active_admin_leases": 0,
+    "bun_version": "1.3.11"
+  },
+  "tests": {
+    "backend_passed": 2293,
+    "ui_passed": 341,
+    "locale_keys": 2227,
+    "locales": 2,
+    "all_checks_passed": true
+  }
+}

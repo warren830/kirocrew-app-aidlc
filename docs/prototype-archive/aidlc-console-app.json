@@ -1,0 +1,46 @@
+{
+  "name": "aidlc-console",
+  "version": "0.1.0",
+  "displayName": "AI-DLC Console",
+  "description": "Cross-project board for AI-DLC Workflows: every registered repo's intents, phase/stage progress, open approval gates and state-consistency findings, projected read-only from the files AI-DLC already writes.",
+  "author": "ychchen",
+  "license": "Apache-2.0",
+  "tags": [
+    "aidlc",
+    "workflow",
+    "developer-tools",
+    "kiro"
+  ],
+  "backend": {
+    "hooks": {
+      "routes": "backend.routes:register_routes"
+    }
+  },
+  "ui": {
+    "entry": "index.mjs",
+    "pages": [
+      {
+        "route": "/aidlc-console",
+        "label": "AI-DLC",
+        "icon": "GitBranch"
+      }
+    ],
+    "sidebar": {
+      "section": "Apps",
+      "order": 10
+    }
+  },
+  "permissions": {
+    "api": [
+      "/api/apps/aidlc-console",
+      "/api/apps/aidlc-console/*"
+    ],
+    "storage": true,
+    "network": false
+  },
+  "dependencies": {
+    "optionalCommands": [
+      "bun"
+    ]
+  }
+}

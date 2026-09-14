@@ -1,0 +1,13 @@
+{
+  "stage_slug": "intent-capture",
+  "selections": [
+    {
+      "candidate_id": "c1",
+      "type": "learning",
+      "scope": "project",
+      "heading": "## Corrections",
+      "text": "用户说「按照你的推荐来」仅视为该阶段的一次性授权：AI 填入推荐答案并在审批门交回用户确认；不作为常驻自治模式，后续阶段重新征询。",
+      "source": "orchestrator"
+    }
+  ]
+}

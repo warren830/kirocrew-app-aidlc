@@ -1,0 +1,645 @@
+FFFFFFFFFFFFFFFFFFFFFF.....F                                             [100%]
+=================================== FAILURES ===================================
+_ test_question_fences_do_not_reopen_an_answered_h2_question[```markdown-```] __
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+opening = '```markdown', closing = '```'
+
+    @pytest.mark.parametrize("opening,closing", [
+        ("```markdown", "```"),
+        ("~~~markdown", "~~~"),
+        ("````markdown", "`````"),
+        ("~~~~markdown", "~~~~~"),
+        ("   ```markdown", "  ```\t"),
+        ("  ~~~markdown", "   ~~~~  "),
+    ])
+    def test_question_fences_do_not_reopen_an_answered_h2_question(studio, opening, closing):
+        text = (
+            "## Q1. Keep this output?\nA. Keep it\n\n"
+            f"{opening}\n# Generated report\n{closing}\n\n[Answer]: A. Keep it"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "f" * 64)
+>       assert parsed.pending_count == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = QuestionsFile(relpath='questions.md', sha256='ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', quest...onfirmation=None, plan_approval=None, pending_count=1, pending_checkpoint=None, source_language_hint=None, origin=None).pending_count
+
+tests/test_audit_questions.py:289: AssertionError
+_ test_question_fences_do_not_reopen_an_answered_h2_question[~~~markdown-~~~] __
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+opening = '~~~markdown', closing = '~~~'
+
+    @pytest.mark.parametrize("opening,closing", [
+        ("```markdown", "```"),
+        ("~~~markdown", "~~~"),
+        ("````markdown", "`````"),
+        ("~~~~markdown", "~~~~~"),
+        ("   ```markdown", "  ```\t"),
+        ("  ~~~markdown", "   ~~~~  "),
+    ])
+    def test_question_fences_do_not_reopen_an_answered_h2_question(studio, opening, closing):
+        text = (
+            "## Q1. Keep this output?\nA. Keep it\n\n"
+            f"{opening}\n# Generated report\n{closing}\n\n[Answer]: A. Keep it"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "f" * 64)
+>       assert parsed.pending_count == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = QuestionsFile(relpath='questions.md', sha256='ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', quest...onfirmation=None, plan_approval=None, pending_count=1, pending_checkpoint=None, source_language_hint=None, origin=None).pending_count
+
+tests/test_audit_questions.py:289: AssertionError
+_ test_question_fences_do_not_reopen_an_answered_h2_question[````markdown-`````] _
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+opening = '````markdown', closing = '`````'
+
+    @pytest.mark.parametrize("opening,closing", [
+        ("```markdown", "```"),
+        ("~~~markdown", "~~~"),
+        ("````markdown", "`````"),
+        ("~~~~markdown", "~~~~~"),
+        ("   ```markdown", "  ```\t"),
+        ("  ~~~markdown", "   ~~~~  "),
+    ])
+    def test_question_fences_do_not_reopen_an_answered_h2_question(studio, opening, closing):
+        text = (
+            "## Q1. Keep this output?\nA. Keep it\n\n"
+            f"{opening}\n# Generated report\n{closing}\n\n[Answer]: A. Keep it"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "f" * 64)
+>       assert parsed.pending_count == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = QuestionsFile(relpath='questions.md', sha256='ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', quest...onfirmation=None, plan_approval=None, pending_count=1, pending_checkpoint=None, source_language_hint=None, origin=None).pending_count
+
+tests/test_audit_questions.py:289: AssertionError
+_ test_question_fences_do_not_reopen_an_answered_h2_question[~~~~markdown-~~~~~] _
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+opening = '~~~~markdown', closing = '~~~~~'
+
+    @pytest.mark.parametrize("opening,closing", [
+        ("```markdown", "```"),
+        ("~~~markdown", "~~~"),
+        ("````markdown", "`````"),
+        ("~~~~markdown", "~~~~~"),
+        ("   ```markdown", "  ```\t"),
+        ("  ~~~markdown", "   ~~~~  "),
+    ])
+    def test_question_fences_do_not_reopen_an_answered_h2_question(studio, opening, closing):
+        text = (
+            "## Q1. Keep this output?\nA. Keep it\n\n"
+            f"{opening}\n# Generated report\n{closing}\n\n[Answer]: A. Keep it"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "f" * 64)
+>       assert parsed.pending_count == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = QuestionsFile(relpath='questions.md', sha256='ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', quest...onfirmation=None, plan_approval=None, pending_count=1, pending_checkpoint=None, source_language_hint=None, origin=None).pending_count
+
+tests/test_audit_questions.py:289: AssertionError
+_ test_question_fences_do_not_reopen_an_answered_h2_question[   ```markdown-  ```\t] _
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+opening = '   ```markdown', closing = '  ```\t'
+
+    @pytest.mark.parametrize("opening,closing", [
+        ("```markdown", "```"),
+        ("~~~markdown", "~~~"),
+        ("````markdown", "`````"),
+        ("~~~~markdown", "~~~~~"),
+        ("   ```markdown", "  ```\t"),
+        ("  ~~~markdown", "   ~~~~  "),
+    ])
+    def test_question_fences_do_not_reopen_an_answered_h2_question(studio, opening, closing):
+        text = (
+            "## Q1. Keep this output?\nA. Keep it\n\n"
+            f"{opening}\n# Generated report\n{closing}\n\n[Answer]: A. Keep it"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "f" * 64)
+>       assert parsed.pending_count == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = QuestionsFile(relpath='questions.md', sha256='ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', quest...onfirmation=None, plan_approval=None, pending_count=1, pending_checkpoint=None, source_language_hint=None, origin=None).pending_count
+
+tests/test_audit_questions.py:289: AssertionError
+_ test_question_fences_do_not_reopen_an_answered_h2_question[  ~~~markdown-   ~~~~  ] _
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+opening = '  ~~~markdown', closing = '   ~~~~  '
+
+    @pytest.mark.parametrize("opening,closing", [
+        ("```markdown", "```"),
+        ("~~~markdown", "~~~"),
+        ("````markdown", "`````"),
+        ("~~~~markdown", "~~~~~"),
+        ("   ```markdown", "  ```\t"),
+        ("  ~~~markdown", "   ~~~~  "),
+    ])
+    def test_question_fences_do_not_reopen_an_answered_h2_question(studio, opening, closing):
+        text = (
+            "## Q1. Keep this output?\nA. Keep it\n\n"
+            f"{opening}\n# Generated report\n{closing}\n\n[Answer]: A. Keep it"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "f" * 64)
+>       assert parsed.pending_count == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = QuestionsFile(relpath='questions.md', sha256='ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff', quest...onfirmation=None, plan_approval=None, pending_count=1, pending_checkpoint=None, source_language_hint=None, origin=None).pending_count
+
+tests/test_audit_questions.py:289: AssertionError
+___ test_question_fences_do_not_create_example_questions_or_checkpoints[```] ___
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+fence = '```'
+
+    @pytest.mark.parametrize("fence", ["```", "~~~"])
+    def test_question_fences_do_not_create_example_questions_or_checkpoints(studio, fence):
+        text = (
+            f"{fence}markdown\n"
+            "## Q99. H2 example\nA. Example choice\n[Answer]:\n\n"
+            "### Q1 — Example prompt\nA. Example choice\n[Answer]:\n\n"
+            "## Plan Approval\n- Approve Plan\n[Answer]:\n"
+            f"{fence}\n\n"
+            "### Q2 — Real question\nA. Real choice\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [2]
+E       assert [99, 1, 2] == [2]
+E         
+E         At index 0 diff: 99 != 2
+E         Left contains 2 more items, first extra item: 1
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:307: AssertionError
+___ test_question_fences_do_not_create_example_questions_or_checkpoints[~~~] ___
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+fence = '~~~'
+
+    @pytest.mark.parametrize("fence", ["```", "~~~"])
+    def test_question_fences_do_not_create_example_questions_or_checkpoints(studio, fence):
+        text = (
+            f"{fence}markdown\n"
+            "## Q99. H2 example\nA. Example choice\n[Answer]:\n\n"
+            "### Q1 — Example prompt\nA. Example choice\n[Answer]:\n\n"
+            "## Plan Approval\n- Approve Plan\n[Answer]:\n"
+            f"{fence}\n\n"
+            "### Q2 — Real question\nA. Real choice\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [2]
+E       assert [99, 1, 2] == [2]
+E         
+E         At index 0 diff: 99 != 2
+E         Left contains 2 more items, first extra item: 1
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:307: AssertionError
+__________ test_question_fences_cannot_supply_options_or_answers[```] __________
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+fence = '```'
+
+    @pytest.mark.parametrize("fence", ["```", "~~~"])
+    def test_question_fences_cannot_supply_options_or_answers(studio, fence):
+        text = (
+            "## Q1. Keep this output?\nA. Keep it\n\n"
+            f"{fence}markdown\nB. Example option\n[Answer]: Example answer\n{fence}\n\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert parsed.pending_count == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = QuestionsFile(relpath='questions.md', sha256='0000000000000000000000000000000000000000000000000000000000000000', quest...onfirmation=None, plan_approval=None, pending_count=0, pending_checkpoint=None, source_language_hint=None, origin=None).pending_count
+
+tests/test_audit_questions.py:321: AssertionError
+__________ test_question_fences_cannot_supply_options_or_answers[~~~] __________
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+fence = '~~~'
+
+    @pytest.mark.parametrize("fence", ["```", "~~~"])
+    def test_question_fences_cannot_supply_options_or_answers(studio, fence):
+        text = (
+            "## Q1. Keep this output?\nA. Keep it\n\n"
+            f"{fence}markdown\nB. Example option\n[Answer]: Example answer\n{fence}\n\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert parsed.pending_count == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = QuestionsFile(relpath='questions.md', sha256='0000000000000000000000000000000000000000000000000000000000000000', quest...onfirmation=None, plan_approval=None, pending_count=0, pending_checkpoint=None, source_language_hint=None, origin=None).pending_count
+
+tests/test_audit_questions.py:321: AssertionError
+______ test_question_fences_stay_open_until_a_valid_close[````-```-````] _______
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+opening = '````', invalid_close = '```', closing = '````'
+
+    @pytest.mark.parametrize("opening,invalid_close,closing", [
+        ("````", "```", "````"),
+        ("~~~~", "~~~", "~~~~"),
+        ("```", "~~~", "```"),
+        ("~~~", "```", "~~~"),
+        ("```", "    ```", "```"),
+        ("~~~", "\t~~~", "~~~"),
+        ("```", "``` trailing text", "```"),
+        ("~~~", "~~~ trailing text", "~~~"),
+    ])
+    def test_question_fences_stay_open_until_a_valid_close(studio, opening, invalid_close, closing):
+        text = (
+            "## Q1. First question\nA. Keep it\n[Answer]: A. Keep it\n\n"
+            f"{opening}markdown\n{invalid_close}\n"
+            "### Q99 — Still an example\nA. Example choice\n[Answer]:\n"
+            f"{closing}\n\n"
+            "### Q2 — Real question\nB. Real choice\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1, 2]
+E       assert [1, 99, 2] == [1, 2]
+E         
+E         At index 1 diff: 99 != 2
+E         Left contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:345: AssertionError
+______ test_question_fences_stay_open_until_a_valid_close[~~~~-~~~-~~~~] _______
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+opening = '~~~~', invalid_close = '~~~', closing = '~~~~'
+
+    @pytest.mark.parametrize("opening,invalid_close,closing", [
+        ("````", "```", "````"),
+        ("~~~~", "~~~", "~~~~"),
+        ("```", "~~~", "```"),
+        ("~~~", "```", "~~~"),
+        ("```", "    ```", "```"),
+        ("~~~", "\t~~~", "~~~"),
+        ("```", "``` trailing text", "```"),
+        ("~~~", "~~~ trailing text", "~~~"),
+    ])
+    def test_question_fences_stay_open_until_a_valid_close(studio, opening, invalid_close, closing):
+        text = (
+            "## Q1. First question\nA. Keep it\n[Answer]: A. Keep it\n\n"
+            f"{opening}markdown\n{invalid_close}\n"
+            "### Q99 — Still an example\nA. Example choice\n[Answer]:\n"
+            f"{closing}\n\n"
+            "### Q2 — Real question\nB. Real choice\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1, 2]
+E       assert [1, 99, 2] == [1, 2]
+E         
+E         At index 1 diff: 99 != 2
+E         Left contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:345: AssertionError
+_______ test_question_fences_stay_open_until_a_valid_close[```-~~~-```] ________
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+opening = '```', invalid_close = '~~~', closing = '```'
+
+    @pytest.mark.parametrize("opening,invalid_close,closing", [
+        ("````", "```", "````"),
+        ("~~~~", "~~~", "~~~~"),
+        ("```", "~~~", "```"),
+        ("~~~", "```", "~~~"),
+        ("```", "    ```", "```"),
+        ("~~~", "\t~~~", "~~~"),
+        ("```", "``` trailing text", "```"),
+        ("~~~", "~~~ trailing text", "~~~"),
+    ])
+    def test_question_fences_stay_open_until_a_valid_close(studio, opening, invalid_close, closing):
+        text = (
+            "## Q1. First question\nA. Keep it\n[Answer]: A. Keep it\n\n"
+            f"{opening}markdown\n{invalid_close}\n"
+            "### Q99 — Still an example\nA. Example choice\n[Answer]:\n"
+            f"{closing}\n\n"
+            "### Q2 — Real question\nB. Real choice\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1, 2]
+E       assert [1, 99, 2] == [1, 2]
+E         
+E         At index 1 diff: 99 != 2
+E         Left contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:345: AssertionError
+_______ test_question_fences_stay_open_until_a_valid_close[~~~-```-~~~] ________
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+opening = '~~~', invalid_close = '```', closing = '~~~'
+
+    @pytest.mark.parametrize("opening,invalid_close,closing", [
+        ("````", "```", "````"),
+        ("~~~~", "~~~", "~~~~"),
+        ("```", "~~~", "```"),
+        ("~~~", "```", "~~~"),
+        ("```", "    ```", "```"),
+        ("~~~", "\t~~~", "~~~"),
+        ("```", "``` trailing text", "```"),
+        ("~~~", "~~~ trailing text", "~~~"),
+    ])
+    def test_question_fences_stay_open_until_a_valid_close(studio, opening, invalid_close, closing):
+        text = (
+            "## Q1. First question\nA. Keep it\n[Answer]: A. Keep it\n\n"
+            f"{opening}markdown\n{invalid_close}\n"
+            "### Q99 — Still an example\nA. Example choice\n[Answer]:\n"
+            f"{closing}\n\n"
+            "### Q2 — Real question\nB. Real choice\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1, 2]
+E       assert [1, 99, 2] == [1, 2]
+E         
+E         At index 1 diff: 99 != 2
+E         Left contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:345: AssertionError
+_____ test_question_fences_stay_open_until_a_valid_close[```-    ```-```] ______
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+opening = '```', invalid_close = '    ```', closing = '```'
+
+    @pytest.mark.parametrize("opening,invalid_close,closing", [
+        ("````", "```", "````"),
+        ("~~~~", "~~~", "~~~~"),
+        ("```", "~~~", "```"),
+        ("~~~", "```", "~~~"),
+        ("```", "    ```", "```"),
+        ("~~~", "\t~~~", "~~~"),
+        ("```", "``` trailing text", "```"),
+        ("~~~", "~~~ trailing text", "~~~"),
+    ])
+    def test_question_fences_stay_open_until_a_valid_close(studio, opening, invalid_close, closing):
+        text = (
+            "## Q1. First question\nA. Keep it\n[Answer]: A. Keep it\n\n"
+            f"{opening}markdown\n{invalid_close}\n"
+            "### Q99 — Still an example\nA. Example choice\n[Answer]:\n"
+            f"{closing}\n\n"
+            "### Q2 — Real question\nB. Real choice\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1, 2]
+E       assert [1, 99, 2] == [1, 2]
+E         
+E         At index 1 diff: 99 != 2
+E         Left contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:345: AssertionError
+______ test_question_fences_stay_open_until_a_valid_close[~~~-\t~~~-~~~] _______
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+opening = '~~~', invalid_close = '\t~~~', closing = '~~~'
+
+    @pytest.mark.parametrize("opening,invalid_close,closing", [
+        ("````", "```", "````"),
+        ("~~~~", "~~~", "~~~~"),
+        ("```", "~~~", "```"),
+        ("~~~", "```", "~~~"),
+        ("```", "    ```", "```"),
+        ("~~~", "\t~~~", "~~~"),
+        ("```", "``` trailing text", "```"),
+        ("~~~", "~~~ trailing text", "~~~"),
+    ])
+    def test_question_fences_stay_open_until_a_valid_close(studio, opening, invalid_close, closing):
+        text = (
+            "## Q1. First question\nA. Keep it\n[Answer]: A. Keep it\n\n"
+            f"{opening}markdown\n{invalid_close}\n"
+            "### Q99 — Still an example\nA. Example choice\n[Answer]:\n"
+            f"{closing}\n\n"
+            "### Q2 — Real question\nB. Real choice\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1, 2]
+E       assert [1, 99, 2] == [1, 2]
+E         
+E         At index 1 diff: 99 != 2
+E         Left contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:345: AssertionError
+_ test_question_fences_stay_open_until_a_valid_close[```-``` trailing text-```] _
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+opening = '```', invalid_close = '``` trailing text', closing = '```'
+
+    @pytest.mark.parametrize("opening,invalid_close,closing", [
+        ("````", "```", "````"),
+        ("~~~~", "~~~", "~~~~"),
+        ("```", "~~~", "```"),
+        ("~~~", "```", "~~~"),
+        ("```", "    ```", "```"),
+        ("~~~", "\t~~~", "~~~"),
+        ("```", "``` trailing text", "```"),
+        ("~~~", "~~~ trailing text", "~~~"),
+    ])
+    def test_question_fences_stay_open_until_a_valid_close(studio, opening, invalid_close, closing):
+        text = (
+            "## Q1. First question\nA. Keep it\n[Answer]: A. Keep it\n\n"
+            f"{opening}markdown\n{invalid_close}\n"
+            "### Q99 — Still an example\nA. Example choice\n[Answer]:\n"
+            f"{closing}\n\n"
+            "### Q2 — Real question\nB. Real choice\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1, 2]
+E       assert [1, 99, 2] == [1, 2]
+E         
+E         At index 1 diff: 99 != 2
+E         Left contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:345: AssertionError
+_ test_question_fences_stay_open_until_a_valid_close[~~~-~~~ trailing text-~~~] _
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+opening = '~~~', invalid_close = '~~~ trailing text', closing = '~~~'
+
+    @pytest.mark.parametrize("opening,invalid_close,closing", [
+        ("````", "```", "````"),
+        ("~~~~", "~~~", "~~~~"),
+        ("```", "~~~", "```"),
+        ("~~~", "```", "~~~"),
+        ("```", "    ```", "```"),
+        ("~~~", "\t~~~", "~~~"),
+        ("```", "``` trailing text", "```"),
+        ("~~~", "~~~ trailing text", "~~~"),
+    ])
+    def test_question_fences_stay_open_until_a_valid_close(studio, opening, invalid_close, closing):
+        text = (
+            "## Q1. First question\nA. Keep it\n[Answer]: A. Keep it\n\n"
+            f"{opening}markdown\n{invalid_close}\n"
+            "### Q99 — Still an example\nA. Example choice\n[Answer]:\n"
+            f"{closing}\n\n"
+            "### Q2 — Real question\nB. Real choice\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1, 2]
+E       assert [1, 99, 2] == [1, 2]
+E         
+E         At index 1 diff: 99 != 2
+E         Left contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:345: AssertionError
+_ test_question_fences_ignore_an_unclosed_remainder_without_changing_prior_answers[True-```] _
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+fence = '```', answered = True
+
+    @pytest.mark.parametrize("fence", ["```", "~~~"])
+    @pytest.mark.parametrize("answered", [True, False])
+    def test_question_fences_ignore_an_unclosed_remainder_without_changing_prior_answers(studio, fence, answered):
+        answer = "[Answer]: A. Keep it\n" if answered else ""
+        text = (
+            f"## Q1. Keep this output?\nA. Keep it\n{answer}\n{fence}markdown\n"
+            "# Generated report\n[Answer]: Example answer\n\n"
+            "### Q2 — Example prompt\nB. Example choice\n[Answer]:\n"
+            "## Plan Approval\n- Approve Plan\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1]
+E       assert [1, 2] == [1]
+E         
+E         Left contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:362: AssertionError
+_ test_question_fences_ignore_an_unclosed_remainder_without_changing_prior_answers[True-~~~] _
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+fence = '~~~', answered = True
+
+    @pytest.mark.parametrize("fence", ["```", "~~~"])
+    @pytest.mark.parametrize("answered", [True, False])
+    def test_question_fences_ignore_an_unclosed_remainder_without_changing_prior_answers(studio, fence, answered):
+        answer = "[Answer]: A. Keep it\n" if answered else ""
+        text = (
+            f"## Q1. Keep this output?\nA. Keep it\n{answer}\n{fence}markdown\n"
+            "# Generated report\n[Answer]: Example answer\n\n"
+            "### Q2 — Example prompt\nB. Example choice\n[Answer]:\n"
+            "## Plan Approval\n- Approve Plan\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1]
+E       assert [1, 2] == [1]
+E         
+E         Left contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:362: AssertionError
+_ test_question_fences_ignore_an_unclosed_remainder_without_changing_prior_answers[False-```] _
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+fence = '```', answered = False
+
+    @pytest.mark.parametrize("fence", ["```", "~~~"])
+    @pytest.mark.parametrize("answered", [True, False])
+    def test_question_fences_ignore_an_unclosed_remainder_without_changing_prior_answers(studio, fence, answered):
+        answer = "[Answer]: A. Keep it\n" if answered else ""
+        text = (
+            f"## Q1. Keep this output?\nA. Keep it\n{answer}\n{fence}markdown\n"
+            "# Generated report\n[Answer]: Example answer\n\n"
+            "### Q2 — Example prompt\nB. Example choice\n[Answer]:\n"
+            "## Plan Approval\n- Approve Plan\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1]
+E       assert [1, 2] == [1]
+E         
+E         Left contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:362: AssertionError
+_ test_question_fences_ignore_an_unclosed_remainder_without_changing_prior_answers[False-~~~] _
+
+studio = namespace(actions=<module '_aidlc_studio_backend.studio.actions' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/bac...e '_aidlc_studio_backend.studio.storage' from '/Users/ychchen/warren_ws/kirocrew-app-aidlc/backend/studio/storage.py'>)
+fence = '~~~', answered = False
+
+    @pytest.mark.parametrize("fence", ["```", "~~~"])
+    @pytest.mark.parametrize("answered", [True, False])
+    def test_question_fences_ignore_an_unclosed_remainder_without_changing_prior_answers(studio, fence, answered):
+        answer = "[Answer]: A. Keep it\n" if answered else ""
+        text = (
+            f"## Q1. Keep this output?\nA. Keep it\n{answer}\n{fence}markdown\n"
+            "# Generated report\n[Answer]: Example answer\n\n"
+            "### Q2 — Example prompt\nB. Example choice\n[Answer]:\n"
+            "## Plan Approval\n- Approve Plan\n[Answer]:\n"
+        )
+        parsed = studio.aidlc_reader.parse_questions_file(text, "questions.md", "0" * 64)
+>       assert [question.index for question in parsed.questions] == [1]
+E       assert [1, 2] == [1]
+E         
+E         Left contains one more item: 2
+E         Use -v to get more diff
+
+tests/test_audit_questions.py:362: AssertionError
+________ test_question_fences_cannot_displace_a_pending_audit_decision _________
+
+sv = Services(ctx=AppContext(name='aidlc-studio', data_dir=PosixPath('/private/var/folders/fb/pr1pwn_54rq1q3jt1btc3v340000g... _stopped=False, _bun_version=None, _bun_probed=False, _git_version=None, _git_probed=False, _bun_configured_path=None)
+scene = namespace(repo_id='r_000000000001', repo={'repo_id': 'r_000000000001', 'label': 'ledger', 'canonical_path': '/private/...c5c', 'aidlc/spaces/default/intents/intents.json': '9ce4aaaf5409316d6bd9474d76eb5326a9017b7454c83e51e342080f0c6eea6b'})
+
+    def test_question_fences_cannot_displace_a_pending_audit_decision(sv, scene):
+        path = _record_dir(scene.root) / QUESTIONS_REL
+        path.parent.mkdir(parents=True, exist_ok=True)
+        text = "```markdown\n## Q1. Example\nA. Example choice\n[Answer]:\n```\n"
+        path.write_text(text)
+        original = _tree_digest(scene.root)
+        questions = snap(sv, scene).questions
+>       assert questions.origin is not None and questions.origin["kind"] == "audit"
+E       AssertionError: assert (None is not None)
+E        +  where None = QuestionsFile(relpath='aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis/requirements-anal...onfirmation=None, plan_approval=None, pending_count=1, pending_checkpoint=None, source_language_hint=None, origin=None).origin
+
+tests/test_audit_questions.py:385: AssertionError
+=============================== warnings summary ===============================
+tests/test_audit_questions.py::test_question_fences_cannot_displace_a_pending_audit_decision
+  /Users/ychchen/warren_ws/kirocrew-app-aidlc/tests/conftest.py:903: NotAppKeyWarning: It is recommended to use web.AppKey instances for keys.
+  https://docs.aiohttp.org/en/stable/web_advanced.html#application-s-config
+    application["state"] = host
+
+tests/test_audit_questions.py::test_question_fences_cannot_displace_a_pending_audit_decision
+  /Users/ychchen/warren_ws/kirocrew-app-aidlc/tests/conftest.py:904: NotAppKeyWarning: It is recommended to use web.AppKey instances for keys.
+  https://docs.aiohttp.org/en/stable/web_advanced.html#application-s-config
+    application["local_secret"] = "test-internal-secret"
+
+tests/test_audit_questions.py::test_question_fences_cannot_displace_a_pending_audit_decision
+  /Users/ychchen/warren_ws/kirocrew-app-aidlc/tests/conftest.py:907: NotAppKeyWarning: It is recommended to use web.RequestKey instances for keys.
+  https://docs.aiohttp.org/en/stable/web_advanced.html#request-s-storage
+    request["user"] = user
+
+tests/test_audit_questions.py::test_question_fences_cannot_displace_a_pending_audit_decision
+  /Users/ychchen/warren_ws/kirocrew-app-aidlc/tests/conftest.py:909: NotAppKeyWarning: It is recommended to use web.RequestKey instances for keys.
+  https://docs.aiohttp.org/en/stable/web_advanced.html#request-s-storage
+    request["app"] = app
+
+tests/test_audit_questions.py::test_question_fences_cannot_displace_a_pending_audit_decision
+  /Users/ychchen/warren_ws/kirocrew-app-aidlc/tests/test_handlers_auth.py:147: NotAppKeyWarning: It is recommended to use web.AppKey instances for keys.
+  https://docs.aiohttp.org/en/stable/web_advanced.html#application-s-config
+    request.app["ctx"] = sv.ctx
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_audit_questions.py::test_question_fences_do_not_reopen_an_answered_h2_question[```markdown-```]
+FAILED tests/test_audit_questions.py::test_question_fences_do_not_reopen_an_answered_h2_question[~~~markdown-~~~]
+FAILED tests/test_audit_questions.py::test_question_fences_do_not_reopen_an_answered_h2_question[````markdown-`````]
+FAILED tests/test_audit_questions.py::test_question_fences_do_not_reopen_an_answered_h2_question[~~~~markdown-~~~~~]
+FAILED tests/test_audit_questions.py::test_question_fences_do_not_reopen_an_answered_h2_question[   ```markdown-  ```\t]
+FAILED tests/test_audit_questions.py::test_question_fences_do_not_reopen_an_answered_h2_question[  ~~~markdown-   ~~~~  ]
+FAILED tests/test_audit_questions.py::test_question_fences_do_not_create_example_questions_or_checkpoints[```]
+FAILED tests/test_audit_questions.py::test_question_fences_do_not_create_example_questions_or_checkpoints[~~~]
+FAILED tests/test_audit_questions.py::test_question_fences_cannot_supply_options_or_answers[```]
+FAILED tests/test_audit_questions.py::test_question_fences_cannot_supply_options_or_answers[~~~]
+FAILED tests/test_audit_questions.py::test_question_fences_stay_open_until_a_valid_close[````-```-````]
+FAILED tests/test_audit_questions.py::test_question_fences_stay_open_until_a_valid_close[~~~~-~~~-~~~~]
+FAILED tests/test_audit_questions.py::test_question_fences_stay_open_until_a_valid_close[```-~~~-```]
+FAILED tests/test_audit_questions.py::test_question_fences_stay_open_until_a_valid_close[~~~-```-~~~]
+FAILED tests/test_audit_questions.py::test_question_fences_stay_open_until_a_valid_close[```-    ```-```]
+FAILED tests/test_audit_questions.py::test_question_fences_stay_open_until_a_valid_close[~~~-\t~~~-~~~]
+FAILED tests/test_audit_questions.py::test_question_fences_stay_open_until_a_valid_close[```-``` trailing text-```]
+FAILED tests/test_audit_questions.py::test_question_fences_stay_open_until_a_valid_close[~~~-~~~ trailing text-~~~]
+FAILED tests/test_audit_questions.py::test_question_fences_ignore_an_unclosed_remainder_without_changing_prior_answers[True-```]
+FAILED tests/test_audit_questions.py::test_question_fences_ignore_an_unclosed_remainder_without_changing_prior_answers[True-~~~]
+FAILED tests/test_audit_questions.py::test_question_fences_ignore_an_unclosed_remainder_without_changing_prior_answers[False-```]
+FAILED tests/test_audit_questions.py::test_question_fences_ignore_an_unclosed_remainder_without_changing_prior_answers[False-~~~]
+FAILED tests/test_audit_questions.py::test_question_fences_cannot_displace_a_pending_audit_decision
+23 failed, 5 passed, 81 deselected, 5 warnings in 2.18s
