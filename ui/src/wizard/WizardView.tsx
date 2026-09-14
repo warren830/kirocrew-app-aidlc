@@ -428,7 +428,7 @@ export function WizardView({ route, go }: WizardViewProps) {
     const e = planAdvisor.effective
     const d = planAdvisor.draft
     const s = planAdvisor.shadow
-    if (!e || !d || !s || planAdvisor.stale !== null) return
+    if (!e || !d || !s || planAdvisor.shadowBusy || planAdvisor.stale !== null) return
     const refused = new Set(s.issues.flatMap((issue) => refusedSlugs(issue)))
     const leftOut = new Set(
       Object.keys(e.overrides).filter((slug) => refused.has(slug) && e.overrides[slug] !== state.overrides[slug]),
@@ -478,7 +478,8 @@ export function WizardView({ route, go }: WizardViewProps) {
   const derivedLabel = slugifyObjective(state.objective)
   const effectiveLabel = state.label.trim() || derivedLabel
   const labelValid = LABEL_RE.test(effectiveLabel) && effectiveLabel.length <= 120
-  const workComplete = Boolean(repo) && !blocked && state.objective.trim().length > 0 && labelValid && Boolean(activeSpace)
+  const workComplete = Boolean(repo) && !blocked && state.objective.trim().length > 0 && labelValid
+    && Boolean(activeSpace) && !inventory.error
   const presetComplete = state.scope.trim().length > 0
 
   const create = useCallback(async () => {
@@ -589,6 +590,7 @@ export function WizardView({ route, go }: WizardViewProps) {
                 className="studio-wiz-step"
                 data-state={position < index ? 'done' : position === index ? 'now' : 'todo'}
                 {...(position === index ? { 'aria-current': 'step' as const } : {})}
+                disabled={creating}
                 onClick={() => setStep(name)}
               >
                 <span className="studio-wiz-step-n studio-mono" aria-hidden="true">
@@ -600,6 +602,19 @@ export function WizardView({ route, go }: WizardViewProps) {
             </li>
           ))}
         </ol>
+
+        {inventory.error ? (
+          <div className="studio-banner" data-tone="danger" role="alert">
+            <Icon name="warn" size={15} />
+            <span className="studio-grow">
+              {inventory.error.known ? t(`errors.${inventory.error.code}`) : inventory.error.message}
+            </span>
+            <button type="button" className="studio-btn" disabled={inventory.stale || creating}
+              onClick={() => void inventory.refresh()}>
+              {t('common.retry')}
+            </button>
+          </div>
+        ) : null}
 
         {previewError ? (
           <p className="studio-banner" data-tone="danger" role="alert">
@@ -672,7 +687,7 @@ export function WizardView({ route, go }: WizardViewProps) {
           <button
             type="button"
             className="studio-btn"
-            disabled={index === 0}
+            disabled={index === 0 || creating}
             onClick={() => setStep(WIZARD_STEPS[Math.max(0, index - 1)] as WizardStep)}
           >
             {t('wizard.nav.back')}

@@ -355,6 +355,51 @@ beforeEach(() => {
 })
 
 describe('the new intent wizard', () => {
+  it('shows a failed space inventory and lets the user retry it before continuing', async () => {
+    let available = false
+    installRoutes({
+      [`GET ${BASE}/repos/r_1/intents`]: () => {
+        if (!available) throw new StubApiError(503, { code: 'inventory_offline', error: 'Space inventory is unavailable.' })
+        return { intents: [], spaces: ['default'], active_space: 'default' }
+      },
+    })
+    mount()
+    await userEvent.selectOptions(await screen.findByLabelText('Repository'), 'r_1')
+    await userEvent.type(screen.getByLabelText('Objective'), OBJECTIVE)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Space inventory is unavailable.')
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
+    available = true
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('keeps the reviewed inputs locked while Create is pending and unlocks after a refusal', async () => {
+    let refuse!: (reason: unknown) => void
+    const pending = new Promise((_, reject) => { refuse = reject })
+    installRoutes({ [`POST ${BASE}/repos/r_1/intents`]: () => pending })
+    mount()
+    await toPreset()
+    await pickScope('feature')
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    const create = screen.getByRole('button', { name: /Create the intent, paused/ })
+    await waitFor(() => expect(create).toBeEnabled())
+    await userEvent.click(create)
+
+    expect(create).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled()
+    for (const button of within(screen.getByRole('list', { name: 'New intent steps' })).getAllByRole('button')) {
+      expect(button).toBeDisabled()
+      await userEvent.click(button)
+    }
+    expect(screen.queryByLabelText('Repository')).not.toBeInTheDocument()
+    await act(async () => refuse(new StubApiError(409, { code: 'repo_busy', error: 'Repository is busy.' })))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Back' })).toBeEnabled())
+    expect(create).toBeEnabled()
+    expect(apiCalls.filter((call) => call.method === 'POST' && call.path === `${BASE}/repos/r_1/intents`)).toHaveLength(1)
+  })
+
   it('shows four steps and promises that Create writes nothing until it is pressed', async () => {
     mount()
     expect(await screen.findByRole('heading', { name: 'New intent' })).toBeInTheDocument()
@@ -716,6 +761,38 @@ describe('async scope previews', () => {
 })
 
 describe('the Advisor in the Preset step', () => {
+  it('requires a fresh shadow plan before applying changed settings during the debounce', async () => {
+    let finish!: () => void
+    const pending = new Promise<void>((resolve) => { finish = resolve })
+    let hold = false
+    installRoutes({
+      [`POST ${PREVIEW}`]: async (body) => {
+        const request = body as PlanRequest
+        if (hold) await pending
+        return { plan: { ...planFor(request.scope, request.overrides ?? {}), request } }
+      },
+    })
+    mount()
+    await toPreset()
+    await pickScope('feature')
+    await askAndWaitForProposal()
+    hold = true
+
+    fireEvent.click(strategyButton('Standard'))
+    const use = screen.getByRole('button', { name: USE })
+    expect(use).toBeDisabled()
+    fireEvent.click(use)
+    expect(screen.queryByText(APPLIED)).not.toBeInTheDocument()
+    await waitFor(() => expect(previewBodies().at(-1)?.test_strategy).toBe('Standard'))
+    expect(use).toBeDisabled()
+
+    await act(async () => finish())
+    await waitFor(() => expect(use).toBeEnabled())
+    await userEvent.click(use)
+    expect(screen.getByText(APPLIED)).toBeInTheDocument()
+    expect(strategyButton('Standard')).toHaveAttribute('aria-pressed', 'true')
+  })
+
   it('asks the Advisor for nothing until the button is clicked', async () => {
     mount()
     await toPreset()

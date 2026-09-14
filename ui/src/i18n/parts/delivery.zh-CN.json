@@ -1,5 +1,7 @@
 {
   "delivery.answerNeedsText": "仍需补充正文",
+  "delivery.confirmed": "消息已送达，工作流仍需核对",
+  "delivery.confirmedBody": "会话已收到这条消息。AI-DLC 是否接受了回答、工作流状态是否变化，仍未得到验证。这条消息不会被重新发送。",
   "delivery.fact.absent": "未找到",
   "delivery.fact.bootUnchanged": "全程为同一个 Studio 进程",
   "delivery.fact.confirmed": "事后确认已投递",
@@ -22,6 +24,7 @@
   "delivery.step.delivered": "已发送",
   "delivery.step.processing": "智能体处理中",
   "delivery.step.queued": "已排队",
+  "delivery.step.reconciliation": "核对工作流",
   "delivery.step.stateChanged": "状态已变更",
   "delivery.step.unchanged": "状态未变更",
   "delivery.uncertain": "投递结果不确定——没有重放任何内容",

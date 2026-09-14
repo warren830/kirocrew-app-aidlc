@@ -6,8 +6,8 @@
  * movement, never a receipt (FR-GATE-007), so the strip says so in words whenever a send has happened.
  *
  * The uncertain case is the reason this component exists. `DeliveryUncertain` /
- * `ReconciliationRequired` mean Studio cannot prove whether the message reached the conversation. The
- * strip then:
+ * `ReconciliationRequired` can outlive delivery uncertainty: a transcript may prove receipt while the
+ * workflow still needs reconciliation. Without that proof the strip:
  *   - announces it assertively (PRD §10.3 reserves assertive for exactly this),
  *   - states plainly that Studio is watching the disk and will not send again, and
  *   - prints the four facts the backend's own proof depends on, verbatim, so the user can decide
@@ -100,11 +100,13 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
   const i18n = useI18n()
   const { t } = i18n
   const { status } = card
-  const { index, failed } = stepIndex(status)
-  const noTransition = status === 'ResolvedNoTransition'
-  const uncertain = UNCERTAIN_STATUSES.includes(status)
-  const sent = !BEFORE_SEND.includes(status)
   const delivery = card.delivery
+  const needsReconciliation = UNCERTAIN_STATUSES.includes(status)
+  const confirmedPending = needsReconciliation && delivery.delivery_confirmed === true
+  // Receipt completes only the send step. Reconciliation still has to establish what AI-DLC did.
+  const { index, failed } = confirmedPending ? { index: 2, failed: false } : stepIndex(status)
+  const noTransition = status === 'ResolvedNoTransition'
+  const sent = !BEFORE_SEND.includes(status)
 
   return (
     <section className="studio-delivery" aria-label={t('delivery.label')}>
@@ -122,7 +124,8 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
               </span>
               <span className="studio-dstep-label">{t(
                 state === 'unchanged' ? 'delivery.step.unchanged'
-                  : state === 'cancelled' ? 'enum.actionStatus.Cancelled' : key,
+                  : state === 'cancelled' ? 'enum.actionStatus.Cancelled'
+                  : confirmedPending && position === 2 ? 'delivery.step.reconciliation' : key,
               )}</span>
               {/* The step's own state in words: the bullet's colour and glyph carry it visually, and a
                   screen reader gets it here instead of "list item, Sent". */}
@@ -133,12 +136,12 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
       </ol>
 
       <div className="studio-drow">
-        <Chip tone={statusTone(status)} icon={uncertain ? 'warn' : undefined}>
+        <Chip tone={statusTone(status)} icon={needsReconciliation ? 'warn' : undefined}>
           {statusLabel(i18n, status, card.resolution.reason)}
         </Chip>
         {delivery.queued_at ? <Chip icon="clock">{t('delivery.queuedInSlot')}</Chip> : null}
         {noTransition ? <Chip icon="info">{t('delivery.noTransition')}</Chip> : null}
-        {sent && !uncertain ? (
+        {sent && !needsReconciliation ? (
           <Chip tone={noTransition ? 'neutral' : 'ok'} icon={noTransition ? 'info' : 'check'}>
             {t('delivery.watchingDisk')}
           </Chip>
@@ -148,19 +151,18 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
         ) : null}
       </div>
 
-      {uncertain ? (
-        // Assertive: the user is about to be asked what to do about a decision that may already have
-        // landed, and they must not learn that from a chip they did not happen to read.
+      {needsReconciliation ? (
+        // Receipt and workflow acceptance are separate facts; neither warning offers to resend.
         <div className="studio-banner studio-dwarn" data-tone="danger" role="alert">
           <Icon name="warn" size={15} />
           <div className="studio-grow">
-            <p className="studio-dwarn-title">{t('delivery.uncertain')}</p>
-            <p className="studio-muted">{t('delivery.uncertainBody')}</p>
+            <p className="studio-dwarn-title">{t(confirmedPending ? 'delivery.confirmed' : 'delivery.uncertain')}</p>
+            <p className="studio-muted">{t(confirmedPending ? 'delivery.confirmedBody' : 'delivery.uncertainBody')}</p>
           </div>
         </div>
       ) : null}
 
-      {uncertain ? (
+      {needsReconciliation ? (
         <dl className="studio-dproof">
           <div>
             <dt>{t('delivery.fact.transcriptRow')}</dt>

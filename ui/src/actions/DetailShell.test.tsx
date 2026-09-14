@@ -35,25 +35,28 @@ function unbound(): ActionCard {
 }
 
 function mount(card: ActionCard, go: Navigate = () => {}) {
-  function Harness() {
+  function Harness({ selected, actionId }: { selected: ActionCard | null; actionId: string }) {
     const api = useStudioApi()
     return (
       <DetailShell
-        actionId={card.action_id}
-        queueCard={card}
+        actionId={actionId}
+        queueCard={selected}
         api={api}
-        route={{ ...EMPTY_ROUTE, action: card.action_id }}
+        route={{ ...EMPTY_ROUTE, action: actionId }}
         go={go}
         groupedAnswers={false}
         onQueueChanged={() => {}}
       />
     )
   }
-  return render(
+  const pane = (selected: ActionCard | null, actionId: string) => (
     <I18nProvider>
-      <Harness />
-    </I18nProvider>,
+      <Harness selected={selected} actionId={actionId} />
+    </I18nProvider>
   )
+  const view = render(pane(card, card.action_id))
+  return { ...view, select: (selected: ActionCard | null, actionId = selected?.action_id ?? '') =>
+    view.rerender(pane(selected, actionId)) }
 }
 
 /** The confirmation, as a region — so an assertion cannot pass on text rendered somewhere else. */
@@ -111,6 +114,96 @@ describe('a decision whose intent has no canonical conversation', () => {
 })
 
 describe('a refusal the server did return', () => {
+  it('retires a confirmation when the queue advances beyond the cached detail', async () => {
+    const card = actionCard()
+    setApiRoutes({
+      [`GET ${API_BASE}/actions/${card.action_id}`]: () => ({ action: card, transitions: [], drafts: [] }),
+    })
+    const view = mount(card)
+    await userEvent.click(await screen.findByRole('button', { name: /^Approve/ }))
+    expect(confirmation()).toBeInTheDocument()
+
+    view.select({ ...card, status: 'Cancelled', status_generation: card.status_generation + 1,
+      decisions: [], primary: null,
+      resolution: { kind: 'cancelled', resolved_at: card.updated_at, evidence: null, reason: 'command_superseded' } })
+
+    expect(screen.queryByRole('group', { name: en.t('confirm.label') })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Approve/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Cancelled')
+    expect(apiCalls.filter((call) => call.method !== 'GET')).toHaveLength(0)
+  })
+
+  it('does not carry a refused submission into a different selected action', async () => {
+    const first = actionCard()
+    const second = actionCard({ action_id: 'a_second' })
+    setApiRoutes({
+      [`GET ${API_BASE}/actions/${first.action_id}`]: () => ({ action: first, transitions: [], drafts: [] }),
+      [`GET ${API_BASE}/actions/${second.action_id}`]: () => ({ action: second, transitions: [], drafts: [] }),
+      [`POST ${API_BASE}/actions/${first.action_id}/submit`]: () => {
+        throw new StubApiError(409, { code: 'slot_busy', error: 'this conversation is busy' })
+      },
+    })
+    const view = mount(first)
+    await userEvent.click(await screen.findByRole('button', { name: /^Approve/ }))
+    await userEvent.click(within(confirmation()).getByRole('button', { name: /send this exact text/ }))
+    await screen.findAllByText(en.t('errors.slot_busy'))
+
+    view.select(second)
+    await waitFor(() => expect(apiCalls.some((call) => call.path.endsWith(`/actions/${second.action_id}`))).toBe(true))
+    expect(screen.queryByText(en.t('errors.slot_busy'))).not.toBeInTheDocument()
+    expect(screen.queryByText(en.t('detail.nothingSent'))).not.toBeInTheDocument()
+  })
+
+  it('ignores a late stale-card response while another action is loading', async () => {
+    const first = actionCard()
+    const second = actionCard({ action_id: 'a_loading' })
+    let refuse!: (reason: unknown) => void
+    let finishRead!: (value: unknown) => void
+    const submission = new Promise((_, reject) => { refuse = reject })
+    const read = new Promise((resolve) => { finishRead = resolve })
+    setApiRoutes({
+      [`GET ${API_BASE}/actions/${first.action_id}`]: () => ({ action: first, transitions: [], drafts: [] }),
+      [`GET ${API_BASE}/actions/${second.action_id}`]: () => read,
+      [`POST ${API_BASE}/actions/${first.action_id}/submit`]: () => submission,
+    })
+    const view = mount(first)
+    await userEvent.click(await screen.findByRole('button', { name: /^Approve/ }))
+    await userEvent.click(within(confirmation()).getByRole('button', { name: /send this exact text/ }))
+    view.select(null, second.action_id)
+    await act(async () => refuse(new StubApiError(409, {
+      code: 'action_stale', error: 'the old action changed', details: { card: first },
+    })))
+
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()
+    expect(screen.queryByText(en.t('errors.action_stale'))).not.toBeInTheDocument()
+    await act(async () => finishRead({ action: second, transitions: [], drafts: [] }))
+    expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument()
+    expect(screen.queryByText(en.t('errors.action_stale'))).not.toBeInTheDocument()
+  })
+
+  it('keeps an in-flight action disabled after navigating away and back', async () => {
+    const first = actionCard()
+    const second = actionCard({ action_id: 'a_other' })
+    let refuse!: (reason: unknown) => void
+    const submission = new Promise((_, reject) => { refuse = reject })
+    setApiRoutes({
+      [`GET ${API_BASE}/actions/${first.action_id}`]: () => ({ action: first, transitions: [], drafts: [] }),
+      [`GET ${API_BASE}/actions/${second.action_id}`]: () => ({ action: second, transitions: [], drafts: [] }),
+      [`POST ${API_BASE}/actions/${first.action_id}/submit`]: () => submission,
+    })
+    const view = mount(first)
+    await userEvent.click(await screen.findByRole('button', { name: /^Approve/ }))
+    await userEvent.click(within(confirmation()).getByRole('button', { name: /send this exact text/ }))
+    try {
+      view.select(second)
+      view.select(first)
+      expect(screen.getByRole('button', { name: /^Approve/ })).toBeDisabled()
+      expect(apiCalls.filter((call) => call.method === 'POST')).toHaveLength(1)
+    } finally {
+      await act(async () => refuse(new StubApiError(409, { code: 'repo_busy', error: 'Repository is busy.' })))
+    }
+  })
+
   it('closes the Run confirmation when the server retires its command', async () => {
     const base = actionCard()
     const card: ActionCard = { ...base, type: 'run', queue_type: 'run',

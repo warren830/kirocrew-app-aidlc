@@ -524,7 +524,7 @@ export function PreviewFlow({ api, repoId, kind, intro, targetVersion, onStarted
     <section className="studio-preview" aria-label={t(`install.preview.title.${kind}`)}>
       <div className="studio-spread studio-preview-head">
         <h2>{t(`install.preview.title.${kind}`)}</h2>
-        <button type="button" className="studio-btn" onClick={onClose}>
+        <button type="button" className="studio-btn" disabled={applying} onClick={onClose}>
           <Icon name="close" size={14} />
           {t('install.cancel')}
         </button>
@@ -563,7 +563,7 @@ export function PreviewFlow({ api, repoId, kind, intro, targetVersion, onStarted
         ) : null}
         {blocked && state.plan ? <p className="studio-note" data-tone="danger">{t('install.blocked')}</p> : null}
         <div className="studio-repo-actions">
-          <button type="button" className="studio-btn" onClick={() => void run()} disabled={state.loading}>
+          <button type="button" className="studio-btn" onClick={() => void run()} disabled={state.loading || applying}>
             <Icon name="refresh" size={14} />
             {state.loading ? t('install.preview.running') : t('install.preview.refresh')}
           </button>

@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { I18nProvider } from '../i18n'
+import { I18nProvider, makeI18n } from '../i18n'
 import { actionCard } from '../test/fixtures'
 import type { ActionCard } from '../lib/types'
 import { DeliveryStrip, statusTone } from './DeliveryStrip'
@@ -12,6 +12,43 @@ function show(status: ActionCard['status']) {
 }
 
 describe('delivery outcomes describe observed progress', () => {
+  it.each(['en-US', 'zh-CN'] as const)('shows confirmed receipt while keeping workflow reconciliation pending (%s)', (locale) => {
+    document.documentElement.lang = locale
+    const i18n = makeI18n(locale)
+    const base = actionCard()
+    const card = actionCard({
+      status: 'ReconciliationRequired',
+      delivery: { ...base.delivery, outcome: 'uncertain', delivery_confirmed: true,
+        transcript_row: { slot_key: 'aidlc-r1-guest', ts: '2026-09-14T10:00:00Z', role: 'user' },
+        disk_baseline_unchanged: true },
+    })
+    render(<I18nProvider><DeliveryStrip card={card} /></I18nProvider>)
+    const strip = screen.getByRole('region', { name: i18n.t('delivery.label') })
+    expect(within(strip).queryByText(i18n.t('delivery.uncertainBody'))).not.toBeInTheDocument()
+    expect(within(strip).queryByText(i18n.t('delivery.uncertain'))).not.toBeInTheDocument()
+    expect(strip).toHaveTextContent(locale === 'en-US'
+      ? 'Delivery confirmed — workflow needs reconciliation' : '消息已送达，工作流仍需核对')
+    expect(strip).toHaveTextContent(locale === 'en-US'
+      ? 'Whether AI-DLC accepted the answer or changed the workflow is still unverified.'
+      : 'AI-DLC 是否接受了回答、工作流状态是否变化，仍未得到验证。')
+    expect(strip).toHaveTextContent(i18n.t('enum.actionStatus.ReconciliationRequired'))
+    expect(strip).toHaveTextContent('aidlc-r1-guest')
+    expect([...strip.querySelectorAll('.studio-dstep')].map((step) => step.getAttribute('data-state')))
+      .toEqual(['done', 'done', 'now', 'future'])
+    expect(strip.querySelectorAll('.studio-dstep')[2]).toHaveTextContent(
+      locale === 'en-US' ? 'Reconcile workflow' : '核对工作流',
+    )
+  })
+
+  it.each(['DeliveryUncertain', 'ReconciliationRequired'] as const)('keeps the uncertainty warning without confirmed delivery (%s)', (status) => {
+    const i18n = makeI18n('en-US')
+    const strip = show(status)
+    expect(within(strip).getByRole('alert')).toHaveTextContent(i18n.t('delivery.uncertainBody'))
+    expect([...strip.querySelectorAll('.studio-dstep')].map((step) => step.getAttribute('data-state')))
+      .toEqual(['done', 'failed', 'future', 'future'])
+    expect(strip).not.toHaveTextContent('Delivery confirmed — workflow needs reconciliation')
+  })
+
   it('does not call a label-only reply an answered note', () => {
     const card = actionCard({ status: 'ResolvedNoTransition', resolution: {
       kind: 'no_transition', reason: 'answer_requires_text', evidence: null, resolved_at: null,

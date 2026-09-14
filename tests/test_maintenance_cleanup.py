@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 import os
+import shutil
 from pathlib import Path
 from threading import Event
 
@@ -197,6 +198,45 @@ def test_unfinished_terminal_row_and_repo_recovery_are_protected(sv, routes, fak
     status, result = apply(sv, routes, fake_host, repo, [eligible], answer)
     assert status == 409 and result["code"] == "install_recovery_required"
     assert path.exists()
+
+
+def test_startup_finishes_committed_cleanup_before_maintenance_review(sv, routes, fake_host, repo):
+    txid, directory, eid = transaction(
+        sv, repo, 1, status="committed", category="backups", finished=False,
+    )
+    before = preview(sv, routes, fake_host, repo, [eid])
+    assert not before["can_cleanup"]
+    assert before["entries"][0]["reason"] == "unfinished_transaction"
+    assert asyncio.run(sv.installer.settle_abandoned()) == [txid]
+    row = sv.storage.get("install_transactions", txid)
+    assert row["status"] == "committed" and row["finished_at"]
+    assert directory.is_dir()
+    after = preview(sv, routes, fake_host, repo, [eid])
+    assert after["can_cleanup"]
+    status, result = apply(sv, routes, fake_host, repo, [eid], after)
+    assert status == 200 and result["ok"]
+    assert not directory.exists()
+    assert (Path(repo.canonical_path) / "keep.txt").read_text() == "repository bytes"
+
+
+def test_staging_cleanup_error_is_reported_without_aborting_startup(sv, repo, monkeypatch):
+    txid, staging, _ = transaction(sv, repo, 1, status="committed", category="staging", finished=False)
+    rmtree = shutil.rmtree
+
+    def deny_cleanup(path, *args, **kwargs):
+        if Path(path) == staging:
+            raise PermissionError("temporary staging cleanup failure")
+        return rmtree(path, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(shutil, "rmtree", deny_cleanup)
+        report = asyncio.run(sv.reconciler.startup())
+    assert "settle_abandoned:storage_error" in report.issues
+    assert report.finished_at and staging.exists()
+    assert not sv.storage.get("install_transactions", txid)["finished_at"]
+    assert asyncio.run(sv.installer.settle_abandoned()) == [txid]
+    assert not staging.exists()
+    assert (Path(repo.canonical_path) / "keep.txt").read_text() == "repository bytes"
 
 
 def test_unsettled_transaction_protects_its_prior_receipt_even_without_current(sv, routes, fake_host, repo):

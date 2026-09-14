@@ -2742,6 +2742,16 @@ def test_an_uncertain_card_is_retyped_and_offers_the_uncertain_decisions(world, 
     run(scenario())
 
 
+def test_confirmed_delivery_does_not_offer_undelivered_or_resubmit(world, A):
+    async def scenario():
+        rec = await _reconciliation_required(world, A)
+        rec = await world.broker._patch_evidence(rec, {"delivery_confirmed": True})
+        card = await world.broker.card(rec, snapshot(world))
+        assert [d["decision"] for d in card["decisions"]] == ["reconcile"]
+
+    run(scenario())
+
+
 def test_human_text_keeps_only_what_the_person_typed(world, A):
     async def scenario():
         await bind(world)

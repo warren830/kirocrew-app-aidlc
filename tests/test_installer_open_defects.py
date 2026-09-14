@@ -7,12 +7,14 @@ directory. The shipped payload is only read by the existing miniature fixtures.
 from __future__ import annotations
 
 import json
+import multiprocessing
 import os
 import shutil
 from pathlib import Path
 
 import pytest
 
+from conftest import RepoBuilder
 from test_installer import (
     BOOT,
     IDENTITY,
@@ -327,9 +329,10 @@ def test_archive_refuses_symlink_boundaries_without_touching_target(
     assert h.store.get("install_transactions", "tx_dead")["status"] == "written"
 
 
-def test_live_transaction_keeps_its_staging(studio, h, repo_builder):
+@pytest.mark.parametrize("status", ["written", "committed"])
+def test_live_transaction_keeps_its_staging(studio, h, repo_builder, status):
     repo = insert_repo(studio, h.store, repo_builder.with_git().build())
-    staging, _ = abandoned(h, repo)
+    staging, _ = abandoned(h, repo, status=status)
     h.store.lease_acquire("admin", IDENTITY, {
         "repo_id": repo.repo_id, "operation_type": "install",
         "transaction_id": "tx_dead", "boot_id": BOOT,
@@ -337,6 +340,237 @@ def test_live_transaction_keeps_its_staging(studio, h, repo_builder):
     assert run(h.installer.settle_abandoned()) == []
     assert (staging / FILE).read_bytes() == ODD_BYTES
     assert not (h.data_dir / "failed" / "tx_dead").exists()
+
+
+@pytest.mark.parametrize("marker", ["before:release_lease", "after:release_lease", "before:finish"])
+def test_restart_finishes_committed_install_without_orphaning_staging(
+    studio, h, repo_builder, clock, marker,
+):
+    root = repo_builder.with_git().build()
+    repo = insert_repo(studio, h.store, root)
+    plan = h.installer.preview(repo, "install")
+    pending = run(h.installer.begin(repo, "install", plan_digest=plan.digest()))
+    txid = pending.transaction_id
+
+    def child():
+        h.store.close()
+        h.store.open()
+        if marker == "before:finish":
+            async def exit_before_finish(*args):
+                os._exit(77)
+            h.installer._finish = exit_before_finish
+        else:
+            h.fault.on(marker, lambda: os._exit(77))
+        run(h.installer.run(repo, "install", plan_digest=plan.digest(), transaction_id=txid))
+
+    process = multiprocessing.get_context("fork").Process(target=child)
+    process.start()
+    process.join(15)
+    if process.is_alive():
+        process.terminate()
+        process.join()
+        pytest.fail("isolated installer process did not exit")
+    assert process.exitcode == 77
+    committed = h.installer.transaction(txid)
+    assert committed.status == "committed" and not committed.finished_at
+    staging = h.data_dir / "staging" / txid
+    assert staging.is_dir() == (marker != "before:finish")
+    repository = tree(root)
+    backups = tree(h.data_dir / "backups")
+    receipts = h.store.select("install_receipts")
+    repo_row = h.store.get("repos", repo.repo_id)
+    assert repo_row["install_status"] == "installed"
+
+    h.installer._boot_id = h.installer._scheduler._boot_id = "boot-restarted"
+    assert run(h.installer.settle_abandoned()) == [txid]
+    finished = h.installer.transaction(txid)
+    assert finished.status == "committed" and finished.finished_at
+    assert finished.error is None and finished.failed_dir is None
+    assert not staging.exists()
+    assert tree(root) == repository and tree(h.data_dir / "backups") == backups
+    assert h.store.select("install_receipts") == receipts
+    assert h.store.get("repos", repo.repo_id) == repo_row
+    assert run(h.installer.settle_abandoned()) == []
+    clock.advance(studio.constants.LEASE_STALE_SECS + 1)
+    assert run(h.installer._scheduler.startup_sweep()) == []
+    assert h.store.lease_get("admin", IDENTITY) is None
+
+
+def test_restart_retries_ignored_cleanup_errors_from_a_finished_commit(
+    studio, h, repo_builder, monkeypatch, clock,
+):
+    root = repo_builder.with_git().build()
+    repo = insert_repo(studio, h.store, root)
+    unlink = os.unlink
+
+    def deny_candidate_unlink(path, *args, **kwargs):
+        if path == "aidlc-utility.ts" and kwargs.get("dir_fd") is not None:
+            raise PermissionError("temporary staging cleanup failure")
+        return unlink(path, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "unlink", deny_candidate_unlink)
+        result = do(h, repo, "install")
+    assert result.status == "committed" and result.finished_at
+    staging = h.data_dir / "staging" / result.transaction_id
+    assert (staging / FILE).is_file()
+    repository = tree(root)
+    backups = tree(h.data_dir / "backups")
+    row = h.store.get("install_transactions", result.transaction_id)
+    clock.advance(1)
+    h.installer._boot_id = h.installer._scheduler._boot_id = "boot-restarted"
+    assert run(h.installer.settle_abandoned()) == [result.transaction_id]
+    assert not staging.exists()
+    assert h.store.get("install_transactions", result.transaction_id) == row
+    assert tree(root) == repository and tree(h.data_dir / "backups") == backups
+    assert run(h.installer.settle_abandoned()) == []
+
+
+def test_committed_cleanup_error_does_not_strand_another_repos_interrupted_install(
+    studio, h, repo_builder, tmp_path, monkeypatch, clock,
+):
+    root = repo_builder.with_git().build()
+    repo = insert_repo(studio, h.store, root)
+    unlink = os.unlink
+
+    def deny_candidate_unlink(path, *args, **kwargs):
+        if path == "aidlc-utility.ts" and kwargs.get("dir_fd") is not None:
+            raise PermissionError("temporary staging cleanup failure")
+        return unlink(path, *args, **kwargs)
+
+    # A successful, older install whose best-effort cleanup left staging behind.
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "unlink", deny_candidate_unlink)
+        committed = do(h, repo, "install")
+    assert committed.status == "committed" and committed.finished_at
+    staging = h.data_dir / "staging" / committed.transaction_id
+    assert (staging / FILE).is_file()
+    committed_row = h.store.get("install_transactions", committed.transaction_id)
+    committed_repo = h.store.get("repos", repo.repo_id)
+
+    clock.advance(1)
+    other_root = RepoBuilder(tmp_path / "other-repo").with_git().build()
+    other = insert_repo(studio, h.store, other_root, repo_id="r_2", resolved_identity="1:101")
+    plan = h.installer.preview(other, "install")
+    pending = run(h.installer.begin(other, "install", plan_digest=plan.digest()))
+
+    def child():
+        h.store.close()
+        h.store.open()
+        h.fault.on("before:merge_fragments", lambda: os._exit(77))
+        run(h.installer.run(
+            other, "install", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
+        ))
+
+    process = multiprocessing.get_context("fork").Process(target=child)
+    process.start()
+    process.join(15)
+    if process.is_alive():
+        process.terminate()
+        process.join()
+        pytest.fail("isolated installer process did not exit")
+    assert process.exitcode == 77
+    interrupted = h.installer.transaction(pending.transaction_id)
+    assert interrupted.status == "written" and not interrupted.finished_at
+    assert h.store.lease_get("admin", other.resolved_identity) is not None
+    assert (other_root / FILE).is_file()
+    repositories = (tree(root), tree(other_root))
+    backups = tree(h.data_dir / "backups")
+    receipts = h.store.select("install_receipts")
+    rmtree = shutil.rmtree
+
+    def deny_committed_cleanup(path, *args, **kwargs):
+        if Path(path) == staging:
+            raise PermissionError("committed staging is still locked")
+        return rmtree(path, *args, **kwargs)
+
+    h.installer._boot_id = h.installer._scheduler._boot_id = "boot-restarted"
+    clock.advance(studio.constants.LEASE_STALE_SECS + 1)
+    with monkeypatch.context() as patch:
+        patch.setattr(shutil, "rmtree", deny_committed_cleanup)
+        with pytest.raises(studio.errors.StudioError) as exc:
+            run(h.installer.settle_abandoned())
+
+    assert exc.value.code == "storage_error"
+    recovered = h.installer.transaction(pending.transaction_id)
+    assert recovered.status == "recovery_required" and recovered.finished_at
+    assert recovered.repo_install_status == "recovery_required"
+    assert recovered.error == "process_exited" and recovered.failed_dir
+    assert not (h.data_dir / "staging" / pending.transaction_id).exists()
+    assert exc.value.details["transaction_id"] == committed.transaction_id
+    assert exc.value.details["settled_transaction_ids"] == [pending.transaction_id]
+    assert exc.value.details["committed_cleanup_failures"] == [
+        {"transaction_id": committed.transaction_id, "code": "storage_error"},
+    ]
+    assert run(h.installer._scheduler.startup_sweep()) == []
+    assert h.store.lease_get("admin", other.resolved_identity) is None
+    assert staging.exists()
+    assert h.store.get("install_transactions", committed.transaction_id) == committed_row
+    assert h.store.get("repos", repo.repo_id) == committed_repo
+    assert (tree(root), tree(other_root)) == repositories
+    assert tree(h.data_dir / "backups") == backups
+    assert h.store.select("install_receipts") == receipts
+    assert run(h.installer.settle_abandoned()) == [committed.transaction_id]
+    assert not staging.exists()
+    assert run(h.installer.settle_abandoned()) == []
+
+
+@pytest.mark.parametrize("operation", ["cleanup", "bookkeeping"])
+def test_committed_settlement_retries_interrupted_cleanup(
+    studio, h, repo_builder, monkeypatch, operation,
+):
+    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+    staging, _ = abandoned(h, repo, status="committed", candidate="identical")
+    update = h.store.update
+
+    def fail_cleanup(*args, **kwargs):
+        raise OSError("cleanup interrupted")
+
+    def fail_bookkeeping(table, key, values, *args, **kwargs):
+        if table == "install_transactions" and values.get("finished_at"):
+            raise OSError("bookkeeping interrupted")
+        return update(table, key, values, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        if operation == "cleanup":
+            patch.setattr(shutil, "rmtree", fail_cleanup)
+        else:
+            patch.setattr(h.store, "update", fail_bookkeeping)
+        expected = studio.errors.StudioError if operation == "cleanup" else OSError
+        with pytest.raises(expected) as exc:
+            run(h.installer.settle_abandoned())
+        if operation == "cleanup":
+            assert exc.value.code == "storage_error"
+        else:
+            assert str(exc.value) == "bookkeeping interrupted"
+    result = h.installer.transaction("tx_dead")
+    assert result.status == "committed" and not result.finished_at
+    assert staging.exists() == (operation == "cleanup")
+    assert run(h.installer.settle_abandoned()) == ["tx_dead"]
+    assert not staging.exists()
+    assert h.installer.transaction("tx_dead").finished_at
+
+
+@pytest.mark.parametrize("link_at", ["staging", "staging/tx_dead"])
+@pytest.mark.parametrize("finished", [False, True])
+def test_committed_settlement_refuses_staging_symlinks(
+    studio, h, repo_builder, tmp_path, link_at, finished,
+):
+    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+    abandoned(h, repo, status="committed", candidate="absent")
+    if finished:
+        h.store.update("install_transactions", "tx_dead", {"finished_at": TS})
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "sentinel").write_bytes(ODD_BYTES)
+    link = h.data_dir / link_at
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(studio.errors.StudioError) as exc:
+        run(h.installer.settle_abandoned())
+    assert exc.value.code == "bad_path"
+    assert (outside / "sentinel").read_bytes() == ODD_BYTES and link.is_symlink()
+    assert bool(h.installer.transaction("tx_dead").finished_at) == finished
 
 
 @pytest.mark.parametrize("candidate", ["identical", "changed"])

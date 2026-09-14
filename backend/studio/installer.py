@@ -3780,6 +3780,11 @@ class Installer:
           replaced, so the honest status is ``recovery_required`` and the repository is marked the same
           way. That is what raises the blocking ``install_recovery_required`` finding and puts an
           ``install_conflict`` card in front of a person, instead of Studio quietly deciding for them.
+        * ``committed`` without ``finished_at`` — the receipt is already durable, but cleanup and final
+          bookkeeping were interrupted. Finish those without changing the successful outcome. Also
+          retry staging cleanup for completed commits whose best-effort removal left files behind.
+          Report cleanup failures after settling the other candidates, so one old staging directory
+          cannot prevent another repository's interrupted transaction from releasing its lease.
 
         How far the dead process got is not written into the row: ``steps_json`` already records every
         step that ran and its outcome, and the ``install.transaction`` activity row names the status it
@@ -3791,10 +3796,11 @@ class Installer:
         its own live transaction declared abandoned.
         """
         rows = await asyncio.to_thread(self._storage.select, "install_transactions")
-        unsettled = [
+        candidates = [
             row for row in rows if str(row.get("status") or "") not in _SETTLED_STATUS
+            or row.get("status") == "committed"
         ]
-        if not unsettled:
+        if not candidates:
             return []
 
         leases = await asyncio.to_thread(self._storage.select, "admin_leases")
@@ -3806,12 +3812,37 @@ class Installer:
         mine.discard("")
 
         settled: list[str] = []
+        cleanup_failures: list[tuple[str, StudioError]] = []
         now = self._clock.iso()
-        for row in unsettled:
+        for row in candidates:
             txid = str(row.get("transaction_id") or "")
             if not txid or (self._boot_id and txid in mine):
                 continue
             status = str(row.get("status") or "")
+            repo_id = str(row.get("repo_id") or "")
+            if status == "committed":
+                try:
+                    finished = await asyncio.to_thread(
+                        self._finish_abandoned_commit, txid, now, bool(row.get("finished_at"))
+                    )
+                except StudioError as exc:
+                    cleanup_failures.append((txid, exc))
+                    continue
+                if not finished:
+                    continue
+                await self._activity.record(
+                    kind="install.transaction",
+                    severity="info",
+                    repo_id=repo_id,
+                    params={
+                        "transaction_id": txid,
+                        "status": "committed",
+                        "abandoned_in_status": status,
+                    },
+                )
+                await self._publish(txid, repo_id, "committed")
+                settled.append(txid)
+                continue
             wrote_nothing = status in _ABANDONED_WROTE_NOTHING
             if row.get("kind") in {"uninstall", "rollback"} and wrote_nothing:
                 # Recovery can itself die after acquiring its lease. A durable removal journal
@@ -3821,7 +3852,6 @@ class Installer:
                 path = self._failure_path(C.BACKUP_DIRNAME, txid, filename)
                 wrote_nothing = not await asyncio.to_thread(path.exists)
             outcome = "failed" if wrote_nothing else "recovery_required"
-            repo_id = str(row.get("repo_id") or "")
             # Reconstruct only paths owned by this transaction, never paths supplied by the row.
             # Archive before settling: if either operation is interrupted, startup can retry without
             # losing the candidate or pointing the recovery card at another transaction's evidence.
@@ -3863,7 +3893,43 @@ class Installer:
             )
             await self._publish(txid, repo_id, outcome)
             settled.append(txid)
+        if cleanup_failures:
+            txid, first = cleanup_failures[0]
+            # Preserve startup's visible error code, while retaining every failed transaction and
+            # the completed settlements for callers inspecting the error's details.
+            raise StudioError(
+                first.code,
+                first.message,
+                details={
+                    **first.details,
+                    "transaction_id": txid,
+                    "committed_cleanup_failures": [
+                        {"transaction_id": failed_txid, "code": error.code}
+                        for failed_txid, error in cleanup_failures
+                    ],
+                    "settled_transaction_ids": settled,
+                },
+            ) from first
         return settled
+
+    def _finish_abandoned_commit(self, txid: str, finished_at: str, was_finished: bool) -> bool:
+        """Retry post-commit cleanup, keeping the completion marker unset until it succeeds."""
+        staging = self._failure_path(C.STAGING_DIRNAME, txid)
+        has_staging = staging.exists()
+        if was_finished and not has_staging:
+            return False
+        if has_staging:
+            try:
+                shutil.rmtree(staging)
+            except OSError as exc:
+                # Startup reports StudioError and continues with its lease sweep and repository scan.
+                raise StudioError(
+                    "storage_error", "committed transaction staging cleanup failed",
+                    details={"transaction_id": txid},
+                ) from exc
+        if not was_finished:
+            self._storage.update("install_transactions", txid, {"finished_at": finished_at})
+        return True
 
     def _preflight_transaction(self, repo: "RepoRecord", kind: str, plan_digest: str) -> PreviewPlan:
         """Every reason not to start, checked in the order that reveals the most useful one. Sync."""

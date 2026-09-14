@@ -1,0 +1,233 @@
+diff --git a/docs/system-specs/modules/session.md b/docs/system-specs/modules/session.md
+index 8bb4178ff..bbae8ee2a 100644
+--- a/docs/system-specs/modules/session.md
++++ b/docs/system-specs/modules/session.md
+@@ -279,6 +279,24 @@ conversation log, so the LLM has no memory of the interrupted request.
+ 
+ After a hard kill, `_eager_respawn(key)` calls `get_or_create(key)` in a background task so the next user message finds a warm session. On failure, logs at debug and does nothing — the next message triggers `get_or_create` again via the normal path.
+ 
++## Speculative Session Creation
++
++Dashboard `_eager_spawn` resolves agent bindings against `slot.project`, the
++same directory passed as the session's cwd. This applies to both fresh eager
++creation and resumed-session prefetch. Before resolving, it warms that project's
++agent index off the event loop through `warm_project_agent_names`; the resolver
++then runs inline against the warm cache, matching the real-turn path.
++
++Project-local `.kiro/agents/*.json` declarations remain dispatchable even when
++the gateway runs from an unrelated directory. Configured aliases retain their
++precedence, and the gateway's cwd never supplies an agent missing from the slot's
++project. Correct binding at prefetch time is required because the first real
++turn reuses the prefetched process, including its selected agent and hooks.
++
++On runtimes with app-agent self-healing, the retry after a materialized-agent
++refresh and the re-resolution after app registration retain that same project
++scope. Recovery must not replace the slot's project with an absent project.
++
+ ## Session Resume (SessionMap)
+ 
+ Persistent mapping of `session_key → kiro_session_id` stored at
+diff --git a/src/kiro_crew/dashboard/chat_runner.py b/src/kiro_crew/dashboard/chat_runner.py
+index 7b3697be3..ba73481c2 100644
+--- a/src/kiro_crew/dashboard/chat_runner.py
++++ b/src/kiro_crew/dashboard/chat_runner.py
+@@ -2996,7 +2996,10 @@ async def _eager_spawn(
+             agent_model = ""
+             try:
+                 cfg = KiroCrewConfig.load()
+-                bindings = resolve_agent_bindings(cfg, slot.agent or None)
++                # The first turn reuses this session, so resolve project agents
++                # against the same cwd and warmed index as a real turn.
++                await warm_project_agent_names(slot.project)
++                bindings = resolve_agent_bindings(cfg, slot.agent or None, slot.project or None)
+                 kiro_agent = bindings.kiro_agent
+                 agent_model = normalize_agent_model(bindings.model)
+             except Exception:
+diff --git a/test/test_eager_spawn.py b/test/test_eager_spawn.py
+index e341dbb98..d9ef08609 100644
+--- a/test/test_eager_spawn.py
++++ b/test/test_eager_spawn.py
+@@ -10,6 +10,9 @@ and the handler wiring on project set.
+ from __future__ import annotations
+ 
+ import asyncio
++import json
++import os
++from pathlib import Path
+ from unittest.mock import AsyncMock, MagicMock, patch
+ 
+ import pytest
+@@ -307,6 +310,173 @@ class TestEagerSpawn:
+         state.sessions.release.assert_called_once_with(key)
+ 
+ 
++class TestEagerSpawnProjectBindings:
++    """Speculative sessions resolve the same project agents as real turns."""
++
++    @pytest.fixture
++    def cfg(self, monkeypatch, tmp_path):
++        from kiro_crew import agent_discovery
++        from kiro_crew.config import loader
++
++        expected_source = os.environ.get("KIROCREW_EAGER_TEST_SOURCE")
++        if expected_source:
++            assert Path(chat_runner.__file__).resolve() == Path(expected_source).resolve()
++        package_root = Path(chat_runner.__file__).resolve().parents[1]
++        assert Path(loader.__file__).resolve().parents[1] == package_root
++        assert chat_runner.resolve_agent_bindings is loader.resolve_agent_bindings
++        monkeypatch.setattr(chat_runner, "_EAGER_SPAWN_DEBOUNCE_SECS", 0)
++        monkeypatch.setattr(chat_runner, "_armed_prefetches", {})
++        monkeypatch.setattr(agent_discovery, "_PROJECT_NAMES_CACHE", {})
++        monkeypatch.setattr(loader, "_MATERIALIZED_AGENTS_READY", True)
++        monkeypatch.setattr(loader, "_MATERIALIZED_AGENTS", frozenset())
++        cfg = loader.KiroCrewConfig(
++            agents={"default": loader.KiroCrewAgentConfig(kiro_agent="kirocrew")},
++            default_agent="default",
++            workspaces={"default": loader.WorkspaceConfig(dir=str(tmp_path / "workspace"))},
++            memory_stores={"default": loader.MemoryStoreConfig()},
++        )
++        monkeypatch.setattr(chat_runner.KiroCrewConfig, "load", lambda: cfg)
++        if hasattr(chat_runner, "_default_session_model"):
++            # Model fallback is unrelated to binding resolution and may read
++            # user agent files in runtimes that precompute it before spawning.
++            monkeypatch.setattr(chat_runner, "_default_session_model", lambda *_args: "")
++        return cfg
++
++    @staticmethod
++    def _project(root):
++        agents = root / ".kiro" / "agents"
++        agents.mkdir(parents=True, exist_ok=True)
++        (agents / "workflow.json").write_text(json.dumps({"name": "aidlc"}))
++        return root
++
++    @staticmethod
++    async def _spawn(slot, allow_resume):
++        state = _mock_state(slot)
++        state.sessions.get_or_create.return_value = (MagicMock(), True, allow_resume)
++        try:
++            await _eager_spawn(state, slot, allow_resume=allow_resume)
++            state.sessions.get_or_create.assert_awaited_once()
++            key = state.sessions.get_or_create.await_args.args[0]
++            state.sessions.release.assert_called_once_with(key)
++            kwargs = state.sessions.get_or_create.await_args.kwargs
++            assert kwargs["cwd"] == (slot.project or None)
++            assert kwargs["speculative"] is True
++            assert kwargs["speculative_resume"] is allow_resume
++            return kwargs
++        finally:
++            ttl = getattr(slot, "_prefetch_ttl_task", None)
++            if ttl is not None:
++                ttl.cancel()
++                with pytest.raises(asyncio.CancelledError):
++                    await ttl
++
++    @pytest.mark.asyncio
++    @pytest.mark.parametrize("allow_resume", [False, True])
++    @pytest.mark.parametrize("warm_cache", [False, True])
++    async def test_project_agent_with_real_resolver(
++        self, cfg, tmp_path, monkeypatch, allow_resume, warm_cache
++    ):
++        from kiro_crew import agent_discovery
++
++        slot = _ChatSlot("project-agent")
++        slot.agent = "aidlc"
++        slot.project = str(self._project(tmp_path / "project"))
++        elsewhere = tmp_path / "gateway-cwd"
++        elsewhere.mkdir()
++        monkeypatch.chdir(elsewhere)
++        assert agent_discovery.cached_project_agent_names(slot.project) is None
++        if warm_cache:
++            await agent_discovery.warm_project_agent_names(slot.project)
++            assert agent_discovery.cached_project_agent_names(slot.project) == frozenset({"aidlc"})
++        kwargs = await self._spawn(slot, allow_resume)
++        assert kwargs["agent"] == "aidlc"
++
++    @pytest.mark.asyncio
++    @pytest.mark.parametrize("allow_resume", [False, True])
++    @pytest.mark.parametrize("has_project", [False, True])
++    async def test_gateway_cwd_cannot_supply_a_slot_agent(
++        self, cfg, tmp_path, monkeypatch, allow_resume, has_project
++    ):
++        from kiro_crew import agent_discovery
++
++        elsewhere = self._project(tmp_path / "gateway-cwd")
++        monkeypatch.chdir(elsewhere)
++        await agent_discovery.warm_project_agent_names(str(elsewhere))
++        slot = _ChatSlot("unrelated-agent")
++        slot.agent = "aidlc"
++        if has_project:
++            project = tmp_path / "project"
++            project.mkdir()
++            slot.project = str(project)
++        kwargs = await self._spawn(slot, allow_resume)
++        assert kwargs["agent"] == "kirocrew"
++
++    @pytest.mark.asyncio
++    @pytest.mark.parametrize("allow_resume", [False, True])
++    async def test_configured_alias_keeps_precedence_over_project_agent(
++        self, cfg, tmp_path, allow_resume
++    ):
++        from kiro_crew.config.loader import KiroCrewAgentConfig
++
++        cfg.agents["aidlc"] = KiroCrewAgentConfig(
++            kiro_agent="configured-agent", model="alias-model"
++        )
++        slot = _ChatSlot("configured-alias")
++        slot.agent = "aidlc"
++        slot.project = str(self._project(tmp_path / "project"))
++        kwargs = await self._spawn(slot, allow_resume)
++        assert kwargs["agent"] == "configured-agent"
++        assert kwargs["model"] == "alias-model"
++
++    @pytest.mark.asyncio
++    @pytest.mark.skipif(
++        not hasattr(chat_runner, "_recover_app_agent_binding"),
++        reason="this source version predates app-agent prefetch recovery",
++    )
++    @pytest.mark.parametrize("allow_resume", [False, True])
++    @pytest.mark.parametrize("recovery_stage", ["rescan", "register"])
++    async def test_app_recovery_retains_project_scope(
++        self, cfg, tmp_path, monkeypatch, allow_resume, recovery_stage
++    ):
++        from kiro_crew import agent_discovery
++        from kiro_crew.apps import bridges, manager
++
++        slot = _ChatSlot("app-project-agent")
++        slot.agent = "aidlc"
++        slot._app = "aidlc-studio"
++        project = tmp_path / "project"
++        project.mkdir()
++        slot.project = str(project)
++        elsewhere = tmp_path / "gateway-cwd"
++        elsewhere.mkdir()
++        monkeypatch.chdir(elsewhere)
++
++        def materialize(*_args):
++            self._project(project)
++            # Both registration and snapshot refresh run off the event loop.
++            # Populate only this temporary project's index for the real resolver.
++            agent_discovery.project_agent_names(slot.project)
++
++        refresh = MagicMock(side_effect=materialize if recovery_stage == "rescan" else None)
++        register = MagicMock(side_effect=materialize)
++        recovery = AsyncMock(wraps=chat_runner._recover_app_agent_binding)
++        monkeypatch.setattr(chat_runner, "refresh_materialized_agents", refresh)
++        monkeypatch.setattr(chat_runner, "_recover_app_agent_binding", recovery)
++        monkeypatch.setattr(bridges, "register_app", register)
++        monkeypatch.setattr(manager, "is_app_enabled", lambda _app: True)
++        monkeypatch.setattr(manager, "app_lifecycle_lock", lambda _app: asyncio.Lock())
++
++        kwargs = await self._spawn(slot, allow_resume)
++        assert kwargs["agent"] == "aidlc"
++        refresh.assert_called_once_with()
++        if recovery_stage == "rescan":
++            recovery.assert_not_awaited()
++            register.assert_not_called()
++        else:
++            recovery.assert_awaited_once_with(cfg, slot, project=slot.project)
++            register.assert_called_once_with(slot._app)
++
++
+ class TestTtftMetric:
+     """kirocrew.chat.first_token.duration — user message → first visible token."""
+ 

@@ -1,0 +1,27 @@
+--- a/kiro_crew/dashboard/chat_runner.py
++++ b/kiro_crew/dashboard/chat_runner.py
+@@ -4230,7 +4230,8 @@
+             try:
+                 cfg = KiroCrewConfig.load()
+                 loaded_cfg = cfg
+-                bindings = resolve_agent_bindings(cfg, slot.agent or None)
++                await warm_project_agent_names(slot.project)
++                bindings = resolve_agent_bindings(cfg, slot.agent or None, slot.project or None)
+                 kiro_agent = bindings.kiro_agent
+                 crew_alias = bindings.resolved_alias
+                 agent_model = normalize_agent_model(bindings.model)
+@@ -4257,12 +4258,12 @@
+                             slot.key,
+                             exc_info=True,
+                         )
+-                    bindings = resolve_agent_bindings(cfg, slot.agent or None)
++                    bindings = resolve_agent_bindings(cfg, slot.agent or None, slot.project or None)
+                     kiro_agent = bindings.kiro_agent
+                     crew_alias = bindings.resolved_alias
+                     agent_model = normalize_agent_model(bindings.model)
+                     if not bindings.requested_resolved:
+-                        bindings = await _recover_app_agent_binding(cfg, slot, project=None)
++                        bindings = await _recover_app_agent_binding(cfg, slot, project=slot.project or None)
+                         kiro_agent = bindings.kiro_agent
+                         crew_alias = bindings.resolved_alias
+                         agent_model = normalize_agent_model(bindings.model)

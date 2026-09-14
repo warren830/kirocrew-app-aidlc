@@ -1182,6 +1182,42 @@ describe('install recovery required', () => {
     install: install({ status: 'recovery_required', upgrade_available: false }),
   })
 
+  it('keeps recovery open without re-previewing while the accepted transaction is still starting', async () => {
+    let accept!: (value: unknown) => void
+    const starting = new Promise((resolve) => { accept = resolve })
+    setApiRoutes({
+      ...shellRoutes(),
+      [`GET ${BASE}/repos`]: () => ({ repos: [broken], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
+      [`GET ${BASE}/repos/r_1`]: () => ({ repo: broken, intents: [], transactions: [transaction()] }),
+      [`GET ${BASE}/repos/r_1/git`]: () => ({ git: broken.git, owned_dirty: [], unrelated_dirty: 0 }),
+      [`POST ${BASE}/repos/r_1/install/recovery/preview`]: () => ({
+        plan: plan({ kind: 'recovery' }), plan_digest: 'reviewed-recovery',
+      }),
+      [`POST ${BASE}/repos/r_1/install/recovery`]: () => starting,
+      [`GET ${BASE}/repos/r_1/transactions/tx_9`]: () => ({ transaction: transaction({ status: 'committed', error: null }) }),
+    })
+    mount('?view=repos&repo=r_1')
+    await userEvent.click(await screen.findByRole('button', { name: /Preview the recovery/ }))
+    const preview = await screen.findByRole('region', { name: 'Install recovery preview' })
+    const confirm = await within(preview).findByRole('button', { name: /Run install recovery/ })
+    await waitFor(() => expect(confirm).toBeEnabled())
+    await userEvent.click(confirm)
+
+    const cancel = within(preview).getByRole('button', { name: 'Cancel' })
+    const refresh = within(preview).getByRole('button', { name: 'Re-read the repository' })
+    expect(confirm).toBeDisabled()
+    expect(cancel).toBeDisabled()
+    expect(refresh).toBeDisabled()
+    await userEvent.click(cancel)
+    await userEvent.click(refresh)
+    expect(preview).toBeInTheDocument()
+    expect(apiCalls.filter((call) => call.path.endsWith('/install/recovery/preview'))).toHaveLength(1)
+
+    await act(async () => accept({ ok: true, transaction_id: 'tx_9', status: 'staged' }))
+    expect(await screen.findByRole('region', { name: 'Transaction tx_9' })).toBeInTheDocument()
+    expect(apiCalls.filter((call) => call.path.endsWith('/install/recovery'))).toHaveLength(1)
+  })
+
   it('explains restoration of an interrupted uninstall and submits its recovery preview', async () => {
     const restoration = plan({
       kind: 'recovery', engine_from: '2.6.1', engine_to: '2.6.1',

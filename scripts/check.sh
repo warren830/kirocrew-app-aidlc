@@ -17,7 +17,8 @@ ROOT="$PWD"
 
 PY="${PY:-/Users/ychchen/warren_ws/kirocrew/.venv/bin/python}"
 BUNDLE_PY="${BUNDLE_PY:-/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/bin/python3.12}"
-NODE_BIN="${NODE_BIN:-/Users/ychchen/.nvm/versions/node/v24.20.0/bin}"
+NODE_BIN="${NODE_BIN:-$(dirname "$(command -v node)")}"
+export PATH="$NODE_BIN:$PATH"
 
 SCOPE="all"
 FAST=0

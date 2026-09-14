@@ -2212,8 +2212,11 @@ class Reconciler:
         return await self._s.actions.get(rec.action_id)
 
     async def _stamp_evidence_row(self, row: Mapping[str, Any], patch: Mapping[str, Any]) -> None:
-        merged = dict(row.get("evidence_json") or {})
+        previous = dict(row.get("evidence_json") or {})
+        merged = dict(previous)
         merged.update({k: v for k, v in dict(patch).items() if k != "audit_error_events"})
+        if merged == previous:
+            return
         await self._to_thread(
             self._s.storage.cas_update,
             "actions",

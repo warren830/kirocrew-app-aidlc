@@ -1688,6 +1688,7 @@ def test_a_settled_transaction_is_left_alone(studio, h, repo_builder):
     root = repo_builder.with_git().build()
     insert_repo(studio, h.store, root)
     _abandoned(h.store, "committed")
+    h.store.update("install_transactions", "tx_dead", {"finished_at": TS})
 
     assert asyncio.run(h.installer.settle_abandoned()) == []
     assert h.store.get("install_transactions", "tx_dead")["status"] == "committed"

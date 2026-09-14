@@ -609,9 +609,19 @@ Directive，对不存在的 units 调用 join。阶段级指令的 unit 为 null
 
 ## 30. 恢复会话的新消息没有对应 HUMAN_TURN，Learnings 无法入账
 
-**状态：新发现，尚未解决。**
+**状态：宿主补丁与回归验证通过，Studio 已更新并实测；宿主仍有会话运行，等待空闲重启。**
 
 2026-09-13 15:28（Asia/Shanghai），会话收到了 Nothing to add，
 但审计中没有对应的新 HUMAN_TURN。15:28:57 的 aidlc-log answer 返回
 “Cannot record this answer because no new human reply has arrived for the question”。
 需要检查恢复会话的人工输入登记链路，不能通过重放答案或补造人工标记处理。
+
+2026-09-14 已确认根因：KiroCrew `_eager_spawn` 未传入项目目录，
+无法识别项目内的 `aidlc` agent，预热恢复时回退至默认 `kirocrew`。
+用户消息复用该会话后，没有执行 AI-DLC 的人工输入 Hook。
+修复预热时的项目 agent 缓存加载，以及初次解析、重试、应用 agent 恢复分支的项目目录传递。
+当前安装版本的 14 项专项回归全部通过。
+
+同时修复恢复卡片的重复版本更新、已送达消息仍提供重发入口，以及将工作流未确认
+误述为消息未送达的提示。原投递记录和人工决策保留。
+完整修复范围与验证结果见 [本轮验证记录](verification/2026-09-14-recovery-and-ui/README.md)。

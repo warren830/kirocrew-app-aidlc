@@ -2643,6 +2643,9 @@ class HumanActionBroker:
         for name in names:
             if name not in DECISIONS.get(rec.type, ()) and rec.status not in UNCERTAIN_STATUSES:
                 continue
+            if name in ("mark_not_delivered", "resubmit") and rec.evidence.get("delivery_confirmed"):
+                # A missing workflow receipt does not undo the confirmed message delivery.
+                continue
             if name == "mark_not_delivered" and rec.status != "ReconciliationRequired":
                 # `_mark_not_delivered` refuses from every other status (R07), and a recovery card is
                 # always `Queued` — its decisions are all studio-only, so it never reaches an uncertain

@@ -565,6 +565,33 @@ def finding_codes(svc, action_id: str) -> set[str]:
     }
 
 
+def test_unchanged_reconciliation_evidence_keeps_generation_stable(svc, scene):
+    """A quiet recovery card must not become stale on every background scan."""
+    action_id = scene.make(status="ReconciliationRequired")
+    rec = asyncio.run(svc.actions.get(action_id))
+    first = asyncio.run(svc.reconciler._stamp_evidence(rec, {"delivery_confirmed": True}))
+    before = svc.storage.get("actions", action_id)
+
+    asyncio.run(svc.reconciler._stamp_evidence(first, {"delivery_confirmed": True}))
+
+    after = svc.storage.get("actions", action_id)
+    assert after["status_generation"] == before["status_generation"]
+    assert after["updated_at"] == before["updated_at"]
+    assert after["evidence_json"] == before["evidence_json"]
+
+
+def test_changed_reconciliation_evidence_still_advances_generation(svc, scene):
+    action_id = scene.make(status="ReconciliationRequired")
+    rec = asyncio.run(svc.actions.get(action_id))
+    before = svc.storage.get("actions", action_id)
+
+    asyncio.run(svc.reconciler._stamp_evidence(rec, {"delivery_confirmed": True}))
+
+    after = svc.storage.get("actions", action_id)
+    assert after["status_generation"] == before["status_generation"] + 1
+    assert after["evidence_json"]["delivery_confirmed"] is True
+
+
 # --------------------------------------------------------------------------- #
 # 1. startup ordering
 # --------------------------------------------------------------------------- #

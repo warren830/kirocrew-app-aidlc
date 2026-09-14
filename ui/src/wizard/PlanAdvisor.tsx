@@ -250,16 +250,20 @@ export function usePlanAdvisor({
 
   // Declared ahead of `effective`: a setting the proposal leaves null falls back to the PROPOSED scope's own
   // frontmatter when the proposal moves the scope, and that frontmatter arrives with the shadow plan.
-  const [shadow, setShadow] = useState<EffectivePlan | null>(null)
+  const [shadowPreview, setShadowPreview] = useState<{
+    key: string; repoId: string; draftId: string | null; plan: EffectivePlan
+  } | null>(null)
   const [shadowBusy, setShadowBusy] = useState(false)
   const [shadowError, setShadowError] = useState<string | null>(null)
 
   // The proposed scope's frontmatter, once the shadow plan for it has landed. Matched on name: between
   // "Ask again" and the next shadow the state may still hold the previous proposal's plan.
   const proposedMeta = useMemo(() => {
-    const meta = readScopeMeta(shadow?.scope_meta ?? null)
+    const held = shadowPreview?.repoId === repoId && shadowPreview.draftId === draftId
+      ? shadowPreview.plan : null
+    const meta = readScopeMeta(held?.scope_meta ?? null)
     return meta && proposal && meta.name === proposal.scope ? meta : null
-  }, [shadow, proposal])
+  }, [shadowPreview, repoId, draftId, proposal])
 
   const effective = useMemo<ProposalPicks | null>(() => {
     if (!proposal) return null
@@ -289,7 +293,10 @@ export function usePlanAdvisor({
         : null,
     [effective, space, projectType],
   )
-  const shadowKey = shadowBody ? canonicalJson(shadowBody) : ''
+  const shadowKey = shadowBody ? canonicalJson({ repoId, draftId, body: shadowBody }) : ''
+  // Scope metadata may survive a recompute, but applying overrides requires the exact request's
+  // verdict. In particular, the debounce is already stale even before the HTTP call has started.
+  const shadow = shadowPreview?.key === shadowKey ? shadowPreview.plan : null
   const shadowRef = useRef<PlanRequest | null>(shadowBody)
   shadowRef.current = shadowBody
   const shadowSequence = useRef(0)
@@ -299,32 +306,36 @@ export function usePlanAdvisor({
     // The ticket moves on the empty branch too: a preview still in flight for a proposal that was just
     // dismissed must not land as the shadow of nothing.
     const ticket = (shadowSequence.current += 1)
+    setShadowPreview((previous) => previous ? { ...previous, key: '' } : null)
+    setShadowError(null)
     if (!shadowKey || !repoId || !body) {
-      setShadow(null)
+      setShadowPreview(null)
       setShadowBusy(false)
-      setShadowError(null)
       return
     }
+    setShadowBusy(true)
     const timer = setTimeout(() => {
-      setShadowBusy(true)
       api
         .planPreview(repoId, body)
         .then((answer) => {
           if (ticket !== shadowSequence.current) return
-          setShadow(answer.plan)
+          setShadowPreview({ key: shadowKey, repoId, draftId, plan: answer.plan })
           setShadowError(null)
         })
         .catch((thrown: unknown) => {
           if (ticket !== shadowSequence.current) return
-          setShadow(null)
+          setShadowPreview(null)
           setShadowError(decodeError(thrown).code)
         })
         .finally(() => {
           if (ticket === shadowSequence.current) setShadowBusy(false)
         })
     }, SHADOW_DEBOUNCE_MS)
-    return () => clearTimeout(timer)
-  }, [api, repoId, shadowKey])
+    return () => {
+      clearTimeout(timer)
+      if (ticket === shadowSequence.current) shadowSequence.current += 1
+    }
+  }, [api, repoId, draftId, shadowKey])
 
   // The objective is what the draft read. The scope dimension is judged against BOTH what the Advisor saw
   // and what it proposed: after Use the wizard's scope IS the proposed scope, and a proposal must not be

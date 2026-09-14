@@ -64,19 +64,19 @@ export function RecoveryTemplate({ card, detail, api, go }: TemplateProps) {
   const codes = card.headline.params.codes
   const missingSession = (Array.isArray(codes) && codes.includes('session_lost_mid_stage'))
     || card.headline.params.reason === 'session_lost_mid_stage'
-  const uncertain =
+  const deliveryConfirmed = delivery.delivery_confirmed === true
+  const needsReconciliation =
     card.status === 'DeliveryUncertain' ||
     card.status === 'ReconciliationRequired' ||
     delivery.outcome === 'uncertain'
 
   return (
     <section className="studio-template" data-type={card.type} aria-label={templateLabel(i18n, card)}>
-      {uncertain ? (
-        // The one assertive announcement in a decision body. PRD §10.3 reserves it for delivery
-        // uncertainty, and this is the only state where a user could otherwise assume the send happened.
+      {needsReconciliation ? (
+        // A confirmed transcript establishes receipt, not answer acceptance or workflow recovery.
         <p className="studio-alert" role="alert">
           <Icon name="warn" size={15} />
-          <span>{t('template.recovery.uncertainAlert')}</span>
+          <span>{t(deliveryConfirmed ? 'template.recovery.confirmedAlert' : 'template.recovery.uncertainAlert')}</span>
         </p>
       ) : null}
 
@@ -182,27 +182,29 @@ export function RecoveryTemplate({ card, detail, api, go }: TemplateProps) {
             src={t('template.recovery.src.delivery')}
             icon="send"
             value={
-              delivery.outcome
+              deliveryConfirmed
+                ? t('template.recovery.outcome.confirmed')
+                : delivery.outcome
                 ? t(`template.recovery.outcome.${delivery.outcome}`)
                 : t(`enum.actionStatus.${card.status}`)
             }
             sub={t('template.recovery.deliverySub', {
-              confirmed: delivery.delivery_confirmed ? t('template.recovery.yes') : t('template.recovery.no'),
+              confirmed: deliveryConfirmed ? t('template.recovery.yes') : t('template.recovery.no'),
               at: delivery.delivered_at ? at(i18n, delivery.delivered_at) : t('common.unavailable'),
             })}
-            conflict={uncertain}
+            conflict={needsReconciliation && !deliveryConfirmed}
           />
 
           <Ev
             src={t('template.recovery.src.marker')}
             icon="clock"
             value={
-              evidence.markers.turn_counter === null
+              evidence.markers?.turn_counter == null
                 ? t('common.unavailable')
                 : t('template.recovery.turnCounter', { n: evidence.markers.turn_counter })
             }
             sub={t('template.recovery.markerSub', {
-              at: evidence.markers.human_turn_at
+              at: evidence.markers?.human_turn_at
                 ? at(i18n, evidence.markers.human_turn_at)
                 : t('common.unavailable'),
               presence:
@@ -247,10 +249,10 @@ export function RecoveryTemplate({ card, detail, api, go }: TemplateProps) {
         </EvidenceGrid>
       </Block>
 
-      {uncertain ? (
-        <Block title={t('template.recovery.contradiction')} icon="warn">
+      {needsReconciliation ? (
+        <Block title={t(deliveryConfirmed ? 'template.recovery.confirmedTitle' : 'template.recovery.contradiction')} icon="warn">
           <Brief tone="danger">
-            <p>{t('template.recovery.contradictionBody')}</p>
+            <p>{t(deliveryConfirmed ? 'template.recovery.confirmedBody' : 'template.recovery.contradictionBody')}</p>
             <Consequence icon="warn" tone="warn">
               {t('template.recovery.contradictionChecks', {
                 row: delivery.transcript_row
@@ -267,7 +269,7 @@ export function RecoveryTemplate({ card, detail, api, go }: TemplateProps) {
                     ? t('template.recovery.bootUnknown')
                     : delivery.boot_id_unchanged
                       ? t('template.recovery.bootSame')
-                      : t('template.recovery.bootRestarted'),
+                      : t(deliveryConfirmed ? 'template.recovery.bootRestartedConfirmed' : 'template.recovery.bootRestarted'),
               })}
             </Consequence>
           </Brief>

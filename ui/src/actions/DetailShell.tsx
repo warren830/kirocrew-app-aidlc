@@ -47,7 +47,7 @@ import { DeliveryStrip, statusLabel } from './DeliveryStrip'
 import { DetailHeader } from './DetailHeader'
 import { DetailTabs, tabsFor } from './DetailTabs'
 import { isRefreshing } from './QueueRow'
-import { pendingQuestions, useSubmit, wireTextFor } from './useSubmit'
+import { IDLE, pendingQuestions, useSubmit, wireTextFor } from './useSubmit'
 
 // --------------------------------------------------------------------------- //
 // drafts
@@ -312,14 +312,22 @@ export function DetailShell({
 
   const submitter = useSubmit({
     api,
-    onCard: useCallback((card: ActionCard) => setOverride((current) => newer(current, card)), []),
+    onCard: useCallback((card: ActionCard) => {
+      if (card.action_id === actionId) setOverride((current) => newer(current, card))
+    }, [actionId]),
     onSettled: onQueueChanged,
   })
-  const { state: submit, busy } = submitter
+  // Keep the in-flight submitter alive across navigation, while showing only this action's result.
+  const { busy } = submitter
+  const submit = submitter.state.actionId === actionId ? submitter.state : IDLE
+  const currentDetail = detail.data?.action.action_id === actionId ? detail.data : null
 
   const card = useMemo(
-    () => newer(override, detail.data?.action ?? queueCard),
-    [override, detail.data, queueCard],
+    () => newer(
+      override?.action_id === actionId ? override : null,
+      newer(currentDetail?.action ?? null, queueCard?.action_id === actionId ? queueCard : null),
+    ),
+    [override, actionId, currentDetail, queueCard],
   )
 
   const draftValue = useMemo(() => ({ draft, setDraft }), [draft, setDraft])
@@ -365,7 +373,7 @@ export function DetailShell({
   }
 
   const refreshing = isRefreshing(card)
-  const tabs = tabsFor(card, detail.data)
+  const tabs = tabsFor(card, currentDetail)
   const activeTab: Tab = tabs.some((entry) => entry.tab === route.tab) ? route.tab : DEFAULT_TAB
   const Template = templateFor(card.type)
   const Panel = activeTab === 'decision' ? null : panelFor(activeTab)
@@ -552,7 +560,7 @@ export function DetailShell({
               <DraftContext.Provider value={draftValue}>
                 <Template
                   card={card}
-                  detail={detail.data}
+                  detail={currentDetail}
                   draft={draft}
                   setDraft={setDraft}
                   refreshing={refreshing}
@@ -569,7 +577,7 @@ export function DetailShell({
             <DraftContext.Provider value={draftValue}>
               <Panel
                 card={card}
-                detail={detail.data}
+                detail={currentDetail}
                 draft={draft}
                 setDraft={setDraft}
                 refreshing={refreshing}
@@ -601,7 +609,7 @@ export function DetailShell({
               onOpenAnchor={openAnchor}
             />
           ) : activeTab === 'activity' ? (
-            <TransitionList transitions={detail.data?.transitions ?? []} />
+            <TransitionList transitions={currentDetail?.transitions ?? []} />
           ) : activeTab === 'conversation' ? (
             <Conversation slotKey={card.evidence.session?.slot_key ?? ''} />
           ) : (

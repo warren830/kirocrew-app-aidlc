@@ -1,5 +1,7 @@
 {
   "delivery.answerNeedsText": "Text still required",
+  "delivery.confirmed": "Delivery confirmed — workflow needs reconciliation",
+  "delivery.confirmedBody": "The conversation received this message. Whether AI-DLC accepted the answer or changed the workflow is still unverified. This message will not be resent.",
   "delivery.fact.absent": "not found",
   "delivery.fact.bootUnchanged": "Same Studio process throughout",
   "delivery.fact.confirmed": "Delivery later confirmed",
@@ -23,6 +25,7 @@
   "delivery.step.delivered": "Sent",
   "delivery.step.processing": "Agent processing",
   "delivery.step.queued": "Queued",
+  "delivery.step.reconciliation": "Reconcile workflow",
   "delivery.step.stateChanged": "State changed",
   "delivery.step.unchanged": "No state change",
   "delivery.uncertain": "Delivery uncertain — nothing was replayed",

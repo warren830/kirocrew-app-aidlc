@@ -12,7 +12,8 @@ cd "$(dirname "$0")/.."
 ROOT="$PWD"
 APP="aidlc-studio"
 KCAPI="$ROOT/scripts/kcapi.sh"
-NODE_BIN="${NODE_BIN:-/Users/ychchen/.nvm/versions/node/v24.20.0/bin}"
+NODE_BIN="${NODE_BIN:-$(dirname "$(command -v node)")}"
+export PATH="$NODE_BIN:$PATH"
 PY3=/usr/bin/python3
 BUILD=1; DEV=0
 for a in "$@"; do
