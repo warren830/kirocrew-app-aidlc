@@ -386,6 +386,7 @@ Question one — How should the command behave?
 
 [Answer]:
 """
+QUESTION_NOTES = "# Questions\n\nChoose how to answer in the conversation.\n"
 ROUTING_PROMPT = "How would you like to answer the 3 requirements questions?"
 ROUTING_LABELS = ["Guide me", "I'll edit the file", "Chat"]
 BATCH_OPTIONS = (
@@ -957,10 +958,10 @@ def test_question_fences_cannot_displace_a_pending_audit_decision(sv, scene):
     assert _tree_digest(scene.root) == original
 
 
-def unparsed_questions(scene):
+def unparsed_questions(scene, text=UNPARSED_QUESTIONS):
     path = _record_dir(scene.root) / QUESTIONS_REL
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(UNPARSED_QUESTIONS)
+    path.write_text(text)
     _shard(scene.root).write_text(start_audit() + decision(
         Decision=ROUTING_PROMPT, Options=",".join(ROUTING_LABELS),
     ))
@@ -968,10 +969,10 @@ def unparsed_questions(scene):
 
 
 @pytest.mark.parametrize("letter,label", zip("ABC", ROUTING_LABELS))
-def test_unparsed_file_uses_audited_routing_question_through_api_and_reconcile(
+def test_question_notes_without_pending_tags_use_audited_routing_through_api_and_reconcile(
     sv, routes, fake_host, scene, letter, label
 ):
-    path = unparsed_questions(scene)
+    path = unparsed_questions(scene, QUESTION_NOTES)
     original = _tree_digest(scene.root)
     endpoint = f"/repos/{scene.repo_id}/intents/{INTENT}/questions"
     status, body = _get(sv, routes, fake_host, endpoint)
@@ -1006,7 +1007,7 @@ def test_unparsed_file_uses_audited_routing_question_through_api_and_reconcile(
     assert after["mode"] == "degraded"
     assert after["questions"]["pending_count"] == 0
     assert after["questions"]["questions"] == []
-    assert path.read_text() == UNPARSED_QUESTIONS
+    assert path.read_text() == QUESTION_NOTES
     transitions = sv.storage.select("action_transitions", {"action_id": card["action_id"]})
     assert sum(t["to_status"] == "Delivering" for t in transitions) == 1
 
@@ -1014,8 +1015,8 @@ def test_unparsed_file_uses_audited_routing_question_through_api_and_reconcile(
 @pytest.mark.parametrize(
     "failure", ["partial", "read_failed", "protected", "answered", "new_attempt", "same_second", "no_audit"],
 )
-def test_unparsed_file_cannot_relax_audit_evidence_guards(sv, scene, monkeypatch, failure):
-    path = unparsed_questions(scene)
+def test_question_notes_cannot_relax_audit_evidence_guards(sv, scene, monkeypatch, failure):
+    path = unparsed_questions(scene, QUESTION_NOTES)
     if failure == "partial":
         append(scene, F.audit_block("NOTE", ASKED, Details="x" * 2000), shard="zz-large.md")
         read = sv.reader.read_audit
@@ -1039,11 +1040,11 @@ def test_unparsed_file_cannot_relax_audit_evidence_guards(sv, scene, monkeypatch
 
 
 @pytest.mark.parametrize("change", ["file_edit", "structured_replacement", "read_failed"])
-def test_unparsed_file_audit_submit_rechecks_the_file(sv, routes, fake_host, scene, monkeypatch, change):
-    path = unparsed_questions(scene)
+def test_question_notes_audit_submit_rechecks_the_file(sv, routes, fake_host, scene, monkeypatch, change):
+    path = unparsed_questions(scene, QUESTION_NOTES)
     card = question_card(sv, routes, fake_host, scene)
     if change == "file_edit":
-        path.write_text(UNPARSED_QUESTIONS + "\nA changed question description.\n")
+        path.write_text(QUESTION_NOTES + "\nA changed question description.\n")
     elif change == "structured_replacement":
         path.write_text("## Q1. File-owned question\n\nA. File choice\n\n[Answer]:\n")
     else:
@@ -1056,6 +1057,35 @@ def test_unparsed_file_audit_submit_rechecks_the_file(sv, routes, fake_host, sce
     assert status == 409 and body["code"] == "action_stale", body
     assert _row(sv, card["action_id"])["status"] == "Queued"
     assert fake_host.get_slot(scene.slot_key).messages == []
+
+
+@pytest.mark.parametrize("text,pending", [
+    (UNPARSED_QUESTIONS, 1),
+    ((F.FIXTURES / "question-fallback/domain-followups.md").read_text(), 3),
+], ids=["legacy_unparsed", "domain_followups"])
+def test_unsupported_pending_answers_keep_conversation_fallback_over_audit_routing(
+    sv, routes, fake_host, scene, text, pending,
+):
+    path = unparsed_questions(scene, text)
+    original = _tree_digest(scene.root)
+    endpoint = f"/repos/{scene.repo_id}/intents/{INTENT}/questions"
+    status, body = _get(sv, routes, fake_host, endpoint)
+    assert status == 200 and body["mode"] == "degraded"
+    view = body["questions"]
+    assert not view.get("origin")
+    assert view["unsupported_pending_count"] == view["pending_count"] == pending
+    assert all(q["answered"] for q in view["questions"])
+    card = question_card(sv, routes, fake_host, scene)
+    assert card["evidence"]["questions"] == view
+    assert card["primary"] is None and card["decisions"] == []
+    status, result = _submit(
+        sv, routes, fake_host, card, payload=answer_payload(), wire_text=ROUTING_LABELS[0],
+    )
+    assert status == 400 and result["code"] == "invalid_decision"
+    assert result["details"]["reason"] == "unsupported_question_format"
+    assert _row(sv, card["action_id"])["delivery_id"] is None
+    assert fake_host.get_slot(scene.slot_key).messages == []
+    assert path.read_text() == text and _tree_digest(scene.root) == original
 
 
 @pytest.mark.parametrize("structured", [

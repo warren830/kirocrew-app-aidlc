@@ -170,6 +170,22 @@ describe('wireTextFor', () => {
       .toBeNull()
   })
 
+  it('does not build a reply or skip to a checkpoint while unsupported follow-ups remain', () => {
+    const pending = { ...view([question()]), unsupported_pending_count: 3, pending_count: 4 }
+    expect(wireTextFor({ decision: 'answers', answers: [
+      { index: 1, option_letters: ['A'], free_text: null },
+    ] }, pending, true)).toBeNull()
+    expect(wireTextFor({ decision: 'confirm_summary', choice: 'looks_correct' }, pending, true)).toBeNull()
+    expect(wireTextFor({
+      decision: 'confirm_summary', choice: 'request_changes', feedback: 'Clarify',
+    }, pending, true)).toBeNull()
+    expect(wireTextFor({ decision: 'approve_plan' }, pending, true)).toBeNull()
+    expect(wireTextFor({ decision: 'request_plan_changes', feedback: 'Clarify' }, pending, true)).toBeNull()
+    // The optional field does not change supported canonical wire text on legacy cards.
+    expect(wireTextFor({ decision: 'confirm_summary', choice: 'looks_correct' }, view([]), true))
+      .toBe('Looks correct')
+  })
+
   it('retains selected labels alongside multiline Other text', () => {
     expect(answerText({ index: 1, option_letters: ['A', 'X'], free_text: 'Custom, 中文.\nLine 2.' },
       question({ multi_select: true }))).toBe('DynamoDB, Custom, 中文.\nLine 2.')

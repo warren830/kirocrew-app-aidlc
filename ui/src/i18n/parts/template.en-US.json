@@ -41,6 +41,8 @@
   "template.gate.feedbackRouting": "Studio sends this to the canonical session as your turn. It never edits the artifact.",
   "template.questions.group": "Question group — answered together",
   "template.questions.pending": "{n} of {total} unanswered",
+  "template.questions.unsupportedPending": "{n} additional answer fields pending",
+  "template.questions.unsupportedBody": "This file contains unanswered sections that Studio cannot safely map to form questions. Read and answer them in the canonical conversation.",
   "template.questions.none": "This card carries no questions. The group may already have been answered.",
   "template.questions.selectOne": "select one",
   "template.questions.selectAny": "select any",

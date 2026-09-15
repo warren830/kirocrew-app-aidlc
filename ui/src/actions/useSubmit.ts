@@ -99,6 +99,11 @@ export function wireTextFor(
   questions: QuestionsView | null,
   groupedAnswers: boolean,
 ): string | null {
+  // A cached card can still offer question decisions after an unsupported follow-up appears.
+  // Such sections have no safe Q mapping; checkpoint confirmations must not skip them either.
+  if ((questions?.unsupported_pending_count ?? 0) > 0 && [
+    'answers', 'confirm_summary', 'approve_plan', 'request_plan_changes',
+  ].includes(payload.decision)) return null
   switch (payload.decision) {
     case 'approve':
       return WIRE.APPROVE

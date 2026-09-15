@@ -311,6 +311,54 @@ def test_question_context_reaches_the_api_detail_and_action_evidence(sv, routes,
     assert question_path.read_text() == text
 
 
+@pytest.mark.parametrize("checkpoint", [
+    "",
+    "## Consolidated Summary Confirmation\n- Looks correct\n- Request changes\n[Answer]:\n",
+    "## Plan Approval\n- Approve Plan\n- Request Changes\n[Answer]:\n",
+])
+def test_unsupported_domain_questions_keep_waiting_and_reach_real_routes(
+    sv, routes, fake_host, repo_builder, checkpoint,
+):
+    """Reproduce the native demo's shapes in a temp repo, never in the running demo."""
+    text = (CT.FIXTURES / "question-fallback/domain-followups.md").read_text() + "\n" + checkpoint
+    stage = "domain-design"
+    question_rel = f"inception/{stage}/{stage}-questions.md"
+    root = (
+        repo_builder.with_engine("devdelta").with_workspace().with_intent(
+            INTENT,
+            state=F.state_text(marks={stage: "-"}, fields={
+                "Current Stage": stage, "Status": "Running", "Lifecycle Phase": "INCEPTION",
+            }),
+            audit=F.audit_text(F.audit_block("STAGE_STARTED", "2026-09-04T09:00:00Z", Stage=stage)),
+            questions={question_rel: text},
+        ).build()
+    )
+    repo = sv.repos.add(str(root), "fallback")
+    snap = sv.projection.snapshot(repo, "default", INTENT)
+    assert sv.projection.operational_state(snap) == "WaitingForYou"
+    cards = [c for c in sv.projection.derive_cards(
+        snap, findings=(), binding=None, install=None, breakers=(), live_actions=(),
+    ) if c.type == "question"]
+    assert len(cards) == 1
+    assert cards[0].decisions == ()
+
+    for suffix in ("/questions", ""):
+        path = base(repo, suffix)
+        status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))
+        assert status == 200
+        if not suffix:
+            assert body["intent"]["operational_state"] == "WaitingForYou"
+        view = body["questions"] if suffix else body["intent"]["questions"]
+        assert view == cards[0].evidence["questions"]
+        assert view["mode"] == "degraded"
+        assert view["pending_count"] == 3
+        assert view["unsupported_pending_count"] == 3
+        assert all(q["answered"] for q in view["questions"])
+        assert [q["index"] for q in view["questions"]] == [1, 2, 3, 4, 5]
+    assert sv.storage.select("actions") == []  # the GETs and projection never mint actions
+    assert (root / "aidlc/spaces/default/intents" / INTENT / question_rel).read_text() == text
+
+
 def test_review_reports_the_verdict_the_findings_and_the_audit_receipts(sv, routes, fake_host, repo):
     path = base(repo, "/review")
     status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))

@@ -2691,6 +2691,53 @@ def test_checkpoint_card_does_not_claim_zero_unanswered_questions(world, checkpo
     run(scenario())
 
 
+@pytest.mark.parametrize("payload,wire", [
+    ({"decision": "answers", "answers": [{"index": 1, "option_letters": ["A"]}]}, "Store"),
+    ({"decision": "confirm_summary", "choice": "looks_correct"}, "Looks correct"),
+    ({"decision": "confirm_summary", "choice": "request_changes", "feedback": "Clarify"}, "Request changes: Clarify"),
+    ({"decision": "approve_plan"}, "Approve Plan"),
+    ({"decision": "request_plan_changes", "feedback": "Clarify"}, "Request Changes: Clarify"),
+])
+def test_unsupported_followups_refuse_cached_card_decisions_before_delivery(world, A, payload, wire):
+    async def scenario():
+        path = world.builder.record(INTENT) / QUESTIONS_REL
+        text = (
+            "## Q1. Store?\nA. Store\n[Answer]:\n\n## F1. Follow-up\n[Answer]:\n\n"
+            "## Consolidated Summary Confirmation\n- Looks correct\n- Request changes\n[Answer]:\n\n"
+            "## Plan Approval\n- Approve Plan\n- Request Changes\n[Answer]:\n"
+        )
+        path.write_text(text)
+        await bind(world)
+        question = pick(await seed(world), "question")
+        # A cached card from the older parser can carry decisions and lack the new field.
+        legacy_view = dict(question.evidence["questions"])
+        legacy_view.pop("unsupported_pending_count")
+        legacy_view.update(mode="structured", pending_count=1)
+        legacy = dataclasses.replace(
+            question,
+            evidence={
+                **question.evidence, "questions": legacy_view,
+                A.CARD_META_KEY: {**question.card_meta, "decisions": [payload["decision"]]},
+            },
+        )
+        card = await world.broker.card(legacy, snapshot(world))
+        assert card["primary"] is None and card["decisions"] == []
+        assert card["evidence"]["questions"]["mode"] == "degraded"
+        assert card["evidence"]["questions"]["unsupported_pending_count"] == 1
+        with pytest.raises(world.S.errors.StudioError) as exc:
+            await world.broker.submit(
+                question.action_id, captured=captured_of(question, A), payload=payload,
+                client_wire_text=wire, user="owner",
+            )
+        assert exc.value.code == "invalid_decision"
+        assert exc.value.details["reason"] == "unsupported_question_format"
+        assert (await world.broker.get(question.action_id)).delivery_id is None
+        assert world.store.lease_list() == []
+        assert world.fake_host.get_slot(SLOT).messages == []
+        assert path.read_text() == text
+    run(scenario())
+
+
 def test_unavailable_repository_is_refused_before_snapshot_or_dispatch(world, A, monkeypatch):
     async def scenario():
         gate = pick(await seed(world), "gate")

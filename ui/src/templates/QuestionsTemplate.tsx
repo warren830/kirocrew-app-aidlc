@@ -92,7 +92,9 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
   const view = card.evidence.questions
   const questions = view?.questions ?? []
   const pending = pendingQuestions(view)
-  const degraded = view?.mode === 'degraded'
+  const unsupportedPending = view?.unsupported_pending_count ?? 0
+  const hasPending = pending.length > 0 || unsupportedPending > 0
+  const degraded = view?.mode === 'degraded' || unsupportedPending > 0
   const answerable = ['Draft', 'Queued', 'NotDelivered'].includes(card.status)
   const editable = answerable && !degraded && !refreshing
   // Nothing is preselected: `summaryChoice` has a stored default because the payload builder needs one,
@@ -250,7 +252,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
       {degraded ? (
         <Block title={t('template.questions.degradedTitle')} icon="warn">
           <Consequence icon="warn" tone="warn" label={t('template.questions.degradedLabel')}>
-            {t('template.questions.degradedBody')}
+            {t(unsupportedPending > 0 ? 'template.questions.unsupportedBody' : 'template.questions.degradedBody')}
           </Consequence>
           <button type="button" className="studio-btn" onClick={() => go({ tab: 'conversation' })}>
             <Icon name="activity" size={15} />
@@ -261,8 +263,10 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
 
       <Block title={t('template.questions.group')} icon="question">
         <div className="studio-qmetas">
-          <Chip tone={pending.length > 0 ? 'accent' : 'ok'} icon={pending.length > 0 ? 'question' : 'check'}>
-            {t('template.questions.pending', { n: pending.length, total: questions.length })}
+          <Chip tone={hasPending ? 'accent' : 'ok'} icon={hasPending ? 'question' : 'check'}>
+            {unsupportedPending > 0
+              ? t('template.questions.unsupportedPending', { n: unsupportedPending })
+              : t('template.questions.pending', { n: pending.length, total: questions.length })}
           </Chip>
           {view ? <Chip mono>{view.stage}</Chip> : null}
           {view?.unit ? <Chip mono>{view.unit}</Chip> : null}
@@ -284,10 +288,10 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
           </div>
         ) : null}
 
-        {questions.length === 0 ? (
+        {questions.length === 0 && unsupportedPending === 0 ? (
           <p className="studio-muted">{t('template.questions.none')}</p>
-        ) : (
-          questions.map((question) => {
+        ) : null}
+        {questions.map((question) => {
             const stored = draft.answers[String(question.index)]
             const letters = stored?.option_letters ?? []
             const freeText = stored?.free_text ?? ''
@@ -406,8 +410,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
                 )}
               </div>
             )
-          })
-        )}
+          })}
 
         {view ? (
           <Consequence icon="lock">{t('template.questions.neverEdits', { path: view.relpath })}</Consequence>

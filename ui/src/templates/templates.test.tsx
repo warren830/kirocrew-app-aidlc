@@ -671,6 +671,43 @@ describe('questions template', () => {
     expect(patches.at(-1)).toEqual({ tab: 'conversation' })
   })
 
+  it.each([false, true])('keeps unmapped follow-ups visible even with recorded questions: %s', async (hasRecorded) => {
+    setApiRoutes({})
+    const view = questionsView({
+      questions: hasRecorded ? [question({ answered: true, answer: 'Previously recorded' })] : [],
+      pending_count: 3, unsupported_pending_count: 3, mode: 'degraded',
+    })
+    const { patches } = mount(QuestionsTemplate, questionCard(view))
+    expect(screen.getByText(en.t('template.questions.unsupportedPending', { n: 3 }))).toBeInTheDocument()
+    expect(screen.getByText(en.t('template.questions.unsupportedBody'))).toBeInTheDocument()
+    expect(screen.queryByText(en.t('template.questions.none'))).not.toBeInTheDocument()
+    expect(screen.queryByText(en.t('template.questions.pending', { n: 0, total: view.questions.length })))
+      .not.toBeInTheDocument()
+    expect(screen.queryAllByRole('radio')).toHaveLength(0)
+    if (hasRecorded) expect(screen.getByText('Previously recorded')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: en.t('template.questions.openConversation') }))
+    expect(patches).toContainEqual({ tab: 'conversation' })
+    expect(apiCalls.filter((call) => call.method !== 'GET')).toHaveLength(0)
+  })
+
+  it('disables cached question and summary controls when unsupported follow-ups are pending', () => {
+    setApiRoutes({})
+    const view = questionsView({
+      mode: 'structured', pending_count: 2, unsupported_pending_count: 1,
+      pending_checkpoint: 'summary_confirmation',
+      summary_confirmation: { kind: 'summary_confirmation', present: true, answered: false,
+        answer: null, options: ['Looks correct', 'Request changes'] },
+    })
+    const value = questionCard(view)
+    value.decisions.push(spec('confirm_summary', ['confirm']))
+    mount(QuestionsTemplate, value)
+    expect(screen.getByText(en.t('template.questions.unsupportedBody'))).toBeInTheDocument()
+    for (const radio of screen.getAllByRole('radio')) expect(radio).toBeDisabled()
+    expect(screen.queryByRole('radiogroup', { name: en.t('template.questions.summaryChoiceLabel') }))
+      .not.toBeInTheDocument()
+    expect(apiCalls.filter((call) => call.method !== 'GET')).toHaveLength(0)
+  })
+
   it('asks the Advisor about one question, with that question’s index', async () => {
     const calls: unknown[] = []
     setApiRoutes({

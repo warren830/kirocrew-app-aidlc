@@ -1315,6 +1315,8 @@ class QuestionsFile:
     # The UI still receives only the current question; this is never serialized into its payload.
     closed_file: "QuestionsFile | None" = None
     closed_file_receipts: tuple[AuditEvent, ...] = ()
+    # Blank human-answer tags outside supported Q/checkpoint sections. These carry no Q identifiers.
+    unsupported_pending_count: int = 0
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -1326,6 +1328,7 @@ class QuestionsFile:
             ),
             "plan_approval": self.plan_approval.to_json() if self.plan_approval else None,
             "pending_count": self.pending_count,
+            "unsupported_pending_count": self.unsupported_pending_count,
             "pending_checkpoint": self.pending_checkpoint,
             "source_language_hint": self.source_language_hint,
             **({"origin": dict(self.origin)} if self.origin is not None else {}),
@@ -1728,6 +1731,8 @@ def file_questions_support_forms(questions: QuestionsFile) -> bool:
     Unsupported syntax stays readable through the existing conversation fallback. This never invents
     an option or silently merges repeated question/option identifiers.
     """
+    if questions.unsupported_pending_count:
+        return False
     indexes = [question.index for question in questions.questions]
     if any(index < 1 for index in indexes) or len(indexes) != len(set(indexes)):
         return False
@@ -1767,7 +1772,11 @@ def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile:
     ``## Post-approval Amendment`` resets nothing: the ``## Q<n>.`` sections after it are ordinary
     questions, which is how one intent legitimately has both an open gate and a pending question.
 
-    ``pending_count`` counts questions that are not answered, which includes a section the engine
+    ``pending_count`` includes blank answer tags in unsupported sections (e.g. ``## F1.``). Those
+    tags keep the human boundary visible without assigning them numeric Q identifiers; any such
+    pending content makes the whole group conversation-only.
+
+    ``pending_count`` also counts questions that are not answered, which includes a section the engine
     wrote without an ``[Answer]:`` line at all: the human still owes that answer, and calling it
     answered would hide a question card. Checkpoints are counted separately in ``pending_checkpoint``
     because they carry different decisions and different wire text.
@@ -1775,7 +1784,8 @@ def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile:
     raw_lines = text.replace("\r\n", "\n").split("\n")
     lines = _visible_question_lines(raw_lines)
     # Blank placeholders keep raw section offsets intact, including an unclosed fence's remainder.
-    starts: list[tuple[int, str, Any]] = []
+    # The preamble can also contain an answer tag without a supported heading.
+    starts: list[tuple[int, str, Any]] = [(0, "other", None)]
     for index, line in enumerate(lines):
         question = C.QUESTION_HEADING_RE.match(line) or _QUESTION_H3_RE.match(line)
         if question:
@@ -1790,10 +1800,14 @@ def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile:
 
     questions: list[Question] = []
     checkpoints: dict[str, Checkpoint] = {}
+    unsupported_pending_count = 0
     for order, (start, kind, match) in enumerate(starts):
         end = starts[order + 1][0] if order + 1 < len(starts) else len(lines)
         body = lines[start:end]
-        if kind == "other":
+        if kind == "other" or (
+            kind == "checkpoint" and match.group(1) not in _CHECKPOINT_KINDS
+        ):
+            unsupported_pending_count += sum(bool(C.BLANK_ANSWER_RE.match(line)) for line in body)
             continue
         tag_index = next(
             (i for i, line in enumerate(body) if C.ANSWER_TAG_RE.match(line)), None
@@ -1868,9 +1882,10 @@ def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile:
         questions=tuple(questions),
         summary_confirmation=summary,
         plan_approval=plan,
-        pending_count=sum(1 for question in questions if not question.answered),
+        pending_count=sum(1 for question in questions if not question.answered) + unsupported_pending_count,
         pending_checkpoint=pending_checkpoint,
         source_language_hint=None,
+        unsupported_pending_count=unsupported_pending_count,
     )
 
 
@@ -2978,8 +2993,9 @@ class AidlcReader:
         )
 
         def file_or_audit(found: QuestionsFile) -> QuestionsFile:
-            # Pending structured content always owns the interaction. Closed content can yield to
-            # a later audit decision only with a current, file-bound checkpoint receipt.
+            # Pending file content owns the interaction, including unsupported answer sections
+            # that require the conversation. Closed content can yield to a later audit decision
+            # only with a current, file-bound checkpoint receipt.
             if found.pending_count or found.pending_checkpoint:
                 return found
             if (

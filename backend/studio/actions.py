@@ -1461,6 +1461,11 @@ class HumanActionBroker:
         file_answer = decision == "answers" and not audit_question
         if audit_question:
             self._assert_audit_question_current(rec, snap)
+        if rec.type == "question" and snap.questions and snap.questions.unsupported_pending_count:
+            # Old cards may still offer answers or a checkpoint confirmation. Revalidate before
+            # constructing wire text or reserving a delivery, even when their captured hashes match.
+            raise StudioError("invalid_decision", "answer the pending follow-ups in the conversation",
+                              details={"reason": "unsupported_question_format"})
         if file_answer and (
             snap.questions is None or not file_questions_support_forms(snap.questions)
         ):
@@ -2546,6 +2551,10 @@ class HumanActionBroker:
         if queue_type != rec.type:
             severity = SEED_SEVERITY.get(queue_type, severity)
         decisions = self._offered_decisions(rec, meta)
+        if open_card and rec.type == "question" and (
+            evidence.get("questions") or {}
+        ).get("unsupported_pending_count", 0):
+            decisions = []
         if open_card and rec.type in ("run", "resume") and snap is not None and run_unavailable_reason(
             snap, stage=rec.stage, unit=rec.unit,
         ):

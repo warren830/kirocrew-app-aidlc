@@ -2044,6 +2044,8 @@
   "template.questions.summaryChoiceLabel": "你对该检查点的回应",
   "template.questions.textPlaceholder": "填写你想记录的笔记内容。",
   "template.questions.textStillRequired": "上次只发送了输入标签，没有记录笔记。该次操作已结束，请打开当前待办填写笔记正文。",
+  "template.questions.unsupportedBody": "此题单包含尚未作答的内容，Studio 无法将其安全对应到表单问题。请在原会话中阅读并回答。",
+  "template.questions.unsupportedPending": "另有 {n} 处回答待填写",
   "template.recovery.auditSub": "{shards} 个审计分片 · {complete}",
   "template.recovery.bootRestarted": "网关重启过，因此发送中的消息可能已丢失。",
   "template.recovery.bootRestartedConfirmed": "网关曾重启。消息送达已确认，工作流仍待核对。",

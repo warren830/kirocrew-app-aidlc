@@ -918,18 +918,88 @@ def test_questions_post_approval_amendment_yields_an_ordinary_pending_question(R
     assert parsed.pending_checkpoint is None
 
 
-def test_questions_free_sections_contribute_nothing(R):
-    """``## Sources``, ``## 权威来源…`` and the ``## F1.（跟进）`` follow-ups are not questions."""
+def test_questions_free_sections_and_answered_followups_do_not_invent_q_ids(R):
+    """Legacy sources and answered F sections contribute no pending work or numbered questions."""
     text = F.real_questions(F.OLDER, F.OLDER_INTENT, "ideation/market-research")
     assert "## F1." in text
     parsed = R.parse_questions_file(text, "r", "0" * 64)
     assert len(parsed.questions) == 6
     assert parsed.pending_count == 0
+    assert parsed.unsupported_pending_count == 0
     devdelta = R.parse_questions_file(
         F.real_questions(F.DEVDELTA, F.DEVDELTA_POC, "inception/requirements-analysis"), "r", "0" * 64
     )
     assert "## 权威来源" in F.real_questions(F.DEVDELTA, F.DEVDELTA_POC, "inception/requirements-analysis")
     assert len(devdelta.questions) == 4
+
+
+def test_unsupported_followups_retain_pending_work_without_reusing_answered_q_ids(R):
+    text = (F.FIXTURES / "question-fallback/domain-followups.md").read_text()
+    parsed = R.parse_questions_file(text, "domain-design-questions.md", "0" * 64)
+    assert parsed.pending_count == parsed.unsupported_pending_count == 3
+    assert parsed.to_json()["unsupported_pending_count"] == 3
+    assert [q.index for q in parsed.questions] == [1, 2, 3, 4, 5]
+    assert all(q.answered for q in parsed.questions)
+    assert parsed.questions[-1].answer == "A — Refuse before writes or dispatch."
+    assert not R.file_questions_support_forms(parsed)
+
+
+@pytest.mark.parametrize("heading", ["## F1. Follow-up", "### F1. Follow-up", "## Clarification", ""])
+def test_blank_answer_tags_outside_supported_sections_require_conversation(R, heading):
+    text = f"{heading}\n\nChoose in the conversation.\n[Answer]: ___\n"
+    parsed = R.parse_questions_file(text, "questions.md", "0" * 64)
+    assert parsed.questions == ()
+    assert parsed.pending_count == parsed.unsupported_pending_count == 1
+    assert not R.file_questions_support_forms(parsed)
+
+
+@pytest.mark.parametrize("example", [
+    "```md\n## F99. Example\n[Answer]:\n```\n",
+    "~~~~md\n## F99. Example\n[Answer]:\n~~~\n[Answer]:\n~~~~\n",
+    "````md\n```\n## F99. Example\n[Answer]:\n```\n````\n",
+    "> ## F99. Example\n> [Answer]:\n",
+    "    ## F99. Example\n    [Answer]:\n",
+])
+def test_unsupported_followup_detection_ignores_fenced_quoted_and_indented_examples(R, example):
+    parsed = R.parse_questions_file(
+        f"# Examples\n\n{example}\n## F1. Real follow-up\n[Answer]:\n\n"
+        "## Q2. A supported question\nA. Yes\n[Answer]: Yes\n",
+        "questions.md", "0" * 64,
+    )
+    assert parsed.pending_count == parsed.unsupported_pending_count == 1
+    assert [q.index for q in parsed.questions] == [2]
+    assert parsed.questions[0].answered
+
+
+def test_unclosed_fenced_example_does_not_create_pending_followups(R):
+    parsed = R.parse_questions_file(
+        "## Q1. Done\nA. Yes\n[Answer]: Yes\n\n```md\n## F1. Example\n[Answer]:\n",
+        "questions.md", "0" * 64,
+    )
+    assert parsed.pending_count == parsed.unsupported_pending_count == 0
+
+
+@pytest.mark.parametrize("checkpoint,labels,kind", [
+    ("Consolidated Summary Confirmation", "- Looks correct\n- Request changes", "summary_confirmation"),
+    ("Plan Approval", "- Approve Plan\n- Request Changes", "plan_approval"),
+])
+def test_answered_followups_leave_only_the_canonical_checkpoint_pending(R, checkpoint, labels, kind):
+    text = (F.FIXTURES / "question-fallback/domain-followups.md").read_text()
+    text = text.replace("[Answer]: ___", "[Answer]: Recorded F2").replace(
+        "[Answer]:\n", "[Answer]: Recorded follow-up\n",
+    )
+    parsed = R.parse_questions_file(
+        text + f"\n## {checkpoint}\n{labels}\n[Answer]:\n", "questions.md", "0" * 64,
+    )
+    assert parsed.pending_count == parsed.unsupported_pending_count == 0
+    assert parsed.pending_checkpoint == kind
+    assert R.file_questions_support_forms(parsed)
+    assert getattr(parsed, kind).options == tuple(line[2:] for line in labels.splitlines())
+
+
+def test_legacy_questions_file_constructors_default_to_no_unsupported_pending_content(R):
+    parsed = R.QuestionsFile("questions.md", "0" * 64, (), None, None, 0, None, None)
+    assert parsed.unsupported_pending_count == 0
 
 
 def test_questions_multi_select_marker(R):

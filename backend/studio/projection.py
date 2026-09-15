@@ -632,6 +632,7 @@ class QuestionsView:
     mode: str
     host_card: dict | None
     origin: dict[str, Any] | None = None
+    unsupported_pending_count: int = 0
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -655,6 +656,7 @@ class QuestionsView:
             "summary_confirmation": _json_of(self.summary_confirmation),
             "plan_approval": _json_of(self.plan_approval),
             "pending_count": self.pending_count,
+            "unsupported_pending_count": self.unsupported_pending_count,
             "pending_checkpoint": self.pending_checkpoint,
             "mode": self.mode,
             "host_card": dict(self.host_card) if self.host_card else None,
@@ -1504,6 +1506,7 @@ class Projection:
             mode="structured" if not native_wait and (questions.origin or file_form) else "degraded",
             host_card=host_card,
             origin=questions.origin,
+            unsupported_pending_count=questions.unsupported_pending_count,
         )
 
     # -- operational state -------------------------------------------------- #
@@ -1922,6 +1925,10 @@ class Projection:
             # The host says the slot wants input but the file shows nothing pending: offer the file's
             # own vocabulary rather than guessing, so the human answers in the conversation.
             decisions.append("answers")
+        if questions.unsupported_pending_count:
+            # Keep the card and human boundary, but never map unsupported follow-ups onto Q ids
+            # or let a checkpoint confirmation skip them.
+            decisions = []
         captured = self.captured(snap, snap.stage)
         return [
             self._seed(

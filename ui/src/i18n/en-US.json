@@ -2044,6 +2044,8 @@
   "template.questions.summaryChoiceLabel": "Your reply to this checkpoint",
   "template.questions.textPlaceholder": "Enter the note you want to record, in your own words.",
   "template.questions.textStillRequired": "Only the input label was sent; no note was recorded. This attempt is closed. Open current actions to enter the note text.",
+  "template.questions.unsupportedBody": "This file contains unanswered sections that Studio cannot safely map to form questions. Read and answer them in the canonical conversation.",
+  "template.questions.unsupportedPending": "{n} additional answer fields pending",
   "template.recovery.auditSub": "{shards} audit shards · {complete}",
   "template.recovery.bootRestarted": "The gateway restarted, so an in-flight send could have been lost.",
   "template.recovery.bootRestartedConfirmed": "The gateway restarted. Message delivery is confirmed; workflow reconciliation is still pending.",

@@ -35,6 +35,8 @@
   "template.gate.feedbackRouting": "Studio 会把它作为你的发言发送到规范会话，绝不会去改动产出物本身。",
   "template.questions.group": "问题组 — 一起作答",
   "template.questions.pending": "{total} 题中有 {n} 题未作答",
+  "template.questions.unsupportedPending": "另有 {n} 处回答待填写",
+  "template.questions.unsupportedBody": "此题单包含尚未作答的内容，Studio 无法将其安全对应到表单问题。请在原会话中阅读并回答。",
   "template.questions.none": "该事项没有携带问题。这组问题可能已经作答过了。",
   "template.questions.selectOne": "单选",
   "template.questions.selectAny": "可多选",
