@@ -803,3 +803,20 @@ Functional Design 的 FR 回退也按当前单元筛选。不存在的编号、�
 实际旧操作已结束为 `StateChanged`，租约归零，新 Gate 提交成功；
 更新前后 113 个工作流文件逐字节一致。记录见
 [`2026-09-15-audit-growth-recovery/README.md`](verification/2026-09-15-audit-growth-recovery/README.md)。
+
+## 41. 已记录的计划审批被后续重置遮蔽，旧操作无法结束
+
+**状态：已修复、更新本机并验证历史回执；当前计划仍需审批。**
+
+Code Generation 的计划曾被批准并开始执行。后续计划和测试命令发生变化，审批标记被
+清空，旧操作只能看到当前空白答案，无法识别原审批已经完成，因而一直等待直至超时。
+
+现在用完整审计中的原提示与审批回执匹配：问题文件、提示摘要、计划指纹、指令时期、
+运行起点、会话、intent 和单元必须一致；中间出现另一个同目标提示时不接受。
+原回复结束为 `ResolvedNoTransition`，并明确标记当前计划仍需审批，不授予新写权限，
+也不重发旧回复。
+
+354 项相关后端测试、18 项最终复测和 76 项页面测试通过。真实旧操作已按
+`plan_approval_recorded_before_reset` 结束，人工输入增量为 1；更新前后 125 个
+工作流文件逐字节一致。记录见
+[`2026-09-15-plan-receipt-history/README.md`](verification/2026-09-15-plan-receipt-history/README.md)。
