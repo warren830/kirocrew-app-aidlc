@@ -2561,9 +2561,17 @@ class Projection:
         directive_stage: str | None,
     ) -> MapStage:
         phase = (node.phase if node is not None else None) or (row.phase if row is not None else None) or "unknown"
-        suffix = (row.suffix or "") if row is not None else ""
-        in_scope = suffix.upper().startswith("EXECUTE") if row is not None else False
+        suffix = (row.suffix or "").strip().upper() if row is not None else ""
+        in_scope = suffix.startswith("EXECUTE") if row is not None else False
+        if row is not None and node is not None and not suffix:
+            # effectivePlanAction resolves explicit state suffixes before the current scope grid.
+            # Without grid metadata, keep known legacy rows visible like PlanService's live-plan
+            # default (except jump-skipped rows). This fallback never invents an absent state row.
+            action = (snap.grid.get(self._scope(snap) or "", {}).get(slug) or "").strip().upper()
+            in_scope = action == "EXECUTE" if action in {"EXECUTE", "SKIP"} else row.state != "skipped"
         state = row.state if row is not None else "excluded"
+        if not in_scope and state == "not_started":
+            state = "excluded"
         per_unit = node.per_unit if node is not None else slug in C.PER_UNIT_STAGES
         return MapStage(
             slug=slug,
@@ -2577,8 +2585,8 @@ class Projection:
             agent=node.lead_agent if node is not None else "",
             reviewer=node.reviewer if node is not None else None,
             review_class=node.review_class if node is not None else None,
-            # FORMAT-NOTES §4: the graph has no `gate` key — every non-initialization stage gates.
-            gate=phase != "initialization",
+            # Only selected, non-initialization stages contribute a gate to this plan.
+            gate=in_scope and phase != "initialization",
             per_unit=per_unit,
             summary_confirmation=node.summary_confirmation if node is not None else None,
             consumes=tuple(c.artifact for c in node.consumes) if node is not None else (),

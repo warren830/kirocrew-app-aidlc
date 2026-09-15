@@ -1394,6 +1394,145 @@ def test_map_skipped_reason_from_row_suffix_and_from_stages_to_skip(projection, 
     assert stages[GATE_STAGE].in_scope is True
 
 
+@pytest.mark.parametrize("mark, expected_state", [
+    (" ", "excluded"), ("S", "skipped"), ("x", "completed"),
+])
+def test_map_out_of_plan_rows_remain_visible_without_gates(
+    projection, repo_record, repo_builder, mark, expected_state,
+):
+    slug = "deployment-execution"
+    state = F.state_text(marks={slug: mark}, modes={slug: "SKIP"})
+    root = (
+        repo_builder.with_engine("payload").with_workspace()
+        .with_intent(GATE_DIR, state=state).build()
+    )
+    model = projection.map(projection.snapshot(repo_record(root), "default", GATE_DIR))
+    rows = {stage["slug"]: stage for phase in model.to_json()["phases"] for stage in phase["stages"]}
+    assert len(rows) == 33
+    assert rows[slug]["in_scope"] is False
+    assert rows[slug]["state"] == expected_state
+    assert rows[slug]["gate"] is False
+    assert model.counts["gates"] == sum(row["gate"] for row in rows.values())
+
+
+def test_map_effective_stage_selection_overrides_the_scope_preset(
+    projection, repo_record, repo_builder,
+):
+    state = F.state_text(
+        fields={"Scope": "express", "Status": "Running", "Current Stage": GATE_STAGE},
+        marks={"user-stories": " ", "deployment-execution": " "},
+        modes={"user-stories": "EXECUTE", "deployment-execution": "SKIP"},
+    )
+    root = (
+        repo_builder.with_engine("payload").with_workspace()
+        .with_intent(GATE_DIR, state=state).build()
+    )
+    snap = projection.snapshot(repo_record(root), "default", GATE_DIR)
+    assert snap.grid["express"]["user-stories"] == "SKIP"
+    assert snap.grid["express"]["deployment-execution"] == "EXECUTE"
+    model = projection.map(snap)
+    stages = {stage.slug: stage for phase in model.phases for stage in phase.stages}
+    assert stages["user-stories"].in_scope is True
+    assert stages["user-stories"].state == "not_started"
+    assert stages["user-stories"].gate is True
+    assert stages["deployment-execution"].in_scope is False
+    assert stages["deployment-execution"].state == "excluded"
+    assert stages["deployment-execution"].gate is False
+    assert all(not stage.gate for stage in stages.values() if stage.phase == "initialization")
+
+
+def _legacy_map_snapshot(
+    projection, repo_record, repo_builder, *, mark="?", scope="feature", stage=GATE_STAGE,
+):
+    state = F.state_text(
+        fields={"Scope": scope, "Status": "Running", "Current Stage": stage},
+        marks={stage: mark, "workspace-scaffold": "x"},
+        modes={stage: "EXECUTE", "workspace-scaffold": "EXECUTE"},
+    )
+    state = state.replace(f"- [{mark}] {stage} — EXECUTE", f"- [{mark}] {stage}")
+    state = state.replace("- [x] workspace-scaffold — EXECUTE", "- [x] workspace-scaffold")
+    root = (
+        repo_builder.with_engine("payload").with_workspace()
+        .with_intent(GATE_DIR, state=state, scope="poc").build()
+    )
+    snap = projection.snapshot(repo_record(root), "default", GATE_DIR)
+    assert snap.state.row(stage).suffix is None
+    return snap
+
+
+@pytest.mark.parametrize("mark, expected_state", [
+    ("?", "awaiting_approval"), ("-", "in_progress"), (" ", "not_started"), ("x", "completed"),
+])
+def test_map_suffixless_rows_use_the_current_scope_grid(
+    projection, repo_record, repo_builder, mark, expected_state,
+):
+    snap = _legacy_map_snapshot(projection, repo_record, repo_builder, mark=mark)
+    assert snap.grid["feature"][GATE_STAGE] == "EXECUTE"
+    model = projection.map(snap)
+    stages = {stage.slug: stage for phase in model.phases for stage in phase.stages}
+    stage = stages[GATE_STAGE]
+    assert stage.in_scope is True and stage.gate is True
+    assert stage.state == expected_state and stage.is_current is True
+    assert stages["workspace-scaffold"].in_scope is True
+    assert stages["workspace-scaffold"].gate is False
+
+
+def test_map_suffixless_rows_use_state_scope_before_birth_scope(
+    projection, repo_record, repo_builder,
+):
+    slug = "user-stories"
+    snap = _legacy_map_snapshot(projection, repo_record, repo_builder, mark=" ", stage=slug)
+    assert snap.state.project["Scope"] == "feature"
+    assert snap.row.scope == "poc"
+    assert snap.grid["feature"][slug] == "EXECUTE"
+    assert snap.grid["poc"][slug] == "SKIP"
+    model = projection.map(snap)
+    stage = next(stage for phase in model.phases for stage in phase.stages if stage.slug == slug)
+    assert stage.in_scope is True and stage.gate is True
+    assert stage.state == "not_started" and stage.is_current is True
+
+
+@pytest.mark.parametrize("missing", ["grid", "scope", "stage"])
+@pytest.mark.parametrize("mark, selected", [("?", True), ("S", False)])
+def test_map_suffixless_known_rows_survive_an_unknown_grid(
+    projection, repo_record, repo_builder, missing, mark, selected,
+):
+    snap = _legacy_map_snapshot(projection, repo_record, repo_builder, mark=mark)
+    grid = {scope: dict(stages) for scope, stages in snap.grid.items()}
+    if missing == "grid":
+        grid.clear()
+    elif missing == "scope":
+        grid.pop("feature")
+    else:
+        grid["feature"].pop(GATE_STAGE)
+    model = projection.map(replace(snap, grid=grid))
+    stage = next(stage for phase in model.phases for stage in phase.stages if stage.slug == GATE_STAGE)
+    assert stage.in_scope is selected and stage.gate is selected
+    assert stage.state == ("awaiting_approval" if selected else "skipped")
+
+
+def test_map_suffixless_rows_respect_grid_skip_and_missing_nodes(
+    projection, repo_record, repo_builder,
+):
+    snap = _legacy_map_snapshot(projection, repo_record, repo_builder, mark=" ")
+    grid = {scope: dict(stages) for scope, stages in snap.grid.items()}
+    grid["feature"][GATE_STAGE] = "SKIP"
+    variants = [
+        replace(snap, grid=grid),
+        replace(snap, graph=tuple(node for node in snap.graph if node.slug != GATE_STAGE)),
+        replace(snap, state=replace(
+            snap.state, stages=[row for row in snap.state.stages if row.slug != GATE_STAGE]
+        )),
+    ]
+    for variant in variants:
+        model = projection.map(variant)
+        stage = next(
+            stage for phase in model.phases for stage in phase.stages if stage.slug == GATE_STAGE
+        )
+        assert stage.in_scope is False and stage.gate is False
+        assert stage.state == "excluded"
+
+
 def test_map_marks_a_graph_stage_the_plan_never_selected_as_excluded(
     projection, repo_record, repo_builder
 ):
@@ -1409,8 +1548,11 @@ def test_map_marks_a_graph_stage_the_plan_never_selected_as_excluded(
     stages = {stage.slug: stage for phase in model.phases for stage in phase.stages}
     assert stages["contract-design"].state == "excluded"   # in the 33-graph, not in a v7 state file
     assert stages["contract-design"].in_scope is False
+    assert stages["contract-design"].gate is False
     assert "application-design" in stages                 # the v7 row the 33-graph does not know
     assert stages["application-design"].number == ""
+    assert stages["application-design"].in_scope is True
+    assert stages["application-design"].gate is True
 
 
 def test_map_per_unit_stages_expand_into_sub_rows(projection, repo_record, repo_builder):

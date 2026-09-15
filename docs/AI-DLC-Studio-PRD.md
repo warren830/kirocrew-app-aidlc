@@ -370,15 +370,16 @@ Requirements:
 
 ### 9.10 Workflow Map
 
-- **FR-MAP-001:** The primary view is five horizontal phase swimlanes: initialization, ideation, inception, construction, operation.
+- **FR-MAP-001:** The primary view uses horizontal phase swimlanes in lifecycle order: initialization, ideation, inception, construction, operation. Phases without visible stages are omitted.
 - **FR-MAP-002:** Stage cards show state, agent, Gate, review class, elapsed time, artifacts, and current execution marker.
-- **FR-MAP-003:** Skipped and conditional stages retain their position and reason.
+- **FR-MAP-003:** The default view shows the current effective plan, including recorded stage overrides. An explicit Show all stages control exposes the full graph. Excluded stages show no Gate; a selected stage skipped during execution retains its position and reason. Original stage numbers never change when filtering.
 - **FR-MAP-004:** Default view does not draw every dependency edge.
-- **FR-MAP-005:** Selecting a stage overlays upstream, downstream, consumes, and produces relationships.
+- **FR-MAP-005:** Selecting a stage exposes upstream, downstream, consumes, and produces relationships. Stage links and dependency edges are limited to the current view; the full view makes excluded stages inspectable.
 - **FR-MAP-006:** Construction per-unit stages can expand into unit sub-lanes.
 - **FR-MAP-007:** Density modes are Overview, Detailed, and Dependencies.
 - **FR-MAP-008:** Stage selection opens an inspector for artifacts, review, audit, and eligible operations.
 - **FR-MAP-009:** Mobile uses phase accordions rather than a shrink-to-fit canvas.
+- **FR-MAP-010:** Progress and Gate totals describe the effective plan in every view. The table, accordions, unit lanes and inspector follow the same stage filter. An excluded-stage deep link offers the full view without silently displaying excluded stages.
 
 ### 9.11 Artifacts and review
 

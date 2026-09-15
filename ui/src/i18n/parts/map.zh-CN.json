@@ -3,6 +3,8 @@
   "map.empty.body": "工作流图把某个意图的阶段图与其记录中实际存在的内容对照呈现。选定一个意图后，Studio 会从磁盘读取它。",
   "map.empty.action": "选择一个意图",
   "map.empty.noRepo": "请先在范围栏中选择一个仓库。Studio 只读取你已注册的仓库。",
+  "map.empty.plan": "当前计划没有选中的阶段。可查看所有阶段以了解完整流程。",
+  "map.hiddenSelection": "链接中的阶段不在当前计划内。可查看所有阶段以了解其详情。",
   "map.error.title": "无法读取工作流图",
 
   "map.bar.scope": "{repo} / {intent}",
@@ -19,12 +21,14 @@
   "map.bar.hideUnits": "收起单元子泳道",
   "map.bar.showTable": "以表格显示",
   "map.bar.showCanvas": "以泳道显示",
+  "map.bar.showAllStages": "查看所有阶段",
+  "map.bar.showPlanOnly": "只看当前计划",
 
   "map.density.overview": "概览",
   "map.density.detailed": "详细",
   "map.density.dependencies": "依赖",
 
-  "map.consequence": "默认不绘制全部依赖连线。选中某个阶段后，会叠加显示它的上游、下游、消费与产出关系。被跳过的阶段保留原有位置，并显示原因。",
+  "map.consequence": "默认显示当前计划。查看所有阶段时，可查看未选阶段及其原因。阶段编号保持不变，依赖关系仅连接当前可见的阶段。",
   "map.accordion.note": "窄屏下各阶段以折叠面板展示。画布不会被压缩适配，因此不会有阶段卡片变得无法阅读。",
 
   "map.lane.counts_one": "{n} 个阶段 · 跳过 {skipped} 个",
@@ -61,7 +65,7 @@
   "map.a11y.agent": "Agent {agent}",
   "map.a11y.elapsed": "耗时 {duration}",
   "map.a11y.reason": "原因：{reason}",
-  "map.a11y.tableCaption": "{intent} 的全部阶段，按阶段顺序排列：分组、编号、阶段、状态、agent、Gate、评审、耗时、文件与备注。",
+  "map.a11y.tableCaption": "{intent} 当前可见的阶段，按阶段顺序排列：分组、编号、阶段、状态、agent、Gate、评审、耗时、文件与备注。",
 
   "map.status.executing": "正在执行 {number} {slug}",
   "map.status.idle": "当前没有阶段在执行",
@@ -82,6 +86,7 @@
   "map.inspector.close": "清除阶段选择",
   "map.inspector.pick": "选择一个阶段，即可查看它的文件、评审约定、审计记录，以及它所允许的那一项操作。",
   "map.inspector.why": "它未执行的原因。",
+  "map.inspector.notSelected": "当前计划未选中这个阶段。",
   "map.inspector.whyUnknown": "记录中没有说明原因。保留其位置以便完整阅读计划。",
   "map.inspector.relationships": "关系",
   "map.inspector.upstream": "上游",

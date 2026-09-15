@@ -129,7 +129,7 @@ export function StageInspector({
       {notExecuting ? (
         <p className="studio-consequence">
           <b>{t('map.inspector.why')}</b>{' '}
-          {stage.skipped_reason ? stage.skipped_reason : t('map.inspector.whyUnknown')}
+          {stage.skipped_reason || t(stage.state === 'excluded' ? 'map.inspector.notSelected' : 'map.inspector.whyUnknown')}
         </p>
       ) : null}
 

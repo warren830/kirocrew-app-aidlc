@@ -112,6 +112,7 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
   const [density, setDensity] = useDensity()
   const [showUnits, setShowUnits] = useState(false)
   const [asTable, setAsTable] = useState(false)
+  const [allStagesFor, setAllStagesFor] = useState<string | null>(null)
   const accordions = useAccordions()
   const canvasRef = useRef<HTMLDivElement | null>(null)
   // State, not just the ref: the overlay has to re-measure when the canvas element first mounts.
@@ -120,6 +121,8 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
   const repo = route.repo
   const intent = route.intent
   const ready = !!repo && !!intent
+  const planKey = `${repo}:${intent}`
+  const showAllStages = allStagesFor === planKey
 
   const mapRes = useResource<MapResponse>(
     ready ? `map:${repo}:${intent}` : null,
@@ -140,7 +143,7 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
   const model = mapRes.data?.map ?? null
   const detail = intentRes.data?.intent ?? null
 
-  const phases = useMemo<MapPhase[]>(() => {
+  const graphPhases = useMemo<MapPhase[]>(() => {
     if (!model) return []
     // Sorted defensively: the lane order IS the lifecycle (FR-MAP-001), and a phase arriving out of
     // order would misrepresent what runs before what. Unrecognised phases go last.
@@ -149,8 +152,39 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
     )
   }, [model])
 
-  const allStages = useMemo<MapStage[]>(() => phases.flatMap((phase) => phase.stages), [phases])
-  const selected = useMemo(() => allStages.find((stage) => stage.slug === route.stage) ?? null, [allStages, route.stage])
+  const allStages = useMemo<MapStage[]>(() => graphPhases.flatMap((phase) => phase.stages), [graphPhases])
+  const planStages = useMemo(() => allStages.filter((stage) => stage.in_scope), [allStages])
+  const phases = useMemo<MapPhase[]>(() => {
+    const visible = new Set((showAllStages ? allStages : planStages).map((stage) => stage.slug))
+    return graphPhases.map((phase) => {
+      const stages = phase.stages.filter((stage) => visible.has(stage.slug)).map((stage) => ({
+        ...stage,
+        // Older hosts expose the structural Gate flag even for an excluded stage.
+        gate: stage.in_scope && stage.gate,
+        state: !stage.in_scope && stage.state === 'not_started' ? 'excluded' as const : stage.state,
+        depends_on: stage.depends_on.filter((slug) => visible.has(slug)),
+        dependents: stage.dependents.filter((slug) => visible.has(slug)),
+      }))
+      return {
+        ...phase,
+        stages,
+        counts: {
+          total: stages.length,
+          in_scope: stages.filter((stage) => stage.in_scope).length,
+          done: stages.filter((stage) => stage.state === 'completed' || stage.state === 'skipped').length,
+          skipped: stages.filter((stage) => stage.state === 'skipped' || stage.skipped_reason).length,
+        },
+      }
+    }).filter((phase) => phase.stages.length > 0)
+  }, [graphPhases, allStages, planStages, showAllStages])
+  const visibleStages = useMemo(() => phases.flatMap((phase) => phase.stages), [phases])
+  const selected = useMemo(
+    () => visibleStages.find((stage) => stage.slug === route.stage) ?? null,
+    [visibleStages, route.stage],
+  )
+  const hiddenSelection = !showAllStages && allStages.some(
+    (stage) => stage.slug === route.stage && !stage.in_scope,
+  )
   const selectedUnit = useMemo<MapUnit | null>(
     () => (selected && route.unit ? selected.units.find((unit) => unit.unit === route.unit) ?? null : null),
     [selected, route.unit],
@@ -295,15 +329,15 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
     )
   }
 
-  const current = allStages.find((stage) => stage.is_current) ?? null
-  const doneCount = allStages.filter((stage) => stage.state === 'completed').length
+  const current = planStages.find((stage) => stage.is_current) ?? null
+  const doneCount = planStages.filter((stage) => stage.state === 'completed' || stage.state === 'skipped').length
   const executionText = current
     ? t('map.status.executing', { number: current.number, slug: current.slug }).replace(/\s+/g, ' ').trim()
     : t('map.status.idle')
   const intentLabel = detail?.slug || intent
   const repoLabel = detail?.repo_label || repo
   const scope = { repoLabel, intentLabel }
-  const perUnitPresent = allStages.some((stage) => stage.per_unit && stage.units.length > 0)
+  const perUnitPresent = visibleStages.some((stage) => stage.per_unit && stage.units.length > 0)
   const blocked: 'paused' | 'archived' | null = detail?.archived ? 'archived' : detail?.paused ? 'paused' : null
 
   const inspector = (
@@ -330,10 +364,10 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
         <Chip tone="accent" icon="intent" mono>
           {t('map.bar.scope', { repo: repoLabel, intent: intentLabel })}
         </Chip>
-        <Chip mono>{plural(i18n, 'map.bar.stagesKnown', model.counts.stages_known)}</Chip>
-        <Chip mono>{plural(i18n, 'map.bar.stagesSelected', model.counts.stages_selected)}</Chip>
+        {showAllStages ? <Chip mono>{plural(i18n, 'map.bar.stagesKnown', allStages.length)}</Chip> : null}
+        <Chip mono>{plural(i18n, 'map.bar.stagesSelected', planStages.length)}</Chip>
         <Chip mono icon="gate">
-          {plural(i18n, 'map.bar.gates', model.counts.gates)}
+          {plural(i18n, 'map.bar.gates', planStages.filter((stage) => stage.gate).length)}
         </Chip>
         {model.graph_version ? <Chip mono icon="lock">{t('map.bar.engine', { version: model.graph_version })}</Chip> : null}
 
@@ -342,10 +376,18 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
           <Chip tone={current ? 'accent' : 'neutral'} icon={current ? 'play' : 'pause'}>
             {executionText}
           </Chip>
-          <Chip icon="check">{t('map.status.progress', { done: i18n.fmt.number(doneCount), total: i18n.fmt.number(allStages.length) })}</Chip>
+          <Chip icon="check">{t('map.status.progress', { done: i18n.fmt.number(doneCount), total: i18n.fmt.number(planStages.length) })}</Chip>
         </span>
 
         <div className="studio-map-bar-controls">
+          <button
+            type="button"
+            className="studio-btn studio-btn-sm"
+            aria-pressed={showAllStages}
+            onClick={() => setAllStagesFor(showAllStages ? null : planKey)}
+          >
+            {t(showAllStages ? 'map.bar.showPlanOnly' : 'map.bar.showAllStages')}
+          </button>
           <DensityControl value={density} onChange={setDensity} />
           {perUnitPresent ? (
             <button
@@ -390,10 +432,13 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
       ) : null}
 
       {mapRes.error ? <ReadFailure error={mapRes.error} onRetry={() => void mapRes.refresh()} /> : null}
+      {hiddenSelection ? <p className="studio-consequence" role="status">{t('map.hiddenSelection')}</p> : null}
 
       <div className="studio-map-main">
         <div className="studio-map-scroll">
-          {asTable ? (
+          {phases.length === 0 ? (
+            <p className="studio-muted" role="status">{t('map.empty.plan')}</p>
+          ) : asTable ? (
             <>
               <StageTable
                 phases={phases}
@@ -454,7 +499,7 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
                   canvas={canvasEl}
                   from={selected.slug}
                   relations={relations}
-                  token={`${density}:${showUnits}:${selected.slug}:${allStages.length}`}
+                  token={`${density}:${showUnits}:${selected.slug}:${visibleStages.length}`}
                 />
               ) : null}
             </div>

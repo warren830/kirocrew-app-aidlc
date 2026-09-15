@@ -8,7 +8,7 @@
  * a shrunken canvas, and that the swimlanes have a table alternative.
  */
 
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -276,9 +276,63 @@ afterEach(() => {
 // --------------------------------------------------------------------------- //
 
 describe('the workflow map', () => {
-  it('draws the five phases in lifecycle order and keeps every stage in position', async () => {
+  it('defaults to the effective plan and measures progress only within that plan', async () => {
     installRoutes()
     mount()
+
+    const canvas = await screen.findByRole('list', { name: 'Workflow map swimlanes' })
+    expect(canvas.querySelectorAll('.studio-stage')).toHaveLength(7)
+    expect(canvas.querySelector('[data-stage="market-research"]')).toBeNull()
+    expect(canvas.querySelector('[data-stage="reverse-engineering"]')).toBeNull()
+    expect(screen.getByText('2 of 7 stages recorded as done')).toBeInTheDocument()
+    expect(screen.getByText('6 Gates · exact')).toBeInTheDocument()
+  })
+
+  it('shows excluded stages only on request, without their Gates or a changed progress denominator', async () => {
+    installRoutes()
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: 'Show all stages' }))
+
+    const canvas = screen.getByRole('list', { name: 'Workflow map swimlanes' })
+    expect(canvas.querySelectorAll('.studio-stage')).toHaveLength(9)
+    const excluded = screen.getByRole('button', { name: /Stage 2.1 reverse-engineering/ })
+    expect(excluded).not.toHaveAccessibleName(/\bGate\b/)
+    expect(excluded).not.toHaveTextContent('Gate')
+    expect(screen.getByText('2 of 7 stages recorded as done')).toBeInTheDocument()
+    await userEvent.click(excluded)
+    expect(within(screen.getByRole('complementary', { name: 'Stage inspector' })).queryByText('Gate')).toBeNull()
+    expect(within(screen.getByRole('complementary', { name: 'Stage inspector' }))
+      .getByText('This stage is not selected in the current plan.')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show current plan only' }))
+    expect(canvas.querySelectorAll('.studio-stage')).toHaveLength(7)
+    expect(within(screen.getByRole('complementary', { name: 'Stage inspector' }))
+      .queryByRole('heading', { name: 'reverse-engineering' })).toBeNull()
+  })
+
+  it('omits empty phases and excludes hidden stages from the table and dependency inspector', async () => {
+    const model = mapModel()
+    for (const phase of model.phases) {
+      if (phase.phase === 'ideation' || phase.phase === 'operation') {
+        phase.stages = phase.stages.map((stage) => ({ ...stage, in_scope: false }))
+      }
+    }
+    installRoutes({ map: model })
+    mount({ search: `?view=map&repo=${REPO}&intent=${INTENT}&stage=requirements-analysis` })
+    const canvas = await screen.findByRole('list', { name: 'Workflow map swimlanes' })
+    expect([...canvas.querySelectorAll('.studio-lane')].map((lane) => lane.getAttribute('data-phase')))
+      .toEqual(['initialization', 'inception', 'construction'])
+    const inspector = screen.getByRole('complementary', { name: 'Stage inspector' })
+    expect(within(inspector).queryByRole('button', { name: 'reverse-engineering' })).toBeNull()
+    expect(within(inspector).queryByRole('button', { name: 'approval-handoff' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Show as table' }))
+    expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(1 + 5)
+  })
+
+  it('keeps every stage in lifecycle order in the explicitly selected full view', async () => {
+    installRoutes()
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: 'Show all stages' }))
 
     const canvas = await screen.findByRole('list', { name: 'Workflow map swimlanes' })
     const lanes = [...canvas.querySelectorAll('.studio-lane')].map((lane) => lane.getAttribute('data-phase'))
@@ -349,6 +403,8 @@ describe('the workflow map', () => {
 
     // Relationships, as words and as controls.
     expect(within(inspector).getByText('Upstream')).toBeInTheDocument()
+    expect(within(inspector).queryByRole('button', { name: 'reverse-engineering' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Show all stages' }))
     expect(within(inspector).getByRole('button', { name: 'reverse-engineering' })).toBeInTheDocument()
     expect(within(inspector).getByText('requirements-analysis-questions')).toBeInTheDocument()
 
@@ -385,6 +441,7 @@ describe('the workflow map', () => {
     expect(within(inspector).getByText(/ahead of the cursor/)).toBeInTheDocument()
 
     // A skipped stage says so instead.
+    await userEvent.click(screen.getByRole('button', { name: 'Show all stages' }))
     await userEvent.click(screen.getByRole('button', { name: /market-research/ }))
     expect(within(inspector).getByText('This stage is not executing in this plan.')).toBeInTheDocument()
     expect(within(inspector).getByText(/Scope preset "feature" excludes market research/)).toBeInTheDocument()
@@ -426,6 +483,7 @@ describe('the workflow map', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: /^Inception/ })).toBeInTheDocument())
     expect(screen.queryByRole('list', { name: 'Workflow map swimlanes' })).not.toBeInTheDocument()
+    expect(document.querySelector('.studio-stage[data-stage="reverse-engineering"]')).toBeNull()
 
     // The phase holding the selection is open, and the inspector rides inside it.
     const toggle = screen.getByRole('button', { name: /^Inception/ })
@@ -443,8 +501,8 @@ describe('the workflow map', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'Show as table' }))
     const table = screen.getByRole('table')
-    expect(table).toHaveAccessibleName(/Every stage of 250901-guest-checkout/)
-    expect(within(table).getAllByRole('row')).toHaveLength(1 + 9)
+    expect(table).toHaveAccessibleName(/Visible stages of 250901-guest-checkout/)
+    expect(within(table).getAllByRole('row')).toHaveLength(1 + 7)
     expect(within(table).getByRole('columnheader', { name: 'Elapsed' })).toBeInTheDocument()
 
     await userEvent.click(within(table).getByRole('button', { name: 'requirements-analysis' }))
@@ -460,10 +518,71 @@ describe('the workflow map', () => {
     await userEvent.keyboard('{ArrowDown}')
     expect(document.activeElement).toHaveAccessibleName(/approval-handoff/)
     await userEvent.keyboard('{ArrowRight}')
-    expect(document.activeElement).toHaveAccessibleName(/market-research/)
+    expect(document.activeElement).toHaveAccessibleName(/requirements-analysis/)
 
     await userEvent.keyboard('{Escape}')
     expect(window.location.search).not.toContain('stage=')
+  })
+
+  it('explains an excluded stage deep link until the full view is requested', async () => {
+    installRoutes()
+    mount({ search: `?view=map&repo=${REPO}&intent=${INTENT}&stage=reverse-engineering` })
+    expect(await screen.findByText('The linked stage is outside this plan. Show all stages to inspect it.'))
+      .toBeInTheDocument()
+    const inspector = screen.getByRole('complementary', { name: 'Stage inspector' })
+    expect(within(inspector).queryByRole('heading', { name: 'reverse-engineering' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Show all stages' }))
+    expect(within(inspector).getByRole('heading', { name: 'reverse-engineering' })).toBeInTheDocument()
+  })
+
+  it('offers the full workflow when no stage is selected instead of rendering an empty canvas', async () => {
+    const model = mapModel()
+    model.phases = model.phases.map((phase) => ({
+      ...phase, stages: phase.stages.map((stage) => ({ ...stage, in_scope: false })),
+    }))
+    installRoutes({ map: model })
+    mount()
+    expect(await screen.findByText('No stages are selected in this plan. Show all stages to inspect the full workflow.'))
+      .toBeInTheDocument()
+    expect(screen.getByText('0 of 0 stages recorded as done')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Show all stages' }))
+    expect(screen.getByRole('list', { name: 'Workflow map swimlanes' }).querySelectorAll('.studio-stage'))
+      .toHaveLength(9)
+  })
+
+  it('returns to the current-plan view when navigating to another intent', async () => {
+    const next = 'default~250902-second'
+    const nextPath = `${BASE}/repos/${REPO}/intents/${next}`
+    setApiRoutes({
+      [`GET ${INTENT_PATH}/map`]: () => ({ map: mapModel() }),
+      [`GET ${INTENT_PATH}`]: () => ({ intent: intentDetail() }),
+      [`GET ${nextPath}/map`]: () => ({ map: { ...mapModel(), intent_key: next } }),
+      [`GET ${nextPath}`]: () => ({ intent: intentDetail({ intent_key: next, slug: 'another-intent' }) }),
+    })
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: 'Show all stages' }))
+    act(() => {
+      window.history.pushState(null, '', `/apps/aidlc-studio?view=map&repo=${REPO}&intent=${next}`)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+    await screen.findByText('checkout-web / another-intent')
+    expect(screen.getByRole('button', { name: 'Show all stages' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('list', { name: 'Workflow map swimlanes' }).querySelectorAll('.studio-stage'))
+      .toHaveLength(7)
+  })
+
+  it('retains a selected stage skipped during execution and counts it as done', async () => {
+    const model = mapModel()
+    model.phases = model.phases.map((phase) => ({
+      ...phase,
+      stages: phase.stages.map((stage) => stage.slug === 'user-stories'
+        ? { ...stage, state: 'skipped' as const, skipped_reason: 'No user-facing change.' } : stage),
+    }))
+    installRoutes({ map: model })
+    mount()
+    const skipped = await screen.findByRole('button', { name: /Stage 2.4 user-stories/ })
+    expect(skipped).toHaveAttribute('data-state', 'skipped')
+    expect(screen.getByText('3 of 7 stages recorded as done')).toBeInTheDocument()
   })
 
   it('says so, assertively, when the map cannot be read — and offers a retry', async () => {

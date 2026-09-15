@@ -1140,7 +1140,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"map.a11y.reason": "Reason: {reason}",
 	"map.a11y.selected": "Stage {number} {slug} selected. Its evidence is in the stage inspector.",
 	"map.a11y.stage": "Stage {number} {slug}, {phase} phase, {state}, {repo} / {intent}. {facts}",
-	"map.a11y.tableCaption": "Every stage of {intent}, in phase order: phase, number, stage, state, agent, Gate, review, elapsed time, files and notes.",
+	"map.a11y.tableCaption": "Visible stages of {intent}, in phase order: phase, number, stage, state, agent, Gate, review, elapsed time, files and notes.",
 	"map.a11y.unit": "Unit {unit} of stage {number} {slug}, {state}, {repo} / {intent}. {facts}",
 	"map.a11y.unitSelected": "Unit {unit} of stage {number} {slug} selected. Its evidence is in the stage inspector.",
 	"map.accordion.note": "Phases are accordions on a narrow screen. The canvas is not shrunk to fit, so no stage card becomes unreadable.",
@@ -1162,7 +1162,9 @@ var D = Object.defineProperty, O = (e, t) => {
 	"map.bar.hideUnits": "Hide unit sub-lanes",
 	"map.bar.layout": "Layout",
 	"map.bar.scope": "{repo} / {intent}",
+	"map.bar.showAllStages": "Show all stages",
 	"map.bar.showCanvas": "Show as swimlanes",
+	"map.bar.showPlanOnly": "Show current plan only",
 	"map.bar.showTable": "Show as table",
 	"map.bar.stagesKnown_one": "{n} stage known · exact",
 	"map.bar.stagesKnown_other": "{n} stages known · exact",
@@ -1190,15 +1192,17 @@ var D = Object.defineProperty, O = (e, t) => {
 	"map.col.review": "Review",
 	"map.col.stage": "Stage",
 	"map.col.state": "State",
-	"map.consequence": "Dependency edges are not drawn by default. Selecting a stage overlays its upstream, downstream, consumes and produces relationships. Skipped stages keep their position and their reason.",
+	"map.consequence": "The current plan is shown by default. Show all stages to inspect excluded stages and their reasons. Stage numbers stay unchanged, and dependency links follow the visible stages.",
 	"map.density.dependencies": "Dependencies",
 	"map.density.detailed": "Detailed",
 	"map.density.overview": "Overview",
 	"map.empty.action": "Choose an intent",
 	"map.empty.body": "The map draws one intent's stage graph against what its record actually contains. Choose an intent and Studio reads it from disk.",
 	"map.empty.noRepo": "Pick a repository in the scope bar first. Studio only ever reads repositories you registered.",
+	"map.empty.plan": "No stages are selected in this plan. Show all stages to inspect the full workflow.",
 	"map.empty.title": "No intent is selected",
 	"map.error.title": "The map could not be read",
+	"map.hiddenSelection": "The linked stage is outside this plan. Show all stages to inspect it.",
 	"map.inspector.artifacts": "Files",
 	"map.inspector.artifactsEmpty": "No file is recorded for this stage yet.",
 	"map.inspector.artifactsNote": "Studio reads these files. It never writes them.",
@@ -1210,6 +1214,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"map.inspector.downstream": "Downstream",
 	"map.inspector.noOperation": "No eligible operation at this stage",
 	"map.inspector.none": "None recorded",
+	"map.inspector.notSelected": "This stage is not selected in the current plan.",
 	"map.inspector.open": "Open the {type} in Action Center",
 	"map.inspector.openArtifact": "Open {name}",
 	"map.inspector.operation": "Eligible operation",
@@ -3426,7 +3431,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"map.a11y.reason": "原因：{reason}",
 	"map.a11y.selected": "已选中阶段 {number} {slug}。其证据显示在阶段检视面板中。",
 	"map.a11y.stage": "阶段 {number} {slug}，{phase} 阶段，{state}，{repo} / {intent}。{facts}",
-	"map.a11y.tableCaption": "{intent} 的全部阶段，按阶段顺序排列：分组、编号、阶段、状态、agent、Gate、评审、耗时、文件与备注。",
+	"map.a11y.tableCaption": "{intent} 当前可见的阶段，按阶段顺序排列：分组、编号、阶段、状态、agent、Gate、评审、耗时、文件与备注。",
 	"map.a11y.unit": "单元 {unit}，属于阶段 {number} {slug}，{state}，{repo} / {intent}。{facts}",
 	"map.a11y.unitSelected": "已选中阶段 {number} {slug} 的单元 {unit}。其证据显示在阶段检视面板中。",
 	"map.accordion.note": "窄屏下各阶段以折叠面板展示。画布不会被压缩适配，因此不会有阶段卡片变得无法阅读。",
@@ -3448,7 +3453,9 @@ var D = Object.defineProperty, O = (e, t) => {
 	"map.bar.hideUnits": "收起单元子泳道",
 	"map.bar.layout": "布局",
 	"map.bar.scope": "{repo} / {intent}",
+	"map.bar.showAllStages": "查看所有阶段",
 	"map.bar.showCanvas": "以泳道显示",
+	"map.bar.showPlanOnly": "只看当前计划",
 	"map.bar.showTable": "以表格显示",
 	"map.bar.stagesKnown_one": "已知 {n} 个阶段 · 精确",
 	"map.bar.stagesKnown_other": "已知 {n} 个阶段 · 精确",
@@ -3476,15 +3483,17 @@ var D = Object.defineProperty, O = (e, t) => {
 	"map.col.review": "评审",
 	"map.col.stage": "阶段",
 	"map.col.state": "状态",
-	"map.consequence": "默认不绘制全部依赖连线。选中某个阶段后，会叠加显示它的上游、下游、消费与产出关系。被跳过的阶段保留原有位置，并显示原因。",
+	"map.consequence": "默认显示当前计划。查看所有阶段时，可查看未选阶段及其原因。阶段编号保持不变，依赖关系仅连接当前可见的阶段。",
 	"map.density.dependencies": "依赖",
 	"map.density.detailed": "详细",
 	"map.density.overview": "概览",
 	"map.empty.action": "选择一个意图",
 	"map.empty.body": "工作流图把某个意图的阶段图与其记录中实际存在的内容对照呈现。选定一个意图后，Studio 会从磁盘读取它。",
 	"map.empty.noRepo": "请先在范围栏中选择一个仓库。Studio 只读取你已注册的仓库。",
+	"map.empty.plan": "当前计划没有选中的阶段。可查看所有阶段以了解完整流程。",
 	"map.empty.title": "尚未选择意图",
 	"map.error.title": "无法读取工作流图",
+	"map.hiddenSelection": "链接中的阶段不在当前计划内。可查看所有阶段以了解其详情。",
 	"map.inspector.artifacts": "文件",
 	"map.inspector.artifactsEmpty": "该阶段尚无任何文件记录。",
 	"map.inspector.artifactsNote": "Studio 只读取这些文件，从不写入。",
@@ -3496,6 +3505,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"map.inspector.downstream": "下游",
 	"map.inspector.noOperation": "该阶段没有可执行的操作",
 	"map.inspector.none": "无记录",
+	"map.inspector.notSelected": "当前计划未选中这个阶段。",
 	"map.inspector.open": "在 Action Center 中打开该 {type}",
 	"map.inspector.openArtifact": "打开 {name}",
 	"map.inspector.operation": "可执行的操作",
@@ -14538,7 +14548,7 @@ function Do({ stage: e, unit: t, phaseLabel: n, repoLabel: r, intentLabel: i, re
 				children: [
 					/* @__PURE__ */ m("b", { children: _("map.inspector.why") }),
 					" ",
-					e.skipped_reason ? e.skipped_reason : _("map.inspector.whyUnknown")
+					e.skipped_reason || _(e.state === "excluded" ? "map.inspector.notSelected" : "map.inspector.whyUnknown")
 				]
 			}) : null,
 			/* @__PURE__ */ h("section", {
@@ -14837,25 +14847,51 @@ function Bo(e, t) {
 	return Fo.has(t) ? e.t(`enum.phase.${t}`) : e.t("map.phase.unknown");
 }
 function Vo({ api: e, route: t, go: n, cards: r }) {
-	let a = H(), { t: o } = a, [s, c] = Ro(), [f, g] = d(!1), [_, v] = d(!1), y = zo(), b = u(null), [C, w] = d(null), T = t.repo, E = t.intent, D = !!T && !!E, O = J(D ? `map:${T}:${E}` : null, i((t) => e.map(T, E, void 0, { signal: t }), [
+	let a = H(), { t: o } = a, [s, c] = Ro(), [f, g] = d(!1), [_, v] = d(!1), [y, b] = d(null), C = zo(), w = u(null), [T, E] = d(null), D = t.repo, O = t.intent, k = !!D && !!O, A = `${D}:${O}`, j = y === A, M = J(k ? `map:${D}:${O}` : null, i((t) => e.map(D, O, void 0, { signal: t }), [
 		e,
-		T,
-		E
-	])), k = J(D ? `map:intent:${T}:${E}` : null, i((t) => e.intent(T, E, { signal: t }), [
+		D,
+		O
+	])), N = J(k ? `map:intent:${D}:${O}` : null, i((t) => e.intent(D, O, { signal: t }), [
 		e,
-		T,
-		E
-	])), A = J(D && t.stage ? `map:review:${T}:${E}` : null, i((t) => e.review(T, E, { signal: t }), [
+		D,
+		O
+	])), P = J(k && t.stage ? `map:review:${D}:${O}` : null, i((t) => e.review(D, O, { signal: t }), [
 		e,
-		T,
-		E
-	]), { interval: 0 }), j = O.data?.map ?? null, M = k.data?.intent ?? null, N = l(() => j ? [...j.phases].sort((e, t) => (Fo.get(e.phase) ?? ea.length) - (Fo.get(t.phase) ?? ea.length)) : [], [j]), P = l(() => N.flatMap((e) => e.stages), [N]), F = l(() => P.find((e) => e.slug === t.stage) ?? null, [P, t.stage]), I = l(() => F && t.unit ? F.units.find((e) => e.unit === t.unit) ?? null : null, [F, t.unit]), L = l(() => {
+		D,
+		O
+	]), { interval: 0 }), F = M.data?.map ?? null, I = N.data?.intent ?? null, L = l(() => F ? [...F.phases].sort((e, t) => (Fo.get(e.phase) ?? ea.length) - (Fo.get(t.phase) ?? ea.length)) : [], [F]), R = l(() => L.flatMap((e) => e.stages), [L]), ee = l(() => R.filter((e) => e.in_scope), [R]), z = l(() => {
+		let e = new Set((j ? R : ee).map((e) => e.slug));
+		return L.map((t) => {
+			let n = t.stages.filter((t) => e.has(t.slug)).map((t) => ({
+				...t,
+				gate: t.in_scope && t.gate,
+				state: !t.in_scope && t.state === "not_started" ? "excluded" : t.state,
+				depends_on: t.depends_on.filter((t) => e.has(t)),
+				dependents: t.dependents.filter((t) => e.has(t))
+			}));
+			return {
+				...t,
+				stages: n,
+				counts: {
+					total: n.length,
+					in_scope: n.filter((e) => e.in_scope).length,
+					done: n.filter((e) => e.state === "completed" || e.state === "skipped").length,
+					skipped: n.filter((e) => e.state === "skipped" || e.skipped_reason).length
+				}
+			};
+		}).filter((e) => e.stages.length > 0);
+	}, [
+		L,
+		R,
+		ee,
+		j
+	]), B = l(() => z.flatMap((e) => e.stages), [z]), V = l(() => B.find((e) => e.slug === t.stage) ?? null, [B, t.stage]), te = !j && R.some((e) => e.slug === t.stage && !e.in_scope), ne = l(() => V && t.unit ? V.units.find((e) => e.unit === t.unit) ?? null : null, [V, t.unit]), re = l(() => {
 		let e = /* @__PURE__ */ new Map();
-		if (!F) return e;
-		for (let t of F.depends_on) e.set(t, "upstream");
-		for (let t of F.dependents) e.has(t) || e.set(t, "downstream");
+		if (!V) return e;
+		for (let t of V.depends_on) e.set(t, "upstream");
+		for (let t of V.dependents) e.has(t) || e.set(t, "downstream");
 		return e;
-	}, [F]), R = l(() => r.filter((e) => e.intent.intent_key === E), [r, E]), ee = l(() => F ? R.find((e) => e.stage?.slug === F.slug) ?? null : null, [R, F]), z = l(() => R.find((e) => Po.has(e.queue_type)) ?? null, [R]), B = l(() => M ? F ? M.audit_tail.filter((e) => Ho(e, F.slug)).slice(-12).reverse() : [] : null, [M, F]), V = i((e) => {
+	}, [V]), ie = l(() => r.filter((e) => e.intent.intent_key === O), [r, O]), ae = l(() => V ? ie.find((e) => e.stage?.slug === V.slug) ?? null : null, [ie, V]), oe = l(() => ie.find((e) => Po.has(e.queue_type)) ?? null, [ie]), se = l(() => I ? V ? I.audit_tail.filter((e) => Ho(e, V.slug)).slice(-12).reverse() : [] : null, [I, V]), ce = i((e) => {
 		n({
 			stage: t.stage === e && !t.unit ? "" : e,
 			unit: ""
@@ -14864,7 +14900,7 @@ function Vo({ api: e, route: t, go: n, cards: r }) {
 		n,
 		t.stage,
 		t.unit
-	]), te = i((e, r) => {
+	]), le = i((e, r) => {
 		n({
 			stage: e,
 			unit: t.stage === e && t.unit === r ? "" : r
@@ -14873,16 +14909,16 @@ function Vo({ api: e, route: t, go: n, cards: r }) {
 		n,
 		t.stage,
 		t.unit
-	]), ne = i(() => n({
+	]), ue = i(() => n({
 		stage: "",
 		unit: ""
-	}), [n]), re = i((e) => n({
+	}), [n]), de = i((e) => n({
 		view: "actions",
 		action: e,
 		tab: "decision",
 		artifact: "",
 		anchor: ""
-	}), [n]), ie = i((e) => n({
+	}), [n]), fe = i((e) => n({
 		view: "actions",
 		action: "",
 		tab: "artifacts",
@@ -14890,12 +14926,12 @@ function Vo({ api: e, route: t, go: n, cards: r }) {
 		unit: e.unit ?? "",
 		artifact: e.artifact_id,
 		anchor: ""
-	}), [n, t.stage]), ae = i((e) => {
+	}), [n, t.stage]), pe = i((e) => {
 		if (e.key === "Escape") {
-			t.stage && (e.preventDefault(), ne());
+			t.stage && (e.preventDefault(), ue());
 			return;
 		}
-		let n = b.current;
+		let n = w.current;
 		if (!n) return;
 		let r = [...n.querySelectorAll(".studio-stage")], i = r.indexOf(document.activeElement);
 		if (i < 0) return;
@@ -14910,8 +14946,8 @@ function Vo({ api: e, route: t, go: n, cards: r }) {
 		} else return;
 		let o = r[a];
 		o && (e.preventDefault(), o.focus());
-	}, [ne, t.stage]);
-	if (!D) return /* @__PURE__ */ m("div", {
+	}, [ue, t.stage]);
+	if (!k) return /* @__PURE__ */ m("div", {
 		className: "studio-scroll",
 		children: /* @__PURE__ */ m("div", {
 			className: "studio-page",
@@ -14921,7 +14957,7 @@ function Vo({ api: e, route: t, go: n, cards: r }) {
 					size: 18
 				}),
 				title: o("map.empty.title"),
-				subtitle: o(T ? "map.empty.body" : "map.empty.noRepo"),
+				subtitle: o(D ? "map.empty.body" : "map.empty.noRepo"),
 				action: /* @__PURE__ */ h("button", {
 					type: "button",
 					className: "studio-btn",
@@ -14934,36 +14970,36 @@ function Vo({ api: e, route: t, go: n, cards: r }) {
 			})
 		})
 	});
-	if (!j) return /* @__PURE__ */ m("div", {
+	if (!F) return /* @__PURE__ */ m("div", {
 		className: "studio-scroll",
 		children: /* @__PURE__ */ m("div", {
 			className: "studio-page",
-			children: O.error ? /* @__PURE__ */ m(Uo, {
-				error: O.error,
-				onRetry: () => void O.refresh()
+			children: M.error ? /* @__PURE__ */ m(Uo, {
+				error: M.error,
+				onRetry: () => void M.refresh()
 			}) : /* @__PURE__ */ m(x, { rows: 8 })
 		})
 	});
-	let oe = P.find((e) => e.is_current) ?? null, se = P.filter((e) => e.state === "completed").length, ce = oe ? o("map.status.executing", {
-		number: oe.number,
-		slug: oe.slug
-	}).replace(/\s+/g, " ").trim() : o("map.status.idle"), le = M?.slug || E, ue = M?.repo_label || T, de = {
-		repoLabel: ue,
-		intentLabel: le
-	}, fe = P.some((e) => e.per_unit && e.units.length > 0), pe = M?.archived ? "archived" : M?.paused ? "paused" : null, me = /* @__PURE__ */ m(Do, {
-		stage: F,
-		unit: I,
-		phaseLabel: F ? Bo(a, F.phase) : "",
-		repoLabel: ue,
-		intentLabel: le,
-		review: A.data ?? null,
-		audit: B,
-		action: ee,
-		blocked: pe,
-		onClear: ne,
-		onSelectStage: V,
-		onOpenAction: re,
-		onOpenArtifact: ie
+	let me = ee.find((e) => e.is_current) ?? null, he = ee.filter((e) => e.state === "completed" || e.state === "skipped").length, ge = me ? o("map.status.executing", {
+		number: me.number,
+		slug: me.slug
+	}).replace(/\s+/g, " ").trim() : o("map.status.idle"), _e = I?.slug || O, U = I?.repo_label || D, ve = {
+		repoLabel: U,
+		intentLabel: _e
+	}, W = B.some((e) => e.per_unit && e.units.length > 0), ye = I?.archived ? "archived" : I?.paused ? "paused" : null, be = /* @__PURE__ */ m(Do, {
+		stage: V,
+		unit: ne,
+		phaseLabel: V ? Bo(a, V.phase) : "",
+		repoLabel: U,
+		intentLabel: _e,
+		review: P.data ?? null,
+		audit: se,
+		action: ae,
+		blocked: ye,
+		onClear: ue,
+		onSelectStage: ce,
+		onOpenAction: de,
+		onOpenArtifact: fe
 	});
 	return /* @__PURE__ */ h("div", {
 		className: "studio-map",
@@ -14976,52 +15012,59 @@ function Vo({ api: e, route: t, go: n, cards: r }) {
 						icon: "intent",
 						mono: !0,
 						children: o("map.bar.scope", {
-							repo: ue,
-							intent: le
+							repo: U,
+							intent: _e
 						})
 					}),
+					j ? /* @__PURE__ */ m(X, {
+						mono: !0,
+						children: q(a, "map.bar.stagesKnown", R.length)
+					}) : null,
 					/* @__PURE__ */ m(X, {
 						mono: !0,
-						children: q(a, "map.bar.stagesKnown", j.counts.stages_known)
-					}),
-					/* @__PURE__ */ m(X, {
-						mono: !0,
-						children: q(a, "map.bar.stagesSelected", j.counts.stages_selected)
+						children: q(a, "map.bar.stagesSelected", ee.length)
 					}),
 					/* @__PURE__ */ m(X, {
 						mono: !0,
 						icon: "gate",
-						children: q(a, "map.bar.gates", j.counts.gates)
+						children: q(a, "map.bar.gates", ee.filter((e) => e.gate).length)
 					}),
-					j.graph_version ? /* @__PURE__ */ m(X, {
+					F.graph_version ? /* @__PURE__ */ m(X, {
 						mono: !0,
 						icon: "lock",
-						children: o("map.bar.engine", { version: j.graph_version })
+						children: o("map.bar.engine", { version: F.graph_version })
 					}) : null,
 					/* @__PURE__ */ h("span", {
 						className: "studio-map-exec",
 						role: "status",
 						"aria-live": "polite",
 						children: [/* @__PURE__ */ m(X, {
-							tone: oe ? "accent" : "neutral",
-							icon: oe ? "play" : "pause",
-							children: ce
+							tone: me ? "accent" : "neutral",
+							icon: me ? "play" : "pause",
+							children: ge
 						}), /* @__PURE__ */ m(X, {
 							icon: "check",
 							children: o("map.status.progress", {
-								done: a.fmt.number(se),
-								total: a.fmt.number(P.length)
+								done: a.fmt.number(he),
+								total: a.fmt.number(ee.length)
 							})
 						})]
 					}),
 					/* @__PURE__ */ h("div", {
 						className: "studio-map-bar-controls",
 						children: [
+							/* @__PURE__ */ m("button", {
+								type: "button",
+								className: "studio-btn studio-btn-sm",
+								"aria-pressed": j,
+								onClick: () => b(j ? null : A),
+								children: o(j ? "map.bar.showPlanOnly" : "map.bar.showAllStages")
+							}),
 							/* @__PURE__ */ m(uo, {
 								value: s,
 								onChange: c
 							}),
-							fe ? /* @__PURE__ */ h("button", {
+							W ? /* @__PURE__ */ h("button", {
 								type: "button",
 								className: "studio-btn studio-btn-sm",
 								"aria-pressed": f,
@@ -15045,7 +15088,7 @@ function Vo({ api: e, route: t, go: n, cards: r }) {
 					})
 				]
 			}),
-			z ? /* @__PURE__ */ h("div", {
+			oe ? /* @__PURE__ */ h("div", {
 				className: "studio-banner",
 				"data-tone": "danger",
 				role: "alert",
@@ -15061,12 +15104,12 @@ function Vo({ api: e, route: t, go: n, cards: r }) {
 					/* @__PURE__ */ m("button", {
 						type: "button",
 						className: "studio-btn",
-						onClick: () => re(z.action_id),
+						onClick: () => de(oe.action_id),
 						children: o("map.alert.openAction")
 					})
 				]
 			}) : null,
-			M?.unstable ? /* @__PURE__ */ h("div", {
+			I?.unstable ? /* @__PURE__ */ h("div", {
 				className: "studio-banner",
 				"data-tone": "warn",
 				role: "status",
@@ -15078,87 +15121,96 @@ function Vo({ api: e, route: t, go: n, cards: r }) {
 					children: o("map.alert.unstable")
 				})]
 			}) : null,
-			O.error ? /* @__PURE__ */ m(Uo, {
-				error: O.error,
-				onRetry: () => void O.refresh()
+			M.error ? /* @__PURE__ */ m(Uo, {
+				error: M.error,
+				onRetry: () => void M.refresh()
+			}) : null,
+			te ? /* @__PURE__ */ m("p", {
+				className: "studio-consequence",
+				role: "status",
+				children: o("map.hiddenSelection")
 			}) : null,
 			/* @__PURE__ */ h("div", {
 				className: "studio-map-main",
 				children: [/* @__PURE__ */ h("div", {
 					className: "studio-map-scroll",
-					children: [_ ? /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ m(Wo, {
-						phases: N,
-						intentLabel: le,
+					children: [z.length === 0 ? /* @__PURE__ */ m("p", {
+						className: "studio-muted",
+						role: "status",
+						children: o("map.empty.plan")
+					}) : _ ? /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ m(Wo, {
+						phases: z,
+						intentLabel: _e,
 						selectedStage: t.stage,
-						onSelect: V
-					}), y && F ? /* @__PURE__ */ m("div", {
+						onSelect: ce
+					}), C && V ? /* @__PURE__ */ m("div", {
 						className: "studio-map-sheet",
 						role: "complementary",
 						"aria-label": o("map.inspector.title"),
-						children: me
-					}) : null] }) : y ? /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ m("p", {
+						children: be
+					}) : null] }) : C ? /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ m("p", {
 						className: "studio-consequence",
 						children: o("map.accordion.note")
 					}), /* @__PURE__ */ m(Co, {
-						phases: N,
+						phases: z,
 						density: s,
 						showUnits: f,
 						selectedStage: t.stage,
 						selectedUnit: t.unit,
-						scope: de,
-						onSelectStage: V,
-						onSelectUnit: te,
+						scope: ve,
+						onSelectStage: ce,
+						onSelectUnit: le,
 						phaseLabel: (e) => Bo(a, e),
-						inspector: me
+						inspector: be
 					})] }) : /* @__PURE__ */ h("div", {
 						className: "studio-map-canvas",
 						ref: (e) => {
-							b.current = e, w(e);
+							w.current = e, E(e);
 						},
-						onKeyDown: ae,
+						onKeyDown: pe,
 						children: [/* @__PURE__ */ m("ul", {
 							className: "studio-lanes",
 							role: "list",
 							"aria-label": o("map.a11y.canvas"),
-							children: N.map((e) => /* @__PURE__ */ m(wo, {
+							children: z.map((e) => /* @__PURE__ */ m(wo, {
 								phase: e,
 								phaseLabel: Bo(a, e.phase),
 								density: s,
 								showUnits: f,
 								selectedStage: t.stage,
 								selectedUnit: t.unit,
-								relations: L,
-								scope: de,
-								onSelectStage: V,
-								onSelectUnit: te
+								relations: re,
+								scope: ve,
+								onSelectStage: ce,
+								onSelectUnit: le
 							}, e.phase))
-						}), s === "dependencies" && F ? /* @__PURE__ */ m(po, {
-							canvas: C,
-							from: F.slug,
-							relations: L,
-							token: `${s}:${f}:${F.slug}:${P.length}`
+						}), s === "dependencies" && V ? /* @__PURE__ */ m(po, {
+							canvas: T,
+							from: V.slug,
+							relations: re,
+							token: `${s}:${f}:${V.slug}:${B.length}`
 						}) : null]
 					}), /* @__PURE__ */ m("p", {
 						className: "studio-consequence",
 						children: o("map.consequence")
 					})]
-				}), y ? null : /* @__PURE__ */ m("aside", {
+				}), C ? null : /* @__PURE__ */ m("aside", {
 					className: "studio-inspector",
 					"aria-label": o("map.inspector.title"),
-					children: me
+					children: be
 				})]
 			}),
 			/* @__PURE__ */ m("span", {
 				className: "studio-sr",
 				role: "status",
 				"aria-live": "polite",
-				children: F ? I ? o("map.a11y.unitSelected", {
-					unit: I.unit,
-					number: F.number,
-					slug: F.slug
+				children: V ? ne ? o("map.a11y.unitSelected", {
+					unit: ne.unit,
+					number: V.number,
+					slug: V.slug
 				}) : o("map.a11y.selected", {
-					number: F.number,
-					slug: F.slug
+					number: V.number,
+					slug: V.slug
 				}) : ""
 			})
 		]

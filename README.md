@@ -19,8 +19,9 @@ guard-bypass environment variable.
 - **Decisions next to their evidence** — a gate shows the produced artifacts, the stage's acceptance
   criteria, reviewer verdicts and findings, unresolved risks and prior revisions before you answer. The
   confirmation shows both the button you clicked and the exact text that will be sent.
-- **Workflow Map** — five phase swimlanes, every stage with its agent, review class, gate, artifacts and
-  live state; skipped stages keep their position and their reason; Construction expands into per-unit lanes.
+- **Workflow Map** — the current plan in phase swimlanes, with its agents, gates, artifacts and live
+  state. Show all stages to inspect the full method; original stage numbers are preserved, and progress
+  always counts the selected plan. Construction expands into per-unit lanes.
 - **Repository registry and transactional installer** — choose a directory on the gateway or enter its path,
   preflight it read-only, install the bundled AI-DLC v2 harness with a receipt for every file it owns, and
   upgrade later with a previewed diff. Cancel an installation, restore the immediately preceding compatible

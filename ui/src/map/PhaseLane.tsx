@@ -5,9 +5,8 @@
  * is also a linear list for a screen reader — the semantic alternative PRD §10.3 requires for
  * swimlanes. The visual grouping (phase accent bar, count sub-line) is decoration on top of that list.
  *
- * Position is never earned: every stage the graph or the record knows about is rendered here, including
- * `skipped` and `excluded` ones, in the order the backend returned. Dropping them would silently
- * renumber the phase and hide the plan the user actually approved (FR-MAP-003).
+ * MapPage supplies the current plan or the explicitly requested full graph. Both retain the engine's
+ * original stage numbers and order; filtering never renumbers a stage.
  */
 
 import { useI18n } from '../i18n'

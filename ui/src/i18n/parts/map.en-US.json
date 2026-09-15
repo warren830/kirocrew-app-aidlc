@@ -3,6 +3,8 @@
   "map.empty.body": "The map draws one intent's stage graph against what its record actually contains. Choose an intent and Studio reads it from disk.",
   "map.empty.action": "Choose an intent",
   "map.empty.noRepo": "Pick a repository in the scope bar first. Studio only ever reads repositories you registered.",
+  "map.empty.plan": "No stages are selected in this plan. Show all stages to inspect the full workflow.",
+  "map.hiddenSelection": "The linked stage is outside this plan. Show all stages to inspect it.",
   "map.error.title": "The map could not be read",
 
   "map.bar.scope": "{repo} / {intent}",
@@ -19,12 +21,14 @@
   "map.bar.hideUnits": "Hide unit sub-lanes",
   "map.bar.showTable": "Show as table",
   "map.bar.showCanvas": "Show as swimlanes",
+  "map.bar.showAllStages": "Show all stages",
+  "map.bar.showPlanOnly": "Show current plan only",
 
   "map.density.overview": "Overview",
   "map.density.detailed": "Detailed",
   "map.density.dependencies": "Dependencies",
 
-  "map.consequence": "Dependency edges are not drawn by default. Selecting a stage overlays its upstream, downstream, consumes and produces relationships. Skipped stages keep their position and their reason.",
+  "map.consequence": "The current plan is shown by default. Show all stages to inspect excluded stages and their reasons. Stage numbers stay unchanged, and dependency links follow the visible stages.",
   "map.accordion.note": "Phases are accordions on a narrow screen. The canvas is not shrunk to fit, so no stage card becomes unreadable.",
 
   "map.lane.counts_one": "{n} stage · {skipped} skipped",
@@ -61,7 +65,7 @@
   "map.a11y.agent": "Agent {agent}",
   "map.a11y.elapsed": "Elapsed {duration}",
   "map.a11y.reason": "Reason: {reason}",
-  "map.a11y.tableCaption": "Every stage of {intent}, in phase order: phase, number, stage, state, agent, Gate, review, elapsed time, files and notes.",
+  "map.a11y.tableCaption": "Visible stages of {intent}, in phase order: phase, number, stage, state, agent, Gate, review, elapsed time, files and notes.",
 
   "map.status.executing": "Executing {number} {slug}",
   "map.status.idle": "No stage is executing",
@@ -82,6 +86,7 @@
   "map.inspector.close": "Clear the stage selection",
   "map.inspector.pick": "Select a stage to see its files, review contract, audit trail and the one operation it permits.",
   "map.inspector.why": "Why it is not executing.",
+  "map.inspector.notSelected": "This stage is not selected in the current plan.",
   "map.inspector.whyUnknown": "The record does not say why. Its position is kept so the plan stays readable.",
   "map.inspector.relationships": "Relationships",
   "map.inspector.upstream": "Upstream",

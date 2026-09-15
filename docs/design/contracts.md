@@ -1113,7 +1113,7 @@ class StableBoundary:            # PRD §12.2 — all five conditions evaluated
 class MapStage:
     slug: str; number: str; name: str; phase: str; state: str          # STAGE_STATE | "excluded"
     execution: str; in_scope: bool; mode: str; agent: str; reviewer: str | None; review_class: str | None
-    gate: bool; per_unit: bool; summary_confirmation: str | None
+    gate: bool; per_unit: bool; summary_confirmation: str | None   # gate only when in_scope and phase != initialization
     consumes: tuple[str, ...]; produces: tuple[str, ...]; depends_on: tuple[str, ...]; dependents: tuple[str, ...]
     elapsed_secs: int | None            # STAGE_STARTED→STAGE_COMPLETED (latest attempt) or →now when in progress
     artifacts: tuple[ArtifactMeta, ...]; skipped_reason: str | None      # from suffix "SKIP: …" or scope grid
@@ -1124,6 +1124,14 @@ class MapModel:
     intent_key: str; phases: tuple[MapPhase, ...]    # MapPhase{phase, status, stages: tuple[MapStage,...], counts: {total, in_scope, done, skipped}}
     counts: dict[str, int]              # stages_known, stages_selected, gates (exact)
     units: tuple[str, ...]; graph_version: str | None; stage_count: int
+
+# MapModel keeps the full graph/state union for explicit full-workflow inspection.
+# MapPage defaults to in_scope stages from recorded EXECUTE/SKIP choices, including overrides.
+# Present legacy rows without suffixes use the current state scope before the birth registry scope.
+# Known rows remain inspectable when grid metadata is absent; missing state rows are not invented.
+# Unexecuted excluded rows have state="excluded" and gate=False. Historical states remain intact.
+# Visible phases, table rows, unit lanes and stage links use one filter; progress always uses the
+# selected plan (completed + selected skipped stages), even when the full graph is displayed.
 
 @dataclass(frozen=True, slots=True)
 class ArtifactMeta:
