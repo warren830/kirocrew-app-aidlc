@@ -770,3 +770,18 @@ Domain Design 在已回答的 `Q1`–`Q5` 后添加了 `F1`–`F3` 和空的 `[A
 服务健康，随后 Domain Gate 审批一次提交成功。当前没有新的非标准待答题组，
 实际页面兜底仍以回归夹具验证为准；安装记录见
 [`2026-09-15-question-fallback/README.md`](verification/2026-09-15-question-fallback/README.md)。
+
+## 39. 跳过 User Stories 后，FR 需求映射被误报为缺失
+
+**状态：已修复并更新当前 demo；185 项相关测试及真实校验通过。**
+
+Units Generation 在没有 `stories.md` 时会使用 FR 编号，但映射解析器只提取 US 编号，
+使完整的 64 条需求映射被报为 129 项问题。现在解析器按实际选定的上游来源匹配编号，
+Functional Design 的 FR 回退也按当前单元筛选。不存在的编号、缺失映射和错误单元
+仍会失败，已有的 US 路径保持原有行为。
+
+修复包含 29 个新用例，185 项针对性测试通过。本机通过同版本 payload 更新正式安装，
+事务只更新一个框架文件，更新前后 91 个工作流文件逐字节一致。对当前 demo 执行
+独立校验后，缺失、孤立项及无效目标均为零。历史审查中的失败记录保留原始结果。
+本地补丁与上游版本的关系已写入第三方声明和 manifest 来源信息。记录见
+[`2026-09-15-requirement-traceability/README.md`](verification/2026-09-15-requirement-traceability/README.md)。
