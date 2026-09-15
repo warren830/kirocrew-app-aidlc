@@ -84,6 +84,21 @@ describe('delivery outcomes describe observed progress', () => {
     expect(statusTone('ResolvedNoTransition')).toBe('neutral')
   })
 
+  it.each(['en-US', 'zh-CN'] as const)('keeps renewed plan authority pending (%s)', (locale) => {
+    document.documentElement.lang = locale
+    const i18n = makeI18n(locale)
+    const card = actionCard({ status: 'ResolvedNoTransition', resolution: {
+      kind: 'no_transition', reason: 'plan_approval_recorded_before_reset',
+      evidence: null, resolved_at: null,
+    } })
+    render(<I18nProvider><DeliveryStrip card={card} /></I18nProvider>)
+    const strip = screen.getByRole('region', { name: i18n.t('delivery.label') })
+    expect(strip).toHaveTextContent(i18n.t('delivery.previousPlanApproval'))
+    expect(strip).toHaveTextContent(i18n.t('delivery.updatedPlanReview'))
+    expect(strip).toHaveTextContent(i18n.t('delivery.previousPlanApprovalBody'))
+    expect(strip).not.toHaveTextContent(i18n.t('enum.actionStatus.ResolvedNoTransition'))
+  })
+
   it('marks every step complete when the workflow state did change', () => {
     const strip = show('StateChanged')
     expect([...strip.querySelectorAll('.studio-dstep')].map((step) => step.getAttribute('data-state'))).toEqual([

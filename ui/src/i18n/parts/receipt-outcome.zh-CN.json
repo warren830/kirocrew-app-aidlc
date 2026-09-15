@@ -1,5 +1,8 @@
 {
   "delivery.answerNotVerified": "回复未验证",
   "delivery.newGateReview": "复核新的 Gate",
-  "delivery.answerNotVerifiedBody": "回合已结束并出现新的 Gate，但审计回执与发送的回复不一致。空闲租约已释放。请核对会话和新的 Gate；此前的回复不会被重新发送。"
+  "delivery.answerNotVerifiedBody": "回合已结束并出现新的 Gate，但审计回执与发送的回复不一致。空闲租约已释放。请核对会话和新的 Gate；此前的回复不会被重新发送。",
+  "delivery.previousPlanApproval": "此前审批已记录",
+  "delivery.updatedPlanReview": "复核更新后的计划",
+  "delivery.previousPlanApprovalBody": "原计划的审批已记录，此次回复已完成。计划随后被重置为待审，当前版本仍需审批；本次回收没有授予新的写权限，也不会重发此前的回复。"
 }

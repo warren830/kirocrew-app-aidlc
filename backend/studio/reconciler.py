@@ -1554,6 +1554,13 @@ class Reconciler:
                     seen["plan_approval_recorded"] = _json_of(receipt)
                     seen["approved_questions_file"] = _attr(closed, "relpath")
                     return Resolution("no_transition", "plan_approved", seen)
+            if _attr(plan, "present", False) and not _attr(plan, "answered", False):
+                receipt = self._historical_plan_approval(rec, snap, stage, questions)
+                if receipt is not None:
+                    return Resolution("no_transition", "plan_approval_recorded_before_reset", {
+                        **seen, "plan_approval_recorded": _json_of(receipt),
+                        "current_plan_requires_approval": True,
+                    })
             return Resolution("pending", "plan_not_approved", seen)
 
         if decision == "request_plan_changes":
@@ -1986,6 +1993,78 @@ class Reconciler:
         self._ran.pop(str(_attr(rec, "action_id")), None)
 
     # ---- disk predicates -------------------------------------------------- #
+
+    def _historical_plan_approval(
+        self, rec: Any, snap: Any, stage: Any, questions: Any,
+    ) -> Any:
+        """Settle the old reply, never grant authority to a subsequently reset plan."""
+        if stage != "code-generation" or not _attr(_attr(snap, "audit"), "complete", False):
+            return None
+        evidence = _attr(rec, "evidence", {}) or {}
+        captured_question = evidence.get("questions") or {}
+        if _attr(questions, "relpath") != captured_question.get("relpath"):
+            return None
+        boundary = (evidence.get("audit") or {}).get("boundary_event") or {}
+        events = list(_attr(_attr(snap, "audit"), "events", ()) or ())
+        decision = next((
+            event for event in events
+            if _attr(event, "event") == "DECISION_RECORDED"
+            and _attr(event, "shard") == boundary.get("shard")
+            and _attr(event, "pos") == boundary.get("pos")
+        ), None)
+        if decision is None:
+            return None
+        fields = _attr(decision, "fields", {}) or {}
+        unit = _attr(rec, "unit") or None
+        target = f"unit:{unit}" if unit else "stage:code-generation"
+        prompt_sha = _attr(_attr(rec, "captured"), "question_digest")
+        required = {
+            "Stage": stage, "Checkpoint": "Code Generation Plan Approval",
+            "Plan Target": target, "Intent": _attr(rec, "intent_uuid"),
+            "Questions File": captured_question.get("relpath"),
+            "Prompt SHA-256": prompt_sha,
+        }
+        if (
+            not required["Intent"] or not prompt_sha
+            or any(fields.get(key) != value for key, value in required.items())
+            or fields.get("Questions SHA-256") != prompt_sha
+            or (fields.get("Unit") or None) != unit or fields.get("Workflow")
+        ):
+            return None
+        for key in ("Directive Epoch", "Approval Fingerprint"):
+            value = fields.get(key, "")
+            if not isinstance(value, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", value):
+                return None
+        if not fields.get("Run floor") or not fields.get("Session"):
+            return None
+        required.update({key: fields[key] for key in (
+            "Directive Epoch", "Approval Fingerprint", "Run floor", "Session",
+        )})
+        for receipt in self._new_events(rec, snap, ("PLAN_APPROVAL_RECORDED",), stage):
+            received = _attr(receipt, "fields", {}) or {}
+            approved_sha = received.get("Questions SHA-256", "")
+            if (
+                _attr(receipt, "shard") != _attr(decision, "shard")
+                or _event_order(receipt) <= _event_order(decision)
+                or received.get("Details") != C.WIRE_APPROVE_PLAN
+                or (received.get("Unit") or None) != unit or received.get("Workflow")
+                or any(received.get(key) != value for key, value in required.items())
+                or not isinstance(approved_sha, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", approved_sha)
+                or approved_sha == prompt_sha
+            ):
+                continue
+            # A later same-target prompt could have consumed this reply instead.
+            if any(
+                _attr(event, "event") == "DECISION_RECORDED"
+                and (_attr(event, "fields", {}) or {}).get("Stage") == stage
+                and ((_attr(event, "fields", {}) or {}).get("Unit") or None) == unit
+                and _event_order(decision) < _event_order(event) < _event_order(receipt)
+                for event in events
+            ):
+                continue
+            return receipt
+        return None
 
     def _returned_revision_gate(
         self, rec: Any, snap: Any, stage: Any, rejected: Any, revising: Any,

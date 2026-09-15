@@ -85,6 +85,9 @@ export function statusLabel(i18n: I18n, status: ActionStatus, reason?: string | 
   if (status === 'ResolvedNoTransition' && reason === 'answer_not_verified_at_gate') {
     return i18n.t('delivery.answerNotVerified')
   }
+  if (status === 'ResolvedNoTransition' && reason === 'plan_approval_recorded_before_reset') {
+    return i18n.t('delivery.previousPlanApproval')
+  }
   return i18n.t(status === 'ResolvedNoTransition' && reason === 'answer_requires_text'
     ? 'delivery.answerNeedsText' : `enum.actionStatus.${status}`)
 }
@@ -110,6 +113,9 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
   const { index, failed } = confirmedPending ? { index: 2, failed: false } : stepIndex(status)
   const noTransition = status === 'ResolvedNoTransition'
   const answerNotVerified = noTransition && card.resolution.reason === 'answer_not_verified_at_gate'
+  const planReset = noTransition && card.resolution.reason === 'plan_approval_recorded_before_reset'
+  const remainingLabel = planReset ? 'delivery.updatedPlanReview'
+    : answerNotVerified ? 'delivery.newGateReview' : 'delivery.noTransition'
   const sent = !BEFORE_SEND.includes(status)
 
   return (
@@ -127,7 +133,8 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
                 <Icon name={STEP_ICON[state]} size={10} strokeWidth={2.4} />
               </span>
               <span className="studio-dstep-label">{t(
-                state === 'unchanged' ? (answerNotVerified ? 'delivery.newGateReview' : 'delivery.step.unchanged')
+                state === 'unchanged' ? (planReset ? 'delivery.updatedPlanReview'
+                  : answerNotVerified ? 'delivery.newGateReview' : 'delivery.step.unchanged')
                   : state === 'cancelled' ? 'enum.actionStatus.Cancelled'
                   : confirmedPending && position === 2 ? 'delivery.step.reconciliation' : key,
               )}</span>
@@ -144,7 +151,7 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
           {statusLabel(i18n, status, card.resolution.reason)}
         </Chip>
         {delivery.queued_at ? <Chip icon="clock">{t('delivery.queuedInSlot')}</Chip> : null}
-        {noTransition ? <Chip icon="info">{t(answerNotVerified ? 'delivery.newGateReview' : 'delivery.noTransition')}</Chip> : null}
+        {noTransition ? <Chip icon="info">{t(remainingLabel)}</Chip> : null}
         {sent && !needsReconciliation ? (
           <Chip tone={noTransition ? 'neutral' : 'ok'} icon={noTransition ? 'info' : 'check'}>
             {t('delivery.watchingDisk')}
@@ -159,6 +166,12 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
         <div className="studio-banner studio-dwarn" data-tone="warn" role="alert">
           <Icon name="warn" size={15} />
           <p>{t('delivery.answerNotVerifiedBody')}</p>
+        </div>
+      ) : null}
+      {planReset ? (
+        <div className="studio-banner studio-dwarn" data-tone="warn" role="alert">
+          <Icon name="warn" size={15} />
+          <p>{t('delivery.previousPlanApprovalBody')}</p>
         </div>
       ) : null}
 

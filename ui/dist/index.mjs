@@ -521,6 +521,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"delivery.label": "Delivery state",
 	"delivery.newGateReview": "Review the new gate",
 	"delivery.noTransition": "No workflow state change was recorded.",
+	"delivery.previousPlanApproval": "Previous approval recorded",
+	"delivery.previousPlanApprovalBody": "The original plan approval was recorded, and that reply is complete. The plan was later reset for review. Its current version still requires approval; no new write authority was granted and the earlier reply will not be resent.",
 	"delivery.queuedInSlot": "Waiting in the conversation's queue",
 	"delivery.reportFailed": "KiroCrew has the message but Studio could not record the outcome. It will reconcile from disk; the message is never sent a second time.",
 	"delivery.sentAt": "sent {at}",
@@ -539,6 +541,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"delivery.step.unchanged": "No state change",
 	"delivery.uncertain": "Delivery uncertain — nothing was replayed",
 	"delivery.uncertainBody": "Studio cannot prove whether the conversation received this message, so it is watching the AI-DLC files on disk and will not send it again. Choose what to do below.",
+	"delivery.updatedPlanReview": "Review the updated plan",
 	"delivery.watchingDisk": "Studio is watching disk state, not the HTTP receipt",
 	"detail.additionalAttemptBlocked": "This additional attempt was blocked. An earlier delivery is recorded below.",
 	"detail.bar.closed": "This is a closed record. Open current actions to continue.",
@@ -2817,6 +2820,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"delivery.label": "投递状态",
 	"delivery.newGateReview": "复核新的 Gate",
 	"delivery.noTransition": "未记录到工作流状态变更。",
+	"delivery.previousPlanApproval": "此前审批已记录",
+	"delivery.previousPlanApprovalBody": "原计划的审批已记录，此次回复已完成。计划随后被重置为待审，当前版本仍需审批；本次回收没有授予新的写权限，也不会重发此前的回复。",
 	"delivery.queuedInSlot": "在会话队列中等待",
 	"delivery.reportFailed": "KiroCrew 已收到该消息，但 Studio 未能记录结果。它会从磁盘对账；消息绝不会被再发一次。",
 	"delivery.sentAt": "发送于 {at}",
@@ -2835,6 +2840,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"delivery.step.unchanged": "状态未变更",
 	"delivery.uncertain": "投递结果不确定——没有重放任何内容",
 	"delivery.uncertainBody": "Studio 无法证明会话是否收到了这条消息，因此它会持续观察磁盘上的 AI-DLC 文件，并且不会再次发送。请在下方选择如何处理。",
+	"delivery.updatedPlanReview": "复核更新后的计划",
 	"delivery.watchingDisk": "Studio 依据磁盘状态判断，而不是 HTTP 回执",
 	"detail.additionalAttemptBlocked": "本次再次提交被阻止。此前已发送的内容见下方记录。",
 	"detail.bar.closed": "这是一条已关闭的记录。请打开当前待办继续。",
@@ -7683,7 +7689,7 @@ function tr(e) {
 	return e === "StateChanged" ? "ok" : e === "NotDelivered" || e === "Failed" || Zn.includes(e) ? "danger" : e === "Delivering" || e === "Delivered" || e === "Processing" ? "accent" : "neutral";
 }
 function nr(e, t, n) {
-	return t === "ResolvedNoTransition" && n === "answer_not_verified_at_gate" ? e.t("delivery.answerNotVerified") : e.t(t === "ResolvedNoTransition" && n === "answer_requires_text" ? "delivery.answerNeedsText" : `enum.actionStatus.${t}`);
+	return t === "ResolvedNoTransition" && n === "answer_not_verified_at_gate" ? e.t("delivery.answerNotVerified") : t === "ResolvedNoTransition" && n === "plan_approval_recorded_before_reset" ? e.t("delivery.previousPlanApproval") : e.t(t === "ResolvedNoTransition" && n === "answer_requires_text" ? "delivery.answerNeedsText" : `enum.actionStatus.${t}`);
 }
 function rr(e, t) {
 	return t === null ? e.t("common.unavailable") : e.t(t ? "delivery.fact.yes" : "delivery.fact.no");
@@ -7692,7 +7698,7 @@ function ir({ card: e }) {
 	let t = H(), { t: n } = t, { status: r } = e, i = e.delivery, a = Zn.includes(r), o = a && i.delivery_confirmed === !0, { index: s, failed: c } = o ? {
 		index: 2,
 		failed: !1
-	} : Qn(r), l = r === "ResolvedNoTransition", u = l && e.resolution.reason === "answer_not_verified_at_gate", d = !Xn.includes(r);
+	} : Qn(r), l = r === "ResolvedNoTransition", u = l && e.resolution.reason === "answer_not_verified_at_gate", d = l && e.resolution.reason === "plan_approval_recorded_before_reset", f = d ? "delivery.updatedPlanReview" : u ? "delivery.newGateReview" : "delivery.noTransition", p = !Xn.includes(r);
 	return /* @__PURE__ */ h("section", {
 		className: "studio-delivery",
 		"aria-label": n("delivery.label"),
@@ -7716,7 +7722,7 @@ function ir({ card: e }) {
 							}),
 							/* @__PURE__ */ m("span", {
 								className: "studio-dstep-label",
-								children: n(i === "unchanged" ? u ? "delivery.newGateReview" : "delivery.step.unchanged" : i === "cancelled" ? "enum.actionStatus.Cancelled" : o && t === 2 ? "delivery.step.reconciliation" : e)
+								children: n(i === "unchanged" ? d ? "delivery.updatedPlanReview" : u ? "delivery.newGateReview" : "delivery.step.unchanged" : i === "cancelled" ? "enum.actionStatus.Cancelled" : o && t === 2 ? "delivery.step.reconciliation" : e)
 							}),
 							/* @__PURE__ */ m("span", {
 								className: "studio-sr",
@@ -7740,9 +7746,9 @@ function ir({ card: e }) {
 					}) : null,
 					l ? /* @__PURE__ */ m(X, {
 						icon: "info",
-						children: n(u ? "delivery.newGateReview" : "delivery.noTransition")
+						children: n(f)
 					}) : null,
-					d && !a ? /* @__PURE__ */ m(X, {
+					p && !a ? /* @__PURE__ */ m(X, {
 						tone: l ? "neutral" : "ok",
 						icon: l ? "info" : "check",
 						children: n("delivery.watchingDisk")
@@ -7761,6 +7767,15 @@ function ir({ card: e }) {
 					name: "warn",
 					size: 15
 				}), /* @__PURE__ */ m("p", { children: n("delivery.answerNotVerifiedBody") })]
+			}) : null,
+			d ? /* @__PURE__ */ h("div", {
+				className: "studio-banner studio-dwarn",
+				"data-tone": "warn",
+				role: "alert",
+				children: [/* @__PURE__ */ m(Y, {
+					name: "warn",
+					size: 15
+				}), /* @__PURE__ */ m("p", { children: n("delivery.previousPlanApprovalBody") })]
 			}) : null,
 			a ? /* @__PURE__ */ h("div", {
 				className: "studio-banner studio-dwarn",
@@ -7805,7 +7820,7 @@ function ir({ card: e }) {
 					})] })
 				]
 			}) : null,
-			d && i.wire_text ? /* @__PURE__ */ h("div", {
+			p && i.wire_text ? /* @__PURE__ */ h("div", {
 				className: "studio-dsent",
 				children: [/* @__PURE__ */ h("p", {
 					className: "studio-dsent-head",
@@ -9172,7 +9187,7 @@ function li({ card: e }) {
 	return rt(e) ? /* @__PURE__ */ m(Z, {
 		title: n("template.common.closedTitle"),
 		icon: "doc",
-		children: /* @__PURE__ */ h(ni, { children: [/* @__PURE__ */ m("p", { children: n(e.resolution.reason === "answer_requires_text" ? "template.questions.textStillRequired" : e.resolution.reason === "answer_not_verified_at_gate" ? "delivery.answerNotVerifiedBody" : e.resolution.reason === "command_superseded" ? "template.command.superseded" : "template.common.closedBody") }), /* @__PURE__ */ h("details", { children: [
+		children: /* @__PURE__ */ h(ni, { children: [/* @__PURE__ */ m("p", { children: n(e.resolution.reason === "answer_requires_text" ? "template.questions.textStillRequired" : e.resolution.reason === "answer_not_verified_at_gate" ? "delivery.answerNotVerifiedBody" : e.resolution.reason === "plan_approval_recorded_before_reset" ? "delivery.previousPlanApprovalBody" : e.resolution.reason === "command_superseded" ? "template.command.superseded" : "template.common.closedBody") }), /* @__PURE__ */ h("details", { children: [
 			/* @__PURE__ */ m("summary", { children: n("template.common.originalNotice") }),
 			/* @__PURE__ */ m("p", { children: r }),
 			i ? /* @__PURE__ */ m("p", { children: i }) : null

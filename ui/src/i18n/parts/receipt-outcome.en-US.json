@@ -1,5 +1,8 @@
 {
   "delivery.answerNotVerified": "Reply not verified",
   "delivery.newGateReview": "Review the new gate",
-  "delivery.answerNotVerifiedBody": "The turn ended and a new gate opened, but the audit receipt did not match the reply sent. The idle lease was released. Review the conversation and the new gate; the earlier reply will not be resent."
+  "delivery.answerNotVerifiedBody": "The turn ended and a new gate opened, but the audit receipt did not match the reply sent. The idle lease was released. Review the conversation and the new gate; the earlier reply will not be resent.",
+  "delivery.previousPlanApproval": "Previous approval recorded",
+  "delivery.updatedPlanReview": "Review the updated plan",
+  "delivery.previousPlanApprovalBody": "The original plan approval was recorded, and that reply is complete. The plan was later reset for review. Its current version still requires approval; no new write authority was granted and the earlier reply will not be resent."
 }
