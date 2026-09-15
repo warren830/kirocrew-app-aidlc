@@ -1466,6 +1466,34 @@ class Reconciler:
                     and _attr(rec, "wire_text") == questions.questions[0].options[0].text
                 ):
                     return Resolution("no_transition", "answer_requires_text", seen)
+                if (
+                    answered is None and self._current_stage(snap) == stage
+                    and self._row_mark(snap, stage) == "?"
+                ):
+                    gate = self._newest_new(rec, snap, ("STAGE_AWAITING_APPROVAL",), stage)
+                    gate_fields = _attr(gate, "fields", {}) or {}
+                    if (
+                        gate is not None and not gate_fields.get("Workflow")
+                        and (gate_fields.get("Unit") or None) == origin.get("unit")
+                    ):
+                        for candidate in self._new_events(rec, snap, ("QUESTION_ANSWERED",), stage):
+                            recorded_text = (_attr(candidate, "fields", {}) or {}).get("Details")
+                            if not isinstance(recorded_text, str) or not recorded_text:
+                                continue
+                            scoped_receipt = audit_question_answer(
+                                _attr(snap, "audit"), origin, recorded_text,
+                                str(_attr(rec, "delivering_at") or ""),
+                                project_dir=_attr(snap, "canonical_path"),
+                            )
+                            if scoped_receipt is candidate:
+                                # The receipt belongs to this question but does not verify our reply.
+                                # The ended turn and later gate permit retiring its lease, never replay
+                                # or an "answered" claim. Presence/cursor checks still run above.
+                                return Resolution("no_transition", "answer_not_verified_at_gate", {
+                                    **seen, "answer_verified": False,
+                                    "recorded_answer": _json_of(candidate),
+                                    "next_gate": _json_of(gate),
+                                })
                 return Resolution(
                     "no_transition" if answered is not None else "pending",
                     "question_answered" if answered is not None else "answers_not_recorded",

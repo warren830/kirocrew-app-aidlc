@@ -82,6 +82,9 @@ export function statusTone(status: ActionStatus): ChipTone {
 }
 
 export function statusLabel(i18n: I18n, status: ActionStatus, reason?: string | null): string {
+  if (status === 'ResolvedNoTransition' && reason === 'answer_not_verified_at_gate') {
+    return i18n.t('delivery.answerNotVerified')
+  }
   return i18n.t(status === 'ResolvedNoTransition' && reason === 'answer_requires_text'
     ? 'delivery.answerNeedsText' : `enum.actionStatus.${status}`)
 }
@@ -106,6 +109,7 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
   // Receipt completes only the send step. Reconciliation still has to establish what AI-DLC did.
   const { index, failed } = confirmedPending ? { index: 2, failed: false } : stepIndex(status)
   const noTransition = status === 'ResolvedNoTransition'
+  const answerNotVerified = noTransition && card.resolution.reason === 'answer_not_verified_at_gate'
   const sent = !BEFORE_SEND.includes(status)
 
   return (
@@ -123,7 +127,7 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
                 <Icon name={STEP_ICON[state]} size={10} strokeWidth={2.4} />
               </span>
               <span className="studio-dstep-label">{t(
-                state === 'unchanged' ? 'delivery.step.unchanged'
+                state === 'unchanged' ? (answerNotVerified ? 'delivery.newGateReview' : 'delivery.step.unchanged')
                   : state === 'cancelled' ? 'enum.actionStatus.Cancelled'
                   : confirmedPending && position === 2 ? 'delivery.step.reconciliation' : key,
               )}</span>
@@ -140,7 +144,7 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
           {statusLabel(i18n, status, card.resolution.reason)}
         </Chip>
         {delivery.queued_at ? <Chip icon="clock">{t('delivery.queuedInSlot')}</Chip> : null}
-        {noTransition ? <Chip icon="info">{t('delivery.noTransition')}</Chip> : null}
+        {noTransition ? <Chip icon="info">{t(answerNotVerified ? 'delivery.newGateReview' : 'delivery.noTransition')}</Chip> : null}
         {sent && !needsReconciliation ? (
           <Chip tone={noTransition ? 'neutral' : 'ok'} icon={noTransition ? 'info' : 'check'}>
             {t('delivery.watchingDisk')}
@@ -150,6 +154,13 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
           <span className="studio-muted studio-mono studio-dat">{t('delivery.sentAt', { at: at(i18n, delivery.delivered_at) })}</span>
         ) : null}
       </div>
+
+      {answerNotVerified ? (
+        <div className="studio-banner studio-dwarn" data-tone="warn" role="alert">
+          <Icon name="warn" size={15} />
+          <p>{t('delivery.answerNotVerifiedBody')}</p>
+        </div>
+      ) : null}
 
       {needsReconciliation ? (
         // Receipt and workflow acceptance are separate facts; neither warning offers to resend.

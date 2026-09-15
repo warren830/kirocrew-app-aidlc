@@ -506,6 +506,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"decision.run_now.hint": "Runs one turn now, outside the budget that stopped it.",
 	"decision.run_now.label": "Run now",
 	"delivery.answerNeedsText": "Text still required",
+	"delivery.answerNotVerified": "Reply not verified",
+	"delivery.answerNotVerifiedBody": "The turn ended and a new gate opened, but the audit receipt did not match the reply sent. The idle lease was released. Review the conversation and the new gate; the earlier reply will not be resent.",
 	"delivery.confirmed": "Delivery confirmed — workflow needs reconciliation",
 	"delivery.confirmedBody": "The conversation received this message. Whether AI-DLC accepted the answer or changed the workflow is still unverified. This message will not be resent.",
 	"delivery.fact.absent": "not found",
@@ -517,6 +519,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"delivery.fact.transcriptRow": "Transcript row",
 	"delivery.fact.yes": "yes",
 	"delivery.label": "Delivery state",
+	"delivery.newGateReview": "Review the new gate",
 	"delivery.noTransition": "No workflow state change was recorded.",
 	"delivery.queuedInSlot": "Waiting in the conversation's queue",
 	"delivery.reportFailed": "KiroCrew has the message but Studio could not record the outcome. It will reconcile from disk; the message is never sent a second time.",
@@ -2797,6 +2800,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"decision.run_now.hint": "越过限制它的预算，现在运行一轮。",
 	"decision.run_now.label": "立即运行",
 	"delivery.answerNeedsText": "仍需补充正文",
+	"delivery.answerNotVerified": "回复未验证",
+	"delivery.answerNotVerifiedBody": "回合已结束并出现新的 Gate，但审计回执与发送的回复不一致。空闲租约已释放。请核对会话和新的 Gate；此前的回复不会被重新发送。",
 	"delivery.confirmed": "消息已送达，工作流仍需核对",
 	"delivery.confirmedBody": "会话已收到这条消息。AI-DLC 是否接受了回答、工作流状态是否变化，仍未得到验证。这条消息不会被重新发送。",
 	"delivery.fact.absent": "未找到",
@@ -2808,6 +2813,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"delivery.fact.transcriptRow": "会话记录行",
 	"delivery.fact.yes": "是",
 	"delivery.label": "投递状态",
+	"delivery.newGateReview": "复核新的 Gate",
 	"delivery.noTransition": "未记录到工作流状态变更。",
 	"delivery.queuedInSlot": "在会话队列中等待",
 	"delivery.reportFailed": "KiroCrew 已收到该消息，但 Studio 未能记录结果。它会从磁盘对账；消息绝不会被再发一次。",
@@ -7667,7 +7673,7 @@ function tr(e) {
 	return e === "StateChanged" ? "ok" : e === "NotDelivered" || e === "Failed" || Zn.includes(e) ? "danger" : e === "Delivering" || e === "Delivered" || e === "Processing" ? "accent" : "neutral";
 }
 function nr(e, t, n) {
-	return e.t(t === "ResolvedNoTransition" && n === "answer_requires_text" ? "delivery.answerNeedsText" : `enum.actionStatus.${t}`);
+	return t === "ResolvedNoTransition" && n === "answer_not_verified_at_gate" ? e.t("delivery.answerNotVerified") : e.t(t === "ResolvedNoTransition" && n === "answer_requires_text" ? "delivery.answerNeedsText" : `enum.actionStatus.${t}`);
 }
 function rr(e, t) {
 	return t === null ? e.t("common.unavailable") : e.t(t ? "delivery.fact.yes" : "delivery.fact.no");
@@ -7676,7 +7682,7 @@ function ir({ card: e }) {
 	let t = H(), { t: n } = t, { status: r } = e, i = e.delivery, a = Zn.includes(r), o = a && i.delivery_confirmed === !0, { index: s, failed: c } = o ? {
 		index: 2,
 		failed: !1
-	} : Qn(r), l = r === "ResolvedNoTransition", u = !Xn.includes(r);
+	} : Qn(r), l = r === "ResolvedNoTransition", u = l && e.resolution.reason === "answer_not_verified_at_gate", d = !Xn.includes(r);
 	return /* @__PURE__ */ h("section", {
 		className: "studio-delivery",
 		"aria-label": n("delivery.label"),
@@ -7700,7 +7706,7 @@ function ir({ card: e }) {
 							}),
 							/* @__PURE__ */ m("span", {
 								className: "studio-dstep-label",
-								children: n(i === "unchanged" ? "delivery.step.unchanged" : i === "cancelled" ? "enum.actionStatus.Cancelled" : o && t === 2 ? "delivery.step.reconciliation" : e)
+								children: n(i === "unchanged" ? u ? "delivery.newGateReview" : "delivery.step.unchanged" : i === "cancelled" ? "enum.actionStatus.Cancelled" : o && t === 2 ? "delivery.step.reconciliation" : e)
 							}),
 							/* @__PURE__ */ m("span", {
 								className: "studio-sr",
@@ -7724,9 +7730,9 @@ function ir({ card: e }) {
 					}) : null,
 					l ? /* @__PURE__ */ m(X, {
 						icon: "info",
-						children: n("delivery.noTransition")
+						children: n(u ? "delivery.newGateReview" : "delivery.noTransition")
 					}) : null,
-					u && !a ? /* @__PURE__ */ m(X, {
+					d && !a ? /* @__PURE__ */ m(X, {
 						tone: l ? "neutral" : "ok",
 						icon: l ? "info" : "check",
 						children: n("delivery.watchingDisk")
@@ -7737,6 +7743,15 @@ function ir({ card: e }) {
 					}) : null
 				]
 			}),
+			u ? /* @__PURE__ */ h("div", {
+				className: "studio-banner studio-dwarn",
+				"data-tone": "warn",
+				role: "alert",
+				children: [/* @__PURE__ */ m(Y, {
+					name: "warn",
+					size: 15
+				}), /* @__PURE__ */ m("p", { children: n("delivery.answerNotVerifiedBody") })]
+			}) : null,
 			a ? /* @__PURE__ */ h("div", {
 				className: "studio-banner studio-dwarn",
 				"data-tone": "danger",
@@ -7780,7 +7795,7 @@ function ir({ card: e }) {
 					})] })
 				]
 			}) : null,
-			u && i.wire_text ? /* @__PURE__ */ h("div", {
+			d && i.wire_text ? /* @__PURE__ */ h("div", {
 				className: "studio-dsent",
 				children: [/* @__PURE__ */ h("p", {
 					className: "studio-dsent-head",
@@ -9147,7 +9162,7 @@ function li({ card: e }) {
 	return rt(e) ? /* @__PURE__ */ m(Z, {
 		title: n("template.common.closedTitle"),
 		icon: "doc",
-		children: /* @__PURE__ */ h(ni, { children: [/* @__PURE__ */ m("p", { children: n(e.resolution.reason === "answer_requires_text" ? "template.questions.textStillRequired" : e.resolution.reason === "command_superseded" ? "template.command.superseded" : "template.common.closedBody") }), /* @__PURE__ */ h("details", { children: [
+		children: /* @__PURE__ */ h(ni, { children: [/* @__PURE__ */ m("p", { children: n(e.resolution.reason === "answer_requires_text" ? "template.questions.textStillRequired" : e.resolution.reason === "answer_not_verified_at_gate" ? "delivery.answerNotVerifiedBody" : e.resolution.reason === "command_superseded" ? "template.command.superseded" : "template.common.closedBody") }), /* @__PURE__ */ h("details", { children: [
 			/* @__PURE__ */ m("summary", { children: n("template.common.originalNotice") }),
 			/* @__PURE__ */ m("p", { children: r }),
 			i ? /* @__PURE__ */ m("p", { children: i }) : null
@@ -9234,7 +9249,7 @@ function fi(e, t) {
 		repo: t.repo.label,
 		intent: t.intent.title ?? t.intent.slug,
 		stage: lr(t, e.t("common.none")),
-		state: e.t(`enum.actionStatus.${t.status}`)
+		state: nr(e, t.status, t.resolution.reason)
 	});
 }
 function pi(e) {

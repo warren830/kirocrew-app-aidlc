@@ -1,0 +1,5 @@
+{
+  "delivery.answerNotVerified": "回复未验证",
+  "delivery.newGateReview": "复核新的 Gate",
+  "delivery.answerNotVerifiedBody": "回合已结束并出现新的 Gate，但审计回执与发送的回复不一致。空闲租约已释放。请核对会话和新的 Gate；此前的回复不会被重新发送。"
+}

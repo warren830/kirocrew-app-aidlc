@@ -26,6 +26,7 @@ import { isClosedAction } from '../lib/actionQueue'
 import type { ActionCard, DecisionSpec, Question } from '../lib/types'
 import { answerText, MAX_ANSWER_CHARS, MAX_FEEDBACK_CHARS } from '../actions/useSubmit'
 import { stageText } from '../actions/QueueRow'
+import { statusLabel } from '../actions/DeliveryStrip'
 import { Chip } from '../shell/Chip'
 import { Icon, type IconName } from '../shell/Icon'
 import type { ActionDraft } from '../actions/DetailShell'
@@ -235,6 +236,8 @@ export function DecisionBrief({ card }: { card: ActionCard }) {
         <Brief>
           <p>{t(card.resolution.reason === 'answer_requires_text'
             ? 'template.questions.textStillRequired'
+            : card.resolution.reason === 'answer_not_verified_at_gate'
+              ? 'delivery.answerNotVerifiedBody'
             : card.resolution.reason === 'command_superseded'
               ? 'template.command.superseded' : 'template.common.closedBody')}</p>
           <details>
@@ -343,7 +346,7 @@ export function templateLabel(i18n: I18n, card: ActionCard): string {
     repo: card.repo.label,
     intent: card.intent.title ?? card.intent.slug,
     stage: stageText(card, i18n.t('common.none')),
-    state: i18n.t(`enum.actionStatus.${card.status}`),
+    state: statusLabel(i18n, card.status, card.resolution.reason),
   })
 }
 

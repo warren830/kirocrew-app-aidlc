@@ -1,0 +1,5 @@
+{
+  "delivery.answerNotVerified": "Reply not verified",
+  "delivery.newGateReview": "Review the new gate",
+  "delivery.answerNotVerifiedBody": "The turn ended and a new gate opened, but the audit receipt did not match the reply sent. The idle lease was released. Review the conversation and the new gate; the earlier reply will not be resent."
+}
