@@ -10263,21 +10263,21 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 		"Draft",
 		"Queued",
 		"NotDelivered"
-	].includes(e.status), S = x && !b && !a, [C, w] = d(!1), T = _?.pending_checkpoint === "summary_confirmation" ? _.summary_confirmation : _?.pending_checkpoint === "plan_approval" ? _.plan_approval : null, E = e.decisions.some((e) => e.decision === "request_plan_changes" || e.decision === "confirm_summary"), D = e.decisions.some((e) => e.decision === "confirm_summary"), O = (e, t, i) => r({ answers: {
+	].includes(e.status), S = x && !b && !a, [w, T] = d(!1), E = _?.pending_checkpoint === "summary_confirmation" ? _.summary_confirmation : _?.pending_checkpoint === "plan_approval" ? _.plan_approval : null, D = e.decisions.some((e) => e.decision === "request_plan_changes" || e.decision === "confirm_summary"), O = e.decisions.some((e) => e.decision === "confirm_summary"), k = (e, t, i) => r({ answers: {
 		...n.answers,
 		[String(e)]: {
 			option_letters: t,
 			free_text: i
 		}
-	} }), k = (e, t) => {
+	} }), A = (e, t) => {
 		let r = n.answers[String(e.index)], i = r?.option_letters ?? [];
 		if (!e.multi_select) {
-			O(e.index, [t], r?.free_text ?? null);
+			k(e.index, [t], r?.free_text ?? null);
 			return;
 		}
 		let a = i.includes(t) ? i.filter((e) => e !== t) : [...i, t];
-		O(e.index, a, r?.free_text ?? null);
-	}, A = i((e, t) => {
+		k(e.index, a, r?.free_text ?? null);
+	}, j = i((e, t) => {
 		let r = { ...n.answers };
 		for (let n of e) {
 			let e = v.find((e) => e.index === n.question_index);
@@ -10288,7 +10288,7 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 			a && (r[i] = a);
 		}
 		return r;
-	}, [n.answers, v]), j = (e) => r({ answers: A(e, !1) }), M = g.draft?.request.auto === !0 && g.draft.action_id === e.action_id ? Si(g.draft) : null, N = M ? g.draft?.draft_id ?? null : null, P = l(() => {
+	}, [n.answers, v]), M = (e) => r({ answers: j(e, !1) }), N = g.draft?.request.auto === !0 && g.draft.action_id === e.action_id ? Si(g.draft) : null, P = N ? g.draft?.draft_id ?? null : null, F = l(() => {
 		let r = n.advisorApplied;
 		if (!r) return [];
 		let i = g.draft?.draft_id === r ? g.draft : (t?.drafts ?? []).find((e) => e.draft_id === r);
@@ -10298,30 +10298,30 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 		g.draft,
 		t?.drafts,
 		e.action_id
-	]), F = l(() => P.some((e) => {
+	]), I = l(() => F.some((e) => {
 		let t = v.find((t) => t.index === e.question_index);
 		if (!t) return !1;
 		let r = Li(t, e);
 		return !!r && Ri(n.answers[String(t.index)], r);
 	}), [
-		P,
+		F,
 		n.answers,
 		v
 	]);
 	return o(() => {
-		if (!M || !N || !S || n.advisorApplied === N) return;
-		let e = A(M.suggested_answers, !0);
+		if (!N || !P || !S || n.advisorApplied === P) return;
+		let e = j(N.suggested_answers, !0);
 		Object.keys(e).length !== Object.keys(n.answers).length && r({
 			answers: e,
-			advisorApplied: N
+			advisorApplied: P
 		});
 	}, [
-		M,
 		N,
+		P,
 		S,
 		n.advisorApplied,
 		n.answers,
-		A,
+		j,
 		r
 	]), /* @__PURE__ */ h("section", {
 		className: "studio-template",
@@ -10379,7 +10379,7 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 							}) : null
 						]
 					}),
-					F && S ? /* @__PURE__ */ h("div", {
+					I && S ? /* @__PURE__ */ h("div", {
 						className: "studio-advisor-apply",
 						role: "status",
 						children: [
@@ -10396,7 +10396,7 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 								className: "studio-btn studio-btn-sm studio-btn-ghost",
 								onClick: () => {
 									let e = { ...n.answers };
-									for (let t of P) {
+									for (let t of F) {
 										let n = v.find((e) => e.index === t.question_index);
 										if (!n) continue;
 										let r = Li(n, t), i = String(n.index);
@@ -10425,6 +10425,10 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 										t.prompt
 									]
 								}),
+								t.context?.trim() ? /* @__PURE__ */ m("div", {
+									className: "msg-content studio-md",
+									children: /* @__PURE__ */ m(C, { content: t.context })
+								}) : null,
 								/* @__PURE__ */ h("p", {
 									className: "studio-q-sub",
 									children: [
@@ -10482,7 +10486,7 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 									placeholder: f("template.questions.textPlaceholder"),
 									"aria-label": t.prompt,
 									disabled: !S,
-									onChange: (e) => O(t.index, [o.letter], e.target.value)
+									onChange: (e) => k(t.index, [o.letter], e.target.value)
 								}) : /* @__PURE__ */ h(p, { children: [t.options.map((e) => {
 									let n = i.includes(e.letter);
 									return /* @__PURE__ */ h("label", {
@@ -10495,7 +10499,7 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 											value: e.letter,
 											checked: n,
 											disabled: !S,
-											onChange: () => k(t, e.letter)
+											onChange: () => A(t, e.letter)
 										}), /* @__PURE__ */ h("span", {
 											className: "studio-opt-body",
 											children: [
@@ -10521,7 +10525,7 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 									placeholder: f("template.questions.otherPlaceholder"),
 									"aria-label": f("template.questions.otherLabel", { index: t.index }),
 									disabled: !S,
-									onChange: (e) => O(t.index, i, e.target.value)
+									onChange: (e) => k(t.index, i, e.target.value)
 								}) : null] })
 							]
 						}, t.index);
@@ -10532,28 +10536,28 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 					}) : null
 				]
 			}),
-			T?.present ? /* @__PURE__ */ h(Z, {
-				title: f(`template.questions.checkpoint.${T.kind}`),
+			E?.present ? /* @__PURE__ */ h(Z, {
+				title: f(`template.questions.checkpoint.${E.kind}`),
 				icon: "gate",
 				children: [
 					/* @__PURE__ */ m("p", {
 						className: "studio-q-prompt",
-						children: f(`template.questions.checkpoint.${T.kind}.body`)
+						children: f(`template.questions.checkpoint.${E.kind}.body`)
 					}),
-					T.options.length > 0 ? /* @__PURE__ */ m("ul", {
+					E.options.length > 0 ? /* @__PURE__ */ m("ul", {
 						className: "studio-optionlist studio-mono",
-						children: T.options.map((e, t) => /* @__PURE__ */ m("li", {
+						children: E.options.map((e, t) => /* @__PURE__ */ m("li", {
 							className: "studio-wrap-any",
 							children: e
 						}, t))
 					}) : null,
-					T.answered ? /* @__PURE__ */ m(ri, {
+					E.answered ? /* @__PURE__ */ m(ri, {
 						icon: "check",
-						children: f("template.questions.checkpointAnswered", { answer: T.answer ?? f("common.unavailable") })
-					}) : D && S ? /* @__PURE__ */ m(_i, {
+						children: f("template.questions.checkpointAnswered", { answer: E.answer ?? f("common.unavailable") })
+					}) : O && S ? /* @__PURE__ */ m(_i, {
 						draft: n,
 						setDraft: (e) => {
-							w(!0), r(e);
+							T(!0), r(e);
 						},
 						name: `${e.action_id}/summary`,
 						groupLabel: f("template.questions.summaryChoiceLabel"),
@@ -10561,17 +10565,17 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 						looksCorrectHint: f("template.questions.looksCorrectHint"),
 						changesLabel: f("template.questions.summaryChanges"),
 						changesHint: f("template.questions.summaryChangesHint"),
-						chosen: C
+						chosen: w
 					}) : null
 				]
 			}) : null,
 			y.length > 0 && x ? /* @__PURE__ */ m(wi, {
 				card: e,
 				advisor: g,
-				...S ? { onApplyAnswers: j } : {},
-				...E && S ? { onUseFeedback: (e) => r({ feedback: e }) } : {}
+				...S ? { onApplyAnswers: M } : {},
+				...D && S ? { onUseFeedback: (e) => r({ feedback: e }) } : {}
 			}) : null,
-			E && S ? /* @__PURE__ */ m(Z, {
+			D && S ? /* @__PURE__ */ m(Z, {
 				title: f("template.questions.feedback"),
 				icon: "doc",
 				children: /* @__PURE__ */ m(hi, {

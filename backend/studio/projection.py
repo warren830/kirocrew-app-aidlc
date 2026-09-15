@@ -643,6 +643,7 @@ class QuestionsView:
                 {
                     "index": q.index,
                     "prompt": q.prompt,
+                    "context": getattr(q, "context", ""),
                     "options": [{"letter": o.letter, "text": o.text, "is_other": o.is_other} for o in q.options],
                     "multi_select": q.multi_select,
                     "answer": q.answer,

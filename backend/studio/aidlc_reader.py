@@ -175,7 +175,8 @@ _QUESTION_H3_RE = re.compile(r"^### Q(\d+)(?:[.:]|[ \t]+[—–-])?[ \t]+(.*)$")
 _QUESTION_SECTION_END_RE = re.compile(r"^#{1,6}(?:[ \t]+|$)")
 _QUESTION_CODE_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 _QUESTION_MULTI_SELECT_RE = re.compile(
-    r"[(（\[]\s*(?:multi[- ]select|select\s+all\s+that\s+apply|多选|可多选)\s*[)）\]]",
+    r"[(（\[]\s*(?:(?:multi[- ]select|多选|可多选)\s*|"
+    r"select\s+all\b[^()\[\]（）\r\n]*)[)）\]]",
     re.IGNORECASE,
 )
 _QUESTION_OPTION_LIKE_RE = re.compile(r"^\s*(?:[-*]\s+)?[A-Z][.):：]\s+\S")
@@ -1264,11 +1265,13 @@ class Question:
     answer: str | None
     answered: bool
     raw: str
+    context: str = ""
 
     def to_json(self) -> dict[str, Any]:
         return {
             "index": self.index,
             "prompt": self.prompt,
+            "context": self.context,
             "options": [option.to_json() for option in self.options],
             "multi_select": self.multi_select,
             "answer": self.answer,
@@ -1677,6 +1680,48 @@ def _visible_question_lines(raw_lines: list[str]) -> list[str]:
     return lines
 
 
+def _question_multi_select(prompt: str, context_lines: list[str]) -> bool:
+    """Accept explicit markers in the heading or a standalone explanatory instruction.
+
+    Context markers must end a paragraph and start a sentence (or stand alone). A background
+    mention such as "(select all that apply) is another format" is not an instruction.
+    Soft line breaks and paired emphasis do not change instruction meaning. Normalization is
+    detection-only: the displayed context keeps its original Markdown. Callers supply only
+    pre-option lines with fenced examples already masked.
+    """
+    if _QUESTION_MULTI_SELECT_RE.search(prompt):
+        return True
+    emphasis = ("***", "___", "**", "__", "*", "_")
+    for paragraph in re.split(r"\n[ \t]*\n", "\n".join(context_lines)):
+        lines = paragraph.splitlines()
+        # A quote's unprefixed soft-wrapped lines are still quoted background.
+        if any(line.lstrip().startswith(">") for line in lines):
+            continue
+        text = " ".join(line.strip() for line in lines).strip()
+        for delimiter in emphasis:
+            if (
+                text.startswith(delimiter) and text.endswith(delimiter)
+                and len(text) > 2 * len(delimiter)
+            ):
+                text = text[len(delimiter):-len(delimiter)]
+                break
+        for marker in _QUESTION_MULTI_SELECT_RE.finditer(text):
+            prefix = text[:marker.start()].rstrip()
+            suffix = text[marker.end():].strip()
+            # A final parenthetical can be emphasized independently of the preceding prose.
+            for delimiter in emphasis:
+                if prefix.endswith(delimiter) and suffix == delimiter:
+                    prefix = prefix[:-len(delimiter)].rstrip()
+                    suffix = ""
+                    break
+            if (
+                not suffix
+                and (not prefix or prefix.endswith((".", "!", "?", "。", "！", "？")))
+            ):
+                return True
+    return False
+
+
 def file_questions_support_forms(questions: QuestionsFile) -> bool:
     """Only unambiguous, persisted option groups become editable forms.
 
@@ -1758,8 +1803,11 @@ def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile:
         limit = tag_index if tag_index is not None else len(body)
         if kind == "question":
             options: list[QuestionOption] = []
-            for line in body[1:limit]:
+            context_end = limit
+            for index, line in enumerate(body[1:limit], 1):
                 option = C.OPTION_LINE_RE.match(line)
+                if option or _QUESTION_OPTION_LIKE_RE.match(line):
+                    context_end = min(context_end, index)
                 if option:
                     letter = option.group(1)
                     options.append(
@@ -1770,15 +1818,23 @@ def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile:
                         )
                     )
             prompt = match.group(2).strip()
+            context_start = 1
+            # Trim blank boundary lines without stripping Markdown list/code indentation.
+            while context_start < context_end and not raw_lines[start + context_start].strip():
+                context_start += 1
+            while context_end > context_start and not raw_lines[start + context_end - 1].strip():
+                context_end -= 1
+            context = "\n".join(raw_lines[start + context_start:start + context_end])
             questions.append(
                 Question(
                     index=int(match.group(1)),
                     prompt=prompt,
                     options=tuple(options),
-                    multi_select=bool(_QUESTION_MULTI_SELECT_RE.search(prompt)),
+                    multi_select=_question_multi_select(prompt, body[context_start:context_end]),
                     answer=answer,
                     answered=answered,
                     raw="\n".join(raw_lines[start:end]).strip("\n"),
+                    context=context,
                 )
             )
             continue

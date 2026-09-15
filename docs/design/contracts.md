@@ -858,8 +858,9 @@ def parse_scope_frontmatter(text: str, filename: str) -> ScopeMeta | None
 class QuestionOption: letter: str; text: str; is_other: bool          # is_other = letter == "X"
 @dataclass(frozen=True, slots=True)
 class Question:
-    index: int; prompt: str; options: tuple[QuestionOption, ...]; multi_select: bool   # prompt contains "(multi-select)" (case-insensitive)
+    index: int; prompt: str; options: tuple[QuestionOption, ...]; multi_select: bool
     answer: str | None; answered: bool; raw: str
+    context: str = ""        # explanatory Markdown between the heading and first option/answer; additive wire field
 @dataclass(frozen=True, slots=True)
 class Checkpoint:            # one per checkpoint heading (review P09)
     kind: str                # "summary_confirmation" | "plan_approval"
@@ -883,6 +884,11 @@ def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile
     # `---` (multi-line answers, FORMAT-NOTES §7). A `## Post-approval Amendment` heading resets nothing: the `## Q<n>.`
     # sections that follow it are ordinary questions (they may be pending while the stage row is `[?]` — the intent then
     # legitimately has BOTH a gate card and a question card). Never raises on content.
+    # Preserve pre-option explanatory Markdown as context, including paragraph breaks and indentation. Render it before
+    # options through the existing safe Markdown renderer; legacy/audit questions default to empty context. Context is
+    # evidence only and never enters an answer payload or wire text. Explicit parenthetical multi-select instructions
+    # can appear in the heading or as a final sentence in the explanatory paragraph; paired emphasis and soft line
+    # breaks preserve their meaning. Options, answers, fenced/quoted examples and background mentions do not enable it.
 question_digest(bytes) = sha256(bytes)
 
 @dataclass(frozen=True, slots=True)

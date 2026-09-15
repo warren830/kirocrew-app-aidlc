@@ -24,7 +24,7 @@ import { describe, expect, it } from 'vitest'
 
 import { I18nProvider, makeI18n } from '../i18n'
 import { useStudioApi } from '../lib/api'
-import { EMPTY_DRAFT, type ActionDraft } from '../actions/DetailShell'
+import { EMPTY_DRAFT, payloadFor, type ActionDraft } from '../actions/DetailShell'
 import { wireTextFor } from '../actions/useSubmit'
 import type { TemplateProps } from './DecisionControls'
 import { EMPTY_ROUTE, type RoutePatch, type StudioRoute } from '../lib/route'
@@ -438,6 +438,92 @@ describe('questions template', () => {
       primary: { decision: 'answers', label_key: 'decision.answers.label' },
       evidence: { ...card().evidence, questions: view },
     })
+
+  const capabilityContext = [
+    '**Select all that apply.** The numbered capabilities mean:',
+    '',
+    '1. **Routing** maps existing agent requests to the correct adapter.',
+    '2. **Durable delivery** preserves requests across reconnects.',
+    '3. **Observability** records delivery outcomes and timing.',
+    '',
+    'Keep the existing `agentbridge` API compatible.',
+    'Include the current brownfield clients in verification.',
+  ].join('\n')
+
+  it('shows numbered question context before its options and sends only the selected labels', async () => {
+    setApiRoutes({})
+    const view = questionsView({ questions: [question({
+      index: 3, prompt: 'Which capabilities belong in this update?', context: capabilityContext, multi_select: true,
+      options: [
+        { letter: 'A', text: 'Capabilities 1 and 2', is_other: false },
+        { letter: 'B', text: 'Capability 3', is_other: false },
+        { letter: 'C', text: 'No capability changes', is_other: false },
+      ],
+    })] })
+    const value = questionCard(view)
+    const { draft } = mount(QuestionsTemplate, value)
+    const context = screen.getByTestId('markdown')
+    // The host renderer is stubbed with <pre>: assert that all Markdown and paragraph breaks reach it.
+    expect(context.textContent).toBe(capabilityContext)
+    expect(context.closest('.msg-content')).not.toBeNull()
+    const first = screen.getByRole('checkbox', { name: /Capabilities 1 and 2/ })
+    const second = screen.getByRole('checkbox', { name: /Capability 3/ })
+    expect(context.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    expect(draft().answers).toEqual({})
+    await userEvent.click(first)
+    await userEvent.click(second)
+    expect(first).toBeChecked()
+    expect(second).toBeChecked()
+    expect(draft().answers).toEqual({ '3': { option_letters: ['A', 'B'], free_text: null } })
+    const payload = payloadFor('answers', value, draft())
+    expect(payload).toEqual({ decision: 'answers', answers: [
+      { index: 3, option_letters: ['A', 'B'], free_text: null },
+    ] })
+    expect(wireTextFor(payload!, view, false)).toBe('Capabilities 1 and 2, Capability 3')
+    expect(apiCalls.filter((call) => call.method !== 'GET')).toHaveLength(0)
+  })
+
+  it('passes raw HTML in question context as text to the existing safe Markdown renderer', () => {
+    setApiRoutes({})
+    const context = '<script>window.questionContextExecuted = true</script>\n\n<img src=x onerror="alert(1)">'
+    mount(QuestionsTemplate, questionCard(questionsView({ questions: [question({ context })] })))
+    const rendered = screen.getByTestId('markdown')
+    expect(rendered.textContent).toBe(context)
+    expect(rendered.closest('.msg-content')?.querySelector('script, img, [onerror]')).toBeNull()
+    expect(screen.getAllByRole('radio')).toHaveLength(3)
+  })
+
+  it.each(['answered', 'historical', 'refreshing', 'degraded'] as const)(
+    'keeps question context visible when the question is %s',
+    (state) => {
+      setApiRoutes({})
+      const answered = state === 'answered'
+      const value = questionCard(questionsView({
+        questions: [question({ context: capabilityContext, answered,
+          answer: answered ? 'Exactly-once via a transactional outbox' : null })],
+        pending_count: answered ? 0 : 1,
+        mode: state === 'degraded' ? 'degraded' : 'structured',
+      }))
+      mount(QuestionsTemplate, state === 'historical' ? { ...value, status: 'Cancelled', decisions: [], primary: null } : value,
+        { refreshing: state === 'refreshing' })
+      expect(screen.getByTestId('markdown').textContent).toBe(capabilityContext)
+      if (answered) {
+        expect(screen.getByText('Exactly-once via a transactional outbox')).toBeInTheDocument()
+        expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+      } else {
+        for (const radio of screen.getAllByRole('radio')) expect(radio).toBeDisabled()
+      }
+      expect(apiCalls.filter((call) => call.method !== 'GET')).toHaveLength(0)
+    },
+  )
+
+  it.each([undefined, '', ' \n\t '])('omits empty question context while preserving legacy options (%j)', (context) => {
+    setApiRoutes({})
+    mount(QuestionsTemplate, questionCard(questionsView({ questions: [question({ context })] })))
+    expect(screen.queryByTestId('markdown')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('radio')).toHaveLength(3)
+  })
 
   it('renders the ordered group with its prompts and option labels verbatim', () => {
     setApiRoutes({})

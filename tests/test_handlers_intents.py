@@ -279,6 +279,38 @@ def test_questions_use_supported_files_but_degrade_during_a_native_wait(sv, rout
     assert body["host_cards"][0]["ask_id"] == "blocking-ask"
 
 
+def test_question_context_reaches_the_api_detail_and_action_evidence(sv, routes, fake_host, repo, slot):
+    context = (
+        "The capabilities are (1) durable state, (2) session ownership, and (3) error reporting.\n\n"
+        "**(Select all that should be recorded as in scope.)**"
+    )
+    text = (
+        f"## Q1. Which capabilities are required?\n\n{context}\n\n"
+        "A. Capabilities 1 and 2\nB. Capability 3\nX. Other\n\n[Answer]:\n"
+    )
+    question_path = Path(repo.canonical_path) / "aidlc/spaces/default/intents" / INTENT / QUESTIONS_REL
+    question_path.write_text(text)
+    _bind(sv, routes, fake_host, repo, slot)
+    path = base(repo, "/questions")
+    status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))
+    assert status == 200 and body["mode"] == "structured"
+    question = body["questions"]["questions"][0]
+    assert question["context"] == context
+    assert question["multi_select"] is True
+    assert [option["text"] for option in question["options"]] == [
+        "Capabilities 1 and 2", "Capability 3", "Other",
+    ]
+
+    status, body = call(sv, routes, "GET", base(repo),
+                        CT.owner_request("GET", base(repo), host=fake_host))
+    assert status == 200
+    assert body["intent"]["questions"]["questions"][0]["context"] == context
+    snap = sv.projection.snapshot(repo, "default", INTENT)
+    evidence = sv.projection.evidence(snap).to_json()
+    assert evidence["questions"]["questions"][0]["context"] == context
+    assert question_path.read_text() == text
+
+
 def test_review_reports_the_verdict_the_findings_and_the_audit_receipts(sv, routes, fake_host, repo):
     path = base(repo, "/review")
     status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))

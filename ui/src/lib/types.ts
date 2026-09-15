@@ -166,7 +166,7 @@ export type DirectiveEvidence = Pick<Directive, 'stage' | 'unit' | 'matches_stat
   & Partial<Pick<Directive, 'version' | 'kind' | 'units' | 'state_sha256'>>
 export interface MarkersView { human_turn_at: string | null; engine_touch_at: string | null; turn_counter: number | null; goal_stop_present: boolean; recovery: Record<string, string> | null; hooks_health: Record<string, string>; compose_pending: boolean }
 export interface QuestionOption { letter: string; text: string; is_other: boolean }
-export interface Question { index: number; prompt: string; options: QuestionOption[]; multi_select: boolean; answer: string | null; answered: boolean; required: true }
+export interface Question { index: number; prompt: string; context?: string; options: QuestionOption[]; multi_select: boolean; answer: string | null; answered: boolean; required: true }
 export interface Checkpoint { kind: 'summary_confirmation' | 'plan_approval'; present: boolean; answered: boolean; answer: string | null; options: string[] }
 export interface HostQuestionCard { ask_id?: string; card_id?: string; slot: string; questions: { question: string; header?: string; options: { label: string; description?: string }[]; multiSelect?: boolean }[]; ts: number }
 export interface AuditQuestionOrigin { kind: 'audit'; event: string; shard: string; pos: number; timestamp: string; stage: string; unit: string | null; workflow: null; attempt_generation: string | null; decision_sha256: string }

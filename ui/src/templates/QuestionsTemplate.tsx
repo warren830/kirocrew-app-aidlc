@@ -24,6 +24,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { MarkdownRenderer } from '@kirocrew/app-sdk/ui'
 
 import { useI18n } from '../i18n'
 import { pendingQuestions } from '../actions/useSubmit'
@@ -300,6 +301,12 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
                 <p className="studio-q-prompt">
                   {question.index}. {question.prompt}
                 </p>
+                {question.context?.trim() ? (
+                  // Use the same sanitising renderer as artifacts. Context is evidence, never a draft answer.
+                  <div className="msg-content studio-md">
+                    <MarkdownRenderer content={question.context} />
+                  </div>
+                ) : null}
                 <p className="studio-q-sub">
                   <Chip>
                     {textInput ? t('template.questions.freeText')

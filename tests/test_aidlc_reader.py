@@ -962,6 +962,123 @@ def test_questions_multi_select_is_not_inferred_from_an_option_or_background(R):
     assert parsed.questions[0].multi_select is False
 
 
+def test_questions_preserve_scope_capabilities_and_body_select_all(R):
+    capabilities = (
+        "The eight candidate capabilities carried forward from the approved intent statement are: "
+        "(1) pause and resume by exact job ID, (2) durable paused state across restart and scheduler "
+        "rebuild, (3) session ownership checks on pause and resume, (4) session scoping of `list` and "
+        "`delete`, (5) idempotent replies when pausing an already-paused job or resuming a running one, "
+        "(6) guidance on a missing or invalid job ID argument, (7) a persistence failure reported as "
+        "a failure rather than success, (8) old cron JSON files still readable with the pinned agent "
+        "preserved."
+    )
+    instructions = (
+        "Naming them as out keeps the scope document honest. "
+        "(Select all that should be recorded as out of scope.)"
+    )
+    parsed = R.parse_questions_file(
+        f"## Q1. Which capabilities are Must-have?\n\n{capabilities}\n\n"
+        "A. All eight are Must-have\nB. Must-have: 1, 2, 3, 7, 8\nX. Other\n\n[Answer]:\n\n"
+        f"## Q3. Which adjacent capabilities are OUT of scope?\n\n{instructions}\n\n"
+        "A. Pause all jobs\nB. Pause with an expiry\nX. Other\n\n[Answer]:\n",
+        "scope-definition-questions.md", "0" * 64,
+    )
+    first, third = parsed.questions
+    assert first.context == capabilities
+    assert first.to_json()["context"] == capabilities
+    assert first.prompt == "Which capabilities are Must-have?"
+    assert [option.text for option in first.options] == [
+        "All eight are Must-have", "Must-have: 1, 2, 3, 7, 8", "Other",
+    ]
+    assert not first.multi_select
+    assert third.context == instructions and third.multi_select
+    assert parsed.pending_count == 2 and R.file_questions_support_forms(parsed)
+
+
+@pytest.mark.parametrize("context", [
+    "**(Select all that should be recorded as out of scope.)**",
+    "__(Select all that should be recorded as out of scope.)__",
+    "*(Select all that should be recorded as out of scope.)*",
+    "Keep the boundary explicit. **(Select all that should be recorded as out of scope.)**",
+    "(Select all that should be\nrecorded as out of scope.)",
+    "**(Select\nall that should be recorded as out of scope.)**",
+    "**Keep the boundary explicit. (Select all that should be recorded as out of scope.)**",
+])
+def test_question_context_multi_select_markdown_equivalence(R, context):
+    parsed = R.parse_questions_file(
+        f"## Q1. Which capabilities are out?\n\n{context}\n\n"
+        "A. Pause all jobs\nB. Pause with expiry\nX. Other\n\n[Answer]:\n",
+        "questions.md", "0" * 64,
+    )
+    assert parsed.questions[0].context == context
+    assert parsed.questions[0].multi_select is True
+    assert R.file_questions_support_forms(parsed)
+
+
+@pytest.mark.parametrize("context", [
+    "Background: **(select all that apply)**\nis another format.",
+    "Background: (select all that\napply) is another format.",
+    "> Example:\n**(Select all that should be recorded as out of scope.)**",
+    "**`(Select all that should be recorded as out of scope.)`**",
+])
+def test_question_context_markdown_examples_are_not_directives(R, context):
+    parsed = R.parse_questions_file(
+        f"## Q1. Pick one\n\n{context}\n\nA. One\nX. Other\n\n[Answer]:\n",
+        "questions.md", "0" * 64,
+    )
+    assert parsed.questions[0].context == context
+    assert parsed.questions[0].multi_select is False
+
+
+def test_question_context_preserves_markdown_and_stops_before_answer(R):
+    context = "  - First capability\n    - Nested detail\n\nSecond paragraph."
+    parsed = R.parse_questions_file(
+        f"## Q1. Explain\n \n{context}\n \n[Answer]: Saved answer\n",
+        "questions.md", "0" * 64,
+    )
+    question = parsed.questions[0]
+    assert question.context == context
+    assert question.answer == "Saved answer"
+    assert question.options == () and not question.multi_select
+
+
+@pytest.mark.parametrize("location", ["fence", "option", "answer", "after_options", "quote"])
+@pytest.mark.parametrize("marker", [
+    "(Select all that should be recorded as out of scope.)",
+    "**(Select all that should be\nrecorded as out of scope.)**",
+])
+def test_question_context_does_not_promote_non_instruction_markers(R, location, marker):
+    context = ""
+    option = "One"
+    answer = ""
+    tail = ""
+    if location == "fence":
+        context = f"Example:\n```md\n{marker}\n## Q99. Fake\nA. Fake\n[Answer]: Fake\n```\n"
+    elif location == "option":
+        option = marker
+    elif location == "answer":
+        answer = marker
+    elif location == "after_options":
+        tail = f"\n{marker}\n"
+    else:
+        context = f"> Background. {marker}\n"
+    parsed = R.parse_questions_file(
+        f"## Q1. Pick one\n\n{context}\nA. {option}\nX. Other\n{tail}\n[Answer]: {answer}\n",
+        "questions.md", "0" * 64,
+    )
+    assert len(parsed.questions) == 1
+    question = parsed.questions[0]
+    assert not question.multi_select
+    assert [option.letter for option in question.options] == ["A", "X"]
+    assert question.context == context.rstrip("\n")
+    assert question.answer == (answer or None)
+
+
+def test_question_context_defaults_empty_for_legacy_constructors(R):
+    question = R.Question(1, "Legacy", (), False, None, False, "raw")
+    assert question.context == "" and question.to_json()["context"] == ""
+
+
 @pytest.mark.parametrize("body", [
     "### Q1. First?\n- A. One\n[Answer]:\n### Q1. Second?\n- A. Two\n[Answer]:\n",
     "### Q1. Pick one\n- A. One\n- A. Two\n[Answer]:\n",

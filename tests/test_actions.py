@@ -580,6 +580,27 @@ def test_the_other_option_sends_free_text_and_refuses_a_blank_one(A, studio):
     assert exc.value.details["reason"] == "free_text_required"
 
 
+@pytest.mark.parametrize("context", [
+    "Keep the boundary explicit. (Select all that should be recorded as out of scope.)",
+    "**(Select all that should be recorded as out of scope.)**",
+    "(Select all that should be\nrecorded as out of scope.)",
+    "**(Select\nall that should be recorded as out of scope.)**",
+])
+def test_body_multi_select_submits_labels_without_explanatory_context(A, studio, context):
+    questions = _parse_questions(
+        studio,
+        f"## Q1. Which capabilities are out?\n\n{context}\n\n"
+        "A. Pause all jobs\nB. Pause with expiry\nX. Other\n\n[Answer]:\n",
+    )
+    text = A.wire_text_for(
+        "answers",
+        {"answers": [{"index": 1, "option_letters": ["A", "B"], "free_text": None}]},
+        questions=questions,
+        grouped_answers_enabled=False,
+    )
+    assert text == "Pause all jobs, Pause with expiry"
+
+
 def test_an_unanswered_pending_question_and_an_unknown_letter_are_both_refused(A, studio):
     questions = _parse_questions(
         studio,
