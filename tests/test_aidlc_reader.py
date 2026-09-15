@@ -762,6 +762,50 @@ def test_read_audit_tail_read_marks_the_bundle_incomplete(reader, devdelta_repo)
     assert all(event.event for event in tail.events)   # no half-parsed block survived
 
 
+def test_default_audit_history_keeps_ordinals_when_it_crosses_old_tail_limit(reader, repo_builder, R):
+    intent = "260904-long-audit"
+    opening = F.audit_block("STAGE_AWAITING_APPROVAL", "2026-09-04T10:00:00Z", Stage="a")
+    repo = repo_builder.with_workspace().with_intent(intent, state=GATE_STATE, audit=opening).build()
+    path = next((repo / "aidlc/spaces/default/intents" / intent / "audit").glob("*.md"))
+    before = reader.read_audit(repo, "default", intent)
+    path.write_text(path.read_text() + F.audit_text(
+        F.audit_block("ARTIFACT_UPDATED", "2026-09-04T10:00:01Z",
+                      Details="x" * R.C.MAX_AUDIT_TAIL_BYTES),
+        F.audit_block("HUMAN_TURN", "2026-09-04T10:00:02Z"),
+        F.audit_block("GATE_REJECTED", "2026-09-04T10:00:02Z", Stage="a"),
+    ))
+    after = reader.read_audit(repo, "default", intent)
+    assert after.complete and not any(shard.truncated for shard in after.shards)
+    assert after.events[:len(before.events)] == before.events
+    assert after.events[-1].event == "GATE_REJECTED"
+    assert after.events[-1].pos > before.events[-1].pos
+
+
+def test_audit_history_has_one_aggregate_read_budget(reader, repo_builder, R, monkeypatch):
+    intent = "260904-audit-budget"
+    repo = repo_builder.with_workspace().with_intent(intent, state=GATE_STATE, audit="").build()
+    directory = repo / "aidlc/spaces/default/intents" / intent / "audit"
+    for name in ("a.md", "b.md", "c.md"):
+        (directory / name).write_text(F.audit_block(
+            "ARTIFACT_UPDATED", "2026-09-04T10:00:00Z", Details="x" * 500,
+        ))
+    monkeypatch.setattr(R.C, "MAX_AUDIT_HISTORY_BYTES", 700)
+    requested = []
+    for name in ("bounded_read", "tail_read"):
+        original = getattr(R.security, name)
+
+        def counted(path, limit, _read=original):
+            requested.append(limit)
+            return _read(path, limit)
+
+        monkeypatch.setattr(R.security, name, counted)
+    audit = reader.read_audit(repo, "default", intent)
+    assert sum(requested) <= 700
+    assert not audit.complete
+    assert any(shard.truncated for shard in audit.shards)
+    assert {Path(shard.relpath).name for shard in audit.shards} >= {"a.md", "b.md", "c.md"}
+
+
 def test_read_audit_of_a_record_without_audit_dir(reader, repo_builder):
     repo = repo_builder.with_workspace().with_intent("260904-x", state=GATE_STATE, audit="").build()
     shutil.rmtree(repo / "aidlc/spaces/default/intents/260904-x/audit")

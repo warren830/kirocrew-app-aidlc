@@ -1372,6 +1372,12 @@ class Reconciler:
             seen["stage_revising"] = _json_of(revising)
             if rejected is not None and revising is not None and self._row_mark(snap, stage) in ("R", "r"):
                 return Resolution("state_changed", "gate_rejected", seen)
+            if ended and rejected is not None and revising is not None:
+                returned = self._returned_revision_gate(rec, snap, stage, rejected, revising)
+                if returned is not None:
+                    return Resolution("state_changed", "gate_revision_returned", {
+                        **seen, "returned_gate": _json_of(returned),
+                    })
             return Resolution("pending", "no_gate_rejected", seen)
 
         if action_type == "question":
@@ -1980,6 +1986,54 @@ class Reconciler:
         self._ran.pop(str(_attr(rec, "action_id")), None)
 
     # ---- disk predicates -------------------------------------------------- #
+
+    def _returned_revision_gate(
+        self, rec: Any, snap: Any, stage: Any, rejected: Any, revising: Any,
+    ) -> Any:
+        """Recover a finished revision even if no poll observed its transient R row.
+
+        A question mark alone proves nothing. Require the original audit boundary,
+        a complete same-shard rejection/revision/returned-gate chain in the same
+        scope, and the corresponding revision increase. Presence and cursor checks
+        still run in evaluate_resolution; this never approves the returned gate.
+        """
+        audit = _attr(snap, "audit")
+        if (
+            self._current_stage(snap) != stage or self._row_mark(snap, stage) != "?"
+            or not _attr(audit, "complete", False)
+            or self._boundary_order(rec, snap) is None
+        ):
+            return None
+        gate = self._newest_new(rec, snap, ("STAGE_AWAITING_APPROVAL",), stage)
+        if gate is None:
+            return None
+        events = (rejected, revising, gate)
+        expected_unit = _attr(rec, "unit") or None
+        for event in events:
+            fields = _attr(event, "fields", {}) or {}
+            if fields.get("Workflow") or (fields.get("Unit") or None) != expected_unit:
+                return None
+        shard = _attr(rejected, "shard")
+        if not shard or any(_attr(event, "shard") != shard for event in events):
+            return None
+        boundary = (_attr(rec, "evidence", {}) or {}).get("audit", {}).get("boundary_event") or {}
+        if boundary.get("shard") != shard:
+            return None
+        if not (_event_order(rejected) < _event_order(revising) < _event_order(gate)):
+            return None
+        times = [C.epoch_from_iso(_attr(event, "timestamp")) for event in events]
+        if any(value is None for value in times) or not (times[0] <= times[1] <= times[2]):
+            return None
+        before = ((_attr(rec, "evidence", {}) or {}).get("state") or {}).get("revision_count")
+        current = _attr(_attr(snap, "state"), "revision_count")
+        fields = _attr(revising, "fields", {}) or {}
+        recorded = str(fields.get("Revision count", fields.get("Revision Count", ""))).strip()
+        if (
+            type(before) is not int or type(current) is not int or not recorded.isdecimal()
+            or current != int(recorded) or current <= before
+        ):
+            return None
+        return gate
 
     def _new_events(self, rec: Any, snap: Any, types: Sequence[str], stage: Any) -> list[Any]:
         """Audit rows that belong to *this* dispatch (the "new X" rule, review P23).

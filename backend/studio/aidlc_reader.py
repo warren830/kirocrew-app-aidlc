@@ -2502,20 +2502,23 @@ class AidlcReader:
         return parse_directive(data, state_sha256)
 
     def read_audit(
-        self, repo: Path, space: str, intent_dir: str, *, tail_bytes: int = C.MAX_AUDIT_TAIL_BYTES
+        self, repo: Path, space: str, intent_dir: str, *, tail_bytes: int = C.MAX_AUDIT_HISTORY_BYTES
     ) -> AuditBundle:
         """Every ``audit/*.md`` shard, merged chronologically.
 
         Shards are per clone, not per intent: the same file name appears under two intents and one
-        intent can have two shards, so this always globs (``04 §5.1``). A shard bigger than
-        ``tail_bytes`` is tail-read with its partial first line dropped and the bundle is marked
-        incomplete — an evidence claim built on a truncated history has to say so (``audit_incomplete``).
+        intent can have two shards, so this always globs (``04 §5.1``). Prefer complete history:
+        parsed event ordinals and human-turn counts are dispatch evidence, and tail windows
+        would rebase them as the log grows. Reads share one bounded history budget across
+        all shards. Exceeding that budget (or an explicit smaller tail_bytes limit) still
+        produces an honestly incomplete bundle, never a complete-history claim.
         """
         audit_dir = security.resolve_inside(repo, f"{self.record_rel(space, intent_dir)}/{AUDIT_DIRNAME}")
         record_rel = self.record_rel(space, intent_dir)
         shards: list[ShardMeta] = []
         per_shard: list[list[AuditEvent]] = []
         complete = True
+        remaining = C.MAX_AUDIT_HISTORY_BYTES
         try:
             paths = sorted((p for p in audit_dir.iterdir() if p.suffix == ".md"), key=lambda p: p.name)
         except FileNotFoundError:
@@ -2533,12 +2536,15 @@ class AidlcReader:
             except OSError:
                 complete = False
                 continue
-            truncated = stat.st_size > tail_bytes
+            budget = max(0, min(tail_bytes, remaining))
+            truncated = stat.st_size > budget
+            requested = min(stat.st_size, budget)
             data = (
-                security.tail_read(path, tail_bytes)
+                security.tail_read(path, requested)
                 if truncated
-                else security.bounded_read(path, tail_bytes)
-            )
+                else security.bounded_read(path, requested)
+            ) if requested > 0 else b""
+            remaining -= requested
             # A failed read used to be indistinguishable from an empty shard. Audit-backed questions
             # need absence of a later answer to be a proof, so an unreadable/changing shard is partial.
             try:
