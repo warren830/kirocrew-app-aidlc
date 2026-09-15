@@ -1086,7 +1086,9 @@ class HumanActionBroker:
         it never entered.
         """
         meta = _seed_meta(seed)
-        meta["captured_at"] = seed.captured.get("captured_at") or rec.captured.captured_at
+        # Another observation of the same evidence must not invalidate an in-flight submit's CAS.
+        # Compare using this version's first observation time; real changes get the new time below.
+        meta["captured_at"] = rec.captured.captured_at
         meta["stable"] = bool(seed.captured.get("stable", True))
         evidence = dict(rec.evidence)
         for key in EVIDENCE_SNAPSHOT_KEYS:
@@ -1122,6 +1124,8 @@ class HumanActionBroker:
         }
         if all(current[key] == values[key] for key in values):
             return
+        # `meta` belongs to the outgoing evidence, so meaningful refreshes retain their fresh timestamp.
+        meta["captured_at"] = seed.captured.get("captured_at") or rec.captured.captured_at
         try:
             await asyncio.to_thread(
                 self._storage.cas_update, _ACTIONS, rec.action_id, rec.status_generation, values

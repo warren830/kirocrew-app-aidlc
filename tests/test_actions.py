@@ -2436,6 +2436,130 @@ def test_one_live_card_per_boundary_and_terminal_rows_keep_their_key(world, A):
     run(scenario())
 
 
+@pytest.mark.parametrize("type_", ["gate", "question"])
+def test_clock_only_refresh_preserves_queued_generation_and_live_capture_time(world, A, type_):
+    async def scenario():
+        await bind(world)
+        rec = pick(await seed(world), type_)
+        before = world.store.get("actions", rec.action_id)
+
+        for _ in range(3):
+            world.clock.advance(5)
+            refreshed = pick(await seed(world), type_)
+            assert refreshed.action_id == rec.action_id
+            assert world.store.get("actions", rec.action_id) == before
+            assert refreshed.captured.captured_at == rec.captured.captured_at
+
+            # GET still reports the time of its fresh read, not the persisted version's first look.
+            card = await world.broker.card(refreshed, snapshot(world))
+            assert card["captured"]["captured_at"] == world.clock.iso()
+            assert card["captured"]["stable"] is True
+            assert A.Captured.from_json(card["captured"]).differences(rec.captured) == []
+            assert world.store.get("actions", rec.action_id) == before
+
+    run(scenario())
+
+
+@pytest.mark.parametrize("competing_submit", [False, True])
+@pytest.mark.parametrize("repo_options", [{"questions": _questions(single=True)}])
+def test_clock_only_refresh_during_submit_keeps_one_delivery(
+    world, A, monkeypatch, competing_submit,
+):
+    async def scenario():
+        await bind(world)
+        rec = pick(await seed(world), "question")
+        payload = {"decision": "answers", "answers": [{"index": 1, "option_letters": ["B"]}]}
+        loop = asyncio.get_running_loop()
+        original = world.store.deliver_under_lease
+        refreshes = []
+
+        async def refresh_before_cas():
+            world.clock.advance(5)
+            refreshes.append(pick(await seed(world), "question"))
+            if competing_submit:
+                # The first request holds the lease but has not committed Delivering yet.
+                with pytest.raises(world.S.errors.StudioError) as exc:
+                    await world.broker.submit(
+                        rec.action_id, captured=captured_of(rec, A), payload=payload,
+                        client_wire_text="SQLite", user="owner-2",
+                    )
+                assert exc.value.code == "repo_busy"
+
+        def interleaved(*args, **kwargs):
+            # Run a real derived-card refresh after submit's reads, immediately before its real CAS.
+            asyncio.run_coroutine_threadsafe(refresh_before_cas(), loop).result(timeout=10)
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(world.store, "deliver_under_lease", interleaved)
+        receipt = await world.broker.submit(
+            rec.action_id, captured=captured_of(rec, A), payload=payload,
+            client_wire_text="SQLite", user="owner-1",
+        )
+        assert len(refreshes) == 1
+        assert refreshes[0].status_generation == rec.status_generation
+        after = await world.broker.get(rec.action_id)
+        assert after.status == receipt.status == "Delivering"
+        assert after.status_generation == rec.status_generation + 1
+        assert after.delivery_id == receipt.delivery_id
+        assert after.wire_text == "SQLite"
+        assert after.captured.captured_at == rec.captured.captured_at
+        assert (
+            world.S.constants.epoch_from_iso(receipt.expires_at)
+            - world.S.constants.epoch_from_iso(after.delivering_at)
+        ) == world.S.constants.DELIVERY_ACK_DEADLINE_SECS
+        transitions = world.store.select("action_transitions", {"action_id": rec.action_id})
+        assert [(row["from_status"], row["to_status"]) for row in transitions] == [
+            ("Queued", "Delivering"),
+        ]
+        held = leases_held(world)
+        assert len(held) == 1 and held[0].action_id == rec.action_id
+        assert world.fake_host.get_slot(SLOT).messages == []
+
+    run(scenario())
+
+
+@pytest.mark.parametrize("repo_options", [{"questions": _questions(single=True)}])
+def test_meaningful_refresh_during_submit_still_refuses_the_original_generation(
+    world, A, monkeypatch,
+):
+    async def scenario():
+        await bind(world)
+        rec = pick(await seed(world), "question")
+        loop = asyncio.get_running_loop()
+        original = world.store.deliver_under_lease
+        refreshed = []
+
+        async def change_evidence():
+            world.clock.advance(5)
+            path = world.builder.record(INTENT) / f"inception/{STAGE}/requirements.md"
+            path.write_text(path.read_text() + "\nA changed requirement must be reviewed.\n")
+            refreshed.append(pick(await seed(world), "question"))
+
+        def interleaved(*args, **kwargs):
+            asyncio.run_coroutine_threadsafe(change_evidence(), loop).result(timeout=10)
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(world.store, "deliver_under_lease", interleaved)
+        with pytest.raises(world.S.errors.StaleGeneration) as exc:
+            await world.broker.submit(
+                rec.action_id, captured=captured_of(rec, A),
+                payload={"decision": "answers", "answers": [{"index": 1, "option_letters": ["B"]}]},
+                client_wire_text="SQLite", user="owner-1",
+            )
+        assert exc.value.details["expected"] == rec.status_generation
+        assert exc.value.details["actual"] == rec.status_generation + 1
+        after = await world.broker.get(rec.action_id)
+        assert len(refreshed) == 1 and refreshed[0].action_id == rec.action_id
+        assert after.status == "Queued" and after.delivery_id is None
+        assert after.captured.captured_at == world.clock.iso()
+        assert after.captured.differences(rec.captured) == ["evidence_digest"]
+        assert world.store.select("action_transitions", {"action_id": rec.action_id}) == []
+        assert leases_held(world) == []
+        assert world.fake_host.get_slot(SLOT).messages == []
+
+    run(scenario())
+
+
 def test_a_refresh_touches_a_queued_card_and_never_an_inflight_one(world, A):
     async def scenario():
         await bind(world)
@@ -2443,17 +2567,21 @@ def test_a_refresh_touches_a_queued_card_and_never_an_inflight_one(world, A):
         unchanged = pick(await seed(world), "gate")
         assert unchanged.status_generation == gate.status_generation, "no write when nothing moved"
 
+        world.clock.advance(30)
         world.builder.append_audit(INTENT, F.audit_block("SESSION_STARTED", F._plus(TS, 30)))
         refreshed = pick(await seed(world), "gate")
         assert refreshed.status_generation > gate.status_generation
+        assert refreshed.captured.captured_at == world.clock.iso()
         assert refreshed.evidence["audit"]["last_event"]["type"] == "SESSION_STARTED"
 
         receipt = await approve(world, A, rec=refreshed)
         frozen = await world.broker.get(receipt.action_id)
+        world.clock.advance(30)
         world.builder.append_audit(INTENT, F.audit_block("SESSION_STARTED", F._plus(TS, 60)))
         await seed(world)
         after = await world.broker.get(receipt.action_id)
         assert after.status_generation == frozen.status_generation
+        assert after.captured.captured_at == frozen.captured.captured_at
         assert after.evidence["audit"] == frozen.evidence["audit"], "an in-flight record is not rewritten"
 
     run(scenario())
