@@ -14,9 +14,11 @@ from test_projection import proj_mod, projection, repo_record  # noqa: F401
 INTENT = "260910-output-locations"
 
 
-def workspace(builder, stage, *, space="default", unit=None):
-    phase = "CONSTRUCTION" if unit else "INCEPTION"
+def workspace(builder, stage, *, space="default", unit=None, test_strategy=None):
+    phase = "CONSTRUCTION" if unit or stage == "build-and-test" else "INCEPTION"
     fields = {"Current Stage": stage, "Status": "Running", "Lifecycle Phase": phase}
+    if test_strategy is not None:
+        fields["Test Strategy"] = test_strategy
     root = (
         builder.with_engine()
         .with_workspace(active_space=space)
@@ -47,6 +49,57 @@ def artifact_findings(projection, snap):
         f for f in projection._consistency.evaluate_intent(snap, facts)
         if f.code == "missing_required_artifact"
     ]
+
+
+BUILD_EXTRA_INSTRUCTIONS = {
+    "integration-test-instructions",
+    "performance-test-instructions",
+    "security-test-instructions",
+}
+
+
+@pytest.mark.parametrize("strategy, missing", [
+    ("Minimal", set()),
+    ("Standard", {"integration-test-instructions"}),
+    ("Comprehensive", BUILD_EXTRA_INSTRUCTIONS),
+    ("", BUILD_EXTRA_INSTRUCTIONS),
+    ("Custom", BUILD_EXTRA_INSTRUCTIONS),
+])
+def test_build_artifact_requirements_follow_the_test_strategy(
+    repo_builder, projection, repo_record, strategy, missing
+):
+    """Build-and-Test Steps 3–7 explicitly require no extra instructions for Minimal."""
+    root, node = workspace(repo_builder, "build-and-test", test_strategy=strategy)
+    rel = f"aidlc/spaces/default/intents/{INTENT}/construction/build-and-test"
+    directory = write_outputs(root, rel, node)
+    (directory / "build-test-results.md").rename(directory / "test-results.md")
+    for name in BUILD_EXTRA_INSTRUCTIONS:
+        (directory / f"{name}.md").unlink()
+
+    findings = artifact_findings(projection, projection.snapshot(repo_record(root), "default", INTENT))
+    assert {f.params["artifact"] for f in findings} == missing
+    assert all(f.severity == "blocking" for f in findings)
+
+
+@pytest.mark.parametrize("strategy", ["Minimal", "Standard"])
+@pytest.mark.parametrize("logical_name, filename", [
+    ("build-instructions", "build-instructions.md"),
+    ("build-and-test-summary", "build-and-test-summary.md"),
+    ("build-test-results", "test-results.md"),
+    ("cross-unit-traceability", "cross-unit-traceability.md"),
+])
+def test_lighter_test_strategies_keep_core_build_evidence_required(
+    repo_builder, projection, repo_record, strategy, logical_name, filename
+):
+    root, node = workspace(repo_builder, "build-and-test", test_strategy=strategy)
+    rel = f"aidlc/spaces/default/intents/{INTENT}/construction/build-and-test"
+    directory = write_outputs(root, rel, node)
+    (directory / "build-test-results.md").rename(directory / "test-results.md")
+    (directory / filename).unlink()
+
+    findings = artifact_findings(projection, projection.snapshot(repo_record(root), "default", INTENT))
+    assert [(f.params["artifact"], f.severity) for f in findings] == [(logical_name, "blocking")]
+
 
 @pytest.mark.parametrize("stage, logical_name", [
     ("build-and-test", "build-test-results"),

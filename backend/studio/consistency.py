@@ -748,6 +748,14 @@ class ConsistencyEngine:
             return []
 
         optional = set(_attr(node, "optional_produces", ()) or ())
+        if current == "build-and-test":
+            # The stage graph lists the union of outputs. Its Steps 3–7 require no additional test
+            # instructions for Minimal and only integration instructions for Standard.
+            strategy = (_attr(state, "scope_config", {}) or {}).get("Test Strategy")
+            if strategy in ("Minimal", "Standard"):
+                optional.update(("performance-test-instructions", "security-test-instructions"))
+            if strategy == "Minimal":
+                optional.add("integration-test-instructions")
         kinds = _attr(node, "produces_kinds", {}) or {}
         required = [name for name in (_attr(node, "produces", ()) or ())
                     if name not in optional and name not in kinds]
