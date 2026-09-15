@@ -223,15 +223,23 @@ function tokenPresent(cell: string, token: string): boolean {
   return new RegExp(`(?:^|[\\s,;/])${escaped}(?:$|[\\s,;/])`, "i").test(cell);
 }
 
-function storyAssignments(storyMapPath: string, units: string[], ids: Map<string, string>): { assignments: Map<string, Set<string>>; reason?: string } {
+function storyAssignments(
+  storyMapPath: string,
+  units: string[],
+  ids: Map<string, string>,
+  sourceIds: ReadonlySet<string>,
+): { assignments: Map<string, Set<string>>; reason?: string } {
   const read = readText(storyMapPath);
   if (read.content === null) return { assignments: new Map(), reason: read.reason };
   const assignments = new Map<string, Set<string>>();
   for (const line of read.content.split(/\r?\n/)) {
     const cells = markdownCells(line);
     if (cells.length === 0) continue;
-    const stories = extractIds(line, [ID_PATTERNS.US]);
-    if (stories.size === 0) continue;
+    // Units may map FRs when user-stories was skipped. Only the selected
+    // upstream artifact can authorize an ID; the map cannot invent one.
+    const stories = [...extractIds(line, [ID_PATTERNS.US, ID_PATTERNS.FR])]
+      .filter((id) => sourceIds.has(id));
+    if (stories.length === 0) continue;
     for (const unit of units) {
       const aliases = [unit, ids.get(unit)].filter((value): value is string => value !== undefined);
       if (!cells.some((cell) => aliases.some((alias) => tokenPresent(cell, alias)))) continue;
@@ -243,7 +251,7 @@ function storyAssignments(storyMapPath: string, units: string[], ids: Map<string
     }
   }
   return assignments.size === 0
-    ? { assignments, reason: `unit-of-work-story-map.md contains no story-to-unit mappings: ${storyMapPath}` }
+    ? { assignments, reason: `unit-of-work-story-map.md contains no upstream-ID-to-unit mappings: ${storyMapPath}` }
     : { assignments };
 }
 
@@ -317,7 +325,7 @@ function resolveUpstream(stage: string, projectDir: string, outputPath: string):
       unitIds: unitIdMap(join(docsDir, "inception", "units-generation", "unit-of-work.md"), dag.units),
     };
     result.unitContext = context;
-    const mapped = storyAssignments(storyMap, context.units, context.unitIds);
+    const mapped = storyAssignments(storyMap, context.units, context.unitIds, sourceIds);
     if (mapped.reason) result.reasons.push(mapped.reason);
     result.storyAssignments = mapped.assignments;
     for (const id of sourceIds) {
@@ -335,8 +343,13 @@ function resolveUpstream(stage: string, projectDir: string, outputPath: string):
   const unit = resolvedUnit.context.unitName;
 
   if (stage === "functional-design") {
-    if (existsSync(stories) && existsSync(storyMap)) {
-      const mapped = storyAssignments(storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds);
+    if (existsSync(storyMap)) {
+      const hasStories = existsSync(stories);
+      const source = hasStories
+        ? idsFromFile(stories, [ID_PATTERNS.US], "stories.md")
+        : idsFromFile(requirements, [ID_PATTERNS.FR], "requirements.md");
+      if (source.reason) result.reasons.push(source.reason);
+      const mapped = storyAssignments(storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds, source.ids);
       if (mapped.reason) result.reasons.push(mapped.reason);
       result.storyAssignments = mapped.assignments;
       const unitStories = new Set(
@@ -345,7 +358,11 @@ function resolveUpstream(stage: string, projectDir: string, outputPath: string):
           .map(([story]) => story),
       );
       if (unitStories.size === 0) {
-        result.reasons.push(`no stories in unit-of-work-story-map.md map to unit "${unit}"`);
+        result.reasons.push(`no ${hasStories ? "stories" : "requirements"} in unit-of-work-story-map.md map to unit "${unit}"`);
+        return result;
+      }
+      if (!hasStories) {
+        for (const id of unitStories) result.ids.add(id);
         return result;
       }
       const storyRead = readText(stories);
@@ -400,7 +417,10 @@ function resolveUpstream(stage: string, projectDir: string, outputPath: string):
   if (stage === "code-generation") {
     if (existsSync(stories)) {
       if (existsSync(storyMap)) {
-        const mapped = storyAssignments(storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds);
+        const mapped = storyAssignments(
+          storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds,
+          idsFromFile(stories, [ID_PATTERNS.US], "stories.md").ids,
+        );
         if (mapped.reason) result.reasons.push(mapped.reason);
         result.storyAssignments = mapped.assignments;
         const unitStories = new Set(
@@ -596,6 +616,11 @@ function main(): void {
   const upstream = resolveUpstream(stage, projectDir, outputPath);
   reasons.push(...upstream.reasons);
   gaps.push(...upstream.extraGaps);
+  if (stage === "units-generation" || stage === "functional-design") {
+    for (const id of declared) {
+      if (!upstream.ids.has(id)) invalidEntries.push(`upstream_ids:${id}: id is absent from the resolved upstream source`);
+    }
+  }
   const missingFromUpstreamIds = [...upstream.ids].filter((id) => !declared.has(id));
   if (upstream.ids.size === 0 && upstream.reasons.length === 0) {
     reasons.push(`upstream ID set is empty for stage "${stage}"`);

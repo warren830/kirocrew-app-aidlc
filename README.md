@@ -120,8 +120,9 @@ decision is at-most-once after it might have been delivered.
 
 ## Bundled AI-DLC
 
-`payload/aidlc-kiro/` holds an unmodified copy of the AI-DLC Workflows Kiro CLI distribution, version
-**2.7.1**, under the MIT No Attribution licence (`payload/AIDLC-LICENSE`). Every file is inventoried with its
+`payload/aidlc-kiro/` holds the AI-DLC Workflows Kiro CLI distribution, version **2.7.1**, with
+Studio-maintained local patches documented in `THIRD_PARTY_NOTICES.md`, under the MIT No Attribution
+licence (`payload/AIDLC-LICENSE`). Every file is inventoried with its
 SHA-256 in `payload/manifest.json`, which is also what the installer verifies before and after writing.
 Studio's own version and the bundled AI-DLC version are shown separately in Settings. See
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
@@ -162,10 +163,14 @@ cd ui && npm run check      # tsc --noEmit && vitest run && vite build
 
 # regenerate the bundled payload inventory after changing payload/aidlc-kiro/
 python3 scripts/build_payload_manifest.py --version 2.7.1 \
-  --source-ref "main @ a277af21 (v2.7.1)" \
+  --source-ref "v2.7.1 @ a277af21 + Studio plan-progress, review-appendix and requirement-traceability compatibility patches" \
   --source-commit a277af218f0df7f325d3b8be7b6d90fce2c5bd40 --state-versions 8
 ```
 
+Keep `--source-commit` pinned to the upstream base and describe local patches in `--source-ref`
+and `THIRD_PARTY_NOTICES.md`; a local fix is not an upstream release. Regenerate the manifest rather
+than editing file hashes by hand.
+
 ## Licence
 
-Apache-2.0 (`LICENSE`). The bundled AI-DLC distribution is MIT-0 and is not modified.
+Apache-2.0 (`LICENSE`). The bundled AI-DLC distribution is MIT-0, with the local changes noted above.

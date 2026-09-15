@@ -4,7 +4,7 @@
   "engineVersion": "2.7.1",
   "source": {
     "repository": "https://github.com/awslabs/aidlc-workflows",
-    "ref": "v2.7.1 @ a277af21 + Studio plan-progress and review-appendix compatibility patch",
+    "ref": "v2.7.1 @ a277af21 + Studio plan-progress, review-appendix and requirement-traceability compatibility patches",
     "commit": "a277af218f0df7f325d3b8be7b6d90fce2c5bd40",
     "distPath": "dist/kiro",
     "license": "MIT-0"
@@ -13,7 +13,7 @@
     8
   ],
   "stageCount": 33,
-  "payloadDigest": "b4b0db9e35c9e47366a8b6c9ce59d0dab1233de434448f1068d6d26c6c16d8e6",
+  "payloadDigest": "ad3610ce43093cf51d6230fd509b791d731fd672a1fd28e54b71041da63f30be",
   "fileCount": 293,
   "mergeTargets": {
     ".kiro/settings/cli.json": {
@@ -1538,8 +1538,8 @@
     },
     {
       "path": ".kiro/tools/aidlc-sensor-traceability.ts",
-      "sha256": "0c46165c9d42a3eaa038ecae508408202f1ff8968ffc772461e90d8340bc71f4",
-      "size": 24467,
+      "sha256": "c00d7dc667f1b65b7119d7d8c3b9acab4529bdc18f4a0024c4a879a3986cc4d9",
+      "size": 25479,
       "ownership": "framework"
     },
     {
