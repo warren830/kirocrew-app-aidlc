@@ -818,7 +818,7 @@ class PlanService:
         blocking_findings: Sequence["Finding"] = (),
         confirm_plan_digest: str | None = None,
     ) -> IntentCreateResult:
-        """Create an intent with ``utility.intent_create`` and prove on disk that it exists.
+        """Create an intent, apply its confirmed stage overrides, and verify the result on disk.
 
         Never sends a prompt and never runs ``next``: the new intent is inert (``Idle``) until a human
         presses Run, which is what makes "Studio started a workflow the user did not ask for"
@@ -890,7 +890,34 @@ class PlanService:
             )
             self._require_engine_ok(result)
             intent_dir, verified = await asyncio.to_thread(self._verify_created, root, space, before)
+            creation_failed_phase = "plan_composition"
             try:
+                if req.overrides:
+                    # Creation accepts scope settings, not per-stage switches. Apply the confirmed
+                    # delta to this new record under the same lease before compiling its runtime.
+                    changes = await asyncio.to_thread(
+                        self._created_override_diff, root, space, intent_dir, req.overrides
+                    )
+                    if changes:
+                        composed = await self._engine.run(
+                            "utility.recompose", root, engine_dir,
+                            skip=",".join(change.slug for change in changes if not change.to_enabled),
+                            add=",".join(change.slug for change in changes if change.to_enabled),
+                            dir_name=intent_dir, slug=space,
+                            lease_generation=grant.generation, repo_id=repo.repo_id,
+                        )
+                        self._require_engine_ok(composed)
+                        remaining = await asyncio.to_thread(
+                            self._created_override_diff, root, space, intent_dir, req.overrides
+                        )
+                        if remaining:
+                            raise StudioError(
+                                "state_inconsistent", "created plan does not match confirmed overrides",
+                                details={"reason": "plan_overrides_not_applied",
+                                         "diff": [change.to_json() for change in remaining]},
+                            )
+                    verified["plan_overrides"] = dict(req.overrides)
+                creation_failed_phase = "runtime_compile"
                 runtime = await self._engine.run(
                     "runtime.compile", root, engine_dir,
                     lease_generation=grant.generation, repo_id=repo.repo_id,
@@ -910,11 +937,13 @@ class PlanService:
                 verified["runtime_graph_present"] = True
             except StudioError as exc:
                 # Creation has already succeeded. Preserve that fact in the error so callers do not
-                # mistake a failed derived-file compile for an intent that never existed.
+                # mistake it for an intent that never existed. Compile-only repair is safe only
+                # after composition has been verified; callers must distinguish these failure phases.
                 raise StudioError(
-                    exc.code, f"Intent {intent_dir} was created, but its runtime graph is not ready: {exc.message}",
+                    exc.code, f"Intent {intent_dir} was created, but its confirmed plan or runtime graph is not ready: {exc.message}",
                     details={**exc.details, "intent_created": True, "intent_dir": intent_dir,
-                             "intent_key": C.intent_key_for(space, intent_dir), "space": space},
+                             "intent_key": C.intent_key_for(space, intent_dir), "space": space,
+                             "creation_failed_phase": creation_failed_phase},
                 ) from exc
         finally:
             await self._scheduler.release(grant)
@@ -1303,13 +1332,8 @@ class PlanService:
             locks[slug] = LOCK_NOT_IN_GRAPH
             drafts.append({"node": None, "row": row, "slug": slug})
 
-        # The dependency lock has to be part of the BASE locks, not only of the rendered result: it is
-        # what refuses "turn off a stage another enabled stage needs". Computed after the overrides it
-        # could only ever explain a plan that had already lost its input.
         satisfied = {slug for slug, row in rows.items() if row.state in _DEPENDENCY_SATISFIED_STATES}
         base_required_by = _required_by(graph, base, satisfied, req.project_type)
-        for slug, needed_by in base_required_by.items():
-            locks[slug] = _best_lock([locks.get(slug), lock_required_by(needed_by)])
 
         enabled = dict(base)
         for slug, wanted in req.overrides.items():
@@ -1330,6 +1354,24 @@ class PlanService:
         baseline_gaps = _starvations(
             graph, {slug for slug, selected in base.items() if selected} | satisfied, req.project_type
         )
+        # Dependency locks follow the effective consumers, unlike ALWAYS/history locks. Refuse a
+        # baseline producer's removal only while a selected consumer still needs it. Restoring a
+        # consumer can restore its own dependencies, so repeat until no more removals are refused.
+        while True:
+            restored = False
+            for slug in base_required_by:
+                if enabled[slug]:
+                    continue
+                with_producer = {**enabled, slug: True}
+                needed_by = _required_by(
+                    graph, with_producer, satisfied, req.project_type, allowed_gaps=baseline_gaps
+                ).get(slug)
+                if needed_by is not None:
+                    enabled[slug] = True
+                    issues.append(self._override_refused(slug, lock_required_by(needed_by)))
+                    restored = True
+            if not restored:
+                break
         required_by = _required_by(
             graph, enabled, satisfied, req.project_type, allowed_gaps=baseline_gaps
         )
@@ -1714,6 +1756,28 @@ class PlanService:
         return arguments
 
     # ---- verification ------------------------------------------------------
+
+    def _created_override_diff(
+        self, root: Path, space: str, intent_dir: str, overrides: Mapping[str, bool]
+    ) -> tuple[PlanDiffEntry, ...]:
+        """Compare confirmed switches with the engine's actual stage suffixes."""
+        read = self._reader.read_state(root, space, intent_dir)
+        if read is None or read[0].unstable:
+            raise StudioError("state_inconsistent", "created state is not stably readable",
+                              details={"intent_dir": intent_dir})
+        rows = {row.slug: row for row in read[1].stages}
+        missing = sorted(set(overrides) - set(rows))
+        if missing:
+            raise StudioError("state_inconsistent", "created state is missing confirmed stages",
+                              details={"intent_dir": intent_dir, "missing_rows": missing})
+        return tuple(
+            PlanDiffEntry(
+                slug=slug, from_enabled=_row_selected(rows[slug]),
+                to_enabled=wanted, reason=DIFF_REASON_OVERRIDE,
+            )
+            for slug, wanted in overrides.items()
+            if _row_selected(rows[slug]) != wanted
+        )
 
     def _verify_created(
         self, root: Path, space: str, before: set[str]

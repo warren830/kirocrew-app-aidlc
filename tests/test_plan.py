@@ -289,6 +289,65 @@ def test_sole_producer_of_a_required_input_is_dependency_locked(studio, P, deps)
     assert plan.stage("performance-validation").lock_reason is None
 
 
+def test_deselected_baseline_consumer_unlocks_its_producer(studio, P, deps):
+    repo = engine_only_repo(studio, deps, "payload", engine_version="2.7.1")
+    baseline = deps.svc.effective_plan(
+        repo, ".kiro", request(P, "express", depth="Minimal", project_type="Brownfield")
+    )
+    assert baseline.exact.stages == 10
+    assert baseline.stage("deployment-pipeline").lock_reason == P.lock_required_by("deployment-execution")
+    deselected = deps.svc.effective_plan(repo, ".kiro", request(
+        P, "express", depth="Minimal", project_type="Brownfield",
+        overrides={"deployment-execution": False},
+    ))
+    assert deselected.valid
+    assert not deselected.stage("deployment-execution").enabled
+    assert deselected.stage("deployment-pipeline").enabled
+    assert not deselected.stage("deployment-pipeline").locked
+    assert deselected.stage("deployment-pipeline").lock_reason is None
+
+
+@pytest.mark.parametrize("reverse_order", [False, True])
+def test_baseline_dependency_chain_can_be_deselected_together(studio, P, deps, reverse_order):
+    repo = engine_only_repo(studio, deps, "payload")
+    slugs = ["ci-pipeline", "deployment-pipeline", "deployment-execution"]
+    overrides = dict.fromkeys(reversed(slugs) if reverse_order else slugs, False)
+    plan = deps.svc.effective_plan(repo, ".kiro", request(
+        P, "express", depth="Minimal", project_type="Brownfield", overrides=overrides,
+    ))
+    assert plan.valid, [issue.to_json() for issue in plan.issues]
+    assert all(not plan.stage(slug).enabled and not plan.stage(slug).locked for slug in slugs)
+    assert plan.stage("code-generation").lock_reason == P.LOCK_ALWAYS
+    assert plan.stage("build-and-test").lock_reason == P.LOCK_ALWAYS
+
+
+def test_selected_consumers_keep_baseline_producers_locked(studio, P, deps):
+    repo = engine_only_repo(studio, deps, "payload")
+    plan = deps.svc.effective_plan(repo, ".kiro", request(
+        P, "feature", project_type="Brownfield",
+        overrides={"ci-pipeline": False, "deployment-pipeline": False},
+    ))
+    assert not plan.valid
+    assert plan.stage("deployment-execution").enabled
+    assert plan.stage("deployment-pipeline").enabled
+    assert plan.stage("ci-pipeline").enabled
+    assert plan.stage("deployment-pipeline").lock_reason == P.lock_required_by("environment-provisioning")
+    assert plan.stage("ci-pipeline").lock_reason == P.lock_required_by("deployment-pipeline")
+
+
+def test_refused_always_consumer_removal_keeps_its_producer_locked(studio, P, deps):
+    repo = engine_only_repo(studio, deps, "payload")
+    plan = deps.svc.effective_plan(repo, ".kiro", request(
+        P, "feature", project_type="Brownfield",
+        overrides={"units-generation": False, "domain-design": False},
+    ))
+    assert not plan.valid
+    assert plan.stage("units-generation").enabled
+    assert plan.stage("units-generation").lock_reason == P.LOCK_ALWAYS
+    assert plan.stage("domain-design").enabled
+    assert plan.stage("domain-design").lock_reason == P.lock_required_by("units-generation")
+
+
 def test_optional_stage_still_locks_inputs_for_a_new_consumer(studio, P, deps):
     repo = engine_only_repo(studio, deps, "payload")
     both = deps.svc.effective_plan(repo, ".kiro", request(

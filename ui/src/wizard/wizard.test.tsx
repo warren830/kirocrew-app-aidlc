@@ -16,7 +16,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { I18nProvider } from '../i18n'
+import { I18nProvider, makeI18n } from '../i18n'
 import { apiCalls, setApiRoutes, StubApiError, type RouteHandler } from '../test/stubs/app-sdk'
 import { EMPTY_ROUTE, type RoutePatch } from '../lib/route'
 import type { AdvisorDraft, EffectivePlan, HealthResponse, PlanProposal, PlanRequest, PlanStage, ReposResponse } from '../lib/types'
@@ -500,7 +500,59 @@ describe('the new intent wizard', () => {
     expect(apiCalls.filter((call) => call.method === 'POST' && !call.path.endsWith('/plan/preview'))).toHaveLength(0)
   })
 
-  it('repairs a partial creation without offering another create or sending a workflow turn', async () => {
+  it.each(['en-US', 'zh-CN'] as const)('opens a partially created intent for plan correction without compiling default stages (%s)', async (locale) => {
+    const createPath = `${BASE}/repos/r_1/intents`
+    const compilePath = `${createPath}/default~250905-guest-checkout/runtime/compile`
+    installRoutes({
+      [`POST ${createPath}`]: () => {
+        throw new StubApiError(409, {
+          code: 'state_inconsistent', error: 'Intent exists, but plan composition failed.',
+          details: { intent_created: true, creation_failed_phase: 'plan_composition',
+            intent_dir: '250905-guest-checkout', intent_key: 'default~250905-guest-checkout', space: 'default' },
+        })
+      },
+      // Compiling the default plan would return success, so the UI must never take this recovery path.
+      [`POST ${compilePath}`]: () => ({ ok: true, runtime_graph_present: true }),
+    })
+    mount()
+    await toPreset()
+    await pickScope('feature')
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    const optionalStage = await screen.findByRole('checkbox', { name: /nfr-requirements/ })
+    await waitFor(() => expect(optionalStage).toBeEnabled())
+    await userEvent.click(optionalStage)
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await act(async () => { document.documentElement.lang = locale })
+    const i18n = makeI18n(locale)
+    const create = screen.getByRole('button', { name: i18n.t('wizard.nav.create') })
+    await waitFor(() => expect(create).toBeEnabled())
+    await userEvent.click(create)
+
+    expect(await screen.findByRole('heading', { name: locale === 'en-US'
+      ? 'Intent created; plan needs correction' : '意图已创建，计划需要修正' })).toBeInTheDocument()
+    expect(screen.getByText(locale === 'en-US'
+      ? '250905-guest-checkout already exists, but the selected stage changes were not applied. Open this intent to review and correct its plan before compiling or running it.'
+      : '250905-guest-checkout 已经存在，但尚未应用所选的阶段变更。请打开该意图检查并修正计划，再编译运行图或启动工作流。')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: i18n.t('wizard.partial.retry') })).not.toBeInTheDocument()
+    expect(screen.queryByText(i18n.t('wizard.partial.activate'))).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: i18n.t('wizard.partial.title') })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: i18n.t('wizard.nav.create') })).not.toBeInTheDocument()
+    expect(screen.queryByText(i18n.t('wizard.created.title'))).not.toBeInTheDocument()
+    expect(navigated).toEqual([])
+
+    await userEvent.click(screen.getByRole('button', { name: locale === 'en-US'
+      ? 'Open intent to review its plan' : '打开意图检查计划' }))
+    expect(navigated.at(-1)).toEqual({
+      view: 'intents', repo: 'r_1', space: 'default', intent: 'default~250905-guest-checkout',
+    })
+    const creates = apiCalls.filter((call) => call.method === 'POST' && call.path === createPath)
+    expect(creates).toHaveLength(1)
+    expect(creates[0]?.body).toMatchObject({ overrides: { 'nfr-requirements': false } })
+    expect(apiCalls.filter((call) => call.path === compilePath)).toHaveLength(0)
+    expect(apiCalls.some((call) => call.path.startsWith('/api/chat') || call.path.endsWith('/run'))).toBe(false)
+  })
+
+  it.each([undefined, 'runtime_compile'])('repairs a partial creation without creating again or sending a workflow turn (phase: %s)', async (failedPhase) => {
     const repairPath = `${BASE}/repos/r_1/intents/default~250905-guest-checkout/runtime/compile`
     let attempts = 0
     installRoutes({
@@ -508,7 +560,8 @@ describe('the new intent wizard', () => {
         throw new StubApiError(409, {
           code: 'state_inconsistent', error: 'Intent exists, but runtime compilation failed.',
           details: { intent_created: true, intent_dir: '250905-guest-checkout',
-            intent_key: 'default~250905-guest-checkout', space: 'default' },
+            intent_key: 'default~250905-guest-checkout', space: 'default',
+            ...(failedPhase ? { creation_failed_phase: failedPhase } : {}) },
         })
       },
       [`POST ${repairPath}`]: () => {

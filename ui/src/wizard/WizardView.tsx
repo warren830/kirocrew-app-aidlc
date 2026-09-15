@@ -236,7 +236,7 @@ export function WizardView({ route, go }: WizardViewProps) {
   const [createError, setCreateError] = useState<StudioApiError | null>(null)
   const [created, setCreated] = useState<IntentCreateResponse | null>(null)
   const [partialCreated, setPartialCreated] = useState<{
-    repoId: string; intentKey: string; space: string; intentDir: string
+    repoId: string; intentKey: string; space: string; intentDir: string; failedPhase: string | null
   } | null>(null)
   const [repairing, setRepairing] = useState(false)
   const [scopes, setScopes] = useState<string[]>([])
@@ -503,6 +503,8 @@ export function WizardView({ route, go }: WizardViewProps) {
         setPartialCreated({
           repoId: repo.repo_id, intentKey: error.details.intent_key,
           space: error.details.space, intentDir: error.details.intent_dir,
+          failedPhase: typeof error.details.creation_failed_phase === 'string'
+            ? error.details.creation_failed_phase : null,
         })
         dismissProposal()
       }
@@ -512,11 +514,15 @@ export function WizardView({ route, go }: WizardViewProps) {
   }, [api, currentPlan, repo, state, activeSpace, digest, workComplete, presetComplete, previewing, creating, dismissProposal])
 
   if (partialCreated) {
+    const compositionFailed = partialCreated.failedPhase === 'plan_composition'
+    const titleKey = compositionFailed ? 'wizard.partial.planComposition.title' : 'wizard.partial.title'
     const open = () => go({
       view: 'intents', repo: partialCreated.repoId,
       space: partialCreated.space, intent: partialCreated.intentKey,
     })
     const repair = async () => {
+      // Compilation cannot apply the selected stage overrides; their plan must be corrected first.
+      if (compositionFailed || repairing) return
       setRepairing(true)
       setCreateError(null)
       try {
@@ -529,16 +535,22 @@ export function WizardView({ route, go }: WizardViewProps) {
       }
     }
     return (
-      <section className="studio-scroll studio-wiz" aria-label={t('wizard.partial.title')}>
-        <h2>{t('wizard.partial.title')}</h2>
-        <p>{t('wizard.partial.body', { intent: partialCreated.intentDir })}</p>
-        <p>{t('wizard.partial.activate')}</p>
+      <section className="studio-scroll studio-wiz" aria-label={t(titleKey)}>
+        <h2>{t(titleKey)}</h2>
+        <p>{t(compositionFailed ? 'wizard.partial.planComposition.body' : 'wizard.partial.body', {
+          intent: partialCreated.intentDir,
+        })}</p>
+        {!compositionFailed ? <p>{t('wizard.partial.activate')}</p> : null}
         {createError ? <p role="alert">{createError.message}</p> : null}
         <div className="studio-row">
-          <button className="studio-btn" disabled={repairing} onClick={() => void repair()}>
-            {t(repairing ? 'wizard.partial.repairing' : 'wizard.partial.retry')}
+          {!compositionFailed ? (
+            <button className="studio-btn" disabled={repairing} onClick={() => void repair()}>
+              {t(repairing ? 'wizard.partial.repairing' : 'wizard.partial.retry')}
+            </button>
+          ) : null}
+          <button className="studio-btn" disabled={repairing} onClick={open}>
+            {t(compositionFailed ? 'wizard.partial.planComposition.open' : 'wizard.partial.open')}
           </button>
-          <button className="studio-btn" disabled={repairing} onClick={open}>{t('wizard.partial.open')}</button>
         </div>
       </section>
     )

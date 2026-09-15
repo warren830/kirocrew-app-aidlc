@@ -2151,6 +2151,9 @@ var D = Object.defineProperty, O = (e, t) => {
 	"wizard.partial.activate": "Retrying activates this intent so the engine compiles the correct runtime graph.",
 	"wizard.partial.body": "{intent} already exists. Retry compilation for this intent instead of creating another one. No workflow turn was started.",
 	"wizard.partial.open": "Open the existing intent",
+	"wizard.partial.planComposition.body": "{intent} already exists, but the selected stage changes were not applied. Open this intent to review and correct its plan before compiling or running it.",
+	"wizard.partial.planComposition.open": "Open intent to review its plan",
+	"wizard.partial.planComposition.title": "Intent created; plan needs correction",
 	"wizard.partial.repairing": "Compiling runtime graph…",
 	"wizard.partial.retry": "Retry runtime compilation",
 	"wizard.partial.title": "Intent created; runtime graph needs repair",
@@ -4434,6 +4437,9 @@ var D = Object.defineProperty, O = (e, t) => {
 	"wizard.partial.activate": "重试会激活此意图，让引擎编译正确的运行图。",
 	"wizard.partial.body": "{intent} 已经存在。可为此意图重试编译，无需再创建一个。尚未启动工作流回合。",
 	"wizard.partial.open": "打开已创建的意图",
+	"wizard.partial.planComposition.body": "{intent} 已经存在，但尚未应用所选的阶段变更。请打开该意图检查并修正计划，再编译运行图或启动工作流。",
+	"wizard.partial.planComposition.open": "打开意图检查计划",
+	"wizard.partial.planComposition.title": "意图已创建，计划需要修正",
 	"wizard.partial.repairing": "正在编译运行图…",
 	"wizard.partial.retry": "重试编译运行图",
 	"wizard.partial.title": "意图已创建，运行图需要修复",
@@ -16658,7 +16664,8 @@ function As({ route: e, go: t }) {
 					repoId: re.repo_id,
 					intentKey: t.details.intent_key,
 					space: t.details.space,
-					intentDir: t.details.intent_dir
+					intentDir: t.details.intent_dir,
+					failedPhase: typeof t.details.creation_failed_phase == "string" ? t.details.creation_failed_phase : null
 				}), W());
 			} finally {
 				O(!1);
@@ -16678,44 +16685,46 @@ function As({ route: e, go: t }) {
 		W
 	]);
 	if (N) {
-		let e = () => t({
+		let e = N.failedPhase === "plan_composition", n = e ? "wizard.partial.planComposition.title" : "wizard.partial.title", i = () => t({
 			view: "intents",
 			repo: N.repoId,
 			space: N.space,
 			intent: N.intentKey
-		}), n = async () => {
-			I(!0), A(null);
-			try {
-				await a.compileRuntime(N.repoId, N.intentKey), e();
-			} catch (e) {
-				A(e instanceof U ? e : new U("internal_error", String(e), {}, 0));
-			} finally {
-				I(!1);
+		}), o = async () => {
+			if (!(e || F)) {
+				I(!0), A(null);
+				try {
+					await a.compileRuntime(N.repoId, N.intentKey), i();
+				} catch (e) {
+					A(e instanceof U ? e : new U("internal_error", String(e), {}, 0));
+				} finally {
+					I(!1);
+				}
 			}
 		};
 		return /* @__PURE__ */ h("section", {
 			className: "studio-scroll studio-wiz",
-			"aria-label": r("wizard.partial.title"),
+			"aria-label": r(n),
 			children: [
-				/* @__PURE__ */ m("h2", { children: r("wizard.partial.title") }),
-				/* @__PURE__ */ m("p", { children: r("wizard.partial.body", { intent: N.intentDir }) }),
-				/* @__PURE__ */ m("p", { children: r("wizard.partial.activate") }),
+				/* @__PURE__ */ m("h2", { children: r(n) }),
+				/* @__PURE__ */ m("p", { children: r(e ? "wizard.partial.planComposition.body" : "wizard.partial.body", { intent: N.intentDir }) }),
+				e ? null : /* @__PURE__ */ m("p", { children: r("wizard.partial.activate") }),
 				k ? /* @__PURE__ */ m("p", {
 					role: "alert",
 					children: k.message
 				}) : null,
 				/* @__PURE__ */ h("div", {
 					className: "studio-row",
-					children: [/* @__PURE__ */ m("button", {
+					children: [e ? null : /* @__PURE__ */ m("button", {
 						className: "studio-btn",
 						disabled: F,
-						onClick: () => void n(),
+						onClick: () => void o(),
 						children: r(F ? "wizard.partial.repairing" : "wizard.partial.retry")
 					}), /* @__PURE__ */ m("button", {
 						className: "studio-btn",
 						disabled: F,
-						onClick: e,
-						children: r("wizard.partial.open")
+						onClick: i,
+						children: r(e ? "wizard.partial.planComposition.open" : "wizard.partial.open")
 					})]
 				})
 			]

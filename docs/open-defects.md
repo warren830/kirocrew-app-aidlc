@@ -609,7 +609,7 @@ Directive，对不存在的 units 调用 join。阶段级指令的 unit 为 null
 
 ## 30. 恢复会话的新消息没有对应 HUMAN_TURN，Learnings 无法入账
 
-**状态：宿主补丁与回归验证通过，Studio 已更新并实测；宿主仍有会话运行，等待空闲重启。**
+**状态：宿主已于 2026-09-15 重启；同一原生会话恢复后的输入登记已实测通过。**
 
 2026-09-13 15:28（Asia/Shanghai），会话收到了 Nothing to add，
 但审计中没有对应的新 HUMAN_TURN。15:28:57 的 aidlc-log answer 返回
@@ -625,3 +625,37 @@ Directive，对不存在的 units 调用 join。阶段级指令的 unit 为 null
 同时修复恢复卡片的重复版本更新、已送达消息仍提供重发入口，以及将工作流未确认
 误述为消息未送达的提示。原投递记录和人工决策保留。
 完整修复范围与验证结果见 [本轮验证记录](verification/2026-09-14-recovery-and-ui/README.md)。
+
+重启后的隔离 demo 先发送只读状态请求，再关闭、恢复并聚焦同一会话。
+宿主日志确认预热使用 `agent=aidlc`、`resumed=True`，原生会话 ID 保持一致；
+预热没有新增 `HUMAN_TURN`，随后通过界面发送的请求使其从 1 增加至 2。
+另一次 demo 检查点回答已产生引擎的 `QUESTION_ANSWERED` 回执。
+原业务会话的答案未重放。
+
+## 31. 取消下游阶段后，上游阶段仍保留过期依赖锁
+
+**状态：已修复并更新本机，真实计划预览和回归测试通过。**
+
+`express` 计划取消 `deployment-execution` 后，`deployment-pipeline` 仍被禁用，
+并显示“deployment-execution 已选中”的错误原因。依赖锁在应用 overrides 之前
+写入了基础锁集合，导致已取消的消费者仍锁定生产者。
+
+现在按最终选择计算依赖锁；仍被选中的消费者继续保护所需生产者，
+ALWAYS、已完成阶段和当前阶段的锁保持不变。依赖链可以整体取消，且不依赖
+overrides 的排列顺序。
+
+## 32. 新建 Intent 未应用已经确认的阶段选择
+
+**状态：已修复并更新本机，真实引擎创建和失败恢复回归通过。**
+
+向导预览确认了 8 个阶段，但创建后的状态仍为 scope 默认的 10 个阶段：
+创建接口调用 `intent-create` 时没有将阶段 overrides 应用到新记录。
+
+现在在同一管理租约内创建 Intent、通过引擎重组阶段、读取磁盘验证 overrides，
+然后编译 runtime graph。创建后重组失败会明确返回 `plan_composition`，
+界面提示进入已创建 Intent 审查计划，不提供无法修复阶段选择的编译重试。
+实际编译失败及旧版响应仍保留原编译恢复入口。
+
+隔离 demo 同时取消三个 Operation 阶段后，预览为 7 阶段、4 个 Gate，
+新建记录及 runtime graph 均保留该选择。相关整合检查通过 287 项后端测试及
+421 项前端测试。
