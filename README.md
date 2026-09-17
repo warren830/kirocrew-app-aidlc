@@ -46,7 +46,7 @@ guard-bypass environment variable.
 |---|---|
 | KiroCrew | 0.3.0 or newer (`minKiroCrewVersion`) |
 | Platform | macOS or Linux |
-| For running AI-DLC in a repository | [`bun`](https://bun.sh) discoverable by the gateway or configured in Studio Settings, a signed-in `kiro-cli`, and a paid Kiro plan for the models AI-DLC expects |
+| For running AI-DLC in a repository | [Bun installed on the gateway](#install-bun-for-ai-dlc), a signed-in `kiro-cli`, and a paid Kiro plan for the models AI-DLC expects |
 | For Git observation | `git` on `PATH` (optional; Studio degrades to "Git unavailable" without it) |
 
 Studio itself opens no port, no tunnel and no external network connection. It inherits the KiroCrew
@@ -55,6 +55,44 @@ Gateway's binding, authentication and remote-access policy.
 ## Install
 
 [中文安装说明](docs/installation.zh-CN.md)
+
+### Install Bun for AI-DLC
+
+AI-DLC uses Bun to run its TypeScript tools. Install it **on the machine running the KiroCrew
+Gateway, as the same operating-system user**. If the gateway is remote, run these commands there.
+Node.js is still required by Studio's installation helper.
+
+On macOS (13 or newer) or Linux, use the [official Bun installer](https://bun.com/docs/installation):
+
+```bash
+curl -fsSL https://bun.com/install | bash
+
+# Make the default installation available in this terminal immediately.
+export PATH="$HOME/.bun/bin:$PATH"
+bun --version
+command -v bun
+```
+
+Linux needs `unzip` for this installer. On Debian/Ubuntu, install missing prerequisites with
+`sudo apt install curl unzip`; on other distributions, use their package manager.
+
+If you already use Homebrew, this is an alternative installation method:
+
+```bash
+brew install oven-sh/bun/bun
+bun --version
+command -v bun
+```
+
+If a new terminal reports `bun: command not found`, add `export PATH="$HOME/.bun/bin:$PATH"` to
+`~/.zshrc` for zsh or `~/.bashrc` for Bash (`~/.bash_profile` for a login shell), then reopen the terminal. This path applies to the official
+installer's default location; use your actual installation directory if you customized it.
+
+After Studio is installed, open **Settings → Bun executable → Detect Bun again**. If it still cannot find
+Bun, paste the full path printed by `command -v bun` into **Absolute path to Bun**, then click
+**Save and verify path**. Use the expanded absolute path, not a literal `~` or `$HOME`.
+Desktop-launched gateways may have a different `PATH` from your terminal; these settings apply
+immediately without restarting Studio.
 
 ### Install from GitHub
 
