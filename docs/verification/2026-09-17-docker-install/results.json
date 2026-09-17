@@ -1,0 +1,55 @@
+{
+  "date": "2026-09-17",
+  "published_baseline": "fff973be1478d6b09b2163cd725afe444e18056c",
+  "source_download_note": "Direct GitHub clone transferred data but was cancelled because it was slow. The tested clean snapshot was exported from the exact Git commit independently verified on public GitHub; local untracked files and credentials were excluded.",
+  "platform": {
+    "docker_server": "29.5.3",
+    "architecture": "arm64",
+    "kirocrew_image": "ghcr.io/kirodotdev/kirocrew@sha256:ba01bb1c75ea454af2b53773f39c3b38899f0d1d9ab51a0eb97001df6db27407",
+    "kirocrew_version": "0.6.0",
+    "gateway_python": "/usr/local/bin/python3",
+    "node_present": false,
+    "usr_bin_python3_present": false
+  },
+  "bun": {
+    "os": "Linux-6.12.76-linuxkit-aarch64-with-glibc2.41",
+    "architecture": "aarch64",
+    "bun_absent_before": true,
+    "official_installer_succeeded": true,
+    "bun_version": "1.4.2",
+    "bun_sha256": "616f267a34278ff5ac282df37ffdfba1d7141f4f6926bca99af2cd6ef3ad32b1",
+    "typescript_result": "42",
+    "aidlc_version_output": "aidlc 2.7.1\n"
+  },
+  "checks": {
+    "first_install_exit": 0,
+    "repeat_update_exit": 0,
+    "app_health": "healthy",
+    "payload_ok": true,
+    "payload_files": 293,
+    "payload_mismatches": 0,
+    "served_ui_matches_bundle": true,
+    "absolute_bun_path_accepted": true,
+    "relative_bun_path_error": "bad_path",
+    "missing_bun_path_error": "bun_missing",
+    "valid_bun_selection_preserved_after_rejection": true,
+    "bun_and_repo_preserved_after_update": true,
+    "real_harness_install_status": "committed",
+    "real_harness_version": "aidlc 2.7.1",
+    "user_readme_preserved": true
+  },
+  "regression_checks": {
+    "before_fix_failed": 3,
+    "after_fix_passed": 3,
+    "packaging_checks_passed": 29
+  },
+  "fixed_script_sha256": {
+    "scripts/dev-install.sh": "a96285ce0173017133e8edef685c480554da5e112a0600e6ca9e8d6720048797",
+    "scripts/kcapi.sh": "1690e749b6949c6b538247c0371d460c392996d46c6d963752d2efc38eda758a"
+  },
+  "limits": [
+    "Linux ARM64 was tested; Linux x86_64 and fresh macOS installation were not.",
+    "The UI bundle was served and byte-checked; browser rendering was not exercised.",
+    "No model calls, Kiro CLI login, real messaging channels, or live user repositories were used."
+  ]
+}

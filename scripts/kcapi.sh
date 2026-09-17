@@ -17,8 +17,6 @@ set -euo pipefail
 CURL=/usr/bin/curl
 GREP=/usr/bin/grep
 HEAD=/usr/bin/head
-PY3=/usr/bin/python3
-
 KC_PORT="${KC_PORT:-5476}"
 KC_BASE="${KC_BASE:-http://127.0.0.1:${KC_PORT}}"
 KC_JAR="${KC_JAR:-/tmp/kc-cookies-${KC_PORT}.jar}"

@@ -3,13 +3,21 @@
 A KiroCrew App that makes [AI-DLC Workflows](https://github.com/awslabs/aidlc-workflows) observable and
 operable across all of your repositories — without taking any authority away from it.
 
-AI-DLC already runs a full software lifecycle on disk: five phases, 33 stages, domain-expert agents,
-approval gates at every stage, structured questions, reviewers, artifacts and an append-only audit trail.
-What it does not have is a place to see and act on that from outside a terminal session. Studio is that
-place, and nothing more: **it reads AI-DLC's own files, and every decision it submits travels through the
-intent's own AI-DLC conversation.** Studio never edits `aidlc-state.md`, audit shards, questions files or
-the active-intent cursor, never calls a protected transition command on your behalf, and never sets a
-guard-bypass environment variable.
+The bundled AI-DLC workflow model includes five phases, 33 stages, domain-expert agents, approval
+gates, structured questions, reviewers, artifacts and an append-only audit trail. The selected plan
+determines which stages and gates apply.
+
+Studio provides a UI to observe and operate that lifecycle across registered repositories.
+**Confirmed Run/Resume commands, approvals and answers travel through the intent's own AI-DLC
+conversation. AI-DLC agents and the engine perform the work, enforce workflow rules and update the
+workflow files; Studio reads the results and refreshes the interface.**
+
+Studio also invokes allowlisted engine commands for setup and administration, including intent
+creation, plan and configuration changes, diagnostics, and space or intent selection. These
+engine-managed operations may update state, append audit records or move the active-intent cursor.
+Studio does not hand-edit workflow authority files (`aidlc-state.md`, audit shards, questions files
+or selection cursors), fabricate approval or human-turn evidence, directly invoke protected workflow
+transition commands from its backend, or set guard-bypass environment variables.
 
 ## What you get
 
@@ -60,7 +68,7 @@ Gateway's binding, authentication and remote-access policy.
 
 AI-DLC uses Bun to run its TypeScript tools. Install it **on the machine running the KiroCrew
 Gateway, as the same operating-system user**. If the gateway is remote, run these commands there.
-Node.js is still required by Studio's installation helper.
+Node.js and npm are needed only if you rebuild Studio's UI.
 
 On macOS (13 or newer) or Linux, use the [official Bun installer](https://bun.com/docs/installation):
 
@@ -97,8 +105,8 @@ immediately without restarting Studio.
 ### Install from GitHub
 
 Start KiroCrew on the machine where you want the app installed. The installation helper needs Git,
-Node.js, Bash, `curl` and `/usr/bin/python3`. The repository includes the built UI, so installing a copy
-does **not** require `npm install` or a frontend build:
+Bash, `curl` and Python 3 (`KC_PY`, or `python3` on `PATH`). The repository includes the built UI, so
+`--no-build` needs neither Node.js nor npm:
 
 ```bash
 git clone https://github.com/warren830/kirocrew-app-aidlc.git
@@ -194,17 +202,41 @@ gateway authentication itself; no API token needs to be copied into this reposit
 
 ```
 you click Approve  →  Studio shows the exact text that will be sent  →  you confirm
-   →  Studio durably records the pending decision (compare-and-submit against the captured evidence)
+   →  Studio validates the captured evidence and acquires the repository's execution lease
+   →  Studio uses the engine to select the intended space/intent when needed, then verifies the cursor
+   →  Studio durably records the pending delivery
    →  your own dashboard session sends that text to the intent's AI-DLC conversation
-   →  kiro-cli records the human turn, the AI-DLC conductor reads your answer
-   →  the AI-DLC engine commits the transition and writes its own audit event
+   →  AI-DLC's input hook records the human turn, and its conductor reads your answer
+   →  the conductor invokes the engine, which validates the decision and commits the transition
    →  Studio watches the audit trail and the state file, and only then marks the decision resolved
 ```
+
+Repeating this interaction at each required checkpoint supports the full selected lifecycle:
+AI-DLC owns stage execution and workflow state; Studio owns the user interface, delivery tracking
+and repository coordination. The input hook must run to establish human-turn evidence.
 
 A 2xx response never means AI-DLC changed. Studio resolves an action only when it observes the evidence that
 action's contract requires — a `GATE_APPROVED` block and the stage checkbox moving, for a gate approval. If
 delivery is uncertain, Studio says so and asks you to decide, rather than sending anything twice: a human
 decision is at-most-once after it might have been delivered.
+
+## How setup and administration work
+
+For engine-managed setup and administration, Studio invokes supported, allowlisted operations under
+repository leases. Creating an intent, changing its plan, scope or configuration, compiling its
+runtime, running Doctor, and selecting a space or intent do not require an agent to interpret a chat
+message. The engine performs the corresponding writes, including state or audit changes where that
+operation requires them.
+
+Intent selection also happens as a prerequisite to a confirmed workflow submission: Studio can ask
+the engine to move the active-intent cursor, then reads it back before sending the decision.
+Protected workflow transitions such as approving a stage or advancing the lifecycle remain on the
+AI-DLC conversation path described above.
+
+Studio writes its own registry, delivery records, leases and preferences to its own storage. Its
+transactional installer writes managed harness files and records their ownership in receipts.
+These records support operation and recovery; AI-DLC's workflow files remain authoritative for
+lifecycle progress.
 
 ## Bundled AI-DLC
 
@@ -239,6 +271,7 @@ never submits anything. It analyses an evidence package Studio passes to it and 
 | [docs/design/contracts.md](docs/design/contracts.md) | binding module, API, frontend and test contracts |
 | [docs/research/](docs/research/) | the verified facts about the KiroCrew host and the AI-DLC on-disk model that the design rests on |
 | [tests/fixtures/FORMAT-NOTES.md](tests/fixtures/FORMAT-NOTES.md) | the real AI-DLC file formats, version by version |
+| [Docker installation verification](docs/verification/2026-09-17-docker-install/README.md) | actual Linux ARM64 Bun installation and app/harness install-update checks against the official KiroCrew image |
 
 ## Development
 

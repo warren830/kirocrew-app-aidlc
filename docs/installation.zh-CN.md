@@ -2,17 +2,20 @@
 
 本仓库包含可直接安装的 UI 构建产物。首次安装可跳过前端构建，无需执行 `npm install`。
 
+已在官方 KiroCrew Docker 镜像中实际验证安装和更新，详见 [Docker 验证记录](verification/2026-09-17-docker-install/README.md)。
+
 ## 安装条件
 
 - macOS 或 Linux，已启动 KiroCrew。应用声明的最低 KiroCrew 版本为 0.3.0。
-- 安装脚本需要 Git、Node.js、Bash、`curl` 和 `/usr/bin/python3`。
+- 安装脚本需要 Git、Bash、`curl` 和 Python 3。优先使用 `KC_PY`，否则查找 `PATH` 中的 `python3`。
+- 使用 `--no-build` 安装预构建 UI 时，无需 Node.js 或 npm；重新构建 UI 时才需要。
 - 在项目中运行 AI-DLC 时，还需要 Bun、已登录的 Kiro CLI，以及支持所用模型的 Kiro 订阅。
 
 安装命令应在运行 KiroCrew Gateway 的机器上执行。安装 Studio 和向项目安装 AI-DLC 是两个独立步骤。
 
 ## 1. 安装 AI-DLC 所需的 Bun
 
-AI-DLC 使用 Bun 执行 TypeScript 工具。请在 **KiroCrew Gateway 所在机器上，以运行 Gateway 的同一系统用户**安装。如果 Gateway 在远程服务器上，应在服务器执行命令。Studio 安装脚本仍需要前面列出的 Node.js。
+AI-DLC 使用 Bun 执行 TypeScript 工具。请在 **KiroCrew Gateway 所在机器上，以运行 Gateway 的同一系统用户**安装。如果 Gateway 在远程服务器上，应在服务器执行命令。Node.js 和 npm 仅在重新构建 Studio UI 时需要。
 
 macOS 13 及以上版本和 Linux 可使用 [Bun 官方安装脚本](https://bun.com/docs/installation)：
 
@@ -86,6 +89,12 @@ KC_PY=/path/to/kirocrew/.venv/bin/python KC_PORT=5476 \
 
 如果 KiroCrew 的 Discover 目录已经收录 AI-DLC Studio，也可从 **Discover → AI-DLC Studio → Install** 安装。公开 GitHub 仓库不会自动将应用加入 Discover 目录。
 
+如果 Gateway 已在 Docker 中运行，先用 `docker exec -it <容器名> bash` 进入容器，再在其中执行 Bun 安装、仓库克隆和应用安装。官方镜像可使用以下 Python 配置，无需额外安装 Node 或 `/usr/bin/python3`：
+
+```bash
+KC_PY="$(command -v python3)" bash scripts/dev-install.sh --no-build
+```
+
 ## 3. 确认安装结果
 
 安装脚本最后的应用健康检查应返回 `"status": "healthy"`。也可单独执行：
@@ -128,7 +137,8 @@ bash scripts/dev-install.sh
 |---|---|
 | `could not mint a token` | 确认 Gateway 已启动，`KC_PY` 指向其实际 Python，并由运行 Gateway 的同一系统用户执行命令 |
 | `cookie exchange failed` | 确认 `KC_PORT` 与当前 Gateway 一致，且没有连接到另一套 KiroCrew 实例 |
-| `node` 不存在 | 安装 Node.js 并确认它在 `PATH` 中；即使使用预构建 UI，当前安装脚本也会查找 Node.js |
+| `node` 不存在 | 安装预构建 UI 时使用 `--no-build`；需要重新构建时，再安装 Node.js 和 npm 并确认它们在 `PATH` 中 |
+| Python 位于虚拟环境或 `/usr/local/bin` | 将 `KC_PY` 设置为 Gateway 实际使用的 Python；脚本不要求固定的 `/usr/bin/python3` 路径 |
 | `bun: command not found` | 按 Bun 安装步骤配置 `PATH`，重新打开终端并运行 `bun --version` |
 | 终端能运行 Bun，但 Studio 显示未找到 | 在 Gateway 机器上运行 `command -v bun`，将输出填入 Studio 设置中的 Bun 绝对路径，再保存并校验 |
 | 页面已打开，但项目无法运行 AI-DLC | 在 Studio 设置中检查 Bun；确认 Kiro CLI 已登录，并已对目标项目执行 Install AI-DLC |
