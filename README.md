@@ -54,20 +54,70 @@ Gateway's binding, authentication and remote-access policy.
 
 ## Install
 
-From the KiroCrew dashboard: **Discover → AI-DLC Studio → Install**, then grant trust to this app alone when
-prompted. Third-party app code runs in the Gateway process with significant privileges, so KiroCrew asks
-per app — please do not enable blanket third-party trust to install this.
+[中文安装说明](docs/installation.zh-CN.md)
 
-From a local checkout:
+### Install from GitHub
+
+Start KiroCrew on the machine where you want the app installed. The installation helper needs Git,
+Node.js, Bash, `curl` and `/usr/bin/python3`. The repository includes the built UI, so installing a copy
+does **not** require `npm install` or a frontend build:
 
 ```bash
-git clone <this repo> && cd kirocrew-app-aidlc
-(cd ui && npm install && npm run build)     # produces ui/dist/index.mjs
-scripts/dev-install.sh                       # install/update, trust, enable, health-check
+git clone https://github.com/warren830/kirocrew-app-aidlc.git
+cd kirocrew-app-aidlc
+bash scripts/dev-install.sh --no-build
 ```
 
-`scripts/dev-install.sh --dev` additionally turns on live reload for the UI. `scripts/kcapi.sh` is a small
-authenticated `curl` wrapper for the local gateway if you want to drive the API by hand.
+The helper installs or updates this checkout in the **local running gateway**, grants trust to
+`aidlc-studio` only, enables its backend, and prints hook and app health. Its defaults match an Apple
+Silicon macOS desktop installation: port `5476` and the Python runtime bundled inside
+`/Applications/KiroCrew.app`. Open **Apps → AI-DLC Studio** after installation; the final app-health
+response should report `"status": "healthy"`.
+
+For Linux, Intel macOS, or a source/virtual-environment installation, set `KC_PY` to the **same Python
+interpreter that runs your KiroCrew gateway**. Set `KC_PORT` if the gateway uses another port:
+
+```bash
+# Replace the interpreter path with your gateway's actual Python executable.
+KC_PY=/path/to/kirocrew/.venv/bin/python KC_PORT=5476 \
+  bash scripts/dev-install.sh --no-build
+```
+
+Installing Studio adds the KiroCrew app. Installing the AI-DLC harness into a project is a separate,
+explicit step in **Repos → Add repository → Install AI-DLC**, described under [First run](#first-run).
+
+If your KiroCrew catalog already lists this app, **Discover → AI-DLC Studio → Install** is another
+installation route. A public GitHub repository alone does not add an app to that catalog. Grant trust
+to this app when prompted; blanket third-party trust is not needed.
+
+### Update or rebuild
+
+Run an update when no Studio operation is active: the helper briefly disables the app to reload its
+backend hooks.
+
+```bash
+git pull --ff-only
+bash scripts/dev-install.sh --no-build
+```
+
+To rebuild after editing the UI, install the locked development dependencies first. The checked-in
+Vite dependency requires Node.js `^20.19.0 || >=22.12.0`.
+
+```bash
+(cd ui && npm ci)
+bash scripts/dev-install.sh       # builds ui/dist/index.mjs, then installs
+```
+
+`scripts/dev-install.sh --dev` additionally enables UI live reload. `scripts/kcapi.sh` is an authenticated
+`curl` wrapper for the local gateway; use it to check an installation without changing it:
+
+```bash
+bash scripts/kcapi.sh GET /api/apps/aidlc-studio/health
+```
+
+If token creation or cookie exchange fails, check that KiroCrew is running, `KC_PORT` points to that
+gateway, and `KC_PY` belongs to the same installation and operating-system user. The helper obtains local
+gateway authentication itself; no API token needs to be copied into this repository.
 
 ## First run
 
