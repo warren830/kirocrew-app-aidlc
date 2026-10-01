@@ -135,9 +135,15 @@ KC_PY=/path/to/kirocrew/.venv/bin/python KC_PORT=5476 \
 Installing Studio adds the KiroCrew app. Installing the AI-DLC harness into a project is a separate,
 explicit step in **Repos → Add repository → Install AI-DLC**, described under [First run](#first-run).
 
-If your KiroCrew catalog already lists this app, **Discover → AI-DLC Studio → Install** is another
-installation route. A public GitHub repository alone does not add an app to that catalog. Grant trust
-to this app when prompted; blanket third-party trust is not needed.
+### Install from Discover
+
+This repository is also an app registry: its `app-registry.json` lists the `release` branch. Add
+`https://github.com/warren830/kirocrew-app-aidlc` with branch `release` to KiroCrew's app registries,
+then **Discover → AI-DLC Studio → Install**, and later **Update** when a new release lands. From a
+script, `GET /api/apps/registries` first: `PUT` replaces the whole list, so send your existing rows plus
+`{"name": "aidlc-studio", "repo": "https://github.com/warren830/kirocrew-app-aidlc", "branch": "release"}`.
+The gateway clones the registry itself, without your shell's proxy variables, so it needs direct access to
+GitHub. Grant trust to this app when prompted; blanket third-party trust is not needed.
 
 ### Update or rebuild
 

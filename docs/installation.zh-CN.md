@@ -87,7 +87,7 @@ KC_PY=/path/to/kirocrew/.venv/bin/python KC_PORT=5476 \
   bash scripts/dev-install.sh --no-build
 ```
 
-如果 KiroCrew 的 Discover 目录已经收录 AI-DLC Studio，也可从 **Discover → AI-DLC Studio → Install** 安装。公开 GitHub 仓库不会自动将应用加入 Discover 目录。
+也可以通过 Discover 安装：本仓库本身就是一个应用 registry，`app-registry.json` 指向 `release` 分支。在 KiroCrew 的应用 registry 设置中添加 `https://github.com/warren830/kirocrew-app-aidlc`，分支填 `release`，然后在 **Discover → AI-DLC Studio → Install** 安装；有新版本时在同一处 **Update**。如果用脚本调用，请先 `GET /api/apps/registries`：`PUT` 会整体替换列表，因此要把已有条目连同 `{"name": "aidlc-studio", "repo": "https://github.com/warren830/kirocrew-app-aidlc", "branch": "release"}` 一起提交。Gateway 自己克隆 registry，不会继承终端里的代理变量，所以它需要能直接访问 GitHub。
 
 如果 Gateway 已在 Docker 中运行，先用 `docker exec -it <容器名> bash` 进入容器，再在其中执行 Bun 安装、仓库克隆和应用安装。官方镜像中 `PATH` 里的 `python3` 就是 Gateway 的 Python，无需设置 `KC_PY`，也无需额外安装 Node 或 `/usr/bin/python3`：
 
