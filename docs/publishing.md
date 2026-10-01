@@ -61,8 +61,8 @@ Two things must stay true in every listing:
 | Store icon | `assets/icon-512.png` | 512×512, opaque, no text |
 | Small icon | `assets/icon-256.png` | 256×256, opaque |
 | Sidebar icon | `ui/icon.svg` | monochrome, `currentColor`, renders legibly at 16px |
-| Hero | `assets/hero-light.svg`, `assets/hero-dark.svg` | 16:9, one per theme polarity |
-| Detail banner | `assets/hero-detail-light.svg`, `assets/hero-detail-dark.svg` | 25:6 |
+| Hero | `assets/hero-light.png`, `assets/hero-dark.png` (rendered from the `.svg` sources) | 1600×900 raster, one per theme polarity; the official publish pipeline accepts only PNG/WebP/JPEG |
+| Detail banner | `assets/hero-detail-light.png`, `assets/hero-detail-dark.png` (rendered from the `.svg` sources) | 1600×384 raster (25:6) |
 | Screenshots | `assets/screenshots/*.png` | landscape ≈1200px wide; **light and dark for each flow** |
 
 Screenshots to capture, in both themes and both languages (PRD §18 quality gates):

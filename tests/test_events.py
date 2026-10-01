@@ -463,14 +463,14 @@ async def test_poll_limit_is_clamped_to_the_ring(C, log):
 
 
 @aio
-async def test_stream_sets_the_sse_headers_before_the_first_frame(E, log, request_factory):
+async def test_stream_sets_the_sse_headers_before_the_first_frame(C, E, log, request_factory):
     request = request_factory.owner("GET", "/events")
     wire, task = start(log, request, fail_after=1)          # die on the greeting
     response = await task
 
     assert wire.frames == [
         b'id: 0\nevent: hello\ndata: {"newest_seq":0,"server_time":"2026-09-04T10:00:00Z",'
-        b'"app_version":"1.0.0"}\n\n'
+        b'"app_version":"' + C.APP_VERSION.encode() + b'"}\n\n'
     ]
     for key, value in E.SSE_HEADERS.items():
         assert response.headers[key] == value

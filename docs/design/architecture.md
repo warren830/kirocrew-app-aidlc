@@ -80,7 +80,7 @@ kirocrew-app-aidlc/                     (published as awslabs/aidlc-workflows/in
 ```json
 {
   "name": "aidlc-studio",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "AI-DLC Studio",
   "description": "Cross-repository Action Center, Workflow Map, plan composer, transactional installer and evidence trail for AI-DLC Workflows. Every workflow decision travels through the intent's own AI-DLC conversation; Studio never edits AI-DLC state.",
   "author": "ychchen",
@@ -89,7 +89,7 @@ kirocrew-app-aidlc/                     (published as awslabs/aidlc-workflows/in
   "tags": ["aidlc", "developer-tools", "workflows", "automation"],
   "highlights": ["...3 bullets..."],
   "iconPath": "assets/icon-512.png",
-  "heroImage": "assets/hero-light.svg", "heroImageDark": "assets/hero-dark.svg",
+  "heroImage": "assets/hero-light.png", "heroImageDark": "assets/hero-dark.png",
   "screenshots": ["assets/screenshots/action-center.png"],
   "agents": ["agents/advisor.json"],
   "backend": { "hooks": { "routes": "backend.routes:register_routes",
