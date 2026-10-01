@@ -18,14 +18,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../i18n'
 import { StudioApiError, useStudioApi, type StudioApi } from '../lib/api'
 import { buildRoute, parseRoute } from '../lib/route'
-import type { IntentSummary, RepoRecord, SlotView } from '../lib/types'
+import type { ChatFolder, IntentSummary, RepoRecord, SlotView } from '../lib/types'
 import { StudioApp } from '../shell/StudioApp'
 import { API_BASE, actionCard, shellRoutes } from '../test/fixtures'
 import { apiCalls, setApiRoutes, StubApiError } from '../test/stubs/app-sdk'
 import { IntentActions } from './IntentActions'
 import { IntentList } from './IntentList'
 import { readInventory } from './IntentsView'
-import { SessionPanel } from './SessionPanel'
+import { intentFolder, repoFolder, SessionPanel } from './SessionPanel'
 
 const INTENT = {
   repo_id: 'r_1', repo_label: 'checkout-web', space: 'default', intent_dir: '250901-guest-checkout',
@@ -202,34 +202,141 @@ const mount = (intent: IntentSummary, onChanged?: (message?: string) => void) =>
     </I18nProvider>,
   )
 
+/** A sidebar folder as `GET /api/chat/folders` lists it, with only the fields Studio reads. */
+const folder = (over: Partial<ChatFolder>): ChatFolder =>
+  ({ id: 'f', name: 'f', parent_id: '', project_dir: '', order: 0, ...over }) as ChatFolder
+
+/** Steps 1-4 answered, and a host folder store that hands out ids in order. */
+function bindRoutes(folders: ChatFolder[], extra: Record<string, (body: unknown) => unknown> = {}) {
+  let made = 0
+  setApiRoutes({
+    [`POST ${CHAT}/slots`]: () => ({ key: SLOT, agent: 'aidlc', project: '' }),
+    [`PATCH ${CHAT}/slots/${SLOT}/title`]: () => ({ ok: true }),
+    [`POST ${CHAT}/slots/${SLOT}/project`]: () => ({ ok: true, project: '/work/checkout-web' }),
+    [`POST ${INTENT_PATH}/session/bind`]: () => ({
+      ok: true,
+      binding: { slot_key: SLOT, session_key: 'ses_7' },
+      slot: slot({ key: SLOT, running: true }),
+    }),
+    [`GET ${CHAT}/folders`]: () => folders,
+    [`POST ${CHAT}/folders`]: (body) => folder({ ...(body as Partial<ChatFolder>), id: `f_new${++made}` }),
+    [`PATCH ${CHAT}/slots/${SLOT}/folder`]: (body) => ({ ok: true, ...(body as object) }),
+    ...extra,
+  })
+}
+
+const FIRST_FOUR = [
+  { method: 'POST', path: `${CHAT}/slots`, body: { name: SLOT, agent: 'aidlc' } },
+  { method: 'PATCH', path: `${CHAT}/slots/${SLOT}/title`, body: { title: 'checkout-web / guest-checkout' } },
+  { method: 'POST', path: `${CHAT}/slots/${SLOT}/project`, body: { project: '/work/checkout-web' } },
+  { method: 'POST', path: `${INTENT_PATH}/session/bind`, body: { slot_key: SLOT } },
+]
+
 describe('the canonical conversation panel', () => {
-  it('creates, titles, points and binds the conversation, in that order and nothing else', async () => {
-    setApiRoutes({
-      [`POST ${CHAT}/slots`]: () => ({ key: SLOT, agent: 'aidlc', project: '' }),
-      [`PATCH ${CHAT}/slots/${SLOT}/title`]: () => ({ ok: true }),
-      [`POST ${CHAT}/slots/${SLOT}/project`]: () => ({ ok: true, project: '/work/checkout-web' }),
-      [`POST ${INTENT_PATH}/session/bind`]: () => ({
-        ok: true,
-        binding: { slot_key: SLOT, session_key: 'ses_7' },
-        slot: slot({ key: SLOT, running: true }),
-      }),
-    })
+  it('creates, titles, points and binds the conversation, then files it under the repository folder', async () => {
+    bindRoutes([
+      folder({ id: 'f_other', name: 'payments', project_dir: '/work/payments-api', order: 1 }),
+      folder({ id: 'f_repo', name: 'Checkout', project_dir: '/work/checkout-web/', order: 3 }),
+    ])
     const onChanged = vi.fn()
     mount(UNBOUND, onChanged)
 
     await userEvent.click(screen.getByRole('button', { name: 'Create and bind the conversation' }))
 
     await waitFor(() => expect(screen.getByText('ses_7')).toBeInTheDocument())
+    expect(
+      await screen.findByText('Filed in the sidebar under Checkout / 250901-guest-checkout.'),
+    ).toBeInTheDocument()
     expect(apiCalls).toEqual([
-      { method: 'POST', path: `${CHAT}/slots`, body: { name: SLOT, agent: 'aidlc' } },
-      { method: 'PATCH', path: `${CHAT}/slots/${SLOT}/title`, body: { title: 'checkout-web / guest-checkout' } },
-      { method: 'POST', path: `${CHAT}/slots/${SLOT}/project`, body: { project: '/work/checkout-web' } },
-      { method: 'POST', path: `${INTENT_PATH}/session/bind`, body: { slot_key: SLOT } },
+      ...FIRST_FOUR,
+      { method: 'GET', path: `${CHAT}/folders`, body: undefined },
+      {
+        method: 'POST', path: `${CHAT}/folders`,
+        body: { name: '250901-guest-checkout', parent_id: 'f_repo', project_dir: '/work/checkout-web' },
+      },
+      { method: 'PATCH', path: `${CHAT}/slots/${SLOT}/folder`, body: { folder_id: 'f_new1' } },
     ])
     // The bound state is shown from the answer, not from a refetch the caller may not have made yet.
     expect(screen.getByText(SLOT)).toBeInTheDocument()
     expect(screen.getByText('A turn is running')).toBeInTheDocument()
     expect(onChanged).toHaveBeenCalledWith(`Bound to ${SLOT}.`)
+  })
+
+  it('reuses the intent folder a previous binding made', async () => {
+    bindRoutes([
+      folder({ id: 'f_repo', name: 'Checkout', project_dir: '/work/checkout-web' }),
+      folder({ id: 'f_intent', name: '250901-guest-checkout', parent_id: 'f_repo', project_dir: '/work/checkout-web' }),
+    ])
+    mount(UNBOUND)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create and bind the conversation' }))
+
+    expect(
+      await screen.findByText('Filed in the sidebar under Checkout / 250901-guest-checkout.'),
+    ).toBeInTheDocument()
+    expect(apiCalls.slice(4)).toEqual([
+      { method: 'GET', path: `${CHAT}/folders`, body: undefined },
+      { method: 'PATCH', path: `${CHAT}/slots/${SLOT}/folder`, body: { folder_id: 'f_intent' } },
+    ])
+  })
+
+  it('makes the repository folder and the intent folder when the sidebar has none for this repo', async () => {
+    bindRoutes([folder({ id: 'f_other', name: 'payments', project_dir: '/work/payments-api' })])
+    mount(UNBOUND)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create and bind the conversation' }))
+
+    expect(
+      await screen.findByText('Filed in the sidebar under checkout-web / 250901-guest-checkout.'),
+    ).toBeInTheDocument()
+    expect(apiCalls.slice(4)).toEqual([
+      { method: 'GET', path: `${CHAT}/folders`, body: undefined },
+      { method: 'POST', path: `${CHAT}/folders`, body: { name: 'checkout-web', project_dir: '/work/checkout-web' } },
+      {
+        method: 'POST', path: `${CHAT}/folders`,
+        body: { name: '250901-guest-checkout', parent_id: 'f_new1', project_dir: '/work/checkout-web' },
+      },
+      { method: 'PATCH', path: `${CHAT}/slots/${SLOT}/folder`, body: { folder_id: 'f_new2' } },
+    ])
+  })
+
+  it('files into the repository folder itself when the host will not let it nest there', async () => {
+    bindRoutes([folder({ id: 'f_repo', name: 'Checkout', project_dir: '/work/checkout-web' })], {
+      [`POST ${CHAT}/folders`]: () => {
+        throw new StubApiError(403, {
+          error: 'cannot create a folder inside one this app does not own', code: 'folder_not_owned',
+        })
+      },
+    })
+    mount(UNBOUND)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create and bind the conversation' }))
+
+    expect(await screen.findByText('Filed in the sidebar under Checkout.')).toBeInTheDocument()
+    expect(apiCalls.at(-1)).toEqual({
+      method: 'PATCH', path: `${CHAT}/slots/${SLOT}/folder`, body: { folder_id: 'f_repo' },
+    })
+  })
+
+  it('keeps the binding when the host refuses the folder, and says why', async () => {
+    bindRoutes([], {
+      [`POST ${CHAT}/folders`]: () => {
+        throw new StubApiError(429, { error: 'too many folders created recently; retry shortly' })
+      },
+    })
+    const onChanged = vi.fn()
+    mount(UNBOUND, onChanged)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create and bind the conversation' }))
+
+    expect(
+      await screen.findByText(
+        'The conversation is bound, but it could not be filed into a sidebar folder: too many folders created recently; retry shortly',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('ses_7')).toBeInTheDocument()
+    expect(onChanged).toHaveBeenCalledWith(`Bound to ${SLOT}.`)
+    expect(apiCalls.map((call) => call.path)).not.toContain(`${CHAT}/slots/${SLOT}/folder`)
   })
 
   it('names the step the host refused and does not bind a slot the host would not point at the repo', async () => {
@@ -246,7 +353,7 @@ describe('the canonical conversation panel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Create and bind the conversation' }))
 
     expect(
-      await screen.findByText(/Step 3 of 4 was refused \(point it at this repository\)/),
+      await screen.findByText(/Step 3 of 5 was refused \(point it at this repository\)/),
     ).toBeInTheDocument()
     // The host's own words, verbatim: a 403 with no code would otherwise read as "you are not the owner".
     expect(screen.getByText(/refusing a sensitive path: \/work\/checkout-web/)).toBeInTheDocument()
@@ -337,5 +444,26 @@ describe('the canonical conversation panel', () => {
       }),
     )
     expect(screen.getByText('ses_3')).toBeInTheDocument()
+  })
+})
+
+
+describe('the sidebar folder an intent is filed under', () => {
+  const tree = [
+    folder({ id: 'nested', name: 'Checkout (old)', parent_id: 'work', project_dir: '/work/checkout-web', order: 0 }),
+    folder({ id: 'work', name: 'Work', order: 0 }),
+    folder({ id: 'top_late', name: 'Checkout', project_dir: '/work/checkout-web', order: 5 }),
+    folder({ id: 'top_early', name: 'checkout-web', project_dir: '/work/checkout-web/', order: 2 }),
+  ]
+
+  it('prefers the shallowest folder for the repository, then sidebar order', () => {
+    expect(repoFolder(tree, '/work/checkout-web')?.id).toBe('top_early')
+    expect(repoFolder(tree, '/work/payments-api')).toBeNull()
+  })
+
+  it('finds an intent folder only inside its repository folder', () => {
+    const withIntent = [...tree, folder({ id: 'i', name: '250901-guest-checkout', parent_id: 'top_early' })]
+    expect(intentFolder(withIntent, 'top_early', '250901-guest-checkout')?.id).toBe('i')
+    expect(intentFolder(withIntent, 'top_late', '250901-guest-checkout')).toBeNull()
   })
 })
