@@ -87,6 +87,8 @@ export interface SessionRef { slot_key: string; session_key: string; running: bo
  * `SLOT_IDLE` instead of switching on the union.
  */
 export interface SlotView { key: string; running: boolean; project: string; agent: string; app: string; queue_depth: number; pending_approval: boolean; needs_input: boolean; waiting_for_input: boolean; stop_state: string; interrupted: boolean; last_ts: string; last_turn_ts: string; linked_session_key: string; session_key: string; messages: number; has_options: boolean; options: string[]; slack_linked: boolean; title: string; stopping: boolean; wait_state: Record<string, unknown> | null; in_stage_execution: boolean; approvals_pending: number; subagents_running: number; subagents_queued: number; deliveries_inflight: number }
+/** A KiroCrew sidebar folder (`GET /api/chat/folders`): the fields Studio reads. A person's folder has no `owner_app`. */
+export interface ChatFolder { id: string; name: string; parent_id: string; project_dir: string; order: number; owner_app?: string | null }
 export const SLOT_IDLE = 'idle'
 export type BusyReason = 'running' | 'stage_execution' | 'stopping' | 'queued' | 'approval_pending' | 'subagents' | 'deliveries_inflight'
 export interface BindingView { repo_id: string; space: string; intent_dir: string; intent_key: string; intent_uuid: string | null; slot_key: string | null; session_key: string | null; binding_generation: number; archive_state: 'active' | 'archived'; paused: boolean; paused_at: string | null; interrupted_at: string | null; keep_moving: boolean; last_stable_boundary: StableBoundary | null; updated_at: string }

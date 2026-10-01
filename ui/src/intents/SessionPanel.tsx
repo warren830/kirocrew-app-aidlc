@@ -14,6 +14,13 @@
  *   2. `PATCH  /api/chat/slots/{key}/title {"title": "<repo label> / <intent slug>"}` (host)
  *   3. `POST   /api/chat/slots/{key}/project {"project": <canonical_path>}` (host; 403 when sensitive)
  *   4. `POST   …/{intent}/session/bind {"slot_key": key}`                  (Studio; verifies 1-3)
+ *   5. `PATCH  /api/chat/slots/{key}/folder {"folder_id": …}`              (host; sidebar placement)
+ *
+ * Step 5 files the conversation under the repository's sidebar folder — the one whose `project_dir` is
+ * this repository, created when there is none — in a sub-folder per intent. These calls run with the
+ * owner's cookie, so the folders are the person's own and may nest under a folder the person made; an
+ * app-owned folder could not (the host refuses an app nesting under a folder it does not own). Placement
+ * is not part of the binding: a refusal here leaves the intent bound and says so.
  *
  * The order is load-bearing, not cosmetic: the project must be set before Studio checks it (§2.13), and
  * step 4 refuses `slot_mismatch` unless `slot.agent == "aidlc"` and `realpath(slot.project) ==
@@ -37,13 +44,13 @@ import { Icon } from '../shell/Icon'
 import { useI18n } from '../i18n'
 import { StudioApiError, type StudioApi } from '../lib/api'
 import { unavailable } from '../lib/format'
-import type { BindingView, IntentSummary, RepoRecord, SessionRef, SlotView } from '../lib/types'
+import type { BindingView, ChatFolder, IntentSummary, RepoRecord, SessionRef, SlotView } from '../lib/types'
 
 /** The agent an AI-DLC conversation runs. `SessionBinder.bind` refuses every other one (§1.11). */
 const AIDLC_AGENT = 'aidlc'
 
 /** How many calls create-and-bind takes. The copy counts them, so the user can name the one that failed. */
-const STEPS = 4
+const STEPS = 5
 
 /** Step number → the catalogue key that says what that step does. Explicit, so both are greppable. */
 const STEP_KEYS = [
@@ -51,6 +58,7 @@ const STEP_KEYS = [
   'intents.session.step.title',
   'intents.session.step.project',
   'intents.session.step.bind',
+  'intents.session.step.folder',
 ] as const
 
 /**
@@ -81,6 +89,61 @@ export function adoptableSlots(slots: SlotView[], canonicalPath: string): SlotVi
   return slots.filter(
     (slot) => slot.agent === AIDLC_AGENT && !!slot.project && samePath(slot.project, canonicalPath),
   )
+}
+
+/**
+ * The repository's sidebar folder: one whose `project_dir` is this repository. The shallowest wins, then
+ * sidebar order, so a folder the person made for the repository outranks the per-intent folders filed
+ * inside it (they carry the same `project_dir`, so a new chat opened there starts in the repository).
+ */
+export function repoFolder(folders: ChatFolder[], canonicalPath: string): ChatFolder | null {
+  const byId = new Map(folders.map((folder) => [folder.id, folder]))
+  const depth = (folder: ChatFolder): number => {
+    const seen = new Set<string>()
+    let parent = folder.parent_id
+    while (parent && !seen.has(parent) && byId.has(parent)) {
+      seen.add(parent)
+      parent = byId.get(parent)?.parent_id ?? ''
+    }
+    return seen.size
+  }
+  const matches = folders.filter((folder) => !!folder.project_dir && samePath(folder.project_dir, canonicalPath))
+  matches.sort((a, b) => depth(a) - depth(b) || (a.order ?? 0) - (b.order ?? 0))
+  return matches[0] ?? null
+}
+
+/** This intent's sub-folder of the repository folder, named by the intent directory. */
+export function intentFolder(folders: ChatFolder[], parentId: string, intentDir: string): ChatFolder | null {
+  return folders.find((folder) => folder.parent_id === parentId && folder.name === intentDir) ?? null
+}
+
+/**
+ * Step 5: find or make the repository folder, then the intent's sub-folder, then file the slot there.
+ *
+ * When the host answers `folder_not_owned` — these calls were attributed to the app rather than to the
+ * person, and an app may not nest under a folder it does not own — the conversation still goes into the
+ * repository folder itself, which any caller may file its own sessions into.
+ */
+async function fileConversation(
+  api: StudioApi, repo: RepoRecord, intent: IntentSummary, slotKey: string,
+): Promise<string> {
+  const folders = await api.listFolders()
+  const parent = repoFolder(folders, repo.canonical_path)
+    ?? await api.createFolder({ name: repo.label, project_dir: repo.canonical_path })
+  let child = intentFolder(folders, parent.id, intent.intent_dir)
+  if (!child) {
+    try {
+      child = await api.createFolder({
+        name: intent.intent_dir, parent_id: parent.id, project_dir: repo.canonical_path,
+      })
+    } catch (caught) {
+      if (!(caught instanceof StudioApiError) || caught.code !== 'folder_not_owned') throw caught
+      await api.setSlotFolder(slotKey, parent.id)
+      return parent.name
+    }
+  }
+  await api.setSlotFolder(slotKey, child.id)
+  return `${parent.name} / ${child.name}`
 }
 
 /** What the panel needs to show about a live binding, from `SessionRef` or from a `BindingView`. */
@@ -115,6 +178,9 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
   const [at, setAt] = useState(0)
   const [failedAt, setFailedAt] = useState(0)
   const [error, setError] = useState<StudioApiError | null>(null)
+  /** Where step 5 filed the conversation, or why it could not; the binding stands either way. */
+  const [filed, setFiled] = useState<string | null>(null)
+  const [folderError, setFolderError] = useState<StudioApiError | null>(null)
   const [slots, setSlots] = useState<SlotView[] | null>(null)
   const [candidates, setCandidates] = useState<{ slot: SlotView; reason: string }[] | null>(null)
   /**
@@ -151,6 +217,8 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
     setBusy(kind)
     setError(null)
     setFailedAt(0)
+    setFiled(null)
+    setFolderError(null)
   }, [])
 
   /** The whole sequence, in order, reporting the step that refused. */
@@ -176,6 +244,15 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
       remember(answer.binding, answer.slot)
       setSlots(null)
       onChanged(t('intents.session.done.bound', { slot: answer.binding.slot_key ?? key }))
+      step = 5
+      setAt(step)
+      try {
+        setFiled(await fileConversation(api, repo, intent, answer.binding.slot_key ?? key))
+      } catch (caught) {
+        setFolderError(
+          caught instanceof StudioApiError ? caught : new StudioApiError('internal_error', String(caught), {}, 0),
+        )
+      }
     } catch (caught) {
       fail(caught, step)
     } finally {
@@ -346,6 +423,26 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
       ) : busy !== null ? (
         <p className="studio-muted" role="status">
           {t('intents.busy')}
+        </p>
+      ) : null}
+
+      {filed ? (
+        <p className="studio-consequence" role="status">
+          <Icon name="check" size={13} />
+          <span>{t('intents.session.folder.filed', { path: filed })}</span>
+        </p>
+      ) : null}
+
+      {folderError ? (
+        <p className="studio-banner" data-tone="warn" role="alert">
+          <Icon name="warn" size={15} />
+          <span className="studio-grow">
+            {/* The host's own words: its folder errors carry host codes Studio's catalogue does not know,
+                and a code Studio derived from the status alone would hide which limit was hit. */}
+            {t('intents.session.folder.failed', {
+              reason: folderError.message || t(`errors.${folderError.code}`),
+            })}
+          </span>
         </p>
       ) : null}
 

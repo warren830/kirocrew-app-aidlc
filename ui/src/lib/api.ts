@@ -26,7 +26,7 @@ import { ERROR_CODES, type ErrorCode } from './errorCodes.generated'
 import type {
   ActionDetailResponse, ActionResponse, ActionsResponse, ActivityResponse, AddRepoResponse,
   AdvisorDraftGetResponse, AdvisorDraftResponse, AdvisorKind, ArtifactResponse, ArtifactsResponse,
-  BindResponse, BindingResponse, BunToolResponse, CalibrationClearResponse, CalibrationResponse, CommandResponse,
+  BindResponse, BindingResponse, BunToolResponse, CalibrationClearResponse, CalibrationResponse, ChatFolder, CommandResponse,
   DeliveryReport, DeliveryResponse, DiagnosticsBundle, DirectoryResponse, DoctorResponse, EventPollResponse,
   HealthResponse, HostChatReceipt, IntentCreateResponse, IntentGitResponse, IntentResponse,
   IntentsResponse, LeasesResponse, MapResponse, MaintenancePreview, MaintenanceResult, MigrationApplyResponse, MigrationPreviewResponse,
@@ -278,6 +278,9 @@ export interface StudioApi extends WorkspaceApi {
   setSlotTitle(slotKey: string, title: string): Promise<Record<string, unknown>>
   setSlotProject(slotKey: string, project: string): Promise<Record<string, unknown>>
   setSlotAgent(slotKey: string, agent: string): Promise<Record<string, unknown>>
+  listFolders(o?: ReadOptions): Promise<ChatFolder[]>
+  createFolder(body: { name: string; parent_id?: string; project_dir?: string }): Promise<ChatFolder>
+  setSlotFolder(slotKey: string, folderId: string): Promise<Record<string, unknown>>
   /** The exact `SubmitReceipt.host` call. Body is passed through byte-for-byte — never rebuilt. */
   sendToHost(path: string, body: Record<string, unknown>): Promise<HostChatReceipt>
 }
@@ -466,6 +469,26 @@ export function useStudioApi(): StudioApi {
         chatPost(api, `${CHAT_BASE}/slots/${encodeURIComponent(slotKey)}/project`, { project }),
       setSlotAgent: (slotKey, agent) =>
         chatPost(api, `${CHAT_BASE}/slots/${encodeURIComponent(slotKey)}/agent`, { agent }),
+      listFolders: async (o) => {
+        try {
+          return await api.get<ChatFolder[]>(`${CHAT_BASE}/folders`, o?.signal ? { signal: o.signal } : undefined)
+        } catch (error) {
+          if (isAbort(error)) throw error
+          throw decodeError(error)
+        }
+      },
+      createFolder: (body) => chatPost<ChatFolder>(api, `${CHAT_BASE}/folders`, body),
+      // `PATCH`, like the title route (`kc:routes/sessions.py:94`).
+      setSlotFolder: async (slotKey, folderId) => {
+        try {
+          return await api.patch<Record<string, unknown>>(
+            `${CHAT_BASE}/slots/${encodeURIComponent(slotKey)}/folder`,
+            { folder_id: folderId },
+          )
+        } catch (error) {
+          throw decodeError(error)
+        }
+      },
       sendToHost: (path, body) => chatPost<HostChatReceipt>(api, path, body),
     }
   }, [api])
