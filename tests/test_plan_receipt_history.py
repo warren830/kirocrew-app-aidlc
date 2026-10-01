@@ -2,6 +2,10 @@
 
 import asyncio
 import os
+import re
+import shutil
+import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 
 import fixtures as F
@@ -168,3 +172,104 @@ def test_unit_scoped_history_uses_the_captured_file_and_target(studio, complete)
         rec, SimpleNamespace(audit=audit), STAGE, questions,
     )
     assert (found is not None) is complete
+
+
+#: ECMAScript ``String.prototype.trimEnd`` whitespace.
+JS_TRIM = (
+    "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006"
+    "\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+)
+ENGINE = Path(__file__).resolve().parents[1] / "payload/aidlc-kiro/.kiro/tools/aidlc-testing-posture.ts"
+ENGINE_PROMPT_EXPRESSION = r'.replace(/^\[Answer\]:[ \t]*.*$/gm, "[Answer]:")'
+
+
+def engine_prompt_sha(text):
+    """``Prompt SHA-256`` the way the engine writes it: every answer blanked, trimEnd, one LF."""
+    blanked = re.sub(r"(?m)^\[Answer\]:[ \t]*[^\n\r\u2028\u2029]*", "[Answer]:", text)
+    return F.sha256(blanked.rstrip(JS_TRIM) + "\n")
+
+
+def approve(text):
+    head, _, tail = text.rpartition("[Answer]:")
+    return head + "[Answer]: Approve Plan" + tail.lstrip(" \t")
+
+
+SHAPES = {
+    "answered_question": PLAN.replace(
+        "## Plan Approval",
+        "## Q1. Which test runner should the plan use?\n\nA. pytest\nB. unittest\nX. Other\n\n"
+        "[Answer]: A\n\n## Plan Approval",
+    ),
+    "trailing_blank_line": PLAN + "\n",
+    "blank_answer_with_space": PLAN.replace("[Answer]:\n", "[Answer]: \n"),
+    "crlf": PLAN.replace("\n", "\r\n"),
+}
+
+
+def test_prompt_digest_mirror_matches_the_engine_expression():
+    source = ENGINE.read_text()
+    assert source.count(ENGINE_PROMPT_EXPRESSION) >= 2, "the engine changed how it digests a prompt"
+    bun = shutil.which("bun")
+    if bun is None:
+        pytest.skip("real Bun is required to evaluate the engine's expression")
+    script = (
+        "const t = await Bun.stdin.text();"
+        "const h = new Bun.CryptoHasher('sha256');"
+        f"h.update(`${{t{ENGINE_PROMPT_EXPRESSION}.trimEnd()}}\\n`);"
+        "console.log(h.digest('hex'));"
+    )
+    for text in [PLAN, *SHAPES.values(), approve(SHAPES["answered_question"])]:
+        done = subprocess.run([bun, "-e", script], input=text.encode(), capture_output=True,
+                              timeout=20, check=True)
+        assert done.stdout.decode().strip() == engine_prompt_sha(text)
+
+
+@pytest.mark.parametrize("shape", [*SHAPES, "boundary_elsewhere"])
+def test_recorded_plan_approval_uses_the_engines_two_digests(sv, routes, fake_host, scene, shape):
+    """The prompt's whole-file digest binds the capture; its blanked digest binds the receipt."""
+    text = SHAPES.get(shape, PLAN)
+    assert shape == "boundary_elsewhere" or engine_prompt_sha(text) != F.sha256(text)
+    assert engine_prompt_sha(approve(text)) == engine_prompt_sha(text)
+    intent_uuid = sv.reader.registry(scene.root, "default")[0].uuid
+    (_record_dir(scene.root) / QUESTIONS).write_bytes(text.encode())
+    prompt = {**plan_fields(), "Intent": intent_uuid,
+              "Questions SHA-256": F.sha256(text), "Prompt SHA-256": engine_prompt_sha(text)}
+    shard = _shard(scene.root)
+    shard.write_text(F.audit_text(
+        F.audit_block("STAGE_STARTED", "2026-09-04T09:00:02Z", Stage=STAGE),
+        F.audit_block("DECISION_RECORDED", "2026-09-04T09:59:00Z", Decision="Approve this exact plan?",
+                      Options="[protected exact choices]", **prompt),
+    ))
+    if shape == "boundary_elsewhere":
+        # A newer boundary row from another clone becomes the card's captured boundary.
+        (shard.parent / "000-other-clone.md").write_text(F.audit_text(F.audit_block(
+            "QUESTION_ANSWERED", "2026-09-04T09:59:30Z", Stage="functional-design", Details="A",
+        )))
+    card = question_card(sv, routes, fake_host, scene)
+    assert card["captured"]["question_digest"] == F.sha256(text)
+    if shape == "boundary_elsewhere":
+        assert card["evidence"]["audit"]["boundary_event"]["shard"] == "000-other-clone.md"
+    status, receipt = _submit(sv, routes, fake_host, card,
+                              payload={"decision": "approve_plan"}, wire_text="Approve Plan")
+    assert status == 200, receipt
+    _finish_the_turn(fake_host, scene.slot_key, wire_text="Approve Plan")
+    assert _report(sv, routes, fake_host, card["action_id"], receipt)[0] == 200
+    marker = _record_dir(scene.root) / ".aidlc-human-turn"
+    marker.write_text("2026-09-04T10:00:20Z\n")
+    os.utime(marker, ns=(2_000_000_000, 2_000_000_000))
+    shard.write_text(shard.read_text() + F.audit_text(
+        F.audit_block("HUMAN_TURN", "2026-09-04T10:00:20Z"),
+        F.audit_block("PLAN_APPROVAL_RECORDED", "2026-09-04T10:00:21Z", **{
+            **prompt, "Details": "Approve Plan", "Questions SHA-256": F.sha256(approve(text)),
+        }),
+    ))
+    (_record_dir(scene.root) / QUESTIONS).write_bytes(
+        text.replace(OLD_FINGERPRINT, NEW_FINGERPRINT).encode()
+    )
+    asyncio.run(sv.reconciler.reconcile_now(card["action_id"]))
+    row = _row(sv, card["action_id"])
+    assert row["status"] == "ResolvedNoTransition", row["resolution_json"]
+    assert row["resolution_json"]["reason"] == "plan_approval_recorded_before_reset"
+    assert row["resolution_json"]["evidence"]["current_plan_requires_approval"] is True
+    assert not sv.storage.lease_list()
+    assert len(fake_host.get_slot(scene.slot_key).messages) == 2

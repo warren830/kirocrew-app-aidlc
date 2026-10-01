@@ -21,13 +21,20 @@ for a in "$@"; do
   esac
 done
 
-# The gateway's Python may live in a venv or /usr/local/bin (including the
-# official Docker image). Use the configured interpreter for JSON checks too.
-PY3="${KC_PY:-$(command -v python3 || true)}"
-if [ -z "$PY3" ] || [ ! -x "$PY3" ]; then
-  echo "dev-install: Python 3 is required; set KC_PY to the gateway's Python executable." >&2
-  exit 1
+# kcapi.sh mints its login token with the gateway's own Python, so both scripts must use the same
+# one: KC_PY when set (a path, or a command name on PATH), else the macOS desktop app's bundled
+# runtime, else python3 on PATH (Linux, a venv on PATH, the official Docker image).
+BUNDLED_PY=/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/bin/python3.12
+if [ -z "${KC_PY:-}" ]; then
+  if [ -x "$BUNDLED_PY" ]; then KC_PY="$BUNDLED_PY"; else KC_PY=python3; fi
 fi
+PY3="$(command -v "$KC_PY" 2>/dev/null || true)"
+case "$PY3" in
+  /*) ;;
+  *) echo "dev-install: Python 3 is required; set KC_PY to the gateway's Python executable (not found: $KC_PY)." >&2
+     exit 1 ;;
+esac
+export KC_PY="$PY3"
 
 if [ "$BUILD" = 1 ] && [ -f "$ROOT/ui/package.json" ]; then
   if [ -z "${NODE_BIN:-}" ]; then

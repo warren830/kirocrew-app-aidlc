@@ -20,7 +20,11 @@ HEAD=/usr/bin/head
 KC_PORT="${KC_PORT:-5476}"
 KC_BASE="${KC_BASE:-http://127.0.0.1:${KC_PORT}}"
 KC_JAR="${KC_JAR:-/tmp/kc-cookies-${KC_PORT}.jar}"
-KC_PY="${KC_PY:-/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/bin/python3.12}"
+# The gateway's own Python mints the token. Same default as dev-install.sh, which passes its choice on.
+BUNDLED_PY=/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/bin/python3.12
+if [ -z "${KC_PY:-}" ]; then
+  if [ -x "$BUNDLED_PY" ]; then KC_PY="$BUNDLED_PY"; else KC_PY=python3; fi
+fi
 
 usage() { echo "usage: $(basename "$0") <METHOD> <PATH> [JSON_BODY]" >&2; exit 2; }
 [ $# -ge 2 ] || usage
@@ -30,10 +34,14 @@ session_ok() { $CURL -s -f -b "$KC_JAR" "${KC_BASE}/api/auth/me" >/dev/null 2>&1
 
 mint() {
   local url token
+  if ! command -v "$KC_PY" >/dev/null 2>&1; then
+    echo "kcapi: gateway Python not found: ${KC_PY}; set KC_PY to the Python that runs KiroCrew" >&2
+    exit 1
+  fi
   url=$("$KC_PY" -m kiro_crew token 2>/dev/null | $GREP -o 'token=.*' | $HEAD -1) || true
   token="${url#token=}"
   if [ -z "$token" ]; then
-    echo "kcapi: could not mint a token — is the gateway running on ${KC_PORT}?" >&2
+    echo "kcapi: could not mint a token with ${KC_PY} — is the gateway running on ${KC_PORT}, and is KC_PY its own Python?" >&2
     exit 1
   fi
   $CURL -s -o /dev/null -c "$KC_JAR" "${KC_BASE}/?token=${token}"

@@ -901,6 +901,32 @@ class AuditBundle:
         }
 
 
+def _audit_read_limits(
+    sizes: Sequence[int], mtimes_ns: Sequence[int], per_shard: int, total: int
+) -> list[int]:
+    """How many bytes each shard may contribute to one bounded history read.
+
+    A record that fits is read whole (each shard up to ``per_shard``). Over budget, every shard keeps
+    an equal share first — never less than the old 64 × 256 KiB windows — and the remainder goes to
+    the most recently written shards. Shard names are ``<host>-<random clone id>.md``, so name order
+    says nothing about which shard holds the dispatch being reconciled; spending the budget in that
+    order left the active clone's shard with nothing to read.
+    """
+    wanted = [max(0, min(size, per_shard)) for size in sizes]
+    if sum(wanted) <= total:
+        return wanted
+    share = total // len(wanted)
+    limits = [min(want, share) for want in wanted]
+    left = total - sum(limits)
+    for index in sorted(range(len(wanted)), key=lambda i: (-mtimes_ns[i], i)):
+        if left <= 0:
+            break
+        extra = min(wanted[index] - limits[index], left)
+        limits[index] += extra
+        left -= extra
+    return limits
+
+
 # --------------------------------------------------------------------------- #
 # 1.6.2 parsers — stage graph, scope grid, scopes
 # --------------------------------------------------------------------------- #
@@ -1772,7 +1798,8 @@ def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile:
     ``## Post-approval Amendment`` resets nothing: the ``## Q<n>.`` sections after it are ordinary
     questions, which is how one intent legitimately has both an open gate and a pending question.
 
-    ``pending_count`` includes blank answer tags in unsupported sections (e.g. ``## F1.``). Those
+    ``pending_count`` includes blank answer tags in unsupported sections (e.g. ``## F1.``) and any
+    after a supported section's first tag, including ``- [Answer]:`` list items. Those
     tags keep the human boundary visible without assigning them numeric Q identifiers; any such
     pending content makes the whole group conversation-only.
 
@@ -1807,11 +1834,17 @@ def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile:
         if kind == "other" or (
             kind == "checkpoint" and match.group(1) not in _CHECKPOINT_KINDS
         ):
-            unsupported_pending_count += sum(bool(C.BLANK_ANSWER_RE.match(line)) for line in body)
+            unsupported_pending_count += sum(bool(C.PENDING_ANSWER_TAG_RE.match(line)) for line in body)
             continue
         tag_index = next(
             (i for i, line in enumerate(body) if C.ANSWER_TAG_RE.match(line)), None
         )
+        if tag_index is not None:
+            # A section owns only its first tag. A blank one after it (a bold "Follow-up" label, a
+            # setext heading, "- [Answer]:") is a question with no identifier of its own.
+            unsupported_pending_count += sum(
+                bool(C.PENDING_ANSWER_TAG_RE.match(line)) for line in body[tag_index + 1:]
+            )
         answered = tag_index is not None and not C.BLANK_ANSWER_RE.match(body[tag_index])
         answer = _answer_from(body, tag_index, plain_continuation=kind == "question") if answered and tag_index is not None else None
         limit = tag_index if tag_index is not None else len(body)
@@ -2518,7 +2551,6 @@ class AidlcReader:
         shards: list[ShardMeta] = []
         per_shard: list[list[AuditEvent]] = []
         complete = True
-        remaining = C.MAX_AUDIT_HISTORY_BYTES
         try:
             paths = sorted((p for p in audit_dir.iterdir() if p.suffix == ".md"), key=lambda p: p.name)
         except FileNotFoundError:
@@ -2527,24 +2559,34 @@ class AidlcReader:
             paths, complete = [], False
         if len(paths) > C.MAX_AUDIT_SHARDS:
             complete = False
-        for index, path in enumerate(paths[: C.MAX_AUDIT_SHARDS]):
+        readable: list[tuple[Path, os.stat_result]] = []
+        for path in paths[: C.MAX_AUDIT_SHARDS]:
             if not security.is_regular_file(path):
                 complete = False
                 continue
             try:
-                stat = path.stat()
+                readable.append((path, path.stat()))
             except OSError:
                 complete = False
-                continue
-            budget = max(0, min(tail_bytes, remaining))
-            truncated = stat.st_size > budget
-            requested = min(stat.st_size, budget)
-            data = (
-                security.tail_read(path, requested)
-                if truncated
-                else security.bounded_read(path, requested)
-            ) if requested > 0 else b""
-            remaining -= requested
+        limits = _audit_read_limits(
+            [stat.st_size for _, stat in readable], [stat.st_mtime_ns for _, stat in readable],
+            tail_bytes, C.MAX_AUDIT_HISTORY_BYTES,
+        )
+        spare = max(0, C.MAX_AUDIT_HISTORY_BYTES - sum(limits))
+        for (path, stat), limit in zip(readable, limits):
+            truncated = stat.st_size > limit
+            if truncated:
+                data: bytes | None = security.tail_read(path, limit) if limit > 0 else b""
+            else:
+                # The engine can append between the stat above and this read. Capping at the stat
+                # size refused the grown file and dropped every event in it, which read as missing
+                # human turns. Let a whole shard grow into the budget nothing else claimed.
+                data = security.bounded_read(path, limit + spare)
+                if data is None:
+                    truncated = True
+                    data = security.tail_read(path, limit) if limit > 0 else b""
+                else:
+                    spare = max(0, spare - max(0, len(data) - limit))
             # A failed read used to be indistinguishable from an empty shard. Audit-backed questions
             # need absence of a later answer to be a proof, so an unreadable/changing shard is partial.
             try:
@@ -2563,10 +2605,12 @@ class AidlcReader:
             except UnicodeDecodeError:
                 complete = False
             rel = f"{record_rel}/{AUDIT_DIRNAME}/{path.name}"
+            # The index is the shard's position in ``shards``, which is how the reconciler places a
+            # captured boundary; counting skipped entries here made the two disagree.
+            per_shard.append(parse_audit_shard(_text(data), path.name, len(shards)))
             shards.append(
                 ShardMeta(relpath=rel, size=stat.st_size, mtime_ns=stat.st_mtime_ns, truncated=truncated)
             )
-            per_shard.append(parse_audit_shard(_text(data), path.name, index))
         try:
             if sorted(p.name for p in audit_dir.iterdir() if p.suffix == ".md") != [p.name for p in paths]:
                 complete = False

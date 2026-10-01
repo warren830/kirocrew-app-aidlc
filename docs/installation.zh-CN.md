@@ -7,7 +7,7 @@
 ## 安装条件
 
 - macOS 或 Linux，已启动 KiroCrew。应用声明的最低 KiroCrew 版本为 0.3.0。
-- 安装脚本需要 Git、Bash、`curl` 和 Python 3。优先使用 `KC_PY`，否则查找 `PATH` 中的 `python3`。
+- 安装脚本需要 Git、Bash、`curl` 和 Gateway 所用的 Python。优先使用 `KC_PY`（可以是路径，也可以是 `PATH` 中的命令名）；未设置时，若存在 `/Applications/KiroCrew.app` 自带的 Python 则使用它，否则使用 `PATH` 中的 `python3`。安装脚本会把同一个解释器传给 `scripts/kcapi.sh`。
 - 使用 `--no-build` 安装预构建 UI 时，无需 Node.js 或 npm；重新构建 UI 时才需要。
 - 在项目中运行 AI-DLC 时，还需要 Bun、已登录的 Kiro CLI，以及支持所用模型的 Kiro 订阅。
 
@@ -79,7 +79,7 @@ bash scripts/dev-install.sh --no-build
 - Gateway 端口：`5476`。
 - Gateway Python：`/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/bin/python3.12`。
 
-Linux、Intel Mac、源码安装或虚拟环境安装，需要将 `KC_PY` 设置为实际运行 Gateway 的 Python。端口不同则同时设置 `KC_PORT`：
+Linux、Intel Mac、源码安装或虚拟环境安装，若 `PATH` 中的 `python3` 不是实际运行 Gateway 的 Python，需要将 `KC_PY` 设置为该 Python。端口不同则同时设置 `KC_PORT`：
 
 ```bash
 # 将路径替换为当前 KiroCrew Gateway 实际使用的 Python。
@@ -89,10 +89,10 @@ KC_PY=/path/to/kirocrew/.venv/bin/python KC_PORT=5476 \
 
 如果 KiroCrew 的 Discover 目录已经收录 AI-DLC Studio，也可从 **Discover → AI-DLC Studio → Install** 安装。公开 GitHub 仓库不会自动将应用加入 Discover 目录。
 
-如果 Gateway 已在 Docker 中运行，先用 `docker exec -it <容器名> bash` 进入容器，再在其中执行 Bun 安装、仓库克隆和应用安装。官方镜像可使用以下 Python 配置，无需额外安装 Node 或 `/usr/bin/python3`：
+如果 Gateway 已在 Docker 中运行，先用 `docker exec -it <容器名> bash` 进入容器，再在其中执行 Bun 安装、仓库克隆和应用安装。官方镜像中 `PATH` 里的 `python3` 就是 Gateway 的 Python，无需设置 `KC_PY`，也无需额外安装 Node 或 `/usr/bin/python3`：
 
 ```bash
-KC_PY="$(command -v python3)" bash scripts/dev-install.sh --no-build
+bash scripts/dev-install.sh --no-build
 ```
 
 ## 3. 确认安装结果
@@ -135,6 +135,7 @@ bash scripts/dev-install.sh
 
 | 现象 | 检查方法 |
 |---|---|
+| `gateway Python not found` | `KC_PY` 指向的解释器不存在或不可执行；将其设置为 Gateway 实际使用的 Python |
 | `could not mint a token` | 确认 Gateway 已启动，`KC_PY` 指向其实际 Python，并由运行 Gateway 的同一系统用户执行命令 |
 | `cookie exchange failed` | 确认 `KC_PORT` 与当前 Gateway 一致，且没有连接到另一套 KiroCrew 实例 |
 | `node` 不存在 | 安装预构建 UI 时使用 `--no-build`；需要重新构建时，再安装 Node.js 和 npm 并确认它们在 `PATH` 中 |
