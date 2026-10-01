@@ -2,10 +2,9 @@
 
 Two independent acceptances gate a public release (PRD §24.2), and neither has a promised date:
 
-1. **AI-DLC upstream** accepts the integration directory `integrations/kirocrew/aidlc-studio` in
-   `awslabs/aidlc-workflows` — or explicitly rejects it, at which point this directory moves to an
-   independent public repository **without changing the slug, the storage schema or the registry
-   contract**. Maintainer silence is not a rejection (D23).
+1. **AI-DLC upstream** may later accept an integration directory in `awslabs/aidlc-workflows`. Until
+   then the app ships from its own public repository; moving it must not change the slug, the storage
+   schema or the registry contract (D23).
 2. **The KiroCrew official App registry** merges the listing, and a clean user can install it from
    Discover and complete the smoke journey.
 
@@ -14,35 +13,46 @@ enforces the mechanical half.
 
 ## 1. Registry entry
 
-The official registry is a JSON catalog of app entries; a monorepo app is listed with a `subdirectory`.
-The entry this app needs, once the upstream location is settled:
+The app is published from its own public repository, `https://github.com/warren830/kirocrew-app-aidlc`
+(app at the repository root, no `subdirectory`). It reaches users through three channels:
+
+1. **Direct install** — `git clone` plus `bash scripts/dev-install.sh --no-build` (README → Install).
+2. **Self-hosted registry** — this repository's own `app-registry.json` lists the `release` branch.
+   An owner adds the repository under Settings → App registries, and Discover then offers install
+   and update. Such a registry is `index` trust: no verified badge.
+3. **KiroCrew official catalog** — `official-registry.json` in the `KiroCrewApps` package, published to
+   `https://apps.crew.kiro.dev/`. Official entries are pinned to an immutable commit, so every update is
+   an explicit republish of the entry with a new `ref` and `version`:
 
 ```json
 {
   "name": "aidlc-studio",
+  "source": {
+    "type": "git",
+    "url": "https://github.com/warren830/kirocrew-app-aidlc",
+    "ref": "<full commit id of the release tag>"
+  },
+  "categories": ["developer-tools"],
   "displayName": "AI-DLC Studio",
-  "description": "Cross-repository Action Center, Workflow Map and transactional installer for AI-DLC Workflows.",
-  "gitUrl": "https://github.com/awslabs/aidlc-workflows",
-  "branch": "main",
-  "subdirectory": "integrations/kirocrew/aidlc-studio",
-  "author": "ychchen",
-  "license": "Apache-2.0",
+  "summary": "Cross-repository Action Center, Workflow Map and transactional installer for AI-DLC Workflows.",
+  "author": { "name": "ychchen", "url": "https://github.com/warren830", "kind": "user" },
   "tags": ["aidlc", "developer-tools", "workflows", "automation"],
-  "builtin": false
+  "version": "<app.json version>"
 }
 ```
 
-Two things must stay true in that entry:
+Release procedure: tag `vX.Y.Z` on `main` (with `app.json` `version` equal to `X.Y.Z`), publish a GitHub
+Release, fast-forward `release` to the tag, then republish the official entry with the tag's commit.
 
-- **`builtin: false` and narrow trust.** The listing must never imply blanket third-party trust. A user
+Two things must stay true in every listing:
+
+- **Narrow trust.** The listing must never imply blanket third-party trust. A user
   installing from Discover grants trust to `aidlc-studio` alone; the README says so, and no instruction
   anywhere tells a user to set `agent.apps_allow_third_party`.
 - **Asset paths are repository-relative.** `registry.py` rewrites `iconPath`, `heroImage*` and
   `screenshots` into blob-proxy URLs so the artwork resolves before the app is installed. Absolute
   `/apps/aidlc-studio/ui/...` paths work only for a locally installed app and break in Discover, so the
-  published manifest keeps the relative form. (Whether the proxy resolves those paths relative to the
-  repository root or to `subdirectory` is the one thing that cannot be verified from this machine — check
-  it against a real Discover render before merging.)
+  published manifest keeps the relative form. Check it against a real Discover render after listing.
 
 ## 2. Assets
 
@@ -74,7 +84,7 @@ multi-step flow.
   unattended automation ships disabled and why), the permission table with a reason per entry, the
   bundled AI-DLC version and licence.
 - `THIRD_PARTY_NOTICES.md` — the bundled AI-DLC distribution, its MIT-0 licence, version, source commit
-  and the fact that it is unmodified.
+  and the Studio compatibility patches applied to it.
 - `LICENSE` — Apache-2.0, matching `app.json`.
 - `docs/design/architecture.md`, `docs/design/contracts.md` — how it works and what it promises, for a
   reviewer who needs to check the security claims rather than take them.
