@@ -1461,7 +1461,13 @@ class HumanActionBroker:
         file_answer = decision == "answers" and not audit_question
         if audit_question:
             self._assert_audit_question_current(rec, snap)
-        if rec.type == "question" and snap.questions and snap.questions.unsupported_pending_count:
+        if (
+            rec.type == "question" and snap.questions and snap.questions.unsupported_pending_count
+            # Only this card's own file. Another stage's follow-ups mean the boundary moved, which
+            # the drift check below reports as action_stale with a refreshed card.
+            and rec.stage == snap.stage
+            and snap.questions.relpath == (rec.evidence.get("questions") or {}).get("relpath")
+        ):
             # Old cards may still offer answers or a checkpoint confirmation. Revalidate before
             # constructing wire text or reserving a delivery, even when their captured hashes match.
             raise StudioError("invalid_decision", "answer the pending follow-ups in the conversation",

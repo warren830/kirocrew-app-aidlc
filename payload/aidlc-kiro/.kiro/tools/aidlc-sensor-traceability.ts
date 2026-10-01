@@ -52,6 +52,15 @@ interface UpstreamResolution {
   extraGaps: string[];
   unitContext?: UnitContext;
   storyAssignments?: Map<string, Set<string>>;
+  /** The whole selected source when `ids` is one unit's share of it. */
+  sourceIds?: Set<string>;
+}
+
+interface StoryAssignments {
+  assignments: Map<string, Set<string>>;
+  reason?: string;
+  /** The map was read but maps no source ID to a declared unit. */
+  empty: boolean;
 }
 
 const ID_PATTERNS = {
@@ -198,9 +207,31 @@ function extractUnitName(outputPath: string): string | null {
   return match?.[1] ?? null;
 }
 
+function isTableSeparator(line: string): boolean {
+  return line.trimStart().startsWith("|") && line.includes("-") && /^\s*\|?[\s:|-]+\|?\s*$/.test(line);
+}
+
 function markdownCells(line: string): string[] {
   if (!line.trimStart().startsWith("|") || /^\s*\|?[\s:|-]+\|?\s*$/.test(line)) return [];
   return line.split("|").slice(1, -1).map((cell) => cell.trim());
+}
+
+interface ColumnRoles {
+  ids: number[];
+  units: number[];
+}
+
+// Columns a story-map header names. Notes, rationale and dependency columns mention other IDs and
+// units in passing; they never map one.
+function columnRoles(header: string[]): ColumnRoles | null {
+  const roles: ColumnRoles = { ids: [], units: [] };
+  header.forEach((raw, index) => {
+    const name = raw.replace(/[`*_]/g, " ").trim().toLowerCase();
+    if (/\b(?:notes?|comments?|remarks?|rationale|reasons?|descriptions?|depend\w*|related|see also)\b/.test(name)) return;
+    if (/\b(?:units?|director(?:y|ies))\b/.test(name)) roles.units.push(index);
+    else if (/\b(?:stor(?:y|ies)|requirements?|upstream|ids?|frs?|uss?)\b/.test(name)) roles.ids.push(index);
+  });
+  return roles.ids.length > 0 && roles.units.length > 0 ? roles : null;
 }
 
 function unitIdMap(unitFile: string, units: string[]): Map<string, string> {
@@ -228,21 +259,38 @@ function storyAssignments(
   units: string[],
   ids: Map<string, string>,
   sourceIds: ReadonlySet<string>,
-): { assignments: Map<string, Set<string>>; reason?: string } {
+): StoryAssignments {
   const read = readText(storyMapPath);
-  if (read.content === null) return { assignments: new Map(), reason: read.reason };
+  if (read.content === null) return { assignments: new Map(), reason: read.reason, empty: false };
   const assignments = new Map<string, Set<string>>();
-  for (const line of read.content.split(/\r?\n/)) {
+  const lines = read.content.split(/\r?\n/);
+  let roles: ColumnRoles | null = null;
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
     const cells = markdownCells(line);
-    if (cells.length === 0) continue;
+    if (cells.length === 0) {
+      if (!line.trimStart().startsWith("|")) roles = null;
+      continue;
+    }
+    if (isTableSeparator(lines[index + 1] ?? "")) {
+      roles = columnRoles(cells);
+      continue;
+    }
     // Units may map FRs when user-stories was skipped. Only the selected
     // upstream artifact can authorize an ID; the map cannot invent one.
-    const stories = [...extractIds(line, [ID_PATTERNS.US, ID_PATTERNS.FR])]
+    // Without a recognised header, the first cell naming a source ID is the
+    // row's ID cell, so a later note cannot assign the IDs it mentions.
+    const idCells = roles
+      ? roles.ids.map((column) => cells[column] ?? "")
+      : cells.filter((cell) => [...extractIds(cell, [ID_PATTERNS.US, ID_PATTERNS.FR])]
+        .some((id) => sourceIds.has(id))).slice(0, 1);
+    const unitCells = roles ? roles.units.map((column) => cells[column] ?? "") : cells;
+    const stories = [...extractIds(idCells.join(" | "), [ID_PATTERNS.US, ID_PATTERNS.FR])]
       .filter((id) => sourceIds.has(id));
     if (stories.length === 0) continue;
     for (const unit of units) {
       const aliases = [unit, ids.get(unit)].filter((value): value is string => value !== undefined);
-      if (!cells.some((cell) => aliases.some((alias) => tokenPresent(cell, alias)))) continue;
+      if (!unitCells.some((cell) => aliases.some((alias) => tokenPresent(cell, alias)))) continue;
       for (const story of stories) {
         const mapped = assignments.get(story) ?? new Set<string>();
         mapped.add(unit);
@@ -251,8 +299,16 @@ function storyAssignments(
     }
   }
   return assignments.size === 0
-    ? { assignments, reason: `unit-of-work-story-map.md contains no upstream-ID-to-unit mappings: ${storyMapPath}` }
-    : { assignments };
+    ? {
+      assignments,
+      reason: `unit-of-work-story-map.md contains no upstream-ID-to-unit mappings: ${storyMapPath}`,
+      empty: true,
+    }
+    : { assignments, empty: false };
+}
+
+function unitShare(assignments: Map<string, Set<string>>, unit: string): Set<string> {
+  return new Set([...assignments.entries()].filter(([, units]) => units.has(unit)).map(([id]) => id));
 }
 
 function resolveUnitContext(projectDir: string, outputPath: string, docsDir: string): { context?: UnitContext; reason?: string } {
@@ -350,13 +406,16 @@ function resolveUpstream(stage: string, projectDir: string, outputPath: string):
         : idsFromFile(requirements, [ID_PATTERNS.FR], "requirements.md");
       if (source.reason) result.reasons.push(source.reason);
       const mapped = storyAssignments(storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds, source.ids);
+      if (!hasStories && mapped.empty) {
+        // A map written before requirement rows were understood names none. It scopes nothing,
+        // so keep the earlier rule — every requirement for every unit — instead of failing.
+        for (const id of source.ids) result.ids.add(id);
+        return result;
+      }
       if (mapped.reason) result.reasons.push(mapped.reason);
       result.storyAssignments = mapped.assignments;
-      const unitStories = new Set(
-        [...mapped.assignments.entries()]
-          .filter(([, units]) => units.has(unit))
-          .map(([story]) => story),
-      );
+      result.sourceIds = source.ids;
+      const unitStories = unitShare(mapped.assignments, unit);
       if (unitStories.size === 0) {
         result.reasons.push(`no ${hasStories ? "stories" : "requirements"} in unit-of-work-story-map.md map to unit "${unit}"`);
         return result;
@@ -370,7 +429,8 @@ function resolveUpstream(stage: string, projectDir: string, outputPath: string):
         result.reasons.push(storyRead.reason ?? `cannot read ${stories}`);
         return result;
       }
-      for (const ac of extractIds(storyRead.content, [ID_PATTERNS.AC])) {
+      result.sourceIds = extractIds(storyRead.content, [ID_PATTERNS.AC]);
+      for (const ac of result.sourceIds) {
         const [group, story] = ac.slice(2).split(".");
         if (unitStories.has(`US${group}.${story}`)) result.ids.add(ac);
       }
@@ -423,11 +483,7 @@ function resolveUpstream(stage: string, projectDir: string, outputPath: string):
         );
         if (mapped.reason) result.reasons.push(mapped.reason);
         result.storyAssignments = mapped.assignments;
-        const unitStories = new Set(
-          [...mapped.assignments.entries()]
-            .filter(([, units]) => units.has(unit))
-            .map(([story]) => story),
-        );
+        const unitStories = unitShare(mapped.assignments, unit);
         const storyRead = readText(stories);
         if (storyRead.content !== null) {
           for (const ac of extractIds(storyRead.content, [ID_PATTERNS.AC])) {
@@ -439,7 +495,25 @@ function resolveUpstream(stage: string, projectDir: string, outputPath: string):
         addSource(result, idsFromFile(stories, [ID_PATTERNS.AC], "stories.md"));
       }
     } else {
-      addSource(result, idsFromFile(requirements, [ID_PATTERNS.FR, ID_PATTERNS.NFR], "requirements.md"));
+      const source = idsFromFile(requirements, [ID_PATTERNS.FR, ID_PATTERNS.NFR], "requirements.md");
+      if (source.reason) result.reasons.push(source.reason);
+      const requirementIds = new Set([...source.ids].filter((id) => !id.startsWith("NFR")));
+      // Scope FRs to this unit exactly as functional-design does, so the two stages agree on what
+      // a unit owns. A missing or requirement-free map keeps every FR, as before.
+      const mapped = existsSync(storyMap)
+        ? storyAssignments(storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds, requirementIds)
+        : null;
+      if (mapped !== null && !mapped.empty && !mapped.reason) {
+        result.storyAssignments = mapped.assignments;
+        const unitRequirements = unitShare(mapped.assignments, unit);
+        if (unitRequirements.size === 0) {
+          result.reasons.push(`no requirements in unit-of-work-story-map.md map to unit "${unit}"`);
+        }
+        for (const id of unitRequirements) result.ids.add(id);
+      } else {
+        for (const id of requirementIds) result.ids.add(id);
+      }
+      for (const id of source.ids) if (id.startsWith("NFR")) result.ids.add(id);
     }
     const nfrDir = join(docsDir, "construction", unit, "nfr-requirements");
     for (const name of ["performance-requirements.md", "security-requirements.md", "scalability-requirements.md", "reliability-requirements.md"]) {
@@ -617,8 +691,16 @@ function main(): void {
   reasons.push(...upstream.reasons);
   gaps.push(...upstream.extraGaps);
   if (stage === "units-generation" || stage === "functional-design") {
+    // Another unit's ID may be listed only as N/A, the way a complete requirement table reads.
+    const notApplicable = new Set(data.coverage.filter((entry) => entry.status === "N/A").map((entry) => entry.id));
+    const claimed = new Set(data.coverage.filter((entry) => entry.status !== "N/A").map((entry) => entry.id));
     for (const id of declared) {
-      if (!upstream.ids.has(id)) invalidEntries.push(`upstream_ids:${id}: id is absent from the resolved upstream source`);
+      if (upstream.ids.has(id)) continue;
+      if (!upstream.sourceIds?.has(id)) {
+        invalidEntries.push(`upstream_ids:${id}: id is absent from the resolved upstream source`);
+      } else if (!notApplicable.has(id) || claimed.has(id)) {
+        invalidEntries.push(`upstream_ids:${id}: id is mapped to another unit; mark it N/A or remove it`);
+      }
     }
   }
   const missingFromUpstreamIds = [...upstream.ids].filter((id) => !declared.has(id));

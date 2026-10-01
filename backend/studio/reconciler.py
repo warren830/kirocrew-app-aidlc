@@ -319,6 +319,27 @@ def _event_order(event: Any) -> tuple[int, int]:
     return int(_attr(event, "shard_index", 0) or 0), int(_attr(event, "pos", 0) or 0)
 
 
+_SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}")
+
+
+def _unit_scoped(event: Any, unit: Any, snap: Any) -> bool:
+    """Is this main-workflow audit row about the action's unit?
+
+    Only team gates write ``Unit`` on gate rows (``teamGateFields``); a solo gate row carries Stage,
+    Feedback and a revision count and nothing else. A blank Unit therefore belongs to the unit the
+    engine is running now, which must still be the action's — the reader's question floors accept a
+    blank Unit for the same reason. A recorded Unit must match exactly.
+    """
+    fields = _attr(event, "fields", {}) or {}
+    if fields.get("Workflow"):
+        return False
+    recorded = str(fields.get("Unit") or "").strip() or None
+    expected = unit or None
+    if recorded is not None:
+        return recorded == expected
+    return expected is None or _attr(snap, "unit") == expected
+
+
 def _iso_gt(left: Any, right: Any) -> bool:
     """``left > right`` for two ISO-8601 UTC second-precision stamps; ``False`` when either is absent."""
     return bool(left) and bool(right) and str(left) > str(right)
@@ -1372,8 +1393,8 @@ class Reconciler:
             seen["stage_revising"] = _json_of(revising)
             if rejected is not None and revising is not None and self._row_mark(snap, stage) in ("R", "r"):
                 return Resolution("state_changed", "gate_rejected", seen)
-            if ended and rejected is not None and revising is not None:
-                returned = self._returned_revision_gate(rec, snap, stage, rejected, revising)
+            if ended:
+                returned = self._returned_revision_gate(rec, snap, stage)
                 if returned is not None:
                     return Resolution("state_changed", "gate_revision_returned", {
                         **seen, "returned_gate": _json_of(returned),
@@ -1472,34 +1493,22 @@ class Reconciler:
                     and _attr(rec, "wire_text") == questions.questions[0].options[0].text
                 ):
                     return Resolution("no_transition", "answer_requires_text", seen)
-                if (
-                    answered is None and self._current_stage(snap) == stage
-                    and self._row_mark(snap, stage) == "?"
-                ):
-                    gate = self._newest_new(rec, snap, ("STAGE_AWAITING_APPROVAL",), stage)
-                    gate_fields = _attr(gate, "fields", {}) or {}
-                    if (
-                        gate is not None and not gate_fields.get("Workflow")
-                        and (gate_fields.get("Unit") or None) == origin.get("unit")
-                    ):
-                        for candidate in self._new_events(rec, snap, ("QUESTION_ANSWERED",), stage):
-                            recorded_text = (_attr(candidate, "fields", {}) or {}).get("Details")
-                            if not isinstance(recorded_text, str) or not recorded_text:
-                                continue
-                            scoped_receipt = audit_question_answer(
-                                _attr(snap, "audit"), origin, recorded_text,
-                                str(_attr(rec, "delivering_at") or ""),
-                                project_dir=_attr(snap, "canonical_path"),
-                            )
-                            if scoped_receipt is candidate:
-                                # The receipt belongs to this question but does not verify our reply.
-                                # The ended turn and later gate permit retiring its lease, never replay
-                                # or an "answered" claim. Presence/cursor checks still run above.
-                                return Resolution("no_transition", "answer_not_verified_at_gate", {
-                                    **seen, "answer_verified": False,
-                                    "recorded_answer": _json_of(candidate),
-                                    "next_gate": _json_of(gate),
-                                })
+                receipt = self._unverified_receipt(rec, snap, origin, stage) if answered is None else None
+                if receipt is not None:
+                    # The receipt belongs to this question but does not verify our reply. The ended
+                    # turn and that receipt permit retiring its lease — whether AI-DLC then opened a
+                    # gate or asked a follow-up — never replay or an "answered" claim. Presence and
+                    # cursor checks still run in evaluate_resolution.
+                    gate = self._next_gate(rec, snap, stage, origin.get("unit"))
+                    return Resolution(
+                        "no_transition",
+                        "answer_not_verified_at_gate" if gate is not None else "answer_not_verified",
+                        {
+                            **seen, "answer_verified": False,
+                            "recorded_answer": _json_of(receipt),
+                            "next_gate": _json_of(gate),
+                        },
+                    )
                 return Resolution(
                     "no_transition" if answered is not None else "pending",
                     "question_answered" if answered is not None else "answers_not_recorded",
@@ -1545,9 +1554,7 @@ class Reconciler:
                 receipt = next((
                     event for event in (_attr(questions, "closed_file_receipts", ()) or ())
                     if event in new_receipts
-                    and event.fields.get("Prompt SHA-256") in (
-                        None, _attr(_attr(rec, "captured"), "question_digest"),
-                    )
+                    and self._receipt_prompt_matches(rec, snap, stage, event)
                     and event.fields.get("Intent") in (None, _attr(rec, "intent_uuid"))
                 ), None)
                 if receipt is not None:
@@ -1994,125 +2001,182 @@ class Reconciler:
 
     # ---- disk predicates -------------------------------------------------- #
 
+    def _captured_plan_prompt(self, rec: Any, snap: Any, stage: Any, receipt: Any) -> Any:
+        """The Plan Approval prompt ``receipt`` answers, when it is the prompt this card showed.
+
+        The engine puts two digests on that prompt (``aidlc-testing-posture.ts``): ``Questions
+        SHA-256`` over the file's bytes, which is what Studio captures, and ``Prompt SHA-256`` over
+        the file with every ``[Answer]:`` blanked, which is what the approval receipt repeats. They
+        differ whenever the file holds another answer, a trailing blank line or CRLF endings, so the
+        capture is matched on the first and the receipt on the second. The prompt is the newest
+        same-target decision before the receipt in its shard, and it must predate the dispatch: a
+        prompt asked again after the reply was sent could have consumed some other reply.
+        """
+        unit = _attr(rec, "unit") or None
+        captured = _attr(_attr(rec, "captured"), "question_digest")
+        relpath = ((_attr(rec, "evidence", {}) or {}).get("questions") or {}).get("relpath")
+        sent = C.epoch_from_iso(_attr(rec, "delivering_at"))
+        if not captured or not relpath or sent is None:
+            return None
+        prompts = [
+            event for event in list(_attr(_attr(snap, "audit"), "events", ()) or ())
+            if _attr(event, "event") == "DECISION_RECORDED"
+            and _attr(event, "shard") == _attr(receipt, "shard")
+            and _event_order(event) < _event_order(receipt)
+            and (_attr(event, "fields", {}) or {}).get("Stage") == stage
+            and ((_attr(event, "fields", {}) or {}).get("Unit") or None) == unit
+        ]
+        if not prompts:
+            return None
+        prompt = max(prompts, key=_event_order)
+        fields = _attr(prompt, "fields", {}) or {}
+        asked = C.epoch_from_iso(_attr(prompt, "timestamp"))
+        if (
+            asked is None or asked > sent or fields.get("Workflow")
+            or fields.get("Checkpoint") != C.PLAN_APPROVAL_AUDIT_CHECKPOINT
+            or fields.get("Questions File") != relpath
+            or fields.get("Questions SHA-256") != captured
+            or not _SHA256_HEX_RE.fullmatch(str(fields.get("Prompt SHA-256") or ""))
+        ):
+            return None
+        return prompt
+
+    def _receipt_prompt_matches(self, rec: Any, snap: Any, stage: Any, receipt: Any) -> bool:
+        """Does a closed file's approval receipt answer the prompt this card captured?"""
+        prompt_sha = (_attr(receipt, "fields", {}) or {}).get("Prompt SHA-256")
+        # Older receipts carry no prompt digest; blanking changes nothing in a file that holds only
+        # a blank Plan Approval answer, so an equal whole-file digest is the same prompt.
+        if prompt_sha in (None, _attr(_attr(rec, "captured"), "question_digest")):
+            return True
+        prompt = self._captured_plan_prompt(rec, snap, stage, receipt)
+        return prompt is not None and (_attr(prompt, "fields", {}) or {}).get("Prompt SHA-256") == prompt_sha
+
     def _historical_plan_approval(
         self, rec: Any, snap: Any, stage: Any, questions: Any,
     ) -> Any:
-        """Settle the old reply, never grant authority to a subsequently reset plan."""
+        """Settle the old reply, never grant authority to a subsequently reset plan.
+
+        The prompt is found from the receipt rather than at the card's captured boundary: that
+        boundary is the newest gate/question row of any kind at capture, which a second unit's plan
+        prompt or a row from another clone's shard can occupy instead.
+        """
         if stage != "code-generation" or not _attr(_attr(snap, "audit"), "complete", False):
             return None
-        evidence = _attr(rec, "evidence", {}) or {}
-        captured_question = evidence.get("questions") or {}
+        captured_question = (_attr(rec, "evidence", {}) or {}).get("questions") or {}
         if _attr(questions, "relpath") != captured_question.get("relpath"):
             return None
-        boundary = (evidence.get("audit") or {}).get("boundary_event") or {}
-        events = list(_attr(_attr(snap, "audit"), "events", ()) or ())
-        decision = next((
-            event for event in events
-            if _attr(event, "event") == "DECISION_RECORDED"
-            and _attr(event, "shard") == boundary.get("shard")
-            and _attr(event, "pos") == boundary.get("pos")
-        ), None)
-        if decision is None:
-            return None
-        fields = _attr(decision, "fields", {}) or {}
         unit = _attr(rec, "unit") or None
-        target = f"unit:{unit}" if unit else "stage:code-generation"
-        prompt_sha = _attr(_attr(rec, "captured"), "question_digest")
-        required = {
-            "Stage": stage, "Checkpoint": "Code Generation Plan Approval",
-            "Plan Target": target, "Intent": _attr(rec, "intent_uuid"),
+        identity = {
+            "Stage": stage, "Checkpoint": C.PLAN_APPROVAL_AUDIT_CHECKPOINT,
+            "Plan Target": f"unit:{unit}" if unit else "stage:code-generation",
+            "Intent": _attr(rec, "intent_uuid"),
             "Questions File": captured_question.get("relpath"),
-            "Prompt SHA-256": prompt_sha,
         }
-        if (
-            not required["Intent"] or not prompt_sha
-            or any(fields.get(key) != value for key, value in required.items())
-            or fields.get("Questions SHA-256") != prompt_sha
-            or (fields.get("Unit") or None) != unit or fields.get("Workflow")
-        ):
+        if not identity["Intent"]:
             return None
-        for key in ("Directive Epoch", "Approval Fingerprint"):
-            value = fields.get(key, "")
-            if not isinstance(value, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", value):
-                return None
-        if not fields.get("Run floor") or not fields.get("Session"):
-            return None
-        required.update({key: fields[key] for key in (
-            "Directive Epoch", "Approval Fingerprint", "Run floor", "Session",
-        )})
         for receipt in self._new_events(rec, snap, ("PLAN_APPROVAL_RECORDED",), stage):
+            prompt = self._captured_plan_prompt(rec, snap, stage, receipt)
+            fields = _attr(prompt, "fields", {}) or {}
+            if prompt is None or any(fields.get(key) != value for key, value in identity.items()):
+                continue
+            if any(
+                not re.fullmatch(r"sha256:[0-9a-f]{64}", str(fields.get(key) or ""))
+                for key in ("Directive Epoch", "Approval Fingerprint")
+            ) or not fields.get("Run floor") or not fields.get("Session"):
+                continue
+            required = {**identity, **{key: fields[key] for key in (
+                "Directive Epoch", "Approval Fingerprint", "Run floor", "Session", "Prompt SHA-256",
+            )}}
             received = _attr(receipt, "fields", {}) or {}
-            approved_sha = received.get("Questions SHA-256", "")
+            approved_sha = str(received.get("Questions SHA-256") or "")
             if (
-                _attr(receipt, "shard") != _attr(decision, "shard")
-                or _event_order(receipt) <= _event_order(decision)
-                or received.get("Details") != C.WIRE_APPROVE_PLAN
+                received.get("Details") != C.WIRE_APPROVE_PLAN
                 or (received.get("Unit") or None) != unit or received.get("Workflow")
                 or any(received.get(key) != value for key, value in required.items())
-                or not isinstance(approved_sha, str)
-                or not re.fullmatch(r"[0-9a-f]{64}", approved_sha)
-                or approved_sha == prompt_sha
-            ):
-                continue
-            # A later same-target prompt could have consumed this reply instead.
-            if any(
-                _attr(event, "event") == "DECISION_RECORDED"
-                and (_attr(event, "fields", {}) or {}).get("Stage") == stage
-                and ((_attr(event, "fields", {}) or {}).get("Unit") or None) == unit
-                and _event_order(decision) < _event_order(event) < _event_order(receipt)
-                for event in events
+                or not _SHA256_HEX_RE.fullmatch(approved_sha)
+                or approved_sha == fields.get("Questions SHA-256")
             ):
                 continue
             return receipt
         return None
 
-    def _returned_revision_gate(
-        self, rec: Any, snap: Any, stage: Any, rejected: Any, revising: Any,
-    ) -> Any:
+    def _returned_revision_gate(self, rec: Any, snap: Any, stage: Any) -> Any:
         """Recover a finished revision even if no poll observed its transient R row.
 
-        A question mark alone proves nothing. Require the original audit boundary,
-        a complete same-shard rejection/revision/returned-gate chain in the same
-        scope, and the corresponding revision increase. Presence and cursor checks
-        still run in evaluate_resolution; this never approves the returned gate.
+        A question mark alone proves nothing, and by the next poll the returned gate may already be
+        approved, so the row may be ``?`` or completed. Require the original audit boundary, a
+        complete same-shard rejection/revision/returned-gate chain in this action's unit, and the
+        corresponding revision increase. Each link is the newest one in scope, so another unit's later
+        rows cannot hide this unit's chain. Presence and cursor checks still run in
+        evaluate_resolution; this never approves the gate.
         """
         audit = _attr(snap, "audit")
+        at_gate = self._current_stage(snap) == stage and self._row_mark(snap, stage) == "?"
         if (
-            self._current_stage(snap) != stage or self._row_mark(snap, stage) != "?"
-            or not _attr(audit, "complete", False)
-            or self._boundary_order(rec, snap) is None
+            not (at_gate or self._row_completed(snap, stage))
+            or not _attr(audit, "complete", False) or self._boundary_order(rec, snap) is None
         ):
             return None
-        gate = self._newest_new(rec, snap, ("STAGE_AWAITING_APPROVAL",), stage)
-        if gate is None:
-            return None
-        events = (rejected, revising, gate)
-        expected_unit = _attr(rec, "unit") or None
-        for event in events:
-            fields = _attr(event, "fields", {}) or {}
-            if fields.get("Workflow") or (fields.get("Unit") or None) != expected_unit:
-                return None
-        shard = _attr(rejected, "shard")
-        if not shard or any(_attr(event, "shard") != shard for event in events):
-            return None
-        boundary = (_attr(rec, "evidence", {}) or {}).get("audit", {}).get("boundary_event") or {}
-        if boundary.get("shard") != shard:
-            return None
-        if not (_event_order(rejected) < _event_order(revising) < _event_order(gate)):
-            return None
-        times = [C.epoch_from_iso(_attr(event, "timestamp")) for event in events]
-        if any(value is None for value in times) or not (times[0] <= times[1] <= times[2]):
-            return None
+        boundary = ((_attr(rec, "evidence", {}) or {}).get("audit") or {}).get("boundary_event") or {}
+        shard = boundary.get("shard")
+        unit = _attr(rec, "unit") or None
         before = ((_attr(rec, "evidence", {}) or {}).get("state") or {}).get("revision_count")
         current = _attr(_attr(snap, "state"), "revision_count")
-        fields = _attr(revising, "fields", {}) or {}
-        recorded = str(fields.get("Revision count", fields.get("Revision Count", ""))).strip()
-        if (
-            type(before) is not int or type(current) is not int or not recorded.isdecimal()
-            or current != int(recorded) or current <= before
-        ):
+        if not shard or type(before) is not int or type(current) is not int or current <= before:
             return None
-        return gate
+
+        def scoped(event_type: str) -> list[Any]:
+            return sorted((
+                event for event in self._new_events(rec, snap, (event_type,), stage)
+                if _attr(event, "shard") == shard and _unit_scoped(event, unit, snap)
+            ), key=_event_order)
+
+        rejections = scoped("GATE_REJECTED")
+        revisions = scoped("STAGE_REVISING")
+        for gate in reversed(scoped("STAGE_AWAITING_APPROVAL")):
+            revising = next(
+                (e for e in reversed(revisions) if _event_order(e) < _event_order(gate)), None,
+            )
+            if revising is None:
+                continue
+            rejected = next(
+                (e for e in reversed(rejections) if _event_order(e) < _event_order(revising)), None,
+            )
+            if rejected is None:
+                continue
+            times = [C.epoch_from_iso(_attr(event, "timestamp")) for event in (rejected, revising, gate)]
+            if any(value is None for value in times) or not (times[0] <= times[1] <= times[2]):
+                continue
+            fields = _attr(revising, "fields", {}) or {}
+            recorded = str(fields.get("Revision count", fields.get("Revision Count", ""))).strip()
+            if recorded.isdecimal() and int(recorded) == current:
+                return gate
+        return None
+
+    def _unverified_receipt(self, rec: Any, snap: Any, origin: Mapping[str, Any], stage: Any) -> Any:
+        """A new receipt for exactly this audit question whose recorded text is not our reply."""
+        for candidate in self._new_events(rec, snap, ("QUESTION_ANSWERED",), stage):
+            recorded_text = (_attr(candidate, "fields", {}) or {}).get("Details")
+            if not isinstance(recorded_text, str) or not recorded_text:
+                continue
+            scoped_receipt = audit_question_answer(
+                _attr(snap, "audit"), origin, recorded_text,
+                str(_attr(rec, "delivering_at") or ""),
+                project_dir=_attr(snap, "canonical_path"),
+            )
+            if scoped_receipt is candidate:
+                return candidate
+        return None
+
+    def _next_gate(self, rec: Any, snap: Any, stage: Any, unit: Any) -> Any:
+        """The newest new gate in this stage and unit, while the stage is still waiting at it."""
+        if self._current_stage(snap) != stage or self._row_mark(snap, stage) != "?":
+            return None
+        gates = [
+            event for event in self._new_events(rec, snap, ("STAGE_AWAITING_APPROVAL",), stage)
+            if _unit_scoped(event, unit, snap)
+        ]
+        return max(gates, key=lambda e: _attr(e, "sort_key", ("", 0, 0))) if gates else None
 
     def _new_events(self, rec: Any, snap: Any, types: Sequence[str], stage: Any) -> list[Any]:
         """Audit rows that belong to *this* dispatch (the "new X" rule, review P23).
@@ -2153,6 +2217,10 @@ class Reconciler:
         in the current bundle. When the shard is gone the row cannot be ordered against, so the floor is
         dropped and the timestamp condition carries the rule alone — the honest reading of "we no longer
         have that history".
+
+        A tail window numbers its blocks from wherever it starts, so a position read from a truncated
+        shard — at capture or now — names a different row once the file grows. The shard still orders
+        against the others, but inside it the timestamp condition decides alone.
         """
         audit = dict(_attr(rec, "evidence", {}) or {}).get("audit") or {}
         boundary = audit.get("boundary_event") if isinstance(audit, Mapping) else None
@@ -2162,8 +2230,15 @@ class Reconciler:
         pos = boundary.get("pos")
         if not shard or not isinstance(pos, int):
             return None
+        captured_truncated = any(
+            isinstance(meta, Mapping) and meta.get("truncated")
+            and str(meta.get("relpath") or "").rsplit("/", 1)[-1] == shard
+            for meta in (audit.get("shards") or ())
+        )
         for index, meta in enumerate(list(_attr(_attr(snap, "audit"), "shards", ()) or ())):
             if str(_attr(meta, "relpath", "")).rsplit("/", 1)[-1] == shard:
+                if captured_truncated or _attr(meta, "truncated", False):
+                    return index, -1
                 return index, pos
         return None
 

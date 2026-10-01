@@ -2738,6 +2738,45 @@ def test_unsupported_followups_refuse_cached_card_decisions_before_delivery(worl
     run(scenario())
 
 
+@pytest.mark.parametrize("repo_options,payload,wire", [
+    ({"questions": "## Plan Approval\n- Approve Plan\n- Request Changes\n[Answer]:\n"},
+     {"decision": "approve_plan"}, "Approve Plan"),
+    ({"questions": "## Consolidated Summary Confirmation\n- Looks correct\n- Request changes\n[Answer]:\n"},
+     {"decision": "confirm_summary", "choice": "looks_correct"}, "Looks correct"),
+], ids=["plan", "summary"])
+def test_a_later_stages_followups_leave_a_stale_checkpoint_card_stale(
+    world, A, repo_options, payload, wire,
+):
+    """The follow-up guard reads the current file; a card for an earlier stage must go stale instead."""
+    async def scenario():
+        await bind(world)
+        question = pick(await seed(world), "question")
+        record = world.builder.record(INTENT)
+        state = F.state_text(marks={STAGE: "x", SECOND_STAGE: "-"}, fields={
+            "Current Stage": SECOND_STAGE, "Status": "Running", "Next Stage": "domain-model",
+            "Lifecycle Phase": "INCEPTION", "Completed": "8",
+        })
+        (record / "aidlc-state.md").write_text(state)
+        (record / ".aidlc-active-directive.json").write_text(
+            json.dumps({"version": 1, "stage": SECOND_STAGE, "state_sha256": F.sha256(state)})
+        )
+        later = record / f"inception/{SECOND_STAGE}/{SECOND_STAGE}-questions.md"
+        later.parent.mkdir(parents=True, exist_ok=True)
+        later.write_text("## Q1. Persona?\nA. Admin\n[Answer]: A\n\n## F1. Follow-up\n[Answer]:\n")
+        live = snapshot(world)
+        assert live.stage == SECOND_STAGE and live.questions.unsupported_pending_count == 1
+        with pytest.raises(world.S.errors.StudioError) as exc:
+            await world.broker.submit(
+                question.action_id, captured=captured_of(question, A), payload=payload,
+                client_wire_text=wire, user="owner",
+            )
+        assert exc.value.code == "action_stale", exc.value.details
+        assert "card" in exc.value.details
+        assert (await world.broker.get(question.action_id)).delivery_id is None
+        assert world.fake_host.get_slot(SLOT).messages == []
+    run(scenario())
+
+
 def test_unavailable_repository_is_refused_before_snapshot_or_dispatch(world, A, monkeypatch):
     async def scenario():
         gate = pick(await seed(world), "gate")

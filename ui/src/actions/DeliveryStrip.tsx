@@ -82,7 +82,9 @@ export function statusTone(status: ActionStatus): ChipTone {
 }
 
 export function statusLabel(i18n: I18n, status: ActionStatus, reason?: string | null): string {
-  if (status === 'ResolvedNoTransition' && reason === 'answer_not_verified_at_gate') {
+  // A receipt for this question was recorded, but not with the reply that was sent.
+  if (status === 'ResolvedNoTransition'
+    && (reason === 'answer_not_verified_at_gate' || reason === 'answer_not_verified')) {
     return i18n.t('delivery.answerNotVerified')
   }
   if (status === 'ResolvedNoTransition' && reason === 'plan_approval_recorded_before_reset') {
@@ -112,10 +114,13 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
   // Receipt completes only the send step. Reconciliation still has to establish what AI-DLC did.
   const { index, failed } = confirmedPending ? { index: 2, failed: false } : stepIndex(status)
   const noTransition = status === 'ResolvedNoTransition'
-  const answerNotVerified = noTransition && card.resolution.reason === 'answer_not_verified_at_gate'
+  // A follow-up question can consume the receipt without a new gate opening.
+  const atNewGate = card.resolution.reason === 'answer_not_verified_at_gate'
+  const answerNotVerified = noTransition && (atNewGate || card.resolution.reason === 'answer_not_verified')
   const planReset = noTransition && card.resolution.reason === 'plan_approval_recorded_before_reset'
+  const unverifiedLabel = atNewGate ? 'delivery.newGateReview' : 'delivery.conversationReview'
   const remainingLabel = planReset ? 'delivery.updatedPlanReview'
-    : answerNotVerified ? 'delivery.newGateReview' : 'delivery.noTransition'
+    : answerNotVerified ? unverifiedLabel : 'delivery.noTransition'
   const sent = !BEFORE_SEND.includes(status)
 
   return (
@@ -134,7 +139,7 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
               </span>
               <span className="studio-dstep-label">{t(
                 state === 'unchanged' ? (planReset ? 'delivery.updatedPlanReview'
-                  : answerNotVerified ? 'delivery.newGateReview' : 'delivery.step.unchanged')
+                  : answerNotVerified ? unverifiedLabel : 'delivery.step.unchanged')
                   : state === 'cancelled' ? 'enum.actionStatus.Cancelled'
                   : confirmedPending && position === 2 ? 'delivery.step.reconciliation' : key,
               )}</span>
@@ -165,7 +170,7 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
       {answerNotVerified ? (
         <div className="studio-banner studio-dwarn" data-tone="warn" role="alert">
           <Icon name="warn" size={15} />
-          <p>{t('delivery.answerNotVerifiedBody')}</p>
+          <p>{t(atNewGate ? 'delivery.answerNotVerifiedBody' : 'delivery.answerNotVerifiedFollowUpBody')}</p>
         </div>
       ) : null}
       {planReset ? (

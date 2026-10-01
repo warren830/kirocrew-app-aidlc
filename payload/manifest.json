@@ -13,7 +13,7 @@
     8
   ],
   "stageCount": 33,
-  "payloadDigest": "ad3610ce43093cf51d6230fd509b791d731fd672a1fd28e54b71041da63f30be",
+  "payloadDigest": "f39dde557e80f45287a545d1a5ee1063e0039217870896327e3c36b8d92902e9",
   "fileCount": 293,
   "mergeTargets": {
     ".kiro/settings/cli.json": {
@@ -1538,8 +1538,8 @@
     },
     {
       "path": ".kiro/tools/aidlc-sensor-traceability.ts",
-      "sha256": "c00d7dc667f1b65b7119d7d8c3b9acab4529bdc18f4a0024c4a879a3986cc4d9",
-      "size": 25479,
+      "sha256": "73ca2e3234001bfa8c024efa63db1efc515c23f9e738a2c58fb70920b4e59423",
+      "size": 29530,
       "ownership": "framework"
     },
     {

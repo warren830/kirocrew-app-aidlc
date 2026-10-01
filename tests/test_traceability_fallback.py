@@ -51,11 +51,11 @@ units:
     return SimpleNamespace(root=tmp_path, record=record, write=write)
 
 
-def write_map(workspace, rows):
+def write_map(workspace, rows, header=("Upstream ID", "Unit")):
     return workspace.write(
         "inception/units-generation/unit-of-work-story-map.md",
-        "| Upstream ID | Unit |\n|---|---|\n"
-        + "".join(f"| {identifier} | {unit} |\n" for identifier, unit in rows),
+        "| " + " | ".join(header) + " |\n|" + "---|" * len(header) + "\n"
+        + "".join("| " + " | ".join(row) + " |\n" for row in rows),
     )
 
 
@@ -79,8 +79,11 @@ def run_sensor(workspace, stage, coverage):
         "stage": stage,
         "upstream_ids": list(coverage),
         "coverage": [
-            {"id": identifier, "status": "OK", "target": target}
-            for identifier, target in coverage.items()
+            {"id": identifier, "status": status, "target": target}
+            for identifier, (status, target) in (
+                (key, value if isinstance(value, tuple) else ("OK", value))
+                for key, value in coverage.items()
+            )
         ],
     }))
     before = {p.relative_to(workspace.root): p.read_bytes()
@@ -172,8 +175,7 @@ def test_functional_design_scopes_requirement_fallback_to_its_unit(workspace):
     [("FR1", "U2"), ("FR1.1", "U2"), ("FR2", "U2")],
     [("FR99", "U1"), ("FR2", "U2")],
     [("FR1", "U99"), ("FR2", "U2")],
-    [],
-], ids=["other-unit", "unknown-source", "unknown-unit", "empty-map"])
+], ids=["other-unit", "unknown-source", "unknown-unit"])
 def test_functional_design_rejects_map_without_requirements_for_unit(workspace, rows):
     write_map(workspace, rows)
     result = run_sensor(workspace, "functional-design", {
@@ -258,3 +260,71 @@ def test_code_generation_keeps_its_existing_story_and_rule_sources(workspace):
     assert_pass(run_sensor(workspace, "code-generation", {
         "AC1.1.1": target, "AC1.1.2": target, "BR1.1": target,
     }))
+
+
+@pytest.mark.parametrize("rows", [[], [("US1.1", "U1")]], ids=["empty-map", "story-rows-only"])
+def test_a_map_without_requirement_rows_keeps_every_requirement(workspace, rows):
+    """An in-flight map written before FR rows were understood scopes nothing: all FRs still count."""
+    write_map(workspace, rows)
+    assert_pass(run_sensor(workspace, "functional-design", {
+        identifier: "BR1.1" for identifier in REQUIREMENTS
+    }))
+    result = run_sensor(workspace, "functional-design", {"FR1": "BR1.1"})
+    assert not result["pass"], result
+    assert result["missing_from_upstream_ids"] == ["FR1.1", "FR2"], result
+    assert "map to unit" not in result.get("reason", ""), result
+
+
+@pytest.mark.parametrize("header", [
+    ("Upstream ID", "Unit", "Notes"), ("Item", "Owner", "Comment"),
+], ids=["named-columns", "unnamed-columns"])
+def test_ids_mentioned_in_a_note_are_not_mapped(workspace, header):
+    write_map(workspace, [
+        ("FR1", "U1", "-"), ("FR1.1", "U1", "-"), ("FR2", "U2", "shares validation with FR1"),
+    ], header=header)
+    result = run_sensor(workspace, "units-generation", {"FR1": "U2", "FR1.1": "U1", "FR2": "U2"})
+    assert not result["pass"], result
+    assert result["invalid_targets"] == [
+        'FR1: target "U2" is not mapped in unit-of-work-story-map.md'
+    ], result
+
+
+def test_units_named_in_a_note_column_are_not_mapped(workspace):
+    write_map(workspace, [
+        ("FR1", "U1", "-"), ("FR1.1", "U1", "-"), ("FR2", "U2", "called by U1"),
+    ], header=("Upstream ID", "Unit", "Depends on"))
+    result = run_sensor(workspace, "units-generation", {"FR1": "U1", "FR1.1": "U1", "FR2": "U1"})
+    assert result["invalid_targets"] == [
+        'FR2: target "U1" is not mapped in unit-of-work-story-map.md'
+    ], result
+    # Cross-cutting rows name several units in the unit column itself.
+    write_map(workspace, [("FR1", "U1, U2"), ("FR1.1", "U1"), ("FR2", "U2")])
+    assert_pass(run_sensor(workspace, "units-generation", {"FR1": "U2", "FR1.1": "U1", "FR2": "U2"}))
+
+
+def test_another_units_requirement_may_be_listed_only_as_not_applicable(workspace):
+    write_map(workspace, [("FR1, FR1.1", "U1"), ("FR2", "U2")])
+    assert_pass(run_sensor(workspace, "functional-design", {
+        "FR1": "BR1.1", "FR1.1": "BR1.1", "FR2": ("N/A", "owned by beta"),
+    }))
+    result = run_sensor(workspace, "functional-design", {
+        "FR1": "BR1.1", "FR1.1": "BR1.1", "FR2": ("Deferred", "later"),
+    })
+    assert not result["pass"], result
+    assert result["invalid_entries"] == [
+        "upstream_ids:FR2: id is mapped to another unit; mark it N/A or remove it"
+    ], result
+
+
+@pytest.mark.parametrize("mapped", [True, False], ids=["requirement-map", "no-requirement-rows"])
+def test_code_generation_scopes_requirements_like_functional_design(workspace, mapped):
+    write_map(workspace, [("FR1, FR1.1", "U1"), ("FR2", "U2")] if mapped else [("US9.9", "U1")])
+    workspace.write("construction/alpha/code-generation/implementation.py", "pass\n")
+    target = "aidlc/spaces/default/intents/fixture/construction/alpha/code-generation/implementation.py"
+    coverage = {identifier: target for identifier in ["FR1", "FR1.1", "NFR1", "BR1.1"]}
+    result = run_sensor(workspace, "code-generation", coverage)
+    if mapped:
+        assert_pass(result)
+    else:
+        # Without FR rows the map scopes nothing, exactly as before: every FR is still owed.
+        assert result["missing_from_upstream_ids"] == ["FR2"], result

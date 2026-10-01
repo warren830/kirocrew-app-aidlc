@@ -72,6 +72,21 @@ describe('delivery outcomes describe observed progress', () => {
     expect(strip).not.toHaveTextContent(i18n.t('delivery.noTransition'))
   })
 
+  it.each(['en-US', 'zh-CN'] as const)('labels a receipt before a follow-up as unverified, not a new gate (%s)', (locale) => {
+    document.documentElement.lang = locale
+    const i18n = makeI18n(locale)
+    const card = actionCard({ status: 'ResolvedNoTransition', resolution: {
+      kind: 'no_transition', reason: 'answer_not_verified', evidence: null, resolved_at: null,
+    } })
+    render(<I18nProvider><DeliveryStrip card={card} /></I18nProvider>)
+    const strip = screen.getByRole('region', { name: i18n.t('delivery.label') })
+    expect(strip).toHaveTextContent(i18n.t('delivery.answerNotVerified'))
+    expect(strip).toHaveTextContent(i18n.t('delivery.conversationReview'))
+    expect(strip).toHaveTextContent(i18n.t('delivery.answerNotVerifiedFollowUpBody'))
+    expect(strip).not.toHaveTextContent(i18n.t('delivery.newGateReview'))
+    expect(strip).not.toHaveTextContent(i18n.t('enum.actionStatus.ResolvedNoTransition'))
+  })
+
   it('does not mark a workflow state change complete when a turn ended without one', () => {
     const strip = show('ResolvedNoTransition')
     const steps = [...strip.querySelectorAll('.studio-dstep')]

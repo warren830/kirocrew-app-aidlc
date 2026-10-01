@@ -456,6 +456,10 @@ AUDIT_BLOCK_SEPARATOR = "\n---\n"
 ANSWER_TAG_RE = re.compile(r"^\[Answer\]:[ \t]*(.*)$", re.MULTILINE)
 #: An unanswered tag: empty, or only the underscore placeholder the templates write.
 BLANK_ANSWER_RE = re.compile(r"^\[Answer\]:[ \t]*_*[ \t]*$", re.MULTILINE)
+#: A blank tag that still owes an answer: ``BLANK_ANSWER_RE``, or the same tag as a list item. The
+#: engine's Stop hook (``hasPendingQuestion``) matches the tag anywhere on a line; quoted and indented
+#: copies stay excluded here on purpose — they are examples, not questions.
+PENDING_ANSWER_TAG_RE = re.compile(r"^(?:[-*+][ \t]+)?\[Answer\]:[ \t]*_*[ \t]*$")
 QUESTION_HEADING_RE = re.compile(r"^## Q(\d+)[.:]?\s*(.*)$", re.MULTILINE)
 #: ``- A. Some option`` / ``A. Some option`` / ``- X. Other (please specify)``.
 OPTION_LINE_RE = re.compile(r"^(?:- )?([A-Z])\.[ \t]+(.*)$", re.MULTILINE)

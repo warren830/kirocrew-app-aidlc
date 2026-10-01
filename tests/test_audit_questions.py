@@ -1199,7 +1199,14 @@ def test_reconcile_cannot_consume_a_foreign_or_different_answer(sv, routes, fake
     answer_on_disk(scene, **fields)
     for _ in range(3):
         asyncio.run(sv.reconciler.reconcile_now(card["action_id"]))
-    assert _row(sv, card["action_id"])["status"] == "Processing"
+    row = _row(sv, card["action_id"])
+    if "Details" in fields:
+        # This question's own receipt, with other text: the turn is over but the reply is unverified.
+        assert row["status"] == "ResolvedNoTransition"
+        assert row["resolution_json"]["reason"] == "answer_not_verified"
+        assert row["resolution_json"]["evidence"]["answer_verified"] is False
+    else:
+        assert row["status"] == "Processing"
 
 
 def test_host_options_cannot_replace_disk_labels_or_enable_protected_choices(

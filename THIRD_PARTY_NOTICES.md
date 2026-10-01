@@ -20,9 +20,13 @@ The bundled copy includes Studio-maintained local changes and is not byte-identi
 The local requirement-traceability patch changes
 `payload/aidlc-kiro/.kiro/tools/aidlc-sensor-traceability.ts`. Units-generation maps only IDs found in
 its selected upstream source: US IDs from an existing `stories.md`, or FR group/detail IDs from
-`requirements.md` when stories are absent. Functional-design applies an existing requirement map
-to the current unit before checking FR-to-business-rule coverage; without a map it preserves the
-existing requirements fallback. Existing story maps still resolve to acceptance-criterion IDs.
+`requirements.md` when stories are absent. A story-map row maps only the IDs in the columns its
+header names as ID columns to the units in its unit columns; notes, rationale and dependency
+columns never map anything, and a table without such a header maps only the IDs in the first cell
+that names one. Functional-design and, when stories are absent, code-generation apply an existing
+requirement map to the current unit; a unit may still list another unit's requirement as `N/A`.
+Without a map, or with a map that has no requirement rows, both keep the existing
+every-requirement fallback. Existing story maps still resolve to acceptance-criterion IDs.
 Missing mappings, wrong units, and IDs outside the selected source remain failures. No US stories
 are synthesized. This is a Studio vendored fix, not an upstream change, and it is additional to
 the previously recorded plan-progress and review-appendix compatibility patches.

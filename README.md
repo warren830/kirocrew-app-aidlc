@@ -105,8 +105,10 @@ immediately without restarting Studio.
 ### Install from GitHub
 
 Start KiroCrew on the machine where you want the app installed. The installation helper needs Git,
-Bash, `curl` and Python 3 (`KC_PY`, or `python3` on `PATH`). The repository includes the built UI, so
-`--no-build` needs neither Node.js nor npm:
+Bash, `curl` and the gateway's Python: `KC_PY` when set (a path or a command name on `PATH`),
+otherwise the runtime bundled in `/Applications/KiroCrew.app` when present, otherwise `python3` on
+`PATH`. It passes the same interpreter to `scripts/kcapi.sh`. The repository includes the built UI,
+so `--no-build` needs neither Node.js nor npm:
 
 ```bash
 git clone https://github.com/warren830/kirocrew-app-aidlc.git
@@ -121,7 +123,8 @@ Silicon macOS desktop installation: port `5476` and the Python runtime bundled i
 response should report `"status": "healthy"`.
 
 For Linux, Intel macOS, or a source/virtual-environment installation, set `KC_PY` to the **same Python
-interpreter that runs your KiroCrew gateway**. Set `KC_PORT` if the gateway uses another port:
+interpreter that runs your KiroCrew gateway** unless that is already the `python3` on `PATH` (as in the
+official Docker image). Set `KC_PORT` if the gateway uses another port:
 
 ```bash
 # Replace the interpreter path with your gateway's actual Python executable.

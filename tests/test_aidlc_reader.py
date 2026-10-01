@@ -806,6 +806,65 @@ def test_audit_history_has_one_aggregate_read_budget(reader, repo_builder, R, mo
     assert {Path(shard.relpath).name for shard in audit.shards} >= {"a.md", "b.md", "c.md"}
 
 
+def test_a_shard_that_grows_during_the_read_keeps_its_history(reader, repo_builder, R, monkeypatch):
+    """An engine append between stat and read used to drop the whole shard (and its human turns)."""
+    intent = "260904-growing-audit"
+    repo = repo_builder.with_workspace().with_intent(intent, state=GATE_STATE, audit=GATE_AUDIT).build()
+    before = reader.read_audit(repo, "default", intent)
+    path = next((repo / "aidlc/spaces/default/intents" / intent / "audit").glob("*.md"))
+    original = R.security.bounded_read
+
+    def racing(target, cap):
+        if Path(target) == path:
+            with path.open("a") as file:
+                file.write(F.audit_block("ERROR_LOGGED", "2026-09-04T10:00:09Z", Details="retry"))
+        return original(target, cap)
+
+    monkeypatch.setattr(R.security, "bounded_read", racing)
+    during = reader.read_audit(repo, "default", intent)
+    assert during.events[:len(before.events)] == before.events
+    assert [e.event for e in during.events].count("HUMAN_TURN") == [
+        e.event for e in before.events
+    ].count("HUMAN_TURN")
+    assert during.complete is False   # it changed under the read; the next read is whole again
+    assert not any(shard.truncated for shard in during.shards)
+
+
+def test_over_budget_history_keeps_the_newest_shard_whole(reader, repo_builder, R, monkeypatch):
+    """Shard names are per clone; the one written last must not be starved by name order."""
+    intent = "260904-two-clones"
+    repo = repo_builder.with_workspace().with_intent(intent, state=GATE_STATE, audit="").build()
+    directory = repo / "aidlc/spaces/default/intents" / intent / "audit"
+    for stale in directory.glob("*.md"):
+        stale.unlink()
+    old = directory / "alice-0000.md"
+    old.write_text(F.audit_text(*(
+        F.audit_block("ARTIFACT_UPDATED", "2026-09-01T10:00:00Z", Details="x" * 400) for _ in range(8)
+    )))
+    os.utime(old, ns=(1_000_000_000, 1_000_000_000))
+    active = directory / "bob-9999.md"
+    active.write_text(F.audit_text(
+        F.audit_block("HUMAN_TURN", "2026-09-04T10:00:20Z"),
+        F.audit_block("GATE_APPROVED", "2026-09-04T10:00:20Z", Stage="requirements-analysis"),
+    ))
+    monkeypatch.setattr(R.C, "MAX_AUDIT_HISTORY_BYTES", old.stat().st_size)
+    audit = reader.read_audit(repo, "default", intent)
+    assert audit.complete is False
+    assert [shard.truncated for shard in audit.shards] == [True, False]
+    assert [e.event for e in audit.events if e.shard == active.name] == ["HUMAN_TURN", "GATE_APPROVED"]
+    assert 0 < sum(1 for e in audit.events if e.shard == old.name) < 8
+
+
+def test_shard_index_is_the_position_among_read_shards(reader, repo_builder):
+    intent = "260904-odd-shard"
+    repo = repo_builder.with_workspace().with_intent(intent, state=GATE_STATE, audit=GATE_AUDIT).build()
+    (repo / "aidlc/spaces/default/intents" / intent / "audit/000-not-a-file.md").mkdir()
+    audit = reader.read_audit(repo, "default", intent)
+    assert audit.complete is False
+    assert len(audit.shards) == 1
+    assert {event.shard_index for event in audit.events} == {0}
+
+
 def test_read_audit_of_a_record_without_audit_dir(reader, repo_builder):
     repo = repo_builder.with_workspace().with_intent("260904-x", state=GATE_STATE, audit="").build()
     shutil.rmtree(repo / "aidlc/spaces/default/intents/260904-x/audit")
@@ -816,6 +875,33 @@ def test_read_audit_of_a_record_without_audit_dir(reader, repo_builder):
 # --------------------------------------------------------------------------- #
 # questions
 # --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize("follow_up", [
+    "**Follow-up F1:** Which region?\n\n[Answer]:",
+    "Follow-up\n---------\n\nWhich region?\n\n[Answer]: ___",
+    "Follow-up F1: Which region?\n- [Answer]:",
+], ids=["bold-label", "setext-heading", "bulleted-tag"])
+def test_a_blank_followup_inside_an_answered_question_is_still_pending(R, follow_up):
+    """The engine's Stop hook holds the turn for any blank tag; a form must not skip it."""
+    text = (
+        "## Q1. Store?\nA. Postgres\nB. SQLite\nX. Other\n\n[Answer]: A\n- chosen for joins\n\n"
+        f"{follow_up}\n\n## Q2. Region?\nA. EU\nB. US\n\n[Answer]:\n"
+    )
+    parsed = R.parse_questions_file(text, "x-questions.md", "0" * 64)
+    assert [question.answered for question in parsed.questions] == [True, False]
+    assert parsed.questions[0].answer.startswith("A")
+    assert parsed.unsupported_pending_count == 1
+    assert parsed.pending_count == 2
+    assert not R.file_questions_support_forms(parsed)
+
+
+def test_a_bulleted_blank_tag_in_a_free_section_is_pending(R):
+    text = "## Q1. Store?\nA. Postgres\n\n[Answer]: A\n\n## Notes\n\nConfirm the region:\n- [Answer]:\n"
+    parsed = R.parse_questions_file(text, "x-questions.md", "0" * 64)
+    assert (parsed.unsupported_pending_count, parsed.pending_count) == (1, 1)
+    answered = R.parse_questions_file(text.replace("- [Answer]:", "- [Answer]: EU"), "x-questions.md", "0" * 64)
+    assert (answered.unsupported_pending_count, answered.pending_count) == (0, 0)
 
 
 @pytest.mark.parametrize("tree,intent,stage_rel", QUESTION_FIXTURES)
