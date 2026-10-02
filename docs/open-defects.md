@@ -165,7 +165,7 @@ presence 增量异常会把 action 永久停在 `ReconciliationRequired`：被�
 
 - 演示仓库 `/tmp/aidlc-demo-full`（10 行 Python 小工具，README 写明 `--precision` 被忽略），
   Studio 里 `repo_id = r_efc5c63de739`，intent `260909-precision`。
-- 41 张逐步截图在 `assets/demo-20260909/`，含 P0 那条的拒绝画面（`41-approve-sent.png`）。
+- 41 张逐步截图在 [v1.0.1 的 `assets/demo-20260909/`](https://github.com/warren830/kirocrew-app-aidlc/tree/v1.0.1/assets/demo-20260909)（为缩小安装克隆已从后续版本移除），含 P0 那条的拒绝画面（`41-approve-sent.png`）。
 - 手工验收流程见 `docs/manual-e2e-runbook.md`。
 
 ## 6. 2026-09-10 完整流程截图实测新增：流程图产物链接保留旧 action
