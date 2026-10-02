@@ -120,6 +120,12 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
     return getattr(obj, key, default)
 
 
+#: The one registered Activity kind for every notification (``activity.ACTIVITY_KINDS``); which kind of
+#: notification it was travels in ``params.kind``. Per-class names such as ``notification.gate`` are not
+#: registered, and the projector refuses an unknown kind — so those records used to be dropped.
+NOTIFICATION_ACTIVITY_KIND = "notification.sent"
+
+
 class NotificationAdapter:
     """Dashboard and Slack delivery for the events that need a human.
 
@@ -181,10 +187,10 @@ class NotificationAdapter:
         slack_state, slack_ts = await self._notify_slack(card, kind=kind, title=title)
         await self._mark_seen(dedupe_key)
         await self._record(
-            kind=f"notification.{kind}",
+            kind=NOTIFICATION_ACTIVITY_KIND,
             severity=_text(_get(card, "severity")) or "info",
             card=card,
-            params={"dashboard": dashboard, "slack": slack_state, "deep_link": link},
+            params={"kind": kind, "dashboard": dashboard, "slack": slack_state, "deep_link": link},
         )
         return NotificationResult(dashboard, slack_state, slack_ts, link, False)
 
@@ -209,12 +215,49 @@ class NotificationAdapter:
             slack_state = _SLACK_SENT if slack_ts else _SLACK_UNAVAILABLE
         await self._mark_seen(dedupe_key)
         await self._record(
-            kind="notification.completion",
+            kind=NOTIFICATION_ACTIVITY_KIND,
             severity="info",
             card=None,
-            params={"repo_id": repo_id, "intent_key": intent_key, "dashboard": dashboard, "slack": slack_state},
+            params={"kind": "completion", "repo_id": repo_id, "intent_key": intent_key,
+                    "dashboard": dashboard, "slack": slack_state},
         )
         return NotificationResult(dashboard, slack_state, slack_ts, link, False)
+
+    async def notify_tool_approval(
+        self, *, repo_id: str, repo_label: str, intent_key: str, intent_label: str,
+        slot_key: str, approval: Mapping[str, str],
+    ) -> NotificationResult:
+        """Tell the user an intent's conversation is parked on a host tool approval, once per approval.
+
+        The link opens the intent in Studio, whose row says what is being asked and opens the
+        conversation, where the host's own approve/trust/reject controls are: Studio makes the wait
+        visible and does not answer it (architecture A31). Studio links only to its own page
+        (``HostBridge.notify``), so the conversation is one click further.
+        """
+        link = self.intent_link(repo_id, intent_key)
+        identity = _text(approval.get("request_id")) or S.sha256_text(
+            f"{_text(approval.get('tool'))}\0{_text(approval.get('tool_input'))}"
+        )
+        dedupe_key = f"approval:{_text(slot_key)}:{identity}"
+        if await self._seen(dedupe_key):
+            return NotificationResult(False, _SLACK_INELIGIBLE, None, link, True)
+        label = _text(intent_label or intent_key, 60)
+        title = _text(f"AI-DLC is waiting for your approval: {label}", 150)
+        what = _text(approval.get("tool")) or "a tool call"
+        command = _text(approval.get("tool_input"))
+        body = f"{_text(repo_label or repo_id, 60)} · {label} — {what}"
+        if command:
+            body = f"{body}: {command}"
+        dashboard = self._notify_dashboard(title, _text(body, _BODY_LIMIT), link, action_id="", kind="approval")
+        await self._mark_seen(dedupe_key)
+        await self._record(
+            kind=NOTIFICATION_ACTIVITY_KIND,
+            severity="attention",
+            card=None,
+            params={"kind": "approval", "repo_id": repo_id, "intent_key": intent_key,
+                    "slot_key": slot_key, "dashboard": dashboard},
+        )
+        return NotificationResult(dashboard, _SLACK_DISABLED, None, link, False)
 
     async def notify_digest(self, ledger: Mapping[str, Any]) -> NotificationResult:
         """The morning digest. In v1 it reports honestly that no unattended work ran.
@@ -232,7 +275,8 @@ class NotificationAdapter:
             _BODY_LIMIT,
         )
         dashboard = self._notify_dashboard(title, body, link, action_id="", kind="completion")
-        await self._record(kind="notification.digest", severity="info", card=None, params=dict(ledger))
+        await self._record(kind=NOTIFICATION_ACTIVITY_KIND, severity="info", card=None,
+                           params={"kind": "digest", **dict(ledger)})
         return NotificationResult(dashboard, _SLACK_DISABLED, None, link, False)
 
     # ---- Slack -------------------------------------------------------------- #

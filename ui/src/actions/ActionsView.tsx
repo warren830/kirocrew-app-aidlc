@@ -31,6 +31,7 @@ import { DetailShell } from './DetailShell'
 import { QueueFilters, useOrganize } from './QueueFilters'
 import { QueueList } from './QueueList'
 import { intentText, repoText, stageText } from './QueueRow'
+import { ApprovalWaitNotice } from '../intents/ApprovalWait'
 
 /** Every word a search should be able to find a row by. */
 function haystack(card: ActionCard, typeLabel: string, headline: string): string {
@@ -129,6 +130,16 @@ export function ActionsView({ route, go }: ViewProps) {
           total={total}
           stale={actions.stale}
         />
+
+        {(actions.data?.approval_waits ?? []).map((wait) => (
+          <ApprovalWaitNotice
+            key={wait.slot_key}
+            slotKey={wait.slot_key}
+            tool={wait.tool}
+            toolInput={wait.tool_input}
+            label={`${wait.repo_label} / ${wait.intent_dir}`}
+          />
+        ))}
 
         {actions.error && !actions.data ? (
           <div className="studio-queue-list studio-queue-empty">

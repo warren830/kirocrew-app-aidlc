@@ -146,5 +146,9 @@
   "intents.confirm.run.title": "开始运行？",
   "intents.confirm.run.body": "Studio 会向这个意图的会话发送一次 {text}，AI-DLC 会一直运行到下一个检查点。",
   "intents.confirm.resume.title": "继续运行？",
-  "intents.confirm.resume.body": "Studio 会向这个意图的会话发送一次 {text}，AI-DLC 从停下的地方继续。"
+  "intents.confirm.resume.body": "Studio 会向这个意图的会话发送一次 {text}，AI-DLC 从停下的地方继续。",
+  "intents.approval.waiting": "会话在等你批准一个工具调用。",
+  "intents.approval.waitingFor": "{label} 在等你批准一个工具调用。",
+  "intents.approval.where": "在会话里选择允许、信任或拒绝。",
+  "intents.approval.open": "打开会话"
 }

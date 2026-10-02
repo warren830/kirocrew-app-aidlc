@@ -117,13 +117,65 @@ def test_deep_link_identifies_and_authorises_nothing(studio, clock):
     assert "token" not in link and "secret" not in link
 
 
+class RegisteredOnlyActivity(FakeActivity):
+    """Refuses what the real projector refuses: a kind missing from ``activity.ACTIVITY_KINDS``."""
+
+    def __init__(self, kinds: frozenset[str]) -> None:
+        super().__init__()
+        self.kinds = kinds
+
+    async def record(self, **kwargs: Any) -> int:
+        assert kwargs["kind"] in self.kinds, f"unregistered activity kind {kwargs['kind']!r}"
+        return await super().record(**kwargs)
+
+
+@pytest.mark.parametrize("notification", ["gate", "completion", "digest", "approval"])
+def test_every_notification_records_a_registered_activity_kind(studio, clock, notification):
+    """The fake above used to accept any kind, which hid that the real projector dropped them all."""
+    activity = RegisteredOnlyActivity(frozenset(studio.activity.ACTIVITY_KINDS))
+    adapter = _adapter(studio, clock, activity=activity)
+    if notification == "gate":
+        asyncio.run(adapter.notify_action(_card()))
+    elif notification == "completion":
+        asyncio.run(adapter.notify_completion(SimpleNamespace(
+            repo_id="r_1", repo_label="ledger", intent_key="260904-x", intent_dir="260904-x", slug="x",
+        )))
+    elif notification == "digest":
+        asyncio.run(adapter.notify_digest({"waiting": 1}))
+    else:
+        asyncio.run(adapter.notify_tool_approval(
+            repo_id="r_1", repo_label="ledger", intent_key="260904-x", intent_label="x",
+            slot_key="slot-1", approval={"tool": "Read", "tool_input": "cat a", "request_id": "q1"},
+        ))
+    assert [(row["kind"], row["params"]["kind"]) for row in activity.rows] == [
+        ("notification.sent", notification),
+    ]
+
+
+def test_a_notification_lands_in_the_real_activity_projector(studio, clock, tmp_path):
+    store = studio.storage.Storage(tmp_path / "studio.sqlite3", clock=clock, ids=None)
+    store.open()
+    try:
+        projector = studio.activity.ActivityProjector(store, clock)
+        adapter = _adapter(studio, clock, activity=projector)
+        asyncio.run(adapter.notify_action(_card()))
+        rows = store.select("activity")
+        # Storage decodes the JSON columns on read.
+        assert [(row["kind"], row["params_json"]["kind"]) for row in rows] == [
+            ("notification.sent", "gate"),
+        ]
+    finally:
+        store.close()
+
+
 def test_a_gate_notifies_both_channels_once(studio, clock):
     host, activity, prefs = FakeHostBridge(), FakeActivity(), MemoryPrefs()
     adapter = _adapter(studio, clock, host=host, activity=activity, storage=prefs)
     first = asyncio.run(adapter.notify_action(_card()))
     assert first.dashboard is True and first.slack == "sent" and first.dedupe_hit is False
     assert len(host.notified) == 1 and len(host.slack_calls) == 1
-    assert activity.rows and activity.rows[0]["kind"] == "notification.gate"
+    assert activity.rows and activity.rows[0]["kind"] == "notification.sent"
+    assert activity.rows[0]["params"]["kind"] == "gate"
 
     second = asyncio.run(adapter.notify_action(_card()))
     assert second.dedupe_hit is True
@@ -243,6 +295,25 @@ def test_completion_notifies_once_and_links_to_the_intent(studio, clock):
     assert first.dashboard is True and "view=intents" in first.deep_link
     assert asyncio.run(adapter.notify_completion(summary)).dedupe_hit is True
     assert len(host.notified) == 1
+
+
+def test_a_tool_approval_notifies_once_per_approval_and_links_to_the_conversation(studio, clock):
+    host, prefs = FakeHostBridge(), MemoryPrefs()
+    adapter = _adapter(studio, clock, host=host, storage=prefs)
+    wait = dict(repo_id="r_1", repo_label="devlake", intent_key="261001-servicenow-plugin",
+                intent_label="servicenow-plugin", slot_key="aidlc-studio-r_1-261001-servicenow-plugin")
+    approval = {"tool": "Locate the load-steering instructions", "tool_input": "grep -n steering SKILL.md",
+                "request_id": "req-1"}
+    first = asyncio.run(adapter.notify_tool_approval(**wait, approval=approval))
+    assert first.dashboard is True
+    assert "view=intents" in first.deep_link and "intent=261001-servicenow-plugin" in first.deep_link
+    sent = host.notified[0]
+    assert sent["title"] == "AI-DLC is waiting for your approval: servicenow-plugin"
+    assert "grep -n steering SKILL.md" in sent["body"] and sent["meta"]["kind"] == "approval"
+    assert asyncio.run(adapter.notify_tool_approval(**wait, approval=approval)).dedupe_hit is True
+    # The next approval in the same conversation is a new wait.
+    asyncio.run(adapter.notify_tool_approval(**wait, approval={**approval, "request_id": "req-2"}))
+    assert len(host.notified) == 2
 
 
 def test_the_digest_says_plainly_that_no_unattended_work_ran(studio, clock):

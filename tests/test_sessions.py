@@ -1131,11 +1131,44 @@ def test_session_ref_reports_the_live_running_state(binder, bridge, store, studi
     assert ref.slot_key == SLOT and ref.session_key == f"dashboard:{SLOT}"
     assert ref.running is False and ref.bound_at == binding.updated_at
     assert ref.to_json() == {"slot_key": SLOT, "session_key": f"dashboard:{SLOT}",
-                             "running": False, "bound_at": binding.updated_at}
+                             "running": False, "bound_at": binding.updated_at,
+                             "waiting_approval": False, "approval": None}
 
     slot.running = True
     assert run(binder.session_ref(binding)).running is True
     assert run(binder.session_ref(run(binder.get("r_1", "default", "other")))) is None
+
+
+def test_session_ref_and_the_queue_see_a_conversation_parked_on_a_tool_approval(
+    binder, bridge, store, studio, repo_dir,
+):
+    record = repo(studio, store, repo_dir)
+    slot = attach_slot(bridge, repo_dir)
+    binding = run(binder.bind(record, "default", INTENT, slot_key=SLOT, intent_uuid="u-1"))
+    # The host writes each approval as a `permission` row; an answered one is marked resolved.
+    slot.messages.extend([
+        {"role": "permission", "content": "Read the old file",
+         "cls": '{"tool_input": "cat old.txt", "approval_id": "req-0", "resolved": "approved"}'},
+        {"role": "permission", "content": "Locate the load-steering instructions",
+         "cls": '{"tool_input": "grep -n steering .kiro/skills/aidlc/SKILL.md token=sk-live-abcdefghijklmnop", '
+                '"approval_id": "req-1"}'},
+    ])
+    slot._approval_futures = {"req-1": SimpleNamespace(done=lambda: False)}
+
+    ref = run(binder.session_ref(binding)).to_json()
+    assert ref["waiting_approval"] is True
+    assert ref["approval"]["tool"] == "Locate the load-steering instructions"
+    assert ref["approval"]["tool_input"].startswith("grep -n steering .kiro/skills/aidlc/SKILL.md")
+    assert "sk-live-abcdefghijklmnop" not in ref["approval"]["tool_input"]   # redacted
+
+    waits = run(binder.waiting_approvals())
+    assert [(w["intent_key"], w["slot_key"], w["tool"]) for w in waits] == [
+        (INTENT, SLOT, "Locate the load-steering instructions"),
+    ]
+
+    slot._approval_futures = {"req-1": SimpleNamespace(done=lambda: True)}
+    assert run(binder.session_ref(binding)).to_json()["waiting_approval"] is False
+    assert run(binder.waiting_approvals()) == []
 
 
 # --------------------------------------------------------------------------- #
