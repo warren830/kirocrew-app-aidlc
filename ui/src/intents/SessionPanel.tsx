@@ -16,6 +16,10 @@
  *   4. `POST   …/{intent}/session/bind {"slot_key": key}`                  (Studio; verifies 1-3)
  *   5. `PATCH  /api/chat/slots/{key}/folder {"folder_id": …}`              (host; sidebar placement)
  *
+ * The primary button then starts the workflow: it names the text it sends (`/aidlc`), queues the run and
+ * sends it through the Action Center's own two-phase submit (`StartRun.tsx`), so "create, bind and start"
+ * is one click without a second, unseen send path. "Create and bind only" leaves the intent idle.
+ *
  * Step 5 files the conversation under the repository's sidebar folder — the one whose `project_dir` is
  * this repository, created when there is none — in a sub-folder per intent. These calls run with the
  * owner's cookie, so the folders are the person's own and may nest under a folder the person made; an
@@ -45,6 +49,7 @@ import { useI18n } from '../i18n'
 import { StudioApiError, type StudioApi } from '../lib/api'
 import { unavailable } from '../lib/format'
 import type { BindingView, ChatFolder, IntentSummary, RepoRecord, SessionRef, SlotView } from '../lib/types'
+import { StartStatus, startBlockedReason, startKind, startText, useStartRun } from './StartRun'
 
 /** The agent an AI-DLC conversation runs. `SessionBinder.bind` refuses every other one (§1.11). */
 const AIDLC_AGENT = 'aidlc'
@@ -192,6 +197,11 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
 
   const bound = confirmed ? confirmed.value : fromSession(intent.session)
   const wanted = canonicalSlotKey(intent.repo_id, intent.intent_dir)
+  const run = useStartRun(api, () => onChanged())
+  const kind = startKind(intent)
+  // A just-bound conversation is idle; the inventory row's `running` is one poll behind.
+  const blocked = startBlockedReason(bound ? { ...intent, session: null } : intent, t)
+    ?? (bound?.running ? t('intents.run.disabledRunning') : null)
   const stepLabel = (step: number): string => t(STEP_KEYS[step - 1] ?? STEP_KEYS[0])
 
   const fail = useCallback((caught: unknown, step: number) => {
@@ -221,8 +231,8 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
     setFolderError(null)
   }, [])
 
-  /** The whole sequence, in order, reporting the step that refused. */
-  const create = useCallback(async () => {
+  /** The whole sequence, in order, reporting the step that refused; `andRun` then starts the workflow. */
+  const create = useCallback(async (andRun: boolean) => {
     start('create')
     let step = 1
     setAt(step)
@@ -253,13 +263,15 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
           caught instanceof StudioApiError ? caught : new StudioApiError('internal_error', String(caught), {}, 0),
         )
       }
+      setAt(0)
+      if (andRun) await run.start(intent, kind)
     } catch (caught) {
       fail(caught, step)
     } finally {
       setBusy(null)
       setAt(0)
     }
-  }, [api, wanted, repo, intent, remember, onChanged, t, fail, start])
+  }, [api, wanted, repo, intent, remember, onChanged, t, fail, start, run, kind])
 
   const list = useCallback(async () => {
     start('list')
@@ -372,6 +384,17 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
           />
 
           <div className="studio-row studio-wrap">
+            {blocked === null ? (
+              <button
+                type="button"
+                className="studio-btn studio-btn-primary"
+                disabled={busy !== null || run.busy}
+                onClick={() => void run.start(intent, kind)}
+              >
+                <Icon name="play" size={13} />
+                {t('intents.start.go', { text: startText(kind) })}
+              </button>
+            ) : null}
             <button type="button" className="studio-btn" disabled={busy !== null} onClick={() => void unbind()}>
               <Icon name="close" size={13} />
               {t('intents.session.unbind')}
@@ -399,15 +422,34 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
           />
 
           <div className="studio-row studio-wrap">
-            <button
-              type="button"
-              className="studio-btn studio-btn-primary"
-              disabled={busy !== null}
-              onClick={() => void create()}
-            >
-              <Icon name="plus" size={13} />
-              {t('intents.session.create')}
-            </button>
+            {blocked === null ? (
+              <>
+                <button
+                  type="button"
+                  className="studio-btn studio-btn-primary"
+                  disabled={busy !== null || run.busy}
+                  onClick={() => void create(true)}
+                >
+                  <Icon name="play" size={13} />
+                  {t('intents.session.createAndRun', { text: startText(kind) })}
+                </button>
+                <button type="button" className="studio-btn" disabled={busy !== null || run.busy}
+                  onClick={() => void create(false)}>
+                  <Icon name="plus" size={13} />
+                  {t('intents.session.createOnly')}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="studio-btn studio-btn-primary"
+                disabled={busy !== null}
+                onClick={() => void create(false)}
+              >
+                <Icon name="plus" size={13} />
+                {t('intents.session.create')}
+              </button>
+            )}
             <button type="button" className="studio-btn" disabled={busy !== null} onClick={() => void list()}>
               <Icon name="link" size={13} />
               {t('intents.session.adopt')}
@@ -425,6 +467,8 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
           {t('intents.busy')}
         </p>
       ) : null}
+
+      <StartStatus run={run} />
 
       {filed ? (
         <p className="studio-consequence" role="status">

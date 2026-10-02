@@ -61,11 +61,21 @@ describe('the intents inventory', () => {
     expect(screen.getByText('payments-api: not reachable')).toBeInTheDocument()
   })
 
-  it('queues a run without sending it, and pauses behind a confirmation', async () => {
+  it('shows the text before sending, then queues and sends the run once; pauses behind a confirmation', async () => {
     const runnable = { ...INTENT, operational_state: 'Idle' as const,
       counts: { ...INTENT.counts, awaiting_approval: 0 } }
+    const card = actionCard({ action_id: 'a_9', type: 'run' })
+    const receipt = {
+      ok: true as const, action_id: 'a_9', status: 'Delivering' as const, lane: 'human_lane' as const,
+      delivery_id: 'd_9', slot_key: 's1', session_key: 'ses_1', wire_text: '/aidlc', expires_at: '',
+      lease_generation: 1, host: { method: 'POST', path: '/api/chat?ws=1', body: { slot: 's1', message: '/aidlc' } },
+    }
     const api = {
-      run: vi.fn(async () => ({ ok: true as const, action_id: 'a_9', status: 'Queued' as const, action: {} as never })),
+      run: vi.fn(async () => ({ ok: true as const, action_id: 'a_9', status: 'Queued' as const, action: card })),
+      submitAction: vi.fn(async () => receipt),
+      listSlots: vi.fn(async () => [slot({ key: 's1' })]),
+      sendToHost: vi.fn(async () => ({ ok: true })),
+      reportDelivery: vi.fn(async () => ({ ok: true as const, action: { ...card, status: 'Delivered' }, idempotent: false })),
       pause: vi.fn(async () => ({ ok: true as const, binding: {} as never, blocked_actions: ['a_1', 'a_2'] })),
     } as unknown as StudioApi
     const onQueued = vi.fn()
@@ -76,8 +86,20 @@ describe('the intents inventory', () => {
       </I18nProvider>,
     )
     await userEvent.click(screen.getByRole('button', { name: 'Run to next checkpoint' }))
-    await waitFor(() => expect(api.run).toHaveBeenCalledWith('r_1', 'default~250901-guest-checkout'))
-    expect(onQueued).toHaveBeenCalledWith('a_9', runnable)
+    // Nothing leaves before the person has seen the exact text.
+    expect(screen.getByText('Start the workflow?')).toBeInTheDocument()
+    expect(api.run).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Send /aidlc' }))
+    expect(await screen.findByText('Sent /aidlc. The workflow has started in the conversation.')).toBeInTheDocument()
+    expect(api.run).toHaveBeenCalledWith('r_1', 'default~250901-guest-checkout')
+    expect(api.submitAction).toHaveBeenCalledWith('a_9', expect.objectContaining({
+      payload: { decision: 'run' }, client_wire_text: '/aidlc',
+    }))
+    expect(api.sendToHost).toHaveBeenCalledTimes(1)
+    expect(api.sendToHost).toHaveBeenCalledWith('/api/chat?ws=1', { slot: 's1', message: '/aidlc' })
+    expect(api.reportDelivery).toHaveBeenCalledWith('a_9', expect.objectContaining({ delivery_id: 'd_9', outcome: 'delivered' }))
+    expect(onQueued).not.toHaveBeenCalled()
 
     await userEvent.click(screen.getByRole('button', { name: 'Pause after current turn' }))
     expect(screen.getByText('2 waiting decisions will refuse to send while this intent is paused.')).toBeInTheDocument()
@@ -85,6 +107,38 @@ describe('the intents inventory', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Confirm' }))
     await waitFor(() => expect(api.pause).toHaveBeenCalledWith('r_1', 'default~250901-guest-checkout', true))
     expect(onChanged).toHaveBeenCalledWith('Paused. 2 waiting decisions will now refuse to send.')
+  })
+
+  it('points at the Action Center when the run could not be sent', async () => {
+    const runnable = { ...INTENT, operational_state: 'Idle' as const,
+      counts: { ...INTENT.counts, awaiting_approval: 0 } }
+    const card = actionCard({ action_id: 'a_9', type: 'run' })
+    const api = {
+      run: vi.fn(async () => ({ ok: true as const, action_id: 'a_9', status: 'Queued' as const, action: card })),
+      submitAction: vi.fn(async () => { throw new StudioApiError('repo_busy', 'another operation holds this repository', {}, 409) }),
+      sendToHost: vi.fn(),
+    } as unknown as StudioApi
+    const onQueued = vi.fn()
+    render(
+      <I18nProvider>
+        <IntentActions api={api} intent={runnable} onGo={() => {}} onQueued={onQueued} onChanged={() => {}} onRecompose={() => {}} onSession={() => {}} />
+      </I18nProvider>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Run to next checkpoint' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Send /aidlc' }))
+    expect(await screen.findByText('/aidlc was not sent: another operation holds this repository')).toBeInTheDocument()
+    expect(api.sendToHost).not.toHaveBeenCalled()
+    expect(onQueued).toHaveBeenCalledWith('a_9', runnable)
+  })
+
+  it('does not offer Run before a conversation is bound', () => {
+    const unbound = { ...INTENT, operational_state: 'Idle' as const, session: null,
+      counts: { ...INTENT.counts, awaiting_approval: 0 } } as IntentSummary
+    render(<I18nProvider><IntentActions api={{} as StudioApi} intent={unbound} onGo={() => {}}
+      onQueued={() => {}} onChanged={() => {}} onRecompose={() => {}} onSession={() => {}} /></I18nProvider>)
+    const button = screen.getByRole('button', { name: 'Run to next checkpoint' })
+    expect(button).toBeDisabled()
+    expect(button).toHaveAttribute('title', 'Create and bind the conversation first.')
   })
 
   it.each(['approval', 'question', 'running', 'completed'])('does not offer another Run during %s', async (kind) => {
@@ -183,6 +237,10 @@ const slot = (over: Partial<SlotView>): SlotView =>
   ({ key: 'k', project: '/work/checkout-web', agent: 'aidlc', running: false, title: '', ...over }) as unknown as SlotView
 
 const UNBOUND = { ...INTENT, session: null } as IntentSummary
+/** An idle intent with nothing waiting: the one a first conversation is created for. */
+const RUNNABLE_UNBOUND = {
+  ...UNBOUND, operational_state: 'Idle', counts: { ...INTENT.counts, awaiting_approval: 0 },
+} as IntentSummary
 
 /**
  * The panel with a REAL client, so the assertions are about the requests that leave the browser.
@@ -260,6 +318,71 @@ describe('the canonical conversation panel', () => {
     expect(screen.getByText(SLOT)).toBeInTheDocument()
     expect(screen.getByText('A turn is running')).toBeInTheDocument()
     expect(onChanged).toHaveBeenCalledWith(`Bound to ${SLOT}.`)
+  })
+
+  it('creates, binds, files and starts the workflow in one click, sending the text it showed', async () => {
+    const runCard = actionCard({ action_id: 'a_run', type: 'run' })
+    bindRoutes([folder({ id: 'f_repo', name: 'Checkout', project_dir: '/work/checkout-web' })], {
+      [`POST ${INTENT_PATH}/run`]: () => ({ ok: true, action_id: 'a_run', status: 'Queued', action: runCard }),
+      [`POST ${BASE}/actions/a_run/submit`]: () => ({
+        ok: true, action_id: 'a_run', status: 'Delivering', lane: 'human_lane', delivery_id: 'd_run',
+        slot_key: SLOT, session_key: 'ses_7', wire_text: '/aidlc', expires_at: '', lease_generation: 1,
+        host: { method: 'POST', path: `${CHAT}?ws=1`, body: { slot: SLOT, message: '/aidlc' } },
+      }),
+      [`GET ${CHAT}/slots`]: () => [slot({ key: SLOT })],
+      [`POST ${CHAT}?ws=1`]: () => ({ ok: true, slot: SLOT }),
+      [`POST ${BASE}/actions/a_run/delivery`]: () => ({ ok: true, action: { ...runCard, status: 'Delivered' }, idempotent: false }),
+    })
+    mount(RUNNABLE_UNBOUND)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create the conversation and start (sends /aidlc)' }))
+
+    expect(await screen.findByText('Sent /aidlc. The workflow has started in the conversation.')).toBeInTheDocument()
+    const paths = apiCalls.map((call) => `${call.method} ${call.path}`)
+    expect(paths.slice(-5)).toEqual([
+      `POST ${INTENT_PATH}/run`,
+      `POST ${BASE}/actions/a_run/submit`,
+      `GET ${CHAT}/slots`,
+      `POST ${CHAT}?ws=1`,
+      `POST ${BASE}/actions/a_run/delivery`,
+    ])
+    expect(paths.filter((path) => path === `POST ${CHAT}?ws=1`)).toHaveLength(1)
+    expect(apiCalls.find((call) => call.path === `${BASE}/actions/a_run/submit`)?.body).toMatchObject({
+      payload: { decision: 'run' }, client_wire_text: '/aidlc',
+    })
+  })
+
+  it('creates and binds only, sending nothing, when asked to', async () => {
+    bindRoutes([folder({ id: 'f_repo', name: 'Checkout', project_dir: '/work/checkout-web' })])
+    mount(RUNNABLE_UNBOUND)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create and bind only' }))
+
+    expect(
+      await screen.findByText('Filed in the sidebar under Checkout / 250901-guest-checkout.'),
+    ).toBeInTheDocument()
+    expect(apiCalls.map((call) => call.path)).not.toContain(`${INTENT_PATH}/run`)
+  })
+
+  it('starts an already bound, idle intent from the panel', async () => {
+    const runCard = actionCard({ action_id: 'a_run', type: 'run' })
+    setApiRoutes({
+      [`POST ${INTENT_PATH}/run`]: () => ({ ok: true, action_id: 'a_run', status: 'Queued', action: runCard }),
+      [`POST ${BASE}/actions/a_run/submit`]: () => ({
+        ok: true, action_id: 'a_run', status: 'Delivering', lane: 'human_lane', delivery_id: 'd_run',
+        slot_key: 's1', session_key: 'ses_1', wire_text: '/aidlc', expires_at: '', lease_generation: 1,
+        host: { method: 'POST', path: `${CHAT}?ws=1`, body: { slot: 's1', message: '/aidlc' } },
+      }),
+      [`GET ${CHAT}/slots`]: () => [slot({ key: 's1' })],
+      [`POST ${CHAT}?ws=1`]: () => ({ ok: true, slot: 's1' }),
+      [`POST ${BASE}/actions/a_run/delivery`]: () => ({ ok: true, action: { ...runCard, status: 'Delivered' }, idempotent: false }),
+    })
+    mount({ ...RUNNABLE_UNBOUND, session: INTENT.session } as IntentSummary)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start the workflow (sends /aidlc)' }))
+
+    expect(await screen.findByText('Sent /aidlc. The workflow has started in the conversation.')).toBeInTheDocument()
+    expect(apiCalls.filter((call) => call.path === `${CHAT}?ws=1`)).toHaveLength(1)
   })
 
   it('reuses the intent folder a previous binding made', async () => {
