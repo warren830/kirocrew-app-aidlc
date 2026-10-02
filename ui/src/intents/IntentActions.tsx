@@ -1,12 +1,11 @@
 /**
  * What you can do to one intent from the inventory — and the one thing this file deliberately cannot do.
  *
- * **Run and Resume do not send anything.** `POST …/{intent}/run` creates a `Queued` action card and
- * returns it; the message that reaches the conversation is sent by the two-phase submit in the Action
- * Center, after the user has seen the exact wire text the server chose. So this component creates the card
- * and then points at it. That is not indirection for its own sake: it is the only arrangement in which
- * "at most once, and never without the user seeing what is sent" survives a second entry point
- * (contracts §2.4, §3.6; PRD P-03).
+ * **Run and Resume send only after a confirmation that shows the exact text.** The confirmation names
+ * what will reach the conversation (`/aidlc`); confirming queues the command card and sends it through
+ * the Action Center's own two-phase submit (`StartRun.tsx`), so "at most once, and never without the
+ * user seeing what is sent" (contracts §2.4, §3.6; PRD P-03) holds without a detour. A send that does
+ * not go through leaves the card in the Action Center, and the row points there.
  *
  * Pause, archive and restore are Studio-only and reversible, so they run from here — behind a confirmation
  * that states the consequence, because "no further dispatch happens for this intent" is not obvious from a
@@ -25,8 +24,9 @@ import { useI18n } from '../i18n'
 import { StudioApiError, type StudioApi } from '../lib/api'
 import { plural } from '../lib/format'
 import type { IntentSummary } from '../lib/types'
+import { StartStatus, startBlockedReason, startText, useStartRun, type StartKind } from './StartRun'
 
-type Pending = 'pause' | 'unpause' | 'archive' | 'restore'
+type Pending = 'pause' | 'unpause' | 'archive' | 'restore' | StartKind
 
 export interface IntentActionsProps {
   api: StudioApi
@@ -56,6 +56,19 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<StudioApiError | null>(null)
   const confirmRef = useRef<HTMLButtonElement | null>(null)
+  const run = useStartRun(api, () => onChanged())
+  const pointed = useRef<string | null>(null)
+
+  // A start that did not reach the conversation leaves its card queued; say where it is, once.
+  useEffect(() => {
+    const { stage, attempt, actionId } = run.state
+    const missed = stage === 'refused' || stage === 'stale' ||
+      (stage === 'settled' && !!attempt && (attempt.outcome !== 'delivered' || !attempt.reported))
+    if (missed && actionId && pointed.current !== actionId) {
+      pointed.current = actionId
+      onQueued(actionId, intent)
+    }
+  }, [run.state, intent, onQueued])
 
   // A confirmation that appears out of nowhere is unusable with a keyboard, so focus follows it.
   useEffect(() => {
@@ -66,27 +79,14 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
     setError(caught instanceof StudioApiError ? caught : new StudioApiError('internal_error', String(caught), {}, 0))
   }, [])
 
-  const command = useCallback(
-    async (kind: 'run' | 'resume') => {
-      setBusy(true)
-      setError(null)
-      try {
-        const answer = kind === 'run'
-          ? await api.run(intent.repo_id, intent.intent_key)
-          : await api.resume(intent.repo_id, intent.intent_key)
-        onQueued(answer.action_id, intent)
-        onChanged()
-      } catch (caught) {
-        fail(caught)
-      } finally {
-        setBusy(false)
-      }
-    },
-    [api, intent, onQueued, onChanged, fail],
-  )
-
   const confirm = useCallback(async () => {
     if (!pending) return
+    if (pending === 'run' || pending === 'resume') {
+      setPending(null)
+      setError(null)
+      await run.start(intent, pending)
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -110,20 +110,11 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
     } finally {
       setBusy(false)
     }
-  }, [api, intent, pending, onChanged, fail, i18n, t])
+  }, [api, intent, pending, onChanged, fail, i18n, t, run])
 
-  const runDisabledReason = intent.archived
-    ? t('intents.run.disabledArchived')
-    : intent.paused
-      ? t('intents.run.disabledPaused')
-      : intent.session?.running
-        ? t('intents.run.disabledRunning')
-        : intent.counts.awaiting_approval > 0 || intent.operational_state === 'WaitingForYou'
-          ? t('intents.run.disabledCheckpoint')
-          : intent.disk.status?.toLowerCase() === 'completed'
-            ? t('intents.run.disabledCompleted')
-            : null
   const bound = Boolean(intent.session?.slot_key)
+  // Unbound, a start would be refused `session_unbound`: the conversation button creates, binds and starts.
+  const runDisabledReason = startBlockedReason(intent, t) ?? (bound ? null : t('intents.run.disabledUnbound'))
   const parked = Boolean(intent.disk.parked_at)
   const recomposable = intent.disk.status === 'Running' && !intent.archived
   const recomposeReason = recomposable
@@ -133,6 +124,8 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
         status: intent.disk.status ?? t('common.unavailable'),
       })
 
+  const starting = pending === 'run' || pending === 'resume'
+
   return (
     <div className="studio-col studio-intent-actions" role="group" aria-label={t('intents.action.a11y', { intent: intent.intent_dir })}>
       <div className="studio-row studio-wrap">
@@ -140,9 +133,9 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
           <button
             type="button"
             className="studio-btn studio-btn-sm"
-            disabled={busy || runDisabledReason !== null}
+            disabled={busy || run.busy || runDisabledReason !== null}
             {...(runDisabledReason ? { title: runDisabledReason } : {})}
-            onClick={() => void command('resume')}
+            onClick={() => setPending('resume')}
           >
             <Icon name="play" size={13} />
             {t('intents.action.resume')}
@@ -151,9 +144,9 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
           <button
             type="button"
             className="studio-btn studio-btn-sm"
-            disabled={busy || runDisabledReason !== null}
+            disabled={busy || run.busy || runDisabledReason !== null}
             {...(runDisabledReason ? { title: runDisabledReason } : {})}
-            onClick={() => void command('run')}
+            onClick={() => setPending('run')}
           >
             <Icon name="play" size={13} />
             {t('intents.action.run')}
@@ -244,6 +237,8 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
         </p>
       ) : null}
 
+      <StartStatus run={run} />
+
       {pending ? (
         <div
           className="studio-confirm"
@@ -254,7 +249,7 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
           }}
         >
           <h3>{t(`intents.confirm.${pending}.title`)}</h3>
-          <p>{t(`intents.confirm.${pending}.body`)}</p>
+          <p>{t(`intents.confirm.${pending}.body`, { text: starting ? startText(pending as StartKind) : '' })}</p>
           {pending === 'pause' && intent.open_actions > 0 ? (
             <p className="studio-consequence" data-tone="warn">
               <Icon name="warn" size={13} />
@@ -269,7 +264,7 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
               disabled={busy}
               onClick={() => void confirm()}
             >
-              {t('intents.confirm.go')}
+              {starting ? t('intents.start.send', { text: startText(pending as StartKind) }) : t('intents.confirm.go')}
             </button>
             <button type="button" className="studio-btn studio-btn-sm" disabled={busy} onClick={() => setPending(null)}>
               {t('common.cancel')}
