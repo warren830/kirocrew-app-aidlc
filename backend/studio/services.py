@@ -666,6 +666,15 @@ class _InertNotifications:
             "dedupe_hit": False,
         }
 
+    async def notify_tool_approval(self, **_: Any) -> dict:
+        return {
+            "dashboard": False,
+            "slack": "unavailable",
+            "slack_ts": None,
+            "deep_link": "",
+            "dedupe_hit": False,
+        }
+
     def slack_quick_action_eligible(self, card: Any) -> tuple[bool, str]:
         return (False, "host_seam_unavailable")
 

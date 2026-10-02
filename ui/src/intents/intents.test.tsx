@@ -21,7 +21,8 @@ import { buildRoute, parseRoute } from '../lib/route'
 import type { ChatFolder, IntentSummary, RepoRecord, SlotView } from '../lib/types'
 import { StudioApp } from '../shell/StudioApp'
 import { API_BASE, actionCard, shellRoutes } from '../test/fixtures'
-import { apiCalls, setApiRoutes, StubApiError } from '../test/stubs/app-sdk'
+import { apiCalls, navigations, setApiRoutes, StubApiError } from '../test/stubs/app-sdk'
+import { ApprovalWaitNotice } from './ApprovalWait'
 import { IntentActions } from './IntentActions'
 import { IntentList } from './IntentList'
 import { readInventory } from './IntentsView'
@@ -129,6 +130,28 @@ describe('the intents inventory', () => {
     expect(await screen.findByText('/aidlc was not sent: another operation holds this repository')).toBeInTheDocument()
     expect(api.sendToHost).not.toHaveBeenCalled()
     expect(onQueued).toHaveBeenCalledWith('a_9', runnable)
+  })
+
+  it('says when the conversation is parked on a tool approval, and opens it', async () => {
+    const parked = { ...INTENT, operational_state: 'Idle' as const, session: {
+      ...INTENT.session!, running: true, waiting_approval: true,
+      approval: { tool: 'Locate the load-steering instructions', tool_input: 'grep -n steering SKILL.md' },
+    } } as IntentSummary
+    render(<I18nProvider><IntentActions api={{} as StudioApi} intent={parked} onGo={() => {}}
+      onQueued={() => {}} onChanged={() => {}} onRecompose={() => {}} onSession={() => {}} /></I18nProvider>)
+    expect(screen.getByText('The conversation is waiting for you to approve a tool call.')).toBeInTheDocument()
+    expect(screen.getByText('Locate the load-steering instructions')).toBeInTheDocument()
+    expect(screen.getByText('grep -n steering SKILL.md')).toBeInTheDocument()
+    navigations.length = 0
+    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }))
+    expect(navigations).toEqual(['/chat?sid=s1'])
+  })
+
+  it('names the intent when the wait is listed away from its row', () => {
+    render(<I18nProvider><ApprovalWaitNotice slotKey="aidlc studio/1" tool="" toolInput="go test ./..."
+      label="devlake / 261001-servicenow-plugin" /></I18nProvider>)
+    expect(screen.getByText('devlake / 261001-servicenow-plugin is waiting for you to approve a tool call.')).toBeInTheDocument()
+    expect(screen.getByText('go test ./...')).toBeInTheDocument()
   })
 
   it('does not offer Run before a conversation is bound', () => {

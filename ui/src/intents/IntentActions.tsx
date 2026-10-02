@@ -25,6 +25,7 @@ import { StudioApiError, type StudioApi } from '../lib/api'
 import { plural } from '../lib/format'
 import type { IntentSummary } from '../lib/types'
 import { StartStatus, startBlockedReason, startText, useStartRun, type StartKind } from './StartRun'
+import { ApprovalWaitNotice } from './ApprovalWait'
 
 type Pending = 'pause' | 'unpause' | 'archive' | 'restore' | StartKind
 
@@ -238,6 +239,14 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
       ) : null}
 
       <StartStatus run={run} />
+
+      {intent.session?.waiting_approval ? (
+        <ApprovalWaitNotice
+          slotKey={intent.session.slot_key}
+          tool={intent.session.approval?.tool ?? ''}
+          toolInput={intent.session.approval?.tool_input ?? ''}
+        />
+      ) : null}
 
       {pending ? (
         <div

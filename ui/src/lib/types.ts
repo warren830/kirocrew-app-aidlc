@@ -79,7 +79,8 @@ export interface GitObservation { available: boolean; reason: string | null; bra
 export interface GitCommit { sha: string; at: string; subject: string }
 export interface LeaseView { kind: LeaseKind; repo_id: string; resolved_repo_identity: string; generation: number; acquired_at: string; heartbeat_at: string; intent_uuid: string | null; intent_key: string | null; session_key: string | null; action_id: string | null; operation_type: string | null; transaction_id: string | null; observed_busy_state: string | null; orphaned: boolean }
 export interface StableBoundary { stable: boolean; reasons: string[]; stage: string | null; marker: string | null; boundary_token: string | null; recorded_at: string }
-export interface SessionRef { slot_key: string; session_key: string; running: boolean; bound_at: string }
+/** `waiting_approval`: the conversation is parked on a host tool approval; `approval` says what it asks. */
+export interface SessionRef { slot_key: string; session_key: string; running: boolean; bound_at: string; waiting_approval?: boolean; approval?: { tool: string; tool_input: string } | null }
 /**
  * DRIFT: §3.1 types `stop_state` as `'idle' | 'soft_pending' | 'killing'`. `SlotView.of` deliberately
  * passes an unrecognised host value through ("anything that is not idle refuses a dispatch"), so a
@@ -221,7 +222,9 @@ export interface ActionCard {
   deep_link: string; dedupe_key: string | null; human_text_present: boolean; acknowledged_evidence_sha256: string | null
 }
 export interface ActionGroup { key: string; label_key: string; action_ids: string[] }
-export interface ActionsResponse { actions: ActionCard[]; organize: Organize; groups: ActionGroup[]; counts: { total: number; critical: number; blocking: number; attention: number; info: number }; generated_at: string }
+/** A bound conversation parked on a host tool approval (architecture A31). Answered in the chat, not here. */
+export interface ApprovalWait { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; slot_key: string; tool: string; tool_input: string }
+export interface ActionsResponse { actions: ActionCard[]; organize: Organize; groups: ActionGroup[]; counts: { total: number; critical: number; blocking: number; attention: number; info: number }; approval_waits?: ApprovalWait[]; generated_at: string }
 export interface ActionTransition { from_status: ActionStatus | null; to_status: ActionStatus; generation: number; at: string; reason: string | null; evidence: Record<string, unknown> }
 export interface ActionDetailResponse { action: ActionCard; transitions: ActionTransition[]; drafts: AdvisorDraft[] }
 export interface AnswerInput { index: number; option_letters: string[]; free_text: string | null }

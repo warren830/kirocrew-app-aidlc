@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import logging
 import os
 import sqlite3
@@ -272,6 +273,9 @@ class SlotView:
     subagents_running: int = 0
     subagents_queued: int = 0
     deliveries_inflight: int = 0
+    #: What the newest unresolved tool approval asks for (``tool``, ``tool_input``, ``request_id``,
+    #: redacted), or ``None`` when nothing waits. Not part of ``to_json``: the §3.1 shape is pinned.
+    approval: Mapping[str, str] | None = None
 
     @classmethod
     def from_payload(
@@ -284,6 +288,7 @@ class SlotView:
         subagents_running: int = 0,
         subagents_queued: int = 0,
         deliveries_inflight: int = 0,
+        approval: Mapping[str, str] | None = None,
     ) -> "SlotView":
         """Map ``slot.to_dict()`` plus the facts that are not in it.
 
@@ -326,6 +331,7 @@ class SlotView:
             subagents_running=_count(subagents_running),
             subagents_queued=_count(subagents_queued),
             deliveries_inflight=_count(deliveries_inflight),
+            approval=dict(approval) if approval is not None else None,
         )
 
     @property
@@ -1183,6 +1189,7 @@ class HostBridge:
             "subagents_running": running,
             "subagents_queued": queued,
             "deliveries_inflight": _count(getattr(slot, "_subagent_deliveries_inflight", 0)),
+            "approval": _pending_approval(slot) if approvals else None,
         }
 
     def _subagent_depth(self, session_key: str) -> tuple[int, int]:
@@ -1305,18 +1312,60 @@ def _same_dir(left: object, right: object) -> bool:
 # --------------------------------------------------------------------------- #
 
 
+#: Longest approval text Studio repeats on a card or in a notification.
+_APPROVAL_TEXT_LIMIT = 500
+
+
+def _pending_approval(slot: Any) -> dict[str, str]:
+    """What the newest unresolved tool approval on ``slot`` asks for.
+
+    The host writes each approval as a ``permission`` row whose ``cls`` is JSON meta, and marks it
+    ``resolved`` once answered — the same reading its own slot projection does. An approval with no row
+    (a sub-agent's, raised on the coordinator) still waits, so the answer is then empty, never ``None``.
+    Every value is redacted: it is model-written text bound for a card and a notification.
+    """
+    for message in reversed(list(getattr(slot, "messages", None) or ())):
+        if not isinstance(message, Mapping) or message.get("role") != "permission":
+            continue
+        try:
+            meta = json.loads(_text(message.get("cls")) or "{}")
+        except (TypeError, ValueError):
+            meta = {}
+        if not isinstance(meta, Mapping):
+            meta = {}
+        if meta.get("resolved"):
+            continue
+        return {
+            "tool": security.redact(_text(message.get("content")))[:_APPROVAL_TEXT_LIMIT],
+            "tool_input": security.redact(_text(meta.get("tool_input")))[:_APPROVAL_TEXT_LIMIT],
+            "request_id": _text(meta.get("approval_id") or meta.get("request_id")),
+        }
+    return {"tool": "", "tool_input": "", "request_id": ""}
+
+
 @dataclass(frozen=True, slots=True)
 class SessionRef:
-    """The compact "which session is this intent talking to" shape §2.3 embeds in an IntentSummary."""
+    """The compact "which session is this intent talking to" shape §2.3 embeds in an IntentSummary.
+
+    ``waiting_approval`` says the conversation is parked on a host tool approval, and ``approval`` what
+    it asks for — so a run that stopped to ask is visible where the intent is, not only in the chat.
+    """
 
     slot_key: str
     session_key: str
     running: bool
     bound_at: str
+    waiting_approval: bool = False
+    approval: Mapping[str, str] | None = None
 
     def to_json(self) -> dict[str, Any]:
+        approval = (
+            {"tool": self.approval.get("tool", ""), "tool_input": self.approval.get("tool_input", "")}
+            if self.waiting_approval and self.approval is not None else None
+        )
         return {"slot_key": self.slot_key, "session_key": self.session_key,
-                "running": self.running, "bound_at": self.bound_at}
+                "running": self.running, "bound_at": self.bound_at,
+                "waiting_approval": self.waiting_approval, "approval": approval}
 
 
 @dataclass(frozen=True, slots=True)
@@ -1477,13 +1526,46 @@ class SessionBinder:
         if not slot_key:
             return None
         view = self._host.slot(slot_key)
+        waiting = view is not None and (view.approvals_pending > 0 or view.pending_approval)
         return SessionRef(
             slot_key=slot_key,
             session_key=_text(getattr(binding, "session_key", ""))
             or (view.session_key if view is not None else ""),
             running=bool(view.running) if view is not None else False,
             bound_at=_text(getattr(binding, "updated_at", "")),
+            waiting_approval=waiting,
+            approval=view.approval if waiting and view is not None else None,
         )
+
+    async def waiting_approvals(self) -> list[dict[str, Any]]:
+        """Every bound, unarchived intent whose conversation is parked on a host tool approval.
+
+        Read from the host each call — the wait lasts seconds to hours and Studio stores nothing about
+        it. The Action Center lists these above the queue with a link to the conversation, where the
+        host's own controls answer it.
+        """
+        rows = await asyncio.to_thread(self._storage.select, _BINDINGS)
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            slot_key = _text(row.get("slot_key"))
+            if not slot_key or row.get("archive_state") == ARCHIVE_ARCHIVED:
+                continue
+            view = self._host.slot(slot_key)
+            if view is None or not (view.approvals_pending > 0 or view.pending_approval):
+                continue
+            approval = view.approval or {}
+            space = _text(row.get("space")) or C.DEFAULT_SPACE
+            intent_dir = _text(row.get("intent_dir"))
+            out.append({
+                "repo_id": _text(row.get("repo_id")),
+                "space": space,
+                "intent_dir": intent_dir,
+                "intent_key": C.intent_key_for(space, intent_dir),
+                "slot_key": slot_key,
+                "tool": _text(approval.get("tool")),
+                "tool_input": _text(approval.get("tool_input")),
+            })
+        return out
 
     async def canonical_slot_name(self, repo_id: str, intent_dir: str) -> str:
         """The slot name Studio asks the UI to create for this intent (§0.1)."""

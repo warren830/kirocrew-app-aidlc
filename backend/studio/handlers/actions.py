@@ -84,9 +84,31 @@ async def list_actions(services: Any, request: web.Request) -> web.Response:
             "organize": organize,
             "groups": groups,
             "counts": counts,
+            "approval_waits": await _approval_waits(services, repo_id, space, intent_dir),
             "generated_at": services.clock.iso(),
         }
     )
+
+
+async def _approval_waits(
+    services: Any, repo_id: str | None, space: str | None, intent_dir: str | None,
+) -> list[dict[str, Any]]:
+    """Conversations parked on a host tool approval, in the queue's own repo/space/intent filter.
+
+    Not cards: the host answers them, in the conversation (architecture A31). Listed here so a run
+    that stopped to ask is seen where every other wait is.
+    """
+    out: list[dict[str, Any]] = []
+    for wait in await services.sessions.waiting_approvals():
+        if (repo_id and wait["repo_id"] != repo_id) or (space and wait["space"] != space) \
+                or (intent_dir and wait["intent_dir"] != intent_dir):
+            continue
+        try:
+            repo = await asyncio.to_thread(services.repos.get, wait["repo_id"])
+        except StudioError:
+            continue
+        out.append({**wait, "repo_label": repo.label})
+    return out
 
 
 async def get_action(services: Any, request: web.Request) -> web.Response:
