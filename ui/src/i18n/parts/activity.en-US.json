@@ -229,5 +229,19 @@
   "audit.WORKSPACE_INITIALISED": "Workspace initialised.",
   "audit.WORKSPACE_SCAFFOLDED": "Workspace scaffolded.",
   "audit.WORKSPACE_SCANNED": "Workspace scanned.",
-  "audit.WORKTREE_CREATED": "A Git worktree was created."
+  "audit.WORKTREE_CREATED": "A Git worktree was created.",
+  "audit.CEREMONY_SET": "Ceremony settings changed (sensors, learnings or summary confirmation).",
+  "audit.CHANGE_ACCEPTED": "A proposed change was accepted.",
+  "audit.CHANGE_CONTROL_SET": "Change-control policy changed.",
+  "audit.CHECKPOINT_VERIFICATION_RECORDED": "A Construction checkpoint verification was recorded.",
+  "audit.CONSTRUCTION_POLICY_RECORDED": "The Construction checkpoint policy was recorded.",
+  "audit.GUARD_DISABLED": "A workflow guard was turned off.",
+  "audit.GUARD_POLICY_SET": "The guard policy changed.",
+  "audit.GUARD_RESTORED": "A workflow guard was turned back on.",
+  "audit.GUARD_STOOD_ASIDE": "A workflow guard stood aside for one operation.",
+  "audit.PLAN_APPROVAL_OVERRIDDEN": "A plan approval was overridden.",
+  "audit.SOURCE_COMMITTED": "A source commit was recorded against reviewed work.",
+  "audit.VERIFICATION_COMMAND_RECORDED": "A verification command was recorded.",
+  "audit.WORKFLOW_ARCHIVED": "The intent was archived.",
+  "audit.WORKFLOW_UNARCHIVED": "The intent was restored from the archive."
 }

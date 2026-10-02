@@ -20,6 +20,7 @@
       ".agents",
       ".codex",
       ".gitignore",
+      "AGENTS.md",
       "aidlc"
     ]
   },

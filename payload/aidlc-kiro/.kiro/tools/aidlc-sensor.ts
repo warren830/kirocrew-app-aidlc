@@ -48,12 +48,15 @@ import {
 } from "./aidlc-graph.ts";
 import {
 	artifactFilename,
+	auditLockDir,
 	codekbDir,
 	errorMessage,
 	getField,
+	holdsAuditLock,
 	isoTimestamp,
 	isPlainObject,
 	KNOWN_CODEKB_STAGES,
+	readRegularFileNoFollowOrThrow,
 	readStateFile,
 	recordDir,
 	resolveProjectDir,
@@ -65,10 +68,46 @@ import {
 	compiledExecutable,
 	resolveHarnessPath,
 } from "./aidlc-runtime-paths.ts";
+import { parseSensorManifest } from "./aidlc-sensor-schema.ts";
+import claimSourcesSensorSource from "../sensors/aidlc-claim-sources.md" with {
+	type: "text",
+};
+import linterSensorSource from "../sensors/aidlc-linter.md" with {
+	type: "text",
+};
+import requiredSectionsSensorSource from "../sensors/aidlc-required-sections.md" with {
+	type: "text",
+};
+import traceabilitySensorSource from "../sensors/aidlc-traceability.md" with {
+	type: "text",
+};
+import typeCheckSensorSource from "../sensors/aidlc-type-check.md" with {
+	type: "text",
+};
+import upstreamCoverageSensorSource from "../sensors/aidlc-upstream-coverage.md" with {
+	type: "text",
+};
 
 // --- Constants ---
 
 const DEFAULT_TIMEOUT_SECONDS = 60;
+const SENSOR_HELP_SOURCES = [
+	claimSourcesSensorSource,
+	linterSensorSource,
+	requiredSectionsSensorSource,
+	traceabilitySensorSource,
+	typeCheckSensorSource,
+	upstreamCoverageSensorSource,
+] as const;
+
+export function sensorHelpSummaries(): ReadonlyMap<string, string> {
+	return new Map(
+		SENSOR_HELP_SOURCES.map((source) => {
+			const manifest = parseSensorManifest(source);
+			return [`sensor-${manifest.id}`, manifest.description] as const;
+		}),
+	);
+}
 
 // Locked at 100ms in the truth table to disambiguate timeout-induced SIGTERM
 // from external-SIGTERM (parent kill, Ctrl-C). Anything within GRACE of the
@@ -76,11 +115,9 @@ const DEFAULT_TIMEOUT_SECONDS = 60;
 const DEFAULT_TIMEOUT_GRACE_MS = 100;
 
 // Resolve sibling per-sensor script paths relative to THIS file's location,
-// not cwd. Mirrors aidlc-bolt.ts:84's spawnSibling pattern. The manifest
-// `command:` is `bun <harness>/tools/aidlc-sensor-<id>.ts` — the dispatcher
-// extracts the basename and resolves it next to itself, then spawns bun
-// with cwd=projectDir so the script's own file I/O resolves under the
-// user's project.
+// not cwd. The copy projection names `bun <harness>/tools/aidlc-sensor-<id>.ts`;
+// the release projection names `aidlc engine sensor-<id>`. Both resolve to
+// the same bundled module identity.
 const __FILE_DIR = dirname(fileURLToPath(import.meta.url));
 
 // --- Types ---
@@ -104,6 +141,85 @@ interface FireContext {
 	scriptArgs: string[]; // CLI args appended to the script invocation
 	scriptAbsPath: string; // sibling-resolved absolute path
 	timeoutMs: number;
+}
+
+function sensorLockOwnerSnapshot(path: string): Record<string, unknown> {
+	try {
+		const owner: unknown = JSON.parse(
+			readRegularFileNoFollowOrThrow(path, "sensor audit lock owner", 4096).toString("utf-8"),
+		);
+		if (!isPlainObject(owner)) return { state: "malformed" };
+		return {
+			state: "observed",
+			pid: Number.isSafeInteger(owner.pid) ? owner.pid : null,
+			startedAtMs: typeof owner.startedAtMs === "number" ? owner.startedAtMs : null,
+			tokenPresent: typeof owner.token === "string",
+			processGenerationPresent: typeof owner.processGeneration === "string",
+		};
+	} catch (error) {
+		return { state: "unavailable", code: (error as NodeJS.ErrnoException).code ?? null };
+	}
+}
+
+/** Measure the existing lock without logging or probing owners while holding it. */
+function withSensorAuditLock(
+	projectDir: string,
+	ctx: FireContext,
+	phase: "fired" | "terminal",
+	append: () => void,
+): void {
+	const started = process.hrtime.bigint();
+	const times: { entered: bigint | null; bodyEnded: bigint | null } = {
+		entered: null, bodyEnded: null,
+	};
+	let failed = false;
+	let failure: string | null = null;
+	try {
+		withAuditLock(projectDir, () => {
+			times.entered = process.hrtime.bigint();
+			try { append(); }
+			finally { times.bodyEnded = process.hrtime.bigint(); }
+		});
+	} catch (error) {
+		failed = true;
+		failure = errorMessage(error).slice(0, 512);
+		throw error;
+	} finally {
+		const returned = process.hrtime.bigint();
+		const { entered, bodyEnded } = times;
+		if (failed || process.env.AIDLC_TEST_SENSOR_LOCK_TRACE === "1") {
+			try {
+				// Owner files are sampled only after a failure, with a bounded,
+				// no-follow read. These observations never authorize any action.
+				const lockDir = failed ? auditLockDir(projectDir) : null;
+				const milliseconds = (value: bigint) => Number(value) / 1_000_000;
+				console.error(`AIDLC_SENSOR_AUDIT_LOCK ${JSON.stringify({
+					at: Date.now(),
+					pid: process.pid,
+					fireId: ctx.fireId,
+					sensorId: ctx.sensor.id,
+					phase,
+					failed,
+					error: failure,
+					startedNs: started.toString(),
+					enteredNs: entered?.toString() ?? null,
+					bodyEndedNs: bodyEnded?.toString() ?? null,
+					returnedNs: returned.toString(),
+					acquireMs: milliseconds((entered ?? returned) - started),
+					bodyMs: entered === null || bodyEnded === null ? null : milliseconds(bodyEnded - entered),
+					releaseMs: bodyEnded === null ? null : milliseconds(returned - bodyEnded),
+					totalMs: milliseconds(returned - started),
+					releasePending: holdsAuditLock(projectDir),
+					...(lockDir ? {
+						owner: sensorLockOwnerSnapshot(join(lockDir, "owner.json")),
+						coordinationOwner: sensorLockOwnerSnapshot(join(`${lockDir}.reap`, "owner.json")),
+					} : {}),
+				})}`);
+			} catch {
+				// Diagnostics must not replace the original audit result/error.
+			}
+		}
+	}
 }
 
 interface FireVerdict {
@@ -143,8 +259,8 @@ function dispatchError(msg: string): never {
 
 // --- Sibling-script resolver ---
 //
-// Manifest `command:` is `bun <harness>/tools/aidlc-sensor-<id>.ts`. The
-// dispatcher extracts the .ts basename and resolves it next to itself.
+// The dispatcher extracts either the .ts basename or the native delegate name
+// and resolves it next to itself.
 // This decouples script discovery from cwd — works in tests where
 // projectDir doesn't carry a .claude/tools/ tree, AND in production where
 // it does. Sibling resolution mirrors aidlc-bolt.ts:84.
@@ -160,14 +276,18 @@ function resolveScriptPath(command: string): string {
 	const tokens = command.trim().split(/\s+/);
 	// Find the first .ts token (drops the "bun" prefix or any flags).
 	const tsToken = tokens.find((t) => t.endsWith(".ts"));
-	if (!tsToken) {
+	const engineIndex = tokens.indexOf("engine");
+	const nativeDelegate = engineIndex >= 0 ? tokens[engineIndex + 1] : undefined;
+	if (!tsToken && !nativeDelegate?.startsWith("sensor-")) {
 		dispatchError(`manifest command lacks a .ts script: "${command}"`);
 	}
 	// String.split always returns a non-empty array, so the last element
 	// is always defined — indexed access keeps the basename typed as
 	// string without a non-null assertion.
-	const parts = tsToken.split("/");
-	const basename = parts[parts.length - 1];
+	const parts = tsToken?.split("/") ?? [];
+	const basename = nativeDelegate?.startsWith("sensor-")
+		? `aidlc-${nativeDelegate}.ts`
+		: parts[parts.length - 1];
 	const scriptDir = process.env.AIDLC_SENSOR_SCRIPT_DIR
 		?? (compiledExecutable() ? resolveHarnessPath(["tools"]) : __FILE_DIR);
 	return join(scriptDir, basename);
@@ -458,7 +578,7 @@ function handleFire(args: string[]): void {
 	}
 
 	// --- 3. Pre-compute detail-file path (used only on FAILED) ---
-		// <record>/.aidlc-sensors/<stage-slug>/<sensor-id>-<fire-id>.md
+		// <record>/.aidlc-engine/sensors/<stage-slug>/<sensor-id>-<fire-id>.md
 
 	// required-sections additionally takes the TPL template seam: the
 	// templates source-of-truth dir + the stage's template-eligible artifact
@@ -519,7 +639,7 @@ function handleFire(args: string[]): void {
 	};
 
 	// --- 4. Lock window A — emit SENSOR_FIRED ---
-	withAuditLock(projectDir, () => {
+	withSensorAuditLock(projectDir, ctx, "fired", () => {
 		appendAuditEntryUnlocked(
 			"SENSOR_FIRED",
 			{
@@ -540,10 +660,10 @@ function handleFire(args: string[]): void {
 		BUNDLED_SENSOR_IDS.has(ctx.sensor.id) &&
 		!process.env.AIDLC_SENSOR_SCRIPT_DIR;
 	const command = useBundledWorker
-		? [executable, "__sensor-script", ctx.sensor.id, ...ctx.scriptArgs]
-		: executable
-			? [executable, "__sensor-script-file", ctx.sensor.id, ...ctx.scriptArgs]
-			: [process.execPath, ctx.scriptAbsPath, ...ctx.scriptArgs];
+			? [executable, "engine", "__sensor-script", ctx.sensor.id, ...ctx.scriptArgs]
+			: executable
+				? [executable, "engine", "__sensor-script-file", ctx.sensor.id, ...ctx.scriptArgs]
+				: [process.execPath, ctx.scriptAbsPath, ...ctx.scriptArgs];
 	const result = spawnSync(command[0], command.slice(1), {
 		encoding: "utf-8",
 		timeout: timeoutMs,
@@ -573,7 +693,7 @@ function handleFire(args: string[]): void {
 	}
 
 	// --- 8. Lock window B — emit terminal row ---
-	withAuditLock(projectDir, () => {
+	withSensorAuditLock(projectDir, ctx, "terminal", () => {
 		emitTerminal(ctx, finalOutcome, projectDir);
 	});
 
@@ -844,7 +964,7 @@ function emitTerminal(
 	if (outcome.kind === "failed") {
 		// detailPath is absolute; emit it as the project-relative path for
 		// human readability. The audit-format spec calls for a relative
-			// path under the active record's .aidlc-sensors/ directory.
+			// path under the active record's .aidlc-engine/sensors/ directory.
 		const fields: Record<string, string> = {
 			...baseFields,
 			"Detail path": relativizePath(detailPath, projectDir),

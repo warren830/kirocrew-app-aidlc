@@ -80,6 +80,43 @@ HOOKS_HEALTH_SUFFIX = ".last"
 STOP_HOOK_REL = ".aidlc-stop-hook/block-count.json"
 REVIEWER_DISPATCH_FILENAME = ".aidlc-reviewer-dispatch.json"
 TURN_COUNTER_REL = f"{WORKSPACE_DIRNAME}/.aidlc-turn-counter"
+#: AI-DLC 2.9+ keeps a record's engine bookkeeping under ``<record>/.aidlc-engine/`` and reads the
+#: legacy record-root names only as a fallback. Keyed by the legacy first path component.
+ENGINE_DIRNAME = ".aidlc-engine"
+ENGINE_RECORD_NAMES: dict[str, str] = {
+    DIRECTIVE_FILENAME: "active-directive.json",
+    RECOVERY_FILENAME: "recovery.md",
+    HUMAN_TURN_FILENAME: "human-turn",
+    ENGINE_TOUCH_FILENAME: "engine-touch",
+    HOOKS_HEALTH_DIRNAME: "hooks-health",
+    ".aidlc-stop-hook": "stop-hook",
+    REVIEWER_DISPATCH_FILENAME: "reviewer-dispatch.json",
+    ".aidlc-sensors": "sensors",
+}
+
+
+def record_file(repo: Path, record: str, legacy_rel: str) -> Path:
+    """Where the engine reads ``legacy_rel`` for this record, by its own rule (``engineReadDirFor``).
+
+    The ``.aidlc-engine`` location wins unless it is absent and the legacy path exists. An
+    ``.aidlc-engine`` entry that is not a directory is not absence: the engine stays on the new path
+    and fails closed rather than reviving legacy state, so Studio reads the same (missing) file.
+    """
+    head, _, rest = legacy_rel.partition("/")
+    current_rel = f"{record}/{ENGINE_DIRNAME}/{ENGINE_RECORD_NAMES[head]}" + (f"/{rest}" if rest else "")
+    current = security.resolve_inside(repo, current_rel)
+    legacy = security.resolve_inside(repo, f"{record}/{legacy_rel}")
+    try:
+        engine = security.resolve_inside(repo, f"{record}/{ENGINE_DIRNAME}")
+        if os.path.lexists(engine) and not engine.is_dir():
+            return current
+        if not os.path.lexists(current) and os.path.lexists(legacy):
+            return legacy
+    except (OSError, StudioError):
+        return current
+    return current
+
+
 COMPOSE_PENDING_REL = f"{WORKSPACE_DIRNAME}/.aidlc-compose-pending"
 TOOLS_DIRNAME = "tools"
 TOOLS_DATA_DIRNAME = "data"
@@ -662,6 +699,9 @@ class Directive:
     #: Internal scope evidence: v2 Code Generation run-stage omitted both unit fields. A null,
     #: empty or malformed field must not be mistaken for this engine-defined zero-unit shape.
     zero_unit_run: bool = False
+    #: Record-relative file the marker was read from: ``.aidlc-engine/active-directive.json`` on
+    #: 2.9+, the legacy record-root name before. Evidence only; not on the wire.
+    marker_name: str = DIRECTIVE_FILENAME
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -2422,12 +2462,12 @@ class AidlcReader:
         the number only inside the state template in ``aidlc-utility.ts``. Guessing here would make
         ``state_version_unsupported`` fire against a healthy repository.
         """
-        lib = security.bounded_text(tools / ENGINE_LIB_NAME, C.MAX_ARTIFACT_RENDER_BYTES)
+        lib = security.bounded_text(tools / ENGINE_LIB_NAME, C.MAX_ENGINE_SOURCE_BYTES)
         if lib:
             match = C.ENGINE_STATE_VERSION_RE.search(lib)
             if match:
                 return int(match.group(1))
-        utility = security.bounded_text(tools / ENGINE_UTILITY_NAME, C.MAX_ARTIFACT_RENDER_BYTES)
+        utility = security.bounded_text(tools / ENGINE_UTILITY_NAME, C.MAX_ENGINE_SOURCE_BYTES)
         if utility:
             match = _TEMPLATE_STATE_VERSION_RE.search(utility)
             if match:
@@ -2526,13 +2566,14 @@ class AidlcReader:
     def read_directive(
         self, repo: Path, space: str, intent_dir: str, state_sha256: str
     ) -> Directive | None:
-        path = security.resolve_inside(
-            repo, f"{self.record_rel(space, intent_dir)}/{DIRECTIVE_FILENAME}"
-        )
+        path = record_file(repo, self.record_rel(space, intent_dir), DIRECTIVE_FILENAME)
         data = security.bounded_read(path, C.MAX_JSON_BYTES)
         if data is None:
             return None
-        return parse_directive(data, state_sha256)
+        directive = parse_directive(data, state_sha256)
+        if directive is not None and path.parent.name == ENGINE_DIRNAME:
+            directive = replace(directive, marker_name=f"{ENGINE_DIRNAME}/{path.name}")
+        return directive
 
     def read_audit(
         self, repo: Path, space: str, intent_dir: str, *, tail_bytes: int = C.MAX_AUDIT_HISTORY_BYTES
@@ -2871,19 +2912,19 @@ class AidlcReader:
         """
         record = self.record_rel(space, intent_dir)
         recovery_text = security.bounded_text(
-            security.resolve_inside(repo, f"{record}/{RECOVERY_FILENAME}"), C.MAX_TEXT_PREVIEW_BYTES
+            record_file(repo, record, RECOVERY_FILENAME), C.MAX_TEXT_PREVIEW_BYTES
         )
         hooks: dict[str, str] = {}
-        hooks_dir = security.resolve_inside(repo, f"{record}/{HOOKS_HEALTH_DIRNAME}")
+        hooks_dir = record_file(repo, record, HOOKS_HEALTH_DIRNAME)
         for entry in sorted(_iterdir(hooks_dir), key=lambda path: path.name):
             if not entry.name.endswith(HOOKS_HEALTH_SUFFIX) or not security.is_regular_file(entry):
                 continue
             value = security.bounded_text(entry, C.MAX_TEXT_PREVIEW_BYTES) or ""
             hooks[entry.name[: -len(HOOKS_HEALTH_SUFFIX)]] = value.strip()
         return Markers(
-            human_turn_mtime_ns=_mtime_ns(security.resolve_inside(repo, f"{record}/{HUMAN_TURN_FILENAME}")),
+            human_turn_mtime_ns=_mtime_ns(record_file(repo, record, HUMAN_TURN_FILENAME)),
             engine_touch_mtime_ns=_mtime_ns(
-                security.resolve_inside(repo, f"{record}/{ENGINE_TOUCH_FILENAME}")
+                record_file(repo, record, ENGINE_TOUCH_FILENAME)
             ),
             recovery=parse_recovery_breadcrumb(recovery_text) if recovery_text is not None else None,
             goal_stop_present=security.is_regular_file(
@@ -2892,7 +2933,7 @@ class AidlcReader:
             hooks_health=hooks,
             stop_block_count=_json_dict(
                 security.bounded_read(
-                    security.resolve_inside(repo, f"{record}/{STOP_HOOK_REL}"), C.MAX_JSON_BYTES
+                    record_file(repo, record, STOP_HOOK_REL), C.MAX_JSON_BYTES
                 )
             ),
             turn_counter=_int_or_none(
@@ -2903,7 +2944,7 @@ class AidlcReader:
             compose_pending=(security.resolve_inside(repo, COMPOSE_PENDING_REL)).exists(),
             reviewer_dispatch=_json_dict(
                 security.bounded_read(
-                    security.resolve_inside(repo, f"{record}/{REVIEWER_DISPATCH_FILENAME}"),
+                    record_file(repo, record, REVIEWER_DISPATCH_FILENAME),
                     C.MAX_JSON_BYTES,
                 )
             ),
@@ -2941,7 +2982,7 @@ class AidlcReader:
             ),
             human_turn_events_partial=not audit.complete,
             human_turn_mtime_ns=_mtime_ns(
-                security.resolve_inside(repo, f"{record}/{HUMAN_TURN_FILENAME}")
+                record_file(repo, record, HUMAN_TURN_FILENAME)
             ),
             turn_counter=_int_or_none(
                 security.bounded_text(

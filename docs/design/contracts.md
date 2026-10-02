@@ -141,7 +141,7 @@ updating this document.
 
 ```python
 APP_NAME = "aidlc-studio"
-APP_VERSION = "1.0.3"                       # must equal app.json "version" (test pins)
+APP_VERSION = "1.1.0"                       # must equal app.json "version" (test pins)
 MIN_KIROCREW_VERSION = "0.3.0"              # == app.json minKiroCrewVersion (architecture §2/A10; review P19/R05)
 BUNDLED_ENGINE_VERSION = "2.7.1"            # == payload/manifest.json engineVersion. Tests assert equality with
 BUNDLED_STATE_VERSION = 8                   #    PayloadManifest.load(); they never compare against a literal
@@ -2973,7 +2973,7 @@ Notation below: `→ 200 {…}` success body; `✗ code` = error codes the route
 
 `GET /health` → 200
 ```json
-{"app": "aidlc-studio", "version": "1.0.3", "bundled_engine_version": "2.7.1", "min_kirocrew_version": "0.3.0",
+{"app": "aidlc-studio", "version": "1.1.0", "bundled_engine_version": "2.10.0", "min_kirocrew_version": "0.3.0",
  "boot_id": "…16 hex…",                                       // Services.boot_id; values above are examples — they come from constants/manifest
  "host_version": "0.5.0-insider.9" | null, "started_at": iso|null, "status": "healthy"|"degraded"|"error",
  "issues": [str],

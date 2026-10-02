@@ -31,13 +31,13 @@ from typing import Any, Mapping, Protocol
 
 APP_NAME = "aidlc-studio"
 #: Must equal ``app.json`` ``version`` (pinned by tests/test_manifest.py).
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.1.0"
 #: Must equal ``app.json`` ``minKiroCrewVersion``. 0.3.0 is enough because Studio registers its own
 #: module namespace (see ``backend/routes.py``) instead of relying on the 0.5.0 loader, and every
 #: other host primitive it uses exists in 0.3.0.
 MIN_KIROCREW_VERSION = "0.3.0"
 #: Must equal ``payload/manifest.json`` ``engineVersion``.
-BUNDLED_ENGINE_VERSION = "2.7.1"
+BUNDLED_ENGINE_VERSION = "2.10.0"
 #: What the bundled engine writes. Code and tests read these from ``payload/manifest.json`` rather than
 #: comparing against the literals below; the literals exist so a mismatch is a visible diff here too.
 BUNDLED_STATE_VERSION = 8
@@ -62,6 +62,10 @@ SUPPORTED_STAGE_COUNTS = (32, 33)
 MAX_STATE_BYTES = 512 * 1024
 MAX_JSON_BYTES = 4 * 1024 * 1024
 MAX_ARTIFACT_RENDER_BYTES = 1024 * 1024
+#: Ceiling for reading the engine's own sources (``aidlc-lib.ts``/``aidlc-utility.ts``) to find
+#: ``CURRENT_STATE_VERSION``. These are code, not artifacts, and outgrew the render cap: 2.10.0's
+#: ``aidlc-lib.ts`` is 1.2 MiB, which the 1 MiB cap read as absent and reported no state version.
+MAX_ENGINE_SOURCE_BYTES = 8 * 1024 * 1024
 MAX_AUDIT_TAIL_BYTES = 256 * 1024
 # Same aggregate ceiling as the former 64 × 256 KiB shard windows.
 MAX_AUDIT_HISTORY_BYTES = 16 * 1024 * 1024
@@ -561,6 +565,10 @@ RESOLUTION_EVENTS = (
     "QUESTION_ANSWERED",
     "SUMMARY_CONFIRMATION_RECORDED",
     "PLAN_APPROVAL_RECORDED",
+    # 2.10.0 resolves the Construction checkpoint-policy and verification-command gates with
+    # their own rows (``GATE_RESOLUTION_EVENTS`` in aidlc-lib.ts), not with GATE_APPROVED.
+    "CONSTRUCTION_POLICY_RECORDED",
+    "VERIFICATION_COMMAND_RECORDED",
 )
 #: Events that prove the workflow actually moved. Deliberately excludes the noise below: audit growth
 #: alone is NOT movement (a session start or a failed command appends rows too).

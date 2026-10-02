@@ -249,8 +249,8 @@ lifecycle progress.
 
 ## Bundled AI-DLC
 
-`payload/aidlc-kiro/` holds the AI-DLC Workflows Kiro CLI distribution, version **2.7.1**, with
-Studio-maintained local patches documented in `THIRD_PARTY_NOTICES.md`, under the MIT No Attribution
+`payload/aidlc-kiro/` holds the AI-DLC Workflows Kiro CLI distribution, version **2.10.0**, with
+one Studio-maintained local patch documented in `THIRD_PARTY_NOTICES.md`, under the MIT No Attribution
 licence (`payload/AIDLC-LICENSE`). Every file is inventoried with its
 SHA-256 in `payload/manifest.json`, which is also what the installer verifies before and after writing.
 Studio's own version and the bundled AI-DLC version are shown separately in Settings. See
@@ -292,9 +292,10 @@ never submits anything. It analyses an evidence package Studio passes to it and 
 cd ui && npm run check      # tsc --noEmit && vitest run && vite build
 
 # regenerate the bundled payload inventory after changing payload/aidlc-kiro/
-python3 scripts/build_payload_manifest.py --version 2.7.1 \
-  --source-ref "v2.7.1 @ a277af21 + Studio plan-progress, review-appendix and requirement-traceability compatibility patches" \
-  --source-commit a277af218f0df7f325d3b8be7b6d90fce2c5bd40 --state-versions 8
+python3 scripts/build_payload_manifest.py --version 2.10.0 \
+  --source-ref "v2.10.0 @ 2a883858 + Studio requirement-traceability compatibility patch" \
+  --source-commit 2a883858f5483bce3b48f43b8f6d3ca2c042d6ae \
+  --dist-path "aidlc-copy-runtime-2.10.0.tar.gz:runtime/kiro" --state-versions 8
 ```
 
 Keep `--source-commit` pinned to the upstream base and describe local patches in `--source-ref`

@@ -595,7 +595,7 @@ class ConsistencyEngine:
                 {"stage": _attr(directive, "stage"), "unit": _attr(directive, "unit"),
                  "directive_state_sha256": _attr(directive, "state_sha256"), "state_sha256": actual},
                 (
-                    EvidenceRef("file", self._record_rel(snap) + "/" + _DIRECTIVE_FILENAME,
+                    EvidenceRef("file", self._record_rel(snap) + "/" + (_attr(directive, "marker_name") or _DIRECTIVE_FILENAME),
                                 f"state_sha256 {_short(_attr(directive, 'state_sha256'))}"),
                     EvidenceRef("file", self._state_rel(snap), f"sha256 {_short(actual)}"),
                 ),
@@ -639,7 +639,8 @@ class ConsistencyEngine:
                 },
                 (
                     EvidenceRef("file", self._state_rel(snap), f"no {_ACTIVE_UNIT_FIELD} field"),
-                    EvidenceRef("file", f"{record}/{_DIRECTIVE_FILENAME}", "no unit key"),
+                    EvidenceRef("file", f"{record}/{_attr(_attr(snap, 'directive'), 'marker_name') or _DIRECTIVE_FILENAME}",
+                                "no unit key"),
                     EvidenceRef("file", f"{record}/{_CONSTRUCTION_DIRNAME}",
                                 f"{len(units)} unit directories: {', '.join(units)}"),
                 ),

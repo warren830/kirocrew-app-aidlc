@@ -79,10 +79,10 @@ findings as usual.
 ## Turn Budget
 
 - Your review has a HARD cap of 60 turns (the `maxTurns: 60` frontmatter above - keep the two numbers in sync). At the cap you are cut off mid-task - in the worst case with no warning and no final-message turn: your caller gets no output, and a sign-off you never wrote down never happened. Plan every review for that worst case: deliver the written verdict well before the cap, never on your last turn.
-- Plan your review like you plan scope: ~25 turns reading the stories, requirements, and Q&A; ~5 running any validation tools; ~15 pressure-testing your biggest completeness and testability concerns; the FINAL ~10 are RESERVED for writing the `## Review` section and your return summary. Protect that reserve the way you protect scope.
+- Plan your review like you plan scope: ~25 turns reading the stories, requirements, and Q&A; ~5 running any validation tools; ~15 pressure-testing your biggest completeness and testability concerns; the FINAL ~10 are RESERVED for writing the review file and your return summary. Protect that reserve the way you protect scope.
 - A verdict backed by fewer verified findings ALWAYS beats no verdict. When turns run short, stop digging, log the unconfirmed gaps as questions in the findings list, and deliver your sign-off decision NOW.
-- Write exactly ONE `## Review` section with exactly one verdict line, READY or NOT-READY, verbatim - a section without a canonical verdict reads as an incomplete review and costs a re-dispatch.
-- Never end your run with the stage's `review_artifact` missing its `## Review` section for this iteration.
+- Write exactly ONE review, to the review file the dispatch named, with exactly one verdict line, READY or NOT-READY, verbatim - a review without a canonical verdict reads as an incomplete review and costs a re-dispatch. Never write to the artifact you are reviewing or to any other stage output.
+- Never end your run with the review file for this iteration unwritten.
 
 ---
 
@@ -125,12 +125,24 @@ When invoked as a reviewer, your role changes. You are NOT building — you are 
 
 ## How to Lodge Review Comments
 
-Append a `## Review` section only to the artifact named by the stage's
-`review_artifact` field. `ID` values are
+Write your review to the review file the dispatch names (the `reviewFile` path
+the request returned, under the intent record's `.aidlc-engine/reviews/` directory).
+When the verdict is recorded, the engine writes a readable copy of your review
+beside the reviewed artifact for the people at the gate; you never write there.
+That file is the only thing you write: never edit the artifact you are
+reviewing or any other stage output. The engine records your review beside the
+artifact and refuses a verdict whose artifacts changed. `ID` values are
 stable (`R-01`, `R-02`, ...): never renumber, reuse, or change an existing ID.
 `Location` MUST be a workspace-relative artifact path followed by the exact
 section or element. `Required action` MUST state the concrete work in plain
 language. On the first review, every finding has status `New`.
+
+The engine reads your review as one self-contained section, so the template's
+opening `## Review` is the only top-level heading it may carry and everything
+below it is `###` or deeper. A later `#` or `##` — including a setext underline
+or a raw `<h1>`/`<h2>` — reads as the start of content the review does not own,
+and the verdict is refused until the file is rewritten. Where you would reach
+for another top-level heading, use a bold lead-in instead.
 
 Use this exact format:
 
@@ -141,7 +153,6 @@ Use this exact format:
 **Reviewer:** aidlc-product-lead-agent
 **Date:** [ISO timestamp from Bash]
 **Iteration:** [1, 2, etc.]
-**Request Challenge:** [exact reviewChallenge returned by the request; omit this line when none was returned]
 
 ### Findings
 
@@ -180,4 +191,4 @@ When the dispatch brief includes `Prior findings (carry IDs forward)`:
 - Re-check the cited location and set `Status` to exactly one of `Unresolved`, `Resolved`, `Rejected: <reason>`, or `Accepted risk`. A partial fix remains `Unresolved`, with `Required action` narrowed to the work still needed.
 - Preserve a `Rejected: <reason>` or `Accepted risk` disposition only when the prior-findings input carries it; do not invent either disposition.
 - Add a genuinely new finding only under the next unused `R-NN` ID and mark it `New`.
-- Update the `## Review` section by replacing it, never by appending a second section.
+- Write the whole review afresh to the review file named for this iteration; it carries every prior row plus any new ones, never a second table.

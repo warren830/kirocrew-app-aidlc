@@ -143,6 +143,11 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--source-commit", required=True, help="upstream commit the payload was extracted from")
     ap.add_argument("--source-ref", default="", help="upstream tag/ref, e.g. v2.3.0")
     ap.add_argument(
+        "--dist-path",
+        default="dist/kiro",
+        help="where the Kiro tree came from: a repo path, or <release asset>:<path> for 2.8+ releases",
+    )
+    ap.add_argument(
         "--state-versions",
         default="7",
         help="comma-separated AI-DLC State Version values this payload writes/accepts",
@@ -235,7 +240,7 @@ def main(argv: list[str]) -> int:
             "repository": "https://github.com/awslabs/aidlc-workflows",
             "ref": args.source_ref,
             "commit": args.source_commit,
-            "distPath": "dist/kiro",
+            "distPath": args.dist_path,
             "license": "MIT-0",
         },
         "compatibleStateVersions": [int(v) for v in args.state_versions.split(",") if v.strip()],

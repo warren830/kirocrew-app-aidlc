@@ -221,7 +221,13 @@ def test_the_harness_json_merge_target_manages_the_identity_keys_and_nothing_els
     spec = payload_manifest.merge_targets[rel]
     assert spec["strategy"] == "json-managed-keys"
     shipped = json.loads((APP_ROOT / "payload" / "aidlc-kiro" / rel).read_text("utf-8"))
-    assert spec["managedKeys"] == sorted(shipped) == ["harnessDir", "name", "rulesSubdir"]
+    # 2.10.0 added four distribution-descriptor keys (the same values the engine ships in
+    # ``aidlc-projection.json``). Read before accepting: none is operator-edited, all are rewritten
+    # by the engine's own refresh, so Studio owning them keeps an upgrade able to refresh them.
+    assert spec["managedKeys"] == sorted(shipped) == [
+        "configNextStep", "distribution", "harnessDir", "name", "productName", "rulesSubdir",
+        "schemaVersion",
+    ]
     assert "plugins" not in spec["managedKeys"]
 
 

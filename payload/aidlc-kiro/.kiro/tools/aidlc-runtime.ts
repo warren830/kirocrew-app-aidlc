@@ -41,6 +41,7 @@ import {
   relativeMemoryPath,
   relativeRecordDir,
   resolveAuditWorktreePath,
+  resolveBoltIdentity,
   requireLiveClaimForTeamUnit,
   resolveProjectDir,
   runtimeGraphPath,
@@ -50,7 +51,6 @@ import {
   validateLiveUnitScope,
   withAuditLock,
   worktreeClaimBoundaryMatches,
-  worktreePath,
   worktreeRuntimeGraphPath,
   writeFileAtomic,
 } from "./aidlc-lib.ts";
@@ -809,6 +809,12 @@ function compile(opts: CompileOptions): { skipped?: string; written?: string } {
   return { written: runtimeGraphPath(projectDir) };
 }
 
+export function compileRuntime(
+  projectDir: string,
+): { skipped?: string; written?: string } {
+  return compile({ projectDir });
+}
+
 // Empty-graph short-circuit for the "state exists, no audit / no
 // WORKFLOW_STARTED" cases. Writes a valid graph with empty stages array
 // so downstream readers don't have to special-case absence.
@@ -1162,17 +1168,6 @@ function handleFragmentFork(rest: string[], projectDir: string): void {
     process.stderr.write(`aidlc-runtime fragment-fork: ${slugErr}\n`);
     process.exit(1);
   }
-  const wtPath = worktreePath(projectDir, flags.slug);
-  if (worktreeClaimBoundaryMatches(projectDir, wtPath, flags.slug)) {
-    validateLiveUnitScope(projectDir, flags.slug);
-  } else {
-    requireLiveClaimForTeamUnit(projectDir, flags.slug, {
-      intent: flags.intent,
-      space: flags.space,
-      walkingSkeletonMain,
-    });
-  }
-
   // Pin the worktree runtime-graph mirror AND the main read to ONE intent
   // (vision §5). recordPrefix -> the worktree mirror's relative record dir
   // (null -> flat); wtRecord -> the record-dir NAME the worktree fragment lives
@@ -1193,6 +1188,16 @@ function handleFragmentFork(rest: string[], projectDir: string): void {
   const space = selection.space;
   const recordPrefix = relativeRecordDir(projectDir, intent, space);
   const wtRecord = selection.intent ?? undefined;
+  const wtPath = resolveBoltIdentity(projectDir, flags.slug, selection).dir;
+  if (worktreeClaimBoundaryMatches(projectDir, wtPath, flags.slug)) {
+    validateLiveUnitScope(projectDir, flags.slug);
+  } else {
+    requireLiveClaimForTeamUnit(projectDir, flags.slug, {
+      intent: flags.intent,
+      space: flags.space,
+      walkingSkeletonMain,
+    });
+  }
 
   const wtFragmentPath = worktreeRuntimeGraphPath(wtPath, recordPrefix);
   const mainPath = runtimeGraphPath(projectDir, intent, space);
@@ -1280,7 +1285,11 @@ function handleFragmentMerge(rest: string[], projectDir: string): void {
     process.stderr.write(`aidlc-runtime fragment-merge: ${slugErr}\n`);
     process.exit(1);
   }
-  const wtPath = worktreePath(projectDir, flags.slug);
+  const selection = resolveWorkflowSelection(projectDir, {
+    intent: flags.intent,
+    space: flags.space,
+  });
+  const wtPath = resolveBoltIdentity(projectDir, flags.slug, selection).dir;
   requireLiveClaimForTeamUnit(projectDir, flags.slug, {
     intent: flags.intent,
     space: flags.space,
@@ -1288,7 +1297,7 @@ function handleFragmentMerge(rest: string[], projectDir: string): void {
   });
 
   // Same selector the fork used -> the SAME intent record (vision §5).
-  const recordPrefix = relativeRecordDir(projectDir, flags.intent, flags.space);
+  const recordPrefix = relativeRecordDir(projectDir, selection.intent ?? undefined, selection.space);
 
   const wtFragmentPath = worktreeRuntimeGraphPath(wtPath, recordPrefix);
 
@@ -1371,7 +1380,7 @@ function tryRun(label: string, handler: SubcommandHandler): SubcommandHandler {
 }
 
 const handleCompile: SubcommandHandler = (_rest, projectDir) => {
-  const result = compile({ projectDir });
+  const result = compileRuntime(projectDir);
   if (result.skipped) {
     process.exit(0);
   }

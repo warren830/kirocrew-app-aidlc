@@ -54,6 +54,9 @@ interface UpstreamResolution {
   storyAssignments?: Map<string, Set<string>>;
   /** The whole selected source when `ids` is one unit's share of it. */
   sourceIds?: Set<string>;
+  // IDs a stage may declare and cover without being required to (2.10.0: NFR rows in a
+  // stories-less units-generation map). Still bounded by what the upstream artifact names.
+  optionalIds?: Set<string>;
 }
 
 interface StoryAssignments {
@@ -211,6 +214,20 @@ function isTableSeparator(line: string): boolean {
   return line.trimStart().startsWith("|") && line.includes("-") && /^\s*\|?[\s:|-]+\|?\s*$/.test(line);
 }
 
+// A zero-Unit directive writes code-generation artifacts directly under
+// construction/code-generation/ with no Unit segment (stage prose). Only that
+// stage runs without a Unit today; the other per-Unit stages keep deriving one.
+function isZeroUnitOutput(stage: string, outputPath: string): boolean {
+  return stage === "code-generation" &&
+    normalizePath(outputPath).endsWith("/construction/code-generation/traceability.json");
+}
+
+// Per-Unit artifacts live under construction/<unit>/<stage>/; a zero-Unit run
+// keeps the stage-level construction/<stage>/ location.
+function constructionDir(docsDir: string, unit: string, stage: string): string {
+  return unit ? join(docsDir, "construction", unit, stage) : join(docsDir, "construction", stage);
+}
+
 function markdownCells(line: string): string[] {
   if (!line.trimStart().startsWith("|") || /^\s*\|?[\s:|-]+\|?\s*$/.test(line)) return [];
   return line.split("|").slice(1, -1).map((cell) => cell.trim());
@@ -282,10 +299,10 @@ function storyAssignments(
     // row's ID cell, so a later note cannot assign the IDs it mentions.
     const idCells = roles
       ? roles.ids.map((column) => cells[column] ?? "")
-      : cells.filter((cell) => [...extractIds(cell, [ID_PATTERNS.US, ID_PATTERNS.FR])]
+      : cells.filter((cell) => [...extractIds(cell, [ID_PATTERNS.US, ID_PATTERNS.FR, ID_PATTERNS.NFR])]
         .some((id) => sourceIds.has(id))).slice(0, 1);
     const unitCells = roles ? roles.units.map((column) => cells[column] ?? "") : cells;
-    const stories = [...extractIds(idCells.join(" | "), [ID_PATTERNS.US, ID_PATTERNS.FR])]
+    const stories = [...extractIds(idCells.join(" | "), [ID_PATTERNS.US, ID_PATTERNS.FR, ID_PATTERNS.NFR])]
       .filter((id) => sourceIds.has(id));
     if (stories.length === 0) continue;
     for (const unit of units) {
@@ -311,12 +328,20 @@ function unitShare(assignments: Map<string, Set<string>>, unit: string): Set<str
   return new Set([...assignments.entries()].filter(([, units]) => units.has(unit)).map(([id]) => id));
 }
 
-function resolveUnitContext(projectDir: string, outputPath: string, docsDir: string): { context?: UnitContext; reason?: string } {
+function resolveUnitContext(projectDir: string, outputPath: string, docsDir: string, stage: string): { context?: UnitContext; reason?: string } {
   const unitName = extractUnitName(outputPath);
-  if (!unitName) return { reason: `cannot derive the construction unit from output path: ${outputPath}` };
+  if (!unitName && !isZeroUnitOutput(stage, outputPath)) {
+    return { reason: `cannot derive the construction unit from output path: ${outputPath}` };
+  }
   const dag = resolveBoltDag(projectDir);
   if (dag.state === "malformed") {
     return { reason: `unit-of-work-dependency.md is ${dag.reason}: ${dag.detail}` };
+  }
+  if (!unitName) {
+    if (dag.state === "ok") {
+      return { reason: `cannot derive the construction unit from output path while unit-of-work-dependency.md declares Units: ${outputPath}` };
+    }
+    return { context: { unitName: "", units: [], unitIds: new Map() } };
   }
   const units = dag.state === "ok" ? dag.units : [unitName];
   if (dag.state === "ok" && !units.includes(unitName)) {
@@ -362,7 +387,8 @@ function resolveUpstream(stage: string, projectDir: string, outputPath: string):
     return result;
   }
   if (stage === "units-generation") {
-    const source = existsSync(stories)
+    const hasStories = existsSync(stories);
+    const source = hasStories
       ? idsFromFile(stories, [ID_PATTERNS.US], "stories.md")
       : idsFromFile(requirements, [ID_PATTERNS.FR], "requirements.md");
     const sourceIds = addSource(result, source);
@@ -381,7 +407,16 @@ function resolveUpstream(stage: string, projectDir: string, outputPath: string):
       unitIds: unitIdMap(join(docsDir, "inception", "units-generation", "unit-of-work.md"), dag.units),
     };
     result.unitContext = context;
-    const mapped = storyAssignments(storyMap, context.units, context.unitIds, sourceIds);
+    // Without stories the required set stays FR-only, but a scope that also traces NFRs must not
+    // have its correctly mapped NFR rows reported as unmapped targets (2.10.0), so the join may
+    // also accept the NFR IDs requirements.md itself names. The map still cannot invent one.
+    const optionalIds = hasStories
+      ? new Set<string>()
+      : new Set([...idsFromFile(requirements, [ID_PATTERNS.NFR], "requirements.md").ids]
+        .filter((id) => !sourceIds.has(id)));
+    result.optionalIds = optionalIds;
+    const joinIds = new Set([...sourceIds, ...optionalIds]);
+    const mapped = storyAssignments(storyMap, context.units, context.unitIds, joinIds);
     if (mapped.reason) result.reasons.push(mapped.reason);
     result.storyAssignments = mapped.assignments;
     for (const id of sourceIds) {
@@ -390,7 +425,7 @@ function resolveUpstream(stage: string, projectDir: string, outputPath: string):
     return result;
   }
 
-  const resolvedUnit = resolveUnitContext(projectDir, outputPath, docsDir);
+  const resolvedUnit = resolveUnitContext(projectDir, outputPath, docsDir, stage);
   if (!resolvedUnit.context) {
     result.reasons.push(resolvedUnit.reason ?? "cannot resolve construction unit");
     return result;
@@ -476,7 +511,7 @@ function resolveUpstream(stage: string, projectDir: string, outputPath: string):
   }
   if (stage === "code-generation") {
     if (existsSync(stories)) {
-      if (existsSync(storyMap)) {
+      if (unit && existsSync(storyMap)) {
         const mapped = storyAssignments(
           storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds,
           idsFromFile(stories, [ID_PATTERNS.US], "stories.md").ids,
@@ -515,7 +550,7 @@ function resolveUpstream(stage: string, projectDir: string, outputPath: string):
       }
       for (const id of source.ids) if (id.startsWith("NFR")) result.ids.add(id);
     }
-    const nfrDir = join(docsDir, "construction", unit, "nfr-requirements");
+    const nfrDir = constructionDir(docsDir, unit, "nfr-requirements");
     for (const name of ["performance-requirements.md", "security-requirements.md", "scalability-requirements.md", "reliability-requirements.md"]) {
       const path = join(nfrDir, name);
       if (existsSync(path)) {
@@ -525,14 +560,16 @@ function resolveUpstream(stage: string, projectDir: string, outputPath: string):
         }
       }
     }
-    const brPath = join(docsDir, "construction", unit, "functional-design", "rules.md");
+    const brPath = join(constructionDir(docsDir, unit, "functional-design"), "rules.md");
     if (existsSync(brPath)) {
       const read = readText(brPath);
       if (read.content !== null) {
         for (const id of extractIds(read.content, [ID_PATTERNS.BR])) result.ids.add(id);
       }
     }
-    if (result.ids.size === 0) result.reasons.push(`upstream ID set is empty for unit "${unit}"`);
+    if (result.ids.size === 0) {
+      result.reasons.push(unit ? `upstream ID set is empty for unit "${unit}"` : "upstream ID set is empty for the zero-Unit code-generation run");
+    }
     return result;
   }
 
@@ -635,8 +672,8 @@ function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].sort();
 }
 
-function main(): void {
-  const flags = parseFlags(process.argv.slice(2));
+export function main(argv: string[]): void {
+  const flags = parseFlags(argv);
   if (!flags.outputPath) fail("--output-path is required");
   const outputPath = normalizePath(flags.outputPath);
   if (!existsSync(outputPath)) fail(`--output-path not found: ${flags.outputPath}`);
@@ -695,7 +732,7 @@ function main(): void {
     const notApplicable = new Set(data.coverage.filter((entry) => entry.status === "N/A").map((entry) => entry.id));
     const claimed = new Set(data.coverage.filter((entry) => entry.status !== "N/A").map((entry) => entry.id));
     for (const id of declared) {
-      if (upstream.ids.has(id)) continue;
+      if (upstream.ids.has(id) || upstream.optionalIds?.has(id)) continue;
       if (!upstream.sourceIds?.has(id)) {
         invalidEntries.push(`upstream_ids:${id}: id is absent from the resolved upstream source`);
       } else if (!notApplicable.has(id) || claimed.has(id)) {
@@ -735,8 +772,10 @@ function main(): void {
   emit(result);
 }
 
-try {
-  main();
-} catch (error) {
-  emit(failedResult(`traceability sensor failed safely: ${errorMessage(error)}`));
+if (import.meta.main) {
+  try {
+    main(process.argv.slice(2));
+  } catch (error) {
+    emit(failedResult(`traceability sensor failed safely: ${errorMessage(error)}`));
+  }
 }
