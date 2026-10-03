@@ -196,12 +196,34 @@ class FakeSlot:
         self._stop_state = "idle"
         self._in_stage_execution = False
         self._approval_futures: dict[str, Any] = {}
+        #: Live ``ApprovalCoordinator`` records for this slot — a sub-agent's approval — oldest first.
+        self.coordinator_approvals: list[dict[str, str]] = []
         self._question_pending: dict[str, dict] = {}
         self.linked_session_key = ""
         self.task = None
         self.stopping = False
 
+    def _pending_approval_info(self, slot_pending: bool) -> dict[str, str] | None:
+        # The host's own reading (`slot_projection.to_dict`): the newest unresolved permission row for a
+        # slot-level approval, else the oldest coordinator record.
+        if slot_pending:
+            for message in reversed(self.messages):
+                if message.get("role") != "permission":
+                    continue
+                meta = json.loads(message.get("cls") or "{}")
+                if meta.get("resolved"):
+                    continue
+                return {"tool": message.get("content") or "", "tool_input": meta.get("tool_input", ""),
+                        "tool_kind": meta.get("tool_kind", ""),
+                        "request_id": meta.get("approval_id", meta.get("request_id", ""))}
+        if self.coordinator_approvals:
+            record = self.coordinator_approvals[0]
+            return {"tool": record.get("tool", ""), "tool_input": record.get("tool_input", ""),
+                    "tool_kind": "", "request_id": record.get("id", "")}
+        return None
+
     def to_dict(self) -> dict[str, Any]:
+        slot_pending = any(not f.done() for f in self._approval_futures.values())
         return {
             "key": self.key,
             "title": self.title,
@@ -215,7 +237,8 @@ class FakeSlot:
             "messages": len(self.messages),
             "needs_input": bool(self._question_pending),
             "waiting_for_input": not self.running and bool(self.messages),
-            "pending_approval": any(not f.done() for f in self._approval_futures.values()),
+            "pending_approval": slot_pending or bool(self.coordinator_approvals),
+            "pending_approval_info": self._pending_approval_info(slot_pending),
             "last_ts": self.messages[-1]["ts"] if self.messages else "",
             "linked_session_key": self.linked_session_key,
         }

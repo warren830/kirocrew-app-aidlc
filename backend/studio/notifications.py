@@ -225,7 +225,7 @@ class NotificationAdapter:
 
     async def notify_tool_approval(
         self, *, repo_id: str, repo_label: str, intent_key: str, intent_label: str,
-        slot_key: str, approval: Mapping[str, str],
+        slot_key: str, approval: Mapping[str, str], turn: str = "",
     ) -> NotificationResult:
         """Tell the user an intent's conversation is parked on a host tool approval, once per approval.
 
@@ -235,8 +235,11 @@ class NotificationAdapter:
         (``HostBridge.notify``), so the conversation is one click further.
         """
         link = self.intent_link(repo_id, intent_key)
+        # The approval's own id when the host gives one. Otherwise what it asks plus the turn it was
+        # asked in (``turn``, the slot's last turn): an empty description alone would be one key per
+        # slot forever, and every later approval there would be swallowed as a duplicate.
         identity = _text(approval.get("request_id")) or S.sha256_text(
-            f"{_text(approval.get('tool'))}\0{_text(approval.get('tool_input'))}"
+            f"{_text(approval.get('tool'))}\0{_text(approval.get('tool_input'))}\0{_text(turn)}"
         )
         dedupe_key = f"approval:{_text(slot_key)}:{identity}"
         if await self._seen(dedupe_key):

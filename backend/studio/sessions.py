@@ -1179,7 +1179,10 @@ class HostBridge:
                         approvals += 1
                 except (AttributeError, TypeError):
                     approvals += 1  # an unreadable future is a pending one, never a resolved one
-        elif payload.get("pending_approval"):
+        # The host's ``pending_approval`` also covers a sub-agent's approval, which waits on the
+        # state-level coordinator rather than on this slot's futures. Uncounted, a run parked there read
+        # as not waiting, and its approval was never shown or notified.
+        if not approvals and payload.get("pending_approval"):
             approvals = 1
 
         running, queued = self._subagent_depth(session_key)
@@ -1189,7 +1192,7 @@ class HostBridge:
             "subagents_running": running,
             "subagents_queued": queued,
             "deliveries_inflight": _count(getattr(slot, "_subagent_deliveries_inflight", 0)),
-            "approval": _pending_approval(slot) if approvals else None,
+            "approval": _pending_approval(slot, payload.get("pending_approval_info")) if approvals else None,
         }
 
     def _subagent_depth(self, session_key: str) -> tuple[int, int]:
@@ -1316,14 +1319,22 @@ def _same_dir(left: object, right: object) -> bool:
 _APPROVAL_TEXT_LIMIT = 500
 
 
-def _pending_approval(slot: Any) -> dict[str, str]:
-    """What the newest unresolved tool approval on ``slot`` asks for.
+def _pending_approval(slot: Any, info: Any = None) -> dict[str, str]:
+    """What the tool approval ``slot`` waits on asks for.
 
-    The host writes each approval as a ``permission`` row whose ``cls`` is JSON meta, and marks it
-    ``resolved`` once answered — the same reading its own slot projection does. An approval with no row
-    (a sub-agent's, raised on the coordinator) still waits, so the answer is then empty, never ``None``.
-    Every value is redacted: it is model-written text bound for a card and a notification.
+    The host's own ``pending_approval_info`` comes first: it reads the newest unresolved ``permission``
+    row and, when there is none, the coordinator record a sub-agent's approval waits on, with its id.
+    Without it (an older host) the newest unresolved ``permission`` row is read the same way — its
+    ``cls`` is JSON meta marked ``resolved`` once answered. An approval nothing describes still waits,
+    so the answer is then empty, never ``None``. Every value is redacted: it is model-written text bound
+    for a card and a notification.
     """
+    if isinstance(info, Mapping) and any(info.get(key) for key in ("tool", "tool_input", "request_id")):
+        return {
+            "tool": security.redact(_text(info.get("tool")))[:_APPROVAL_TEXT_LIMIT],
+            "tool_input": security.redact(_text(info.get("tool_input")))[:_APPROVAL_TEXT_LIMIT],
+            "request_id": _text(info.get("request_id")),
+        }
     for message in reversed(list(getattr(slot, "messages", None) or ())):
         if not isinstance(message, Mapping) or message.get("role") != "permission":
             continue

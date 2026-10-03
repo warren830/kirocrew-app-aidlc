@@ -17,8 +17,9 @@ ROOT="$PWD"
 
 PY="${PY:-/Users/ychchen/warren_ws/kirocrew/.venv/bin/python}"
 BUNDLE_PY="${BUNDLE_PY:-/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/bin/python3.12}"
-NODE_BIN="${NODE_BIN:-$(dirname "$(command -v node)")}"
-export PATH="$NODE_BIN:$PATH"
+# `dirname ""` is ".", so a missing node used to surface later as "env: ./npx: No such file".
+NODE_BIN="${NODE_BIN:-$(command -v node >/dev/null 2>&1 && dirname "$(command -v node)")}"
+[ -n "$NODE_BIN" ] && export PATH="$NODE_BIN:$PATH"
 
 SCOPE="all"
 FAST=0
@@ -158,15 +159,19 @@ fi
 if [ "$SCOPE" != "backend" ]; then
   step "generated UI sources are current" generated_current
   step "i18n catalogs" "$PY" scripts/build_i18n.py --check
-  step "ui typecheck" env -C ui "$NODE_BIN/npx" tsc --noEmit -p tsconfig.json
-  if [ -d ui/node_modules/vitest ]; then
-    # --passWithNoTests: an area whose tests are not written yet must not read as a broken gate.
-    step "ui tests" env -C ui "$NODE_BIN/npx" vitest run --silent --passWithNoTests
-  fi
-  if [ "$FAST" = 0 ]; then
-    step "ui build" env -C ui "$NODE_BIN/npm" run build --silent
-    step "bundle parses" "$NODE_BIN/node" --check ui/dist/index.mjs
-    step "bundle content policy" bundle_clean
+  if [ -z "$NODE_BIN" ] || [ ! -x "$NODE_BIN/node" ] || [ ! -x "$NODE_BIN/npm" ]; then
+    step "node toolchain" sh -c 'echo "node and npm not found: set NODE_BIN to the directory that holds them" >&2; exit 1'
+  else
+    step "ui typecheck" env -C ui "$NODE_BIN/npx" tsc --noEmit -p tsconfig.json
+    if [ -d ui/node_modules/vitest ]; then
+      # --passWithNoTests: an area whose tests are not written yet must not read as a broken gate.
+      step "ui tests" env -C ui "$NODE_BIN/npx" vitest run --silent --passWithNoTests
+    fi
+    if [ "$FAST" = 0 ]; then
+      step "ui build" env -C ui "$NODE_BIN/npm" run build --silent
+      step "bundle parses" "$NODE_BIN/node" --check ui/dist/index.mjs
+      step "bundle content policy" bundle_clean
+    fi
   fi
 fi
 
