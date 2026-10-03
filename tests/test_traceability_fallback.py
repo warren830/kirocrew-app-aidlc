@@ -153,7 +153,18 @@ def test_units_generation_rejects_wrong_coverage_target(workspace, target):
     assert result["invalid_targets"][0].startswith("FR1:"), result
 
 
-@pytest.mark.parametrize("identifier", ["FR99", "US9.9", "NFR1", "BR1.1", "CUSTOM-1"])
+def test_units_generation_accepts_a_named_nfr_without_requiring_it(workspace):
+    """2.10.0: a stories-less map may join the NFRs requirements.md names; only FRs are required."""
+    write_map(workspace, [(item, "U1") for item in [*REQUIREMENTS, "NFR1"]])
+    assert_pass(run_sensor(workspace, "units-generation", {
+        item: "U1" for item in [*REQUIREMENTS, "NFR1"]
+    }))
+    write_map(workspace, [(item, "U1") for item in REQUIREMENTS])
+    assert_pass(run_sensor(workspace, "units-generation", {item: "U1" for item in REQUIREMENTS}))
+
+
+# NFR9 is not in requirements.md. NFR1 is, and since 2.10.0 it may be joined (test above).
+@pytest.mark.parametrize("identifier", ["FR99", "US9.9", "NFR9", "BR1.1", "CUSTOM-1"])
 def test_units_generation_does_not_accept_ids_outside_selected_source(workspace, identifier):
     write_map(workspace, [(item, "U1") for item in [*REQUIREMENTS, identifier]])
     result = run_sensor(workspace, "units-generation", {

@@ -63,14 +63,14 @@
       "infrastructure-design": "EXECUTE",
       "code-generation": "EXECUTE",
       "build-and-test": "EXECUTE",
-      "ci-pipeline": "EXECUTE",
-      "deployment-pipeline": "EXECUTE",
-      "environment-provisioning": "EXECUTE",
-      "deployment-execution": "EXECUTE",
-      "observability-setup": "EXECUTE",
-      "incident-response": "EXECUTE",
-      "performance-validation": "EXECUTE",
-      "feedback-optimization": "EXECUTE"
+      "ci-pipeline": "SKIP",
+      "deployment-pipeline": "SKIP",
+      "environment-provisioning": "SKIP",
+      "deployment-execution": "SKIP",
+      "observability-setup": "SKIP",
+      "incident-response": "SKIP",
+      "performance-validation": "SKIP",
+      "feedback-optimization": "SKIP"
     }
   },
   "enterprise": {

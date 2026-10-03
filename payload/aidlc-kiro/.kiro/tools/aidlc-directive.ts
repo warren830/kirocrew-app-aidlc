@@ -17,7 +17,19 @@
 // unknown-key rejection per kind. The shape guard reuses isPlainObject from
 // aidlc-lib.ts.
 
-import { isPlainObject } from "./aidlc-lib.ts";
+import {
+  CEREMONY_KEYS,
+  CEREMONY_SETTINGS,
+  type CeremonyPolicy,
+  GUARD_REMEDY_OPS,
+  type GuardRemedy,
+  isPlainObject,
+} from "./aidlc-lib.ts";
+import {
+  guardOperationMatchesCommand,
+  guardOperationMatchesRemedy,
+  isGuardRecoveryOperation,
+} from "./aidlc-guard-operation.ts";
 
 // --- Public types ---
 
@@ -64,6 +76,7 @@ export const VALID_PROTOCOL_MODULES = [
   "ensemble",
   "construction",
   "swarm",
+  "learnings",
 ] as const;
 export type ProtocolModule = (typeof VALID_PROTOCOL_MODULES)[number];
 
@@ -82,10 +95,16 @@ export type DirectiveKind =
   | "notice";
 
 // load-steering - one bounded part of the active stage's deterministic rule
-// bundle. The conductor applies rules_content in order and immediately invokes
-// `aidlc-orchestrate continue <continue_token>`; the final continuation emits
-// the run-stage directive. Chunking is an engine transport detail and is not
-// surfaced as conversational progress.
+// bundle, emitted ONLY when the rules and the run-stage directive together do
+// not fit one directive (a bundle a team's memory files pushed past the
+// transport cap). The conductor applies rules_content in order and immediately
+// runs the ready `next` command, which carries the 8-character `receipt` for
+// this part; the final continuation emits the run-stage directive. Chunking is
+// an engine transport detail and is not surfaced as conversational progress.
+//
+// Field order is load-bearing: `receipt` and `next` precede the large
+// rules_content payload so a host that truncates long tool output can never
+// discard the cursor.
 export interface LoadSteeringDirective {
   kind: "load-steering";
   /** Optional spoken line for the user; presentation only (see NarrationField). */
@@ -94,8 +113,11 @@ export interface LoadSteeringDirective {
   bundle: string;
   part: number;
   parts: number;
+  /** 8-character proof of receipt for THIS part; echoed back via `continue`. */
+  receipt: string;
+  /** The exact command that fetches the next part (or the run-stage). */
+  next: string;
   rules_content: Array<{ path: string; text: string }>;
-  continue_token: string;
 }
 
 export type WaveReviewState =
@@ -182,18 +204,55 @@ export interface RunStageDirective {
   // Present only for team-owned unit-major approval beats. The stage body is
   // already settled; the conductor opens/reports this unit gate with --unit.
   unit_gate?: "per-stage" | "unit-end";
+  construction_policy?: {
+    iteration: "unit-major" | "stage-major";
+    execution: "serial" | "swarm";
+    autonomy: "unset" | "gated" | "autonomous";
+    offer_autonomy: boolean;
+    human_completion_required: boolean;
+    completion_only: boolean;
+  };
+  construction_checkpoint?: {
+    kind: "unit" | "skeleton";
+    unit: string;
+    stages: string[];
+    fingerprint: string;
+    ready: boolean;
+    verified: boolean;
+    approved: boolean;
+    human_required: boolean;
+    errors: string[];
+    proof_path: string;
+    verification_command: string | null;
+    command_authorized: boolean;
+  };
+  swarm_checkpoint?: {
+    batch: number;
+    units: string[];
+    fingerprint: string;
+    ready: boolean;
+    approved: boolean;
+    human_required: boolean;
+    errors: string[];
+  };
   memory_path: string;
   // consumes carries only the declared inputs that EXIST on disk at emit time;
   // declared inputs whose file is absent move to consumes_absent so the
   // conductor is never pointed at a path that cannot be read.
   consumes: string[];
   produces: string[];
-  // Exact active-space rule paths represented by the preceding load-steering
-  // bundle. On dispatched topologies the conductor passes the already-loaded
-  // rule text to every agent brief.
+  // Exact active-space rule paths represented by the delivered rule bundle. On
+  // dispatched topologies the conductor passes the already-loaded rule text to
+  // every agent brief.
   rules_in_context: string[];
+  // The rule bundle itself, present whenever it fits in the same directive
+  // (every shipped stage does). Absent only when the bundle arrived through a
+  // preceding load-steering sequence.
+  rules_content?: Array<{ path: string; text: string }>;
   // Presentation projection only: detailed fire policy remains on stage-graph.
   sensors_applicable: string[];
+  // Engine-resolved ceremony switches apply equally to inline and dispatched work.
+  ceremony: CeremonyPolicy;
   stage_file: string;
   // Kiro IDE 0.12 has no chat/session id. The engine emits this one-time
   // capability only to the `next`/`continue` caller that owns legacy planning;
@@ -220,6 +279,9 @@ export interface RunStageDirective {
   // protocol files the conductor reads before the stage body. The prose
   // triggers remain the compatibility fallback when this field is absent.
   protocol_modules?: ProtocolModule[];
+  // Re-present an open approval gate. Body and review are settled; do not rerun
+  // the stage or edit its outputs. Team gates retain their unit_gate routing.
+  gate_only?: true;
   // Gate-only re-entry after every autonomous swarm Unit and reviewer receipt
   // converged. Present only as literal true; the conductor must not rerun the
   // stage body or reviewer.
@@ -296,6 +358,7 @@ export interface DispatchSubagentDirective {
   rules_in_context: string[];
   // Presentation projection only: detailed fire policy remains on stage-graph.
   sensors_applicable: string[];
+  ceremony: CeremonyPolicy;
   stage_file: string;
   worker: string;
   conductor_persona?: string;
@@ -314,6 +377,8 @@ export interface InvokeSwarmDirective {
   /** Optional spoken line for the user; presentation only (see NarrationField). */
   narration?: NarrationField;
   units: string[];
+  batch?: number;
+  resume_existing?: true;
   stage?: string;
   stage_file?: string;
   reviewer?: string;
@@ -414,11 +479,32 @@ export interface LegacyPlanApprovalRecoveryAskDirective
   waiting_units?: undefined;
 }
 
+export interface GuardRecoveryAskDirective extends AskDirectiveBase {
+  ask_type: "guard-recovery";
+  response_route: "execute-remedy";
+  stage: string;
+  unit?: string;
+  reason_codes: string[];
+  remedies: GuardRemedy[];
+  // Present only on the terminal ask (empty remedies): the signature of the
+  // guard state that has no authority-preserving exit, for escalation.
+  state_signature?: string;
+  new_work_description?: undefined;
+  proposed_scope?: undefined;
+  available_intents?: undefined;
+  numbered_prose_question?: undefined;
+  claimable_units?: undefined;
+  claimed_units?: undefined;
+  waiting_units?: undefined;
+  recovery_choice?: undefined;
+}
+
 export type AskDirective =
   | ReportAskDirective
   | NewWorkRoutingAskDirective
   | UnitClaimAskDirective
-  | LegacyPlanApprovalRecoveryAskDirective;
+  | LegacyPlanApprovalRecoveryAskDirective
+  | GuardRecoveryAskDirective;
 
 // print — print verbatim and stop (status / help / doctor / version).
 export interface PrintDirective {
@@ -489,9 +575,15 @@ type DirectivePayload =
   | ParkedDirective
   | NoticeDirective;
 
-/** `stage_validity` is universal and advisory; `kind` still owns routing. */
+/**
+ * `stage_validity` is universal and advisory; `kind` still owns routing.
+ * `change_notices` is universal too: the one-line sentences for input changes a
+ * governed checkpoint accepted under Change Control `relaxed`, already worded
+ * for the human, each said once verbatim.
+ */
 export type Directive = DirectivePayload & {
   stage_validity?: StageValidityAdvisory;
+  change_notices?: string[];
 };
 
 export type ValidationResult =
@@ -539,11 +631,16 @@ const RUN_STAGE_FIELDS = [
   "context_warnings",
   "gate",
   "unit_gate",
+  "construction_policy",
+  "construction_checkpoint",
+  "swarm_checkpoint",
   "memory_path",
   "consumes",
   "produces",
   "rules_in_context",
+  "rules_content",
   "sensors_applicable",
+  "ceremony",
   "stage_file",
   "reviewer",
   "review_artifact",
@@ -551,6 +648,7 @@ const RUN_STAGE_FIELDS = [
   "review_class",
   "protocol_modules",
   "swarm_settled",
+  "gate_only",
   "conductor_persona",
   "next_stage",
   "unit",
@@ -565,8 +663,9 @@ const LOAD_STEERING_FIELDS = [
   "bundle",
   "part",
   "parts",
+  "receipt",
+  "next",
   "rules_content",
-  "continue_token",
 ] as const;
 
 // dispatch-subagent = shared run-stage fields + `worker`; the isolated-run
@@ -578,6 +677,7 @@ const DISPATCH_SUBAGENT_FIELDS = [
       field !== "wave" &&
       field !== "protocol_modules" &&
       field !== "swarm_settled" &&
+      field !== "gate_only" &&
       field !== "legacy_plan_approval_choices",
   ),
   "worker",
@@ -586,6 +686,8 @@ const DISPATCH_SUBAGENT_FIELDS = [
 const INVOKE_SWARM_FIELDS = [
   "kind",
   "units",
+  "batch",
+  "resume_existing",
   "stage",
   "stage_file",
   "reviewer",
@@ -610,6 +712,11 @@ const ASK_FIELDS = [
   "claimed_units",
   "waiting_units",
   "recovery_choice",
+  "stage",
+  "unit",
+  "reason_codes",
+  "remedies",
+  "state_signature",
 ] as const;
 const PRINT_FIELDS = ["kind", "message"] as const;
 const ERROR_FIELDS = ["kind", "message"] as const;
@@ -624,11 +731,12 @@ const NOTICE_FIELDS = ["kind", "message"] as const;
 // attach a line without touching this file.
 const NARRATION_FIELD = "narration" as const;
 const STAGE_VALIDITY_FIELD = "stage_validity" as const;
+const CHANGE_NOTICES_FIELD = "change_notices" as const;
 
 // Every kind's set gains `narration`, so the per-kind literals above stay the
 // record of what is kind-SPECIFIC and this one helper adds what is universal.
 function withNarration(fields: readonly string[]): readonly string[] {
-  return [...fields, NARRATION_FIELD, STAGE_VALIDITY_FIELD];
+  return [...fields, NARRATION_FIELD, STAGE_VALIDITY_FIELD, CHANGE_NOTICES_FIELD];
 }
 
 const KNOWN_FIELDS_BY_KIND: Readonly<Record<DirectiveKind, readonly string[]>> = {
@@ -692,6 +800,7 @@ export function validateDirective(obj: unknown): ValidationResult {
   // would otherwise be handed a non-sentence to speak.
   checkOptionalString(o, NARRATION_FIELD, kind, errors);
   checkOptionalStageValidity(o, kind, errors);
+  checkOptionalStringArray(o, CHANGE_NOTICES_FIELD, kind, errors);
 
   // Rule 4-6: per-kind required-field presence + type checks, with specific,
   // kind-aware messages.
@@ -701,8 +810,14 @@ export function validateDirective(obj: unknown): ValidationResult {
       checkString(o, "bundle", kind, errors);
       checkPositiveInteger(o, "part", kind, errors);
       checkPositiveInteger(o, "parts", kind, errors);
+      checkString(o, "receipt", kind, errors);
+      checkString(o, "next", kind, errors);
+      for (const field of ["receipt", "next"] as const) {
+        if (typeof o[field] === "string" && o[field].length === 0) {
+          errors.push(`${kind}: ${field} must not be empty`);
+        }
+      }
       checkPathTextArray(o, "rules_content", kind, errors);
-      checkString(o, "continue_token", kind, errors);
       if (
         typeof o.part === "number" &&
         typeof o.parts === "number" &&
@@ -724,6 +839,8 @@ export function validateDirective(obj: unknown): ValidationResult {
       break;
     case "invoke-swarm":
       checkStringArray(o, "units", kind, errors);
+      checkOptionalPositiveInteger(o, "batch", kind, errors);
+      checkOptionalTrue(o, "resume_existing", kind, errors);
       checkOptionalString(o, "stage", kind, errors);
       checkOptionalString(o, "stage_file", kind, errors);
       checkOptionalString(o, "reviewer", kind, errors);
@@ -769,10 +886,11 @@ export function validateDirective(obj: unknown): ValidationResult {
         "ask_type" in o &&
         o.ask_type !== "new-work-routing" &&
         o.ask_type !== "unit-claim" &&
-        o.ask_type !== "legacy-plan-approval-recovery"
+        o.ask_type !== "legacy-plan-approval-recovery" &&
+        o.ask_type !== "guard-recovery"
       ) {
         errors.push(
-          `${kind}: ask_type must be one of new-work-routing | unit-claim | legacy-plan-approval-recovery, got ${String(o.ask_type)}`,
+          `${kind}: ask_type must be one of new-work-routing | unit-claim | legacy-plan-approval-recovery | guard-recovery, got ${String(o.ask_type)}`,
         );
       }
       if (o.ask_type === "new-work-routing") {
@@ -787,6 +905,11 @@ export function validateDirective(obj: unknown): ValidationResult {
           "claimed_units",
           "waiting_units",
           "recovery_choice",
+          "stage",
+          "unit",
+          "reason_codes",
+          "remedies",
+          "state_signature",
         ] as const) {
           if (field in o) {
             errors.push(
@@ -807,6 +930,11 @@ export function validateDirective(obj: unknown): ValidationResult {
           "available_intents",
           "numbered_prose_question",
           "recovery_choice",
+          "stage",
+          "unit",
+          "reason_codes",
+          "remedies",
+          "state_signature",
         ] as const) {
           if (field in o) {
             errors.push(`${kind}: ${field} is not valid for unit-claim`);
@@ -831,11 +959,40 @@ export function validateDirective(obj: unknown): ValidationResult {
           "claimable_units",
           "claimed_units",
           "waiting_units",
+          "stage",
+          "unit",
+          "reason_codes",
+          "remedies",
+          "state_signature",
         ] as const) {
           if (field in o) {
             errors.push(
               `${kind}: ${field} is not valid for legacy-plan-approval-recovery`,
             );
+          }
+        }
+      } else if (o.ask_type === "guard-recovery") {
+        if (o.response_route !== "execute-remedy") {
+          errors.push(
+            `${kind}: guard-recovery response_route must be "execute-remedy"`,
+          );
+        }
+        checkString(o, "stage", kind, errors);
+        checkOptionalString(o, "unit", kind, errors);
+        checkStringArray(o, "reason_codes", kind, errors);
+        checkGuardRemedies(o, kind, errors);
+        for (const field of [
+          "new_work_description",
+          "proposed_scope",
+          "available_intents",
+          "numbered_prose_question",
+          "claimable_units",
+          "claimed_units",
+          "waiting_units",
+          "recovery_choice",
+        ] as const) {
+          if (field in o) {
+            errors.push(`${kind}: ${field} is not valid for guard-recovery`);
           }
         }
       } else {
@@ -849,6 +1006,11 @@ export function validateDirective(obj: unknown): ValidationResult {
           "claimed_units",
           "waiting_units",
           "recovery_choice",
+          "stage",
+          "unit",
+          "reason_codes",
+          "remedies",
+          "state_signature",
         ] as const) {
           if (field in o) {
             errors.push(
@@ -914,7 +1076,11 @@ function checkRunStageShared(
   checkStringArray(o, "consumes", kind, errors);
   checkStringArray(o, "produces", kind, errors);
   checkStringArray(o, "rules_in_context", kind, errors);
+  if (o.rules_content !== undefined) {
+    checkPathTextArray(o, "rules_content", kind, errors);
+  }
   checkStringArray(o, "sensors_applicable", kind, errors);
+  checkCeremony(o, kind, errors);
   checkString(o, "stage_file", kind, errors);
   checkOptionalLegacyPlanApprovalChoices(o, kind, errors);
   checkOptionalString(o, "conductor_persona", kind, errors);
@@ -950,6 +1116,7 @@ function checkRunStageShared(
   if (kind === "run-stage") {
     checkOptionalProtocolModules(o, kind, errors);
     checkOptionalTrue(o, "swarm_settled", kind, errors);
+    checkOptionalTrue(o, "gate_only", kind, errors);
   }
   // unit: optional on a run-stage directive (present only on a per-unit
   // Construction directive resolved to a concrete Unit of Work). A present
@@ -966,12 +1133,71 @@ function checkRunStageShared(
   if ("unit_gate" in o && typeof o.unit !== "string") {
     errors.push(`${kind}: unit_gate requires unit`);
   }
+  if ("construction_policy" in o) {
+    const policy = o.construction_policy;
+    if (!isObject(policy) || o.phase !== "construction") {
+      errors.push(`${kind}: construction_policy requires a Construction policy object`);
+    } else {
+      checkEnum(policy, "iteration", ["unit-major", "stage-major"], kind, errors);
+      checkEnum(policy, "execution", ["serial", "swarm"], kind, errors);
+      checkEnum(policy, "autonomy", ["unset", "gated", "autonomous"], kind, errors);
+      for (const field of ["offer_autonomy", "human_completion_required", "completion_only"]) {
+        if (typeof policy[field] !== "boolean") errors.push(`${kind}: construction_policy.${field} must be boolean`);
+      }
+    }
+  }
+  if ("construction_checkpoint" in o) {
+    const checkpoint = o.construction_checkpoint;
+    if (!isObject(checkpoint) || o.phase !== "construction" || checkpoint.unit !== o.unit) {
+      errors.push(`${kind}: construction_checkpoint must name this Construction Unit`);
+    } else {
+      checkEnum(checkpoint, "kind", ["unit", "skeleton"], kind, errors);
+      for (const field of ["ready", "verified", "approved", "human_required", "command_authorized"]) {
+        if (typeof checkpoint[field] !== "boolean") errors.push(`${kind}: construction_checkpoint.${field} must be boolean`);
+      }
+      for (const field of ["fingerprint", "proof_path"]) {
+        if (typeof checkpoint[field] !== "string") errors.push(`${kind}: construction_checkpoint.${field} must be string`);
+      }
+      if (checkpoint.verification_command !== null && typeof checkpoint.verification_command !== "string") {
+        errors.push(`${kind}: construction_checkpoint.verification_command must be string or null`);
+      }
+      for (const field of ["stages", "errors"]) {
+        if (!Array.isArray(checkpoint[field]) || !checkpoint[field].every((entry: unknown) => typeof entry === "string")) {
+          errors.push(`${kind}: construction_checkpoint.${field} must be a string array`);
+        }
+      }
+    }
+  }
+  if ("swarm_checkpoint" in o) {
+    const checkpoint = o.swarm_checkpoint;
+    if (!isObject(checkpoint) || o.phase !== "construction" || o.stage !== "code-generation") {
+      errors.push(`${kind}: swarm_checkpoint requires Code Generation`);
+    } else {
+      if (!Number.isSafeInteger(checkpoint.batch) || (checkpoint.batch as number) < 1) {
+        errors.push(`${kind}: swarm_checkpoint.batch must be a positive integer`);
+      }
+      for (const field of ["ready", "approved", "human_required"]) {
+        if (typeof checkpoint[field] !== "boolean") errors.push(`${kind}: swarm_checkpoint.${field} must be boolean`);
+      }
+      if (typeof checkpoint.fingerprint !== "string") errors.push(`${kind}: swarm_checkpoint.fingerprint must be string`);
+      for (const field of ["units", "errors"]) {
+        const values = checkpoint[field];
+        if (!Array.isArray(values) || !values.every((entry: unknown) => typeof entry === "string")) {
+          errors.push(`${kind}: swarm_checkpoint.${field} must be a string array`);
+        }
+      }
+    }
+  }
   // consumes_absent: optional (present only when a declared consume's file is
   // missing at emit time). Each entry must be {path: string, expected: boolean}.
   checkOptionalConsumesAbsent(o, "consumes_absent", kind, errors);
 }
 
 // --- Helpers (mirror aidlc-stage-schema.ts: presence first, then type) ---
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
 
 function describe(v: unknown): string {
   if (v === null) return "null";
@@ -1028,6 +1254,135 @@ function checkOptionalStageValidity(
   }
   if (typeof raw.warning !== "string") {
     errors.push(`${kind}: ${STAGE_VALIDITY_FIELD}.warning must be string`);
+  }
+}
+
+// The remedies of a guard-recovery ask. Every remedy names a closed `op`, which
+// is what routing compares; the sentence beside it is presentation. An EMPTY
+// remedies array is the terminal ask and must carry `state_signature`: the
+// engine found no authority-preserving exit, and the human is told so with the
+// exact situation to escalate instead of being shown an error.
+function checkGuardRemedies(
+  o: Record<string, unknown>,
+  kind: DirectiveKind,
+  errors: string[],
+): void {
+  if (!("remedies" in o)) {
+    errors.push(`${kind}: missing required field: remedies`);
+    return;
+  }
+  if (!Array.isArray(o.remedies)) {
+    errors.push(`${kind}: remedies must be an array`);
+    return;
+  }
+  const terminal = "state_signature" in o;
+  if (terminal) {
+    if (
+      typeof o.state_signature !== "string" ||
+      !/^[0-9a-f]{64}$/.test(o.state_signature)
+    ) {
+      errors.push(`${kind}: state_signature must be a sha256 hex digest`);
+    }
+    if (o.remedies.length !== 0) {
+      errors.push(
+        `${kind}: a terminal guard-recovery ask (state_signature present) carries no remedies`,
+      );
+    }
+    return;
+  }
+  if (o.remedies.length === 0) {
+    errors.push(
+      `${kind}: remedies must be a non-empty array unless state_signature marks the ask terminal`,
+    );
+    return;
+  }
+  const allowed = new Set([
+    "op",
+    "action",
+    "operation",
+    "interaction",
+    "command",
+    "requiresHuman",
+    "executableNow",
+  ]);
+  const ops: ReadonlySet<string> = new Set(GUARD_REMEDY_OPS);
+  for (let index = 0; index < o.remedies.length; index++) {
+    const remedy = o.remedies[index];
+    if (!isPlainObject(remedy)) {
+      errors.push(`${kind}: remedies[${index}] must be object`);
+      continue;
+    }
+    for (const key of Object.keys(remedy)) {
+      if (!allowed.has(key)) {
+        errors.push(`${kind}: remedies[${index}] unknown key: ${key}`);
+      }
+    }
+    if (typeof remedy.op !== "string" || !ops.has(remedy.op)) {
+      errors.push(
+        `${kind}: remedies[${index}].op must be one of ${GUARD_REMEDY_OPS.join(" | ")}`,
+      );
+    }
+    if (typeof remedy.action !== "string" || remedy.action.length === 0) {
+      errors.push(`${kind}: remedies[${index}].action must be non-empty string`);
+    }
+    if (
+      "interaction" in remedy &&
+      !["command", "human-input", "external-work"].includes(String(remedy.interaction))
+    ) {
+      errors.push(`${kind}: remedies[${index}].interaction must be command, human-input, or external-work`);
+    }
+    if ("operation" in remedy) {
+      if (
+        !isGuardRecoveryOperation(remedy.operation) ||
+        !guardOperationMatchesRemedy(
+          remedy.operation,
+          String(remedy.op),
+          String(o.stage),
+          typeof o.unit === "string" ? o.unit : undefined,
+        )
+      ) {
+        errors.push(`${kind}: remedies[${index}].operation must match the offered remedy and target`);
+      }
+      if (typeof remedy.command !== "string" || remedy.interaction !== "command") {
+        errors.push(`${kind}: remedies[${index}].operation requires a command interaction and command`);
+      }
+      if (remedy.requiresHuman !== true) {
+        errors.push(`${kind}: remedies[${index}].recovery reset requires human selection`);
+      }
+    } else if (remedy.interaction === "command") {
+      errors.push(`${kind}: remedies[${index}].command interaction requires an operation`);
+    }
+    if ("command" in remedy) {
+      if (typeof remedy.command !== "string" || remedy.command.trim().length === 0) {
+        errors.push(`${kind}: remedies[${index}].command must be non-empty string`);
+      } else {
+        if (/<[A-Za-z][^<>]*>/.test(remedy.command)) {
+          errors.push(
+            `${kind}: remedies[${index}].command must not contain unresolved placeholders`,
+          );
+        }
+        if (
+          !isGuardRecoveryOperation(remedy.operation) ||
+          !guardOperationMatchesCommand(remedy.operation, remedy.command)
+        ) {
+          errors.push(
+            `${kind}: remedies[${index}].command must exactly render its structured recovery operation for a source or native install`,
+          );
+        }
+      }
+    }
+    if (
+      (remedy.interaction === "human-input" && remedy.requiresHuman !== true) ||
+      (remedy.interaction === "external-work" && remedy.requiresHuman !== false)
+    ) {
+      errors.push(`${kind}: remedies[${index}].interaction must agree with requiresHuman`);
+    }
+    if (typeof remedy.requiresHuman !== "boolean") {
+      errors.push(`${kind}: remedies[${index}].requiresHuman must be boolean`);
+    }
+    if (remedy.executableNow !== true) {
+      errors.push(`${kind}: remedies[${index}].executableNow must be true`);
+    }
   }
 }
 
@@ -1236,6 +1591,39 @@ function checkOptionalStringArray(
 ): void {
   if (!(field in o)) return;
   checkStringArray(o, field, kind, errors);
+}
+
+function checkCeremony(
+  o: Record<string, unknown>,
+  kind: DirectiveKind,
+  errors: string[],
+): void {
+  if (!("ceremony" in o)) {
+    errors.push(`${kind}: missing required field: ceremony`);
+    return;
+  }
+  const value = o.ceremony;
+  if (!isPlainObject(value)) {
+    errors.push(`${kind}: ceremony must be object, got ${describe(value)}`);
+    return;
+  }
+  for (const key of Object.keys(value)) {
+    if (!(CEREMONY_KEYS as readonly string[]).includes(key)) {
+      errors.push(`${kind}: ceremony unknown key: ${key}`);
+    }
+  }
+  for (const key of CEREMONY_KEYS) {
+    if (!(key in value)) {
+      errors.push(`${kind}: missing required field: ceremony.${key}`);
+    } else if (
+      typeof value[key] !== "string" ||
+      !(CEREMONY_SETTINGS as readonly string[]).includes(value[key])
+    ) {
+      errors.push(
+        `${kind}: ceremony.${key} must be one of ${CEREMONY_SETTINGS.join(" | ")}, got ${describe(value[key])}`,
+      );
+    }
+  }
 }
 
 function checkOptionalProtocolModules(
@@ -1608,7 +1996,8 @@ if (import.meta.main) {
       rules_content: [
         { path: "aidlc-org.md", text: "## Testing Posture\n\nTests are first-class.\n" },
       ],
-      continue_token: "opaque-token",
+      receipt: "k7q2m9xd",
+      next: "aidlc engine orchestrate continue k7q2m9xd",
     },
     {
       kind: "run-stage",
@@ -1636,6 +2025,7 @@ if (import.meta.main) {
         "Could not read optional knowledge file example.md; fix its permissions.",
       ],
       sensors_applicable: ["required-sections", "upstream-coverage"],
+      ceremony: { sensors: "on", learnings: "on", summary_confirmation: "on" },
       stage_file: ".claude/aidlc-common/stages/inception/domain-design.md",
       next_stage: "Units Generation",
     },
@@ -1653,6 +2043,7 @@ if (import.meta.main) {
       produces: ["aidlc-docs/construction/auth/code-generation/code-manifest.md"],
       rules_in_context: ["aidlc-org.md", "aidlc-phase-construction.md"],
       sensors_applicable: ["linter", "type-check"],
+      ceremony: { sensors: "on", learnings: "on", summary_confirmation: "on" },
       stage_file: ".claude/aidlc-common/stages/construction/code-generation.md",
       worker: "code-generation",
     },
@@ -1697,6 +2088,7 @@ if (import.meta.main) {
       produces: ["aidlc-docs/construction/{unit-name}/functional-design/functional-spec.md"],
       rules_in_context: ["aidlc-org.md", "aidlc-phase-construction.md"],
       sensors_applicable: ["required-sections"],
+      ceremony: { sensors: "on", learnings: "on", summary_confirmation: "on" },
       stage_file: ".claude/aidlc-common/stages/construction/functional-design.md",
       conductor_persona: "# The Conductor's Craft …",
     },

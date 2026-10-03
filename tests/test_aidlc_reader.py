@@ -1709,6 +1709,77 @@ def test_markers_optional_files(reader, repo_builder):
     assert markers.turn_counter == 41
 
 
+def test_markers_read_the_2_10_engine_directory(reader, repo_builder):
+    """2.9+ writes record bookkeeping under ``.aidlc-engine/``; every marker reads from there."""
+    repo = repo_builder.with_workspace().with_intent("260904-x", state=GATE_STATE, audit=GATE_AUDIT).build()
+    engine = repo / "aidlc/spaces/default/intents/260904-x/.aidlc-engine"
+    (engine / "hooks-health").mkdir(parents=True)
+    (engine / "hooks-health/validate-state.last").write_text("2026-09-04T09:59:00Z\n")
+    (engine / "stop-hook").mkdir()
+    (engine / "stop-hook/block-count.json").write_text('{"signature":"","count":3}')
+    (engine / "reviewer-dispatch.json").write_text('{"reviewer":"r","stage":"code-generation"}')
+    (engine / "human-turn").write_text("")
+    (engine / "engine-touch").write_text("")
+    markers = reader.read_markers(repo, "default", "260904-x")
+    assert markers.hooks_health == {"validate-state": "2026-09-04T09:59:00Z"}
+    assert markers.stop_block_count == {"signature": "", "count": 3}
+    assert markers.reviewer_dispatch["stage"] == "code-generation"
+    assert markers.human_turn_mtime_ns == (engine / "human-turn").stat().st_mtime_ns
+    assert markers.engine_touch_mtime_ns == (engine / "engine-touch").stat().st_mtime_ns
+
+
+def test_engine_directory_wins_over_a_legacy_marker_of_the_same_name(R, repo_builder):
+    """The engine only falls back when the new entry is absent, so a stale legacy file must not win."""
+    repo = repo_builder.with_workspace().with_intent("260904-x", state=GATE_STATE, audit=GATE_AUDIT).build()
+    record = "aidlc/spaces/default/intents/260904-x"
+    (repo / record / ".aidlc-engine/hooks-health").mkdir(parents=True)
+    (repo / record / ".aidlc-hooks-health").mkdir()
+    assert R.record_file(repo, record, R.HOOKS_HEALTH_DIRNAME).parent.name == ".aidlc-engine"
+    (repo / record / ".aidlc-engine/hooks-health").rmdir()
+    assert R.record_file(repo, record, R.HOOKS_HEALTH_DIRNAME).name == ".aidlc-hooks-health"
+
+
+def test_markers_without_an_engine_fallback_ignore_legacy_copies_once_the_directory_exists(R, repo_builder):
+    """An upgraded record keeps 2.7.1's root markers, but 2.10.0 never reads them back."""
+    repo = repo_builder.with_workspace().with_intent("260904-x", state=GATE_STATE, audit=GATE_AUDIT).build()
+    record = "aidlc/spaces/default/intents/260904-x"
+    for legacy in (R.HUMAN_TURN_FILENAME, R.ENGINE_TOUCH_FILENAME, R.RECOVERY_FILENAME,
+                   R.REVIEWER_DISPATCH_FILENAME):
+        (repo / record / legacy).write_text("")
+        assert R.record_file(repo, record, legacy).name == legacy
+    (repo / record / ".aidlc-engine").mkdir()
+    for legacy in (R.HUMAN_TURN_FILENAME, R.ENGINE_TOUCH_FILENAME, R.RECOVERY_FILENAME,
+                   R.REVIEWER_DISPATCH_FILENAME):
+        path = R.record_file(repo, record, legacy)
+        assert path.parent.name == ".aidlc-engine" and not path.exists()
+    (repo / record / R.DIRECTIVE_FILENAME).write_text("{}")
+    assert R.record_file(repo, record, R.DIRECTIVE_FILENAME).name == R.DIRECTIVE_FILENAME
+
+
+def test_a_non_directory_engine_entry_is_not_absence(R, repo_builder):
+    """Like ``engineReadDirFor``: a file at ``.aidlc-engine`` keeps the read on the (missing) new path."""
+    repo = repo_builder.with_workspace().with_intent("260904-x", state=GATE_STATE, audit=GATE_AUDIT).build()
+    record = "aidlc/spaces/default/intents/260904-x"
+    (repo / record / ".aidlc-engine").write_text("not a directory")
+    (repo / record / ".aidlc-active-directive.json").write_text("{}")
+    path = R.record_file(repo, record, R.DIRECTIVE_FILENAME)
+    assert path.name == "active-directive.json" and not path.exists()
+
+
+def test_directive_reads_the_2_10_marker_and_names_its_file(reader, repo_builder):
+    repo = repo_builder.with_workspace().with_intent("260904-x", state=GATE_STATE, audit=GATE_AUDIT).build()
+    snap, _ = reader.read_state(repo, "default", "260904-x")
+    engine = repo / "aidlc/spaces/default/intents/260904-x/.aidlc-engine"
+    engine.mkdir()
+    (engine / "active-directive.json").write_text(json.dumps(
+        {"version": 2, "kind": "run-stage", "stage": "requirements-analysis", "state_sha256": snap.sha256}
+    ))
+    directive = reader.read_directive(repo, "default", "260904-x", snap.sha256)
+    assert directive.stage == "requirements-analysis" and directive.matches_state is True
+    assert directive.marker_name == ".aidlc-engine/active-directive.json"
+    assert "marker_name" not in directive.to_json()
+
+
 def test_runtime_graph_and_traceability_are_raw_dicts(R):
     assert R.parse_runtime_graph(b'{"workflow_id": "x", "stages": []}') == {"workflow_id": "x", "stages": []}
     assert R.parse_runtime_graph(b"[]") is None

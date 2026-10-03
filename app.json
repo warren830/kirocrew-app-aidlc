@@ -1,6 +1,6 @@
 {
   "name": "aidlc-studio",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "displayName": "AI-DLC Studio",
   "description": "The visual operating surface for AI-DLC Workflows: one Action Center for every approval gate, question and recovery decision across your repositories, with the evidence beside each decision. Studio reads AI-DLC's own files and sends every decision through the intent's own conversation; it never edits AI-DLC state.",
   "author": "ychchen",
@@ -92,7 +92,7 @@
   },
   "extra": {
     "bundledAidlc": {
-      "engineVersion": "2.7.1",
+      "engineVersion": "2.10.0",
       "harness": "kiro",
       "manifest": "payload/manifest.json",
       "license": "MIT-0",

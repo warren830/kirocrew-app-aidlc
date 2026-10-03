@@ -229,5 +229,19 @@
   "audit.WORKSPACE_INITIALISED": "工作区已初始化。",
   "audit.WORKSPACE_SCAFFOLDED": "工作区脚手架已生成。",
   "audit.WORKSPACE_SCANNED": "工作区已扫描。",
-  "audit.WORKTREE_CREATED": "已创建一个 Git worktree。"
+  "audit.WORKTREE_CREATED": "已创建一个 Git worktree。",
+  "audit.CEREMONY_SET": "仪式设置已变更（传感器、经验沉淀或摘要确认）。",
+  "audit.CHANGE_ACCEPTED": "一项提议的变更已被接受。",
+  "audit.CHANGE_CONTROL_SET": "变更控制策略已变更。",
+  "audit.CHECKPOINT_VERIFICATION_RECORDED": "已记录一次构建检查点验证。",
+  "audit.CONSTRUCTION_POLICY_RECORDED": "已记录构建阶段的检查点策略。",
+  "audit.GUARD_DISABLED": "一项工作流守卫已关闭。",
+  "audit.GUARD_POLICY_SET": "守卫策略已变更。",
+  "audit.GUARD_RESTORED": "一项工作流守卫已重新开启。",
+  "audit.GUARD_STOOD_ASIDE": "一项工作流守卫为单次操作让行。",
+  "audit.PLAN_APPROVAL_OVERRIDDEN": "一项计划批准被覆盖。",
+  "audit.SOURCE_COMMITTED": "已针对已审查的工作记录一次源码提交。",
+  "audit.VERIFICATION_COMMAND_RECORDED": "已记录一条验证命令。",
+  "audit.WORKFLOW_ARCHIVED": "该意图已归档。",
+  "audit.WORKFLOW_UNARCHIVED": "该意图已从归档中恢复。"
 }

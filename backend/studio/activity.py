@@ -162,6 +162,23 @@ _EXTRA_AUDIT_EVENTS: tuple[str, ...] = (
     "DOCUMENT_INDEXED",
     "DOCUMENT_UPDATED",
     "DOCUMENT_REMOVED",
+    # AI-DLC 2.9/2.10 rows: ceremony and guard settings, construction policy and checkpoint
+    # verification, commit provenance and intent archiving. Readable history only, for the same
+    # reason as the rows above; the two gate-resolving ones are also in ``RESOLUTION_EVENTS``.
+    "CEREMONY_SET",
+    "CHANGE_ACCEPTED",
+    "CHANGE_CONTROL_SET",
+    "CHECKPOINT_VERIFICATION_RECORDED",
+    "CONSTRUCTION_POLICY_RECORDED",
+    "GUARD_DISABLED",
+    "GUARD_POLICY_SET",
+    "GUARD_RESTORED",
+    "GUARD_STOOD_ASIDE",
+    "PLAN_APPROVAL_OVERRIDDEN",
+    "SOURCE_COMMITTED",
+    "VERIFICATION_COMMAND_RECORDED",
+    "WORKFLOW_ARCHIVED",
+    "WORKFLOW_UNARCHIVED",
 )
 
 #: Every audit event Studio ships an ``audit.<EVENT>`` key for. Derived from the engine taxonomy in

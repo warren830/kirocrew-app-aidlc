@@ -351,6 +351,11 @@ ENGINE_DENY: frozenset[str] = frozenset(
         # prevent: `test_every_verb_the_state_tool_dispatches_is_either_allowlisted_or_denied`
         # now derives the denominator from the engine's own verb listing so it cannot recur.
         "aidlc-state.ts:set-construction-iteration",
+        # 2.10.0's Construction policy writers: checkpoint rhythm, execution mode and the verification
+        # command. Each records a human-owned Construction decision, so Studio never issues them.
+        "aidlc-state.ts:set-construction-checkpoints",
+        "aidlc-state.ts:set-construction-execution",
+        "aidlc-state.ts:set-construction-verification-command",
         "aidlc-state.ts:acknowledge-compaction",
         "aidlc-state.ts:reuse-artifact",
         "aidlc-state.ts:practices-event",

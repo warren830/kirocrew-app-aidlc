@@ -9,6 +9,10 @@ keywords:
 description: CVE response
 skeleton: off
 runner: true
+guard_policy: strict
+sensors: on
+learnings: on
+summary_confirmation: on
 ---
 
 # security-patch scope
@@ -19,6 +23,8 @@ patch must do (requirements-analysis), capture the security constraint
 (nfr-requirements), fix and test (code-generation, build-and-test), then
 ship through the deployment stages so the patch actually reaches
 production.
+
+Guard Policy defaults to strict: a patch whose inputs move after approval is approved again before it ships, and no fences are lowered.
 
 ## Why these stages, why skip those
 

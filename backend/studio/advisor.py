@@ -1767,8 +1767,8 @@ class AdvisorBroker:
         """
         record = _reader.AidlcReader.record_rel(space, intent_dir)
         state_path = security.resolve_inside(root, f"{record}/{_reader.STATE_FILENAME}")
-        directive_path = security.resolve_inside(root, f"{record}/{_reader.DIRECTIVE_FILENAME}")
-        marker_path = security.resolve_inside(root, f"{record}/{_reader.HUMAN_TURN_FILENAME}")
+        directive_path = _reader.record_file(root, record, _reader.DIRECTIVE_FILENAME)
+        marker_path = _reader.record_file(root, record, _reader.HUMAN_TURN_FILENAME)
         counter_path = security.resolve_inside(root, _reader.TURN_COUNTER_REL)
 
         question_digest: str | None = None

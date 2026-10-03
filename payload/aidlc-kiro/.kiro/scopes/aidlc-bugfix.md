@@ -9,6 +9,10 @@ description: Fix a specific bug
 skeleton: off
 runner: true
 review_cap: advisory
+guard_policy: relaxed
+sensors: on
+learnings: on
+summary_confirmation: on
 ---
 
 # bugfix scope
@@ -17,6 +21,8 @@ Minimal depth for fixing one specific bug in an existing codebase. It
 skips ideation entirely (there is no new product to discover), runs
 reverse-engineering to understand the current code, pulls requirements for
 the fix, then generates, tests, and deploys it.
+
+Guard Policy defaults to relaxed: changed inputs are recorded and announced rather than reopening approval; plan approval and review freeze are lowered for undirected work.
 
 ## Why these stages, why skip those
 

@@ -1097,12 +1097,12 @@ class RepoRegistry:
         Neither present (the fixture trees ship data files only) → unknown, never a guess: a wrong
         answer here would make ``state_version_unsupported`` fire against a perfectly good repository.
         """
-        lib = security.bounded_text(tools / ENGINE_LIB_FILE, C.MAX_ARTIFACT_RENDER_BYTES)
+        lib = security.bounded_text(tools / ENGINE_LIB_FILE, C.MAX_ENGINE_SOURCE_BYTES)
         if lib:
             match = C.ENGINE_STATE_VERSION_RE.search(lib)
             if match:
                 return int(match.group(1))
-        utility = security.bounded_text(tools / ENGINE_UTILITY_FILE, C.MAX_ARTIFACT_RENDER_BYTES)
+        utility = security.bounded_text(tools / ENGINE_UTILITY_FILE, C.MAX_ENGINE_SOURCE_BYTES)
         if utility:
             match = _STATE_VERSION_FIELD_RE.search(utility)
             if match:
