@@ -93,6 +93,11 @@ ENGINE_RECORD_NAMES: dict[str, str] = {
     REVIEWER_DISPATCH_FILENAME: "reviewer-dispatch.json",
     ".aidlc-sensors": "sensors",
 }
+#: The legacy names the engine itself still reads when the new entry is absent: the directive marker
+#: (``resolveActiveDirectiveTarget``), hook health and sensors (``engineReadDirFor``). It rebuilds the
+#: rest at the new path with no fallback, so once a record has an ``.aidlc-engine`` directory their
+#: record-root copies are leftovers from an engine before 2.9.
+ENGINE_LEGACY_READS = frozenset({DIRECTIVE_FILENAME, HOOKS_HEALTH_DIRNAME, ".aidlc-sensors"})
 
 
 def record_file(repo: Path, record: str, legacy_rel: str) -> Path:
@@ -100,7 +105,9 @@ def record_file(repo: Path, record: str, legacy_rel: str) -> Path:
 
     The ``.aidlc-engine`` location wins unless it is absent and the legacy path exists. An
     ``.aidlc-engine`` entry that is not a directory is not absence: the engine stays on the new path
-    and fails closed rather than reviving legacy state, so Studio reads the same (missing) file.
+    and fails closed rather than reviving legacy state, so Studio reads the same (missing) file. A name
+    outside ``ENGINE_LEGACY_READS`` reads its legacy copy only while the record has no ``.aidlc-engine``
+    at all, which is a record an engine before 2.9 is still writing.
     """
     head, _, rest = legacy_rel.partition("/")
     current_rel = f"{record}/{ENGINE_DIRNAME}/{ENGINE_RECORD_NAMES[head]}" + (f"/{rest}" if rest else "")
@@ -108,7 +115,7 @@ def record_file(repo: Path, record: str, legacy_rel: str) -> Path:
     legacy = security.resolve_inside(repo, f"{record}/{legacy_rel}")
     try:
         engine = security.resolve_inside(repo, f"{record}/{ENGINE_DIRNAME}")
-        if os.path.lexists(engine) and not engine.is_dir():
+        if os.path.lexists(engine) and (not engine.is_dir() or head not in ENGINE_LEGACY_READS):
             return current
         if not os.path.lexists(current) and os.path.lexists(legacy):
             return legacy

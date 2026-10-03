@@ -1732,12 +1732,28 @@ def test_engine_directory_wins_over_a_legacy_marker_of_the_same_name(R, repo_bui
     """The engine only falls back when the new entry is absent, so a stale legacy file must not win."""
     repo = repo_builder.with_workspace().with_intent("260904-x", state=GATE_STATE, audit=GATE_AUDIT).build()
     record = "aidlc/spaces/default/intents/260904-x"
+    (repo / record / ".aidlc-engine/hooks-health").mkdir(parents=True)
+    (repo / record / ".aidlc-hooks-health").mkdir()
+    assert R.record_file(repo, record, R.HOOKS_HEALTH_DIRNAME).parent.name == ".aidlc-engine"
+    (repo / record / ".aidlc-engine/hooks-health").rmdir()
+    assert R.record_file(repo, record, R.HOOKS_HEALTH_DIRNAME).name == ".aidlc-hooks-health"
+
+
+def test_markers_without_an_engine_fallback_ignore_legacy_copies_once_the_directory_exists(R, repo_builder):
+    """An upgraded record keeps 2.7.1's root markers, but 2.10.0 never reads them back."""
+    repo = repo_builder.with_workspace().with_intent("260904-x", state=GATE_STATE, audit=GATE_AUDIT).build()
+    record = "aidlc/spaces/default/intents/260904-x"
+    for legacy in (R.HUMAN_TURN_FILENAME, R.ENGINE_TOUCH_FILENAME, R.RECOVERY_FILENAME,
+                   R.REVIEWER_DISPATCH_FILENAME):
+        (repo / record / legacy).write_text("")
+        assert R.record_file(repo, record, legacy).name == legacy
     (repo / record / ".aidlc-engine").mkdir()
-    (repo / record / ".aidlc-engine/human-turn").write_text("")
-    (repo / record / ".aidlc-human-turn").write_text("")
-    assert R.record_file(repo, record, R.HUMAN_TURN_FILENAME).parent.name == ".aidlc-engine"
-    (repo / record / ".aidlc-engine/human-turn").unlink()
-    assert R.record_file(repo, record, R.HUMAN_TURN_FILENAME).name == ".aidlc-human-turn"
+    for legacy in (R.HUMAN_TURN_FILENAME, R.ENGINE_TOUCH_FILENAME, R.RECOVERY_FILENAME,
+                   R.REVIEWER_DISPATCH_FILENAME):
+        path = R.record_file(repo, record, legacy)
+        assert path.parent.name == ".aidlc-engine" and not path.exists()
+    (repo / record / R.DIRECTIVE_FILENAME).write_text("{}")
+    assert R.record_file(repo, record, R.DIRECTIVE_FILENAME).name == R.DIRECTIVE_FILENAME
 
 
 def test_a_non_directory_engine_entry_is_not_absence(R, repo_builder):
