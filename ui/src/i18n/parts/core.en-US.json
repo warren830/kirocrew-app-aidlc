@@ -124,8 +124,6 @@
   "errors.same_version_installed": "This repository already has the bundled AI-DLC version.",
   "errors.state_version_migration_unconfirmed": "This repository's AI-DLC state is an older version, and upgrading it is not yet proven safe.",
   "errors.payload_degraded": "Studio's bundled AI-DLC payload failed verification.",
-  "errors.migration_not_applicable": "There is nothing to migrate.",
-  "errors.migration_already_applied": "The migration has already run.",
   "errors.session_unbound": "This intent has no conversation bound yet.",
   "errors.slot_mismatch": "That conversation belongs to a different repository or agent.",
   "errors.slot_busy": "The conversation is busy.",

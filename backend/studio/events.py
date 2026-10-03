@@ -64,11 +64,10 @@ EVENT_TYPES = (
     "advisor.updated",
     "settings.updated",
     "health.updated",
-    "migration.updated",
     "reset",
 )
 
-#: Stream-only frame names. ``reset`` is also a publishable type (a migration may tell every client to
+#: Stream-only frame names. ``reset`` is also a publishable type (a producer may tell every client to
 #: start over), so the constant is shared rather than spelled twice.
 EVENT_HELLO = "hello"
 EVENT_RESET = "reset"

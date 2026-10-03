@@ -153,8 +153,6 @@
   "activity.lease.reclaimed": "已回收孤立租约。",
   "activity.engine.run": "已运行 AI-DLC 引擎命令。",
   "activity.install.transaction": "已记录安装事务。",
-  "activity.migration.previewed": "已预览原型迁移。未写入任何内容。",
-  "activity.migration.applied": "已应用原型迁移。",
   "activity.advisor.requested": "已请求顾问草稿。它只读取，无法推动工作流。",
   "activity.advisor.auto_requested": "已自动请求顾问草稿，因为该仓库设置了提前起草。它只读取，无法推动工作流。",
   "activity.advisor.completed": "顾问草稿已就绪。它是草稿，不是决定。",

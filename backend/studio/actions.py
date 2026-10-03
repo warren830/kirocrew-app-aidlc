@@ -981,27 +981,6 @@ class HumanActionBroker:
             recs = [rec for rec in recs if rec.type != "revision"]
         return sorted(recs, key=self._queue_key)
 
-    async def list_for_intent(
-        self,
-        repo_id: str,
-        space: str,
-        intent_dir: str,
-        *,
-        include_terminal: bool = False,
-        limit: int = 50,
-    ) -> list[ActionRecord]:
-        rows = await asyncio.to_thread(
-            self._storage.select,
-            _ACTIONS,
-            {"repo_id": repo_id, "space": space, "intent_dir": intent_dir},
-            order_by="created_at DESC, action_id DESC",
-            limit=None if include_terminal else max(1, int(limit)) * 4,
-        )
-        recs = [ActionRecord.from_row(row) for row in rows]
-        if not include_terminal:
-            recs = [rec for rec in recs if rec.status in LIVE_STATUSES]
-        return recs[: max(1, int(limit))]
-
     @staticmethod
     def _queue_key(rec: ActionRecord) -> tuple[int, int, str, str]:
         queue_type = rec.queue_type
@@ -1366,7 +1345,7 @@ class HumanActionBroker:
             wire_text=None,
             expires_at=rec.deadline_at or "",
             lease_generation=None,
-            host=HostCall("POST", f"/api/chat/slots/{rec.slot_key}/stop", {}),
+            host=HostCall("POST", f"{C.HOST_CHAT_SLOTS_PATH}/{rec.slot_key}/stop", {}),
         )
 
     # ---- two-phase submit ------------------------------------------------- #
@@ -2692,7 +2671,7 @@ class HumanActionBroker:
         host: dict[str, Any] | None = None
         if rec.delivery_id and rec.slot_key:
             if rec.type == "force_stop":
-                host = HostCall("POST", f"/api/chat/slots/{rec.slot_key}/stop", {}).to_json()
+                host = HostCall("POST", f"{C.HOST_CHAT_SLOTS_PATH}/{rec.slot_key}/stop", {}).to_json()
             elif rec.wire_text is not None:
                 host = HostCall(
                     "POST",

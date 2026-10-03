@@ -94,12 +94,6 @@ function routes(overrides: Record<string, (body: unknown, path: string) => unkno
       repos: [REPO],
       totals: { repos: 1, unavailable: 0, open_actions: 0 },
     }),
-    'GET /api/apps/aidlc-studio/migration/status': () => ({
-      applied: false,
-      result: null,
-      preview_available: false,
-      console: { installed: false, enabled: false },
-    }),
     ...overrides,
   })
   return puts
@@ -324,32 +318,5 @@ describe('A rejected patch', () => {
     await waitFor(() =>
       expect(screen.getByText(/rejected night_window\.turn_cap/)).toBeInTheDocument(),
     )
-  })
-})
-
-describe('Migration', () => {
-  it('renders nothing when there is no prototype and no migration on record', async () => {
-    routes()
-    await renderSettings()
-    expect(screen.queryByText(/Migrate from the AI-DLC console prototype/)).toBeNull()
-  })
-
-  it('leads with the two-control-surfaces warning while both Apps are enabled', async () => {
-    routes({
-      'GET /api/apps/aidlc-studio/migration/status': () => ({
-        applied: false,
-        result: null,
-        preview_available: true,
-        console: { installed: true, enabled: true },
-      }),
-    })
-    await renderSettings()
-
-    await waitFor(() =>
-      expect(screen.getByText('Two Apps can control the same repositories')).toBeInTheDocument(),
-    )
-    expect(screen.getByRole('button', { name: /Preview what moves/ })).toBeInTheDocument()
-    // Nothing may be applied before a preview has been read.
-    expect(screen.queryByRole('button', { name: /Apply the migration once/ })).toBeNull()
   })
 })

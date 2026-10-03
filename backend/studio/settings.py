@@ -65,7 +65,7 @@ DEFAULTS: dict[str, Any] = {
         "credit_cap": None,
     },
     "diagnostics": {"retention_days": 30, "export_include_human_text": False},
-    "human_text_retention_days": 30,
+    "human_text_retention_days": C.HUMAN_TEXT_RETENTION_DAYS_DEFAULT,
     # ``auto_draft_repo_ids`` is the standing request FR-ADV-001 permits: empty means the Advisor runs
     # only on a click, which is the default on every install. An id here is one repository whose owner
     # has said "draft for me before I get there" — a grant, revocable by unchecking, never retroactive.

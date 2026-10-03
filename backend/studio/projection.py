@@ -208,9 +208,6 @@ PROJECT_PLACEHOLDERS = frozenset(
 #: `IntentSummary.title` cap (§1.8).
 MAX_TITLE_CHARS = 160
 
-#: Marker names `StableBoundary.marker` can carry (§1.8).
-BOUNDARY_MARKERS = ("[?]", "[R]", "question", "parked", "completed", "phase_complete")
-
 #: Unmet-condition codes `StableBoundary.reasons` can carry (§1.8).
 BOUNDARY_REASONS = ("state_unstable", "not_at_boundary", "action_in_flight", "session_busy", "cursor_mismatch")
 

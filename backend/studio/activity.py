@@ -104,8 +104,6 @@ ACTIVITY_KINDS: tuple[str, ...] = (
     "lease.reclaimed",
     "engine.run",
     "install.transaction",
-    "migration.previewed",
-    "migration.applied",
     "advisor.requested",
     # A draft Studio asked for on the owner's standing grant, not one a human clicked for
     # (FR-ADV-010). A separate kind rather than a parameter on ``advisor.requested`` because the

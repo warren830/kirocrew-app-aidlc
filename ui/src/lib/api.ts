@@ -29,8 +29,7 @@ import type {
   BindResponse, BindingResponse, BunToolResponse, CalibrationClearResponse, CalibrationResponse, ChatFolder, CommandResponse,
   DeliveryReport, DeliveryResponse, DiagnosticsBundle, DirectoryResponse, DoctorResponse, EventPollResponse,
   HealthResponse, HostChatReceipt, IntentCreateResponse, IntentGitResponse, IntentResponse,
-  IntentsResponse, LeasesResponse, MapResponse, MaintenancePreview, MaintenanceResult, MigrationApplyResponse, MigrationPreviewResponse,
-  MigrationStatusResponse, Organize, PauseResponse, PayloadResponse, PlanAdviseRequest, PlanPreviewResponse,
+  IntentsResponse, LeasesResponse, MapResponse, MaintenancePreview, MaintenanceResult, Organize, PauseResponse, PayloadResponse, PlanAdviseRequest, PlanPreviewResponse,
   PlanRequest, PreflightResponse, PreviewPlanResponse, QuestionsResponse, ReceiptsResponse,
   RecomposePreviewResponse, RecomposeResponse, RemoveRepoResponse, RepoDetailResponse,
   RepoGitResponse, RepoResponse, ReposResponse, RescanResponse, ResolvePayload, ResolveResponse,
@@ -192,9 +191,6 @@ export interface StudioApi extends WorkspaceApi {
   putSettings(patch: DeepPartial<SettingsValues>): Promise<SettingsResponse>
   calibration(o?: ReadOptions): Promise<CalibrationResponse>
   clearCalibration(): Promise<CalibrationClearResponse>
-  migrationStatus(o?: ReadOptions): Promise<MigrationStatusResponse>
-  migrationPreview(): Promise<MigrationPreviewResponse>
-  migrationApply(sourceSha256: string): Promise<MigrationApplyResponse>
 
   // -- events and activity ------------------------------------------------ //
   pollEvents(cursor: number | null, limit?: number, o?: ReadOptions): Promise<EventPollResponse>
@@ -338,10 +334,6 @@ export function useStudioApi(): StudioApi {
       putSettings: (patch) => send('put', '/settings', patch),
       calibration: (o) => get('/calibration', o),
       clearCalibration: () => post('/calibration/clear', { confirm: true }),
-      migrationStatus: (o) => get('/migration/status', o),
-      migrationPreview: () => post('/migration/preview', {}),
-      migrationApply: (sourceSha256) =>
-        post('/migration/apply', { confirm: true, source_sha256: sourceSha256 }),
 
       pollEvents: (cursor, limit, o) =>
         get(`/events/poll${query({ cursor, limit })}`, o),

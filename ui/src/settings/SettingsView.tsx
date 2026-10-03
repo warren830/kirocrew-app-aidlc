@@ -11,10 +11,6 @@
  *    concurrent patches would race and the loser would be silently discarded.
  *  - A rejected patch is reported with the key the backend named (`details.key`), because "invalid
  *    settings" on a page with a dozen controls tells the user nothing about which one refused.
- *
- * The page also mounts the prototype migration section at the top (FR-MIG-001): it renders nothing at all
- * unless there is a prototype or a migration on record, and when both Apps are live it is the first thing
- * on the page.
  */
 
 import { useCallback, useMemo, useState, type ReactNode } from 'react'
@@ -28,7 +24,6 @@ import type {
 import { useResource } from '../lib/useResource'
 import { Chip } from '../shell/Chip'
 import { Icon } from '../shell/Icon'
-import { MigrationView } from '../migration/MigrationView'
 import { AboutPanel } from './AboutPanel'
 import { BunSetting } from './BunSetting'
 import { AdvisorSetting } from './AdvisorSetting'
@@ -200,8 +195,6 @@ export function SettingsView({ go }: SettingsViewProps) {
         <p className="studio-settings-status" role="status" aria-live="polite" aria-label={t('settings.page.status')}>
           {notice ?? ''}
         </p>
-
-        <MigrationView onApplied={() => void repos.refresh()} />
 
         {settings.error && !current ? (
           <div className="studio-banner" data-tone="warn" role="status">

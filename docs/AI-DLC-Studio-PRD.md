@@ -504,6 +504,8 @@ Settings include:
 
 ### 9.22 Prototype migration
 
+> **Retired 2026-10-03 (Studio 1.1.1, architecture A33).** The prototype was never published, so no Studio installation can have its registry to import. FR-MIG-001–005 no longer apply and are kept here as the record.
+
 - **FR-MIG-001:** Detect the local `aidlc-console` prototype and present a one-time migration preview before enabling `aidlc-studio`.
 - **FR-MIG-002:** Migrate only Studio-owned repo registry, archive metadata, preferences, and compatible action-free history; never copy credentials or AI-DLC repo data.
 - **FR-MIG-003:** Rewrite internal repo ids/action links under a versioned migration transaction and validate counts before committing.
@@ -934,7 +936,7 @@ Every mutation returns the Studio action/transaction id and an observable status
 15. **Mobile:** 390px Action Center completes Gate/question/Advisor flow without horizontal page scrolling.
 16. **Archive:** Archive/restore changes Studio visibility only; repo bytes remain identical.
 17. **Git:** Static scan finds no Git write verb reachable from backend code, and runtime policy tests deny representative branch/commit/push/merge/checkout invocations.
-18. **Migration:** Existing `aidlc-console` repo registry/archive metadata migrates once to `aidlc-studio`; stale trust, storage, routes, and sidebar registration are removed or clearly preserved for rollback without duplicate UI.
+18. **Migration** *(retired 2026-10-03 with §9.22)*: Existing `aidlc-console` repo registry/archive metadata migrates once to `aidlc-studio`; stale trust, storage, routes, and sidebar registration are removed or clearly preserved for rollback without duplicate UI.
 
 ### Quality gates
 

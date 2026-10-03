@@ -49,7 +49,7 @@ export interface StreamStatus {
 const RING_TYPES: readonly StudioEventType[] = [
   'action.created', 'action.updated', 'repo.updated', 'repo.removed', 'intent.updated',
   'transaction.updated', 'lease.updated', 'activity.appended', 'advisor.updated',
-  'settings.updated', 'health.updated', 'migration.updated', 'reset',
+  'settings.updated', 'health.updated', 'reset',
 ]
 
 export const BACKOFF_MIN_MS = 1_000

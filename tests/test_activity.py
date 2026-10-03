@@ -124,7 +124,7 @@ CONTRACT_KINDS = (
     "repo.added repo.removed repo.rebound repo.rescanned repo.updated action.created action.updated action.submitted "
     "action.delivery action.resolved action.cancelled action.retried action.failed breaker.opened "
     "breaker.reset lease.acquired lease.released lease.reclaimed engine.run install.transaction "
-    "migration.previewed migration.applied advisor.requested advisor.auto_requested "
+    "advisor.requested advisor.auto_requested "
     "advisor.completed advisor.failed "
     "notification.sent slack.sent slack.callback session.bound session.unbound session.takeover "
     "intent.created intent.paused intent.resumed intent.archived intent.restored intent.force_stop "

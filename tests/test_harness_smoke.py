@@ -1,6 +1,5 @@
 """Smoke test for the harness itself: the fakes must refuse what policy forbids."""
-import json, os, subprocess, sys
-from pathlib import Path
+import json, os, subprocess
 import pytest
 import conftest as CT
 import fixtures as F
