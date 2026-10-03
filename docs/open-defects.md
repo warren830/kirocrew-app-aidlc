@@ -13,7 +13,7 @@
 cd /Users/ychchen/warren_ws/kirocrew-app-aidlc
 PY=/Users/ychchen/warren_ws/kirocrew/.venv/bin/python
 $PY scripts/build_i18n.py && $PY scripts/gen_ui_sources.py
-PATH=/Users/ychchen/.nvm/versions/node/v24.20.0/bin:$PATH bash scripts/check.sh   # 期望 ALL CHECKS PASSED
+NODE_BIN=/Users/ychchen/.nvm/versions/node/v25.2.1/bin bash scripts/check.sh   # 期望 ALL CHECKS PASSED
 ./scripts/dev-install.sh                                                       # 更新并重新启用应用，加载新后端
 scripts/kcapi.sh GET /api/apps/aidlc-studio/health                                # 期望 healthy / issues []
 ```

@@ -60,3 +60,24 @@ def test_a_scan_notifies_once_per_approval_with_a_link_to_the_conversation(sv, r
     assert len(sent) == 1
     assert sent[0]["title"] == "AI-DLC is waiting for your approval: gate-demo"
     assert "grep -n steering" in sent[0]["body"]
+
+
+def test_a_sub_agents_approval_on_the_coordinator_is_shown_and_notified(sv, routes, fake_host, scene):
+    """A sub-agent's approval waits on the host's coordinator, not on the slot's own futures."""
+    slot = fake_host.get_slot(scene.slot_key)
+    slot.coordinator_approvals.append({
+        "id": "spawn:dev-1", "tool": "Run the unit tests", "tool_input": "go test ./backend/plugins/servicenow/...",
+    })
+    status, body = _get(sv, routes, fake_host, "/actions")
+    assert status == 200
+    assert [(w["slot_key"], w["tool"], w["tool_input"]) for w in body["approval_waits"]] == [
+        (scene.slot_key, "Run the unit tests", "go test ./backend/plugins/servicenow/..."),
+    ]
+    before = len(fake_host.notifications)
+    asyncio.run(sv.reconciler.scan_repo(sv.repos.get(scene.repo_id)))
+    sent = fake_host.notifications[before:]
+    assert len(sent) == 1 and "go test ./backend/plugins/servicenow/..." in sent[0]["body"]
+
+    slot.coordinator_approvals.clear()
+    status, body = _get(sv, routes, fake_host, "/actions")
+    assert body["approval_waits"] == []

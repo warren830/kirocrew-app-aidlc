@@ -316,6 +316,19 @@ def test_a_tool_approval_notifies_once_per_approval_and_links_to_the_conversatio
     assert len(host.notified) == 2
 
 
+def test_an_undescribed_approval_notifies_again_in_a_later_turn(studio, clock):
+    """No id and no text: the turn keeps one slot's approvals from collapsing into one key forever."""
+    host = FakeHostBridge()
+    adapter = _adapter(studio, clock, host=host, storage=MemoryPrefs())
+    wait = dict(repo_id="r_1", repo_label="devlake", intent_key="261001-servicenow-plugin",
+                intent_label="servicenow-plugin", slot_key="slot-1",
+                approval={"tool": "", "tool_input": "", "request_id": ""})
+    asyncio.run(adapter.notify_tool_approval(**wait, turn="2026-10-03T10:00:00Z"))
+    assert asyncio.run(adapter.notify_tool_approval(**wait, turn="2026-10-03T10:00:00Z")).dedupe_hit is True
+    asyncio.run(adapter.notify_tool_approval(**wait, turn="2026-10-03T10:05:00Z"))
+    assert len(host.notified) == 2
+
+
 def test_the_digest_says_plainly_that_no_unattended_work_ran(studio, clock):
     host = FakeHostBridge()
     adapter = _adapter(studio, clock, host=host)
