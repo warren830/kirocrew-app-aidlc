@@ -271,7 +271,7 @@ export interface ActivityResponse { items: TimelineEntry[]; next_cursor: string 
 export type StudioEventType =
   | 'action.created' | 'action.updated' | 'repo.updated' | 'repo.removed' | 'intent.updated'
   | 'transaction.updated' | 'lease.updated' | 'activity.appended' | 'advisor.updated'
-  | 'settings.updated' | 'health.updated' | 'migration.updated' | 'reset'
+  | 'settings.updated' | 'health.updated' | 'reset'
 /** One persisted ring row (`EventRecord.to_json`). */
 export interface StudioEvent { seq: number; at: string; type: StudioEventType; payload: Record<string, unknown> }
 export interface EventPollResponse { events: StudioEvent[]; cursor: number; oldest_seq: number; reset: boolean }
@@ -293,10 +293,6 @@ export interface BunToolResponse { tool: { found: boolean; path: string | null; 
 export type CapabilityName = 'night_window' | 'credit_cap' | 'slack' | 'advisor' | 'slack_quick_actions' | 'grouped_answers'
 export interface SettingsResponse { settings: SettingsValues; capabilities: Record<CapabilityName, Capability>; versions: { studio: string; bundled_engine: string; min_kirocrew: string; host: string | null }; updated_at: string | null }
 export interface HealthResponse { app: 'aidlc-studio'; version: string; bundled_engine_version: string; min_kirocrew_version: string; boot_id: string; host_version: string | null; started_at: string | null; status: 'healthy' | 'degraded' | 'error'; issues: string[]; storage: { path_hash: string; schema_version: number; integrity: 'ok' | 'error'; wal: boolean }; payload: { ok: boolean; engine_version: string; file_count: number; mismatches: number }; host: { attached: boolean; capabilities: Record<string, Capability> }; tools: { bun: { found: boolean; path: string | null; version: string | null; source: string | null; searched: string[] }; git: { found: boolean; path: string | null; version: string | null } }; reconciler: { running: boolean; last_tick_at: string | null; last_tick_ms: number | null; repos_scanned: number }; counts: { repos: number; intents: number; live_actions: number; execution_leases: number; admin_leases: number }; machine_lane: { available: false; reason: 'machine_lane_unavailable' } }
-export interface MigrationPreview { applicable: boolean; reason: string | null; source_path: string; source_sha256: string | null; rows_in: number; rows: { legacy_id: string; path: string; label: string; added_at: string | null; resolution: string; identity: string | null; error: string | null }[]; rows_out: number; console_installed: boolean; console_enabled: boolean; already_applied: boolean }
-/** DRIFT: §3.1 references `MigrationResult` without defining it (`migration.py`). */
-export interface MigrationResult { migration_id: string; applied_at: string; status: string; backup_path: string | null; summary: Record<string, unknown>; next_steps: string[] }
-export interface MigrationStatusResponse { applied: boolean; result: MigrationResult | null; preview_available: boolean; console: { installed: boolean; enabled: boolean } }
 
 // ---- payload / diagnostics (§2.1; §3.1 defines none of these) ----
 export interface PayloadFile { path: string; sha256: string; size: number; ownership: Ownership }
@@ -341,8 +337,6 @@ export interface ReceiptsResponse { receipts: Receipt[] }
 export interface TransactionResponse { transaction: TransactionResult }
 export interface PlanPreviewResponse { plan: EffectivePlan }
 export interface CalibrationClearResponse { ok: true; removed: number }
-export interface MigrationPreviewResponse { preview: MigrationPreview }
-export interface MigrationApplyResponse { ok: true; result: MigrationResult }
 export interface SlackCallbackResponse { ok: true; recorded: true }
 export interface MapResponse { map: MapModel }
 export interface IntentResponse { intent: IntentDetail }

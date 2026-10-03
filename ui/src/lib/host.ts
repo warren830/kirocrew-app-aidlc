@@ -53,15 +53,6 @@ export function useHostMode(): HostMode {
   return useSyncExternalStore(subscribeToAttributes(['data-mode', 'data-theme']), readMode, () => 'dark')
 }
 
-/** The host's theme slug (e.g. `monokai-dark`), for the rare case a component needs it. */
-export function useHostTheme(): string {
-  return useSyncExternalStore(
-    subscribeToAttributes(['data-theme']),
-    () => document.documentElement.dataset.theme ?? 'dark',
-    () => 'dark',
-  )
-}
-
 function matchLocale(tag: string | null | undefined): StudioLocale | null {
   if (!tag) return null
   const wanted = tag.trim().toLowerCase()
@@ -171,10 +162,4 @@ export function ensureStylesheet(href = '/apps/aidlc-studio/ui/dist/style.css', 
   link.rel = 'stylesheet'
   link.href = href
   document.head.appendChild(link)
-}
-
-/** Optional host modules that are not in the import map; absent on older hosts. */
-export function hostModule<T = unknown>(key: string): T | null {
-  const registry = (globalThis as { __kirocrew_modules?: Record<string, unknown> }).__kirocrew_modules
-  return (registry?.[key] as T | undefined) ?? null
 }

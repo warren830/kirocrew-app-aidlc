@@ -1,6 +1,5 @@
 """Reversible registry metadata and explicit, bounded gateway directory selection."""
 import asyncio
-from pathlib import Path
 
 import pytest
 

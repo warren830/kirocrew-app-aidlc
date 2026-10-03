@@ -442,6 +442,12 @@ def test_wire_text_templates_match_the_pinned_file_byte_for_byte(A):
     assert A.WIRE_TEXT_TEMPLATES == pinned["decisions"]
 
 
+def test_every_wire_constant_matches_the_pinned_file_byte_for_byte(C):
+    """Casing is load-bearing (`Request Changes` vs `Request changes`), so no constant may drift alone."""
+    pinned = json.loads((APP_ROOT / C.WIRE_TEXT_SOURCE).read_text("utf-8"))
+    assert C.WIRE_TEXT == pinned["constants"]
+
+
 def test_wire_text_for_every_decision_is_the_pinned_string(A, C):
     def wire(decision, payload=None, questions=None, grouped=False):
         return A.wire_text_for(

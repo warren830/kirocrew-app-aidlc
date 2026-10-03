@@ -239,7 +239,7 @@ def test_foreign_harness_does_not_gain_refresh_authority(refresh_env, studio):
     env = refresh_env()
     (env.root / ".kiro").rename(env.root / ".claude")
     before = _tree(env.root)
-    installer = env.bundle("fixed")
+    env.bundle("fixed")
     install = _install_json(env)
     assert install["engine_version"] == VERSION
     assert install["own_engine_version"] is None

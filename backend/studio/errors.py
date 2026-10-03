@@ -69,8 +69,6 @@ ERROR_CODES: dict[str, int] = {
     "same_version_installed": 409,
     "state_version_migration_unconfirmed": 409,
     "payload_degraded": 409,
-    "migration_not_applicable": 409,
-    "migration_already_applied": 409,
     "session_unbound": 409,
     "slot_mismatch": 409,
     "slot_busy": 409,
@@ -166,26 +164,3 @@ class LeaseHeld(StudioError):
 
     def __init__(self, message: str = "", *, details: dict[str, Any] | None = None) -> None:
         super().__init__("repo_busy", message or "repository is busy", details=details)
-
-
-class Unstable(StudioError):
-    """A file changed while it was being read as decision evidence.
-
-    Surfaced as ``Refreshing`` in the UI: the snapshot cannot authorise a decision (FR-ACT-009), and
-    the caller must re-read rather than proceed with either version.
-    """
-
-    def __init__(self, message: str = "", *, details: dict[str, Any] | None = None) -> None:
-        super().__init__("unstable_read", message or "file changed while being read", details=details)
-
-
-class ActionStale(StudioError):
-    """The captured evidence no longer matches the live state; the decision must be re-confirmed."""
-
-    def __init__(self, message: str = "", *, details: dict[str, Any] | None = None) -> None:
-        super().__init__("action_stale", message or "the decision context changed", details=details)
-
-
-def status_for(code: str) -> int:
-    """HTTP status for a code, or 500 for an unknown one (never raises in a response path)."""
-    return ERROR_CODES.get(code, 500)

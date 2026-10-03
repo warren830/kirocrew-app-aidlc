@@ -24,7 +24,6 @@ import asyncio
 
 import pytest
 
-import conftest as CT
 from test_actions import A, C, captured_of, delivering, repo_options, world  # noqa: F401 - fixtures
 from test_actions import SLOT
 from test_e2e_gate import (  # noqa: F401 - fixtures

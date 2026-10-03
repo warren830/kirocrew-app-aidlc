@@ -153,8 +153,6 @@
   "activity.lease.reclaimed": "Orphaned lease reclaimed.",
   "activity.engine.run": "AI-DLC engine command run.",
   "activity.install.transaction": "Install transaction recorded.",
-  "activity.migration.previewed": "Prototype migration previewed. Nothing was written.",
-  "activity.migration.applied": "Prototype migration applied.",
   "activity.advisor.requested": "Advisor draft requested. It reads only; it cannot move the workflow.",
   "activity.advisor.auto_requested": "Advisor draft requested automatically, because this repository is set to draft ahead. It reads only; it cannot move the workflow.",
   "activity.advisor.completed": "Advisor draft ready. It is a draft, not a decision.",

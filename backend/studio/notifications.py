@@ -32,20 +32,9 @@ from . import security as S
 
 logger = logging.getLogger(f"kirocrew.app.{C.APP_NAME}.notifications")
 
-#: The classes of event worth interrupting a person for (PRD FR-SLK-003). A stage transition is not one:
-#: notifying every transition trains the user to mute the channel, which costs them the gate as well.
-NOTIFY_KINDS = (
-    "gate",
-    "question",
-    "failure",
-    "circuit_breaker",
-    "delivery_uncertain",
-    "recovery",
-    "install_conflict",
-    "completion",
-)
-
-#: Card types that map onto a notifiable class. Anything absent is deliberately silent.
+#: Card types worth interrupting a person for (PRD FR-SLK-003), mapped onto their notification class.
+#: Anything absent is deliberately silent. A stage transition is not one: notifying every transition
+#: trains the user to mute the channel, which costs them the gate as well.
 _TYPE_TO_KIND = {
     "gate": "gate",
     "question": "question",

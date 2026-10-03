@@ -6,7 +6,6 @@ import asyncio
 import json
 import multiprocessing
 import os
-from dataclasses import replace
 from pathlib import Path
 
 import pytest

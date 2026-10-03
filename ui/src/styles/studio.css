@@ -1698,7 +1698,7 @@ button.studio-chip:hover { border-color: var(--border-hover); }
 }
 
 /* ==========================================================================
- * ACTIVITY, SETTINGS, THE ADVISOR DRAWER AND MIGRATION
+ * ACTIVITY, SETTINGS AND THE ADVISOR DRAWER
  *
  * Namespaced away from `.studio-drawer` and `.studio-field`, which two other areas already define with
  * different meanings: a third meaning on the same selector would silently restyle their panels.
@@ -1903,17 +1903,6 @@ button.studio-chip:hover { border-color: var(--border-hover); }
 .studio-mutelist { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; }
 .studio-mutelist li { padding: 2px 0; }
 .studio-mutelist .studio-mono { max-width: 26ch; }
-
-/* ---------- migration ---------- */
-
-.studio-migration-explain {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 14px;
-  margin: 10px 0;
-}
-.studio-migration .studio-tbl { margin: 8px 0; }
-.studio-migration .studio-banner { margin: 0 0 12px; }
 
 @media (max-width: 1180px) {
   .studio-evdrawer { width: 320px; }

@@ -5,6 +5,14 @@ The file-backed grouped transport is verified; `wire-text.json` v2 appends a one
 Native blocking waits and ambiguous formats still route to the canonical conversation. This amendment
 supersedes historical S1/S2-off examples below. See [verification](../verification/2026-09-11-grouped-answers/README.md).
 
+2026-10-03 amendment (1.1.1): the one-time `aidlc-console` migration is retired (architecture A33).
+§1.22, its routes in §2.8/§2.10, the `migration.updated` event, the `migration.previewed`/`migration.applied`
+Activity kinds, the `migration_not_applicable`/`migration_already_applied` codes, the `Migration*` TS types and
+`tests/test_migration.py` no longer exist. The `migrations` table and `repos.legacy_console_id` stay in schema
+version 2 and are no longer written. Also removed because nothing called them: `ActionStore.list_for_intent`,
+`errors.Unstable` (the `unstable_read` code is unchanged), `VOLATILE_RUNTIME_PATHS` and `NOTIFY_KINDS`
+(`notifications._TYPE_TO_KIND` is what decides which cards notify).
+
 Status: **binding** for implementation. Companion to `docs/design/architecture.md` (module layout,
 authority model, decision log) and `docs/AI-DLC-Studio-PRD.md` (invariants §6, enums §11, API list §15).
 Where this document is more specific than the architecture, this document wins; where it disagrees with
@@ -141,7 +149,7 @@ updating this document.
 
 ```python
 APP_NAME = "aidlc-studio"
-APP_VERSION = "1.1.0"                       # must equal app.json "version" (test pins)
+APP_VERSION = "1.1.1"                       # must equal app.json "version" (test pins)
 MIN_KIROCREW_VERSION = "0.3.0"              # == app.json minKiroCrewVersion (architecture §2/A10; review P19/R05)
 BUNDLED_ENGINE_VERSION = "2.7.1"            # == payload/manifest.json engineVersion. Tests assert equality with
 BUNDLED_STATE_VERSION = 8                   #    PayloadManifest.load(); they never compare against a literal
@@ -2820,38 +2828,9 @@ class SettingsService:
     # sync accessors for other modules (read the cached dict; refreshed on put): human_text_retention_days(), global_concurrency_cap(), slack(), installer()
 ```
 
-### 1.22 `migration.py` — `MigrationService`
+### 1.22 `migration.py` — retired
 
-```python
-MIGRATION_ID = "aidlc-console-v1"
-@dataclass(frozen=True, slots=True)
-class MigrationRowPlan: legacy_id: str; path: str; label: str; added_at: str | None; resolution: str; identity: str | None; error: str | None
-    # resolution: migrate | unavailable | duplicate_of:<legacy_id> | already_registered:<repo_id>
-@dataclass(frozen=True, slots=True)
-class MigrationPreview:
-    applicable: bool; reason: str | None          # not_found | already_applied | malformed
-    source_path: str; source_sha256: str | None; rows_in: int; rows: tuple[MigrationRowPlan, ...]; rows_out: int
-    console_installed: bool; console_enabled: bool; already_applied: bool
-@dataclass(frozen=True, slots=True)
-class MigrationResult:
-    migration_id: str; applied_at: str; status: str    # applied | failed | rolled_back
-    backup_path: str; summary: dict                     # {rows_in, rows_out, repo_ids, unavailable, duplicates, already_registered}
-    next_steps: tuple[str, ...]                          # ("disable_console", "uninstall_console_keep_data")
-
-class MigrationService:
-    def __init__(self, ctx, storage, registry, clock) -> None
-    def source_path(self) -> Path                        # ctx.data_dir.parent.parent / "aidlc-console" / "data" / "kv" / "repos.json"
-    def console_state(self) -> tuple[bool, bool]         # (installed, enabled) from ctx.data_dir.parent.parent / "aidlc-console" / "installed.json"
-    def preview(self) -> MigrationPreview                # sync, read-only
-    def apply(self) -> MigrationResult
-        # sync; refuse when already applied (migration_already_applied) or not applicable; copy source to
-        # ctx.data_dir/"migration"/f"aidlc-console-repos.{ts}.json"; one SQLite transaction: insert repos rows (legacy_console_id set,
-        # unavailable rows with availability from check), validate rows_out == len(unique identities) else ROLLBACK → failed; insert migrations row
-    def status(self) -> dict                             # {"applied": bool, "result": MigrationResult|null, "preview_available": bool, "console": {"installed","enabled"}}
-```
-
-MigrationService must NOT copy `.app_secret`, read anything under a registered repo, or call host install/disable
-APIs (the UI hands the user to `/apps/detail/aidlc-console`; Appendix A C12).
+Removed in 1.1.1 with the prototype migration (see the 2026-10-03 amendment).
 
 ### 1.23 `services.py` — `Services`
 
@@ -2973,7 +2952,7 @@ Notation below: `→ 200 {…}` success body; `✗ code` = error codes the route
 
 `GET /health` → 200
 ```json
-{"app": "aidlc-studio", "version": "1.1.0", "bundled_engine_version": "2.10.0", "min_kirocrew_version": "0.3.0",
+{"app": "aidlc-studio", "version": "1.1.1", "bundled_engine_version": "2.10.0", "min_kirocrew_version": "0.3.0",
  "boot_id": "…16 hex…",                                       // Services.boot_id; values above are examples — they come from constants/manifest
  "host_version": "0.5.0-insider.9" | null, "started_at": iso|null, "status": "healthy"|"degraded"|"error",
  "issues": [str],
@@ -3188,7 +3167,7 @@ A `plan_draft` is never requested through this route (it has no card; see §2.3 
 draft carries `action_id: "plan:<repo_id>"`, `neutrality: null` and an extra `plan_proposal` key (§1.18a); a card draft's
 wire shape is unchanged and never carries that key.
 
-### 2.8 Settings, calibration, migration (`handlers/settings.py`)
+### 2.8 Settings and calibration (`handlers/settings.py`)
 
 | Route | Body | Response | Errors |
 |---|---|---|---|
@@ -3196,9 +3175,6 @@ wire shape is unchanged and never carries that key.
 | `PUT /settings` [owner] | partial `Settings.values` | same as GET | `bad_body` (details.key/reason), `machine_lane_unavailable` |
 | `POST /calibration/clear` [owner] | `{"confirm": true}` | `{"ok": true, "removed": int}` | `invalid_decision` |
 | `GET /calibration` | — | `{"cohorts": [{"scope","depth","stage_class","samples"}], "total": int, "min_samples": 10}` | |
-| `GET /migration/status` | — | `{"applied": bool, "result": MigrationResult|null, "preview_available": bool, "console": {"installed": bool, "enabled": bool}}` | |
-| `POST /migration/preview` [owner] | `{}` | `{"preview": MigrationPreview}` | |
-| `POST /migration/apply` [owner] | `{"confirm": true, "source_sha256": str}` | `{"ok": true, "result": MigrationResult}` | `migration_not_applicable`, `migration_already_applied`, `bad_body` (sha mismatch → preview changed) |
 
 ### 2.9 Slack correlation (`handlers/slack.py`)
 
@@ -3216,7 +3192,6 @@ opens a Slack deep link (review R09; Appendix A C24). ✗ `action_not_found`.
 GET  /health                                   GET  /payload                        GET  /leases
 GET  /diagnostics                              GET  /settings                       PUT  /settings
 GET  /calibration                              POST /calibration/clear
-GET  /migration/status                         POST /migration/preview              POST /migration/apply
 GET  /events                                   GET  /events/poll                    GET  /activity
 GET  /actions                                  GET  /actions/{action_id}
 POST /actions/{action_id}/submit               POST /actions/{action_id}/delivery   POST /actions/{action_id}/retry
@@ -3926,7 +3901,6 @@ Synthetic variants are built in `conftest.py` from the real files with the `fixt
 | `tests/test_notifications.py` | dedupe; mute; `slack_quick_action_eligible` always `(False, "host_seam_unavailable")`; blocks contain deep link and no artifact body and **no** `[OPTIONS:` trailer; no `slack-link`/`link_slack` call ever made (fake host records them); single breaker notification |
 | `tests/test_events.py` | publish → ring + subscriber + ctx.events name mapping (+PermissionError swallowed); SSE frames golden (`id/event/data`), cursor replay, reset, heartbeat; `/events/poll` |
 | `tests/test_settings.py` | defaults; deep-merge; validation errors; night_window.enabled → 409; capabilities; `advisor.auto_draft_repo_ids` accepts a repo id list and rejects the same shapes `slack.muted_repo_ids` rejects |
-| `tests/test_migration.py` | preview from a fake `aidlc-console/data/kv/repos.json` (case-alias rows collapse; unavailable row kept); apply once; backup written; already_applied; never reads `.app_secret` |
 | `tests/test_handlers_auth.py` | every route in §2.10 registered exactly once with the expected method; every handler has `__kirocrew_authenticated__`; every POST/PUT/DELETE has `__kirocrew_owner_only__` (incl. `/slack/actions/callback`; an `X-Internal-Secret` header alone → 401); anon → 401, non-owner → 403 owner_required, app token → 403 app_token_forbidden on each mutation; reads accept app token; unknown code never leaks (500 body has `code: internal_error`); `ROUTE_ORDER` literal with `plan/advise` before `{intent}` |
 | `tests/test_handlers_repos.py`, `test_handlers_intents.py`, `test_handlers_actions.py`, `test_handlers_misc.py` | per-route request/response shape checks against §2 (golden JSON keys), error codes per table; `test_handlers_repos.py` also: the `install` block carries `own_engine_version`, and for a repository whose only harness is foreign it is null with `upgrade_available` False and `newer_installed` False while `POST …/install/preview` is **not** refused `already_installed` and `POST …/upgrade/preview` is refused `not_installed` (A26); `test_handlers_intents.py` for `plan/advise`: needs an objective (400 `bad_body`, `details.missing == ["objective"]`), answers 202 with a plan draft and creates nothing (no intent dir, empty denied log) while the stored `plan_current.scope`, and the package's `plan.current.scope`, `plan.context` and `plan.project_type`, are the body's, and stores `auto` False with an `advisor.requested` row even when the body sends `"auto": true` |
 | `tests/test_e2e_gate.py` | full vertical slice with fakes: add repo → intent with `state-gate-open` → card derived → submit approve (stale/fresh) → UI-side delivery report → audit variant appended → reconciler resolves `StateChanged` → card leaves the queue → activity + events recorded |

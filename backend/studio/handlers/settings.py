@@ -1,15 +1,13 @@
-"""Settings, calibration history and the one-time prototype migration (§2.8).
+"""Settings and calibration history (§2.8).
 
-Three groups of routes that share one property: each mutation is a *policy* change, never a decision
-that reaches AI-DLC. So the owner gate is the whole authorisation story here, and every refusal comes
-from the module that owns the invariant (``SettingsService`` for locked capabilities,
-``MigrationService`` for a registry that already moved) rather than from a check written twice.
+Every mutation here is a *policy* change, never a decision that reaches AI-DLC. So the owner gate is
+the whole authorisation story, and every refusal comes from the module that owns the invariant
+(``SettingsService`` for locked capabilities) rather than from a check written twice.
 """
 
 from __future__ import annotations
 
 import asyncio
-import functools
 from typing import Any
 
 from aiohttp import web
@@ -92,43 +90,6 @@ async def clear_calibration(services: Any, request: web.Request) -> web.Response
     return json_ok({"ok": True, "removed": removed})
 
 
-async def migration_status(services: Any, request: web.Request) -> web.Response:
-    """``GET /migration/status`` — whether the prototype registry has been taken over."""
-    return json_ok(await asyncio.to_thread(services.migration.status))
-
-
-async def migration_preview(services: Any, request: web.Request) -> web.Response:
-    """``POST /migration/preview`` — what would move, writing nothing.
-
-    A POST rather than a GET even though it changes nothing: it stats every registered path in the
-    prototype's registry, which is real filesystem work on paths the user has not vouched for, and the
-    owner gate is what keeps that behind an explicit action.
-    """
-    preview = await asyncio.to_thread(services.migration.preview)
-    return json_ok({"preview": preview.to_json()})
-
-
-async def migration_apply(services: Any, request: web.Request) -> web.Response:
-    """``POST /migration/apply`` — migrate once, against the digest the user was shown.
-
-    The digest is the whole safety argument: it makes "the preview the user confirmed" and "the bytes
-    that get migrated" the same read, so a registry edited in between is refused rather than silently
-    migrated.
-    """
-    body = await read_json(request, required=("source_sha256",))
-    if body.get("confirm") is not True:
-        raise StudioError(
-            "invalid_decision",
-            "applying the migration requires confirm: true",
-            details={"reason": "confirm_required"},
-        )
-    result = await asyncio.to_thread(
-        functools.partial(services.migration.apply, expect_sha256=str(body["source_sha256"]))
-    )
-    await services.events.publish("migration.updated", result.to_json())
-    return json_ok({"ok": True, "result": result.to_json()})
-
-
 def ROUTES(services: Any) -> list[Any]:
     return [
         route("GET", "/settings", get_settings, services=services),
@@ -138,7 +99,4 @@ def ROUTES(services: Any) -> list[Any]:
         route("POST", "/tools/bun/probe", reprobe_bun, owner=True, services=services),
         route("GET", "/calibration", get_calibration, services=services),
         route("POST", "/calibration/clear", clear_calibration, owner=True, services=services),
-        route("GET", "/migration/status", migration_status, services=services),
-        route("POST", "/migration/preview", migration_preview, owner=True, services=services),
-        route("POST", "/migration/apply", migration_apply, owner=True, services=services),
     ]

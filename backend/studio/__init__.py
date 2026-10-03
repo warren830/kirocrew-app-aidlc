@@ -20,7 +20,7 @@ from . import consistency, repo_registry            # judgements over what the r
 from . import activity, events, leases, projection, settings  # the read model and Studio's own records
 from . import sessions                                          # the host bridge (read-mostly)
 from . import actions, notifications, reconciler                 # the action lanes and their delivery
-from . import advisor, estimates, installer, migration, plan      # the operations built on top
+from . import advisor, estimates, installer, plan                 # the operations built on top
 from . import services                                            # the object graph and its lifecycle
 from . import handlers                                            # the HTTP surface (all_routes)
 
@@ -39,7 +39,6 @@ __all__ = [
     "handlers",
     "installer",
     "leases",
-    "migration",
     "notifications",
     "plan",
     "projection",

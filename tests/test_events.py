@@ -48,7 +48,6 @@ CONTRACT_EVENT_TYPES = (
     "advisor.updated",
     "settings.updated",
     "health.updated",
-    "migration.updated",
     "reset",
 )
 
@@ -214,7 +213,7 @@ async def settle(times: int = 3) -> None:
 
 def test_event_types_are_exactly_the_contract_list(E):
     assert E.EVENT_TYPES == CONTRACT_EVENT_TYPES
-    # `reset` is publishable (a migration may tell every client to start over); `hello` is not an
+    # `reset` is publishable (a producer may tell every client to start over); `hello` is not an
     # event at all, only a per-connection greeting.
     assert E.EVENT_RESET in E.EVENT_TYPES
     assert E.EVENT_HELLO not in E.EVENT_TYPES
@@ -234,7 +233,6 @@ def test_host_event_mapping_uses_only_declared_names(E, C, manifest):
         "advisor.updated": None,
         "settings.updated": None,
         "health.updated": None,
-        "migration.updated": None,
         "reset": None,
     }
     declared = set(manifest["permissions"]["events"])
@@ -341,7 +339,6 @@ async def test_studio_internal_events_are_not_mirrored(log, fake_ctx):
                                             "intent_key": F.PAYLOAD_GATE_OPEN})
     await log.publish("settings.updated", {"keys": ["density"]})
     await log.publish("health.updated", {"status": "degraded", "issues": ["payload_degraded"]})
-    await log.publish("migration.updated", {"status": "applied"})
     await log.publish("advisor.updated", {"draft_id": "d_0000000000000001", "action_id": "a_0000000000000001",
                                           "status": "ready"})
     await log.publish("reset", {"oldest_seq": 1, "newest_seq": 6})

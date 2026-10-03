@@ -1,4 +1,4 @@
-"""Health, payload, leases, diagnostics, settings, calibration, migration, events, activity, advisor
+"""Health, payload, leases, diagnostics, settings, calibration, events, activity, advisor
 and the Slack correlation hint (§2.1, §2.5–§2.9).
 
 Two properties are worth more than the shapes here.
@@ -383,46 +383,6 @@ def test_clearing_calibration_needs_an_explicit_confirmation(sv, routes, fake_ho
     request = CT.owner_request("POST", "/calibration/clear", host=fake_host, body={"confirm": True})
     status, body = call(sv, routes, "POST", "/calibration/clear", request)
     assert status == 200 and body == {"ok": True, "removed": 0}
-
-
-# --------------------------------------------------------------------------- #
-# migration
-# --------------------------------------------------------------------------- #
-
-
-def test_migration_status_reports_no_prototype_to_migrate(sv, routes, fake_host):
-    status, body = call(sv, routes, "GET", "/migration/status",
-                        CT.owner_request("GET", "/migration/status", host=fake_host))
-    assert status == 200
-    assert body["applied"] is False
-    assert body["result"] is None
-    assert body["preview_available"] is False
-    assert body["console"] == {"installed": False, "enabled": False}
-
-
-def test_migration_preview_reports_why_it_is_not_applicable(sv, routes, fake_host):
-    request = CT.owner_request("POST", "/migration/preview", host=fake_host, body={})
-    status, body = call(sv, routes, "POST", "/migration/preview", request)
-    assert status == 200
-    assert body["preview"]["applicable"] is False
-    assert body["preview"]["reason"]
-
-
-def test_migration_apply_refuses_without_a_confirmation_and_a_digest(sv, routes, fake_host):
-    request = CT.owner_request("POST", "/migration/apply", host=fake_host, body={"confirm": True})
-    status, body = call(sv, routes, "POST", "/migration/apply", request)
-    assert status == 400 and body["code"] == "bad_body"
-    assert body["details"]["missing"] == ["source_sha256"]
-
-    request = CT.owner_request("POST", "/migration/apply", host=fake_host,
-                               body={"source_sha256": "0" * 64})
-    status, body = call(sv, routes, "POST", "/migration/apply", request)
-    assert status == 400 and body["code"] == "invalid_decision"
-
-    request = CT.owner_request("POST", "/migration/apply", host=fake_host,
-                               body={"confirm": True, "source_sha256": "0" * 64})
-    status, body = call(sv, routes, "POST", "/migration/apply", request)
-    assert status == 409 and body["code"] == "migration_not_applicable"
 
 
 # --------------------------------------------------------------------------- #

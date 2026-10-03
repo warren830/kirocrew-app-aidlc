@@ -146,7 +146,3 @@ export function useI18n(): I18n {
   return value ?? makeI18n('en-US')
 }
 
-/** Convenience for the common case. */
-export function useT(): I18n['t'] {
-  return useI18n().t
-}

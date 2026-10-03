@@ -124,8 +124,6 @@
   "errors.same_version_installed": "该仓库已是内置的 AI-DLC 版本。",
   "errors.state_version_migration_unconfirmed": "该仓库的 AI-DLC 状态为旧版本，升级尚未被证明安全。",
   "errors.payload_degraded": "Studio 内置的 AI-DLC 载荷校验失败。",
-  "errors.migration_not_applicable": "没有需要迁移的内容。",
-  "errors.migration_already_applied": "迁移已执行过。",
   "errors.session_unbound": "该意图尚未绑定会话。",
   "errors.slot_mismatch": "该会话属于其他仓库或代理。",
   "errors.slot_busy": "会话正忙。",

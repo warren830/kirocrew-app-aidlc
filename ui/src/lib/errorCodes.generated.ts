@@ -41,8 +41,6 @@ export const ERROR_CODES = {
   lease_lost: 409,
   legacy_layout: 409,
   machine_lane_unavailable: 409,
-  migration_already_applied: 409,
-  migration_not_applicable: 409,
   newer_installed: 409,
   not_delivered_unproven: 409,
   not_installed: 409,

@@ -226,7 +226,6 @@ def test_an_internal_secret_header_alone_is_still_401(sv, routes, fake_host):
 @pytest.mark.parametrize("method,path", [
     ("PUT", "/settings"),
     ("POST", "/calibration/clear"),
-    ("POST", "/migration/apply"),
     ("POST", "/actions/a_0000000000000001/submit"),
     ("POST", "/actions/a_0000000000000001/delivery"),
     ("POST", "/advisor/draft"),
@@ -251,7 +250,6 @@ def test_a_non_owner_gets_403_owner_required_on_every_mutation(sv, routes, fake_
 @pytest.mark.parametrize("method,path", [
     ("PUT", "/settings"),
     ("POST", "/calibration/clear"),
-    ("POST", "/migration/preview"),
     ("POST", "/actions/a_0000000000000001/retry"),
     ("POST", "/advisor/draft"),
     ("POST", "/slack/actions/callback"),

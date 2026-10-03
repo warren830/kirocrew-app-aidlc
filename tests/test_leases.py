@@ -803,7 +803,7 @@ def test_a_reclaim_refuses_when_the_action_dispatched_between_the_proof_and_the_
 
 def test_the_action_guard_covers_absence_and_every_granted_reason(studio, store, sched, bridge, clock, L):
     """`action_absent` demands the row stay absent, and no granted reason may go unguarded."""
-    record = repo(studio, store)
+    repo(studio, store)
     store.lease_acquire("execution", IDENTITY, {"repo_id": "r_1", "session_key": "dashboard:slot-1",
                                                 "action_id": "a_gone"})
     idle_slot(bridge)

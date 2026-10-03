@@ -44,7 +44,6 @@ from .events import EventLog
 from .git_observer import GitObserver
 from .installer import Installer, PayloadManifest, PayloadStatus
 from .leases import RepoScheduler
-from .migration import MigrationService
 from .plan import PlanService
 from .projection import Projection
 from .reconciler import Reconciler
@@ -136,7 +135,6 @@ class Services:
     advisor: AdvisorBroker
     notifications: Any
     events: EventLog
-    migration: MigrationService
     payload: PayloadManifest
     boot_id: str
     scan_pool: concurrent.futures.ThreadPoolExecutor
@@ -285,7 +283,6 @@ class Services:
             scan_pool=scan_pool,
             plan=plan,
         )
-        migration = MigrationService(ctx, storage, repos, clock, ids)
 
         services = cls(
             ctx=ctx,
@@ -312,7 +309,6 @@ class Services:
             advisor=advisor,
             notifications=notifications,
             events=events,
-            migration=migration,
             payload=manifest,
             boot_id=boot_id,
             scan_pool=scan_pool,

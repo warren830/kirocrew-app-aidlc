@@ -31,7 +31,7 @@ from typing import Any, Mapping, Protocol
 
 APP_NAME = "aidlc-studio"
 #: Must equal ``app.json`` ``version`` (pinned by tests/test_manifest.py).
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.1"
 #: Must equal ``app.json`` ``minKiroCrewVersion``. 0.3.0 is enough because Studio registers its own
 #: module namespace (see ``backend/routes.py``) instead of relying on the 0.5.0 loader, and every
 #: other host primitive it uses exists in 0.3.0.
@@ -411,31 +411,6 @@ ALLOWED_TRANSITIONS: dict[str, tuple[str, ...]] = {
     "Cancelled": (),
 }
 
-#: Legal intent operational transitions (PRD §11.2). Studio's projection is derived from disk, so this
-#: table is used to VALIDATE a derived change, never to drive one.
-INTENT_TRANSITIONS: dict[str, tuple[str, ...]] = {
-    "Idle": ("Queued", "Archived"),
-    "Queued": ("Running", "Paused"),
-    "Running": (
-        "WaitingForYou",
-        "Paused",
-        "Parked",
-        "Interrupted",
-        "RetryEligible",
-        "Failed",
-        "Completed",
-    ),
-    "WaitingForYou": ("Queued", "Paused", "Parked"),
-    "Paused": ("Queued", "Parked", "Archived"),
-    "Parked": ("Queued", "Archived"),
-    "RetryEligible": ("Queued", "CircuitOpen", "Paused"),
-    "Interrupted": ("ReconciliationRequired",),
-    "ReconciliationRequired": ("Queued", "Paused", "Failed"),
-    "CircuitOpen": ("RetryEligible", "Paused"),
-    "Completed": ("Archived",),
-    "Failed": ("Archived",),
-    "Archived": ("Completed", "Paused", "Parked", "Failed"),
-}
 
 # --------------------------------------------------------------------------- #
 # AI-DLC grammar
@@ -468,7 +443,6 @@ QUESTION_HEADING_RE = re.compile(r"^## Q(\d+)[.:]?\s*(.*)$", re.MULTILINE)
 #: ``- A. Some option`` / ``A. Some option`` / ``- X. Other (please specify)``.
 OPTION_LINE_RE = re.compile(r"^(?:- )?([A-Z])\.[ \t]+(.*)$", re.MULTILINE)
 OTHER_OPTION_LETTER = "X"
-QUESTION_MODE_RE = re.compile(r"^\*\*Mode:\*\*\s*(.+?)\s*$", re.MULTILINE)
 #: Bullet lines immediately after an ``[Answer]:`` tag continue that answer (real files do this).
 ANSWER_CONTINUATION_RE = re.compile(r"^- (.*)$")
 #: The three checkpoint headings (§1.1). Named because the reader maps a heading to a checkpoint kind and
@@ -606,29 +580,6 @@ NOISE_EVENTS = (
 HUMAN_PRESENCE_EVENT = "HUMAN_TURN"
 ERROR_EVENT = "ERROR_LOGGED"
 
-#: Runtime files any Kiro session over the repo touches. Excluded from every "nothing changed" claim
-#: (FR-ADV-007) because their movement says nothing about the workflow.
-VOLATILE_RUNTIME_PATHS = (
-    "aidlc/.aidlc-turn-counter",
-    "aidlc/.aidlc-readonly-latch",
-    "aidlc/.aidlc-human-turn",
-    "aidlc/.aidlc-sessions",
-    "aidlc/.aidlc-clone-id",
-    # 2.7.1's per-turn unit/claim bookkeeping. Listed in the payload's own ``.gitignore``, which is the
-    # engine saying the same thing: their movement is not the workflow's.
-    "aidlc/.aidlc-unit-scope.json",
-    "aidlc/.aidlc-unit-parked",
-    "aidlc/.aidlc-unit-participant",
-    "aidlc/.aidlc-claim-generations.json",
-    "aidlc/.aidlc-claim-registry.json",
-    "aidlc/.aidlc-unit-releases",
-    "aidlc/.aidlc-unit-merges",
-    ".aidlc-hooks-health",
-    ".aidlc-stop-hook",
-    ".aidlc-engine-touch",
-    ".aidlc-sensors",
-    "runtime-graph.json",
-)
 
 # --------------------------------------------------------------------------- #
 # engine invocation allowlist
@@ -853,11 +804,6 @@ DB_FILENAME = "studio.sqlite3"
 STAGING_DIRNAME = "staging"
 BACKUP_DIRNAME = "backups"
 FAILED_DIRNAME = "failed"
-MIGRATION_BACKUP_DIRNAME = "migration-backup"
-
-#: The prototype this app replaces. Its registry is migrated once, then its routes are retired.
-LEGACY_APP_NAME = "aidlc-console"
-LEGACY_STORAGE_KEY = "repos"
 
 # --------------------------------------------------------------------------- #
 # SQLite (storage.py)

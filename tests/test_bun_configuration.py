@@ -1,9 +1,5 @@
 """Application-level bun selection must persist and update every consumer without a restart."""
 
-import asyncio
-import os
-from pathlib import Path
-
 import pytest
 
 import conftest as CT

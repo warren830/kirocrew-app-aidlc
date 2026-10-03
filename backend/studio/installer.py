@@ -186,10 +186,6 @@ UNINSTALL_JOURNAL_FILENAME = "uninstall-journal.json"
 ROLLBACK_JOURNAL_FILENAME = "rollback-journal.json"
 ROLLBACK_ACTIONS = ("restore_version", "remove", "preserve", "identical", "rollback_conflict")
 UNINSTALL_ACTIONS = ("remove", "remove_fragment", "preserve", "already_absent", "uninstall_conflict")
-UNINSTALL_STEPS = (
-    "acquire_admin_lease", "backup", "remove_files", "remove_fragments",
-    "post_uninstall_validate", "commit_uninstall", "release_lease",
-)
 _STATUS_AFTER.update({
     "remove_files": "written",
     "remove_fragments": "merged",
@@ -2627,7 +2623,7 @@ class Installer:
                     payload_sha256=f["before"], receipt_sha256=f["before"], size=size,
                     fragment_key=None, diff=None, blocking=action == "recovery_conflict", reason=reason,
                 ))
-        except (StudioError, OSError, ValueError, TypeError) as exc:
+        except (StudioError, OSError, ValueError, TypeError):
             entries = [PreviewEntry(
                 path=ENGINE_DIR, ownership="framework", action="recovery_conflict",
                 live_sha256=None, payload_sha256=None, receipt_sha256=None, size=None,

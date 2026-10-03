@@ -24,7 +24,7 @@
  */
 
 import {
-  createContext, useCallback, useContext, useEffect, useMemo, useState, type ComponentType, type ReactNode,
+  useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode,
 } from 'react'
 import { ChatEmbed } from '@kirocrew/app-sdk'
 
@@ -251,13 +251,6 @@ function newer(a: ActionCard | null, b: ActionCard | null): ActionCard | null {
   return a.updated_at > b.updated_at ? a : b
 }
 
-const DraftContext = createContext<{ draft: ActionDraft; setDraft: (patch: Partial<ActionDraft>) => void } | null>(null)
-
-/** For a template that renders its own inputs deep inside a subtree. */
-export function useActionDraft() {
-  return useContext(DraftContext)
-}
-
 export interface DetailShellProps {
   /** The selected action id, from the route. Empty when nothing is selected. */
   actionId: string
@@ -330,7 +323,6 @@ export function DetailShell({
     [override, actionId, currentDetail, queueCard],
   )
 
-  const draftValue = useMemo(() => ({ draft, setDraft }), [draft, setDraft])
 
   // A settled send is the end of this draft's life: keeping it would re-populate the box the next time
   // the card appears, and offer to send text the conductor already has.
@@ -557,25 +549,7 @@ export function DetailShell({
                 </button>
               </section>
             ) : Template ? (
-              <DraftContext.Provider value={draftValue}>
-                <Template
-                  card={card}
-                  detail={currentDetail}
-                  draft={draft}
-                  setDraft={setDraft}
-                  refreshing={refreshing}
-                  api={api}
-                  route={route}
-                  go={go}
-                  reload={detail.refresh}
-                />
-              </DraftContext.Provider>
-            ) : (
-              <MissingBody kind={card.type} />
-            )
-          ) : Panel ? (
-            <DraftContext.Provider value={draftValue}>
-              <Panel
+              <Template
                 card={card}
                 detail={currentDetail}
                 draft={draft}
@@ -586,7 +560,21 @@ export function DetailShell({
                 go={go}
                 reload={detail.refresh}
               />
-            </DraftContext.Provider>
+            ) : (
+              <MissingBody kind={card.type} />
+            )
+          ) : Panel ? (
+            <Panel
+              card={card}
+              detail={currentDetail}
+              draft={draft}
+              setDraft={setDraft}
+              refreshing={refreshing}
+              api={api}
+              route={route}
+              go={go}
+              reload={detail.refresh}
+            />
           ) : activeTab === 'artifacts' ? (
             <ArtifactsTab
               repoId={card.repo.repo_id}
