@@ -1,13 +1,8 @@
-"""Reviewed cleanup of terminal installer data, never of repository files.
+"""Reviewed cleanup of terminal installer data (``backups/<txid>``, ``failed/<txid>``), never repository files.
 
-Only generated backups/<txid> and failed/<txid> directories belonging to known transactions are
-candidates. A digest binds selection, database protections and the complete bounded filesystem
-inventory (including inode/ctime). Directory descriptors and O_NOFOLLOW keep deletion anchored.
-
-Before deleting, a committed preferences record retains the reviewed entries and top-level JSON
-evidence. Installer rows/receipts are never changed. A crash or partial failure leaves the remaining
-tree in place; a fresh preview is required to authorize its new shape. There is no background sweep.
-"""
+A digest binds the selection, database protections and the bounded inventory (inode/ctime); directory fds and
+O_NOFOLLOW anchor deletion; a committed record keeps reviewed entries and top-level JSON evidence before any
+unlink, and a crash or partial failure needs a fresh preview. Installer rows are never changed; no sweep runs."""
 
 from __future__ import annotations
 
@@ -37,6 +32,13 @@ MAX_METADATA_BYTES = 1 << 20
 MAX_EVIDENCE_BYTES = 4 << 20
 MAX_HISTORY_BYTES = 8 << 20
 _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+_CONSEQUENCES = {
+    "older_restore_point": "Deleting this backup discards an older restore point. "
+                           "The current rollback backup and receipt history are retained.",
+    "terminal_backup": "Deletes backup files for a finished transaction. Transaction and receipt records are retained.",
+    "terminal_failure_evidence": "Deletes archived failure files. Transaction records and top-level "
+                                 "JSON evidence are retained in app data.",
+}
 
 
 def _digest(value: Any) -> str:
@@ -44,8 +46,8 @@ def _digest(value: Any) -> str:
 
 
 def _stamp(value: os.stat_result) -> tuple[int, ...]:
-    return (value.st_dev, value.st_ino, value.st_mode, value.st_nlink,
-            value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+    return (value.st_dev, value.st_ino, value.st_mode, value.st_nlink, value.st_size, value.st_mtime_ns,
+            value.st_ctime_ns)
 
 
 def _identity(value: os.stat_result) -> tuple[int, ...]:
@@ -54,8 +56,7 @@ def _identity(value: os.stat_result) -> tuple[int, ...]:
 
 def selection(value: Any) -> list[str]:
     if not isinstance(value, list) or len(value) > MAX_SELECTION:
-        raise StudioError("bad_body", "entry_ids must be a bounded list",
-                          details={"limit": MAX_SELECTION})
+        raise StudioError("bad_body", "entry_ids must be a bounded list", details={"limit": MAX_SELECTION})
     if any(not isinstance(item, str) or not ENTRY_RE.fullmatch(item) for item in value):
         raise StudioError("bad_body", "entry_ids must be generated transaction/category identifiers")
     if len(set(value)) != len(value):
@@ -88,24 +89,17 @@ class MaintenanceService:
             raise StudioError("repo_not_found", "repository is no longer registered")
         if row.get("resolved_identity") != repo.resolved_identity or not repo.resolved_identity:
             raise StudioError("identity_unprovable", "repository identity changed")
-        transactions = self.storage.select(
-            "install_transactions", {"repo_id": repo.repo_id},
-            order_by="transaction_id ASC", limit=MAX_HISTORY + 1,
-        )
-        receipts = self.storage.select(
-            "install_receipts", {"repo_id": repo.repo_id},
-            order_by="receipt_id ASC", limit=MAX_HISTORY + 1,
-        )
+        transactions = self.storage.select("install_transactions", {"repo_id": repo.repo_id},
+                                           order_by="transaction_id ASC", limit=MAX_HISTORY + 1)
+        receipts = self.storage.select("install_receipts", {"repo_id": repo.repo_id},
+                                       order_by="receipt_id ASC", limit=MAX_HISTORY + 1)
         if len(transactions) > MAX_HISTORY or len(receipts) > MAX_HISTORY:
             raise StudioError("too_large", "maintenance history exceeds the bounded scan",
                               details={"reason": "history_limit", "limit": MAX_HISTORY})
         if any(not TX_RE.fullmatch(str(tx["transaction_id"])) for tx in transactions):
             raise StudioError("state_inconsistent", "invalid transaction identifier in history")
-        meta = {
-            "repo": {key: row.get(key) for key in
-                     ("id", "resolved_identity", "receipt_version", "install_status")},
-            "transactions": transactions, "receipts": receipts,
-        }
+        meta = {"repo": {key: row.get(key) for key in ("id", "resolved_identity", "receipt_version", "install_status")},
+                "transactions": transactions, "receipts": receipts}
         if len(json.dumps(meta).encode()) > MAX_HISTORY_BYTES:
             raise StudioError("too_large", "maintenance history metadata exceeds the byte limit")
         return meta
@@ -118,8 +112,7 @@ class MaintenanceService:
         current = meta["repo"].get("receipt_version")
         if current:
             roots.append((current, "current_receipt"))
-        roots.extend((r["receipt_id"], "current_receipt")
-                     for r in receipts.values() if r["status"] == "current")
+        roots.extend((r["receipt_id"], "current_receipt") for r in receipts.values() if r["status"] == "current")
         for tx in meta["transactions"]:
             txid = tx["transaction_id"]
             if tx["status"] == "recovery_required":
@@ -134,10 +127,8 @@ class MaintenanceService:
                 roots.append((tx["prior_receipt_id"], "receipt_restoration"))
         visited = set()
         missing = False
-        # Installer._rollback_material reads backups/<current.transaction_id>, not the target
-        # receipt's transaction backup. Recovery restores its own transaction's journal/backup.
-        # Preserve the immediate receipt an unsettled transaction may make current again, but do
-        # not recurse through older receipts: those are optional historical restore points.
+        # Rollback reads backups/<current.transaction_id> and recovery its own journal: keep the receipt an
+        # unsettled transaction may make current again, but not older ancestors (optional restore points).
         for rid, reason in roots:
             if rid in visited:
                 continue
@@ -269,8 +260,7 @@ class MaintenanceService:
                 stored = tx.get("backup_dir" if category == "backups" else "failed_dir")
                 if stored and str(expected_path) != stored:
                     reason = reason or "path_mismatch"
-                tree: dict[str, Any] = {"nodes": {"": _stamp(st)}, "size_bytes": None,
-                                        "files": None, "evidence": {}}
+                tree: dict[str, Any] = {"nodes": {"": _stamp(st)}, "size_bytes": None, "files": None, "evidence": {}}
                 try:
                     self._guard_anchors(anchors, category)
                     tree = self._scan(fd, txid, budget)
@@ -281,31 +271,16 @@ class MaintenanceService:
                 protected = reason is not None
                 consequence = None
                 if not protected:
-                    if category == "backups" and txid in receipt_transactions:
-                        reason = "older_restore_point"
-                        consequence = (
-                            "Deleting this backup discards an older restore point. "
-                            "The current rollback backup and receipt history are retained."
-                        )
-                    elif category == "backups":
-                        reason = "terminal_backup"
-                        consequence = (
-                            "Deletes backup files for a finished transaction. "
-                            "Transaction and receipt records are retained."
-                        )
+                    if category == "backups":
+                        reason = "older_restore_point" if txid in receipt_transactions else "terminal_backup"
                     else:
                         reason = "terminal_failure_evidence"
-                        consequence = (
-                            "Deletes archived failure files. Transaction records and top-level "
-                            "JSON evidence are retained in app data."
-                        )
+                    consequence = _CONSEQUENCES[reason]
                 trees[eid] = tree
                 entries.append({
-                    "id": eid, "txid": txid, "category": category,
-                    "relative_path": f"{category}/{txid}", "status": tx["status"],
-                    "size_bytes": tree["size_bytes"], "files": tree["files"],
-                    "protected": protected, "reason": reason, "consequence": consequence,
-                    "selected": eid in selected,
+                    "id": eid, "txid": txid, "category": category, "relative_path": f"{category}/{txid}",
+                    "status": tx["status"], "size_bytes": tree["size_bytes"], "files": tree["files"],
+                    "protected": protected, "reason": reason, "consequence": consequence, "selected": eid in selected,
                 })
         known = {e["id"] for e in entries}
         if set(selected) - known:
@@ -319,20 +294,16 @@ class MaintenanceService:
             "can_cleanup": bool(selected) and not blocked, "blocked": blocked,
             "totals": {
                 "entries": len(entries), "eligible_entries": len(eligible),
-                "protected_entries": len(entries) - len(eligible),
-                "selected_entries": len(chosen),
+                "protected_entries": len(entries) - len(eligible), "selected_entries": len(chosen),
                 "eligible_bytes": sum(e["size_bytes"] or 0 for e in eligible),
                 "selected_bytes": sum(e["size_bytes"] or 0 for e in chosen),
                 "selected_files": sum(e["files"] or 0 for e in chosen),
                 "unknown_sizes": sum(e["size_bytes"] is None for e in entries),
             },
         }
-        plan["plan_digest"] = _digest({
-            "plan": plan, "metadata": meta,
-            "roots": {key: value[1] if key in CATEGORIES and value else value
-                      for key, value in anchors.items() if key != "root"},
-            "trees": trees,
-        })
+        roots = {key: value[1] if key in CATEGORIES and value else value for key, value in anchors.items()
+                 if key != "root"}
+        plan["plan_digest"] = _digest({"plan": plan, "metadata": meta, "roots": roots, "trees": trees})
         return {"public": plan, "metadata": meta, "trees": trees}
 
     async def preview(self, repo: Any, entry_ids: Any = None) -> dict[str, Any]:
@@ -380,7 +351,7 @@ class MaintenanceService:
                             raise _UnsafeTree("path_changed")
                         os.unlink(child, dir_fd=fd)
                 guard()
-                # Unexpected files are never enumerated for deletion. rmdir refuses a nonempty tree.
+                # Unexpected files are never enumerated for deletion; rmdir refuses a nonempty tree.
                 os.rmdir(name, dir_fd=pfd)
                 links.pop()
 
@@ -400,15 +371,12 @@ class MaintenanceService:
                             else "install_conflict")
                     raise StudioError(code, "protected installer evidence cannot be deleted",
                                       details={"reason": "protected_entries", "blocked": plan["blocked"]})
-                record = {
-                    "status": "prepared", "plan": plan, "at": self.services.clock.iso(),
-                    "evidence": {eid: reviewed["trees"][eid]["evidence"] for eid in selected},
-                }
-                # Commit this before any unlink. A crash cannot erase the transaction's JSON journal.
+                record = {"status": "prepared", "plan": plan, "at": self.services.clock.iso(),
+                          "evidence": {eid: reviewed["trees"][eid]["evidence"] for eid in selected}}
+                # Committed before any unlink, so a crash cannot erase the transaction's JSON journal.
                 self.storage.pref_set(key, record)
             with self.storage._txn():
-                # Installer can reserve/update rows before acquiring its lease. Keep metadata and
-                # deletion indivisible with the same nested transaction seam the installer uses.
+                # The installer may update rows before taking its lease: metadata and deletion stay indivisible.
                 current = self._plan(repo, selected, anchors)
                 if current["public"]["plan_digest"] != digest:
                     raise StudioError("install_conflict", "cleanup changed before deletion",
@@ -425,12 +393,9 @@ class MaintenanceService:
                         failures.append({"id": eid, "reason": str(exc) if isinstance(exc, _UnsafeTree)
                                          else "delete_failed", "errno": getattr(exc, "errno", None)})
                         break
-                result = {
-                    "ok": not failures, "plan_digest": digest, "deleted": deleted,
-                    "failures": failures,
-                    "remaining": [eid for eid in selected if eid not in deleted],
-                    "record_key": key, "requires_preview": bool(failures),
-                }
+                result = {"ok": not failures, "plan_digest": digest, "deleted": deleted, "failures": failures,
+                          "remaining": [eid for eid in selected if eid not in deleted],
+                          "record_key": key, "requires_preview": bool(failures)}
                 self.storage.pref_set(key, {**record, "status": "partial" if failures else "complete",
                                             "result": result})
                 return result
@@ -441,9 +406,8 @@ class MaintenanceService:
             raise StudioError("bad_body", "select entries and supply their exact preview plan_digest")
 
         async def work() -> dict[str, Any]:
-            grant = await self.services.scheduler.acquire_admin(
-                repo, operation_type="repo_metadata", transaction_id=None,
-            )
+            grant = await self.services.scheduler.acquire_admin(repo, operation_type="repo_metadata",
+                                                                transaction_id=None)
             try:
                 result = await asyncio.to_thread(self._cleanup_sync, repo, selected, plan_digest)
                 await self.services.events.publish("repo.updated", {"repo_id": repo.repo_id})
@@ -456,8 +420,7 @@ class MaintenanceService:
         try:
             return await asyncio.shield(task)
         except asyncio.CancelledError as cancelled:
-            # A second disconnect/shutdown cancellation must not cancel work's to_thread await
-            # and release the lease while its filesystem worker still runs.
+            # A second cancellation must not release the lease while the filesystem worker still runs.
             try:
                 while not task.done():
                     try:
