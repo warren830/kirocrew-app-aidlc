@@ -736,7 +736,6 @@ class RepoRegistry:
         #   present, else None — whatever else is on disk. Unreadable root: report
         #   rec.installed_engine_version if rec.engine_dir == C.STUDIO_HARNESS_DIR else None, which keeps that branch's
         #   "we cannot see it right now" honesty instead of claiming .kiro is absent (A26).
-    def touch_seen(self, repo_id: str) -> None
 ```
 
 `detect_install` reports **three different facts**, and this document keeps them apart because the code does (A26).

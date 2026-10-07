@@ -195,8 +195,10 @@ def test_read_model_matches_the_recorded_v1_outputs(scenario, sv, routes, fake_h
     recorded = {p.stem: json.loads(p.read_text()) for p in folder.glob("*.json")}
     current = {_file(name): view for name, view in views.items()}
     assert sorted(current) == sorted(recorded), "the set of views changed"
-    for name in sorted(current):
-        assert current[name] == recorded[name], f"{scenario}/{name} differs from the recorded v1 output"
+    # Every view is compared before failing: stopping at the first difference hides the rest, and a
+    # slimming step wants the whole blast radius in one run.
+    differing = [name for name in sorted(current) if current[name] != recorded[name]]
+    assert differing == [], f"{scenario}: {len(differing)} view(s) differ from the recorded v1 output: {differing}"
 
 
 def _file(name: str) -> str:
