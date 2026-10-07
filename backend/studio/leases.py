@@ -4,7 +4,9 @@ An execution lease *is* a dispatched action (stamped with ``lease_generation``) 
 ``Delivered``/``Processing``: the action leaving those statuses is the release, so nothing is heartbeaten
 or reclaimed. Admin operations, and the submit window before ``Delivering``, hold a per-repository
 ``flock`` that the kernel drops when the process dies. A force stop is in flight but takes no lease, and
-uncertain actions hold nothing: the submit-time slot checks keep a second turn out of a busy session.
+uncertain actions hold nothing. Every grant also requires every host session in the repository to be idle:
+the AI-DLC cursor is repository-wide, so a turn still running anywhere there (an uncertain delivery, or one
+the user started by hand) must not have the cursor switched or engine files rewritten under it.
 """
 
 from __future__ import annotations
@@ -114,7 +116,8 @@ class RepoScheduler:
         return await self._acquire("admin", repo, operation_type=operation_type, transaction_id=transaction_id)
 
     def require_host_idle(self, repo: "RepoRecord") -> None:
-        """Check external host turns after acquiring an admin lease and immediately before writing."""
+        """Refuse while any host session bound to this repository is (or may be) running a turn. Every grant
+        checks it; admin work re-checks it immediately before writing."""
         for view in self._host.slots_for_project(repo.canonical_path):
             reasons = self._reasons(view)
             if reasons is None or reasons:
@@ -168,6 +171,7 @@ class RepoScheduler:
                 live = self._live(await asyncio.to_thread(self._in_flight, fields.get("action_id")))
                 if identity in live:
                     raise _busy(live[identity])
+                self.require_host_idle(repo)
                 if kind == "execution":
                     self._assert_cap(identity, live)
                 now = self._clock.iso()

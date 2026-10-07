@@ -225,11 +225,36 @@ def test_the_action_leaving_flight_is_the_release(studio, store, sched, errors):
     ("Delivering", None),   # a force stop: in flight, but the host-control lane takes no lease
 ])
 def test_an_action_out_of_flight_holds_nothing(studio, store, sched, status, generation):
-    """Uncertain rows included: the submit-time slot checks keep a second turn out of a busy session."""
+    """Uncertain rows included: what keeps a second turn out is the host-idle check every grant makes."""
     record = repo(studio, store)
     action(store, status=status, lease_generation=generation)
     assert run(sched.list()) == []
     run(sched.release(turn(sched, record, action_id="a_2")))
+
+
+@pytest.mark.parametrize("kind", ["execution", "admin"])
+def test_a_turn_running_in_any_session_of_the_repository_refuses_every_grant(
+    studio, store, sched, bridge, errors, kind
+):
+    """An uncertain delivery holds no lease, yet its turn may still be running, maybe in another session.
+    The cursor is repository-wide, so no grant may switch it or rewrite engine files under that turn."""
+    record = repo(studio, store)
+    action(store, status="ReconciliationRequired", slot_key="slot-other")
+    bridge.views.append(View("slot-other", record.canonical_path, reasons=("running",)))
+
+    def grant():
+        if kind == "execution":
+            return turn(sched, record, action_id="a_2")
+        return run(sched.acquire_admin(record, operation_type="install", transaction_id="tx_1"))
+
+    with pytest.raises(errors.StudioError) as exc:
+        grant()
+    assert exc.value.code == "repo_busy"
+    assert exc.value.details == {"repo_id": "r_1", "slot_key": "slot-other"}
+    assert run(sched.list()) == []                 # the refusal gave the file lock back
+
+    bridge.views[0].reasons = ()
+    run(sched.release(grant()))
 
 
 def test_a_repository_shows_its_newest_in_flight_action(studio, store, sched):

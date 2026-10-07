@@ -19,6 +19,7 @@ from __future__ import annotations
 import ast
 import asyncio
 import atexit
+import logging
 import shutil
 import tempfile
 from pathlib import Path
@@ -58,7 +59,9 @@ def deps(studio, fake_ctx, fake_host, clock, ids, fake_bun, denied_log):
     activity = studio.activity.ActivityProjector(store, clock)
     events = studio.events.EventLog(store, fake_ctx.events, clock)
     settings = studio.settings.SettingsService(store, fake_host, clock)
-    scheduler = studio.leases.RepoScheduler(store, fake_host, settings, clock, activity)
+    host = studio.sessions.HostBridge(clock, logging.getLogger("test.plan"))
+    host.attach(fake_host)
+    scheduler = studio.leases.RepoScheduler(store, host, settings, clock, activity)
     engine = studio.engine.EngineRunner(bun_path=fake_bun, clock=clock, activity=activity)
     reader = studio.aidlc_reader.AidlcReader(clock)
     projection = studio.projection.Projection(reader, studio.consistency.ConsistencyEngine(), clock)
