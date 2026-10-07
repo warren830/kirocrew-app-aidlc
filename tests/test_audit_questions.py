@@ -586,6 +586,97 @@ def test_closed_sheet_never_resurrects_unproven_audit(closed_sheet_scene, monkey
     assert questions is None or questions.origin is None
 
 
+ASSUMPTION_SECTION = (
+    "## Assumption Confirmation\n\n- The demo covers the extra features [assumption]\n\n"
+    "A. Accept assumptions\nB. Convert to follow-up questions\n\n[Answer]: A. Accept assumptions\n"
+)
+ASSUMPTION_ANSWERED_AT = "2026-09-04T09:59:20Z"
+
+
+def assumption_answer(ts=ASSUMPTION_ANSWERED_AT, **fields):
+    return F.audit_block(
+        "QUESTION_ANSWERED", ts, **{"Stage": STAGE, "Details": "A. Accept assumptions", **fields},
+    )
+
+
+def install_assumption_sheet(scene, *, text=None, audit=None):
+    path = _record_dir(scene.root) / QUESTIONS_REL
+    path.write_text(text if text is not None else ANSWERED_H3_QUESTIONS + ASSUMPTION_SECTION)
+    _shard(scene.root).write_text(
+        audit if audit is not None
+        else start_audit() + closed_sheet_receipt(scene) + assumption_answer() + decision()
+    )
+    return path
+
+
+def test_summary_receipt_binds_the_sheet_before_a_later_assumption_section(closed_sheet_scene):
+    """AI-DLC 2.10 appends Assumption Confirmation after hashing the confirmed summary (A37)."""
+    scene = closed_sheet_scene
+    install_assumption_sheet(scene)
+    questions = closed_sheet_questions(scene)
+    assert questions.origin["kind"] == "audit"
+    assert questions.questions[0].prompt == PROMPT
+    assert [r.event for r in questions.closed_file_receipts] == [
+        "SUMMARY_CONFIRMATION_RECORDED", "QUESTION_ANSWERED",
+    ]
+
+
+@pytest.mark.parametrize("case", [
+    "no_answer_receipt", "answer_mismatch", "answer_after_decision", "answer_before_summary",
+    "section_not_last", "prefix_edited", "blank_tag", "unknown_answer",
+])
+def test_assumption_section_keeps_file_ownership_without_proof(closed_sheet_scene, case):
+    scene = closed_sheet_scene
+    receipt, start = closed_sheet_receipt(scene), start_audit()
+    text = ANSWERED_H3_QUESTIONS + ASSUMPTION_SECTION
+    audit = start + receipt + assumption_answer() + decision()
+    if case == "no_answer_receipt":
+        audit = start + receipt + decision()
+    elif case == "answer_mismatch":
+        audit = start + receipt + assumption_answer(Details="B. Convert to follow-up questions") + decision()
+    elif case == "answer_after_decision":
+        audit = start + receipt + decision() + assumption_answer("2026-09-04T09:59:40Z")
+    elif case == "answer_before_summary":
+        audit = start + assumption_answer("2026-09-04T09:59:05Z") + receipt + decision()
+    elif case == "section_not_last":
+        text = ANSWERED_H3_QUESTIONS + ASSUMPTION_SECTION + "\n## Q9. Follow-up?\nA. Yes\n[Answer]: A. Yes\n"
+    elif case == "prefix_edited":
+        text = ANSWERED_H3_QUESTIONS.replace("[Answer]: A", "[Answer]: B", 1) + ASSUMPTION_SECTION
+    elif case == "blank_tag":
+        text = ANSWERED_H3_QUESTIONS + ASSUMPTION_SECTION.replace("[Answer]: A. Accept assumptions", "[Answer]:")
+    elif case == "unknown_answer":
+        text = ANSWERED_H3_QUESTIONS + ASSUMPTION_SECTION.replace("A. Accept assumptions\n", "Confirmed\n", 1)
+        audit = start + receipt + assumption_answer(Details="Confirmed") + decision()
+    install_assumption_sheet(scene, text=text, audit=audit)
+    questions = closed_sheet_questions(scene)
+    assert questions is None or questions.origin is None
+
+
+def test_questions_asked_in_one_turn_stay_on_the_card_for_the_conversation(sv, routes, fake_host, scene):
+    """Two decision rows written back to back are one reply; no single label can prove it (A37)."""
+    install_closed_sheet(scene)
+    first = decision(Decision="Learnings: which judgments become rules?", Options="c1,c2")
+    _shard(scene.root).write_text(start_audit() + closed_sheet_receipt(scene) + first + decision())
+    card = question_card(sv, routes, fake_host, scene)
+    view = card["evidence"]["questions"]
+    assert view["origin"]["kind"] == "audit"
+    assert [q["prompt"] for q in view["questions"]] == ["Learnings: which judgments become rules?", PROMPT]
+    assert view["pending_count"] == view["unsupported_pending_count"] == 2
+    assert card["decisions"] == []
+    status, body = _submit(sv, routes, fake_host, card, payload=answer_payload(), wire_text=LABELS[0])
+    assert status == 400 and body["details"]["reason"] == "unsupported_question_format", body
+
+
+def test_a_row_between_two_decisions_leaves_only_the_newest_asked(closed_sheet_scene):
+    scene = closed_sheet_scene
+    older = decision("2026-09-04T09:59:20Z", Decision="Older question?", Options="Yes,No")
+    note = F.audit_block("ARTIFACT_UPDATED", "2026-09-04T09:59:25Z", Stage=STAGE)
+    _shard(scene.root).write_text(start_audit() + closed_sheet_receipt(scene) + older + note + decision())
+    questions = closed_sheet_questions(scene)
+    assert [q.prompt for q in questions.questions] == [PROMPT]
+    assert questions.unsupported_pending_count == 0
+
+
 def test_closed_sheet_same_shard_order_proves_freshness_within_one_second(closed_sheet_scene):
     scene = closed_sheet_scene
     _shard(scene.root).write_text(start_audit() + closed_sheet_receipt(scene, ASKED) + decision())

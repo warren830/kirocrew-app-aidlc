@@ -2032,6 +2032,7 @@
   "template.questions.pending": "{n} of {total} unanswered",
   "template.questions.recorded": "Recorded answer",
   "template.questions.required": "required",
+  "template.questions.sameTurnBody": "AI-DLC asked these questions together and expects one reply for all of them, which Studio cannot send or confirm as a single choice. Read them here and answer them in the canonical conversation.",
   "template.questions.selectAny": "select any",
   "template.questions.selectOne": "select one",
   "template.questions.summaryChanges": "The summary needs changes",

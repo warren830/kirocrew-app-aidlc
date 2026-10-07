@@ -31,7 +31,7 @@ from typing import Any, Mapping, Protocol
 
 APP_NAME = "aidlc-studio"
 #: Must equal ``app.json`` ``version`` (pinned by tests/test_manifest.py).
-APP_VERSION = "1.1.4"
+APP_VERSION = "1.1.5"
 #: Must equal ``app.json`` ``minKiroCrewVersion``. 0.3.0 is enough because Studio registers its own
 #: module namespace (see ``backend/routes.py``) instead of relying on the 0.5.0 loader, and every
 #: other host primitive it uses exists in 0.3.0.

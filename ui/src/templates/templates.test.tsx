@@ -557,6 +557,33 @@ describe('questions template', () => {
     expect(draft().answers['1']).toEqual({ option_letters: ['A'], free_text: null })
   })
 
+  it('shows questions asked in one turn read-only and points at the conversation', async () => {
+    setApiRoutes({})
+    const auditView = questionsView({
+      relpath: 'aidlc/spaces/default/intents/demo/audit/000.md', mode: 'structured', host_card: null,
+      origin: { kind: 'audit', event: 'DECISION_RECORDED', shard: '000.md', pos: 43,
+        timestamp: '2026-09-10T08:00:00Z', stage: 'requirements-analysis', unit: null,
+        workflow: null, attempt_generation: null, decision_sha256: 'decision-hash' },
+      pending_count: 2, unsupported_pending_count: 2,
+      questions: [
+        question({ index: 1, prompt: 'Learnings: which judgments become rules?', options: [
+          { letter: 'A', text: 'c1', is_other: false }, { letter: 'B', text: 'c2', is_other: false },
+        ] }),
+        question({ index: 2, prompt: 'Learnings: anything to add?', options: [
+          { letter: 'A', text: 'Nothing to add', is_other: false },
+          { letter: 'B', text: 'Add a note', is_other: false },
+        ] }),
+      ],
+    })
+    const { patches } = mount(QuestionsTemplate, questionCard(auditView))
+    expect(screen.getByText(en.t('template.questions.sameTurnBody'))).toBeInTheDocument()
+    expect(screen.queryByText(en.t('template.questions.unsupportedPending', { n: 2 }))).not.toBeInTheDocument()
+    expect(screen.getAllByText(/Learnings: which judgments become rules\?/).length).toBeGreaterThan(0)
+    for (const radio of screen.getAllByRole('radio')) expect(radio).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: en.t('template.questions.openConversation') }))
+    expect(patches).toContainEqual({ tab: 'conversation' })
+  })
+
   it('uses radios for single select and checkboxes for multi select', () => {
     setApiRoutes({})
     const first = mount(QuestionsTemplate, questionCard())
