@@ -337,19 +337,6 @@ class LeaseRecord:
 
 
 @dataclass(frozen=True, slots=True)
-class EventRecord:
-    """One SSE frame as it was persisted; ``seq`` is the cursor clients replay from."""
-
-    seq: int
-    at: str
-    type: str
-    payload: dict = field(default_factory=dict)
-
-    def to_json(self) -> dict[str, Any]:
-        return {"seq": self.seq, "at": self.at, "type": self.type, "payload": self.payload}
-
-
-@dataclass(frozen=True, slots=True)
 class EvidenceRef:
     """A pointer to the thing that justifies an activity row — never the thing itself.
 
@@ -918,47 +905,6 @@ class Storage:
                 ),
             )
 
-    # ---- events ring ----
-
-    def event_append(self, type: str, payload: Mapping[str, Any]) -> int:
-        """Append one event and trim the ring; returns the new ``seq`` (the SSE id)."""
-        with self._txn() as conn:
-            cur = conn.execute(
-                "INSERT INTO events(at, type, payload_json) VALUES(?, ?, ?)",
-                (self._clock.iso(), type, _dumps(dict(payload))),
-            )
-            seq = int(cur.lastrowid or 0)
-            conn.execute("DELETE FROM events WHERE seq <= ?", (seq - int(C.EVENTS_RING_SIZE),))
-            return seq
-
-    def event_since(self, cursor: int, limit: int = 500) -> list[EventRecord]:
-        """Events after ``cursor``, oldest first.
-
-        A cursor older than ``event_bounds()[0] - 1`` has lost frames to the ring; the caller
-        compares the two and emits ``reset`` rather than silently replaying an incomplete history.
-        """
-        count = max(1, min(int(limit), int(C.EVENTS_RING_SIZE)))
-        with self._txn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM events WHERE seq > ? ORDER BY seq LIMIT ?", (int(cursor), count)
-            ).fetchall()
-        return [
-            EventRecord(
-                seq=int(r["seq"]),
-                at=str(r["at"]),
-                type=str(r["type"]),
-                payload=json.loads(r["payload_json"] or "{}"),
-            )
-            for r in rows
-        ]
-
-    def event_bounds(self) -> tuple[int, int]:
-        with self._txn() as conn:
-            row = conn.execute("SELECT MIN(seq) AS lo, MAX(seq) AS hi FROM events").fetchone()
-        if row is None or row["lo"] is None:
-            return (0, 0)
-        return (int(row["lo"]), int(row["hi"]))
-
     # ---- activity ----
 
     def activity_append(self, row: ActivityRow) -> int:
@@ -1034,6 +980,11 @@ class Storage:
                 (older_than_iso,),
             ).rowcount
         return int(cleared)
+
+    def activity_delete_before(self, older_than_iso: str) -> int:
+        """Delete Studio's activity rows older than the cutoff (``diagnostics.retention_days``)."""
+        with self._txn() as conn:
+            return int(conn.execute("DELETE FROM activity WHERE at < ?", (older_than_iso,)).rowcount)
 
     # ---- preferences ----
 

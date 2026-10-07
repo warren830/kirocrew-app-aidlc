@@ -544,4 +544,4 @@ def test_repo_git_still_answers_once_a_receipt_exists(sv, routes, fake_host, gat
 
 
 def _events(sv: Any) -> list[tuple[str, dict]]:
-    return [(record.type, record.payload) for record in sv.storage.event_since(0)]
+    return [(record.type, record.payload) for record in asyncio.run(sv.events.since(0))]

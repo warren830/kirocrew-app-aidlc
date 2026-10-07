@@ -192,7 +192,7 @@ STABLE_READ_RETRY_SECS = 0.05
 HOST_STARTUP_HOOK_BUDGET_SECS = 10.0        # on_startup must return well under the host's 30 s
 
 # ring / retention
-EVENTS_RING_SIZE = 10_000
+EVENTS_RING_SIZE = 2_000                    # in-memory, per process (events.py)
 ACTIVITY_DEFAULT_LIMIT = 100
 ACTIVITY_MAX_LIMIT = 500
 HUMAN_TEXT_RETENTION_DAYS_DEFAULT = 30
@@ -460,15 +460,11 @@ class Storage:
         # deletes row AND writes an activity row (source=studio, kind="lease.reclaimed"); caller (RepoScheduler)
         # is responsible for having proven the owner is dead (§1.10) — Storage does not check time
 
-    # ---- events ring ----
-    def event_append(self, type: str, payload: Mapping[str, Any]) -> int        # returns seq; trims to EVENTS_RING_SIZE
-    def event_since(self, cursor: int, limit: int = 500) -> list[EventRecord]
-    def event_bounds(self) -> tuple[int, int]                                    # (oldest_seq, newest_seq); (0,0) when empty
-
     # ---- activity ----
     def activity_append(self, row: ActivityRow) -> int
     def activity_query(self, q: ActivityQuery) -> tuple[list[ActivityRow], str | None]   # (rows, next_cursor)
     def activity_purge_human_text(self, older_than_iso: str) -> int
+    def activity_delete_before(self, older_than_iso: str) -> int      # diagnostics.retention_days (reconciler retention pass)
 
     # ---- preferences ----
     def pref_get(self, key: str) -> Any | None
@@ -485,9 +481,6 @@ class LeaseRecord:
     intent_uuid: str | None; session_key: str | None; action_id: str | None; observed_busy_state: str | None
     operation_type: str | None; transaction_id: str | None
     repo_id: str            # denormalised for the API (looked up at acquire)
-
-@dataclass(frozen=True, slots=True)
-class EventRecord:  seq: int; at: str; type: str; payload: dict
 ```
 
 #### DDL (verbatim; `storage.py::SCHEMA_V1`)
@@ -2746,18 +2739,29 @@ one notification per breaker opening.
 ```python
 EVENT_TYPES = ("action.created", "action.updated", "repo.updated", "repo.removed", "intent.updated",
                "transaction.updated", "lease.updated", "activity.appended", "advisor.updated",
-               "settings.updated", "health.updated", "migration.updated", "reset")
+               "settings.updated", "health.updated", "reset")
+
+@dataclass(frozen=True, slots=True)
+class EventRecord:  seq: int; at: str; type: str; payload: dict
 
 class EventLog:
-    def __init__(self, storage, ctx_events: EventBus | None, clock) -> None
+    def __init__(self, storage, ctx_events: EventBus | None, clock, *, ring_size: int | None = None) -> None
+        # storage is unused (kept so existing constructors stay valid). The ring is in memory, EVENTS_RING_SIZE
+        # deep, and per process: seq starts at int(clock.monotonic() * 1e6) and counts up by one, so every cursor
+        # an earlier process issued lies below the ring and resets. Replay does not survive a restart.
     async def publish(self, type: str, payload: dict) -> int
-        # to_thread(storage.event_append); fan out to subscriber queues (bounded 1000; on overflow the queue is marked
-        # `lagged` and the SSE handler emits `reset`); mirror to ctx.events.publish(HOST_EVENT_*) when ctx_events is not None
-        # (action.* → HOST_EVENT_ACTION ; repo.*/intent.* → HOST_EVENT_REPO ; transaction.* → HOST_EVENT_TRANSACTION); PermissionError swallowed+logged once
+        # append to the ring; wake every SSE reader; mirror to ctx.events.publish(HOST_EVENT_*) when ctx_events is not None
+        # (action.* → HOST_EVENT_ACTION ; repo.*/intent.* → HOST_EVENT_REPO ; transaction.* → HOST_EVENT_TRANSACTION);
+        # any host failure swallowed and logged once per mode (denied | failed)
+    def bounds(self) -> tuple[int, int]                  # (oldest_seq, newest_seq); an empty ring is (newest + 1, newest)
     async def since(self, cursor: int, limit: int = 500) -> list[EventRecord]
-    def subscribe(self) -> "Subscription"                # Subscription{queue: asyncio.Queue[EventRecord], lagged: bool, close()}
+    async def poll(self, cursor: int | None = None, limit: int = 500) -> dict   # §2.5
     async def stream(self, request: web.Request, *, cursor: int | None) -> web.StreamResponse      # §2.12
 ```
+
+A cursor is resumable when `oldest_seq - 1 <= cursor <= newest_seq`; `0` means "from this process's first event"
+(resumable until the ring trims it). Anything else resets: trimmed, ahead of the ring, or from an earlier process.
+A reader that falls off the ring while it drains is reset too; a slow reader never blocks `publish`.
 
 Payloads (small; clients refetch the resource):
 
@@ -2772,7 +2776,6 @@ Payloads (small; clients refetch the resource):
 | `advisor.updated` | `{draft_id, action_id, status}` — `action_id` is the sentinel `plan:<repo_id>` for a plan draft (§1.18a): never null on the event; null only on its Activity row |
 | `settings.updated` | `{keys: [str]}` |
 | `health.updated` | `{status, issues: [str]}` |
-| `migration.updated` | `{status}` |
 | `reset` | `{oldest_seq, newest_seq}` (client must refetch everything) |
 
 ### 1.21 `settings.py` — `SettingsService`
@@ -3129,6 +3132,7 @@ authoritative 4xx; `meta` is persisted on the host's user row and is the reconci
 
 `GET /events?cursor=<seq>` (or header `Last-Event-ID`) → `text/event-stream`; see §2.12.
 `GET /events/poll?cursor=<seq>&limit=` → 200 `{"events": [EventRecord], "cursor": int, "oldest_seq": int, "reset": bool}` (fallback for clients without SSE).
+No cursor is a cold start (no backlog, `reset: false`); a cursor that is not resumable (§1.20) answers `reset: true`.
 
 ### 2.6 Activity (`handlers/events.py`)
 
@@ -3287,12 +3291,14 @@ event: <type>\n
 data: <json payload, single line>\n
 \n
 ```
-On connect: if `cursor` (query or `Last-Event-ID`) is given and `>= oldest_seq - 1` → replay `since(cursor)` then live;
-if `cursor < oldest_seq - 1` or the subscription lagged → first frame is `event: reset` with `{"oldest_seq","newest_seq"}`
-then live (client refetches). Without cursor → `event: hello` `{"newest_seq": int, "server_time": iso, "app_version": str}`
-then live. Heartbeat comment `: ping\n\n` every `SSE_HEARTBEAT_SECS`. The handler catches
-`(ConnectionResetError, ConnectionAbortedError, asyncio.CancelledError)` and closes the subscription. Cursor semantics:
-`seq` is monotonic per storage file; the client persists the last seen `id` and resumes with it.
+On connect: if `cursor` (query or `Last-Event-ID`) is resumable (§1.20) → replay `since(cursor)` then live;
+otherwise (trimmed, ahead of the ring, from an earlier process, or a reader that fell off the ring while draining) →
+`event: reset` with `{"oldest_seq","newest_seq"}` then live (client refetches). Without cursor → `event: hello`
+`{"newest_seq": int, "server_time": iso, "app_version": str}` then live. `hello` and `reset` carry `id: <newest_seq>`.
+Heartbeat comment `: ping\n\n` every `SSE_HEARTBEAT_SECS`. A closed connection ends the stream quietly,
+`asyncio.CancelledError` is re-raised, and the reader is always unregistered. Cursor semantics: `seq` is monotonic per
+process (the ring is in memory); the client keeps the last seen `id` and resumes with it, and after a gateway
+restart that cursor resets.
 
 ### 2.13 Host endpoints the UI calls directly (declared in `permissions.api`; owner cookie)
 

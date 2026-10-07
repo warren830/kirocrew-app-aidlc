@@ -726,7 +726,7 @@ def test_create_intent_releases_the_admin_lease_and_records_it(studio, P, deps, 
     created = [row for row in deps.store.select("activity") if row["kind"] == "intent.created"][0]
     assert created["message_key"] == "activity.intent.created"
     assert created["params_json"]["scope"] == "poc"
-    published = [row["type"] for row in deps.store.select("events", order_by="seq ASC")]
+    published = [record.type for record in run(deps.events.since(0))]
     assert published == ["intent.updated"]
     assert deps.ctx.events.published[-1][0] == studio.constants.HOST_EVENT_REPO
 
@@ -902,7 +902,7 @@ def test_recompose_applies_the_flip_and_verifies_the_state_file(studio, deps, li
     # the flip is on disk, not merely reported
     plan = live_repo.plan()
     assert not plan.stage("user-stories").enabled
-    assert [row["type"] for row in deps.store.select("events")] == ["intent.updated"]
+    assert [record.type for record in run(deps.events.since(0))] == ["intent.updated"]
     assert not deps.denied_log.exists()
 
 

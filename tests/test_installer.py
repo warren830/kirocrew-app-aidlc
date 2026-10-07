@@ -1209,7 +1209,7 @@ def test_install_records_activity_and_events(studio, h, repo_builder):
     assert "lease.acquired" in kinds and "lease.released" in kinds
     assert not [row for row in rows if row.source == "aidlc"]
 
-    seqs = h.store.event_since(0, limit=200)
+    seqs = asyncio.run(h.events.since(0, limit=200))
     types = [e.type for e in seqs]
     statuses = [e.payload["status"] for e in seqs if e.type == "transaction.updated"]
     assert "transaction.updated" in types and "repo.updated" in types

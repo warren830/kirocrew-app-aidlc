@@ -344,7 +344,7 @@ def test_put_settings_stores_a_partial_patch_and_publishes_the_change(sv, routes
     assert body["updated_at"]
     # Published on Studio's own ring; `settings.updated` maps to no host event name, so the app event
     # bus is deliberately silent for it (the manifest declares three host events, none of them this).
-    assert "settings.updated" in [record.type for record in sv.storage.event_since(0)]
+    assert "settings.updated" in [record.type for record in asyncio.run(sv.events.since(0))]
 
 
 def test_put_settings_refuses_an_unknown_value_without_storing_anything(sv, routes, fake_host):
@@ -391,34 +391,30 @@ def test_clearing_calibration_needs_an_explicit_confirmation(sv, routes, fake_ho
 
 
 def test_events_poll_without_a_cursor_is_a_cold_start(sv, routes, fake_host):
-    asyncio.run(sv.events.publish("repo.updated", {"repo_id": "r_000000000001"}))
+    seq = asyncio.run(sv.events.publish("repo.updated", {"repo_id": "r_000000000001"}))
     status, body = call(sv, routes, "GET", "/events/poll",
                         CT.owner_request("GET", "/events/poll", host=fake_host))
     assert status == 200
-    assert body == {"events": [], "cursor": 1, "oldest_seq": 1, "reset": False}
+    assert body == {"events": [], "cursor": seq, "oldest_seq": seq, "reset": False}
 
 
 def test_events_poll_replays_from_a_cursor(sv, routes, fake_host):
     asyncio.run(sv.events.publish("repo.updated", {"repo_id": "r_1"}))
-    asyncio.run(sv.events.publish("action.created", {"action_id": "a_1"}))
+    last = asyncio.run(sv.events.publish("action.created", {"action_id": "a_1"}))
     request = CT.owner_request("GET", "/events/poll", host=fake_host, query={"cursor": "0"})
     _status, body = call(sv, routes, "GET", "/events/poll", request)
     assert [event["type"] for event in body["events"]] == ["repo.updated", "action.created"]
-    assert body["cursor"] == 2 and body["reset"] is False
+    assert body["cursor"] == last and body["reset"] is False
 
 
-def test_events_poll_resets_a_cursor_that_fell_out_of_the_ring(sv, routes, fake_host, monkeypatch):
-    asyncio.run(sv.events.publish("repo.updated", {"repo_id": "r_1"}))
-    request = CT.owner_request("GET", "/events/poll", host=fake_host, query={"cursor": "999"})
-    _status, body = call(sv, routes, "GET", "/events/poll", request)
-    # A cursor ahead of the newest row means the storage file was rebuilt and `seq` restarted; resuming
-    # would make every new event look like one already seen.
-    assert body["reset"] is True and body["events"] == []
-
-    monkeypatch.setattr(sv.storage, "event_bounds", lambda: (50, 60))
-    request = CT.owner_request("GET", "/events/poll", host=fake_host, query={"cursor": "1"})
-    _status, body = call(sv, routes, "GET", "/events/poll", request)
-    assert body["reset"] is True and body["events"] == []
+def test_events_poll_resets_a_cursor_it_cannot_resume(sv, routes, fake_host):
+    seq = asyncio.run(sv.events.publish("repo.updated", {"repo_id": "r_1"}))
+    # Ahead of the ring (never issued here), and below it (an earlier process's numbering): both reset
+    # rather than resume, or every new event would look like one already seen.
+    for cursor in (seq + 999, seq - 999):
+        request = CT.owner_request("GET", "/events/poll", host=fake_host, query={"cursor": str(cursor)})
+        _status, body = call(sv, routes, "GET", "/events/poll", request)
+        assert body["reset"] is True and body["events"] == []
 
 
 def test_events_poll_refuses_a_negative_cursor(sv, routes, fake_host):
@@ -473,10 +469,10 @@ async def test_the_sse_route_greets_then_streams_frames_with_ids(sv, routes, fak
         )
         assert set(payload) == {"newest_seq", "server_time", "app_version"}
 
-        await sv.events.publish("repo.updated", {"repo_id": "r_000000000001"})
+        seq = await sv.events.publish("repo.updated", {"repo_id": "r_000000000001"})
         await wire.wait(2)
         frame = wire.frames[1].decode("utf-8")
-        assert frame.splitlines()[0] == "id: 1"
+        assert frame.splitlines()[0] == f"id: {seq}"
         assert frame.splitlines()[1] == "event: repo.updated"
         assert frame.endswith("\n\n")
     finally:

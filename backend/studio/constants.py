@@ -202,7 +202,7 @@ MAX_README_CHARS = 3000
 # retention and ring buffers
 # --------------------------------------------------------------------------- #
 
-EVENTS_RING_SIZE = 10_000
+EVENTS_RING_SIZE = 2_000
 ACTIVITY_DEFAULT_LIMIT = 100
 ACTIVITY_MAX_LIMIT = 500
 HUMAN_TEXT_RETENTION_DAYS_DEFAULT = 30

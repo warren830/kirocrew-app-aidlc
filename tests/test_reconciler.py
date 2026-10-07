@@ -663,8 +663,8 @@ def test_startup_stamps_boot_id_mismatch_and_never_reaches_not_delivered(svc, sc
 def test_startup_report_publishes_health_updated(svc, scene):
     """The report is published, not returned only: `/health` and the UI read it from the event ring."""
     asyncio.run(svc.reconciler.startup())
-    rows = svc.storage.select("events", {"type": "health.updated"})
-    assert rows and "startup" in rows[0]["payload_json"]
+    rows = [record for record in asyncio.run(svc.events.since(0)) if record.type == "health.updated"]
+    assert rows and "startup" in rows[0].payload
     kinds = {row["kind"] for row in svc.storage.select("activity")}
     assert "health.startup" in kinds
 
@@ -1962,7 +1962,7 @@ def test_an_idle_tick_writes_nothing_and_publishes_nothing(svc, scene, studio, c
 
     def state() -> tuple[Any, ...]:
         binding = svc.storage.select("intent_bindings")[0]
-        events = [row for row in svc.storage.select("events") if row["type"] == "intent.updated"]
+        events = [r for r in asyncio.run(svc.events.since(0)) if r.type == "intent.updated"]
         return (
             binding["binding_generation"],
             binding["last_stable_boundary_json"],
@@ -1986,7 +1986,7 @@ def test_a_boundary_that_really_changes_is_still_written_and_published(
     """The dedupe must not become a mute button: real movement still has to reach the ring."""
     asyncio.run(svc.reconciler.tick())
     before = svc.storage.select("intent_bindings")[0]
-    published = len([r for r in svc.storage.select("events") if r["type"] == "intent.updated"])
+    published = len([r for r in asyncio.run(svc.events.since(0)) if r.type == "intent.updated"])
 
     # Clear the gate on disk: the boundary's marker and token both change.
     record = Path(gate_repo) / "aidlc/spaces/default/intents" / GATE_DIR / "aidlc-state.md"
@@ -1996,7 +1996,7 @@ def test_a_boundary_that_really_changes_is_still_written_and_published(
     asyncio.run(svc.reconciler.tick())
     after = svc.storage.select("intent_bindings")[0]
     assert after["last_stable_boundary_json"] != before["last_stable_boundary_json"]
-    assert len([r for r in svc.storage.select("events") if r["type"] == "intent.updated"]) > published
+    assert len([r for r in asyncio.run(svc.events.since(0)) if r.type == "intent.updated"]) > published
 
 
 # --------------------------------------------------------------------------- #
