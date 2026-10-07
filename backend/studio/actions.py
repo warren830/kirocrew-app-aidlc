@@ -165,6 +165,8 @@ WIRE_TEXT_TEMPLATES: dict[str, str | None] = {
     "request_plan_changes": f"{C.WIRE_REQUEST_CHANGES_PREFIX}<feedback>",
     "confirm_summary.looks_correct": C.WIRE_LOOKS_CORRECT,
     "confirm_summary.request_changes": f"{C.WIRE_SUMMARY_REQUEST_CHANGES_PREFIX}<feedback>",
+    "accept_assumptions": C.WIRE_ACCEPT_ASSUMPTIONS,
+    "convert_assumptions": C.WIRE_CONVERT_ASSUMPTIONS,
     "answers.single": "<label>[, <label>...] | <free text when X. Other>",
     "answers.grouped": (
         "Q<n>: <answer>\\nQ<m>: <answer> + WIRE_GROUPED_ANSWER_SUFFIX (file-backed group; one audit receipt)"
@@ -700,6 +702,10 @@ def wire_text_for(
         return C.WIRE_REQUEST_CHANGES_PREFIX + _feedback(payload, "feedback")
     if decision == "approve_plan":
         return C.WIRE_APPROVE_PLAN
+    if decision == "accept_assumptions":
+        return C.WIRE_ACCEPT_ASSUMPTIONS
+    if decision == "convert_assumptions":
+        return C.WIRE_CONVERT_ASSUMPTIONS
     if decision == "confirm_summary":
         choice = str(payload.get("choice") or "")
         if choice == "looks_correct":
@@ -2551,7 +2557,7 @@ class HumanActionBroker:
         delivery = self._delivery_json(rec)
         question_view = evidence.get("questions") or {}
         checkpoint = question_view.get("pending_checkpoint") if question_view.get("pending_count") == 0 else None
-        checkpoint = checkpoint if rec.type == "question" and checkpoint in ("summary_confirmation", "plan_approval") else None
+        checkpoint = checkpoint if rec.type == "question" and checkpoint in C.QUESTION_CHECKPOINT_KINDS else None
         card: dict[str, Any] = {
             "action_id": rec.action_id,
             "type": rec.type,

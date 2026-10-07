@@ -37,8 +37,8 @@ export const OWNERSHIP_KINDS: readonly Ownership[] = ["framework", "framework-mu
 export type StageState = "not_started" | "in_progress" | "awaiting_approval" | "revising" | "completed" | "skipped" | "unknown"
 export const STAGE_STATES: readonly StageState[] = ["not_started", "in_progress", "awaiting_approval", "revising", "completed", "skipped", "unknown"]
 
-export type Decision = "approve" | "request_changes" | "accept_as_is" | "approve_plan" | "request_plan_changes" | "confirm_summary" | "answers" | "provide_input" | "run" | "resume" | "prepare_commit" | "force_stop" | "rebind_session" | "mark_not_delivered" | "acknowledge" | "reconcile" | "resubmit" | "retry_now" | "keep_paused" | "run_now" | "pick_intent"
-export const DECISIONS: readonly Decision[] = ["approve", "request_changes", "accept_as_is", "approve_plan", "request_plan_changes", "confirm_summary", "answers", "provide_input", "run", "resume", "prepare_commit", "force_stop", "rebind_session", "mark_not_delivered", "acknowledge", "reconcile", "resubmit", "retry_now", "keep_paused", "run_now", "pick_intent"]
+export type Decision = "approve" | "request_changes" | "accept_as_is" | "approve_plan" | "request_plan_changes" | "confirm_summary" | "accept_assumptions" | "convert_assumptions" | "answers" | "provide_input" | "run" | "resume" | "prepare_commit" | "force_stop" | "rebind_session" | "mark_not_delivered" | "acknowledge" | "reconcile" | "resubmit" | "retry_now" | "keep_paused" | "run_now" | "pick_intent"
+export const DECISIONS: readonly Decision[] = ["approve", "request_changes", "accept_as_is", "approve_plan", "request_plan_changes", "confirm_summary", "accept_assumptions", "convert_assumptions", "answers", "provide_input", "run", "resume", "prepare_commit", "force_stop", "rebind_session", "mark_not_delivered", "acknowledge", "reconcile", "resubmit", "retry_now", "keep_paused", "run_now", "pick_intent"]
 
 export type Phase = "initialization" | "ideation" | "inception" | "construction" | "operation"
 export const PHASES: readonly Phase[] = ["initialization", "ideation", "inception", "construction", "operation"]

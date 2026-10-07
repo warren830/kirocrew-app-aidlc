@@ -662,6 +662,21 @@ describe('questions template', () => {
     expect(screen.getByText(en.t('template.questions.checkpoint.summary_confirmation'))).toBeInTheDocument()
   })
 
+  it('shows the assumptions an Assumption Confirmation asks about', () => {
+    setApiRoutes({})
+    mount(QuestionsTemplate, questionCard(questionsView({
+      questions: [question({ answered: true, answer: 'At-least-once' })],
+      pending_count: 0,
+      pending_checkpoint: 'assumption_confirmation',
+      assumption_confirmation: { kind: 'assumption_confirmation', present: true, answered: false, answer: null,
+        options: ['A. Accept assumptions', 'B. Convert to follow-up questions'],
+        context: '- The demo covers the extra features [assumption]' },
+    })))
+    expect(screen.getByText(en.t('template.questions.checkpoint.assumption_confirmation'))).toBeInTheDocument()
+    expect(screen.getByText('- The demo covers the extra features [assumption]')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: en.t('advisor.action.question_draft') })).not.toBeInTheDocument()
+  })
+
   it('states degraded mode, disables every input and points at the conversation', async () => {
     setApiRoutes({})
     const { patches } = mount(QuestionsTemplate, questionCard(questionsView({ mode: 'degraded' })))

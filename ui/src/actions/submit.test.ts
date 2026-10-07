@@ -129,6 +129,11 @@ describe('wireTextFor', () => {
     expect(wireTextFor({ decision: 'confirm_summary', choice: 'looks_correct' }, null, false)).toBe('Looks correct')
   })
 
+  it('sends an assumption choice as the engine’s option text', () => {
+    expect(wireTextFor({ decision: 'accept_assumptions' }, null, false)).toBe('A. Accept assumptions')
+    expect(wireTextFor({ decision: 'convert_assumptions' }, null, false)).toBe('B. Convert to follow-up questions')
+  })
+
   it('refuses blank feedback rather than sending a bare prefix', () => {
     expect(wireTextFor({ decision: 'request_changes', feedback: '   ' }, null, false)).toBeNull()
     expect(wireTextFor({ decision: 'request_plan_changes', feedback: '' }, null, false)).toBeNull()

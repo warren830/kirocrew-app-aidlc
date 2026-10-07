@@ -29,6 +29,8 @@
   "action.reason.session_lost_mid_stage": "绑定的会话已不存在",
   "action.reason.recovery_details": "请检查下方记录的证据",
   "action.question.summary_confirmation.headline": "{stage} 正在等待你确认汇总。",
+  "action.question.assumption_confirmation.headline": "{stage} 正在等你确认它保留的假设。",
+  "action.question.consequence.assumption_confirmation": "你的回复会接受列出的假设，或者把它们转成追问，然后再继续此阶段。",
   "action.question.plan_approval.headline": "{stage} 正在等待你批准计划。",
   "action.question.consequence.summary_confirmation": "你的回复会确认已记录的汇总或要求修改，然后再继续此阶段。",
   "action.question.consequence.plan_approval": "你的回复会批准已记录的计划或要求修改，然后再继续实施。"

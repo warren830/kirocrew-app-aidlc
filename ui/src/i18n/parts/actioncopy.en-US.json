@@ -29,6 +29,8 @@
   "action.reason.session_lost_mid_stage": "the bound conversation could not be found",
   "action.reason.recovery_details": "review the recorded evidence below",
   "action.question.summary_confirmation.headline": "{stage} is waiting for you to confirm its summary.",
+  "action.question.assumption_confirmation.headline": "{stage} is waiting for you to confirm the assumptions it kept.",
+  "action.question.consequence.assumption_confirmation": "Your reply accepts the listed assumptions or turns them into follow-up questions before the stage continues.",
   "action.question.plan_approval.headline": "{stage} is waiting for you to approve its plan.",
   "action.question.consequence.summary_confirmation": "Your reply confirms the recorded summary or requests changes before the stage continues.",
   "action.question.consequence.plan_approval": "Your reply approves the recorded plan or requests changes before implementation continues."

@@ -195,6 +195,8 @@ export function payloadFor(decision: Decision, card: ActionCard, draft: ActionDr
     case 'approve': return { decision: 'approve' }
     case 'accept_as_is': return { decision: 'accept_as_is' }
     case 'approve_plan': return { decision: 'approve_plan' }
+    case 'accept_assumptions': return { decision: 'accept_assumptions' }
+    case 'convert_assumptions': return { decision: 'convert_assumptions' }
     case 'request_changes': return { decision: 'request_changes', feedback: draft.feedback }
     case 'request_plan_changes': return { decision: 'request_plan_changes', feedback: draft.feedback }
     case 'confirm_summary':

@@ -1944,7 +1944,7 @@ class AdvisorBroker:
             row["answer"] = None if answer is None else self._clean(str(answer), ANSWER_CHARS, roots=roots)
             clipped.append(row)
         data["questions"] = clipped
-        for key in ("summary_confirmation", "plan_approval"):
+        for key in ("summary_confirmation", "assumption_confirmation", "plan_approval"):
             checkpoint = data.get(key)
             if isinstance(checkpoint, dict):
                 checkpoint["options"] = [
@@ -1955,6 +1955,8 @@ class AdvisorBroker:
                 checkpoint["answer"] = (
                     None if answer is None else self._clean(str(answer), ANSWER_CHARS, roots=roots)
                 )
+                if checkpoint.get("context") is not None:
+                    checkpoint["context"] = self._clean(str(checkpoint["context"]), PROMPT_CHARS, roots=roots)
         return data
 
     def _audit(self, snap: Any, roots: Sequence[str]) -> tuple[dict[str, Any], ...]:

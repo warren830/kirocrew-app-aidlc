@@ -149,7 +149,7 @@ updating this document.
 
 ```python
 APP_NAME = "aidlc-studio"
-APP_VERSION = "1.1.3"                       # must equal app.json "version" (test pins)
+APP_VERSION = "1.1.4"                       # must equal app.json "version" (test pins)
 MIN_KIROCREW_VERSION = "0.3.0"              # == app.json minKiroCrewVersion (architecture §2/A10; review P19/R05)
 BUNDLED_ENGINE_VERSION = "2.7.1"            # == payload/manifest.json engineVersion. Tests assert equality with
 BUNDLED_STATE_VERSION = 8                   #    PayloadManifest.load(); they never compare against a literal
@@ -230,9 +230,10 @@ ANSWER_TAG_RE = r"^\[Answer\]:[ \t]*(.*)$"
 BLANK_ANSWER_RE = r"^\[Answer\]:[ \t]*_*[ \t]*$"
 ANSWER_CONTINUATION_RE = r"^- (.*)$"                     # bullet lines directly after a tag continue the answer (FORMAT-NOTES §7)
 QUESTION_HEADING_RE = r"^## Q(\d+)[.:]\s*(.*)$"
-CHECKPOINT_HEADING_RE = r"^## (Plan Approval|Consolidated Summary Confirmation|Post-approval Amendment)\s*$"
+CHECKPOINT_HEADING_RE = r"^## (Plan Approval|Consolidated Summary Confirmation|Assumption Confirmation|Post-approval Amendment)\s*$"
 OPTION_LINE_RE = r"^(?:- )?([A-Z])\.\s+(.*)$"           # both `A. …` and `- A. …` occur (FORMAT-NOTES §7); review P09
 CHECKPOINT_OPTION_RE = r"^- (Approve Plan|Request Changes|Looks correct|Request changes)\s*$"
+ASSUMPTION_OPTION_RE = r"^(?:- )?(A\. Accept assumptions|B\. Convert to follow-up questions)\s*$"  # A36
 INTENT_DIR_RE = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
 SPACE_RE = INTENT_DIR_RE
 UNIT_NAME_RE = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
@@ -871,16 +872,18 @@ class Question:
     context: str = ""        # explanatory Markdown between the heading and first option/answer; additive wire field
 @dataclass(frozen=True, slots=True)
 class Checkpoint:            # one per checkpoint heading (review P09)
-    kind: str                # "summary_confirmation" | "plan_approval"
+    kind: str                # "summary_confirmation" | "assumption_confirmation" | "plan_approval"
     present: bool; answered: bool; answer: str | None
     options: tuple[str, ...] # the literal option lines under the heading, e.g. ("Approve Plan", "Request Changes")
+    context: str | None = None  # assumption_confirmation only: the Markdown between heading and first option (A36); JSON omits None
 @dataclass(frozen=True, slots=True)
 class QuestionsFile:
     relpath: str; sha256: str; questions: tuple[Question, ...]
     summary_confirmation: Checkpoint | None
     plan_approval: Checkpoint | None
+    assumption_confirmation: Checkpoint | None = None  # A36; JSON emits it only when present
     pending_count: int             # blank Q tags only (checkpoints are reported separately)
-    pending_checkpoint: str | None # "summary_confirmation" | "plan_approval" when that checkpoint is present and unanswered; summary wins if both
+    pending_checkpoint: str | None # first present-and-unanswered of QUESTION_CHECKPOINT_KINDS: summary_confirmation, assumption_confirmation, plan_approval
     source_language_hint: str | None  # None; reserved
 def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile
     # Section starts: QUESTION_HEADING_RE (`## Q<n>.` / `## Q<n>:`) and CHECKPOINT_HEADING_RE (`## Plan Approval`,
@@ -1197,7 +1200,7 @@ Card derivation (one seed per live boundary; `dedupe_key` per §0.1):
 |---|---|---|---|---|
 | `gate` | a row is `[?]` (that row's stage) | row slug | blocking | state_hash, boundary_token, stage_attempt, evidence_digest, is_active |
 | `revision` | a row is `[R]` | row slug | info | same; informational, `decisions=[]` |
-| `question` | current stage's questions file has `pending_count > 0` OR `pending_checkpoint` is set (blank summary confirmation / blank plan approval; review P09), OR host reports `needs_input` for the bound slot | current stage | blocking | + question_digest, evidence_digest, is_active. `decisions` depend on what is pending: Q tags → `answers`; `summary_confirmation` → `confirm_summary`; `plan_approval` → `approve_plan`, `request_plan_changes` |
+| `question` | current stage's questions file has `pending_count > 0` OR `pending_checkpoint` is set (blank summary confirmation / blank plan approval; review P09), OR host reports `needs_input` for the bound slot | current stage | blocking | + question_digest, evidence_digest, is_active. `decisions` depend on what is pending: Q tags → `answers`; `summary_confirmation` → `confirm_summary`; `assumption_confirmation` → `accept_assumptions`, `convert_assumptions` (A36); `plan_approval` → `approve_plan`, `request_plan_changes` |
 | `missing_input` | no state and records exist but cursor null/dangling (intent pick → studio-only `pick_intent`, admin lane), or `Scope` empty (→ human-lane `provide_input kind=scope`) | none | blocking | state_hash may be null |
 | `recovery` | any blocking finding except `delivery_uncertain_action`/`lease_conflict` (incl. `interrupted_session`); or session lost mid-stage (bound slot gone and row `[-]`) | current stage | critical | |
 | `delivery_uncertain` | an action is `DeliveryUncertain`/`ReconciliationRequired` (the card IS that action, re-typed for the queue: `queue_type`) | that action's stage | critical | |
@@ -1569,7 +1572,8 @@ ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
 DECISIONS: dict[str, tuple[str, ...]] = {   # action type → allowed decision kinds
     "gate":              ("approve", "request_changes", "accept_as_is"),   # accept_as_is is OFFERED (card.decisions) only when
                                                                            # captured.stage_attempt >= ACCEPT_AS_IS_MIN_ATTEMPT (review P24)
-    "question":          ("answers", "confirm_summary", "approve_plan", "request_plan_changes"),   # offered per pending checkpoint (§1.8)
+    "question":          ("answers", "confirm_summary", "accept_assumptions", "convert_assumptions",
+                          "approve_plan", "request_plan_changes"),   # offered per pending checkpoint (§1.8; A36)
     "missing_input":     ("provide_input", "pick_intent"),
     "recovery":          ("rebind_session", "mark_not_delivered", "acknowledge"),
     "delivery_uncertain":("reconcile", "mark_not_delivered", "resubmit"),
@@ -1580,8 +1584,8 @@ DECISIONS: dict[str, tuple[str, ...]] = {   # action type → allowed decision k
     "revision":          (),
     "run": ("run",), "resume": ("resume",), "force_stop": ("force_stop",), "prepare_commit": ("prepare_commit",),
 }
-HUMAN_LANE_DECISIONS  = frozenset({"approve", "request_changes", "accept_as_is", "answers", "confirm_summary", "approve_plan",
-                                   "request_plan_changes", "provide_input", "run", "resume", "prepare_commit"})
+HUMAN_LANE_DECISIONS  = frozenset({"approve", "request_changes", "accept_as_is", "answers", "confirm_summary", "accept_assumptions",
+                                   "convert_assumptions", "approve_plan", "request_plan_changes", "provide_input", "run", "resume", "prepare_commit"})
 HOST_CONTROL_DECISIONS = frozenset({"force_stop"})
 STUDIO_ONLY_DECISIONS = frozenset({"rebind_session", "mark_not_delivered", "acknowledge", "reconcile", "resubmit",
                                    "retry_now", "keep_paused", "run_now", "pick_intent"})
@@ -1806,6 +1810,7 @@ from this table). Rules that apply to every row:
 | gate / request_changes | new `GATE_REJECTED` AND `STAGE_REVISING` for stage AND row is `[R]` | never |
 | question / answers | — | (`question_digest` changed AND no blank tag for the answered indices) OR new `QUESTION_ANSWERED` for stage; AND turn ended |
 | question / confirm_summary | — | new `SUMMARY_CONFIRMATION_RECORDED` for stage, OR (`question_digest` changed AND `summary_confirmation.answered`); AND turn ended |
+| question / accept_assumptions, convert_assumptions | — | (`question_digest` changed AND `assumption_confirmation.answered` AND its answer starts with the chosen option) OR new `QUESTION_ANSWERED` for stage whose `Details` starts with it; AND turn ended (A36) |
 | question / approve_plan | — | `question_digest` changed AND `plan_approval.answered` AND `plan_approval.answer` starts with `WIRE_APPROVE_PLAN`; AND turn ended |
 | question / request_plan_changes | — | `question_digest` changed AND (`plan_approval` tag now holds a `Request Changes…` answer OR was cleared for revision); AND turn ended |
 | missing_input / provide_input | scope: `Scope` field == scope | free_text: turn ended |
@@ -2952,7 +2957,7 @@ Notation below: `→ 200 {…}` success body; `✗ code` = error codes the route
 
 `GET /health` → 200
 ```json
-{"app": "aidlc-studio", "version": "1.1.3", "bundled_engine_version": "2.10.0", "min_kirocrew_version": "0.3.0",
+{"app": "aidlc-studio", "version": "1.1.4", "bundled_engine_version": "2.10.0", "min_kirocrew_version": "0.3.0",
  "boot_id": "…16 hex…",                                       // Services.boot_id; values above are examples — they come from constants/manifest
  "host_version": "0.5.0-insider.9" | null, "started_at": iso|null, "status": "healthy"|"degraded"|"error",
  "issues": [str],
@@ -3110,6 +3115,7 @@ SubmitRequest = {
              {"decision": "accept_as_is"} |
              {"decision": "answers", "answers": [{"index": int, "option_letters": [str], "free_text": str|null}]} |
              {"decision": "confirm_summary", "choice": "looks_correct"} | {"decision": "confirm_summary", "choice": "request_changes", "feedback": str} |
+             {"decision": "accept_assumptions"} | {"decision": "convert_assumptions"} |
              {"decision": "approve_plan"} | {"decision": "request_plan_changes", "feedback": str} |
              {"decision": "provide_input", "kind": "scope", "scope": str} |
              {"decision": "provide_input", "kind": "free_text", "text": str} |

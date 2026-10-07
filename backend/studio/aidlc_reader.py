@@ -1355,13 +1355,18 @@ class Question:
 
 @dataclass(frozen=True, slots=True)
 class Checkpoint:
-    """A ``## Plan Approval`` / ``## Consolidated Summary Confirmation`` block (review P09)."""
+    """A ``## Plan Approval`` / ``## Consolidated Summary Confirmation`` / ``## Assumption Confirmation`` block.
+
+    ``context`` is the section's own text before its options, kept only where the human cannot answer
+    without it: an Assumption Confirmation lists the assumptions being accepted (review P09).
+    """
 
     kind: str
     present: bool
     answered: bool
     answer: str | None
     options: tuple[str, ...]
+    context: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -1370,6 +1375,7 @@ class Checkpoint:
             "answered": self.answered,
             "answer": self.answer,
             "options": list(self.options),
+            **({"context": self.context} if self.context is not None else {}),
         }
 
 
@@ -1390,6 +1396,7 @@ class QuestionsFile:
     closed_file_receipts: tuple[AuditEvent, ...] = ()
     # Blank human-answer tags outside supported Q/checkpoint sections. These carry no Q identifiers.
     unsupported_pending_count: int = 0
+    assumption_confirmation: Checkpoint | None = None
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -1400,6 +1407,8 @@ class QuestionsFile:
                 self.summary_confirmation.to_json() if self.summary_confirmation else None
             ),
             "plan_approval": self.plan_approval.to_json() if self.plan_approval else None,
+            **({"assumption_confirmation": self.assumption_confirmation.to_json()}
+               if self.assumption_confirmation else {}),
             "pending_count": self.pending_count,
             "unsupported_pending_count": self.unsupported_pending_count,
             "pending_checkpoint": self.pending_checkpoint,
@@ -1707,6 +1716,7 @@ def _closed_question_receipts(
 #: amendment already agreed, not something pending (C34).
 _CHECKPOINT_KINDS = {
     C.SUMMARY_CONFIRMATION_HEADING: "summary_confirmation",
+    C.ASSUMPTION_CONFIRMATION_HEADING: "assumption_confirmation",
     C.PLAN_APPROVAL_HEADING: "plan_approval",
 }
 
@@ -1935,11 +1945,18 @@ def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile:
         checkpoint_kind = _CHECKPOINT_KINDS.get(match.group(1))
         if checkpoint_kind is None:  # "Post-approval Amendment" — a divider, not a decision
             continue
-        labels = tuple(
-            line[2:].strip()
-            for line in body[1:limit]
-            if C.CHECKPOINT_OPTION_RE.match(line)
-        )
+        context = None
+        if checkpoint_kind == "assumption_confirmation":
+            option_rows = [i for i, line in enumerate(body[1:limit], 1) if C.ASSUMPTION_OPTION_RE.match(line)]
+            labels = tuple(C.ASSUMPTION_OPTION_RE.match(body[i]).group(1) for i in option_rows)
+            context_end = option_rows[0] if option_rows else limit
+            context = "\n".join(raw_lines[start + 1:start + context_end]).strip("\n").strip() or None
+        else:
+            labels = tuple(
+                line[2:].strip()
+                for line in body[1:limit]
+                if C.CHECKPOINT_OPTION_RE.match(line)
+            )
         # A re-opened checkpoint is appended below the old one, so the last block is the live one.
         checkpoints[checkpoint_kind] = Checkpoint(
             kind=checkpoint_kind,
@@ -1947,15 +1964,18 @@ def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile:
             answered=answered,
             answer=answer,
             options=labels,
+            context=context,
         )
 
     summary = checkpoints.get("summary_confirmation")
+    assumptions = checkpoints.get("assumption_confirmation")
     plan = checkpoints.get("plan_approval")
-    pending_checkpoint = None
-    if summary and not summary.answered:
-        pending_checkpoint = "summary_confirmation"
-    elif plan and not plan.answered:
-        pending_checkpoint = "plan_approval"
+    # The engine's own order: the summary is confirmed before its assumptions (intent-capture Step 5).
+    pending_checkpoint = next(
+        (kind for kind in C.QUESTION_CHECKPOINT_KINDS
+         if checkpoints.get(kind) is not None and not checkpoints[kind].answered),
+        None,
+    )
     return QuestionsFile(
         relpath=relpath,
         sha256=sha256,
@@ -1966,6 +1986,7 @@ def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile:
         pending_checkpoint=pending_checkpoint,
         source_language_hint=None,
         unsupported_pending_count=unsupported_pending_count,
+        assumption_confirmation=assumptions,
     )
 
 
@@ -3113,7 +3134,7 @@ class AidlcReader:
                 "audit": pending.sha256, "file": found.relpath, "file_sha256": found.sha256,
             }
             receipts: list[AuditEvent] = []
-            if found.questions or found.summary_confirmation or found.plan_approval:
+            if found.questions or found.summary_confirmation or found.plan_approval or found.assumption_confirmation:
                 try:
                     data = security.bounded_read(
                         security.resolve_inside(repo, found.relpath), C.MAX_QUESTIONS_BYTES,

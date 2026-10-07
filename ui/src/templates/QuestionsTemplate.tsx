@@ -103,9 +103,11 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
   const checkpoint =
     view?.pending_checkpoint === 'summary_confirmation'
       ? view.summary_confirmation
-      : view?.pending_checkpoint === 'plan_approval'
-        ? view.plan_approval
-        : null
+      : view?.pending_checkpoint === 'assumption_confirmation'
+        ? (view.assumption_confirmation ?? null)
+        : view?.pending_checkpoint === 'plan_approval'
+          ? view.plan_approval
+          : null
   const offersChanges = card.decisions.some(
     (spec) => spec.decision === 'request_plan_changes' || spec.decision === 'confirm_summary',
   )
@@ -420,6 +422,13 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
       {checkpoint?.present ? (
         <Block title={t(`template.questions.checkpoint.${checkpoint.kind}`)} icon="gate">
           <p className="studio-q-prompt">{t(`template.questions.checkpoint.${checkpoint.kind}.body`)}</p>
+          {checkpoint.context?.trim() ? (
+            // What is being accepted, in the engine's words: the human cannot choose without reading it.
+            // The same sanitising renderer as a question's context.
+            <div className="msg-content studio-md">
+              <MarkdownRenderer content={checkpoint.context} />
+            </div>
+          ) : null}
           {checkpoint.options.length > 0 ? (
             // The checkpoint's own options, as written in the file. The bytes Studio would send are shown
             // by the confirmation panel, which is the only place wire text belongs.

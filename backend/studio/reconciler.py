@@ -1543,6 +1543,25 @@ class Reconciler:
                 return Resolution("no_transition", "summary_confirmed", seen)
             return Resolution("pending", "summary_not_confirmed", seen)
 
+        if decision in ("accept_assumptions", "convert_assumptions"):
+            # The engine fills the tag with the chosen option verbatim and logs it as an ordinary
+            # QUESTION_ANSWERED (intent-capture Step 5). Either proof must name *this* choice: a reply
+            # that recorded the other option did not carry out the decision the human confirmed.
+            chosen = (
+                C.WIRE_ACCEPT_ASSUMPTIONS if decision == "accept_assumptions" else C.WIRE_CONVERT_ASSUMPTIONS
+            )
+            confirmation = _attr(questions, "assumption_confirmation")
+            answer = str(_attr(confirmation, "answer", "") or "").strip()
+            seen["assumption_answer"] = answer
+            if digest_changed and _attr(confirmation, "answered", False) and answer.startswith(chosen):
+                return Resolution("no_transition", "assumptions_recorded", seen)
+            answered = self._newest_new(rec, snap, ("QUESTION_ANSWERED",), stage)
+            details = str((_attr(answered, "fields", {}) or {}).get("Details") or "").strip()
+            if answered is not None and details.startswith(chosen):
+                seen["question_answered"] = _json_of(answered)
+                return Resolution("no_transition", "assumptions_recorded", seen)
+            return Resolution("pending", "assumptions_not_recorded", seen)
+
         if decision == "approve_plan":
             plan = _attr(questions, "plan_approval")
             answer = str(_attr(plan, "answer", "") or "")

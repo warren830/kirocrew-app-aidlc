@@ -1970,7 +1970,10 @@ def test_map_without_an_engine_still_renders_the_state_rows(projection, repo_rec
 #: of at the user's click.
 CONTRACT_DECISIONS = {
     "gate": ("approve", "request_changes", "accept_as_is"),
-    "question": ("answers", "confirm_summary", "approve_plan", "request_plan_changes"),
+    "question": (
+        "answers", "confirm_summary", "accept_assumptions", "convert_assumptions", "approve_plan",
+        "request_plan_changes",
+    ),
     "missing_input": ("provide_input", "pick_intent"),
     "recovery": ("rebind_session", "mark_not_delivered", "acknowledge"),
     "delivery_uncertain": ("reconcile", "mark_not_delivered", "resubmit"),

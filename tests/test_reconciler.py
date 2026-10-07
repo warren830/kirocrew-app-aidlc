@@ -972,6 +972,64 @@ def test_approve_plan_needs_the_checkpoint_answer_in_the_file(svc, scene, fake_h
     assert status_of(svc, action_id) == "ResolvedNoTransition"
 
 
+ASSUMPTION_QUESTIONS = (
+    "# Intent Capture — Questions\n\n---\n\n"
+    "## Assumption Confirmation\n\n- The demo covers the extra features [assumption]\n\n"
+    "A. Accept assumptions\nB. Convert to follow-up questions\n\n[Answer]:\n"
+)
+
+
+@pytest.mark.parametrize("recorded,status", [
+    ("A. Accept assumptions", "ResolvedNoTransition"),
+    # The engine recorded the other option: not the decision the human confirmed.
+    ("B. Convert to follow-up questions", "Processing"),
+])
+def test_accept_assumptions_resolves_only_on_the_chosen_option(svc, scene, fake_host, C, recorded, status):
+    path = _record(scene.root) / QUESTIONS_REL
+    path.write_text(ASSUMPTION_QUESTIONS)
+    action_id = scene.make(
+        status="Processing",
+        action_type="question",
+        decision="accept_assumptions",
+        wire_text=C.WIRE_ACCEPT_ASSUMPTIONS,
+        payload={"decision": "accept_assumptions"},
+    )
+    path.write_text(ASSUMPTION_QUESTIONS.replace("[Answer]:", f"[Answer]: {recorded}"))
+    touch_human_turn(scene.root)
+    shard = _record(scene.root) / "audit" / "fixture-host-0f1e2d3c4b5a.md"
+    shard.write_text(shard.read_text() + F.audit_block("HUMAN_TURN", "2026-09-04T10:00:00Z"))
+    finish_turn(fake_host, scene.slot_key, wire_text=C.WIRE_ACCEPT_ASSUMPTIONS)
+
+    asyncio.run(svc.reconciler.tick())
+    assert status_of(svc, action_id) == status
+
+
+def test_convert_assumptions_resolves_on_its_question_answered_row(svc, scene, fake_host, C):
+    """The engine logs the choice through the standard answer receipt; that alone is proof when it names it."""
+    path = _record(scene.root) / QUESTIONS_REL
+    path.write_text(ASSUMPTION_QUESTIONS)
+    action_id = scene.make(
+        status="Processing",
+        action_type="question",
+        decision="convert_assumptions",
+        wire_text=C.WIRE_CONVERT_ASSUMPTIONS,
+        payload={"decision": "convert_assumptions"},
+    )
+    shard = _record(scene.root) / "audit" / "fixture-host-0f1e2d3c4b5a.md"
+    shard.write_text(
+        shard.read_text()
+        + F.audit_text(
+            F.audit_block("HUMAN_TURN", "2026-09-04T10:00:00Z"),
+            F.audit_block("QUESTION_ANSWERED", "2026-09-04T10:00:00Z", Stage=GATE_STAGE,
+                          Details=C.WIRE_CONVERT_ASSUMPTIONS),
+        )
+    )
+    touch_human_turn(scene.root)
+    finish_turn(fake_host, scene.slot_key, wire_text=C.WIRE_CONVERT_ASSUMPTIONS)
+    asyncio.run(svc.reconciler.tick())
+    assert status_of(svc, action_id) == "ResolvedNoTransition"
+
+
 def test_request_plan_changes_resolves_when_the_tag_is_cleared_for_revision(svc, scene, fake_host, C):
     """Either shape counts: the tag now holds ``Request Changes…``, or it was cleared for the revision.
 
