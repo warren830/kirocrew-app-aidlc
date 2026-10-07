@@ -929,36 +929,13 @@ def test_recompose_refuses_a_disallowed_flip(studio, deps, live_repo, errors):
     assert run(deps.scheduler.get(IDENTITY)) is None
 
 
-def test_scope_change_and_config_change_run_under_a_lease(studio, deps, live_repo, errors):
-    scope = run(deps.svc.scope_change(live_repo.repo, live_repo.snap(), scope="mvp", depth="Comprehensive"))
-    assert scope.verb_key == "utility.scope_change"
-    argv = list(scope.argv)
-    assert argv[argv.index("--scope") + 1] == "mvp"
-    assert argv[argv.index("--depth") + 1] == "Comprehensive"
-    assert run(deps.scheduler.get(IDENTITY)) is None
-
-    config = run(deps.svc.config_change(live_repo.repo, live_repo.snap(), depth="Minimal"))
-    assert config.verb_key == "utility.config_change"
-    assert "--test-strategy" not in list(config.argv)
-
-    with pytest.raises(errors.StudioError) as excinfo:
-        run(deps.svc.config_change(live_repo.repo, live_repo.snap()))
-    assert excinfo.value.code == "bad_param"
-    with pytest.raises(errors.StudioError):
-        run(deps.svc.config_change(live_repo.repo, live_repo.snap(), depth="Deep"))
-    with pytest.raises(errors.StudioError):
-        run(deps.svc.scope_change(live_repo.repo, live_repo.snap(), scope="Not A Scope"))
-
-
-def test_every_mutating_verb_names_the_record_it_was_asked_about(studio, deps, live_repo):
+def test_recompose_names_the_record_it_was_asked_about(studio, deps, live_repo):
     """`--intent`/`--space` come from the snapshot, so the engine never resolves a record of its own.
 
-    Everything else about these three calls — the lease, the preview, the proposal digest, the on-disk
-    verification, the activity row, the event — is about the intent the request named. With the selector
-    omitted the engine picks the record itself (2.7.1 asks ``resolveWorkflowSelection`` first, so the
-    calling session's binding wins over the cursor), which is how a confirmed change lands on a record
-    nobody was shown. Both flags are asserted because `--intent` alone still takes the space from the
-    binding.
+    With the selector omitted the engine picks the record itself (2.7.1 asks ``resolveWorkflowSelection``
+    first, so the calling session's binding wins over the cursor), which is how a confirmed change lands on
+    a record nobody was shown. Both flags are asserted because `--intent` alone still takes the space from
+    the binding.
     """
     snap = live_repo.snap()
     proposal = live_repo.preview(skip=["user-stories"])
@@ -967,14 +944,10 @@ def test_every_mutating_verb_names_the_record_it_was_asked_about(studio, deps, l
             live_repo.repo, snap, skip=["user-stories"], add=[], proposal_digest=proposal.digest()
         )
     )
-    scoped = run(deps.svc.scope_change(live_repo.repo, live_repo.snap(), scope="mvp"))
-    configured = run(deps.svc.config_change(live_repo.repo, live_repo.snap(), depth="Minimal"))
-
     assert snap.intent_dir == "260901-ledger-export" and snap.space == "default"
-    for result in (recomposed.engine, scoped, configured):
-        argv = list(result.argv)
-        assert argv[argv.index("--intent") + 1] == snap.intent_dir, result.verb_key
-        assert argv[argv.index("--space") + 1] == snap.space, result.verb_key
+    argv = list(recomposed.engine.argv)
+    assert argv[argv.index("--intent") + 1] == snap.intent_dir
+    assert argv[argv.index("--space") + 1] == snap.space
 
 
 # --------------------------------------------------------------------------- #

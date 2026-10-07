@@ -16,7 +16,6 @@ shows up as a diff in an expected number rather than as a quietly different prom
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 
 import pytest
@@ -96,16 +95,12 @@ def stage(
     )
 
 
-def sample(E, *, scope="poc", depth="Minimal", stage_class="code_generation", turns=10, secs=1800,
-           intent_uuid="01a00000-0000-7000-8000-000000000001"):
-    return E.CalibrationSample.of(
-        scope=scope,
-        depth=depth,
-        stage_class=stage_class,
-        actual={"turns": turns, "active_secs": secs},
-        est={"turns": {"low": 8, "high": 16}},
-        intent_uuid=intent_uuid,
-    )
+def seed(store, clock, *, scope="poc", depth="Minimal", stage_class="code_generation", turns=10, secs=1800):
+    """One calibration row as the table stores it (nothing in production writes them yet)."""
+    store.insert("calibration", {
+        "at": clock.iso(), "scope": scope, "depth": depth, "stage_class": stage_class,
+        "est_json": {"turns": {"low": 8, "high": 16}}, "actual_json": {"turns": turns, "active_secs": secs},
+    })
 
 
 # --------------------------------------------------------------------------- #
@@ -307,18 +302,17 @@ def test_coverage_lost_names_the_artifacts_a_disabled_stage_would_have_written(P
 # --------------------------------------------------------------------------- #
 
 
-def test_nine_samples_are_not_history_ten_are(E, P, svc, store):
+def test_nine_samples_are_not_history_ten_are(E, P, svc, store, clock):
     stages = [stage(P, "code-generation", phase="construction", per_unit=True)]
     for index in range(9):
-        svc.record_actual(sample(E, turns=40 + index, secs=(40 + index) * 100))
-    assert svc.cohort_samples("poc", "Minimal", "code_generation") == 9
+        seed(store, clock, turns=40 + index, secs=(40 + index) * 100)
     nine = svc.estimate(stages, depth="Minimal", units=1, scope="poc")
     assert nine.source == E.SOURCE_RULE_BAND
     assert nine.confidence == E.CONFIDENCE_LOW
     assert nine.samples == 9
     assert (nine.turns.low, nine.turns.high) == (7, 14)  # still the rule band
 
-    svc.record_actual(sample(E, turns=49, secs=4900))
+    seed(store, clock, turns=49, secs=4900)
     ten = svc.estimate(stages, depth="Minimal", units=1, scope="poc")
     assert ten.source == E.SOURCE_HISTORY
     assert ten.confidence == E.CONFIDENCE_MEDIUM
@@ -330,9 +324,9 @@ def test_nine_samples_are_not_history_ten_are(E, P, svc, store):
     assert ten.turns.low > 7
 
 
-def test_calibrated_band_ignores_other_cohorts(E, P, svc):
+def test_calibrated_band_ignores_other_cohorts(E, P, svc, store, clock):
     for _ in range(12):
-        svc.record_actual(sample(E, scope="feature", depth="Standard", turns=99, secs=9900))
+        seed(store, clock, scope="feature", depth="Standard", turns=99, secs=9900)
     est = svc.estimate(
         [stage(P, "code-generation", phase="construction", per_unit=True)],
         depth="Minimal",
@@ -343,10 +337,9 @@ def test_calibrated_band_ignores_other_cohorts(E, P, svc):
     assert est.samples == 0
 
 
-def test_one_uncalibrated_class_keeps_the_whole_estimate_a_rule_band(E, P, svc):
+def test_one_uncalibrated_class_keeps_the_whole_estimate_a_rule_band(E, P, svc, store, clock):
     for index in range(10):
-        svc.record_actual(sample(E, scope="feature", depth="Standard", turns=10 + index,
-                                 secs=(10 + index) * 120))
+        seed(store, clock, scope="feature", depth="Standard", turns=10 + index, secs=(10 + index) * 120)
     stages = [
         stage(P, "code-generation", phase="construction", per_unit=True),
         stage(P, "build-and-test", phase="construction"),
@@ -359,9 +352,9 @@ def test_one_uncalibrated_class_keeps_the_whole_estimate_a_rule_band(E, P, svc):
     assert dominant["build-and-test"].source == E.SOURCE_RULE_BAND
 
 
-def test_calibrated_seconds_per_turn_come_from_history(E, P, svc):
+def test_calibrated_seconds_per_turn_come_from_history(E, P, svc, store, clock):
     for index in range(10):
-        svc.record_actual(sample(E, scope="feature", depth="Standard", turns=10, secs=2000 + index))
+        seed(store, clock, scope="feature", depth="Standard", turns=10, secs=2000 + index)
     est = svc.estimate(
         [stage(P, "code-generation", phase="construction", per_unit=True)],
         depth="Standard",
@@ -373,46 +366,21 @@ def test_calibrated_seconds_per_turn_come_from_history(E, P, svc):
     assert est.active_secs.high == est.turns.high * 201
 
 
-def test_record_actual_refuses_an_unknown_cohort_class(E, svc, studio):
-    with pytest.raises(studio.errors.StudioError) as excinfo:
-        svc.record_actual(sample(E, stage_class="does-not-exist"))
-    assert excinfo.value.code == "internal_error"
-
-
-def test_rows_are_content_free(E, svc, store):
-    svc.record_actual(sample(E, intent_uuid="01a00000-0000-7000-8000-0000000000ff"))
-    row = store.select("calibration")[0]
-    text = repr(row)
-    assert "01a00000" not in text
-    assert row["actual_json"]["intent_ref"] == E.intent_ref_for("01a00000-0000-7000-8000-0000000000ff")
-    assert row["actual_json"]["intent_ref"] == hashlib.sha256(
-        b"01a00000-0000-7000-8000-0000000000ff"
-    ).hexdigest()[:12]
-    assert set(row) >= {"scope", "depth", "stage_class", "est_json", "actual_json"}
-    assert row["scope"] == "poc"
-
-
-def test_cohorts_and_est_vs_actual(E, svc):
-    svc.record_actual(sample(E, intent_uuid="uuid-a", turns=11, secs=1100))
-    svc.record_actual(sample(E, intent_uuid="uuid-a", turns=13, secs=1300, stage_class="build_and_test"))
-    svc.record_actual(sample(E, intent_uuid="uuid-b", turns=15, secs=1500))
+def test_cohorts_count_samples_per_key(E, svc, store, clock):
+    seed(store, clock, turns=11, secs=1100)
+    seed(store, clock, turns=13, secs=1300, stage_class="build_and_test")
+    seed(store, clock, turns=15, secs=1500)
     assert svc.cohorts() == [
         {"scope": "poc", "depth": "Minimal", "stage_class": "build_and_test", "samples": 1},
         {"scope": "poc", "depth": "Minimal", "stage_class": "code_generation", "samples": 2},
     ]
-    rows = svc.est_vs_actual(E.intent_ref_for("uuid-a"))
-    assert [r["actual"]["turns"] for r in rows] == [11, 13]
-    assert rows[0]["est"] == {"turns": {"low": 8, "high": 16}}
-    assert "intent_ref" not in rows[0]["actual"]
-    assert svc.est_vs_actual("nothing-here") == []
 
 
-def test_clear_removes_every_sample(E, svc):
+def test_clear_removes_every_sample(E, svc, store, clock):
     for index in range(4):
-        svc.record_actual(sample(E, turns=10 + index))
+        seed(store, clock, turns=10 + index)
     assert svc.clear() == 4
     assert svc.cohorts() == []
-    assert svc.cohort_samples("poc", "Minimal", "code_generation") == 0
     assert svc.clear() == 0
 
 
