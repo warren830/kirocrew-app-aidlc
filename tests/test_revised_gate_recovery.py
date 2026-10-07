@@ -108,8 +108,8 @@ def test_revision_return_uses_ordered_audit_proof_and_releases_only_its_lease(
         assert row["resolution_json"]["evidence"]["presence"]["ok"] is True
         assert not sv.scheduler.live()
     else:
-        assert row["status"] in ("Processing", "DeliveryUncertain", "ReconciliationRequired")
-        assert bool(sv.scheduler.live()) == (row["status"] == "Processing")  # only in flight holds the repo
+        assert row["status"] in ("Delivered", "ReconciliationRequired")
+        assert bool(sv.scheduler.live()) == (row["status"] == "Delivered")  # only in flight holds the repo
     assert len(fake_host.get_slot(scene.slot_key).messages) == 2
     assert row["wire_text"] == wire
     assert _tree_digest(scene.root) == before
@@ -167,8 +167,8 @@ def test_unit_revision_return_accepts_solo_rows_and_ignores_other_units(
     row = _row(sv, card["action_id"])
     if case == "other_unit_active":
         # Blank-Unit rows belong to whichever unit runs now; that is no longer this action's.
-        assert row["status"] in ("Processing", "DeliveryUncertain", "ReconciliationRequired")
-        assert bool(sv.scheduler.live()) == (row["status"] == "Processing")  # only in flight holds the repo
+        assert row["status"] in ("Delivered", "ReconciliationRequired")
+        assert bool(sv.scheduler.live()) == (row["status"] == "Delivered")  # only in flight holds the repo
     else:
         assert row["status"] == "StateChanged"
         assert row["resolution_json"]["reason"] == "gate_revision_returned"

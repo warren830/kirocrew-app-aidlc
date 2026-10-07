@@ -8,7 +8,7 @@ Four properties carry this file, and each of them is the product rather than the
    ``Delivering`` record plus ``receipt.host`` — byte for byte what the UI must POST to the host — and
    the host slot is provably untouched.
 3. **``not_delivered`` is proven, never believed.** With any evidence that the message might have
-   arrived, the answer is ``not_delivered_unproven`` and the row goes to ``DeliveryUncertain``: replaying
+   arrived, the answer is ``not_delivered_unproven`` and the row goes to ``ReconciliationRequired``: replaying
    a decision the conductor already acted on is the one failure the whole design exists to prevent.
 4. **Delivery reports are idempotent.** The same ``delivery_id`` twice is one delivery.
 """
@@ -347,7 +347,8 @@ def test_a_delivered_report_moves_the_row_and_is_idempotent(sv, routes, fake_hos
     status, first = call(sv, routes, "POST", path,
                          CT.owner_request("POST", path, host=fake_host, body=body))
     assert status == 200 and first["ok"] is True and first["idempotent"] is False
-    assert first["action"]["status"] in ("Delivered", "Processing")
+    assert first["action"]["status"] == "Delivered"
+    assert first["action"]["delivery"]["turn_started_at"] == first["action"]["delivery"]["delivered_at"]
     assert first["action"]["delivery"]["outcome"] == "delivered"
     assert first["action"]["delivery"]["receipt"] == {"ok": True, "slot": slot, "mid": "m-1"}
     # `delivery_confirmed` is the *late*-report flag (C24): on the happy path the status is the
@@ -373,6 +374,7 @@ def test_a_queued_receipt_is_delivered_but_waits(sv, routes, fake_host, repo, ga
     assert status == 200
     assert body["action"]["status"] == "Delivered"
     assert body["action"]["delivery"]["queued_at"]
+    assert "turn_started_at" not in body["action"]["delivery"], "its turn has not started yet"
 
 
 def test_not_delivered_is_accepted_only_with_an_authoritative_refusal(sv, routes, fake_host, repo,
@@ -408,7 +410,7 @@ def test_not_delivered_is_refused_when_a_matching_row_exists_in_the_slot(sv, rou
     assert set(body["details"]["checks"]) == {"row_absent", "slot_idle", "disk_baseline_unchanged",
                                              "boot_unchanged"}
     assert body["details"]["checks"]["row_absent"] is False
-    assert sv.storage.get("actions", gate.action_id)["status"] == "DeliveryUncertain"
+    assert sv.storage.get("actions", gate.action_id)["status"] == "ReconciliationRequired"
 
 
 def test_not_delivered_is_refused_without_an_authoritative_status(sv, routes, fake_host, repo, gate,
@@ -455,7 +457,8 @@ def test_an_uncertain_report_is_recorded_as_uncertain(sv, routes, fake_host, rep
         "receipt": None,
     })
     status, body = call(sv, routes, "POST", path, request)
-    assert status == 200 and body["action"]["status"] == "DeliveryUncertain"
+    assert status == 200 and body["action"]["status"] == "ReconciliationRequired"
+    assert body["action"]["queue_type"] == "delivery_uncertain"
 
 
 def test_a_delivery_report_for_another_delivery_is_refused(sv, routes, fake_host, repo, gate, slot):

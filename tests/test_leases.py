@@ -147,7 +147,7 @@ def repo(studio, store, repo_id: str = "r_1", *, identity=_UNSET, **over):
     return studio.repo_registry.RepoRecord.from_row(store.get("repos", repo_id))
 
 
-def action(store, action_id: str = "a_1", *, status: str = "Processing", repo_id: str = "r_1",
+def action(store, action_id: str = "a_1", *, status: str = "Delivered", repo_id: str = "r_1",
            identity: str = IDENTITY, **over):
     row = {
         "action_id": action_id,
@@ -185,7 +185,7 @@ def turn(sched, record, action_id: str = "a_1", **over):
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("status", ["Delivering", "Delivered", "Processing"])
+@pytest.mark.parametrize("status", ["Delivering", "Delivered"])
 def test_an_in_flight_action_is_the_execution_lease_and_blocks_admin_work(
     studio, store, sched, L, errors, status
 ):
@@ -210,7 +210,7 @@ def test_an_in_flight_action_is_the_execution_lease_and_blocks_admin_work(
 
 def test_the_action_leaving_flight_is_the_release(studio, store, sched, errors):
     record = repo(studio, store)
-    action(store, status="Processing")
+    action(store, status="Delivered")
     with pytest.raises(errors.LeaseHeld):
         run(sched.acquire_admin(record, operation_type="upgrade", transaction_id="tx_1"))
 
@@ -220,7 +220,7 @@ def test_the_action_leaving_flight_is_the_release(studio, store, sched, errors):
 
 
 @pytest.mark.parametrize("status,generation", [
-    *[(status, 7) for status in ("Queued", "NotDelivered", "DeliveryUncertain", "ReconciliationRequired",
+    *[(status, 7) for status in ("Queued", "NotDelivered", "ReconciliationRequired",
                                  "StateChanged", "ResolvedNoTransition", "Failed", "Cancelled")],
     ("Delivering", None),   # a force stop: in flight, but the host-control lane takes no lease
 ])

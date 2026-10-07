@@ -596,7 +596,7 @@ def test_stable_boundary_names_every_unmet_condition(projection, proj_mod, gate_
 
     busy = projection.stable_boundary(
         replace(gate_snap, stable=False, is_active=False, cursor="260905-other"),
-        live_actions=[ActionStub(status="Processing")],
+        live_actions=[ActionStub(status="Delivered")],
         busy_reasons=("running",),
         lease_active=True,
     )
@@ -634,10 +634,6 @@ def test_rule_01_archived_wins_over_everything(projection, gate_snap):
 def test_rule_02_blocking_finding_or_uncertain_action(projection, gate_snap):
     assert (
         projection.operational_state(gate_snap, findings=[FindingStub("gate_without_audit_row", "blocking")])
-        == "ReconciliationRequired"
-    )
-    assert (
-        projection.operational_state(gate_snap, live_actions=[ActionStub(status="DeliveryUncertain")])
         == "ReconciliationRequired"
     )
     assert (
@@ -709,7 +705,7 @@ def test_rule_05_completed_and_rule_06_parked(projection, repo_record, parked_re
 def test_rule_07_running_from_the_slot_or_an_in_flight_turn(projection, gate_snap):
     assert projection.operational_state(gate_snap, host=SessionStub(running=True)) == "Running"
     assert projection.operational_state(gate_snap, live_actions=[ActionStub(status="Delivered")]) == "Running"
-    assert projection.operational_state(gate_snap, live_actions=[ActionStub(status="Processing")]) == "Running"
+    assert projection.operational_state(gate_snap, live_actions=[ActionStub(status="Delivered")]) == "Running"
 
 
 def test_rule_08_only_command_actions_make_an_intent_queued(projection, gate_snap):
@@ -1096,11 +1092,11 @@ def test_no_seed_is_derived_for_an_uncertain_delivery(projection, gate_snap, pro
     seeds = _seeds(
         projection,
         gate_snap,
-        live_actions=[ActionStub(status="DeliveryUncertain")],
+        live_actions=[ActionStub(status="ReconciliationRequired")],
         findings=[FindingStub("delivery_uncertain_action", "blocking")],
     )
     assert "delivery_uncertain" not in _by_type(seeds)
-    assert proj_mod.queue_type_for("gate", "DeliveryUncertain") == "delivery_uncertain"
+    assert proj_mod.queue_type_for("gate", "Delivered") == "gate"
     assert proj_mod.queue_type_for("gate", "ReconciliationRequired") == "delivery_uncertain"
     assert proj_mod.queue_type_for("gate", "Queued") == "gate"
 

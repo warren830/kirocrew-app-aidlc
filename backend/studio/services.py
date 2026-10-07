@@ -33,7 +33,7 @@ from typing import Any, Callable
 from . import constants as C
 from . import security
 from .activity import ActivityProjector
-from .actions import HumanActionBroker, MachineActionBroker
+from .actions import HumanActionBroker
 from .advisor import AdvisorBroker
 from .aidlc_reader import AidlcReader
 from .consistency import ConsistencyEngine
@@ -125,7 +125,6 @@ class Services:
     host: HostBridge
     sessions: SessionBinder
     actions: HumanActionBroker
-    machine: MachineActionBroker
     reconciler: Reconciler
     installer: Installer
     plan: PlanService
@@ -245,7 +244,6 @@ class Services:
             boot_id,
             scan_pool=scan_pool,
         )
-        machine = MachineActionBroker(actions, activity, clock)
         installer = Installer(
             storage,
             repos,
@@ -297,7 +295,6 @@ class Services:
             host=host,
             sessions=sessions,
             actions=actions,
-            machine=machine,
             reconciler=None,  # type: ignore[arg-type] - assigned below; it needs the container
             installer=installer,
             plan=plan,

@@ -92,8 +92,8 @@ def test_unverified_reply_releases_only_after_a_scoped_receipt(
             assert evidence["recorded_answer"]["fields"]["Details"] != wire
             assert (evidence["next_gate"] is not None) is (case in AT_GATE)
     else:
-        assert row["status"] in ("Processing", "DeliveryUncertain", "ReconciliationRequired")
-        assert bool(sv.scheduler.live()) == (row["status"] == "Processing")  # only in flight holds the repo
+        assert row["status"] in ("Delivered", "ReconciliationRequired")
+        assert bool(sv.scheduler.live()) == (row["status"] == "Delivered")  # only in flight holds the repo
     assert row["wire_text"] == wire
     assert len(fake_host.get_slot(scene.slot_key).messages) == 2
     assert _tree_digest(scene.root) == before

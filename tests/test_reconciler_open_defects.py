@@ -40,14 +40,13 @@ def test_confirmed_presence_anomaly_can_finish_without_rebasing_or_replay(
 ):
     """The frozen count must not strand a completed gate after its anomaly was escalated."""
     touch_human_turn(scene.root, mtime_ns=1_000_000_000)
-    action_id = scene.make(status="Processing", lease_generation=7)
+    action_id = scene.make(status="Delivered", lease_generation=7)
     original = svc.storage.get("actions", action_id)
     approve_on_disk(scene.root, human_turns=human_turns)
     touch_human_turn(scene.root, mtime_ns=2_000_000_000)
     finish_turn(fake_host, scene.slot_key)
     transcript = list(scene.slot.messages)
 
-    assert _reconcile(svc, action_id).status == "DeliveryUncertain"
     required = _reconcile(svc, action_id)
     assert required.status == "ReconciliationRequired"
     assert required.evidence["delivery_confirmed"] is True
@@ -65,9 +64,7 @@ def test_confirmed_presence_anomaly_can_finish_without_rebasing_or_replay(
     assert settled.presence_baseline == original["presence_baseline_json"]
     assert settled.delivery_id == original["delivery_id"]
     assert scene.slot.messages == transcript
-    assert [status for _, status, _ in svc.actions.transitions] == [
-        "DeliveryUncertain", "ReconciliationRequired", "StateChanged"
-    ]
+    assert [status for _, status, _ in svc.actions.transitions] == ["ReconciliationRequired", "StateChanged"]
     assert asyncio.run(svc.scheduler.get(scene.repo.resolved_identity)) is None
     assert asyncio.run(svc.actions.list_live(repo_id=scene.repo_id)) == []
     assert _reconcile(svc, action_id).status_generation == settled.status_generation

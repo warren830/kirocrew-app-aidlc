@@ -125,14 +125,6 @@ export function IntentRow({ intent, layout, actions }: IntentRowProps) {
     </>
   )
 
-  // `keep_moving` is typed `false` on the wire and always will be in v1: the machine lane is unproven, so
-  // the column reports unavailability with its reason rather than an "off" that implies a switch.
-  const keepMoving = (
-    <Chip icon="warn" tone="warn" title={t('intents.keepMoving.why')}>
-      {t('intents.keepMoving.unavailable')}
-    </Chip>
-  )
-
   if (layout === 'card') {
     return (
       <li className="studio-intent-card" data-state={intent.operational_state}>
@@ -142,10 +134,6 @@ export function IntentRow({ intent, layout, actions }: IntentRowProps) {
         </div>
         <div className="studio-col">{identity}</div>
         <div className="studio-col">{stage}</div>
-        <div className="studio-row studio-wrap">
-          <span className="studio-row-sub">{t('intents.col.keepMoving')}</span>
-          {keepMoving}
-        </div>
         <div className="studio-row studio-wrap">{actions}</div>
       </li>
     )
@@ -157,7 +145,6 @@ export function IntentRow({ intent, layout, actions }: IntentRowProps) {
       <td>{identity}</td>
       <td>{state}</td>
       <td>{stage}</td>
-      <td>{keepMoving}</td>
       <td>{actions}</td>
     </tr>
   )
@@ -179,7 +166,7 @@ export function IntentRowError({ repo, message, layout }: { repo: string; messag
   }
   return (
     <tr data-tone="warn">
-      <td colSpan={6}>
+      <td colSpan={5}>
         <span className="studio-row">
           <Icon name="warn" size={13} />
           {text}

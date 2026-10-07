@@ -59,11 +59,10 @@ def test_plan_settles_after_questions_handoff_without_answering_learnings(
     async def settle():
         rec = await sv.actions.get(card["action_id"])
         if uncertain:
-            for status in ("DeliveryUncertain", "ReconciliationRequired"):
-                rec = await sv.actions.transition(
-                    rec.action_id, status, expected_generation=rec.status_generation,
-                    reason="test_deadline", evidence={"delivery_confirmed": True},
-                )
+            rec = await sv.actions.transition(
+                rec.action_id, "ReconciliationRequired", expected_generation=rec.status_generation,
+                reason="test_deadline", evidence={"delivery_confirmed": True},
+            )
         await sv.reconciler.reconcile_now(rec.action_id)
         assert (await sv.actions.get(rec.action_id)).status == rec.status
         # A plan receipt cannot end a still-running turn; only the in-flight row holds the repository.

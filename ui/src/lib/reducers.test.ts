@@ -51,11 +51,11 @@ describe('looksBusy — the poll-pace reducer', () => {
     expect(looksBusy({ leases: [], global_concurrency_cap: 2, live_execution: 0 })).toBe(false)
   })
 
-  it('recognises exactly the three in-flight card statuses, in a list and on its own', () => {
+  it('recognises exactly the two in-flight card statuses, in a list and on its own', () => {
     // Exhaustive over the generated enum, so a status added by the backend has to be classified here
     // rather than defaulting into the fast poll (or out of it).
     const busy = ACTION_STATUSES.filter((status) => looksBusy({ actions: [actionCard({ status })] }))
-    expect(busy).toEqual(['Delivering', 'Delivered', 'Processing'])
+    expect(busy).toEqual(['Delivering', 'Delivered'])
     for (const status of busy) expect(looksBusy({ action: actionCard({ status }) })).toBe(true)
     // `Queued` is the resting state of the whole queue: polling it fast would mean polling forever.
     expect(looksBusy({ actions: [actionCard({ status: 'Queued' })] })).toBe(false)

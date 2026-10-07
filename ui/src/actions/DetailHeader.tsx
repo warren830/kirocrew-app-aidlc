@@ -107,7 +107,9 @@ export function DetailHeader({ card, onOpenCurrent }: DetailHeaderProps) {
             ? <Chip icon="clock">{t('detail.closedAt', { at: at(i18n, card.resolution.resolved_at) })}</Chip>
             : null
         ) : <Chip icon="clock">{t('detail.waiting', { duration: waiting(i18n, card.waiting_since) })}</Chip>}
-        <Chip tone={statusTone(card.status)}>{statusLabel(i18n, card.status, card.resolution.reason)}</Chip>
+        <Chip tone={statusTone(card.status)}>
+          {statusLabel(i18n, card.status, card.resolution.reason, card.delivery.turn_started_at)}
+        </Chip>
         {/* The review class is AI-DLC's own configured word for this stage: shown verbatim. */}
         {reviewClass ? <Chip tone="info" icon="review">{t('detail.reviewClass', { name: reviewClass })}</Chip> : null}
         {revision !== null && revision > 0 ? <Chip>{t('detail.revision', { n: i18n.fmt.number(revision) })}</Chip> : null}

@@ -227,16 +227,16 @@ DETERMINISTIC_FINGERPRINT_CLASSES = (
 # canonical enums (PRD §11 — verbatim wire strings, never localized)
 # --------------------------------------------------------------------------- #
 
+#: ``Delivered`` covers the running turn too: ``evidence.turn_started_at`` says it began (the UI calls that
+#: "processing"). ``ReconciliationRequired`` is every delivery Studio cannot account for, from the first
+#: moment of doubt.
 ACTION_STATUS = (
-    "Draft",
     "Queued",
     "Delivering",
     "Delivered",
-    "Processing",
     "StateChanged",
     "ResolvedNoTransition",
     "NotDelivered",
-    "DeliveryUncertain",
     "ReconciliationRequired",
     "Failed",
     "Cancelled",
@@ -246,8 +246,6 @@ LIVE_ACTION_STATUS = (
     "Queued",
     "Delivering",
     "Delivered",
-    "Processing",
-    "DeliveryUncertain",
     "ReconciliationRequired",
     "NotDelivered",
     "Failed",
@@ -408,15 +406,13 @@ DECISIONS: dict[str, tuple[str, ...]] = {
     "prepare_commit": ("prepare_commit",),
 }
 
-#: Legal action-state transitions (PRD §11.1). Data, not code, so the state machine and its test read
-#: the same table.
+#: Legal action-state transitions (PRD §11.1, with ``Processing`` folded into ``Delivered`` and
+#: ``DeliveryUncertain`` into ``ReconciliationRequired``). Data, not code, so the state machine and its test
+#: read the same table.
 ALLOWED_TRANSITIONS: dict[str, tuple[str, ...]] = {
-    "Draft": ("Queued", "Cancelled"),
     "Queued": ("Delivering", "Cancelled"),
-    "Delivering": ("Delivered", "NotDelivered", "DeliveryUncertain"),
-    "Delivered": ("Processing", "DeliveryUncertain"),
-    "Processing": ("StateChanged", "ResolvedNoTransition", "DeliveryUncertain", "Failed"),
-    "DeliveryUncertain": ("ReconciliationRequired",),
+    "Delivering": ("Delivered", "NotDelivered", "ReconciliationRequired"),
+    "Delivered": ("StateChanged", "ResolvedNoTransition", "ReconciliationRequired", "Failed"),
     "ReconciliationRequired": ("StateChanged", "ResolvedNoTransition", "NotDelivered", "Failed"),
     "NotDelivered": ("Queued", "Cancelled"),
     "StateChanged": (),
@@ -844,15 +840,13 @@ VACUUM_MIN_FREELIST_PAGES = 2000
 VACUUM_FREELIST_RATIO = 0.25
 
 #: Statuses under which ``actions.dedupe_key`` must be unique — the ``actions_live_dedupe`` partial
-#: index in ``storage.SCHEMA_V1`` and the set ``Projection.upsert_derived`` treats as live. It is
+#: index (as ``storage.SCHEMA_V3`` recreates it) and the set ``upsert_derived`` treats as live. It is
 #: ``LIVE_ACTION_STATUS`` minus ``Failed``: a failed card stays *visible* in the queue but must not
 #: block a retry of the same boundary from being inserted (review P06/R12).
 DEDUPE_LIVE_ACTION_STATUS = (
     "Queued",
     "Delivering",
     "Delivered",
-    "Processing",
-    "DeliveryUncertain",
     "ReconciliationRequired",
     "NotDelivered",
 )

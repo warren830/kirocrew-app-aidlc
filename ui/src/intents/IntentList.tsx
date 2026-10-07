@@ -74,7 +74,6 @@ export function IntentList({ intents, failures, narrow, renderActions }: IntentL
           <th scope="col">{t('intents.col.intent')}</th>
           <th scope="col">{t('intents.col.state')}</th>
           <th scope="col">{t('intents.col.stage')}</th>
-          <th scope="col">{t('intents.col.keepMoving')}</th>
           <th scope="col">{t('intents.col.actions')}</th>
         </tr>
       </thead>

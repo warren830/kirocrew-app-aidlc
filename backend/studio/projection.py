@@ -183,7 +183,7 @@ RECOVERY_EXCLUDED_FINDINGS: frozenset[str] = frozenset({"delivery_uncertain_acti
 COMMAND_ACTION_TYPES: frozenset[str] = frozenset({"run", "resume", "prepare_commit", "force_stop"})
 
 #: Statuses that re-type a card as `delivery_uncertain` in the queue (§2.11).
-UNCERTAIN_STATUSES: frozenset[str] = frozenset({"DeliveryUncertain", "ReconciliationRequired"})
+UNCERTAIN_STATUSES: frozenset[str] = frozenset({"ReconciliationRequired"})
 
 #: How many audit rows `IntentDetail.audit_tail` carries (§1.8).
 AUDIT_TAIL_LIMIT = 50

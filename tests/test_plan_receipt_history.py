@@ -133,8 +133,8 @@ def test_recorded_plan_approval_settles_only_the_original_reply(
         assert row["resolution_json"]["evidence"]["current_plan_requires_approval"] is True
         assert not sv.scheduler.live()
     else:
-        assert row["status"] in ("Processing", "DeliveryUncertain", "ReconciliationRequired")
-        assert bool(sv.scheduler.live()) == (row["status"] == "Processing")  # only in flight holds the repo
+        assert row["status"] in ("Delivered", "ReconciliationRequired")
+        assert bool(sv.scheduler.live()) == (row["status"] == "Delivered")  # only in flight holds the repo
     assert len(fake_host.get_slot(scene.slot_key).messages) == 2
     assert _tree_digest(scene.root) == before
 

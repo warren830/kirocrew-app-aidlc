@@ -219,7 +219,7 @@ def test_old_queued_failure_does_not_recreate_itself_after_workflow_completion(s
     assert failure(projection, snap, live_actions=[old_card]) is None
 
 
-@pytest.mark.parametrize("status", ["DeliveryUncertain", "ReconciliationRequired"])
+@pytest.mark.parametrize("status", ["ReconciliationRequired"])
 def test_terminal_completion_keeps_uncertain_delivery_semantics(snapshot, projection, proj_mod, status):
     snap = snapshot([event("WORKFLOW_COMPLETED", 40)], status="Completed")
     uncertain = ActionStub(status=status)

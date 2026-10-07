@@ -40,9 +40,9 @@ describe('delivery outcomes describe observed progress', () => {
     )
   })
 
-  it.each(['DeliveryUncertain', 'ReconciliationRequired'] as const)('keeps the uncertainty warning without confirmed delivery (%s)', (status) => {
+  it('keeps the uncertainty warning without confirmed delivery', () => {
     const i18n = makeI18n('en-US')
-    const strip = show(status)
+    const strip = show('ReconciliationRequired')
     expect(within(strip).getByRole('alert')).toHaveTextContent(i18n.t('delivery.uncertainBody'))
     expect([...strip.querySelectorAll('.studio-dstep')].map((step) => step.getAttribute('data-state')))
       .toEqual(['done', 'failed', 'future', 'future'])
@@ -124,11 +124,26 @@ describe('delivery outcomes describe observed progress', () => {
   })
 
   it('keeps active processing distinct from a settled turn', () => {
-    const strip = show('Processing')
+    // The backend folds a running turn into `Delivered`; its start time is what still reads "being processed".
+    const base = actionCard()
+    render(<I18nProvider><DeliveryStrip card={actionCard({ status: 'Delivered', delivery: {
+      ...base.delivery, delivered_at: '2026-09-14T10:00:00Z', turn_started_at: '2026-09-14T10:00:01Z',
+    } })} /></I18nProvider>)
+    const strip = screen.getByRole('region', { name: 'Delivery state' })
     expect([...strip.querySelectorAll('.studio-dstep')].map((step) => step.getAttribute('data-state'))).toEqual([
       'done', 'done', 'now', 'future',
     ])
+    expect(strip).toHaveTextContent('Being processed')
     expect(strip).not.toHaveTextContent('No workflow state change was recorded.')
+  })
+
+  it('names a delivered message whose turn has not started on the same step, without claiming processing', () => {
+    const strip = show('Delivered')
+    expect([...strip.querySelectorAll('.studio-dstep')].map((step) => step.getAttribute('data-state'))).toEqual([
+      'done', 'done', 'now', 'future',
+    ])
+    expect(strip).toHaveTextContent('Sent')
+    expect(strip).not.toHaveTextContent('Being processed')
   })
 
   it('does not show a cancelled action as queued and in progress', () => {

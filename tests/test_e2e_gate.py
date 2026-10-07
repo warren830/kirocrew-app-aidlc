@@ -477,7 +477,7 @@ def test_the_delivery_report_moves_the_row_and_is_idempotent(sv, routes, fake_ho
     status, first = _report(sv, routes, fake_host, card["action_id"], receipt)
     assert status == 200, first
     assert first["idempotent"] is False
-    assert first["action"]["status"] in ("Delivered", "Processing")
+    assert first["action"]["status"] == "Delivered"
 
     status, again = _report(sv, routes, fake_host, card["action_id"], receipt)
     assert status == 200
@@ -505,7 +505,7 @@ def test_a_client_claiming_never_sent_is_refused_when_the_transcript_disagrees(
     assert status == 409
     assert body["code"] == "not_delivered_unproven"
     assert body["details"]["checks"]["row_absent"] is False
-    assert _row(sv, card["action_id"])["status"] == "DeliveryUncertain"
+    assert _row(sv, card["action_id"])["status"] == "ReconciliationRequired"
 
 
 # --------------------------------------------------------------------------- #
@@ -703,17 +703,6 @@ def test_no_denied_engine_verb_was_ever_invoked(sv, routes, fake_host, scene, de
     assert not denied_log.exists(), denied_log.read_text()
 
 
-def test_the_machine_lane_refuses_the_same_decision_with_the_pinned_reason(sv, scene, delivered, studio):
-    """There is no machine lane in v1: the broker refuses and records the refusal (S12)."""
-    with pytest.raises(Exception) as raised:
-        asyncio.run(sv.machine.dispatch(action_id=delivered.action_id))
-    assert getattr(raised.value, "code", "") == "machine_lane_unavailable"
-    assert raised.value.details["reason"] == studio.constants.MACHINE_LANE_REASON == "s12_unproven"
-
-    rows = sv.storage.select("activity", {"kind": "machine_lane.refused"})
-    assert len(rows) == 1, "the refusal must be on the record, not only raised at the caller"
-
-
 # --------------------------------------------------------------------------- #
 # 7. the crash path — killed between the CAS and the report
 # --------------------------------------------------------------------------- #
@@ -770,7 +759,7 @@ def test_a_crash_between_the_cas_and_the_report_never_replays_the_decision(
     assert report.actions_reevaluated >= 1
 
     row = dict(after.storage.get("actions", card["action_id"]))
-    assert row["status"] in ("DeliveryUncertain", "ReconciliationRequired"), row["status"]
+    assert row["status"] == "ReconciliationRequired", row["status"]
     assert dict(row["evidence_json"] or {})["boot_id_unchanged"] is False
 
     # Two more ticks: the escalation must reach a state a human can act on and stop there.

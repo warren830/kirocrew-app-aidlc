@@ -48,7 +48,7 @@ if TYPE_CHECKING:  # the injectable protocols live in constants.py (§0.2); anno
 
 #: Bumped only together with a new entry in ``MIGRATIONS``. ``open()`` is a no-op when the file
 #: already carries this version, so a restart costs nothing.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA_V1 = """\
 CREATE TABLE IF NOT EXISTS schema_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -216,7 +216,28 @@ SCHEMA_V2 = """\
 ALTER TABLE admin_leases ADD COLUMN boot_id TEXT;
 """
 
-MIGRATIONS: dict[int, str] = {1: SCHEMA_V1, 2: SCHEMA_V2}
+#: Version 3 folds the two transient action statuses into their neighbours: ``Processing`` becomes
+#: ``Delivered`` with ``evidence.turn_started_at`` (a row that never recorded it was not queued, so its turn
+#: started with the delivery), ``DeliveryUncertain`` becomes ``ReconciliationRequired``, and ``Draft`` — never
+#: created — becomes ``Queued``. History is renamed only where the UI lost the label (``Processing`` keeps
+#: its: it still names a ``Delivered`` row whose turn started). The live-dedupe index is rebuilt over the
+#: statuses that remain.
+SCHEMA_V3 = """\
+UPDATE actions SET status = 'Delivered', evidence_json = json_set(COALESCE(evidence_json, '{}'),
+  '$.turn_started_at', COALESCE(json_extract(evidence_json, '$.turn_started_at'), delivered_at, updated_at))
+  WHERE status = 'Processing';
+UPDATE actions SET status = 'ReconciliationRequired' WHERE status = 'DeliveryUncertain';
+UPDATE actions SET status = 'Queued' WHERE status = 'Draft';
+UPDATE action_transitions SET from_status = CASE from_status WHEN 'DeliveryUncertain' THEN 'ReconciliationRequired'
+  WHEN 'Draft' THEN 'Queued' ELSE from_status END, to_status = CASE to_status
+  WHEN 'DeliveryUncertain' THEN 'ReconciliationRequired' WHEN 'Draft' THEN 'Queued' ELSE to_status END
+  WHERE from_status IN ('DeliveryUncertain', 'Draft') OR to_status IN ('DeliveryUncertain', 'Draft');
+DROP INDEX IF EXISTS actions_live_dedupe;
+CREATE UNIQUE INDEX actions_live_dedupe ON actions(dedupe_key)
+  WHERE dedupe_key IS NOT NULL AND status IN ('Queued','Delivering','Delivered','ReconciliationRequired','NotDelivered');
+"""
+
+MIGRATIONS: dict[int, str] = {1: SCHEMA_V1, 2: SCHEMA_V2, 3: SCHEMA_V3}
 
 #: ``table -> (generation column, timestamp column)``. Per table because the lease tables have no
 #: ``updated_at`` — writing one would fail the whole CAS (review R06).

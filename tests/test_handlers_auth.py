@@ -238,7 +238,6 @@ def test_an_internal_secret_header_alone_is_still_401(sv, routes, fake_host):
     ("POST", "/repos/r_000000000001/intents"),
     ("POST", "/repos/r_000000000001/intents/plan/advise"),
     ("POST", "/repos/r_000000000001/intents/demo/run"),
-    ("POST", "/repos/r_000000000001/intents/demo/keep-moving"),
     ("POST", "/repos/r_000000000001/intents/demo/session/bind"),
 ])
 def test_a_non_owner_gets_403_owner_required_on_every_mutation(sv, routes, fake_host, method, path):

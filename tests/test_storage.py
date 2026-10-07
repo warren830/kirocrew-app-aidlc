@@ -123,16 +123,89 @@ def test_ddl_applies_to_an_empty_file(store, S, db_path):
     # every table the key map claims exists and is readable; only schema_meta starts non-empty
     for table in sorted(set(S.TABLE_KEYS) - {"schema_meta"}):
         assert store.select(table, limit=1) == []
-    assert store.pragmas()["schema_version"] == S.SCHEMA_VERSION == 2
+    assert store.pragmas()["schema_version"] == S.SCHEMA_VERSION == 3
     assert store.integrity_check() == []
 
 
-def test_the_partial_dedupe_index_covers_exactly_the_live_statuses(S, C):
-    tail = S.SCHEMA_V1.split("actions_live_dedupe", 1)[1]
-    listed = tail.split("status IN (", 1)[1].split(")", 1)[0]
+def test_the_partial_dedupe_index_covers_exactly_the_live_statuses(store, C):
+    """Read from the file, not from a DDL string: ``SCHEMA_V1`` stays the record of version 1, and the index
+    in force is the one the latest migration built."""
+    raw = sqlite3.connect(str(store.path))
+    try:
+        (sql,) = raw.execute("SELECT sql FROM sqlite_master WHERE name = 'actions_live_dedupe'").fetchone()
+    finally:
+        raw.close()
+    listed = sql.split("status IN (", 1)[1].split(")", 1)[0]
     statuses = tuple(part.strip().strip("'") for part in listed.split(","))
     assert statuses == tuple(C.DEDUPE_LIVE_ACTION_STATUS)
     assert "Failed" not in statuses and "Failed" in C.LIVE_ACTION_STATUS
+
+
+def test_version_3_folds_the_retired_action_statuses_into_their_neighbours(S, C, db_path, clock, ids):
+    """``Processing`` was a ``Delivered`` whose turn had started, ``DeliveryUncertain`` an early
+    ``ReconciliationRequired``, and ``Draft`` was never created. An upgraded file holds only statuses the code
+    can still move: the turn's start is kept as evidence (the reconciler's own stamp when it made one, else the
+    delivery), and the live-dedupe index is rebuilt over the statuses that remain."""
+    raw = sqlite3.connect(str(db_path))
+    for script in (S.SCHEMA_V1, S.SCHEMA_V2):
+        for statement in S._statements(script):
+            raw.execute(statement)
+    raw.execute("INSERT INTO schema_meta(key, value) VALUES('schema_version', '2')")
+    raw.execute("INSERT INTO repos(id, resolved_identity, canonical_path, label, added_at, platform) "
+                "VALUES('r_1', '1:r_1', '/FIXTURE/repo/r_1', 'r_1', ?, 'darwin')", (TS,))
+
+    def old_row(action_id, status, evidence, *, delivered_at=None, dedupe=None):
+        raw.execute(
+            "INSERT INTO actions(action_id, type, risk_class, repo_id, intent_dir, space, status, created_at, "
+            "updated_at, waiting_since, delivered_at, evidence_json, dedupe_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (action_id, "gate", "human_lane", "r_1", "260904-gate-demo", "default", status, TS,
+             "2026-09-04T10:05:00Z", TS, delivered_at, None if evidence is None else json.dumps(evidence), dedupe))
+
+    old_row("a_ran", "Processing", {"receipt": {"ok": True}}, delivered_at="2026-09-04T10:01:00Z", dedupe="k1")
+    old_row("a_queued", "Processing", {"queued_at": "2026-09-04T10:01:00Z", "turn_started_at": "2026-09-04T10:03:00Z"},
+            delivered_at="2026-09-04T10:01:00Z", dedupe="k2")
+    old_row("a_bare", "Processing", None)
+    old_row("a_unsure", "DeliveryUncertain", {"outcome": "uncertain"}, dedupe="k3")
+    old_row("a_draft", "Draft", {})
+    old_row("a_waiting", "Delivered", {"queued_at": TS}, delivered_at=TS)
+    for from_status, to_status, reason in (("Delivering", "DeliveryUncertain", "ack_deadline"),
+                                           ("DeliveryUncertain", "ReconciliationRequired", "uncertain_escalated"),
+                                           ("Delivered", "Processing", "turn_started")):
+        raw.execute("INSERT INTO action_transitions(action_id, from_status, to_status, generation, at, reason) "
+                    "VALUES('a_unsure', ?, ?, 1, ?, ?)", (from_status, to_status, TS, reason))
+    raw.commit()
+    raw.close()
+
+    store = S.Storage(db_path, clock=clock, ids=ids)
+    store.open()
+    try:
+        assert {r["action_id"]: r["status"] for r in store.select("actions")} == {
+            "a_ran": "Delivered", "a_queued": "Delivered", "a_bare": "Delivered",
+            "a_unsure": "ReconciliationRequired", "a_draft": "Queued", "a_waiting": "Delivered",
+        }
+        assert {r["status"] for r in store.select("actions")} <= set(C.ACTION_STATUS)
+
+        def evidence(action_id):
+            return store.get("actions", action_id)["evidence_json"]
+
+        assert evidence("a_ran") == {"receipt": {"ok": True}, "turn_started_at": "2026-09-04T10:01:00Z"}
+        assert evidence("a_queued")["turn_started_at"] == "2026-09-04T10:03:00Z"
+        assert evidence("a_bare") == {"turn_started_at": "2026-09-04T10:05:00Z"}
+        assert evidence("a_unsure") == {"outcome": "uncertain"}
+        assert "turn_started_at" not in evidence("a_waiting"), "a queued message still waits for its turn"
+        # History keeps its reasons; only a status the UI no longer has a label for is renamed.
+        assert [(t["from_status"], t["to_status"], t["reason"])
+                for t in store.select("action_transitions", order_by="id ASC")] == [
+            ("Delivering", "ReconciliationRequired", "ack_deadline"),
+            ("ReconciliationRequired", "ReconciliationRequired", "uncertain_escalated"),
+            ("Delivered", "Processing", "turn_started"),
+        ]
+        assert store.pragmas()["schema_version"] == S.SCHEMA_VERSION == 3
+        assert store.integrity_check() == []
+        with pytest.raises(sqlite3.IntegrityError):
+            action(store, "a_twin", status="ReconciliationRequired", dedupe_key="k1")
+    finally:
+        store.close()
 
 
 def test_pragmas_are_in_force_on_the_connection(store, C):

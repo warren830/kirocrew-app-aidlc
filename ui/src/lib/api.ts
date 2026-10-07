@@ -254,13 +254,6 @@ export interface StudioApi extends WorkspaceApi {
   prepareCommit(repoId: string, intentKey: string): Promise<CommandResponse>
   pause(repoId: string, intentKey: string, paused: boolean): Promise<PauseResponse>
   forceStop(repoId: string, intentKey: string): Promise<SubmitReceipt>
-  /**
-   * Always rejects with `machine_lane_unavailable` (§2.3). Present so the client surface matches the
-   * route table and so the one place that could ever call it is the one place that documents why it
-   * cannot: every KiroCrew path to kiro-cli mints a `HUMAN_TURN`, so unattended continuation would
-   * forge human presence in AI-DLC's audit trail. Settings renders `unavailable.machineLane` instead.
-   */
-  keepMoving(repoId: string, intentKey: string, enabled: boolean): Promise<never>
   bindSession(repoId: string, intentKey: string, slotKey: string): Promise<BindResponse>
   unbindSession(repoId: string, intentKey: string): Promise<BindingResponse>
   takeoverPreview(repoId: string, intentKey: string): Promise<TakeoverPreviewResponse>
@@ -421,8 +414,6 @@ export function useStudioApi(): StudioApi {
       pause: (repoId, intentKey, paused) => post(intentPath(repoId, intentKey, '/pause'), { paused }),
       forceStop: (repoId, intentKey) =>
         post(intentPath(repoId, intentKey, '/force-stop'), { confirm: true }),
-      keepMoving: (repoId, intentKey, enabled) =>
-        post(intentPath(repoId, intentKey, '/keep-moving'), { enabled }),
       bindSession: (repoId, intentKey, slotKey) =>
         post(intentPath(repoId, intentKey, '/session/bind'), { slot_key: slotKey }),
       unbindSession: (repoId, intentKey) => post(intentPath(repoId, intentKey, '/session/unbind'), {}),

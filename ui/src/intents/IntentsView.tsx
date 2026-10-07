@@ -371,13 +371,6 @@ export function IntentsView({ route, go }: IntentsViewProps) {
           />
         )}
 
-        {intents.length > 0 ? (
-          <p className="studio-consequence">
-            <Icon name="lock" size={13} />
-            <span>{t('intents.keepMoving.why')}</span>
-          </p>
-        ) : null}
-
         <p className="studio-sr" role="status">
           {plural(i18n, 'intents.count', intents.length)}
         </p>

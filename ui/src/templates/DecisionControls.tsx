@@ -350,7 +350,7 @@ export function templateLabel(i18n: I18n, card: ActionCard): string {
     repo: card.repo.label,
     intent: card.intent.title ?? card.intent.slug,
     stage: stageText(card, i18n.t('common.none')),
-    state: statusLabel(i18n, card.status, card.resolution.reason),
+    state: statusLabel(i18n, card.status, card.resolution.reason, card.delivery.turn_started_at),
   })
 }
 
