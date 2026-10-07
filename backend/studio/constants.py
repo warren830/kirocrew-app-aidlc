@@ -631,24 +631,8 @@ ERROR_EVENT = "ERROR_LOGGED"
 #: and ``--project-dir`` are refused with "requires a nonblank value" when present but blank, so an
 #: optional flag Studio has no value for must be left OUT of the argv, never passed empty.
 ENGINE_READ_VERBS: dict[str, tuple[str, ...]] = {
-    "aidlc-utility.ts": (
-        "version",
-        "status",
-        "intent",          # bare = list; with --json = machine-readable cursor + registry
-        "space",
-        "detect",
-        "detect-scope",
-        "resolve-env-scope",
-        "scope-table",
-        "stage-table",
-        "codekb-path",
-        "codekb-scope-diff",
-        "config-get",
-        "config-list",
-        "plugin-list",
-    ),
-    "aidlc-state.ts": ("get", "lookup", "resume", "count"),
-    "aidlc-runtime.ts": ("summary", "read"),
+    "aidlc-utility.ts": ("version", "intent", "space"),
+    "aidlc-state.ts": ("lookup",),
 }
 #: Engine verbs Studio may run while holding a RepoAdminLease, on explicit user action. Each mutates
 #: something the engine owns, and each is the engine's own supported way to do it.
@@ -674,11 +658,10 @@ ENGINE_VERB_ALIASES: dict[str, tuple[str, ...]] = {
 #: ``aidlc-utility.ts upgrade`` exists in 2.7.1 but only prints "unavailable" and exits 1, so Studio's
 #: own transactional installer owns upgrades (PRD FR-INST-015). Listed here so nobody re-adds it.
 ENGINE_UNAVAILABLE_VERBS = ("upgrade",)
-#: Tools and verbs that must never appear in an argv Studio builds. Enforced in
-#: ``security.assert_engine_argv_allowed``, which ``EngineRunner`` calls for every invocation
-#: (engine.py:632). Deliberately narrower than ``engine.ENGINE_DENY``: that list names every
-#: engine-owned tool and per-verb transition and is the one to extend when the engine grows one,
-#: while these two are the floor the argv builder itself trips on.
+#: Tools and verbs that must never appear in an argv Studio builds, enforced in
+#: ``security.assert_engine_argv_allowed`` for every invocation. The allowlists above are the gate;
+#: these are the floor the argv builder itself trips on, so a new engine-owned tool is refused even if
+#: someone adds it to a verb table by mistake.
 ENGINE_FORBIDDEN_TOOLS = ("aidlc-orchestrate.ts", "aidlc-audit.ts", "aidlc-jump.ts", "aidlc-log.ts")
 ENGINE_FORBIDDEN_VERBS = (
     "next",

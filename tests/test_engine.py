@@ -1336,7 +1336,7 @@ def test_allowlist_matches_engine(engine_mod, security, tmp_path):
 
 
 @pytest.mark.skipif(shutil.which("bun") is None, reason="bun is not on PATH")
-def test_every_state_verb_but_the_four_reads_is_refused_on_both_lanes(security, StudioError, tmp_path):
+def test_every_state_verb_but_lookup_is_refused_on_both_lanes(security, StudioError, tmp_path):
     """Default-deny, proved against the engine's own verb listing instead of a hand-kept deny list.
 
     A mutator a version bump adds is refused without anyone writing it down, and putting any state verb on
@@ -1350,7 +1350,7 @@ def test_every_state_verb_but_the_four_reads_is_refused_on_both_lanes(security, 
     dispatched = {token.strip(' "}\n') for token in listing.split("Valid:", 1)[1].split(",")}
     dispatched.discard("")
     assert len(dispatched) > 20, dispatched          # the listing parsed, not one long token
-    reads = {"get", "lookup", "resume", "count"}
+    reads = {"lookup"}                               # the only state verb any Studio code path runs
     assert reads <= dispatched
     for verb in sorted(dispatched):
         if verb in reads:

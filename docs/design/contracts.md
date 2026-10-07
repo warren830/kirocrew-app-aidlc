@@ -1218,7 +1218,11 @@ Projection must NOT touch Storage, the host, or subprocesses; everything it need
 Sync subprocess runner (`run_sync`) with an async wrapper that only does `to_thread`. The allowlist is **data**; a
 static test greps `backend/` for `aidlc-orchestrate`, `aidlc-audit`, `aidlc-log`, `aidlc-jump.ts execute` and
 `approve|reject|revise|advance|finalize|complete-workflow|gate-start|checkbox|park|unpark` as argv tokens and fails
-if any appear outside `ENGINE_DENY` in this module.
+if any appear outside this module's own refusal set. The gate is `constants.ENGINE_READ_VERBS` /
+`ENGINE_ADMIN_VERBS` (what the allowlist may name) plus `ENGINE_FORBIDDEN_TOOLS` / `ENGINE_FORBIDDEN_VERBS` (the
+floor the argv builder trips on); `engine.ENGINE_DENY` is that floor's tool set, not a second list to maintain.
+`test_engine.py` proves default-deny against the engine's OWN verb listing: every `aidlc-state.ts` verb it
+dispatches except `lookup` is refused on both lanes.
 
 Finding `bun` is this module's job for the same reason running it is: the path `find_bun` returns becomes argv[0] of
 every engine invocation. The search order is the user's own PATH first — so a gateway started from a shell behaves
@@ -1260,15 +1264,9 @@ class EngineVerb:
 
 ENGINE_ALLOWLIST: dict[str, EngineVerb] = {
   "utility.version":       EngineVerb(..., "aidlc-utility.ts", ("version",),                    None, False, False, False, False, False, ENGINE_READ_TIMEOUT_SECS),
-  "utility.status":        (... ("status",) ... read-only),
-  "utility.detect":        (... ("detect", "--json") ... json),
   "utility.intent_list":   (... ("intent", "--json") ... json),
   "utility.space_list":    (... ("space", "--json") ... json),
-  "utility.scope_table":   (... ("scope-table",) ... read-only),
-  "state.get":             (... "aidlc-state.ts", ("get", "{field}") ...),
   "state.lookup":          (... ("lookup", "{query}", "{arg}") ...),       # query ∈ phase-of next-stage agent-for number-of stages-in-scope first-in-phase validate-stage validate-phase
-  "state.resume":          (... ("resume",) ... json),
-  "state.count":           (... ("count",) ...),
   "utility.intent_switch": (... ("intent", "{dir_name}"), lease="admin", mutates_audit=False (success) — an unknown name emits ERROR_LOGGED, so validate against intent_list first),
   "utility.space_switch":  (... ("space", "{slug}"), lease="admin", mutates_harness=True),
   "utility.intent_create": (... ("intent-create", "--scope", "{scope}", "--arguments", "{arguments}", "--label", "{label}", "?--depth", "{depth}", "?--test-strategy", "{test_strategy}", "?--review", "{review}", "?--repos", "{repos}"), lease="admin", mutates_audit=True, mutates_state=True, timeout=SUBPROCESS_TIMEOUT_SECS),
@@ -1286,14 +1284,8 @@ ENGINE_ALLOWLIST: dict[str, EngineVerb] = {
   "utility.doctor":        (... ("doctor",), lease="admin", mutates_audit=True, explicit_user_only=True),
 }
 # "?--flag" "{name}" pairs are emitted only when the kwarg is present and non-empty.
-ENGINE_DENY: frozenset[str] = frozenset({"aidlc-orchestrate.ts", "aidlc-audit.ts", "aidlc-log.ts", "aidlc-jump.ts",
-    "aidlc-graph.ts", "aidlc-learnings.ts", "aidlc-swarm.ts", "aidlc-bolt.ts", "aidlc-worktree.ts", "aidlc-runtime.ts",
-    "aidlc-state.ts:set", "aidlc-state.ts:checkbox", "aidlc-state.ts:gate-start", "aidlc-state.ts:approve",
-    "aidlc-state.ts:reject", "aidlc-state.ts:revise", "aidlc-state.ts:skip", "aidlc-state.ts:advance",
-    "aidlc-state.ts:finalize", "aidlc-state.ts:complete-workflow", "aidlc-state.ts:park", "aidlc-state.ts:unpark",
-    "aidlc-state.ts:fork", "aidlc-state.ts:merge", "aidlc-state.ts:set-skeleton-stance",
-    "aidlc-state.ts:acknowledge-compaction", "aidlc-state.ts:reuse-artifact", "aidlc-state.ts:practices-event",
-    "aidlc-state.ts:practices-promote"})
+# The deny floor is data in constants.py, not a second list here:
+ENGINE_DENY: frozenset[str] = frozenset(constants.ENGINE_FORBIDDEN_TOOLS)
 
 @dataclass(frozen=True, slots=True)
 class EngineResult:
@@ -1338,8 +1330,9 @@ payload. Never during preflight, `add`, `check_availability` or `detect_install`
 `PlanService.create_intent` (`utility.intent_create`, under admin lease), `PlanService.recompose/scope_change/config_change`,
 `HumanActionBroker.submit` for **every** HUMAN_LANE decision (`switch_cursor_sync` under the execution lease — FR-SES-006;
 review P01/R01), `HumanActionBroker.resolve(pick_intent)` (`switch_cursor_sync` under an admin lease `cursor_switch`),
-`diagnostics` (`utility.status` on request), `utility.doctor` only from `POST /repos/{id}/doctor` (not in the architecture
-list; see Appendix A) with `confirm: true`.
+`utility.doctor` only from `POST /repos/{id}/doctor` (not in the architecture list; see Appendix A) with
+`confirm: true`. Thirteen verbs are reachable in all: a verb nothing calls is not on the allowlist, so the
+surface and the deny floor cannot drift apart.
 
 `test_engine.py::test_allowlist_matches_payload_help` runs the real `payload/aidlc-kiro/.kiro/tools/aidlc-utility.ts help`
 with a real `bun` when one is on PATH (skipped otherwise) and asserts every `aidlc-utility.ts` verb in `ENGINE_ALLOWLIST`
@@ -1347,7 +1340,7 @@ appears in the printed command list — so a future rename fails in CI instead o
 
 EngineRunner must NOT accept a shell string, run with `shell=True`, inherit the parent environment, run without a lease
 when `verb.lease` is set (the caller passes `lease_generation` and the runner asserts it is non-None), or run any
-`ENGINE_DENY` tool. It records every run as an Activity row (`kind="engine.run"`, params `verb_key, exit_code,
+forbidden tool. It records every run as an Activity row (`kind="engine.run"`, params `verb_key, exit_code,
 duration_ms`; stdout/stderr only in `evidence_json`, redacted).
 
 ### 1.10 `leases.py` — `RepoScheduler`
