@@ -9,8 +9,8 @@ It is the one place Studio hands evidence to a model other than the intent's own
 3. **Neutrality is proved.** State, questions, directive, human-turn marker, turn counter and every audit shard
    are snapshotted before the spawn and compared after it; any movement fails the draft (``evidence_mutated``).
    Engine housekeeping (``NEUTRALITY_EXCLUDED_PATHS``) is excluded by never being read.
-4. **Nothing is half-parsed.** Exactly one ``json`` fence with exactly the ``DraftResult`` keys, or ``bad_result``
-   — so a model cannot smuggle a ``submit`` or ``decision`` field into a draft.
+4. **Nothing is half-parsed.** Exactly one ``json`` fence with exactly the ``DraftResult`` keys, or
+   ``bad_result`` — so a model cannot smuggle a ``submit`` or ``decision`` field into a draft.
 
 The broker never submits anything, never runs an engine verb, and never writes inside a repository.
 """
@@ -42,19 +42,14 @@ ADVISOR_AGENT_NAME: str = C.ADVISOR_AGENT_NAME
 ADVISOR_AGENT_FILE_PREFIX: str = f"{C.APP_NAME}--"
 EVIDENCE_VERSION = 1
 ADVISOR_KINDS: tuple[str, ...] = C.ADVISOR_KINDS
-#: Kinds requested without a card (§1.18a): their ``action_id`` is a ``plan:<repo_id>`` sentinel no card matches.
+#: Kinds requested without a card (§1.18a): their ``action_id`` is a ``plan:<repo_id>`` sentinel.
 ADVISOR_CARDLESS_KINDS: frozenset[str] = frozenset(C.ADVISOR_CARDLESS_KINDS)
 #: Which kinds apply to which card type (§2.7); command cards carry no boundary to reason about.
 ADVISOR_KINDS_BY_TYPE: dict[str, tuple[str, ...]] = {
     "gate": ("gate_analysis", "request_changes_draft"),
     "question": ("question_draft", "question_explain"),
-    "missing_input": ("diagnose",),
-    "recovery": ("diagnose",),
-    "delivery_uncertain": ("diagnose",),
-    "failure": ("diagnose",),
-    "circuit_breaker": ("diagnose",),
-    "install_conflict": ("diagnose",),
-    "budget_stop": ("diagnose",),
+    **{card_type: ("diagnose",) for card_type in ("missing_input", "recovery", "delivery_uncertain", "failure",
+                                                  "circuit_breaker", "install_conflict", "budget_stop")},
 }
 #: The kind an *automatic* draft uses (A24). Explicit rather than derived from the menu order, and never a
 #: rejection: drafting one before the human decided to reject pre-decides the gate (FR-ADV-007).
@@ -223,11 +218,6 @@ def default_agent_lister() -> list[Any] | None:
         return None
 
 
-# --------------------------------------------------------------------------- #
-# records
-# --------------------------------------------------------------------------- #
-
-
 @dataclass(frozen=True, slots=True)
 class EvidencePackage(Jsonable):
     """Everything the advisor may know, already bounded and redacted; no field can carry a path or slot key."""
@@ -275,7 +265,7 @@ class DraftRequest(Jsonable):
             kind=str(data.get("kind") or ""),
             question_index=int(index) if isinstance(index, int) else None,
             locale=str(data.get("locale") or ADVISOR_LOCALES[0]),
-            # Read, not dropped: this also decodes the stored envelope, where automatic drafts must stay automatic.
+            # Read, not dropped: this also decodes the stored envelope, where an automatic draft stays automatic.
             auto=bool(data.get("auto")),
         )
 
@@ -300,14 +290,10 @@ class DraftResult(Jsonable):
             return tuple(str(item) for item in data.get(name) or ())
 
         return cls(
-            verdict=data.get("verdict"),
-            summary=str(data.get("summary") or ""),
+            verdict=data.get("verdict"), summary=str(data.get("summary") or ""),
             suggested_answers=tuple(dict(row) for row in data.get("suggested_answers") or ()),
-            evidence=texts("evidence"),
-            assumptions=texts("assumptions"),
-            alternatives=texts("alternatives"),
-            confidence=str(data.get("confidence") or ""),
-            needs_your_decision=texts("needs_your_decision"),
+            evidence=texts("evidence"), assumptions=texts("assumptions"), alternatives=texts("alternatives"),
+            confidence=str(data.get("confidence") or ""), needs_your_decision=texts("needs_your_decision"),
             drafted_feedback=data.get("drafted_feedback"),
         )
 
@@ -342,11 +328,6 @@ class AdvisorDraft(Jsonable):
         return payload
 
 
-# --------------------------------------------------------------------------- #
-# the answer contract
-# --------------------------------------------------------------------------- #
-
-
 def draft_result_contract(*, kind: str, question_indices: Sequence[int] = ()) -> str:
     """The ``DraftResult`` contract in words, generated from the constants the parser enforces.
 
@@ -357,7 +338,7 @@ def draft_result_contract(*, kind: str, question_indices: Sequence[int] = ()) ->
     verdicts = " | ".join(f'"{name}"' for name in ADVISOR_VERDICTS)
     confidences = " | ".join(f'"{name}"' for name in ADVISOR_CONFIDENCE)
     answer_shapes = {"question_index": "<integer>", "answer": '"<text>"', "option_letters": '["A"]'}
-    answer_shape = "{" + ", ".join(f'"{name}": {answer_shapes[name]}' for name in _SUGGESTED_ANSWER_KEY_ORDER) + "}"
+    answer_shape = "{" + ", ".join(f'"{key}": {answer_shapes[key]}' for key in _SUGGESTED_ANSWER_KEY_ORDER) + "}"
     shapes = {
         "verdict": f"<{verdicts} | null>",
         "summary": '"<text — the one field the operator reads first, never empty>"',
@@ -535,43 +516,19 @@ def parse_draft_result(text: str, *, kind: str, question_indices: Sequence[int] 
             "option_letters": list(letters[:MAX_OPTION_LETTERS]),
         })
     return DraftResult(
-        verdict=verdict,
-        summary=_clip(security.redact(summary), SUMMARY_CHARS),
-        suggested_answers=tuple(answers),
-        evidence=lists["evidence"],
-        assumptions=lists["assumptions"],
-        alternatives=lists["alternatives"],
-        confidence=confidence,
-        needs_your_decision=lists["needs_your_decision"],
+        verdict=verdict, summary=_clip(security.redact(summary), SUMMARY_CHARS),
+        suggested_answers=tuple(answers), confidence=confidence, **lists,
         drafted_feedback=None if feedback is None else _clip(security.redact(feedback), C.MAX_FEEDBACK_CHARS),
     )
-
-
-# --------------------------------------------------------------------------- #
-# AdvisorBroker
-# --------------------------------------------------------------------------- #
 
 
 class AdvisorBroker:
     """Builds evidence packages, spawns the app's own read-only agent, and stores bounded drafts."""
 
     def __init__(
-        self,
-        ctx: Any,
-        storage: Any,
-        host: Any,
-        projection: Any,
-        actions: Any,
-        reader: Any,
-        activity: Any,
-        events: Any,
-        clock: Any,
-        ids: Any,
-        settings: Any = None,
-        *,
-        scan_pool: Executor | None = None,
-        agent_lister: Callable[[], Sequence[Any] | None] | None = None,
-        plan: Any = None,
+        self, ctx: Any, storage: Any, host: Any, projection: Any, actions: Any, reader: Any, activity: Any,
+        events: Any, clock: Any, ids: Any, settings: Any = None, *, scan_pool: Executor | None = None,
+        agent_lister: Callable[[], Sequence[Any] | None] | None = None, plan: Any = None,
     ) -> None:
         """No ``settings`` behaves as enabled (the schema default). ``scan_pool`` keeps package assembly off the
         host executor (§0.6); ``agent_lister`` defaults to the host's own discovery, the only authority on what
@@ -670,14 +627,16 @@ class AdvisorBroker:
     async def _admit(self, locale: str, **where: Any) -> Any:
         """The refusals every draft starts with; returns the spawn seam. ``where`` locates the Activity row."""
         if locale not in ADVISOR_LOCALES:
-            raise StudioError("unsupported_locale", "advisor locale is not supported", details={"locale": locale})
+            raise StudioError("unsupported_locale", "advisor locale is not supported",
+                              details={"locale": locale})
         spawn = getattr(self._ctx, "spawn", None)
         if spawn is None or not callable(getattr(spawn, "run", None)):
             await self._refused("spawn_unavailable", **where)
             raise StudioError("advisor_unavailable", "this gateway does not grant the app a spawn seam",
                               details={"reason": "spawn_unavailable"})
         if not self._enabled():
-            raise StudioError("advisor_unavailable", "the advisor is switched off", details={"reason": "disabled"})
+            raise StudioError("advisor_unavailable", "the advisor is switched off",
+                              details={"reason": "disabled"})
         return spawn
 
     def _new_row(self, req: DraftRequest, package: EvidencePackage, **extra: Any) -> dict[str, Any]:
@@ -687,10 +646,7 @@ class AdvisorBroker:
         now = self._clock.now()
         created_at = C.iso_from_epoch(now)
         return {
-            "draft_id": draft_id,
-            "action_id": req.action_id,
-            "kind": req.kind,
-            "status": "queued",
+            "draft_id": draft_id, "action_id": req.action_id, "kind": req.kind, "status": "queued",
             "spawn_id": None,
             "request_json": {
                 **req.to_json(),
@@ -698,10 +654,7 @@ class AdvisorBroker:
                 "package_sha256": security.sha256_text(_dumps(package.to_json())),
                 **extra,
             },
-            "result_json": None,
-            "error": None,
-            "created_at": created_at,
-            "updated_at": created_at,
+            "result_json": None, "error": None, "created_at": created_at, "updated_at": created_at,
             "expires_at": C.iso_from_epoch(now + C.ADVISOR_DRAFT_TTL_SECS),
         }
 
@@ -776,7 +729,8 @@ class AdvisorBroker:
         info = self._host.subagent(draft.spawn_id or "")
         elapsed = self._clock.now() - (C.epoch_from_iso(draft.created_at) or self._clock.now())
         if info is not None and info.get("error"):
-            return await self._finish(draft_id, status="failed", error="agent_error", detail=str(info.get("error")))
+            return await self._finish(draft_id, status="failed", error="agent_error",
+                                      detail=str(info.get("error")))
         if info is None or not info.get("done"):
             # A reaped record (or a detached bridge) proves nothing: the draft runs until its own timeout.
             if elapsed > C.ADVISOR_TIMEOUT_SECS:
@@ -826,7 +780,8 @@ class AdvisorBroker:
         except Exception as exc:  # noqa: BLE001 - `settle_open` catches only StudioError: fail the draft
             return await self._finish(draft_id, status="failed", error="bad_result",
                                       detail=f"plan_resolution_failed: {exc}")
-        return await self._finish(draft_id, status="ready", result=parsed, extra_result={"plan_proposal": proposal})
+        return await self._finish(draft_id, status="ready", result=parsed,
+                                  extra_result={"plan_proposal": proposal})
 
     async def get(self, draft_id: str) -> AdvisorDraft:
         row = await asyncio.to_thread(self._storage.get, TABLE, draft_id)
@@ -860,7 +815,8 @@ class AdvisorBroker:
         if getattr(self._ctx, "spawn", None) is None:  # this app cannot spawn, so nothing of ours is in flight
             return 0
         rows = await asyncio.to_thread(
-            self._storage.select, TABLE, {"status": ["queued", "running"]}, order_by="created_at ASC", limit=limit
+            self._storage.select, TABLE, {"status": ["queued", "running"]}, order_by="created_at ASC",
+            limit=limit,
         )
         settled = 0
         for row in rows:
@@ -890,7 +846,9 @@ class AdvisorBroker:
         if inflight >= C.ADVISOR_AUTO_DRAFT_MAX_INFLIGHT:
             return 0
         # Oldest first: the card that has waited longest is the one the human reaches next.
-        rows = await asyncio.to_thread(self._storage.select, "actions", {"status": "Queued"}, order_by="created_at ASC")
+        rows = await asyncio.to_thread(
+            self._storage.select, "actions", {"status": "Queued"}, order_by="created_at ASC"
+        )
         locale = self._auto_locale()
         started = 0
         tried = 0  # `limit` bounds attempts, not successes, or a tick of refusals would build every package
@@ -1065,7 +1023,9 @@ class AdvisorBroker:
                 "needs makes the engine refuse the plan (dependency_missing) unless the scope already runs them.",
             ],
             "scope_grid": {
-                token_clean(meta.name): [token_clean(slug) for slug, on in catalog.grid_row(meta.name).items() if on]
+                token_clean(meta.name): [
+                    token_clean(slug) for slug, on in catalog.grid_row(meta.name).items() if on
+                ]
                 for meta in offered
             },
             "existing_intents": [
@@ -1078,7 +1038,9 @@ class AdvisorBroker:
                 "readme_excerpt": excerpt(workspace.get("readme_excerpt")),
                 "truncated": bool(workspace.get("truncated")),
             },
-            "vocabulary": {"depth": list(DEPTHS), "test_strategy": list(TEST_STRATEGIES), "review_cap": list(REVIEW_CAPS)},
+            "vocabulary": {
+                "depth": list(DEPTHS), "test_strategy": list(TEST_STRATEGIES), "review_cap": list(REVIEW_CAPS),
+            },
         }
         package = EvidencePackage(
             version=EVIDENCE_VERSION,
@@ -1100,8 +1062,8 @@ class AdvisorBroker:
         return self._verified(self._fit(package), roots)
 
     def _resolve_plan(self, draft: AdvisorDraft, parsed: DraftResult, env: Mapping[str, Any]) -> dict[str, Any]:
-        """Letters → ``plan_proposal``, from what ``request_plan`` stored beside the request: the catalogue the agent
-        chose from, not a repository that may have changed since. A missing or malformed extra raises."""
+        """Letters → ``plan_proposal`` from what ``request_plan`` stored beside the request: the catalogue the
+        agent chose from, not a repository that may have changed since. A missing or malformed extra raises."""
         questions = env.get("plan_questions")
         if not isinstance(questions, Mapping) or not isinstance(questions.get("questions"), list):
             raise ValueError("plan_questions missing from request_json")
@@ -1109,7 +1071,9 @@ class AdvisorBroker:
         if not isinstance(grid, Mapping):
             raise ValueError("plan_grid missing from request_json")
         always = frozenset(str(slug) for slug in env.get("plan_always") or ())
-        repo_id = (draft.subject or {}).get("repo_id") or draft.action_id.removeprefix(C.ADVISOR_PLAN_ACTION_PREFIX)
+        repo_id = (draft.subject or {}).get("repo_id") or draft.action_id.removeprefix(
+            C.ADVISOR_PLAN_ACTION_PREFIX
+        )
         current = PlanRequest.from_json(env.get("plan_current") or {}, repo_id=str(repo_id))
         # `plan_grid` stores each scope's ON slugs; the resolver wants a full {slug: bool} row like `grid_row`.
         slugs = {
@@ -1131,7 +1095,7 @@ class AdvisorBroker:
     @staticmethod
     def _verified(package: EvidencePackage, roots: Sequence[str]) -> EvidencePackage:
         """Prove both bounds on the finished object: ``_clean`` is all that stands between user-controlled text
-        and the prompt, and a package naming the repository hands a tool-less agent the one fact it must not have."""
+        and the prompt, and naming the repository hands a tool-less agent the one fact it must not have."""
         body = _dumps(package.to_json())
         if len(body) > C.MAX_EVIDENCE_PACKAGE_CHARS:  # pragma: no cover - _shrink always terminates
             raise _too_large(body)
@@ -1145,7 +1109,7 @@ class AdvisorBroker:
     def _probe(
         self, root: Path, space: str, intent_dir: str, stage_dir_rel: str | None, stage: str | None
     ) -> dict[str, Any]:
-        """The six facts the advisor must not change. Sync; reads nothing else, which is what excludes the rest."""
+        """The six facts the advisor must not change. Sync; reading nothing else is what excludes the rest."""
         record = _reader.AidlcReader.record_rel(space, intent_dir)
         state_path = security.resolve_inside(root, f"{record}/{_reader.STATE_FILENAME}")
         directive_path = _reader.record_file(root, record, _reader.DIRECTIVE_FILENAME)
@@ -1190,7 +1154,7 @@ class AdvisorBroker:
 
     @staticmethod
     def _neutrality(before: Mapping[str, Any], after: Mapping[str, Any] | None) -> dict[str, Any]:
-        """The §1.18 dict. In flight the ``_after`` half is null and ``ok`` reads "no violation observed yet"."""
+        """The §1.18 dict. In flight the ``_after`` half is null and ``ok`` means "no violation observed"."""
         out: dict[str, Any] = {}
         for field in NEUTRALITY_FIELDS:
             out[f"{field}_before"] = before.get(field)
@@ -1229,7 +1193,8 @@ class AdvisorBroker:
                 if snapshot is None:
                     excerpt = _UNREAD
                 else:
-                    excerpt = self._clean(snapshot.text, min(EXCERPT_BYTES, remaining), roots=roots, by_bytes=True)
+                    cap = min(EXCERPT_BYTES, remaining)
+                    excerpt = self._clean(snapshot.text, cap, roots=roots, by_bytes=True)
                     remaining -= len(excerpt.encode("utf-8"))
             rows.append({"relpath": meta.relpath, "name": meta.name, "sha256": meta.sha256, "excerpt": excerpt})
         return tuple(rows)
@@ -1354,7 +1319,8 @@ class AdvisorBroker:
             return replace(package, questions={**questions, "questions": rows[: len(rows) // 2]})
         if package.stage and package.stage.get("acceptance_criteria"):
             criteria = package.stage["acceptance_criteria"]
-            return replace(package, stage={**package.stage, "acceptance_criteria": criteria[: len(criteria) // 2]})
+            stage = {**package.stage, "acceptance_criteria": criteria[: len(criteria) // 2]}
+            return replace(package, stage=stage)
         if package.artifacts:
             return replace(package, artifacts=package.artifacts[: len(package.artifacts) // 2])
         return package
@@ -1416,7 +1382,7 @@ class AdvisorBroker:
         return package
 
     def _clean(self, text: str | None, cap: int, *, roots: Sequence[str], by_bytes: bool = False) -> str:
-        """The single funnel every package string passes through: redact, strip repository and home paths, cap."""
+        """The single funnel every package string passes through: redact, strip repo and home paths, cap."""
         out = security.redact(text or "")
         for root in roots:
             if root:
@@ -1428,7 +1394,7 @@ class AdvisorBroker:
 
     @staticmethod
     def _roots(repo: RepoRecord) -> tuple[str, ...]:
-        """The repository path spellings, longest first so the realpath cannot leave a canonical suffix behind."""
+        """The repository path spellings, longest first so a realpath cannot leave a canonical suffix behind."""
         canonical = repo.canonical_path or ""
         real = str(security.realpath(canonical)) if canonical else ""
         return tuple(sorted({p for p in (canonical, real) if p}, key=len, reverse=True))
@@ -1449,18 +1415,11 @@ class AdvisorBroker:
         self._storage.update(TABLE, draft_id, payload)
 
     async def _finish(
-        self,
-        draft_id: str,
-        *,
-        status: str,
-        error: str | None = None,
-        detail: str | None = None,
-        result: DraftResult | None = None,
-        neutrality: Mapping[str, Any] | None = None,
-        severity: str = "attention",
-        extra_result: Mapping[str, Any] | None = None,
+        self, draft_id: str, *, status: str, error: str | None = None, detail: str | None = None,
+        result: DraftResult | None = None, neutrality: Mapping[str, Any] | None = None,
+        severity: str = "attention", extra_result: Mapping[str, Any] | None = None,
     ) -> AdvisorDraft:
-        """Settle a draft. ``extra_result`` (``plan_proposal``) rides beside the nine closed ``DraftResult`` keys."""
+        """Settle a draft. ``extra_result`` (``plan_proposal``) rides beside the closed ``DraftResult`` keys."""
         if status not in DRAFT_STATUS:  # pragma: no cover - guarded by the callers
             raise ValueError(f"unknown advisor draft status {status!r}")
         if error is not None and error not in DRAFT_ERRORS:  # pragma: no cover - same
@@ -1569,8 +1528,8 @@ class AdvisorBroker:
         """Whether drafting ahead for this card would add nothing. Sync; called on a thread.
 
         * Any automatic draft for the card, in any status, is the durable half of at-most-once.
-        * A live (``ready``/in-flight) whole-card draft of the same kind is already the answer a pre-draft would
-          produce; ``failed``/``expired`` leave the human with nothing, which is exactly when a spawn is worth it.
+        * A live (``ready``/in-flight) whole-card draft of the same kind is already the answer a pre-draft
+          would produce; ``failed``/``expired`` leave the human with nothing, exactly when a spawn is worth it.
         """
         for row in self._storage.select(TABLE, {"action_id": action_id}):
             if _auto_of(row):
@@ -1602,16 +1561,12 @@ class AdvisorBroker:
         subject = request.get("subject")
         proposal = result.get("plan_proposal") if isinstance(result, Mapping) else None
         return AdvisorDraft(
-            draft_id=str(row["draft_id"]),
-            action_id=str(row.get("action_id") or ""),
-            kind=str(row.get("kind") or ""),
-            status=str(row.get("status") or ""),
+            draft_id=str(row["draft_id"]), action_id=str(row.get("action_id") or ""),
+            kind=str(row.get("kind") or ""), status=str(row.get("status") or ""),
             request=DraftRequest.from_json(request),
             result=DraftResult.from_json(result) if isinstance(result, Mapping) else None,
-            error=row.get("error"),
-            spawn_id=row.get("spawn_id") or None,
-            created_at=str(row.get("created_at") or ""),
-            updated_at=str(row.get("updated_at") or ""),
+            error=row.get("error"), spawn_id=row.get("spawn_id") or None,
+            created_at=str(row.get("created_at") or ""), updated_at=str(row.get("updated_at") or ""),
             expires_at=str(row.get("expires_at") or ""),
             neutrality=dict(neutrality) if isinstance(neutrality, Mapping) else None,
             subject=dict(subject) if isinstance(subject, Mapping) else None,

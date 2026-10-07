@@ -120,11 +120,6 @@ def _sha256_json(payload: Any, **dumps: Any) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, **dumps).encode("utf-8")).hexdigest()
 
 
-# --------------------------------------------------------------------------- #
-# records
-# --------------------------------------------------------------------------- #
-
-
 @dataclass(frozen=True, slots=True)
 class PlanRequest(Jsonable):
     """What the user asked for. ``repo_id`` is the path parameter, not part of the JSON body (§2.3)."""
@@ -147,7 +142,7 @@ class PlanRequest(Jsonable):
 
     @classmethod
     def from_json(cls, body: Mapping[str, Any] | None, *, repo_id: str) -> "PlanRequest":
-        """Refuse shapes as ``bad_body`` rather than coerce them: repairing a value runs a workflow nobody asked for."""
+        """Refuse shapes as ``bad_body``, never coerce: a repaired value runs a workflow nobody asked for."""
         data = dict(body or {})
         overrides_raw = data.get("overrides")
         if overrides_raw is None:
@@ -160,7 +155,8 @@ class PlanRequest(Jsonable):
                 raise StudioError("bad_body", "override key is not a stage slug",
                                   details={"key": "overrides", "value": str(slug)})
             if not isinstance(value, bool):
-                raise StudioError("bad_body", "override value must be a boolean", details={"key": f"overrides.{slug}"})
+                raise StudioError("bad_body", "override value must be a boolean",
+                                  details={"key": f"overrides.{slug}"})
             overrides[slug] = value
         return cls(
             repo_id=repo_id, space=_opt_str(data.get("space")) or C.DEFAULT_SPACE,
@@ -261,8 +257,7 @@ class EffectivePlan(Jsonable):
     def digest(self) -> str:
         """What ``confirm_plan_digest`` binds (§2.3): the request and the selection, never the estimate."""
         return _sha256_json({
-            "request": self.request.to_json(),
-            "stages": [[s.slug, s.enabled] for s in self.stages],
+            "request": self.request.to_json(), "stages": [[s.slug, s.enabled] for s in self.stages],
             "graph_stage_count": self.graph_stage_count,
         }, separators=(",", ":"))
 
@@ -285,11 +280,8 @@ class RecomposeProposal(Jsonable):
     def digest(self) -> str:
         """Binds the confirmation to the cursor, both lists and the state bytes the preview was computed from."""
         return _sha256_json({
-            "intent_key": self.intent_key,
-            "current_stage": self.current_stage,
-            "skip": list(self.skip),
-            "add": list(self.add),
-            "state_sha256": self.state_sha256,
+            "intent_key": self.intent_key, "current_stage": self.current_stage, "skip": list(self.skip),
+            "add": list(self.add), "state_sha256": self.state_sha256,
             "stages": [[s.slug, s.enabled] for s in self.plan.stages],
         }, separators=(",", ":"))
 
@@ -337,7 +329,7 @@ class PlanCatalog:
     engine_version: str | None
 
     def grid_row(self, scope: str) -> dict[str, bool]:
-        """``{slug: selected}``: the grid row, else the stages listing the scope, else ``{}`` for "no such scope"."""
+        """``{slug: selected}``: the grid row, else the stages listing the scope, else ``{}`` (no such scope)."""
         row = self.grid.get(scope)
         if row:
             return {slug: value == "EXECUTE" for slug, value in row.items()}
@@ -346,27 +338,13 @@ class PlanCatalog:
         return {}
 
 
-# --------------------------------------------------------------------------- #
-# service
-# --------------------------------------------------------------------------- #
-
-
 class PlanService:
     """Reads the installed plan; changes it only through the engine's own verbs, under an admin lease."""
 
     def __init__(
-        self,
-        reader: "AidlcReader",
-        engine: "EngineRunner",
-        scheduler: "RepoScheduler",
-        registry: "RepoRegistry",
-        projection: "Projection",
-        storage: "Storage",
-        estimates: EstimateService,
-        activity: "ActivityProjector",
-        events: "EventLog",
-        clock: "C.Clock",
-        ids: Any,
+        self, reader: "AidlcReader", engine: "EngineRunner", scheduler: "RepoScheduler",
+        registry: "RepoRegistry", projection: "Projection", storage: "Storage", estimates: EstimateService,
+        activity: "ActivityProjector", events: "EventLog", clock: "C.Clock", ids: Any,
     ) -> None:
         self._reader = reader
         self._engine = engine
@@ -392,8 +370,7 @@ class PlanService:
         grid = self._reader.read_scope_grid(root, engine_dir)
         scopes = self._reader.read_scopes(root, engine_dir)
         return PlanCatalog(
-            scopes=tuple(scopes),
-            stages=tuple(graph),
+            scopes=tuple(scopes), stages=tuple(graph),
             grid={str(scope): {str(slug): str(value).upper() for slug, value in row.items()}
                   for scope, row in grid.items()},
             engine_version=repo.installed_engine_version,
@@ -415,7 +392,8 @@ class PlanService:
         scope_meta = next((s for s in scopes if s.name == scope), None)
         grid_row = {slug: str(value).upper() for slug, value in (grid.get(scope) or {}).items()}
         if not grid_row and scope_meta is None:
-            issues.append(PlanIssue.of("scope_unknown", scope=scope, known=[s.name for s in scopes] or sorted(grid)))
+            known = [s.name for s in scopes] or sorted(grid)
+            issues.append(PlanIssue.of("scope_unknown", scope=scope, known=known))
         depth = self._resolve_depth(req, scope_meta, issues)
         request_cap = self._resolve_cap(req.review_cap, "review_cap", issues)
         scope_cap = self._resolve_cap(scope_meta.review_cap if scope_meta else None, None, issues)
@@ -427,18 +405,13 @@ class PlanService:
         units = self._units(repo, snap)
         engine_version = snap.engine.engine_version if snap is not None and snap.engine is not None else None
         return EffectivePlan(
-            request=req,
-            scope_meta=scope_meta,
-            stages=stages,
-            exact=self._exact_counts(stages, units),
+            request=req, scope_meta=scope_meta, stages=stages, exact=self._exact_counts(stages, units),
             estimate=self._estimates.estimate(stages, depth=depth, units=units, scope=scope),
             diff=tuple(PlanDiffEntry(s.slug, s.in_grid, s.enabled, DIFF_REASON_OVERRIDE)
                        for s in stages if s.in_grid != s.enabled),
-            issues=tuple(issues),
-            valid=not issues,
+            issues=tuple(issues), valid=not issues,
             products=tuple(sorted({a for s in stages if s.enabled for a in s.produces})),
-            graph_stage_count=len(graph),
-            engine_version=engine_version or repo.installed_engine_version,
+            graph_stage_count=len(graph), engine_version=engine_version or repo.installed_engine_version,
         )
 
     def validate(
@@ -462,7 +435,7 @@ class PlanService:
     def recompose_preview(
         self, repo: "RepoRecord", snap: "IntentSnapshot", *, skip: Sequence[str], add: Sequence[str]
     ) -> RecomposeProposal:
-        """What ``recompose --skip … --add …`` would do, and every engine guard that would refuse it, in order."""
+        """What ``recompose --skip … --add …`` would do, and every engine guard that refuses it, in order."""
         wanted_skip = _slug_list(skip)
         wanted_add = _slug_list(add)
         req = self._request_from_state(repo, snap, skip=wanted_skip, add=wanted_add)
@@ -472,30 +445,24 @@ class PlanService:
             refusals.extend(self._recompose_refusals(plan, slug))
         # A recompose applies as a whole, so every plan issue (an ignored flip, a starved consumer) refuses it.
         refusals.extend(plan.issues)
-        refusals.extend(r for r in (self._recompose_lane_refusal(snap), self._anchor_refusal(plan)) if r)
+        guards = (self._recompose_lane_refusal(snap), self._anchor_refusal(plan))
+        refusals.extend(r for r in guards if r is not None)
         refusals = _dedupe_issues(refusals)
         applied_skip = tuple(s for s in wanted_skip if s not in wanted_add)
         applied_add = tuple(wanted_add)
         return RecomposeProposal(
             intent_key=snap.intent_key,
             current_stage=snap.state.current_stage if snap.state is not None else None,
-            skip=applied_skip,
-            add=applied_add,
-            plan=plan,
+            skip=applied_skip, add=applied_add, plan=plan,
             argv_preview=_recompose_argv(applied_skip, applied_add),
             allowed=bool(plan.valid and not refusals and (applied_skip or applied_add)),
-            refusals=tuple(refusals),
-            state_sha256=snap.state_sha256,
+            refusals=tuple(refusals), state_sha256=snap.state_sha256,
         )
 
     # ---- mutations (async; engine verbs under an admin lease) ---------------
 
     async def create_intent(
-        self,
-        repo: "RepoRecord",
-        req: PlanRequest,
-        *,
-        blocking_findings: Sequence["Finding"] = (),
+        self, repo: "RepoRecord", req: PlanRequest, *, blocking_findings: Sequence["Finding"] = (),
         confirm_plan_digest: str | None = None,
     ) -> IntentCreateResult:
         """Create an intent, apply its confirmed stage overrides, compile its runtime, and verify all on disk.
@@ -536,7 +503,8 @@ class PlanService:
             before = set(await asyncio.to_thread(self._reader.list_intent_dirs, root, space))
             result = await self._engine.run(
                 "utility.intent_create", root, engine_dir, scope=req.scope, arguments=arguments, label=label,
-                depth=req.depth or "", test_strategy=req.test_strategy or "", review=req.review_cap or "", **lease,
+                depth=req.depth or "", test_strategy=req.test_strategy or "", review=req.review_cap or "",
+                **lease,
             )
             self._require_engine_ok(result)
             intent_dir, verified = await asyncio.to_thread(self._verify_created, root, space, before)
@@ -545,7 +513,9 @@ class PlanService:
                 if req.overrides:
                     # Creation takes scope settings, not per-stage switches: apply the confirmed delta, re-check.
                     def diff() -> Any:
-                        return asyncio.to_thread(self._created_override_diff, root, space, intent_dir, req.overrides)
+                        return asyncio.to_thread(
+                            self._created_override_diff, root, space, intent_dir, req.overrides
+                        )
 
                     changes = await diff()
                     if changes:
@@ -573,7 +543,8 @@ class PlanService:
                 except (ValueError, UnicodeDecodeError):
                     graph = None
                 if not isinstance(graph, dict) or not isinstance(graph.get("stages"), list):
-                    raise StudioError("state_inconsistent", "runtime compilation did not produce a readable graph",
+                    raise StudioError("state_inconsistent",
+                                      "runtime compilation did not produce a readable graph",
                                       details={"relpath": runtime_path})
                 verified["runtime_graph_present"] = True
             except StudioError as exc:
@@ -607,15 +578,10 @@ class PlanService:
         )
 
     async def recompose(
-        self,
-        repo: "RepoRecord",
-        snap: "IntentSnapshot",
-        *,
-        skip: Sequence[str],
-        add: Sequence[str],
+        self, repo: "RepoRecord", snap: "IntentSnapshot", *, skip: Sequence[str], add: Sequence[str],
         proposal_digest: str,
     ) -> RecomposeResult:
-        """Apply a previewed recompose, rebuilt from a FRESH ``snap`` and bound to the digest the user confirmed."""
+        """Apply a previewed recompose, rebuilt from a FRESH ``snap`` and bound to the confirmed digest."""
         self._require_ready(repo)
         engine_dir = self._engine_dir(repo, snap)
         proposal = await asyncio.to_thread(self.recompose_preview, repo, snap, skip=list(skip), add=list(add))
@@ -627,16 +593,21 @@ class PlanService:
                               details={"refusals": [r.to_json() for r in proposal.refusals]})
         transaction_id = self._ids.new("tx")
         root = Path(repo.canonical_path)
-        grant = await self._scheduler.acquire_admin(repo, operation_type=OP_RECOMPOSE, transaction_id=transaction_id)
+        grant = await self._scheduler.acquire_admin(
+            repo, operation_type=OP_RECOMPOSE, transaction_id=transaction_id
+        )
         try:
             # The record is named explicitly (both flags): an omitted selector lets the engine resolve the
             # calling session's binding, which is how a confirmed change lands on a record nobody was shown.
             result = await self._engine.run(
                 "utility.recompose", root, engine_dir, skip=",".join(proposal.skip), add=",".join(proposal.add),
-                dir_name=snap.intent_dir, slug=snap.space, lease_generation=grant.generation, repo_id=repo.repo_id,
+                dir_name=snap.intent_dir, slug=snap.space, lease_generation=grant.generation,
+                repo_id=repo.repo_id,
             )
             self._require_engine_ok(result)
-            verified = await asyncio.to_thread(self._verify_recomposed, root, snap.space, snap.intent_dir, proposal)
+            verified = await asyncio.to_thread(
+                self._verify_recomposed, root, snap.space, snap.intent_dir, proposal
+            )
         finally:
             await self._scheduler.release(grant)
         summary = await self._summary(repo, snap.space, snap.intent_dir)
@@ -736,7 +707,8 @@ class PlanService:
         """Re-read and compare under the lease, then verify settings and every existing mark on disk."""
         self._require_ready(repo)
         grant = await self._scheduler.acquire_admin(
-            repo, operation_type=OP_SCOPE_CHANGE if "scope" in changes else OP_CONFIG_CHANGE, transaction_id=None,
+            repo, operation_type=OP_SCOPE_CHANGE if "scope" in changes else OP_CONFIG_CHANGE,
+            transaction_id=None,
         )
         try:
             # The handler's snapshot is only an address: re-check identity and idleness before every step that
@@ -802,22 +774,15 @@ class PlanService:
         finally:
             await self._scheduler.release(grant)
         await self._announce(repo, snap.intent_key, await self._summary(repo, snap.space, snap.intent_dir))
-        return {"ok": True, "result": result.to_json(), "verified": {"settings": actual, "stages_preserved": preserved}}
+        return {"ok": True, "result": result.to_json(),
+                "verified": {"settings": actual, "stages_preserved": preserved}}
 
     # ---- stage construction ------------------------------------------------
 
     def _build_stages(
-        self,
-        *,
-        graph: Sequence["StageNode"],
-        grid_row: Mapping[str, str],
-        rows: Mapping[str, "StageRow"],
-        snap: "IntentSnapshot | None",
-        req: PlanRequest,
-        scope: str,
-        caps: tuple[str | None, str | None],
-        current_index: int | None,
-        issues: list[PlanIssue],
+        self, *, graph: Sequence["StageNode"], grid_row: Mapping[str, str], rows: Mapping[str, "StageRow"],
+        snap: "IntentSnapshot | None", req: PlanRequest, scope: str, caps: tuple[str | None, str | None],
+        current_index: int | None, issues: list[PlanIssue],
     ) -> tuple[PlanStage, ...]:
         base: dict[str, bool] = {}
         locks: dict[str, str | None] = {}
@@ -943,11 +908,9 @@ class PlanService:
         for stage in enabled:
             intensity[stage.review_class or "none"] += 1
         return ExactCounts(
-            stages=len(enabled),
-            gates=sum(1 for s in enabled if s.gate),
+            stages=len(enabled), gates=sum(1 for s in enabled if s.gate),
             artifacts=sum(len(s.produces) * (unit_count if s.per_unit else 1) for s in enabled),
-            review_intensity=intensity,
-            assumes_units=None if units is not None else 1,
+            review_intensity=intensity, assumes_units=None if units is not None else 1,
         )
 
     # ---- request / state plumbing ------------------------------------------
@@ -962,17 +925,12 @@ class PlanService:
         overrides: dict[str, bool] = {slug: False for slug in skip}
         overrides.update({slug: True for slug in add})
         return PlanRequest(
-            repo_id=repo.repo_id,
-            space=snap.space,
-            scope=(project.get("Scope") or "").strip(),
+            repo_id=repo.repo_id, space=snap.space, scope=(project.get("Scope") or "").strip(),
             depth=(config.get("Depth") or "").strip(),
             test_strategy=(config.get("Test Strategy") or "").strip() or None,
             review_cap=(config.get("Review Override") or "").strip() or None,
             project_type=(project.get("Project Type") or "").strip() or None,
-            overrides=overrides,
-            objective=None,
-            label=None,
-            context=None,
+            overrides=overrides, objective=None, label=None, context=None,
         )
 
     @staticmethod
@@ -1011,8 +969,8 @@ class PlanService:
 
     @staticmethod
     def _resolve_cap(value: str | None, key: str | None, issues: list[PlanIssue]) -> str | None:
-        """A review cap or ``None``; an unknown one is dropped (only ever *more* review) and reported as
-        ``depth_invalid`` — silently when it came off a state file (``key is None``), which the user never typed."""
+        """A review cap or ``None``. An unknown one is dropped (only ever *more* review) and reported as
+        ``depth_invalid``, silently when it came off a state file (``key is None``): the user never typed it."""
         if not value:
             return None
         if value in REVIEW_CAPS:
@@ -1026,7 +984,7 @@ class PlanService:
     @staticmethod
     def _recompose_refusals(plan: EffectivePlan, slug: str) -> list[PlanIssue]:
         """The engine's per-flip guards: compiled, pending, ahead of the cursor. Not "is it locked": a
-        contradicted lock already produced a plan issue, and ``--add`` of a running stage is an accepted no-op."""
+        contradicted lock already made a plan issue, and ``--add`` of a running stage is an accepted no-op."""
         stage = plan.stage(slug)
         if stage is None or stage.lock_reason == LOCK_NOT_IN_GRAPH:
             return [PlanIssue.of("unknown_stage", slug, stage=slug)]
@@ -1045,7 +1003,8 @@ class PlanService:
         if before == after:
             return None
         moved = after or before
-        return PlanIssue.of("skeleton_anchor", *(s for s in (moved,) if s), anchor_before=before, anchor_after=after)
+        return PlanIssue.of("skeleton_anchor", *(s for s in (moved,) if s), anchor_before=before,
+                            anchor_after=after)
 
     @staticmethod
     def _recompose_lane_refusal(snap: "IntentSnapshot") -> PlanIssue | None:
@@ -1053,8 +1012,8 @@ class PlanService:
         status = (state.status if state is not None else None) or ""
         autonomy = ((state.autonomy_mode if state is not None else None) or "").strip().lower()
         if status != RECOMPOSE_REQUIRED_STATUS or autonomy == AUTONOMOUS_MODE:
-            return PlanIssue.of("recompose_not_allowed", status=status, required_status=RECOMPOSE_REQUIRED_STATUS,
-                                autonomy_mode=autonomy or None)
+            return PlanIssue.of("recompose_not_allowed", status=status,
+                                required_status=RECOMPOSE_REQUIRED_STATUS, autonomy_mode=autonomy or None)
         return None
 
     # ---- engine plumbing ---------------------------------------------------
@@ -1155,8 +1114,7 @@ class PlanService:
         cursor, _dangling = self._reader.active_intent(root, space)
         read = self._reader.read_state(root, space, intent_dir)
         verified = {
-            "state_present": read is not None,
-            "registry_row": row is not None,
+            "state_present": read is not None, "registry_row": row is not None,
             "cursor_set": cursor == intent_dir,
             "state_version": read[1].state_version if read is not None else None,
         }
@@ -1177,8 +1135,7 @@ class PlanService:
         state = read[1]
         rows = {row.slug: row for row in state.stages}
         return {
-            "state_present": True,
-            "state_version": state.state_version,
+            "state_present": True, "state_version": state.state_version,
             "skipped": {slug: not _row_selected(rows[slug]) for slug in proposal.skip if slug in rows},
             "added": {slug: _row_selected(rows[slug]) for slug in proposal.add if slug in rows},
             "missing_rows": [slug for slug in (*proposal.skip, *proposal.add) if slug not in rows],
@@ -1202,11 +1159,6 @@ class PlanService:
         })
 
 
-# --------------------------------------------------------------------------- #
-# helpers
-# --------------------------------------------------------------------------- #
-
-
 def _row_selected(row: "StageRow") -> bool:
     """``[S]`` (jump-skip) and ``SKIP: …`` (recompose/scope) are out of the run; no suffix means selected."""
     if row.state == "skipped":
@@ -1215,7 +1167,7 @@ def _row_selected(row: "StageRow") -> bool:
 
 
 def _effective_review_class(node: "StageNode | None", caps: tuple[str | None, str | None]) -> str:
-    """``min(stage class, scope cap, request cap)`` by rank; a reviewer with no declared class is ``advisory``."""
+    """``min(stage class, scope cap, request cap)`` by rank; a reviewer without a class counts as advisory."""
     if node is None:
         return "none"
     base = node.review_class if node.review_class in REVIEW_CAPS else ("advisory" if node.reviewer else "none")
@@ -1238,11 +1190,7 @@ def _best_lock(reasons: Sequence[str | None]) -> str | None:
 
 
 def _required_by(
-    graph: Sequence["StageNode"],
-    enabled: Mapping[str, bool],
-    satisfied: set[str],
-    project_type: str | None,
-    *,
+    graph: Sequence["StageNode"], enabled: Mapping[str, bool], satisfied: set[str], project_type: str | None, *,
     allowed_gaps: set[tuple[str, str]] | None = None,
 ) -> dict[str, str]:
     """``{stage: a selected stage that would starve without it}`` — the sole on-path producer of a required
@@ -1283,7 +1231,9 @@ def _consume_skipped(consume: Any, project_type: str | None) -> bool:
     return str(conditional).strip().lower() != project_type.strip().lower()
 
 
-def _starvations(graph: Sequence["StageNode"], on_path: set[str], project_type: str | None) -> set[tuple[str, str]]:
+def _starvations(
+    graph: Sequence["StageNode"], on_path: set[str], project_type: str | None
+) -> set[tuple[str, str]]:
     """``{(consumer, artifact)}`` for every required input no on-path stage produces."""
     producers = _producers_of(graph)
     return {
@@ -1297,7 +1247,7 @@ def _starvations(graph: Sequence["StageNode"], on_path: set[str], project_type: 
 
 
 def _anchor_stage_from(stages: Sequence[PlanStage], *, use_base: bool) -> str | None:
-    """The walking-skeleton anchor on disk (``use_base``) or as proposed: the first selected Construction stage."""
+    """The walking-skeleton anchor on disk (``use_base``) or as proposed: the first selected Construction."""
     return next((s.slug for s in stages if s.phase == _ANCHOR_PHASE and (s.in_grid if use_base else s.enabled)),
                 None)
 
@@ -1328,7 +1278,7 @@ def _slug_list(values: Sequence[str]) -> tuple[str, ...]:
 
 
 def _recompose_argv(skip: Sequence[str], add: Sequence[str]) -> tuple[str, ...]:
-    """The verb and flags a confirmation will run, without the host paths (this tuple is rendered in a browser)."""
+    """The verb and flags a confirmation will run, minus host paths (this tuple is rendered in a browser)."""
     argv: list[str] = ["aidlc-utility.ts", "recompose"]
     if skip:
         argv += ["--skip", ",".join(skip)]
