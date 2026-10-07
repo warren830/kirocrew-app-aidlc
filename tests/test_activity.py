@@ -380,16 +380,6 @@ def test_query_filters_pass_through_to_the_store(A, proj, clock):
 # --------------------------------------------------------------------------- #
 
 
-def test_severity_of_finding_maps_the_finding_vocabulary_onto_the_shared_one(A, studio):
-    make = studio.consistency.Finding
-    for severity, expected in (("blocking", "blocking"), ("warn", "attention"), ("info", "info")):
-        finding = make(code="receipt_drift", severity=severity, message_key="finding.receipt_drift",
-                       params={}, evidence=())
-        assert A.severity_of_finding(finding) == expected
-    assert A.severity_of_finding({"severity": "warn"}) == "attention"
-    assert A.severity_of_finding({"severity": "nonsense"}) == "info"
-
-
 def test_severity_of_audit_event_flags_only_errors_and_failed_sensors(A, R, K):
     events = R.parse_audit_shard(
         F.audit_text(

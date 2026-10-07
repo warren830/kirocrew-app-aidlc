@@ -331,38 +331,10 @@ class StudioError(Exception):
 class StaleGeneration(StudioError):  code="stale_generation", status=409
 class IllegalTransition(StudioError): code="illegal_transition", status=409
 class LeaseHeld(StudioError):        code="repo_busy", status=409   # details: {"kind","owner":LeaseView,"retry_after_secs"}
-class Unstable(StudioError):         code="unstable_read", status=409
 
-ERROR_CODES: dict[str, int] = {   # code -> HTTP status (the table is data; handlers never pick statuses)
-  # 400
-  "bad_body": 400, "bad_path": 400, "bad_param": 400, "invalid_decision": 400,
-  "feedback_required": 400, "answers_incomplete": 400, "unknown_stage": 400,
-  # 401 / 403
-  "unauthorized": 401, "owner_required": 403, "app_token_forbidden": 403, "sensitive_path": 403,
-  # 404
-  "repo_not_found": 404, "intent_not_found": 404, "action_not_found": 404, "artifact_not_found": 404,
-  "draft_not_found": 404, "transaction_not_found": 404, "receipt_not_found": 404, "route_not_found": 404,
-  # 409
-  "duplicate_identity": 409, "repo_unavailable": 409, "identity_unprovable": 409, "action_stale": 409,
-  "repo_busy": 409, "illegal_transition": 409, "stale_generation": 409, "state_inconsistent": 409,
-  "machine_lane_unavailable": 409, "install_conflict": 409, "install_recovery_required": 409,
-  "not_installed": 409, "already_installed": 409, "newer_installed": 409, "same_version_installed": 409,
-  "payload_degraded": 409, "migration_not_applicable": 409, "migration_already_applied": 409,
-  "session_unbound": 409, "slot_mismatch": 409, "slot_busy": 409, "unstable_read": 409,
-  "breaker_open": 409, "intent_paused": 409, "intent_archived": 409, "cancel_not_safe": 409,
-  "delivery_ack_invalid": 409, "not_delivered_unproven": 409, "cursor_mismatch": 409,
-  "plan_invalid": 409, "recompose_not_allowed": 409, "legacy_layout": 409, "rebind_not_allowed": 409,
-  "action_not_submittable": 409, "retry_not_allowed": 409,
-  "state_version_migration_unconfirmed": 409,   # upgrade/recovery refused: a State Version outside the payload's compatible set (A01; review P03)
-  "grouped_answers_unavailable": 409,           # multi-question grouped submit while capabilities.grouped_answers is off (review P18)
-  "lease_lost": 409,                             # execution lease vanished/regenerated between acquire and the Delivering CAS (review P15)
-  # 413 / 429
-  "too_large": 413, "too_many_repos": 429, "rate_limited": 429,
-  # 5xx
-  "storage_error": 500, "internal_error": 500,
-  "host_unavailable": 503, "bun_missing": 503, "git_missing": 503, "storage_unavailable": 503,
-  "advisor_unavailable": 503, "slack_unavailable": 503,
-}
+ERROR_CODES: dict[str, int]   # code -> HTTP status (the table is data; handlers never pick statuses)
+    # The authoritative list is backend/studio/errors.py: exactly the codes some module raises, plus route_not_found,
+    # which the UI also uses for a bare host 404. A code nothing raises is removed (the UI table is generated from it).
 ```
 
 `StudioError.__init__` looks the status up in `ERROR_CODES`; an unknown code raises `KeyError` at construction
@@ -386,14 +358,15 @@ def tail_read(path: Path, cap: int) -> bytes               # last `cap` bytes, t
 def sha256_bytes(b: bytes) -> str
 def is_sensitive(path: Path) -> bool                       # kiro_crew.security.is_sensitive_path(str(path)); import failure => True (fail closed)
 def redact(text: str) -> str                               # kiro_crew.security.redact_credentials(text)[0]; import failure => aggressive fallback regex
-def redact_json(obj: Any) -> Any                           # recursive redact on every str leaf
+def redact_json(obj: Any, roots: Sequence[str] | None = None) -> Any
+    # recursive redact on every str leaf; with roots, also scrub_repo_paths (the diagnostics/activity export walk)
 def scrub_repo_paths(text: str, allowed_roots: Sequence[str]) -> str
     # replaces any absolute path not under an allowed root with "<path>"; used by diagnostics export
 def build_subprocess_env() -> dict[str, str]
     # {k: os.environ[k] for k in ENV_KEEP if present} + {"NO_COLOR": "1"}; asserts every ENV_MUST_BE_ABSENT
     # key is absent and no key starts with ENV_FORBIDDEN_PREFIXES; raises AssertionError otherwise (test pins)
 def assert_git_argv_readonly(argv: Sequence[str]) -> None
-    # argv EXCLUDES "git" (GitObserver.run_sync prepends it), so the verb is argv[0]. Raises StudioError("internal_error") when:
+    # argv EXCLUDES "git" (GitObserver prepends the binary when it spawns), so the verb is argv[0]. Raises StudioError("internal_error") when:
     #   argv is empty; argv[0] starts with "-" (no global options before the verb: -c/-C/--git-dir/--work-tree/--exec-path/
     #   --namespace/--config-env all live there); argv[0] in GIT_WRITE_VERBS; argv[0] not in GIT_READ_VERBS; or ANY token in argv
     #   is in GIT_FORBIDDEN_TOKENS or starts with a GIT_FORBIDDEN_PREFIXES entry (`--output=`, `--exec-path=`, `--git-dir=`, `--work-tree=`).
@@ -2241,7 +2214,7 @@ admin lease. EstimateService must NOT store intent names, repo paths or any cont
 
 ### 1.16 `git_observer.py` — `GitObserver`
 
-Sync (`run_sync`, `observe`, …); callers use `to_thread`. Every argv (which excludes `git`; the verb is `argv[0]`) is
+Sync (`observe`, `diff`, …); callers use `to_thread`. Every argv (which excludes `git`; the verb is `argv[0]`) is
 checked by `security.assert_git_argv_readonly` before spawn; env = `security.build_subprocess_env()` +
 `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null` (no user
 `core.fsmonitor`/aliases can turn a read into a write; review P21).
@@ -2255,19 +2228,19 @@ class GitObservation:
     observed_at: str; took_ms: int
 @dataclass(frozen=True, slots=True)
 class GitCommit: sha: str; at: str; subject: str
-@dataclass(frozen=True, slots=True)
-class GitResult: argv: tuple[str, ...]; exit_code: int | None; stdout: str; stderr: str; timed_out: bool
 
 class GitObserver:
     def __init__(self, git_path: str | None, clock: Clock) -> None
-    def run_sync(self, repo: Path, argv: Sequence[str]) -> GitResult      # argv excludes "git" (verb = argv[0]); spawn is [git_path, *argv]; timeout GIT_TIMEOUT_SECS
+    def version(self) -> str | None                                       # git --version (no cwd, no repository); /health tools.git.version
     def common_dir(self, repo: Path) -> str | None                        # rev-parse --git-common-dir → realpath
     def observe(self, repo: Path) -> GitObservation
         # rev-parse --abbrev-ref HEAD ; status --porcelain=v2 --branch ; rev-list --left-right --count @{upstream}...HEAD (skip when no upstream)
     def prior_version(self, repo: Path, relpath: str) -> bytes | None     # show HEAD:<relpath> ; cap MAX_ARTIFACT_RENDER_BYTES ; None when untracked
     def diff(self, repo: Path, relpath: str) -> str | None                # diff --no-color --no-ext-diff -- <relpath> ; cap 256 KiB
     def recent_commits(self, repo: Path, paths: Sequence[str], limit: int = 10) -> list[GitCommit]   # log --no-decorate --format=%H%x1f%cI%x1f%s -n <limit> -- <paths>
-    def dirty_split(self, repo: Path, owned_paths: Sequence[str]) -> dict   # {"owned_dirty": [...], "unrelated_dirty": int}
+    def dirty_split(self, repo: Path, owned_paths: Sequence[str]) -> dict
+        # {"owned_dirty": [...], "unrelated_dirty": int, "owned_changes": [{relpath, status}], "available", "reason", "truncated"}
+    # every spawn is [git_path, *argv] (argv excludes "git"; verb = argv[0]); timeout GIT_TIMEOUT_SECS
 ```
 
 GitObserver must NOT run any verb outside `GIT_READ_VERBS`, pass any `GIT_FORBIDDEN_TOKENS`/`GIT_FORBIDDEN_PREFIXES`
@@ -2301,8 +2274,10 @@ class TimelineEntry:
     severity: str                    # SEVERITY (critical|blocking|attention|info) — the same enum Activity rows use (review P26.5)
     refs: dict                       # {"action_id"?, "session_key"?, "audit"?: {shard, pos, event}, "git"?: {sha}}
     raw: str | None                  # verbatim audit block (source aidlc) for the Evidence drawer
+    id: int | None                   # the activity row id; None for a projected AI-DLC row
+    @classmethod
+    def of_row(cls, row: ActivityRow) -> TimelineEntry   # the one Studio-row serializer (timeline and GET /activity)
 
-def severity_of_finding(f: Finding) -> str      # blocking → "blocking", warn → "attention", info → "info"
 def severity_of_audit_event(e: AuditEvent) -> str   # ERROR_LOGGED/SENSOR_FAILED → "attention"; GATE_*/QUESTION_*/STAGE_* → "info"; everything else "info"
 
 class ActivityProjector:

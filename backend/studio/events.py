@@ -28,18 +28,8 @@ logger = logging.getLogger("kirocrew.app.aidlc-studio")
 #: Closed on purpose: an unlisted type would be silently ignored by the UI's reducer, so ``publish``
 #: refuses it. ``hello`` is a per-connection greeting, not an event.
 EVENT_TYPES = (
-    "action.created",
-    "action.updated",
-    "repo.updated",
-    "repo.removed",
-    "intent.updated",
-    "transaction.updated",
-    "lease.updated",
-    "activity.appended",
-    "advisor.updated",
-    "settings.updated",
-    "health.updated",
-    "reset",
+    "action.created", "action.updated", "repo.updated", "repo.removed", "intent.updated", "transaction.updated",
+    "lease.updated", "activity.appended", "advisor.updated", "settings.updated", "health.updated", "reset",
 )
 EVENT_HELLO = "hello"
 EVENT_RESET = "reset"

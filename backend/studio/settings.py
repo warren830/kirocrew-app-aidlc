@@ -166,19 +166,15 @@ def _scan(patch: Mapping[str, Any]) -> tuple[list[tuple[str, Any]], list[tuple[s
     return leaves, problems
 
 
-def _overrides(leaves: Sequence[tuple[str, Any]]) -> dict[str, Any]:
-    out: dict[str, Any] = {}
+def _merged(base: Mapping[str, Any], leaves: Sequence[tuple[str, Any]]) -> dict[str, Any]:
+    out = copy.deepcopy(dict(base))
     for dotted, value in leaves:
         _assign(out, dotted, copy.deepcopy(value))
     return out
 
 
 def _effective(overrides: Mapping[str, Any]) -> dict[str, Any]:
-    """``DEFAULTS`` deep-merged with already-validated overrides."""
-    values = copy.deepcopy(DEFAULTS)
-    for dotted, value in _scan(overrides)[0]:
-        _assign(values, dotted, copy.deepcopy(value))
-    return values
+    return _merged(DEFAULTS, _scan(overrides)[0])
 
 
 def _decode(raw: Any) -> tuple[dict[str, Any], str | None]:
@@ -189,22 +185,7 @@ def _decode(raw: Any) -> tuple[dict[str, Any], str | None]:
     if not isinstance(body, Mapping):
         body = {k: v for k, v in raw.items() if k != "updated_at"}
     stamp = raw.get("updated_at")
-    return _overrides(_scan(body)[0]), stamp if isinstance(stamp, str) and stamp else None
-
-
-def _host_version(host: Any) -> str | None:
-    """The gateway's version, read from ``sys.modules`` rather than imported (this runs on the loop, and an
-    import is disk work). A future ``HostBridge.host_version()`` wins because it knows the attached host."""
-    probe = getattr(host, "host_version", None)
-    if callable(probe):
-        try:
-            reported = probe()
-        except (AttributeError, TypeError, KeyError):
-            reported = None
-        if isinstance(reported, str) and reported:
-            return reported
-    version = getattr(sys.modules.get("kiro_crew"), "__version__", None)
-    return version if isinstance(version, str) and version else None
+    return _merged({}, _scan(body)[0]), stamp if isinstance(stamp, str) and stamp else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -292,11 +273,13 @@ class SettingsService:
         }
 
     def versions(self) -> dict[str, Any]:
+        # Read from `sys.modules`, not imported: this runs on the loop, and an import is disk work.
+        host = getattr(sys.modules.get("kiro_crew"), "__version__", None)
         return {
             "studio": C.APP_VERSION,
             "bundled_engine": C.BUNDLED_ENGINE_VERSION,
             "min_kirocrew": C.MIN_KIROCREW_VERSION,
-            "host": _host_version(self._host),
+            "host": host if isinstance(host, str) and host else None,
         }
 
     # ---- sync accessors for other modules (cache only, never disk) ----
@@ -335,9 +318,7 @@ class SettingsService:
         process, an operator with ``sqlite3``) loses only a conflicting key, never the whole row."""
         with self._write_lock:
             overrides, updated_at = _decode(self._storage.pref_get(PREF_KEY))
-            merged = copy.deepcopy(overrides)
-            for dotted, value in leaves:
-                _assign(merged, dotted, copy.deepcopy(value))
+            merged = _merged(overrides, leaves)
             if merged != overrides:
                 updated_at = self._clock.iso()
                 self._storage.pref_set(PREF_KEY, {"values": merged, "updated_at": updated_at})

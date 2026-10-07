@@ -15,6 +15,7 @@ English only: the host's notification bus has no locale, and the UI renders its 
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Mapping
@@ -57,8 +58,7 @@ class NotificationResult:
     dedupe_hit: bool
 
     def to_json(self) -> dict[str, Any]:
-        return {"dashboard": self.dashboard, "slack": self.slack, "slack_ts": self.slack_ts,
-                "deep_link": self.deep_link, "dedupe_hit": self.dedupe_hit}
+        return dataclasses.asdict(self)
 
 
 @dataclass(slots=True)
