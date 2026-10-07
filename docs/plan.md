@@ -94,6 +94,22 @@
 - 校准没有写入方了，`GET /calibration` 永远为空，估算永远用规则区间：放进 P5a 整个删掉（路由、表、UI）。
 - P2 拆成两步：P2a 租约（派生忙状态 + 每仓库文件锁，接口不变，先做），P2b 决策状态机（合并状态，等 P2a 合入后做）。
 
+### 第二轮（2026-10-08）
+
+**P2a 租约**：`leases.py` 870 → 274 行；storage 的租约方法、reconciler 的心跳循环和回收、安装器每步心跳全部删除。
+- 执行租约 = 仓库里有带 `lease_generation` 的在途决策（Delivering/Delivered/Processing）；决策离开在途即释放。
+- 管理操作和提交窗口持有每仓库一个 `flock`（`<data_dir>/locks/`），进程死亡由内核释放，所以不需要心跳和回收证明。
+- 审查时补的安全缺口：送达不确定的决策不再占仓库，于是每次授予租约（执行和管理）都先要求该仓库所有宿主会话空闲。否则安装或给另一个 intent 发决定，可能在一个还在跑的轮次下面切换游标。比 v1 严：用户在同仓库另一个会话里手动跑 AI-DLC 时，Studio 也会等它跑完。
+- 行为变化：没有孤儿租约和回收记录；`heartbeat_at` 等于 `acquired_at`；generation 是微秒时间戳。
+
+**P5a 杂项**：events、settings、notifications、activity、git_observer、security、errors 共 3,618 → 2,036 行。
+- 事件流改为内存环形缓冲（2,000 条），网关重启后 UI 走已有的重新同步。
+- 删掉无效的夜间窗口设置（后端 + UI）；`diagnostics.retention_days` 生效（删除更早的 Activity）；`notifications.dashboard` 开关原来没人读，现在真正控制桌面通知。
+- 通知合成 `notify(kind, …)`，删掉从未调用的摘要通知；校准功能整个删掉（路由、UI、估算里的校准分支）。
+- 删掉 6 个没有任何地方抛出的错误码。
+
+合并后：后端 29,961 行（−26%），`check.sh` 11 项全过（后端 2789 个测试，UI 468 个）。
+
 ## 金样变更记录
 
 （每次有意改变金样输出都记在这里：哪个阶段、哪个视图、改了什么、为什么。）
