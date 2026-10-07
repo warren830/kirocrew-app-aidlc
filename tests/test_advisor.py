@@ -948,8 +948,7 @@ def test_drafts_are_listed_newest_first_for_a_card(wiring, A):
     second = settle(wiring, A, fence(good_result()))
     listed = asyncio.run(wiring.broker.list_for_action(ACTION))
     assert [d.draft_id for d in listed] == [second.draft_id, first.draft_id]
-    assert asyncio.run(wiring.broker.latest_for_action(ACTION)).draft_id == second.draft_id
-    assert asyncio.run(wiring.broker.latest_for_action("a_nope")) is None
+    assert asyncio.run(wiring.broker.list_for_action("a_nope")) == []
 
 
 # --------------------------------------------------------------------------- #
