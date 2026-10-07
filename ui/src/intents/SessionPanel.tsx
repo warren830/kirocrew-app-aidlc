@@ -54,17 +54,21 @@ import { StartStatus, startBlockedReason, startKind, startText, useStartRun } fr
 /** The agent an AI-DLC conversation runs. `SessionBinder.bind` refuses every other one (§1.11). */
 const AIDLC_AGENT = 'aidlc'
 
-/** How many calls create-and-bind takes. The copy counts them, so the user can name the one that failed. */
-const STEPS = 5
-
 /** Step number → the catalogue key that says what that step does. Explicit, so both are greppable. */
 const STEP_KEYS = [
   'intents.session.step.create',
   'intents.session.step.title',
   'intents.session.step.project',
+  'intents.session.step.agent',
   'intents.session.step.bind',
   'intents.session.step.folder',
 ] as const
+
+/** How many calls create-and-bind takes. The copy counts them, so the user can name the one that failed. */
+const STEPS = STEP_KEYS.length
+
+/** Binding an existing conversation is this same step, so its refusal is numbered like one. */
+const BIND_STEP = STEP_KEYS.indexOf('intents.session.step.bind') + 1
 
 /**
  * `constants.SLOT_KEY_TEMPLATE` (`aidlc-studio-{repo_id}-{intent_dir}`) mirrored, because the slot is
@@ -237,7 +241,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
     let step = 1
     setAt(step)
     try {
-      const created = await api.createSlot(wanted, AIDLC_AGENT)
+      const created = await api.createSlot(wanted)
       // The host answers with the slot it made; its own `key` is what every later call must address,
       // even if it normalised the name we asked for.
       const answered = created['key']
@@ -250,11 +254,15 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
       await api.setSlotProject(key, repo.canonical_path)
       step = 4
       setAt(step)
+      // Only now: the repository's own agent resolves once the slot's project is the repository.
+      await api.setSlotAgent(key, AIDLC_AGENT)
+      step = 5
+      setAt(step)
       const answer = await api.bindSession(intent.repo_id, intent.intent_key, key)
       remember(answer.binding, answer.slot)
       setSlots(null)
       onChanged(t('intents.session.done.bound', { slot: answer.binding.slot_key ?? key }))
-      step = 5
+      step = 6
       setAt(step)
       try {
         setFiled(await fileConversation(api, repo, intent, answer.binding.slot_key ?? key))
@@ -293,8 +301,8 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
         setSlots(null)
         onChanged(t('intents.session.done.bound', { slot: answer.binding.slot_key ?? slotKey }))
       } catch (caught) {
-        // Step 4 by any other route is still step 4: the refusal is the same `slot_mismatch`.
-        fail(caught, STEPS)
+        // The bind step by any other route is still the bind step: the refusal is the same `slot_mismatch`.
+        fail(caught, BIND_STEP)
       } finally {
         setBusy(null)
       }

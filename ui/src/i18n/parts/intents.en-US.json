@@ -64,6 +64,7 @@
   "intents.session.step.create": "create the conversation",
   "intents.session.step.title": "title it",
   "intents.session.step.project": "point it at this repository",
+  "intents.session.step.agent": "switch it to the aidlc agent",
   "intents.session.step.bind": "bind it to this intent",
   "intents.session.step.folder": "file it under the repository's sidebar folder",
   "intents.session.folder.filed": "Filed in the sidebar under {path}.",

@@ -1,6 +1,6 @@
 {
   "name": "aidlc-studio",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "displayName": "AI-DLC Studio",
   "description": "The visual operating surface for AI-DLC Workflows: one Action Center for every approval gate, question and recovery decision across your repositories, with the evidence beside each decision. Studio reads AI-DLC's own files and sends every decision through the intent's own conversation; it never edits AI-DLC state.",
   "author": "ychchen",

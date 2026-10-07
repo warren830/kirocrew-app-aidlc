@@ -270,9 +270,15 @@ export interface StudioApi extends WorkspaceApi {
   // -- host chat (§2.13; the second declared prefix) --------------------- //
   listSlots(o?: ReadOptions): Promise<SlotView[]>
   getSlot(slotKey: string, o?: ReadOptions): Promise<Record<string, unknown>>
-  createSlot(slotKey: string, agent: string): Promise<Record<string, unknown>>
+  /**
+   * Born on the host's default agent, never a named one: KiroCrew 0.8's execution memory resolves an agent
+   * named at birth as a crew member, and a repository's own agent (`aidlc` lives in its `.kiro/agents/`)
+   * cannot resolve before the slot has that repository as its project. `setSlotAgent` switches it after.
+   */
+  createSlot(slotKey: string): Promise<Record<string, unknown>>
   setSlotTitle(slotKey: string, title: string): Promise<Record<string, unknown>>
   setSlotProject(slotKey: string, project: string): Promise<Record<string, unknown>>
+  /** As a provider template (`agent_kind`), so a crew member of the same name never takes the slot. Older hosts ignore the field. */
   setSlotAgent(slotKey: string, agent: string): Promise<Record<string, unknown>>
   listFolders(o?: ReadOptions): Promise<ChatFolder[]>
   createFolder(body: { name: string; parent_id?: string; project_dir?: string }): Promise<ChatFolder>
@@ -445,7 +451,7 @@ export function useStudioApi(): StudioApi {
           throw decodeError(error)
         }
       },
-      createSlot: (slotKey, agent) => chatPost(api, `${CHAT_BASE}/slots`, { name: slotKey, agent }),
+      createSlot: (slotKey) => chatPost(api, `${CHAT_BASE}/slots`, { name: slotKey }),
       // `PATCH`, not `POST`: the host's title route is a patch (`kc:routes/sessions.py:32`).
       setSlotTitle: async (slotKey, title) => {
         try {
@@ -460,7 +466,7 @@ export function useStudioApi(): StudioApi {
       setSlotProject: (slotKey, project) =>
         chatPost(api, `${CHAT_BASE}/slots/${encodeURIComponent(slotKey)}/project`, { project }),
       setSlotAgent: (slotKey, agent) =>
-        chatPost(api, `${CHAT_BASE}/slots/${encodeURIComponent(slotKey)}/agent`, { agent }),
+        chatPost(api, `${CHAT_BASE}/slots/${encodeURIComponent(slotKey)}/agent`, { agent, agent_kind: 'template' }),
       listFolders: async (o) => {
         try {
           return await api.get<ChatFolder[]>(`${CHAT_BASE}/folders`, o?.signal ? { signal: o.signal } : undefined)
