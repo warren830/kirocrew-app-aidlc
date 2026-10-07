@@ -179,12 +179,9 @@ class Resolution:
 
 @dataclass(frozen=True, slots=True)
 class StartupReport:
-    """What the ordered startup pass found, published as the ``health.updated`` event.
-
-    Carries ``within_budget`` because a startup that ran out of the host's hook window is not an error:
-    the remaining work simply leads the first tick. A caller that could not tell the difference would
-    either block the gateway or silently skip repositories.
-    """
+    """What the ordered startup pass found, published as ``health.updated``. ``within_budget=False`` is not an
+    error: the remaining work leads the first tick, and a caller that could not tell would either block the
+    gateway or silently skip repositories."""
 
     boot_id: str
     started_at: str
@@ -193,8 +190,8 @@ class StartupReport:
     integrity: tuple[str, ...]
     payload_ok: bool | None
     payload_mismatches: int
-    #: Transactions a previous process abandoned, closed out by this startup. Non-empty means a gateway
-    #: died mid-install, so it belongs in the report a person can read rather than only in the log.
+    #: Transactions a previous process abandoned, closed by this startup: a gateway died mid-install, which
+    #: belongs in a report a person reads rather than only in the log.
     transactions_settled: tuple[str, ...]
     actions_reevaluated: int
     boot_id_mismatches: int
@@ -416,39 +413,26 @@ class Reconciler:
         #: whose directory was not on disk. Only this component sees consecutive scans, so only it can
         #: tell a branch switch in progress from an intent that is gone (§1.13 step 1b).
         self._missing_since: dict[tuple[str, str, str], float] = {}
-        #: ``repo_id -> number of intent directories the last complete scan found``. What
-        #: ``GET /health`` reports as ``counts.intents``: binding rows outlive a deleted intent on purpose
-        #: (they hold its archive flag and session binding for when it comes back), so counting them
-        #: would keep counting intents that are no longer there.
+        #: ``repo_id -> intent directories the last complete scan found``: ``GET /health`` ``counts.intents``.
+        #: Binding rows outlive a deleted intent on purpose (its archive flag and session), so they cannot count.
         self._intents_on_disk: dict[str, int] = {}
+        #: Binding keys whose state file this process read as not completed: only their completion is announced.
+        self._unfinished: set[str] = set()
         self._running = False
         self._last_tick_at: str | None = None
         self._last_tick_ms: int | None = None
         self._repos_scanned = 0
-        self._tasks: list[asyncio.Task] = []
 
     # ---- introspection ---------------------------------------------------- #
 
     def status(self) -> dict[str, Any]:
-        """The ``reconciler`` block of ``GET /health`` (§2.1).
-
-        Additive to §1.13's signature list: the health body requires these four numbers and no other
-        component observes them. Reported to the orchestrator.
-        """
-        return {
-            "running": self._running,
-            "last_tick_at": self._last_tick_at,
-            "last_tick_ms": self._last_tick_ms,
-            "repos_scanned": self._repos_scanned,
-        }
+        """The ``reconciler`` block of ``GET /health`` (§2.1): four numbers no other component observes."""
+        return {"running": self._running, "last_tick_at": self._last_tick_at, "last_tick_ms": self._last_tick_ms,
+                "repos_scanned": self._repos_scanned}
 
     def intents_on_disk(self) -> int:
-        """Intent directories found by the last complete scan of every registered repository.
-
-        The ``counts.intents`` of ``GET /health`` (§2.1). Zero until the first scan has run, a lower
-        bound while a repository's listing is truncated, and unchanged while a repository is
-        unavailable (nothing can be said about its intents until it is back).
-        """
+        """``GET /health`` ``counts.intents``: zero before the first scan, a lower bound while a listing is
+        truncated, unchanged while a repository is unavailable (nothing can be said about it until it is back)."""
         return sum(self._intents_on_disk.values())
 
     # ---- startup ---------------------------------------------------------- #
@@ -456,29 +440,22 @@ class Reconciler:
     async def startup(self) -> StartupReport:
         """Ordered startup: integrity, payload, in-flight actions, abandoned transactions, first full scan.
 
-        The order is the contract's and each step is a precondition of the next. Re-evaluating every
-        in-flight action before the first scan is what stops a derived card from being minted for a
-        boundary a delivered decision has already closed.
-
-        Bounded by ``HOST_STARTUP_HOOK_BUDGET_SECS``: the gateway detaches an app whose ``on_startup``
-        overruns, so leftover work is left for the first tick rather than finished here.
+        Each step is a precondition of the next: every in-flight action is re-read before the first scan, so no
+        card is minted for a boundary a delivered decision already closed. Bounded by
+        ``HOST_STARTUP_HOOK_BUDGET_SECS`` (the gateway detaches an app whose ``on_startup`` overruns): leftover work
+        leads the first tick.
         """
         clock = self._s.clock
-        started_at = clock.iso()
-        started = clock.monotonic()
+        started_at, started = clock.iso(), clock.monotonic()
         deadline = started + C.HOST_STARTUP_HOOK_BUDGET_SECS
         issues: list[str] = []
-
         integrity = tuple(await self._to_thread(self._s.storage.integrity_check))
         if integrity:
             issues.append("storage_integrity")
-
         payload_ok, mismatches = await self._verify_payload(issues)
-
         reevaluated, boot_mismatches = await self._startup_actions(deadline, issues)
-
-        # A transaction abandoned by process death is settled here, and its repository marked
-        # `recovery_required`, so a person is told the tree may be half written.
+        # A transaction abandoned by process death is settled and its repository marked `recovery_required`, so a
+        # person is told the tree may be half written.
         settled: tuple[str, ...] = ()
         installer = getattr(self._s, "installer", None)
         if installer is not None:
@@ -488,39 +465,22 @@ class Reconciler:
                 issues.append(f"settle_abandoned:{exc.code}")
         if settled:
             issues.append(f"transactions_settled:{len(settled)}")
-
         scanned, pending = await self._startup_scan(deadline, issues)
-
-        finished_at = clock.iso()
         report = StartupReport(
-            boot_id=str(getattr(self._s, "boot_id", "") or ""),
-            started_at=started_at,
-            finished_at=finished_at,
-            took_ms=max(0, int((clock.monotonic() - started) * 1000)),
-            integrity=integrity,
-            payload_ok=payload_ok,
-            payload_mismatches=mismatches,
-            transactions_settled=settled,
-            actions_reevaluated=reevaluated,
-            boot_id_mismatches=boot_mismatches,
-            repos_scanned=scanned,
-            repos_pending=pending,
-            within_budget=clock.monotonic() <= deadline,
-            issues=tuple(issues),
+            boot_id=str(getattr(self._s, "boot_id", "") or ""), started_at=started_at, finished_at=clock.iso(),
+            took_ms=max(0, int((clock.monotonic() - started) * 1000)), integrity=integrity, payload_ok=payload_ok,
+            payload_mismatches=mismatches, transactions_settled=settled, actions_reevaluated=reevaluated,
+            boot_id_mismatches=boot_mismatches, repos_scanned=scanned, repos_pending=pending,
+            within_budget=clock.monotonic() <= deadline, issues=tuple(issues),
         )
         await self._record("health.startup", severity="info", params=report.to_json())
         await self._publish("health.updated", {"startup": report.to_json()})
         return report
 
     async def _verify_payload(self, issues: list[str]) -> tuple[bool | None, int]:
-        """Verify the vendored payload, tolerating an installer that is not wired yet.
-
-        ``Installer`` is a peer module; a Studio whose payload cannot be verified is *degraded*, not
-        broken, so a missing collaborator degrades this one number instead of aborting the startup that
-        every other module's recovery depends on.
-        """
-        installer = getattr(self._s, "installer", None)
-        verify = getattr(installer, "verify_payload", None)
+        """Verify the vendored payload. Unverifiable is *degraded*, not broken: a missing installer costs this one
+        number, never the startup every other module's recovery depends on."""
+        verify = getattr(getattr(self._s, "installer", None), "verify_payload", None)
         if not callable(verify):
             issues.append("payload_unverified")
             return None, 0
@@ -530,20 +490,16 @@ class Reconciler:
             issues.append(f"payload:{exc.code}")
             return False, 0
         ok = bool(_attr(status, "ok", False))
-        mismatches = len(tuple(_attr(status, "mismatches", ()) or ())) + len(
-            tuple(_attr(status, "missing", ()) or ())
-        )
         if not ok:
             issues.append("payload_degraded")
-        return ok, mismatches
+        return ok, len(tuple(_attr(status, "mismatches", ()) or ())) + len(tuple(_attr(status, "missing", ()) or ()))
 
     async def _startup_actions(self, deadline: float, issues: list[str]) -> tuple[int, int]:
         """Re-read every row that was mid-flight when the previous process stopped.
 
-        The ``boot_id`` stamp is written before the row is reconciled, not after: the four-proof
-        ``NotDelivered`` path and ``resolve(mark_not_delivered)`` both read ``evidence.boot_id_unchanged``
-        off the row, so a row reconciled before it was stamped could be declared undelivered on evidence
-        this process cannot have (review R02).
+        The ``boot_id`` stamp is written before the row is reconciled: the four-proof ``NotDelivered`` path reads
+        ``evidence.boot_id_unchanged``, so a row reconciled first could be declared undelivered on evidence this
+        process cannot have (review R02).
         """
         rows = await self._to_thread(
             self._s.storage.select, "actions", {"status": list(STARTUP_STATUS)}, order_by="created_at ASC"
@@ -588,49 +544,30 @@ class Reconciler:
     # ---- loops ------------------------------------------------------------ #
 
     async def run_forever(self) -> None:
-        """Run the tick loop as a task until cancelled."""
+        """Tick every ``RECONCILE_INTERVAL_SECS`` until cancelled; a failed tick is logged and the next one runs."""
         self._running = True
-        self._tasks = [asyncio.create_task(self.tick_loop(), name="aidlc-studio-tick")]
         try:
-            await asyncio.gather(*self._tasks)
-        except asyncio.CancelledError:
-            raise
+            while True:
+                try:
+                    await self.tick()
+                except Exception:  # pragma: no cover - defensive
+                    _LOG.exception("reconciler tick failed")
+                await asyncio.sleep(C.RECONCILE_INTERVAL_SECS)
         finally:
             self._running = False
-            for task in self._tasks:
-                task.cancel()
-            for task in self._tasks:
-                with contextlib.suppress(asyncio.CancelledError, Exception):
-                    await task
-            self._tasks = []
-
-    async def tick_loop(self) -> None:
-        while True:
-            try:
-                await self.tick()
-            except asyncio.CancelledError:
-                raise
-            except Exception:  # pragma: no cover - defensive
-                _LOG.exception("reconciler tick failed")
-            await asyncio.sleep(C.RECONCILE_INTERVAL_SECS)
 
     async def tick(self) -> None:
-        """One reconciliation pass over the whole registry (§1.13 steps 1-8).
-
-        Scans come first so that the actions reconciled in step 2 are judged against evidence read in
-        this tick.
-        """
+        """One pass over the whole registry (§1.13 steps 1-8). Scans come first, so the actions reconciled in step 2
+        are judged against evidence read in this tick."""
         clock = self._s.clock
         started = clock.monotonic()
         self._last_tick_at = clock.iso()
 
         await self._scan_pass(started)
         await self._reconcile_open_actions()
-        # The advisor pass sits exactly here. After steps 1-5 because the ``Queued`` set it drafts for is
-        # the one this tick just derived and reconciled — a card a scan retired seconds ago must never
-        # draw a spawn. Before retention because a draft this pass settles is still handed to
-        # ``_expire_drafts`` in the same tick, so one that was already past its TTL is expired now rather
-        # than sitting ``ready`` for five more seconds.
+        # The advisor pass sits exactly here: after steps 1-5, so the ``Queued`` set it drafts for is the one this
+        # tick derived (a card a scan just retired must never draw a spawn); before retention, so a draft it settles
+        # past its TTL is expired this tick rather than sitting ``ready`` five more seconds.
         await self._advisor_pass()
         await self._retention_pass()
 
@@ -638,35 +575,36 @@ class Reconciler:
 
     # ---- tick step 1: scan scheduling ------------------------------------- #
 
-    async def _scan_pass(self, tick_started: float) -> int:
-        """Scan repositories, open-action ones first, the rest round-robin inside the tick budget."""
+    async def _scan_pass(self, tick_started: float) -> None:
+        """Repositories with open actions first, then the rest round-robin from where the last tick's budget ran
+        out, so the tail of a large registry is never starved. A repository scanned under 2 s ago is skipped."""
+        clock = self._s.clock
         repos = await self._to_thread(self._s.repos.list)
         known = {r.repo_id for r in repos}
-        # A repository that left the registry takes its per-repo memory with it; otherwise a removed
-        # repository would keep counting toward ``counts.intents`` forever.
+        # A repository that left the registry takes its memory with it, or it would count toward
+        # ``counts.intents`` forever.
         for repo_id in [key for key in self._intents_on_disk if key not in known]:
             self._intents_on_disk.pop(repo_id, None)
         for key in [key for key in self._missing_since if key[0] not in known]:
             self._missing_since.pop(key, None)
         if not repos:
-            return 0
-        open_ids = await self._repos_with_open_actions()
+            return
+        rows = await self._to_thread(self._s.storage.select, "actions", {"status": list(C.LIVE_ACTION_STATUS)})
+        open_ids = {str(row.get("repo_id")) for row in rows if row.get("repo_id")}
         priority = [r for r in repos if r.repo_id in open_ids]
         rest = [r for r in repos if r.repo_id not in open_ids]
         if rest:
             cursor = self._cursor % len(rest)
             rest = rest[cursor:] + rest[:cursor]
-
-        clock = self._s.clock
         inflight: set[asyncio.Task] = set()
         scanned = 0
         stopped_at: int | None = None
-
         for index, repo in enumerate(priority + rest):
             if clock.monotonic() - tick_started >= SCAN_TICK_BUDGET_SECS:
                 stopped_at = index - len(priority)
                 break
-            if repo.repo_id not in open_ids and not self._due(repo.repo_id):
+            last = self._scanned_at.get(repo.repo_id, float("-inf"))
+            if repo.repo_id not in open_ids and clock.monotonic() - last < REPO_SCAN_MIN_INTERVAL_SECS:
                 continue
             inflight.add(asyncio.create_task(self._scan_bounded(repo)))
             scanned += 1
@@ -674,43 +612,24 @@ class Reconciler:
                 _, inflight = await asyncio.wait(inflight, return_when=asyncio.FIRST_COMPLETED)
         if inflight:
             await asyncio.wait(inflight)
-
         if rest:
-            # Resume where the budget ran out, so the tail of a large registry is never starved.
             advanced = len(rest) if stopped_at is None else max(0, stopped_at)
             self._cursor = (self._cursor + advanced) % len(rest)
         self._repos_scanned = scanned
-        return scanned
-
-    def _due(self, repo_id: str) -> bool:
-        last = self._scanned_at.get(repo_id)
-        if last is None:
-            return True
-        return (self._s.clock.monotonic() - last) >= REPO_SCAN_MIN_INTERVAL_SECS
-
-    async def _repos_with_open_actions(self) -> set[str]:
-        rows = await self._to_thread(
-            self._s.storage.select, "actions", {"status": list(C.LIVE_ACTION_STATUS)}
-        )
-        return {str(row.get("repo_id")) for row in rows if row.get("repo_id")}
 
     async def _scan_bounded(self, repo: "RepoRecord") -> RepoScan | None:
-        """``scan_repo`` under the per-repo deadline; a slow repository never holds up the tick.
+        """``scan_repo`` under the per-repo deadline, so a slow repository never holds up the tick.
 
-        The executor future is not cancellable, so a timeout marks the scan truncated and moves on: the
-        worker finishes into a result nobody reads, which costs one pool slot for a moment and cannot
-        corrupt anything (every scan writes through the same guarded store).
+        The executor future is not cancellable: on a timeout the worker finishes into a result nobody reads,
+        which costs one pool slot for a moment and cannot corrupt anything (every scan writes through one store).
         """
+        scan = None
         try:
             scan = await asyncio.wait_for(self.scan_repo(repo), timeout=C.REPO_SCAN_DEADLINE_SECS)
         except asyncio.TimeoutError:
             _LOG.warning("repo scan of %s exceeded %.1fs", repo.repo_id, C.REPO_SCAN_DEADLINE_SECS)
-            self._scanned_at[repo.repo_id] = self._s.clock.monotonic()
-            return None
         except (StudioError, OSError) as exc:
             _LOG.warning("repo scan of %s failed: %s", repo.repo_id, exc)
-            self._scanned_at[repo.repo_id] = self._s.clock.monotonic()
-            return None
         self._scanned_at[repo.repo_id] = self._s.clock.monotonic()
         return scan
 
@@ -719,9 +638,9 @@ class Reconciler:
     async def scan_repo(self, repo: "RepoRecord") -> RepoScan:
         """One repository: availability and install health, then every intent's read model.
 
-        Holds the scan semaphore for its whole body — including the intent loop — because the invariant
-        the contract pins is "at most ``SCAN_CONCURRENCY`` concurrent ``scan_repo`` calls", and a
-        semaphore held only around the individual disk reads would let 64 walks interleave.
+        The semaphore is held for the whole body, intent loop included: the pinned invariant is "at most
+        ``SCAN_CONCURRENCY`` concurrent ``scan_repo`` calls", and a gate around single reads would let 64 walks
+        interleave.
         """
         async with self._semaphore():
             return await self._scan_repo_locked(repo)
@@ -731,21 +650,18 @@ class Reconciler:
         started = clock.monotonic()
         base: RepoScan = await self._in_pool(self._s.repos.rescan, repo.repo_id)
         repo = await self._to_thread(self._s.repos.get, repo.repo_id)
-
         summaries: list[Any] = []
         findings: list[Any] = []
         truncated = base.truncated
-        #: Every intent directory the listing found, whether or not its scan succeeded: an intent whose
-        #: state file is mid-write is still on disk, and its cards must not be swept.
+        # Every directory the listing found, scanned or not: an intent whose state file is mid-write is still on
+        # disk, and its cards must not be swept.
         present: set[tuple[str, str]] = set()
         if base.availability == "available":
             leases = await self._s.scheduler.list()
             root = Path(repo.canonical_path)
-            spaces = await self._in_pool(self._s.reader.list_spaces, root)
-            for space in spaces:
+            for space in await self._in_pool(self._s.reader.list_spaces, root):
                 dirs = await self._in_pool(self._s.reader.list_intent_dirs, root, space)
-                if len(dirs) >= C.MAX_INTENTS_PER_REPO:
-                    truncated = True
+                truncated = truncated or len(dirs) >= C.MAX_INTENTS_PER_REPO
                 present.update((space, intent_dir) for intent_dir in dirs)
                 for intent_dir in dirs:
                     try:
@@ -757,53 +673,36 @@ class Reconciler:
                         continue
                     summaries.append(summary)
                     findings.extend(intent_findings)
-
-        if base.availability == "available":
-            # A truncated listing is a lower bound, never proof of absence; the sweep needs the whole
-            # set. The count is still recorded (the health number is a lower bound then too).
+            # Recorded even when truncated: the health number is a lower bound then too.
             self._intents_on_disk[repo.repo_id] = len(present)
-            if truncated:
-                self._forget_missing(repo.repo_id)
-            else:
-                await self._retire_vanished(repo.repo_id, present)
+        if base.availability == "available" and not truncated:
+            await self._retire_vanished(repo.repo_id, present)
         else:
-            # An unmounted or unreadable repository says nothing about its intents: every directory
-            # "vanished" at once. Forget the timers so a remount does not retire cards on stale evidence.
+            # A truncated listing proves no absence, and an unavailable repository says nothing about its intents
+            # (every directory "vanished" at once): forget the timers, so a remount retires nothing on stale evidence.
             self._forget_missing(repo.repo_id)
-
-        scan = RepoScan(
-            repo_id=repo.repo_id,
-            availability=base.availability,
-            install=base.install,
-            intents=tuple(summaries),
-            findings=tuple(findings),
-            took_ms=max(0, int((clock.monotonic() - started) * 1000)),
-            truncated=truncated,
+        return RepoScan(
+            repo_id=repo.repo_id, availability=base.availability, install=base.install, intents=tuple(summaries),
+            findings=tuple(findings), took_ms=max(0, int((clock.monotonic() - started) * 1000)), truncated=truncated,
             scanned_at=clock.iso(),
         )
-        return scan
 
     async def _retire_vanished(self, repo_id: str, present: set[tuple[str, str]]) -> None:
-        """Step 1b of ``scan_repo``: retire the cards of intents whose directory left the disk.
+        """Step 1b: retire the cards of intents whose directory left the disk (a hand deletion, a branch switch,
+        a renamed space), which ``retire_stale`` per *found* intent never reaches.
 
-        ``retire_stale`` runs per intent the scan *found*, so an intent that disappeared whole — a hand
-        deletion, a branch switch, a space renamed — kept every Queued card it had, forever (the cards
-        stayed in the queue, ``counts.intents`` kept counting it, and a click on one of them would have
-        addressed a boundary that no longer exists). The sweep is graced by
-        ``INTENT_MISSING_GRACE_SECS``: absence has to be observed for that long before it is believed,
-        because a listing can be empty for a tick while a checkout is mid-flight, and a card cancelled
-        on that evidence is a gate the human was about to answer. Command cards are left alone by
-        ``retire_stale`` itself, and ``Failed`` cards are marked rather than moved (P07).
+        Absence must last ``INTENT_MISSING_GRACE_SECS`` before it is believed: a listing can be empty for a tick
+        while a checkout is mid-flight, and a card cancelled on that evidence is a gate the human was about to
+        answer. Command cards are left alone by ``retire_stale`` itself; ``Failed`` ones are marked (P07).
         """
         live = await self._s.actions.list_live(repo_id=repo_id, include_revision=True)
         gone: set[tuple[str, str]] = set()
         for rec in live:
             space = str(_attr(rec, "space") or "")
             intent_dir = str(_attr(rec, "intent_dir") or "")
-            evidence = _attr(rec, "evidence") or {}
-            # A ``Failed`` card already marked superseded stays queue-visible until its own condition
-            # clears it (P07); it is not a reason to keep sweeping the intent every tick.
-            if str(_attr(rec, "status") or "") == "Failed" and evidence.get("superseded"):
+            # A `Failed` card already marked superseded stays visible until its own condition clears it (P07);
+            # it is no reason to keep sweeping the intent every tick.
+            if str(_attr(rec, "status") or "") == "Failed" and (_attr(rec, "evidence") or {}).get("superseded"):
                 continue
             if intent_dir and (space, intent_dir) not in present:
                 gone.add((space, intent_dir))
@@ -813,13 +712,9 @@ class Reconciler:
                 self._missing_since.pop(key, None)
         now = self._s.clock.monotonic()
         for space, intent_dir in sorted(gone):
-            key = (repo_id, space, intent_dir)
-            first = self._missing_since.setdefault(key, now)
-            if now - first < C.INTENT_MISSING_GRACE_SECS:
+            if now - self._missing_since.setdefault((repo_id, space, intent_dir), now) < C.INTENT_MISSING_GRACE_SECS:
                 continue
-            await self._s.actions.retire_stale(
-                repo_id, space, intent_dir, set(), reason="intent_missing"
-            )
+            await self._s.actions.retire_stale(repo_id, space, intent_dir, set(), reason="intent_missing")
             _LOG.info("intent %s/%s left the disk; its cards were retired", space, intent_dir)
 
     def _forget_missing(self, repo_id: str) -> None:
@@ -838,15 +733,13 @@ class Reconciler:
         """Snapshot → findings → cards → summary for one intent (§1.13 ``scan_repo``)."""
         key = f"{repo.repo_id}:{space}:{intent_dir}"
         remembered = self._first_unreadable.get(key)
-        # Only retire requests that existed before this snapshot was taken. A new Run created
-        # after the workflow advanced must not be judged against an earlier checkpoint.
+        # Only requests that existed before this snapshot was taken are retired: a Run created after the workflow
+        # advanced must not be judged against an earlier checkpoint.
         live = await self._s.actions.list_live(
             repo_id=repo.repo_id, space=space, intent_dir=intent_dir, include_revision=True
         )
         snap = await self._in_pool(
-            functools.partial(
-                self._s.projection.snapshot, repo, space, intent_dir, first_unreadable_at=remembered
-            )
+            functools.partial(self._s.projection.snapshot, repo, space, intent_dir, first_unreadable_at=remembered)
         )
         first_unreadable = self._track_unreadable(key, snap, remembered)
 
@@ -855,14 +748,11 @@ class Reconciler:
         if slot is not None and slot.approval is not None and not binding.archived:
             # A run parked on a host tool approval waits silently in the chat; say so once per approval.
             # Not for an archived intent: the user set it aside, and the queue does not list it either.
-            try:
-                await self._s.notifications.notify("tool_approval",
-                    repo_id=repo.repo_id, repo_label=repo.label, intent_key=snap.intent_key,
-                    intent_label=_attr(snap.row, "slug") or intent_dir, slot_key=binding.slot_key,
-                    approval=slot.approval, turn=str(_attr(slot, "last_turn_ts") or ""),
-                )
-            except Exception:  # a missed notification must not stop the scan
-                _LOG.debug("tool approval notification failed", exc_info=True)
+            await self._notify(
+                "tool_approval", repo_id=repo.repo_id, repo_label=repo.label, intent_key=snap.intent_key,
+                intent_label=_attr(snap.row, "slug") or intent_dir, slot_key=binding.slot_key,
+                approval=slot.approval, turn=str(_attr(slot, "last_turn_ts") or ""),
+            )
         for command in live:
             await self._retire_obsolete_run(command, snap)
         live = await self._s.actions.list_live(
@@ -870,60 +760,39 @@ class Reconciler:
         )
         breakers = await self._breakers_for(repo.repo_id, snap.intent_key)
         facts = RepoFacts(
-            now=self._s.clock.iso(),
-            repo=repo,
-            install=install,
-            binding=binding,
-            slot=slot,
-            live_actions=live,
-            leases=leases,
-            first_unreadable_at=first_unreadable,
-            layout=snap.layout,
+            now=self._s.clock.iso(), repo=repo, install=install, binding=binding, slot=slot, live_actions=live,
+            leases=leases, first_unreadable_at=first_unreadable, layout=snap.layout,
         )
         findings = await self._in_pool(self._s.consistency.evaluate_intent, snap, facts)
-
-        seeds = await self._in_pool(
-            functools.partial(
-                self._s.projection.derive_cards,
-                snap,
-                findings=findings,
-                binding=binding,
-                install=install,
-                breakers=breakers,
-                live_actions=live,
-                slot=slot,
-                host_card=self._host_card(binding.slot_key),
-            )
-        )
+        seeds = await self._in_pool(functools.partial(
+            self._s.projection.derive_cards, snap, findings=findings, binding=binding, install=install,
+            breakers=breakers, live_actions=live, slot=slot, host_card=self._host_card(binding.slot_key),
+        ))
         live = await self._s.actions.upsert_derived(seeds)
-        await self._s.actions.retire_stale(
-            repo.repo_id, space, intent_dir, {seed.dedupe_key for seed in seeds if seed.dedupe_key}
-        )
+        keys = {seed.dedupe_key for seed in seeds if seed.dedupe_key}
+        await self._s.actions.retire_stale(repo.repo_id, space, intent_dir, keys)
+        if not binding.archived:  # an archived intent's cards are set aside with it
+            for rec in live:
+                # A gate or question this scan leaves open is announced once; the notification ledger remembers.
+                if (_attr(rec, "type") in ("gate", "question") and _attr(rec, "status") == "Queued"
+                        and _attr(rec, "dedupe_key") in keys):
+                    await self._notify("action", rec, snap=snap)
 
         boundary = await self._record_boundary(repo, snap, binding, live, slot, leases)
         binding = await self._s.sessions.get(repo.repo_id, space, intent_dir)
-
-        summary = await self._in_pool(
-            functools.partial(
-                self._s.projection.summarize,
-                snap,
-                binding=binding,
-                live_actions=[a for a in live if _attr(a, "type") != "revision"],
-                breaker_open=any(_attr(b, "opened_at") for b in breakers),
-                host=await self._s.sessions.session_ref(binding),
-                findings=findings,
-                slot=slot,
-            )
-        )
+        summary = await self._in_pool(functools.partial(
+            self._s.projection.summarize, snap, binding=binding,
+            live_actions=[a for a in live if _attr(a, "type") != "revision"],
+            breaker_open=any(_attr(b, "opened_at") for b in breakers),
+            host=await self._s.sessions.session_ref(binding), findings=findings, slot=slot,
+        ))
         await self._publish_intent(key, summary, boundary)
         return summary, list(findings)
 
     def _track_unreadable(self, key: str, snap: Any, remembered: str | None) -> str | None:
-        """Remember when an intent's state file first went unreadable; forget it when it reads again.
-
-        ``state_unreadable`` is ``info`` inside its grace window and ``blocking`` after it (review
-        P26.2), and only this component has seen the earlier ticks that make the distinction possible.
-        """
+        """Remember when the state file first went unreadable, and forget it once it reads again: ``state_unreadable``
+        is ``info`` inside its grace window and ``blocking`` after it, and only this component saw the earlier
+        ticks (review P26.2)."""
         if _attr(snap, "state") is None:
             since = remembered or _attr(snap, "taken_at") or self._s.clock.iso()
             self._first_unreadable[key] = since
@@ -932,9 +801,7 @@ class Reconciler:
         return None
 
     def _host_card(self, slot_key: str | None) -> dict | None:
-        if not slot_key:
-            return None
-        cards = self._s.host.pending_question_cards(str(slot_key))
+        cards = self._s.host.pending_question_cards(str(slot_key)) if slot_key else None
         return cards[0] if cards else None
 
     async def _breakers_for(self, repo_id: str, intent_key: str) -> list[dict]:
@@ -953,29 +820,19 @@ class Reconciler:
         slot: Any,
         leases: Sequence["LeaseRecord"],
     ) -> "StableBoundary":
-        """Evaluate PRD §12.2 and persist it when it changed.
-
-        Computed here rather than in a separate tick step because the five conditions need the snapshot
-        this scan already took; a second read would answer about a different moment, which is exactly
-        what a "stable" boundary must not do.
-        """
+        """Evaluate PRD §12.2 on the snapshot this scan already took (a second read would answer about another
+        moment, which a "stable" boundary must not), and persist it when it changed."""
         boundary = self._s.projection.stable_boundary(
-            snap,
-            live_actions=live,
-            busy_reasons=_busy_reasons(slot),
+            snap, live_actions=live, busy_reasons=_busy_reasons(slot),
             lease_active=self._repo_in_flight(repo, leases),
         )
-        # An unchanged boundary keeps the time it was FIRST seen. Without this, `recorded_at` is the
-        # time of this look, so both dedupes downstream compared two values that could never be equal:
-        # the binder wrote an fsync'd `intent_bindings` row and `_publish_intent` emitted a frame once per
-        # intent per tick, on an app where nothing had happened. `recorded_at` also becomes a more useful
-        # answer — "stable since", rather than "we checked just now", which the tick rate already implies.
+        # An unchanged boundary keeps the time it was FIRST seen ("stable since"). Stamped with the time of each
+        # look, the two dedupes downstream never matched: an fsync'd `intent_bindings` write and an
+        # `intent.updated` frame per intent per tick, on an app where nothing had happened.
         previous = _attr(binding, "last_stable_boundary")
         boundary = _carry_recorded_at(previous, boundary)
         if _json_of(previous) != _json_of(boundary):
-            await self._s.sessions.record_stable_boundary(
-                repo.repo_id, snap.space, snap.intent_dir, boundary
-            )
+            await self._s.sessions.record_stable_boundary(repo.repo_id, snap.space, snap.intent_dir, boundary)
         return boundary
 
     def _repo_in_flight(self, repo: "RepoRecord", leases: Sequence["LeaseRecord"]) -> bool:
@@ -989,22 +846,27 @@ class Reconciler:
         )
 
     async def _publish_intent(self, key: str, summary: Any, boundary: Any) -> None:
+        """``intent.updated`` when the summary changed, and a completion this process watched happen.
+
+        A completion is news only for an intent whose state file this process read as unfinished: after a
+        restart, an un-archive or a briefly unreadable state file, ``Completed`` can be a finish long past.
+        """
         payload = _json_of(summary)
         if self._published.get(key) == payload:
             return
         self._published[key] = payload
-        await self._publish(
-            "intent.updated",
-            {
-                "repo_id": _attr(summary, "repo_id"),
-                "space": _attr(summary, "space"),
-                "intent_dir": _attr(summary, "intent_dir"),
-                "intent_key": _attr(summary, "intent_key"),
-                "operational_state": _attr(summary, "operational_state"),
-                "open_actions": _attr(summary, "open_actions"),
-                "stable_boundary": _json_of(boundary),
-            },
-        )
+        await self._publish("intent.updated", {
+            "repo_id": _attr(summary, "repo_id"), "space": _attr(summary, "space"),
+            "intent_dir": _attr(summary, "intent_dir"), "intent_key": _attr(summary, "intent_key"),
+            "operational_state": _attr(summary, "operational_state"), "open_actions": _attr(summary, "open_actions"),
+            "stable_boundary": _json_of(boundary),
+        })
+        status = str(_attr(_attr(summary, "disk"), "status") or "").strip().lower()
+        if status and status != "completed":
+            self._unfinished.add(key)
+        elif _attr(summary, "operational_state") == "Completed" and key in self._unfinished:
+            self._unfinished.discard(key)
+            await self._notify("completion", summary)
 
     # ---- tick step 2/3: open actions -------------------------------------- #
 
@@ -2239,37 +2101,28 @@ class Reconciler:
     # ---- tick step 6: advisor -------------------------------------------- #
 
     async def _advisor_pass(self) -> tuple[int, int]:
-        """Settle drafts nobody is polling, then start at most one draft the owner has standing-granted."""
+        """Settle drafts nobody is polling, then start at most one draft the owner has standing-granted.
+
+        Settling first is the ordering: the host prunes a finished subagent's answer after an hour and a pre-draft
+        exists because nobody has the card open, so starting drafts must never be why a finished one went unread;
+        it also frees the slots the automatic cap counts. Each half is caught on its own and never re-raised: an
+        advisor that cannot spawn is a missing convenience, a dead tick stops every delivery. The counts are for
+        tests only (``health.reconciler`` is a pinned four-key object).
+        """
         broker = getattr(self._s, "advisor", None)
         settle_open = getattr(broker, "settle_open", None)
         autodraft = getattr(broker, "autodraft", None)
-        # A container without the broker — or with an older one — is a normal shape here: the advisor is
-        # the one collaborator a tick does not need, and tests wire only the parts they assert on. A
-        # housekeeping pass that raised over a missing attribute would stop the loop every delivery needs.
         if not callable(settle_open) or not callable(autodraft):
-            return 0, 0
-
-        settled = 0
-        started = 0
-        # Settling first is the ordering, not a preference. ``poll`` is otherwise reachable only from the
-        # GET route, the host keeps a finished subagent's whole answer for an hour and then prunes it, and
-        # a pre-draft exists precisely because nobody has a browser open on that card: the pass that
-        # starts drafts must never be the reason a finished one went unread. It also frees the inflight
-        # slots the automatic cap counts, so the next draft starts in this tick rather than the next one.
+            return 0, 0  # the one collaborator a tick does not need; tests wire only what they assert on
+        settled = started = 0
         try:
             settled = int(await settle_open())
         except Exception as exc:
-            # Caught per sub-step and never re-raised. An advisor that cannot spawn is a missing
-            # convenience; a tick that died on it would cost the retention pass behind it its human-text
-            # purge and its draft expiry, and would stop the loop every action's delivery is waiting on.
             _LOG.debug("advisor settle pass failed: %s", exc)
         try:
             started = int(await autodraft())
         except Exception as exc:
             _LOG.debug("advisor pre-draft pass failed: %s", exc)
-        # Counts are returned for the tests that assert both halves ran, and go nowhere else. In
-        # particular they stay out of ``status()``: ``health.reconciler`` is a pinned four-key object
-        # (§3.1) and a draft nobody asked for is not a fact about whether reconciliation is healthy.
         return settled, started
 
     # ---- tick step 7: retention ------------------------------------------ #
@@ -2288,14 +2141,8 @@ class Reconciler:
         return int(purged), expired
 
     async def _expire_drafts(self) -> int:
-        """Retire past-TTL drafts through the broker, which is the only thing that may write that table.
-
-        Delegated rather than a second ``UPDATE ... SET status='expired'`` here: the broker's own
-        ``expire_stale`` goes through ``_finish``, which publishes ``advisor.updated``, so a tab already
-        open on the card learns the draft expired within a tick instead of keeping a stale *Apply* — or,
-        for an automatic draft, a stale pre-fill notice — until the human reloads. A container without a
-        broker is the blessed shape ``_advisor_pass`` already tolerates, and expires nothing.
-        """
+        """Retire past-TTL drafts through the broker, the one writer of that table: its ``expire_stale`` publishes
+        ``advisor.updated``, so an open tab drops a stale *Apply* within a tick. No broker expires nothing."""
         expire = getattr(getattr(self._s, "advisor", None), "expire_stale", None)
         if not callable(expire):
             return 0
@@ -2466,14 +2313,29 @@ class Reconciler:
         with contextlib.suppress(StudioError, ValueError):
             await events.publish(event_type, dict(payload))
 
+    async def _notify(self, kind: str, subject: Any = None, *, snap: Any = None, **fields: Any) -> None:
+        """One notification attempt, never raised: the scan that found the news must go on.
+
+        A card is looked up in the ledger before it is rendered, so a scan whose cards were all announced renders
+        none of them.
+        """
+        notifications = getattr(self._s, "notifications", None)
+        if notifications is None:
+            return
+        try:
+            if kind == "action":
+                if await notifications.announced(subject.action_id):
+                    return
+                subject = await self._s.actions.card(subject, snap)
+            await notifications.notify(kind, subject, **fields)
+        except Exception:
+            _LOG.debug("%s notification failed", kind, exc_info=True)
+
     # ---- threading ------------------------------------------------------- #
 
     def _semaphore(self) -> asyncio.Semaphore:
-        """The scan gate, re-created when the running loop changes.
-
-        A semaphore remembers the loop it first suspended on; tests build one ``Reconciler`` and drive it
-        from several ``asyncio.run`` calls, and a gate bound to a dead loop would deadlock the first scan.
-        """
+        """The scan gate, re-created when the running loop changes: a semaphore remembers the loop it first
+        suspended on, and tests drive one ``Reconciler`` from several ``asyncio.run`` calls."""
         loop = asyncio.get_running_loop()
         if self._sem_obj is None or self._sem_loop is not loop:
             self._sem_obj = asyncio.Semaphore(C.SCAN_CONCURRENCY)
@@ -2481,12 +2343,8 @@ class Reconciler:
         return self._sem_obj
 
     async def _in_pool(self, fn: Callable[..., Any], *args: Any) -> Any:
-        """Run one sync call on Studio's own scan pool (review R11).
-
-        Repository walks and hashing go here rather than on the process default executor, which the host
-        uses for chat persistence, spawns and atomic writes: a 64-repository pass must not be able to
-        block the gateway's own work.
-        """
+        """One sync call on Studio's own scan pool (review R11): the default executor is the host's (chat
+        persistence, spawns, atomic writes), and a 64-repository pass must not block the gateway's own work."""
         pool = getattr(self._s, "scan_pool", None)
         if pool is None:
             return await asyncio.to_thread(fn, *args)
@@ -2494,9 +2352,5 @@ class Reconciler:
 
     @staticmethod
     async def _to_thread(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-        """Short store calls on the process default executor, per §0.6.
-
-        Reserved for `Storage` and single-file reads; anything that walks a repository goes through
-        `_in_pool` instead, so the host's own executor is never held for a filesystem traversal.
-        """
+        """Short store calls and single-file reads on the default executor (§0.6); walks go through `_in_pool`."""
         return await asyncio.to_thread(functools.partial(fn, *args, **kwargs))

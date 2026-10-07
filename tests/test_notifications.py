@@ -8,10 +8,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
+
+import fixtures as F
+from test_handlers_auth import sv  # noqa: F401 - fixture
 
 
 def _mod(studio):
@@ -338,3 +343,139 @@ def test_the_dedupe_ledger_is_bounded(studio, clock):
         asyncio.run(adapter.notify("action", _card(action_id=f"a_{index:016d}")))
     stored = prefs.values[mod.NotificationAdapter._DEDUPE_PREF]
     assert len(stored) <= mod.NotificationAdapter._DEDUPE_MAX
+
+
+def test_announced_answers_whether_an_open_card_was_notified(studio, clock):
+    adapter = _adapter(studio, clock, storage=MemoryPrefs())
+    assert asyncio.run(adapter.announced("a_0000000000000001")) is False
+    asyncio.run(adapter.notify("action", _card()))
+    assert asyncio.run(adapter.announced("a_0000000000000001")) is True
+    assert asyncio.run(adapter.announced("a_0000000000000002")) is False
+
+
+# --------------------------------------------------------------------------- #
+# what a scan announces: the reconciler through the real services
+# --------------------------------------------------------------------------- #
+
+GATE_INTENT = "260904-gate-demo"
+
+
+def _scan(sv: Any, repo: Any) -> None:
+    asyncio.run(sv.reconciler.scan_repo(sv.repos.get(repo.repo_id)))
+
+
+def _record(root: Path) -> Path:
+    return root / "aidlc" / "spaces" / "default" / "intents" / GATE_INTENT
+
+
+def _announced(fake_host: Any, kind: str | None = None) -> list[tuple[str, str | None]]:
+    """``(kind, action_id)`` of every dashboard toast so far, in order."""
+    return [(note["meta"]["kind"], note["meta"].get("action_id")) for note in fake_host.notifications
+            if kind is None or note["meta"]["kind"] == kind]
+
+
+def _finished_repo(repo_builder: Any, status: str) -> Path:
+    """An intent at the end of its plan (no next stage): whether it is finished is the state file's `Status`."""
+    state = F.state_text(fields={"Status": status})
+    return (repo_builder.with_engine("payload").with_workspace()
+            .with_intent(GATE_INTENT, state=state, audit=F.gate_approved_audit("requirements-analysis")).build())
+
+
+def _complete(root: Path) -> None:
+    state = _record(root) / "aidlc-state.md"
+    state.write_text(re.sub(r"^- \*\*Status\*\*:.*$", "- **Status**: Completed", state.read_text(), flags=re.M))
+
+
+def test_a_scan_announces_each_new_gate_and_question_once(sv, fake_host, gate_repo, monkeypatch):
+    repo = sv.repos.add(str(gate_repo), "ledger")
+    _scan(sv, repo)
+    first = _announced(fake_host)
+    assert sorted(kind for kind, _ in first) == ["gate", "question"]
+    assert all(action_id for _, action_id in first)
+
+    rendered: list[str] = []
+    render = sv.actions.card
+
+    async def counting(rec, snap):
+        rendered.append(rec.action_id)
+        return await render(rec, snap)
+
+    monkeypatch.setattr(sv.actions, "card", counting)
+    _scan(sv, repo)
+    assert _announced(fake_host) == first, "a card that stays open is announced once"
+    assert rendered == [], "the ledger is read first, so an announced card is not even rendered"
+
+    # The engine moves on: the next stage opens its own gate and asks its own question.
+    record = _record(gate_repo)
+    (record / "aidlc-state.md").write_text(F.state_text(
+        marks={"requirements-analysis": "x", "user-stories": "?"},
+        fields={"Current Stage": "user-stories", "Status": "Running", "Next Stage": "refined-mockups"},
+    ))
+    shard = next((record / "audit").glob("*.md"))
+    shard.write_text(shard.read_text() + F.audit_block(
+        "STAGE_AWAITING_APPROVAL", "2026-09-04T11:00:00Z", Stage="user-stories"))
+    questions = record / "inception" / "user-stories" / "user-stories-questions.md"
+    questions.parent.mkdir(parents=True, exist_ok=True)
+    questions.write_text(F.questions_text(stage="user-stories", questions=[("Which store?", ["One", "Two"])]))
+    _scan(sv, repo)
+    _scan(sv, repo)
+    later = _announced(fake_host)[len(first):]
+    assert sorted(kind for kind, _ in later) == ["gate", "question"]
+    assert not {action_id for _, action_id in later} & {action_id for _, action_id in first}
+
+
+def test_an_archived_intents_cards_are_not_announced(sv, fake_host, gate_repo):
+    repo = sv.repos.add(str(gate_repo), "ledger")
+    asyncio.run(sv.sessions.set_archived(repo.repo_id, "default", GATE_INTENT, True))
+    _scan(sv, repo)
+    assert {rec.type for rec in asyncio.run(sv.actions.list_live(repo_id=repo.repo_id))} >= {"gate", "question"}
+    assert _announced(fake_host) == []
+
+
+def test_a_completion_is_announced_once_and_not_again_after_a_restart(sv, fake_host, repo_builder, studio):
+    root = _finished_repo(repo_builder, "Running")
+    repo = sv.repos.add(str(root), "ledger")
+    _scan(sv, repo)
+    assert _announced(fake_host) == []
+    _complete(root)
+    _scan(sv, repo)
+    _scan(sv, repo)
+    assert _announced(fake_host) == [("completion", None)]
+    assert fake_host.notifications[0]["title"] == "AI-DLC finished: gate-demo"
+
+    sv.reconciler = studio.reconciler.Reconciler(sv)  # a restart keeps the store and forgets the rest
+    _scan(sv, repo)
+    assert _announced(fake_host) == [("completion", None)]
+
+
+def test_an_intent_already_completed_when_first_scanned_is_never_announced(sv, fake_host, repo_builder, studio):
+    repo = sv.repos.add(str(_finished_repo(repo_builder, "Completed")), "ledger")
+    _scan(sv, repo)
+    _scan(sv, repo)
+    sv.reconciler = studio.reconciler.Reconciler(sv)
+    _scan(sv, repo)
+    assert _announced(fake_host) == []
+
+
+def test_restoring_an_archived_finished_intent_announces_nothing(sv, fake_host, repo_builder):
+    """`Archived` → `Completed` is a change of view, not news: nobody watched this intent finish."""
+    repo = sv.repos.add(str(_finished_repo(repo_builder, "Completed")), "ledger")
+    asyncio.run(sv.sessions.set_archived(repo.repo_id, "default", GATE_INTENT, True))
+    _scan(sv, repo)
+    asyncio.run(sv.sessions.set_archived(repo.repo_id, "default", GATE_INTENT, False))
+    _scan(sv, repo)
+    assert _announced(fake_host) == []
+
+
+@pytest.mark.parametrize("muted", [False, True])
+def test_a_scan_announces_through_the_switches_it_is_given(sv, fake_host, gate_repo, muted):
+    repo = sv.repos.add(str(gate_repo), "ledger")
+    asyncio.run(sv.settings.put(
+        {"notifications": {"dashboard": False}, "slack": {"enabled": True, "muted_repo_ids": [repo.repo_id]}}
+        if muted else {"slack": {"enabled": True}}
+    ))
+    _scan(sv, repo)
+    if muted:
+        assert fake_host.notifications == [] and fake_host.slack_client.posts == []
+    else:
+        assert len(fake_host.notifications) == 2 and len(fake_host.slack_client.posts) == 2

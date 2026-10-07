@@ -18,6 +18,11 @@ class Pending:
         return False
 
 
+def _approvals(sent):
+    """The tool-approval toasts only: the same scan also announces the scene's open gate and question cards."""
+    return [note for note in sent if note["meta"]["kind"] == "approval"]
+
+
 def park(fake_host, scene):
     slot = fake_host.get_slot(scene.slot_key)
     slot.messages.append(PERMISSION)
@@ -56,7 +61,7 @@ def test_a_scan_notifies_once_per_approval_with_a_link_to_the_conversation(sv, r
     before = len(fake_host.notifications)
     for _ in range(2):
         asyncio.run(sv.reconciler.scan_repo(sv.repos.get(scene.repo_id)))
-    sent = fake_host.notifications[before:]
+    sent = _approvals(fake_host.notifications[before:])
     assert len(sent) == 1
     assert sent[0]["title"] == "AI-DLC is waiting for your approval: gate-demo"
     assert "grep -n steering" in sent[0]["body"]
@@ -75,7 +80,7 @@ def test_a_sub_agents_approval_on_the_coordinator_is_shown_and_notified(sv, rout
     ]
     before = len(fake_host.notifications)
     asyncio.run(sv.reconciler.scan_repo(sv.repos.get(scene.repo_id)))
-    sent = fake_host.notifications[before:]
+    sent = _approvals(fake_host.notifications[before:])
     assert len(sent) == 1 and "go test ./backend/plugins/servicenow/..." in sent[0]["body"]
 
     slot.coordinator_approvals.clear()

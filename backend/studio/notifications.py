@@ -116,6 +116,10 @@ class NotificationAdapter:
     def _intent_link(self, repo_id: str, intent_key: str) -> str:
         return f"{C.DEEP_LINK_BASE}?view=intents&repo={_text(repo_id)}&intent={_text(intent_key)}"
 
+    async def announced(self, action_id: str) -> bool:
+        """Whether this card's open-class notification already went out, so a scan need not render it to ask."""
+        return f"{_text(action_id)}:open" in await asyncio.to_thread(self._read_ledger)
+
     async def notify(self, kind: str, subject: Any = None, **fields: Any) -> NotificationResult:
         """The one entry point, at most once per dedupe key:
 
