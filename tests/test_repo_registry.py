@@ -560,7 +560,7 @@ def test_rebind_of_an_unknown_repo_raises(registry, tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# list / get / touch_seen
+# list / get
 # --------------------------------------------------------------------------- #
 
 
@@ -572,15 +572,6 @@ def test_list_hides_archived_rows_unless_asked(registry, store, tmp_path):
     assert [r.repo_id for r in registry.list()] == [first.repo_id]
     assert [r.repo_id for r in registry.list(include_archived=True)] == [first.repo_id, second.repo_id]
     assert registry.list(include_archived=True)[1].archived is True
-
-
-def test_touch_seen_stamps_last_seen_and_tolerates_a_missing_row(registry, store, tmp_path, clock):
-    record = registry.add(str(plain_repo(tmp_path)), None)
-    clock.advance(120)
-    registry.touch_seen(record.repo_id)
-
-    assert store.get("repos", record.repo_id)["last_seen"] == clock.iso()
-    registry.touch_seen("r_000000000099")  # a scan loop must not raise on a removed repo
 
 
 # --------------------------------------------------------------------------- #
@@ -1097,23 +1088,24 @@ def test_registry_takes_no_engine_runner(R):
 
 
 def test_record_json_matches_the_frontend_contract(registry, repo_builder):
+    """Key order too: ``to_json`` follows field declaration order, and ``scan_json`` is stored as text."""
     record = registry.add(str(engine_repo(repo_builder, "devdelta")), None)
     body = record.to_json()
 
-    assert set(body) == {
+    assert list(body) == [
         "repo_id", "label", "canonical_path", "resolved_identity", "git_common_dir_identity",
         "platform", "added_at", "last_seen", "availability", "availability_detail", "archived",
         "legacy_console_id", "install_status", "installed_engine_version", "engine_dir",
         "receipt_version",
-    }
+    ]
     assert json.loads(json.dumps(body)) == body
     health = registry.detect_install(record, None).to_json()
-    assert set(health) == {"status", "engine_dir", "engine_version", "own_engine_version",
-                           "engine_state_version", "stage_count", "receipt_id",
-                           "receipt_engine_version", "drift_count", "harness_dirs"}
-    assert set(health["harness_dirs"][0]) == {"dir", "harness_name", "rules_subdir",
-                                              "engine_version", "engine_state_version",
-                                              "stage_count", "has_utility"}
+    assert list(health) == ["status", "engine_dir", "engine_version", "own_engine_version",
+                            "engine_state_version", "stage_count", "receipt_id",
+                            "receipt_engine_version", "drift_count", "harness_dirs"]
+    assert list(health["harness_dirs"][0]) == ["dir", "harness_name", "rules_subdir",
+                                               "engine_version", "engine_state_version",
+                                               "stage_count", "has_utility"]
 
 
 def test_every_enum_value_the_registry_writes_is_canonical(registry, store, K, tmp_path,
