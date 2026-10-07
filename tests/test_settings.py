@@ -429,16 +429,6 @@ def test_non_object_patch(svc):
     assert details == {"reason": "not_an_object"}
 
 
-def test_validate_is_pure_and_reports_dotted_keys(svc, M):
-    assert svc.validate(M.DEFAULTS) == []
-    assert svc.validate({"locale": "zh-CN", "slack": {"enabled": True}}) == []
-    assert svc.validate({"slack": {"muted_repo_ids": [2]}, "bogus": 1}) == [
-        "slack.muted_repo_ids: type",
-        "bogus: unknown_key",
-    ]
-    assert svc.validate("nope") == ["settings: not_an_object"]
-
-
 def test_valid_values_round_trip(svc, M):
     patch = {
         "locale": "zh-CN",
@@ -480,7 +470,7 @@ def test_a_stored_v1_night_window_is_ignored_on_read_and_dropped_on_write(svc, s
 
 def test_capability_block_shape_and_order(svc, M):
     caps = run(svc.get()).capabilities
-    assert list(caps) == list(M.CAPABILITY_NAMES)
+    assert list(caps) == ["slack", "advisor", "slack_quick_actions", "grouped_answers"]
     for entry in caps.values():
         assert sorted(entry) == ["available", "reason"]
 

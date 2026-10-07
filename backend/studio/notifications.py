@@ -75,8 +75,7 @@ class _Message:
     repo_id: str = ""
     slack: tuple[list[dict], str] | None = None  # (blocks, text); None means dashboard only
     scope: dict = field(default_factory=dict)  # the Activity row's repo/intent/stage/action columns
-    params: dict = field(default_factory=dict)  # Activity params before ``dashboard``/``slack``…
-    trailer: dict = field(default_factory=dict)  # …and after them
+    params: dict = field(default_factory=dict)  # Activity params beside kind/dashboard/slack
 
 
 def _text(value: Any, limit: int | None = None) -> str:
@@ -184,7 +183,7 @@ class NotificationAdapter:
                 "stage": stage_slug or None,
                 "action_id": action_id or None,
             },
-            trailer={"deep_link": link},
+            params={"deep_link": link},
         )
 
     def _tool_approval(
@@ -287,7 +286,6 @@ class NotificationAdapter:
         params = {"kind": message.kind, **message.params, "dashboard": dashboard}
         if message.slack is not None:
             params["slack"] = slack
-        params.update(message.trailer)
         try:
             await self._activity.record(
                 kind=NOTIFICATION_ACTIVITY_KIND,

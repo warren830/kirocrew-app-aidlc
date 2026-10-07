@@ -136,14 +136,11 @@ class EventLog:
         try:
             self._ctx_events.publish(host_name, {"seq": record.seq, "event": record.type, "payload": dict(record.payload)})
         except Exception as exc:  # noqa: BLE001 - a host-side defect must not fail the user's change
-            mode = "denied" if isinstance(exc, PermissionError) else "failed"
+            mode = "refused" if isinstance(exc, PermissionError) else "failed"
             if mode not in self._host_logged:
                 self._host_logged.add(mode)
-                if mode == "denied":
-                    logger.warning("aidlc-studio: host refused event %r (%s); Studio's own SSE stream is unaffected",
-                                   host_name, exc)
-                else:
-                    logger.warning("aidlc-studio: host event bus failed for %r: %s", host_name, exc)
+                logger.warning("aidlc-studio: host event bus %s %r (%s); Studio's own SSE stream is unaffected",
+                               mode, host_name, exc)
 
     # ---- reading ----
 

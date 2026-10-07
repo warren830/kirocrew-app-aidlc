@@ -281,7 +281,7 @@ async def test_a_denied_host_event_name_is_swallowed_and_logged_once(E, clock, c
     log = E.EventLog(None, FakeEventBus([]), clock)
     seqs = await publish(log, 3)
     assert [r.seq for r in await log.since(0)] == seqs          # Studio's own ring unaffected
-    assert len([r for r in caplog.records if "host refused" in r.getMessage()]) == 1
+    assert len([r for r in caplog.records if "host event bus refused" in r.getMessage()]) == 1
 
 
 @aio

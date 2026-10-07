@@ -46,13 +46,8 @@ REASON_ERROR = "error"
 #: ``ls-files``. The others do not fire today only because of an argv flag or a verb choice elsewhere in
 #: this file, so they are pinned too. Not coverable this way: a ``filter.<name>.clean`` bound by
 #: ``.gitattributes`` (the repository chooses ``<name>``), which is also how Git-LFS works honestly.
-_GIT_CONFIG_PINS = (
-    ("core.fsmonitor", "false"),
-    ("core.alternateRefsCommand", ""),
-    ("core.pager", "cat"),
-    ("diff.external", ""),
-    ("uploadpack.packObjectsHook", ""),
-)
+_GIT_CONFIG_PINS = {"core.fsmonitor": "false", "core.alternateRefsCommand": "", "core.pager": "cat",
+                    "diff.external": "", "uploadpack.packObjectsHook": ""}
 
 #: Added to ``security.build_subprocess_env()``. The pins travel as ``GIT_CONFIG_KEY_n``/``VALUE_n`` because
 #: ``-c`` is a forbidden token; a git older than 2.31 ignores them, so they can only remove capability.
@@ -62,8 +57,8 @@ _GIT_ENV = {
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": os.devnull,
     "GIT_CONFIG_COUNT": str(len(_GIT_CONFIG_PINS)),
-    **{f"GIT_CONFIG_KEY_{i}": key for i, (key, _) in enumerate(_GIT_CONFIG_PINS)},
-    **{f"GIT_CONFIG_VALUE_{i}": value for i, (_, value) in enumerate(_GIT_CONFIG_PINS)},
+    **{f"GIT_CONFIG_KEY_{i}": key for i, key in enumerate(_GIT_CONFIG_PINS)},
+    **{f"GIT_CONFIG_VALUE_{i}": value for i, value in enumerate(_GIT_CONFIG_PINS.values())},
 }
 
 _STATUS_ARGV = ("status", "--porcelain=v2", "--branch")

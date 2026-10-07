@@ -50,8 +50,6 @@ PREF_KEY = "settings"
 #: promises to keep history it does not keep.
 RETENTION_DAYS_RANGE = (1, C.HUMAN_TEXT_RETENTION_DAYS_MAX)
 
-#: Capability names, in the order the API reports them (contracts §1.21 / §3.1 ``SettingsResponse``).
-CAPABILITY_NAMES = ("slack", "advisor", "slack_quick_actions", "grouped_answers")
 #: Slack quick actions need a host seam that re-dispatches a click as an authenticated compare-and-submit;
 #: the only mechanism that exists sends a bare user turn (C13/review P02).
 REASON_HOST_SEAM = "host_seam_unavailable"
@@ -252,14 +250,8 @@ class SettingsService:
         values, updated_at = self._cache
         return Settings(copy.deepcopy(values), self.capabilities(), self.versions(), updated_at)
 
-    def validate(self, values: dict) -> list[str]:
-        """``"<dotted key>: <reason>"`` for everything wrong with a full or partial ``values``; ``[]`` if storable."""
-        if not isinstance(values, Mapping):
-            return ["settings: not_an_object"]
-        return [f"{key}: {reason}" for key, reason in _scan(values)[1]]
-
     def capabilities(self) -> dict[str, dict[str, Any]]:
-        """What is available, and the code for why not. Loop thread only (it asks ``HostBridge``)."""
+        """What is available and the code for why not, in the order §3.1 pins. Loop thread only (``HostBridge``)."""
         slack_ok, slack_reason = self._host_capability("slack")
         # The advisor's own seam (`ctx.spawn` plus a uniquely named agent) is AdvisorBroker's to check; the
         # nearest thing observable here is the host's subagent manager. `advisor.enabled` is a preference.
