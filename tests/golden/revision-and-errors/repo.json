@@ -1,0 +1,192 @@
+{
+ "body": {
+  "intents": [
+   {
+    "archived": false,
+    "blocking_findings": 0,
+    "counts": {
+     "awaiting_approval": 0,
+     "completed": 7,
+     "done": 7,
+     "in_progress": 0,
+     "not_started": 25,
+     "revising": 1,
+     "skipped": 0,
+     "total": 33,
+     "unknown": 0
+    },
+    "disk": {
+     "completed": 7,
+     "current_stage": "requirements-analysis",
+     "last_updated": "2026-08-30T08:43:44Z",
+     "lifecycle_phase": "INCEPTION",
+     "next_stage": "user-stories",
+     "parked_at": null,
+     "revision_count": 1,
+     "state_version": 8,
+     "status": "Running",
+     "total_stages": 33
+    },
+    "intent_dir": "260906-revising",
+    "intent_key": "260906-revising",
+    "interrupted": false,
+    "is_active_cursor": true,
+    "keep_moving": false,
+    "last_activity_at": "2026-09-04T09:00:11Z",
+    "open_actions": 0,
+    "operational_state": "WaitingForYou",
+    "paused": false,
+    "registry_status": "in-flight",
+    "repo_id": "r_000000000001",
+    "repo_label": "revision-and-errors",
+    "scope": "feature",
+    "session": null,
+    "slug": "revising",
+    "space": "default",
+    "stable_boundary": {
+     "boundary_token": "bdbf005bf2363f31add671019d1da9109a4830f9bafdc08372306d6a8692d552",
+     "marker": "[R]",
+     "reasons": [],
+     "recorded_at": "2026-09-04T10:00:00Z",
+     "stable": true,
+     "stage": "requirements-analysis"
+    },
+    "title": "Implement the lightest end-to-end proof of concept from design/DevDelta-Kiro贡献证据与优化闭环设计-v0.1.md: preserve existing behavior; deliver strict rolling 30-day date ",
+    "unstable": false,
+    "uuid": "01a00000-0000-7000-8000-000000000001",
+    "warn_findings": 0
+   },
+   {
+    "archived": false,
+    "blocking_findings": 0,
+    "counts": {
+     "awaiting_approval": 0,
+     "completed": 7,
+     "done": 7,
+     "in_progress": 1,
+     "not_started": 25,
+     "revising": 0,
+     "skipped": 0,
+     "total": 33,
+     "unknown": 0
+    },
+    "disk": {
+     "completed": 7,
+     "current_stage": "requirements-analysis",
+     "last_updated": "2026-08-30T08:43:44Z",
+     "lifecycle_phase": "INCEPTION",
+     "next_stage": "user-stories",
+     "parked_at": null,
+     "revision_count": 0,
+     "state_version": 8,
+     "status": "Running",
+     "total_stages": 33
+    },
+    "intent_dir": "260907-error-burst",
+    "intent_key": "260907-error-burst",
+    "interrupted": false,
+    "is_active_cursor": false,
+    "keep_moving": false,
+    "last_activity_at": null,
+    "open_actions": 1,
+    "operational_state": "Idle",
+    "paused": false,
+    "registry_status": "in-flight",
+    "repo_id": "r_000000000001",
+    "repo_label": "revision-and-errors",
+    "scope": "feature",
+    "session": null,
+    "slug": "error-burst",
+    "space": "default",
+    "stable_boundary": {
+     "boundary_token": "9c2f39c325be797dee44675dcaeb4f16781df7476c6ccfcac41498e537099ed9",
+     "marker": null,
+     "reasons": [
+      "not_at_boundary",
+      "cursor_mismatch"
+     ],
+     "recorded_at": "2026-09-04T10:00:00Z",
+     "stable": false,
+     "stage": "requirements-analysis"
+    },
+    "title": "Implement the lightest end-to-end proof of concept from design/DevDelta-Kiro贡献证据与优化闭环设计-v0.1.md: preserve existing behavior; deliver strict rolling 30-day date ",
+    "unstable": false,
+    "uuid": "01a00000-0000-7000-8000-000000000002",
+    "warn_findings": 0
+   }
+  ],
+  "repo": {
+   "added_at": "<volatile>",
+   "archived": false,
+   "availability": "available",
+   "availability_detail": null,
+   "canonical_path": "<ROOT0>",
+   "counts": {
+    "blocking_findings": 0,
+    "in_flight": 0,
+    "intents": 2,
+    "open_actions": 1
+   },
+   "engine_dir": ".kiro",
+   "findings": [],
+   "git": {
+    "ahead": null,
+    "available": true,
+    "behind": null,
+    "branch": "main",
+    "detached": false,
+    "dirty": false,
+    "dirty_files": 0,
+    "head": "0000000000000000000000000000000000000000",
+    "head_subject": null,
+    "observed_at": "2026-09-04T10:00:00Z",
+    "reason": null,
+    "took_ms": 0,
+    "upstream": null
+   },
+   "git_common_dir_identity": "<ROOT0>/.git",
+   "install": {
+    "bundled_engine_version": "2.10.0",
+    "drift_count": 0,
+    "engine_dir": ".kiro",
+    "engine_state_version": 8,
+    "engine_version": "2.10.0",
+    "harness_dirs": [
+     {
+      "dir": ".kiro",
+      "engine_state_version": 8,
+      "engine_version": "2.10.0",
+      "harness_name": "kiro",
+      "has_utility": true,
+      "rules_subdir": "steering",
+      "stage_count": 33
+     }
+    ],
+    "newer_installed": false,
+    "own_engine_version": "2.10.0",
+    "receipt": null,
+    "rollback_target": null,
+    "stage_count": 33,
+    "state_version_blocked": false,
+    "status": "installed",
+    "upgrade_available": false
+   },
+   "install_status": "installed",
+   "installed_engine_version": "2.10.0",
+   "label": "revision-and-errors",
+   "last_seen": "<volatile>",
+   "leases": {
+    "admin": null,
+    "execution": null
+   },
+   "legacy_console_id": null,
+   "platform": "darwin",
+   "receipt_version": null,
+   "repo_id": "r_000000000001",
+   "resolved_identity": "<dev:ino>",
+   "scanned_at": "<volatile>"
+  },
+  "transactions": []
+ },
+ "status": 200
+}

@@ -1,0 +1,597 @@
+{
+ "body": {
+  "intent": {
+   "actions": [
+    {
+     "action_id": "a_0000000000000002",
+     "boot_id": null,
+     "captured": {
+      "boundary_token": "9c2f39c325be797dee44675dcaeb4f16781df7476c6ccfcac41498e537099ed9",
+      "captured_at": "2026-09-04T10:00:00Z",
+      "evidence_digest": "cc307a71d6c49fd356fa65e3978a8b3fe2770092ea204f5dce176301c7411853",
+      "is_active": false,
+      "question_digest": null,
+      "stable": true,
+      "stage_attempt": 1,
+      "state_hash": "0d090d7936fd00eb7b479a0581399ad6a53085d5156beae260abb6c80473e7c2"
+     },
+     "created_at": "2026-09-04T10:00:00Z",
+     "cursor_readback": null,
+     "deadline_at": null,
+     "dedupe_key": "failure:r_000000000001:260907-error-burst:requirements-analysis:9c2f39c325be797dee44675dcaeb4f16781df7476c6ccfcac41498e537099ed9",
+     "delivered_at": null,
+     "delivering_at": null,
+     "delivery_id": null,
+     "evidence": {
+      "acceptance_criteria": [],
+      "artifacts": [],
+      "audit": {
+       "boundary_event": null,
+       "complete": true,
+       "last_event": {
+        "ts": "2026-09-04T09:02:00Z",
+        "type": "ERROR_LOGGED"
+       },
+       "shards": [
+        {
+         "relpath": "aidlc/spaces/default/intents/260907-error-burst/audit/fixture-host-0f1e2d3c4b5a.md",
+         "size": 489,
+         "truncated": false
+        }
+       ]
+      },
+      "card": {
+       "captured_at": "2026-09-04T10:00:00Z",
+       "consequence_variant": "no_dispatch",
+       "decisions": [
+        "retry_now",
+        "keep_paused"
+       ],
+       "headline_params": {
+        "burst": true,
+        "stage": "requirements-analysis"
+       },
+       "reason": "error_burst",
+       "related_action_id": null,
+       "severity": "attention",
+       "stable": true,
+       "stage_ref": {
+        "name": "Requirements Analysis",
+        "number": "2.3",
+        "phase": "inception",
+        "slug": "requirements-analysis",
+        "unit": null
+       }
+      },
+      "cursor_readback": null,
+      "directive": null,
+      "error_burst_at": "2026-09-04T09:00:00Z",
+      "findings": [],
+      "git": null,
+      "markers": {
+       "engine_touch_at": null,
+       "goal_stop_present": false,
+       "human_turn_at": null,
+       "recovery": null,
+       "turn_counter": null
+      },
+      "presence": null,
+      "presence_baseline": null,
+      "questions": null,
+      "review": null,
+      "session": null,
+      "state": {
+       "current_stage": "requirements-analysis",
+       "lifecycle_phase": "INCEPTION",
+       "mtime_ns": "<volatile>",
+       "relpath": "aidlc/spaces/default/intents/260907-error-burst/aidlc-state.md",
+       "revision_count": 0,
+       "sha256": "0d090d7936fd00eb7b479a0581399ad6a53085d5156beae260abb6c80473e7c2",
+       "size": 3374,
+       "stable": true,
+       "status": "Running"
+      }
+     },
+     "human_text_present": false,
+     "intent_dir": "260907-error-burst",
+     "intent_key": "260907-error-burst",
+     "intent_uuid": "01a00000-0000-7000-8000-000000000002",
+     "lease_generation": null,
+     "payload": null,
+     "payload_digest": null,
+     "presence_baseline": null,
+     "repo_id": "r_000000000001",
+     "resolution": null,
+     "resolved_at": null,
+     "resolved_repo_identity": "<dev:ino>",
+     "retry_fingerprint": null,
+     "risk_class": "studio_only",
+     "session_key": null,
+     "slot_key": null,
+     "source": "studio",
+     "space": "default",
+     "stage": "requirements-analysis",
+     "status": "Queued",
+     "status_generation": 0,
+     "type": "failure",
+     "unit": null,
+     "updated_at": "2026-09-04T10:00:00Z",
+     "waiting_since": "<volatile>",
+     "wire_text": null
+    }
+   ],
+   "active_directive_stage": null,
+   "archived": false,
+   "artifacts_count": 2,
+   "artifacts_truncated": false,
+   "audit_tail": [
+    {
+     "event": "ERROR_LOGGED",
+     "fields": {
+      "Command": "next",
+      "Error": "ACP transport closed",
+      "Tool": "aidlc-orchestrate.ts"
+     },
+     "pos": 0,
+     "raw": "## Error Logged\n**Timestamp**: 2026-09-04T09:00:00Z\n**Event**: ERROR_LOGGED\n**Tool**: aidlc-orchestrate.ts\n**Command**: next\n**Error**: ACP transport closed",
+     "shard": "fixture-host-0f1e2d3c4b5a.md",
+     "timestamp": "2026-09-04T09:00:00Z"
+    },
+    {
+     "event": "ERROR_LOGGED",
+     "fields": {
+      "Command": "next",
+      "Error": "ACP transport closed",
+      "Tool": "aidlc-orchestrate.ts"
+     },
+     "pos": 1,
+     "raw": "## Error Logged\n**Timestamp**: 2026-09-04T09:01:00Z\n**Event**: ERROR_LOGGED\n**Tool**: aidlc-orchestrate.ts\n**Command**: next\n**Error**: ACP transport closed",
+     "shard": "fixture-host-0f1e2d3c4b5a.md",
+     "timestamp": "2026-09-04T09:01:00Z"
+    },
+    {
+     "event": "ERROR_LOGGED",
+     "fields": {
+      "Command": "next",
+      "Error": "ACP transport closed",
+      "Tool": "aidlc-orchestrate.ts"
+     },
+     "pos": 2,
+     "raw": "## Error Logged\n**Timestamp**: 2026-09-04T09:02:00Z\n**Event**: ERROR_LOGGED\n**Tool**: aidlc-orchestrate.ts\n**Command**: next\n**Error**: ACP transport closed",
+     "shard": "fixture-host-0f1e2d3c4b5a.md",
+     "timestamp": "2026-09-04T09:02:00Z"
+    }
+   ],
+   "binding": {
+    "archive_state": "active",
+    "binding_generation": 1,
+    "intent_dir": "260907-error-burst",
+    "intent_key": "260907-error-burst",
+    "intent_uuid": null,
+    "interrupted_at": null,
+    "keep_moving": false,
+    "last_stable_boundary": {
+     "boundary_token": "9c2f39c325be797dee44675dcaeb4f16781df7476c6ccfcac41498e537099ed9",
+     "marker": null,
+     "reasons": [
+      "not_at_boundary",
+      "cursor_mismatch"
+     ],
+     "recorded_at": "2026-09-04T10:00:00Z",
+     "stable": false,
+     "stage": "requirements-analysis"
+    },
+    "paused": false,
+    "paused_at": null,
+    "repo_id": "r_000000000001",
+    "session_key": null,
+    "slot_key": null,
+    "space": "default",
+    "updated_at": "2026-09-04T10:00:00Z"
+   },
+   "blocking_findings": 0,
+   "counts": {
+    "awaiting_approval": 0,
+    "completed": 7,
+    "done": 7,
+    "in_progress": 1,
+    "not_started": 25,
+    "revising": 0,
+    "skipped": 0,
+    "total": 33,
+    "unknown": 0
+   },
+   "directive": null,
+   "disk": {
+    "completed": 7,
+    "current_stage": "requirements-analysis",
+    "last_updated": "2026-08-30T08:43:44Z",
+    "lifecycle_phase": "INCEPTION",
+    "next_stage": "user-stories",
+    "parked_at": null,
+    "revision_count": 0,
+    "state_version": 8,
+    "status": "Running",
+    "total_stages": 33
+   },
+   "engine": {
+    "dir": ".kiro",
+    "engine_state_version": 8,
+    "engine_version": "2.10.0",
+    "harness_name": "kiro",
+    "has_utility": true,
+    "rules_subdir": "steering",
+    "stage_count": 33
+   },
+   "findings": [],
+   "git": {
+    "ahead": null,
+    "available": true,
+    "behind": null,
+    "branch": "main",
+    "detached": false,
+    "dirty": false,
+    "dirty_files": 0,
+    "head": "0000000000000000000000000000000000000000",
+    "head_subject": null,
+    "observed_at": "2026-09-04T10:00:00Z",
+    "reason": null,
+    "took_ms": 0,
+    "upstream": null
+   },
+   "intent_dir": "260907-error-burst",
+   "intent_key": "260907-error-burst",
+   "interrupted": false,
+   "is_active_cursor": false,
+   "keep_moving": false,
+   "last_activity_at": null,
+   "markers": {
+    "compose_pending": false,
+    "engine_touch_at": null,
+    "goal_stop_present": false,
+    "hooks_health": {},
+    "human_turn_at": null,
+    "recovery": null,
+    "turn_counter": null
+   },
+   "open_actions": 1,
+   "operational_state": "Idle",
+   "paused": false,
+   "phases": [
+    [
+     "Initialization",
+     "Verified"
+    ],
+    [
+     "Ideation",
+     "Verified"
+    ],
+    [
+     "Inception",
+     "Verified"
+    ],
+    [
+     "Construction",
+     "Verified"
+    ],
+    [
+     "Operation",
+     "Pending"
+    ]
+   ],
+   "questions": null,
+   "recovery": null,
+   "registry_status": "in-flight",
+   "repo_id": "r_000000000001",
+   "repo_label": "revision-and-errors",
+   "scope": "feature",
+   "session": null,
+   "slug": "error-burst",
+   "space": "default",
+   "stable_boundary": {
+    "boundary_token": "9c2f39c325be797dee44675dcaeb4f16781df7476c6ccfcac41498e537099ed9",
+    "marker": null,
+    "reasons": [
+     "not_at_boundary",
+     "cursor_mismatch"
+    ],
+    "recorded_at": "2026-09-04T10:00:00Z",
+    "stable": false,
+    "stage": "requirements-analysis"
+   },
+   "stages": [
+    {
+     "mark": "x",
+     "phase": "initialization",
+     "slug": "workspace-scaffold",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "initialization",
+     "slug": "workspace-detection",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "initialization",
+     "slug": "state-init",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "ideation",
+     "slug": "intent-capture",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "market-research",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "feasibility",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "scope-definition",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "team-formation",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "rough-mockups",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "approval-handoff",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "inception",
+     "slug": "reverse-engineering",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "practices-discovery",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "-",
+     "phase": "inception",
+     "slug": "requirements-analysis",
+     "state": "in_progress",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "user-stories",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "refined-mockups",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "domain-design",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "units-generation",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "contract-design",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "delivery-planning",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "construction",
+     "slug": "functional-design",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "construction",
+     "slug": "nfr-requirements",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "construction",
+     "slug": "nfr-design",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "construction",
+     "slug": "infrastructure-design",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "construction",
+     "slug": "code-generation",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "construction",
+     "slug": "build-and-test",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "construction",
+     "slug": "ci-pipeline",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "deployment-pipeline",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "environment-provisioning",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "deployment-execution",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "observability-setup",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "incident-response",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "performance-validation",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "feedback-optimization",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    }
+   ],
+   "state_sections": {
+    "Current Status": {
+     "Current Stage": "requirements-analysis",
+     "Last Updated": "2026-08-30T08:43:44Z",
+     "Lifecycle Phase": "INCEPTION",
+     "Next Stage": "user-stories",
+     "Status": "Running"
+    },
+    "Execution Plan Summary": {
+     "Completed": "7",
+     "In Progress": "none",
+     "Total Stages": "33"
+    },
+    "Phase Progress": {
+     "Construction": "Verified",
+     "Ideation": "Verified",
+     "Inception": "Verified",
+     "Initialization": "Verified",
+     "Operation": "Pending"
+    },
+    "Project Information": {
+     "Active Agent": "aidlc-quality-agent",
+     "Bolt Refs": "",
+     "Practices Affirmed Timestamp": "",
+     "Project": "Implement the lightest end-to-end proof of concept from design/DevDelta-Kiro贡献证据与优化闭环设计-v0.1.md: preserve existing behavior; deliver strict rolling 30-day date semantics, a person-scoped contribution summary linking official/provisional Kiro credits to connector-verified Git commits and merged PRs, and one result-driven optimization recommendation using existing data. No remote Agent control, no non-code connectors, no deployment, and no production changes.",
+     "Project Type": "Brownfield",
+     "Scope": "feature",
+     "Start Date": "2026-08-28T09:27:08Z",
+     "State Version": "8",
+     "Worktree Path": ""
+    },
+    "Runtime State": {
+     "Revision Count": "0",
+     "Skeleton Stance": "scope-dependent"
+    },
+    "Scope Configuration": {
+     "Depth": "Standard",
+     "Review Override": "",
+     "Stages to Execute": "0.1, 0.2, 0.3, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7",
+     "Stages to Skip": "none",
+     "Test Strategy": "Standard"
+    },
+    "Session Resume Point": {
+     "Last Completed Stage": "build-and-test",
+     "Next Action": "Workflow complete",
+     "Pending Artifacts": "none"
+    },
+    "Stage Progress": {},
+    "Workspace State": {
+     "Build System": "go modules (go.mod)",
+     "Frameworks": "Unknown",
+     "Languages": "Unknown",
+     "Project Root": "/FIXTURE/repo"
+    }
+   },
+   "title": "Implement the lightest end-to-end proof of concept from design/DevDelta-Kiro贡献证据与优化闭环设计-v0.1.md: preserve existing behavior; deliver strict rolling 30-day date ",
+   "unstable": false,
+   "uuid": "01a00000-0000-7000-8000-000000000002",
+   "warn_findings": 0
+  }
+ },
+ "status": 200
+}

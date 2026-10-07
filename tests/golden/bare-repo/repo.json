@@ -1,0 +1,68 @@
+{
+ "body": {
+  "intents": [],
+  "repo": {
+   "added_at": "<volatile>",
+   "archived": false,
+   "availability": "available",
+   "availability_detail": null,
+   "canonical_path": "<ROOT0>",
+   "counts": {
+    "blocking_findings": 0,
+    "in_flight": 0,
+    "intents": 0,
+    "open_actions": 0
+   },
+   "engine_dir": null,
+   "findings": [],
+   "git": {
+    "ahead": null,
+    "available": true,
+    "behind": null,
+    "branch": "main",
+    "detached": false,
+    "dirty": false,
+    "dirty_files": 0,
+    "head": "0000000000000000000000000000000000000000",
+    "head_subject": null,
+    "observed_at": "2026-09-04T10:00:00Z",
+    "reason": null,
+    "took_ms": 0,
+    "upstream": null
+   },
+   "git_common_dir_identity": "<ROOT0>/.git",
+   "install": {
+    "bundled_engine_version": "2.10.0",
+    "drift_count": 0,
+    "engine_dir": null,
+    "engine_state_version": null,
+    "engine_version": null,
+    "harness_dirs": [],
+    "newer_installed": false,
+    "own_engine_version": null,
+    "receipt": null,
+    "rollback_target": null,
+    "stage_count": null,
+    "state_version_blocked": false,
+    "status": "not_installed",
+    "upgrade_available": false
+   },
+   "install_status": "not_installed",
+   "installed_engine_version": null,
+   "label": "bare-repo",
+   "last_seen": "<volatile>",
+   "leases": {
+    "admin": null,
+    "execution": null
+   },
+   "legacy_console_id": null,
+   "platform": "darwin",
+   "receipt_version": null,
+   "repo_id": "r_000000000001",
+   "resolved_identity": "<dev:ino>",
+   "scanned_at": "<volatile>"
+  },
+  "transactions": []
+ },
+ "status": 200
+}

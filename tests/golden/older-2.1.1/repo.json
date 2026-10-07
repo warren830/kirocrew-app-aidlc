@@ -1,0 +1,157 @@
+{
+ "body": {
+  "intents": [
+   {
+    "archived": false,
+    "blocking_findings": 1,
+    "counts": {
+     "awaiting_approval": 0,
+     "completed": 5,
+     "done": 5,
+     "in_progress": 1,
+     "not_started": 26,
+     "revising": 0,
+     "skipped": 0,
+     "total": 32,
+     "unknown": 0
+    },
+    "disk": {
+     "completed": 5,
+     "current_stage": "feasibility",
+     "last_updated": "2026-07-10T07:00:47Z",
+     "lifecycle_phase": "IDEATION",
+     "next_stage": "scope-definition",
+     "parked_at": null,
+     "revision_count": 0,
+     "state_version": 7,
+     "status": "Running",
+     "total_stages": 31
+    },
+    "intent_dir": "260707-trello-plugin",
+    "intent_key": "260707-trello-plugin",
+    "interrupted": false,
+    "is_active_cursor": true,
+    "keep_moving": false,
+    "last_activity_at": "2026-07-10T07:52:56Z",
+    "open_actions": 2,
+    "operational_state": "ReconciliationRequired",
+    "paused": false,
+    "registry_status": "in-flight",
+    "repo_id": "r_000000000001",
+    "repo_label": "older-2.1.1",
+    "scope": "feature",
+    "session": null,
+    "slug": "trello-plugin",
+    "space": "default",
+    "stable_boundary": {
+     "boundary_token": "cee25aebb6ee4a9405524851f7af656bcc43259eab5cb7ab3dd6a867aea6373c",
+     "marker": "question",
+     "reasons": [],
+     "recorded_at": "2026-09-04T10:00:00Z",
+     "stable": true,
+     "stage": "feasibility"
+    },
+    "title": "给 DevLake 新增一个 Trello 数据源插件，采集 boards / lists / cards；请全程用中文",
+    "unstable": false,
+    "uuid": "019f3d4f-1da9-7b07-892f-09047f0c3bb8",
+    "warn_findings": 0
+   }
+  ],
+  "repo": {
+   "added_at": "<volatile>",
+   "archived": false,
+   "availability": "available",
+   "availability_detail": null,
+   "canonical_path": "<ROOT0>",
+   "counts": {
+    "blocking_findings": 1,
+    "in_flight": 0,
+    "intents": 1,
+    "open_actions": 2
+   },
+   "engine_dir": ".kiro",
+   "findings": [
+    {
+     "code": "phase_stage_disagreement",
+     "evidence": [
+      {
+       "detail": "Lifecycle Phase: IDEATION",
+       "kind": "file",
+       "ref": "aidlc/spaces/default/intents/260707-trello-plugin/aidlc-state.md"
+      },
+      {
+       "detail": "Phase Progress: IDEATION = Pending",
+       "kind": "file",
+       "ref": "aidlc/spaces/default/intents/260707-trello-plugin/aidlc-state.md"
+      }
+     ],
+     "message_key": "finding.phase_stage_disagreement",
+     "params": {
+      "phase": "IDEATION",
+      "phase_status": "Pending",
+      "reason": "phase_not_active"
+     },
+     "severity": "blocking"
+    }
+   ],
+   "git": {
+    "ahead": null,
+    "available": true,
+    "behind": null,
+    "branch": "main",
+    "detached": false,
+    "dirty": false,
+    "dirty_files": 0,
+    "head": "0000000000000000000000000000000000000000",
+    "head_subject": null,
+    "observed_at": "2026-09-04T10:00:00Z",
+    "reason": null,
+    "took_ms": 0,
+    "upstream": null
+   },
+   "git_common_dir_identity": "<ROOT0>/.git",
+   "install": {
+    "bundled_engine_version": "2.10.0",
+    "drift_count": 0,
+    "engine_dir": ".kiro",
+    "engine_state_version": null,
+    "engine_version": "2.1.1",
+    "harness_dirs": [
+     {
+      "dir": ".kiro",
+      "engine_state_version": null,
+      "engine_version": "2.1.1",
+      "harness_name": null,
+      "has_utility": false,
+      "rules_subdir": "steering",
+      "stage_count": 32
+     }
+    ],
+    "newer_installed": false,
+    "own_engine_version": "2.1.1",
+    "receipt": null,
+    "rollback_target": null,
+    "stage_count": 32,
+    "state_version_blocked": false,
+    "status": "installed",
+    "upgrade_available": true
+   },
+   "install_status": "installed",
+   "installed_engine_version": "2.1.1",
+   "label": "older-2.1.1",
+   "last_seen": "<volatile>",
+   "leases": {
+    "admin": null,
+    "execution": null
+   },
+   "legacy_console_id": null,
+   "platform": "darwin",
+   "receipt_version": null,
+   "repo_id": "r_000000000001",
+   "resolved_identity": "<dev:ino>",
+   "scanned_at": "<volatile>"
+  },
+  "transactions": []
+ },
+ "status": 200
+}

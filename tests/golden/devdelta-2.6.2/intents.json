@@ -1,0 +1,124 @@
+{
+ "body": {
+  "active_space": "default",
+  "intents": [
+   {
+    "archived": false,
+    "blocking_findings": 0,
+    "counts": {
+     "awaiting_approval": 0,
+     "completed": 3,
+     "done": 3,
+     "in_progress": 1,
+     "not_started": 29,
+     "revising": 0,
+     "skipped": 0,
+     "total": 33,
+     "unknown": 0
+    },
+    "disk": {
+     "completed": 3,
+     "current_stage": "reverse-engineering",
+     "last_updated": "2026-08-14T16:55:53Z",
+     "lifecycle_phase": "INCEPTION",
+     "next_stage": "requirements-analysis",
+     "parked_at": null,
+     "revision_count": 0,
+     "state_version": 8,
+     "status": "Running",
+     "total_stages": 13
+    },
+    "intent_dir": "260814-review-major-remediation",
+    "intent_key": "260814-review-major-remediation",
+    "interrupted": false,
+    "is_active_cursor": false,
+    "keep_moving": false,
+    "last_activity_at": null,
+    "open_actions": 0,
+    "operational_state": "Idle",
+    "paused": false,
+    "registry_status": "in-flight",
+    "repo_id": "r_000000000001",
+    "repo_label": "devdelta-2.6.2",
+    "scope": "review-major-remediation",
+    "session": null,
+    "slug": "review-major-remediation",
+    "space": "default",
+    "stable_boundary": {
+     "boundary_token": "12cb9239c790395e35aba06611686c6933e51855da1da7f398b287b5ac188d65",
+     "marker": null,
+     "reasons": [
+      "not_at_boundary",
+      "cursor_mismatch"
+     ],
+     "recorded_at": "2026-09-04T10:00:00Z",
+     "stable": false,
+     "stage": "reverse-engineering"
+    },
+    "title": null,
+    "unstable": false,
+    "uuid": "01a00133-9901-7fdf-815d-5ae4e6e4be02",
+    "warn_findings": 0
+   },
+   {
+    "archived": false,
+    "blocking_findings": 0,
+    "counts": {
+     "awaiting_approval": 0,
+     "completed": 8,
+     "done": 8,
+     "in_progress": 0,
+     "not_started": 25,
+     "revising": 0,
+     "skipped": 0,
+     "total": 33,
+     "unknown": 0
+    },
+    "disk": {
+     "completed": 8,
+     "current_stage": "build-and-test",
+     "last_updated": "2026-08-30T08:43:44Z",
+     "lifecycle_phase": "CONSTRUCTION",
+     "next_stage": null,
+     "parked_at": null,
+     "revision_count": 0,
+     "state_version": 8,
+     "status": "Completed",
+     "total_stages": 33
+    },
+    "intent_dir": "260828-kiro-impact-poc",
+    "intent_key": "260828-kiro-impact-poc",
+    "interrupted": false,
+    "is_active_cursor": true,
+    "keep_moving": false,
+    "last_activity_at": null,
+    "open_actions": 0,
+    "operational_state": "Completed",
+    "paused": false,
+    "registry_status": "complete",
+    "repo_id": "r_000000000001",
+    "repo_label": "devdelta-2.6.2",
+    "scope": "feature",
+    "session": null,
+    "slug": "kiro-impact-poc",
+    "space": "default",
+    "stable_boundary": {
+     "boundary_token": "0b63e609e9e487332cf4c3b3481e131818a46b9d1c91283f09b7abe6867e8a9f",
+     "marker": "completed",
+     "reasons": [],
+     "recorded_at": "2026-09-04T10:00:00Z",
+     "stable": true,
+     "stage": "build-and-test"
+    },
+    "title": "Implement the lightest end-to-end proof of concept from design/DevDelta-Kiro贡献证据与优化闭环设计-v0.1.md: preserve existing behavior; deliver strict rolling 30-day date ",
+    "unstable": false,
+    "uuid": "01a047b1-c605-7f76-927a-8193f101d918",
+    "warn_findings": 0
+   }
+  ],
+  "spaces": [
+   "default"
+  ]
+ },
+ "status": 200
+}

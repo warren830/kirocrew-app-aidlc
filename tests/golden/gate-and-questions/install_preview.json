@@ -1,0 +1,10 @@
+{
+ "body": {
+  "code": "already_installed",
+  "details": {
+   "engine_version": "2.10.0"
+  },
+  "error": "AI-DLC is already installed in this repository"
+ },
+ "status": 409
+}

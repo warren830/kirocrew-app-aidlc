@@ -1,0 +1,17 @@
+{
+ "body": {
+  "actions": [],
+  "approval_waits": [],
+  "counts": {
+   "attention": 0,
+   "blocking": 0,
+   "critical": 0,
+   "info": 0,
+   "total": 0
+  },
+  "generated_at": "<volatile>",
+  "groups": [],
+  "organize": "priority"
+ },
+ "status": 200
+}

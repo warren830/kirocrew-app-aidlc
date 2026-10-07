@@ -1,0 +1,74 @@
+{
+ "body": {
+  "artifacts": [
+   {
+    "artifact_id": "ccc5bb282781e6da80620cee438ce3fbd77458b9",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "aidlc-state.md",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260814-review-major-remediation/aidlc-state.md",
+    "renderable": true,
+    "sha256": "f4ad4b23aeddbcdacf3d30a67c5f2bb8ec687f6883586c5dc0fbee886ab4049c",
+    "size": 3294,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "e545b65675ae74f8f63b1a4b1017552124737d4b",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "artifacts-index.txt",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260814-review-major-remediation/artifacts-index.txt",
+    "renderable": true,
+    "sha256": "4f4db05b385061fd5fc1c2e29c6b18ebc7ffab1a8295331427dc4119408793ce",
+    "size": 1380,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "a672d73319a09160625479881e09737ecc0dd492",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "603e5f4a8072-26e77d17b1cd.md",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260814-review-major-remediation/audit/603e5f4a8072-26e77d17b1cd.md",
+    "renderable": true,
+    "sha256": "0f0264d07c7ba883227ad29b13b734e50ca4f83a9bf46e8cb3e41b7497650075",
+    "size": 22812,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "71476d9c75c824a2f512093f7595b6ed5b430657",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "603e5f4a8072-747664ca2c41.md",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260814-review-major-remediation/audit/603e5f4a8072-747664ca2c41.md",
+    "renderable": true,
+    "sha256": "9b432d389d98c580c97bfa9e32794744be14be89765fef8e8db061d814cfb6a8",
+    "size": 303,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "a595aac891436d243e1699830a354b6c0dc11ca6",
+    "kind": "memory",
+    "mtime": "<volatile>",
+    "name": "memory.md",
+    "phase": "inception",
+    "relpath": "aidlc/spaces/default/intents/260814-review-major-remediation/inception/reverse-engineering/memory.md",
+    "renderable": true,
+    "sha256": "93ec9f3d17bd20e4456a029bdb9979c830aaa4d54ba3a6df26903d81647c1272",
+    "size": 7139,
+    "stage": "reverse-engineering",
+    "unit": null
+   }
+  ],
+  "count": 5,
+  "truncated": false
+ },
+ "status": 200
+}

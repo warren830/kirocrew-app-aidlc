@@ -1,0 +1,16 @@
+{
+ "body": {
+  "code": "state_version_migration_unconfirmed",
+  "details": {
+   "compatible": [
+    8
+   ],
+   "state_versions_found": [
+    7
+   ],
+   "unreadable": []
+  },
+  "error": "this repository holds AI-DLC state this payload cannot write"
+ },
+ "status": 409
+}

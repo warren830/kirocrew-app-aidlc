@@ -1,0 +1,48 @@
+{
+ "body": {
+  "artifacts": [
+   {
+    "artifact_id": "979ac4503236922901f1e6b676ab63490d80a78d",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "aidlc-state.md",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260905-question-demo/aidlc-state.md",
+    "renderable": true,
+    "sha256": "0d090d7936fd00eb7b479a0581399ad6a53085d5156beae260abb6c80473e7c2",
+    "size": 3374,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "1670f91295380fd254e469fcd49d1e0e9cd05a83",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "fixture-host-0f1e2d3c4b5a.md",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260905-question-demo/audit/fixture-host-0f1e2d3c4b5a.md",
+    "renderable": true,
+    "sha256": "950a3c796675d4ceca121e7ec06e2586d7b954c95d56680de18c4f1669e4026e",
+    "size": 117,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "ebc3ff8f38ba035c9459ed50b82490e5ebb49940",
+    "kind": "questions",
+    "mtime": "<volatile>",
+    "name": "requirements-analysis-questions.md",
+    "phase": "inception",
+    "relpath": "aidlc/spaces/default/intents/260905-question-demo/inception/requirements-analysis/requirements-analysis-questions.md",
+    "renderable": true,
+    "sha256": "f315779940d3d29adfcf0025ac5bff0b75d7d21111eccdb3a87fc99582976450",
+    "size": 6329,
+    "stage": "requirements-analysis",
+    "unit": null
+   }
+  ],
+  "count": 3,
+  "truncated": false
+ },
+ "status": 200
+}

@@ -1,0 +1,189 @@
+{
+ "body": {
+  "actions": [
+   {
+    "acknowledged_evidence_sha256": "db314ab210cdf1bd757d93b6f340e2f0213bb953f3a8e43670b37168453c3daa",
+    "action_id": "a_0000000000000002",
+    "advisor": {
+     "latest_draft_id": null,
+     "status": null
+    },
+    "budget": null,
+    "captured": {
+     "boundary_token": "9c2f39c325be797dee44675dcaeb4f16781df7476c6ccfcac41498e537099ed9",
+     "captured_at": "2026-09-04T10:00:00Z",
+     "evidence_digest": "cc307a71d6c49fd356fa65e3978a8b3fe2770092ea204f5dce176301c7411853",
+     "is_active": false,
+     "question_digest": null,
+     "stable": true,
+     "stage_attempt": 1,
+     "state_hash": "0d090d7936fd00eb7b479a0581399ad6a53085d5156beae260abb6c80473e7c2"
+    },
+    "consequence": {
+     "key": "action.failure.consequence.no_dispatch",
+     "params": {
+      "burst": true,
+      "stage": "requirements-analysis"
+     }
+    },
+    "created_at": "2026-09-04T10:00:00Z",
+    "decisions": [
+     {
+      "decision": "retry_now",
+      "label_key": "decision.retry_now.label",
+      "lane": "studio_only",
+      "requires": [],
+      "wire_text_template": null
+     },
+     {
+      "decision": "keep_paused",
+      "label_key": "decision.keep_paused.label",
+      "lane": "studio_only",
+      "requires": [],
+      "wire_text_template": null
+     }
+    ],
+    "dedupe_key": "failure:r_000000000001:260907-error-burst:requirements-analysis:9c2f39c325be797dee44675dcaeb4f16781df7476c6ccfcac41498e537099ed9",
+    "deep_link": "/apps/aidlc-studio?view=actions&action=a_0000000000000002",
+    "delivery": {
+     "boot_id_unchanged": null,
+     "deadline_at": null,
+     "delivered_at": null,
+     "delivering_at": null,
+     "delivery_confirmed": false,
+     "delivery_id": null,
+     "disk_baseline_unchanged": null,
+     "host": null,
+     "lane": null,
+     "outcome": null,
+     "queued_at": null,
+     "receipt": null,
+     "session_key": null,
+     "slot_key": null,
+     "slot_ran_since": null,
+     "transcript_row": null,
+     "wire_text": null
+    },
+    "evidence": {
+     "acceptance_criteria": [],
+     "artifacts": [],
+     "audit": {
+      "boundary_event": null,
+      "complete": true,
+      "last_event": {
+       "ts": "2026-09-04T09:02:00Z",
+       "type": "ERROR_LOGGED"
+      },
+      "shards": [
+       {
+        "relpath": "aidlc/spaces/default/intents/260907-error-burst/audit/fixture-host-0f1e2d3c4b5a.md",
+        "size": 489,
+        "truncated": false
+       }
+      ]
+     },
+     "cursor_readback": null,
+     "directive": null,
+     "findings": [],
+     "git": null,
+     "markers": {
+      "engine_touch_at": null,
+      "goal_stop_present": false,
+      "human_turn_at": null,
+      "recovery": null,
+      "turn_counter": null
+     },
+     "presence": null,
+     "presence_baseline": null,
+     "questions": null,
+     "review": null,
+     "session": null,
+     "state": {
+      "current_stage": "requirements-analysis",
+      "lifecycle_phase": "INCEPTION",
+      "mtime_ns": "<volatile>",
+      "relpath": "aidlc/spaces/default/intents/260907-error-burst/aidlc-state.md",
+      "revision_count": 0,
+      "sha256": "0d090d7936fd00eb7b479a0581399ad6a53085d5156beae260abb6c80473e7c2",
+      "size": 3374,
+      "stable": true,
+      "status": "Running"
+     }
+    },
+    "failure": null,
+    "headline": {
+     "key": "action.failure.headline",
+     "params": {
+      "burst": true,
+      "stage": "requirements-analysis"
+     }
+    },
+    "human_text_present": false,
+    "install": null,
+    "intent": {
+     "intent_dir": "260907-error-burst",
+     "intent_key": "260907-error-burst",
+     "slug": "error-burst",
+     "title": "Implement the lightest end-to-end proof of concept from design/DevDelta-Kiro贡献证据与优化闭环设计-v0.1.md: preserve existing behavior; deliver strict rolling 30-day date ",
+     "uuid": "01a00000-0000-7000-8000-000000000002"
+    },
+    "primary": {
+     "decision": "retry_now",
+     "label_key": "decision.retry_now.label"
+    },
+    "priority_group": 3,
+    "queue_type": "failure",
+    "repo": {
+     "archived": false,
+     "availability": "available",
+     "availability_detail": null,
+     "canonical_path": "<ROOT0>",
+     "label": "revision-and-errors",
+     "repo_id": "r_000000000001"
+    },
+    "resolution": {
+     "evidence": null,
+     "kind": null,
+     "reason": null,
+     "resolved_at": null
+    },
+    "risk_class": "studio_only",
+    "severity": "attention",
+    "source": "studio",
+    "space": "default",
+    "stage": {
+     "name": "Requirements Analysis",
+     "number": "2.3",
+     "phase": "inception",
+     "slug": "requirements-analysis",
+     "unit": null
+    },
+    "status": "Queued",
+    "status_generation": 0,
+    "type": "failure",
+    "updated_at": "2026-09-04T10:00:00Z",
+    "waiting_since": "<volatile>"
+   }
+  ],
+  "approval_waits": [],
+  "counts": {
+   "attention": 1,
+   "blocking": 0,
+   "critical": 0,
+   "info": 0,
+   "total": 1
+  },
+  "generated_at": "<volatile>",
+  "groups": [
+   {
+    "action_ids": [
+     "a_0000000000000002"
+    ],
+    "key": "group.3",
+    "label_key": "queue.group.attention"
+   }
+  ],
+  "organize": "priority"
+ },
+ "status": 200
+}

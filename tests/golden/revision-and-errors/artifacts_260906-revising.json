@@ -1,0 +1,35 @@
+{
+ "body": {
+  "artifacts": [
+   {
+    "artifact_id": "701020dbb21764bc02323f1f43ecf908c638b6da",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "aidlc-state.md",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260906-revising/aidlc-state.md",
+    "renderable": true,
+    "sha256": "60376bc5c69fea5b112e5f99baaffe1c47f41940a96ad95ee8f22a6133513676",
+    "size": 3374,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "9f4d503d46a5b1753bd2127cb4fc94c314170751",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "fixture-host-0f1e2d3c4b5a.md",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260906-revising/audit/fixture-host-0f1e2d3c4b5a.md",
+    "renderable": true,
+    "sha256": "fe489ab91adbc3a0daaf682924cd845a7e158465f5d0b59b6171e1b8abf2f843",
+    "size": 890,
+    "stage": null,
+    "unit": null
+   }
+  ],
+  "count": 2,
+  "truncated": false
+ },
+ "status": 200
+}

@@ -1,0 +1,1219 @@
+{
+ "body": {
+  "plan": {
+   "diff": [],
+   "engine_version": "2.1.1",
+   "estimate": {
+    "active_secs": {
+     "confidence": "low",
+     "high": 22500,
+     "low": 3330,
+     "source": "rule_band",
+     "unit": "secs"
+    },
+    "confidence": "low",
+    "coverage_lost": [],
+    "credits": null,
+    "credits_status": "unavailable",
+    "dominant": [
+     {
+      "share_pct": 35,
+      "slug": "code-generation",
+      "turns": {
+       "confidence": "low",
+       "high": 26,
+       "low": 13,
+       "source": "rule_band",
+       "unit": "turns"
+      }
+     },
+     {
+      "share_pct": 19,
+      "slug": "build-and-test",
+      "turns": {
+       "confidence": "low",
+       "high": 14,
+       "low": 6,
+       "source": "rule_band",
+       "unit": "turns"
+      }
+     },
+     {
+      "share_pct": 16,
+      "slug": "reverse-engineering",
+      "turns": {
+       "confidence": "low",
+       "high": 12,
+       "low": 6,
+       "source": "rule_band",
+       "unit": "turns"
+      }
+     },
+     {
+      "share_pct": 15,
+      "slug": "requirements-analysis",
+      "turns": {
+       "confidence": "low",
+       "high": 11,
+       "low": 6,
+       "source": "rule_band",
+       "unit": "turns"
+      }
+     },
+     {
+      "share_pct": 8,
+      "slug": "intent-capture",
+      "turns": {
+       "confidence": "low",
+       "high": 6,
+       "low": 3,
+       "source": "rule_band",
+       "unit": "turns"
+      }
+     },
+     {
+      "share_pct": 3,
+      "slug": "state-init",
+      "turns": {
+       "confidence": "low",
+       "high": 2,
+       "low": 1,
+       "source": "rule_band",
+       "unit": "turns"
+      }
+     },
+     {
+      "share_pct": 3,
+      "slug": "workspace-detection",
+      "turns": {
+       "confidence": "low",
+       "high": 2,
+       "low": 1,
+       "source": "rule_band",
+       "unit": "turns"
+      }
+     },
+     {
+      "share_pct": 3,
+      "slug": "workspace-scaffold",
+      "turns": {
+       "confidence": "low",
+       "high": 2,
+       "low": 1,
+       "source": "rule_band",
+       "unit": "turns"
+      }
+     }
+    ],
+    "elapsed_secs": {
+     "confidence": "low",
+     "high": 180000,
+     "low": 9990,
+     "source": "assumption",
+     "unit": "secs"
+    },
+    "samples": 0,
+    "source": "rule_band",
+    "turns": {
+     "confidence": "low",
+     "high": 75,
+     "low": 37,
+     "source": "rule_band",
+     "unit": "turns"
+    }
+   },
+   "exact": {
+    "artifacts": 23,
+    "assumes_units": 1,
+    "gates": 5,
+    "review_intensity": {
+     "adversarial": 0,
+     "advisory": 2,
+     "none": 6
+    },
+    "stages": 8
+   },
+   "graph_stage_count": 32,
+   "issues": [],
+   "products": [
+    "api-documentation",
+    "architecture",
+    "build-and-test-summary",
+    "build-instructions",
+    "build-test-results",
+    "business-overview",
+    "code-generation-plan",
+    "code-quality-assessment",
+    "code-structure",
+    "code-summary",
+    "component-inventory",
+    "dependencies",
+    "integration-test-instructions",
+    "intent-capture-questions",
+    "intent-statement",
+    "performance-test-instructions",
+    "requirements",
+    "requirements-analysis-questions",
+    "reverse-engineering-timestamp",
+    "security-test-instructions",
+    "stakeholder-map",
+    "technology-stack",
+    "unit-test-instructions"
+   ],
+   "request": {
+    "context": null,
+    "depth": "Standard",
+    "label": null,
+    "objective": null,
+    "overrides": {},
+    "project_type": null,
+    "review_cap": null,
+    "scope": "poc",
+    "space": "default",
+    "test_strategy": null
+   },
+   "scope_meta": null,
+   "stages": [
+    {
+     "conditional_on": null,
+     "consumes": [],
+     "depends_on": [],
+     "enabled": true,
+     "execution": "ALWAYS",
+     "gate": false,
+     "in_grid": true,
+     "lock_reason": "always",
+     "locked": true,
+     "name": "Workspace Scaffold",
+     "number": "0.1",
+     "per_unit": false,
+     "phase": "initialization",
+     "produces": [],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "workspace-scaffold",
+     "state": null
+    },
+    {
+     "conditional_on": null,
+     "consumes": [],
+     "depends_on": [
+      "workspace-scaffold"
+     ],
+     "enabled": true,
+     "execution": "ALWAYS",
+     "gate": false,
+     "in_grid": true,
+     "lock_reason": "always",
+     "locked": true,
+     "name": "Workspace Detection",
+     "number": "0.2",
+     "per_unit": false,
+     "phase": "initialization",
+     "produces": [],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "workspace-detection",
+     "state": null
+    },
+    {
+     "conditional_on": null,
+     "consumes": [],
+     "depends_on": [
+      "workspace-detection"
+     ],
+     "enabled": true,
+     "execution": "ALWAYS",
+     "gate": false,
+     "in_grid": true,
+     "lock_reason": "always",
+     "locked": true,
+     "name": "State Initialization",
+     "number": "0.3",
+     "per_unit": false,
+     "phase": "initialization",
+     "produces": [],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "state-init",
+     "state": null
+    },
+    {
+     "conditional_on": null,
+     "consumes": [],
+     "depends_on": [],
+     "enabled": true,
+     "execution": "ALWAYS",
+     "gate": true,
+     "in_grid": true,
+     "lock_reason": "always",
+     "locked": true,
+     "name": "Intent Capture & Framing",
+     "number": "1.1",
+     "per_unit": false,
+     "phase": "ideation",
+     "produces": [
+      "intent-statement",
+      "stakeholder-map",
+      "intent-capture-questions"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "intent-capture",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute when initiative has external market positioning or build-vs-buy considerations. Skip for internal tools, bug fixes, or refactors.",
+     "consumes": [
+      "intent-statement"
+     ],
+     "depends_on": [
+      "intent-capture"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Market Research",
+     "number": "1.2",
+     "per_unit": false,
+     "phase": "ideation",
+     "produces": [
+      "competitive-analysis",
+      "market-trends",
+      "build-vs-buy",
+      "market-research-questions"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "market-research",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute when there are integration constraints, regulatory requirements, or significant technical uncertainty. Skip for trivial changes with no technical risk.",
+     "consumes": [
+      "intent-statement",
+      "competitive-analysis",
+      "market-trends",
+      "build-vs-buy"
+     ],
+     "depends_on": [
+      "intent-capture",
+      "market-research"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Feasibility & Constraints",
+     "number": "1.3",
+     "per_unit": false,
+     "phase": "ideation",
+     "produces": [
+      "feasibility-assessment",
+      "constraint-register",
+      "raid-log",
+      "feasibility-questions"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "feasibility",
+     "state": null
+    },
+    {
+     "conditional_on": null,
+     "consumes": [
+      "intent-statement",
+      "feasibility-assessment",
+      "constraint-register"
+     ],
+     "depends_on": [
+      "intent-capture",
+      "feasibility"
+     ],
+     "enabled": false,
+     "execution": "ALWAYS",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Scope Definition",
+     "number": "1.4",
+     "per_unit": false,
+     "phase": "ideation",
+     "produces": [
+      "scope-document",
+      "intent-backlog",
+      "scope-definition-questions"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "scope-definition",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute when team composition, capacity, or mob planning is relevant. Skip for solo developer or small team projects.",
+     "consumes": [
+      "scope-document",
+      "intent-backlog",
+      "feasibility-assessment"
+     ],
+     "depends_on": [
+      "scope-definition"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Team Formation",
+     "number": "1.5",
+     "per_unit": false,
+     "phase": "ideation",
+     "produces": [
+      "team-assessment",
+      "skill-matrix",
+      "mob-composition",
+      "team-formation-questions"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "team-formation",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute when user-facing UI is part of the initiative; for API/backend, produce system interaction diagrams. Skip for non-UI, API-only, or infrastructure-only initiatives.",
+     "consumes": [
+      "intent-statement",
+      "scope-document",
+      "intent-backlog"
+     ],
+     "depends_on": [
+      "scope-definition",
+      "team-formation"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Rough Mockups",
+     "number": "1.6",
+     "per_unit": false,
+     "phase": "ideation",
+     "produces": [
+      "wireframes",
+      "user-flow",
+      "rough-mockups-questions"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-product-lead-agent",
+     "slug": "rough-mockups",
+     "state": null
+    },
+    {
+     "conditional_on": null,
+     "consumes": [
+      "intent-statement",
+      "scope-document",
+      "intent-backlog",
+      "competitive-analysis",
+      "feasibility-assessment",
+      "constraint-register",
+      "team-assessment",
+      "wireframes"
+     ],
+     "depends_on": [
+      "intent-capture",
+      "feasibility",
+      "scope-definition",
+      "team-formation",
+      "rough-mockups"
+     ],
+     "enabled": false,
+     "execution": "ALWAYS",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Approval & Handoff",
+     "number": "1.7",
+     "per_unit": false,
+     "phase": "ideation",
+     "produces": [
+      "initiative-brief",
+      "decision-log",
+      "approval-handoff-questions"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "approval-handoff",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute when project is brownfield. Always rerun for freshness. Skip for greenfield projects.",
+     "consumes": [],
+     "depends_on": [
+      "state-init"
+     ],
+     "enabled": true,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": true,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Reverse Engineering",
+     "number": "2.1",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "business-overview",
+      "architecture",
+      "code-structure",
+      "api-documentation",
+      "component-inventory",
+      "technology-stack",
+      "dependencies",
+      "code-quality-assessment",
+      "reverse-engineering-timestamp"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "reverse-engineering",
+     "state": null
+    },
+    {
+     "conditional_on": "Always rerun for freshness. Brownfield discovers from evidence + reverse-engineering artifacts. Greenfield prompts user via structured questions using org.md defaults.",
+     "consumes": [
+      "code-structure",
+      "technology-stack",
+      "dependencies",
+      "code-quality-assessment",
+      "architecture",
+      "business-overview"
+     ],
+     "depends_on": [
+      "state-init",
+      "reverse-engineering"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Practices Discovery",
+     "number": "2.2",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "team-practices",
+      "discovered-rules",
+      "evidence",
+      "practices-discovery-timestamp"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "practices-discovery",
+     "state": null
+    },
+    {
+     "conditional_on": null,
+     "consumes": [
+      "intent-statement",
+      "scope-document",
+      "business-overview",
+      "architecture",
+      "code-structure",
+      "team-practices"
+     ],
+     "depends_on": [
+      "approval-handoff",
+      "reverse-engineering"
+     ],
+     "enabled": true,
+     "execution": "ALWAYS",
+     "gate": true,
+     "in_grid": true,
+     "lock_reason": "always",
+     "locked": true,
+     "name": "Requirements Analysis",
+     "number": "2.3",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "requirements",
+      "requirements-analysis-questions"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-product-lead-agent",
+     "slug": "requirements-analysis",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute when user-facing features, multiple personas, complex business logic, or cross-team work is involved. Skip for pure refactoring, isolated bug fixes, infrastructure-only changes, or developer tooling.",
+     "consumes": [
+      "requirements",
+      "business-overview",
+      "component-inventory",
+      "team-practices"
+     ],
+     "depends_on": [
+      "requirements-analysis"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "User Stories",
+     "number": "2.4",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "stories",
+      "personas",
+      "user-stories-assessment"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-product-lead-agent",
+     "slug": "user-stories",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute when user-facing UI exists and rough mockups were produced in Ideation; for APIs, refine interaction diagrams",
+     "consumes": [
+      "wireframes",
+      "user-flow",
+      "stories",
+      "requirements",
+      "team-practices"
+     ],
+     "depends_on": [
+      "user-stories"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Refined Mockups",
+     "number": "2.5",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "mockups",
+      "interaction-spec",
+      "design-system-mapping",
+      "accessibility-checklist",
+      "refined-mockups-questions"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-product-lead-agent",
+     "slug": "refined-mockups",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute when new components or services are needed, or service layer design is required. Skip when changes are modifications to existing components only.",
+     "consumes": [
+      "requirements",
+      "stories",
+      "architecture",
+      "component-inventory",
+      "team-practices"
+     ],
+     "depends_on": [
+      "requirements-analysis",
+      "refined-mockups"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Application Design",
+     "number": "2.6",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "components",
+      "component-methods",
+      "services",
+      "component-dependency",
+      "decisions"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-architecture-reviewer-agent",
+     "slug": "application-design",
+     "state": null
+    },
+    {
+     "conditional_on": null,
+     "consumes": [
+      "components",
+      "component-methods",
+      "services",
+      "component-dependency",
+      "decisions",
+      "requirements",
+      "stories"
+     ],
+     "depends_on": [
+      "application-design"
+     ],
+     "enabled": false,
+     "execution": "ALWAYS",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Units Generation",
+     "number": "2.7",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "unit-of-work",
+      "unit-of-work-dependency",
+      "unit-of-work-story-map"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-architecture-reviewer-agent",
+     "slug": "units-generation",
+     "state": null
+    },
+    {
+     "conditional_on": null,
+     "consumes": [
+      "requirements",
+      "stories",
+      "mockups",
+      "components",
+      "unit-of-work",
+      "unit-of-work-dependency",
+      "unit-of-work-story-map",
+      "team-practices"
+     ],
+     "depends_on": [
+      "units-generation"
+     ],
+     "enabled": false,
+     "execution": "ALWAYS",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Delivery Planning",
+     "number": "2.8",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "bolt-plan",
+      "team-allocation",
+      "risk-and-sequencing-rationale",
+      "external-dependency-map",
+      "delivery-planning-questions"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "delivery-planning",
+     "state": null
+    },
+    {
+     "conditional_on": "New data models, complex business logic, or business rules need design. Skip if simple logic changes with no new business logic.",
+     "consumes": [
+      "unit-of-work",
+      "unit-of-work-story-map",
+      "requirements",
+      "components",
+      "component-methods",
+      "services"
+     ],
+     "depends_on": [
+      "units-generation"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Functional Design",
+     "number": "3.1",
+     "per_unit": true,
+     "phase": "construction",
+     "produces": [
+      "business-logic-model",
+      "business-rules",
+      "domain-entities",
+      "frontend-components"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-architecture-reviewer-agent",
+     "slug": "functional-design",
+     "state": null
+    },
+    {
+     "conditional_on": "Performance requirements, security considerations, scalability concerns, or tech stack selection needed. Skip if no NFR requirements and tech stack already determined.",
+     "consumes": [
+      "business-logic-model",
+      "business-rules",
+      "requirements",
+      "technology-stack"
+     ],
+     "depends_on": [
+      "units-generation",
+      "functional-design"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "NFR Requirements",
+     "number": "3.2",
+     "per_unit": true,
+     "phase": "construction",
+     "produces": [
+      "performance-requirements",
+      "security-requirements",
+      "scalability-requirements",
+      "reliability-requirements",
+      "tech-stack-decisions"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-architecture-reviewer-agent",
+     "slug": "nfr-requirements",
+     "state": null
+    },
+    {
+     "conditional_on": "NFR Requirements was executed and NFR patterns need design. Skip if NFR Requirements was skipped.",
+     "consumes": [
+      "performance-requirements",
+      "security-requirements",
+      "scalability-requirements",
+      "reliability-requirements",
+      "tech-stack-decisions",
+      "business-logic-model"
+     ],
+     "depends_on": [
+      "units-generation",
+      "nfr-requirements"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "NFR Design",
+     "number": "3.3",
+     "per_unit": true,
+     "phase": "construction",
+     "produces": [
+      "performance-design",
+      "security-design",
+      "scalability-design",
+      "reliability-design",
+      "logical-components"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-architecture-reviewer-agent",
+     "slug": "nfr-design",
+     "state": null
+    },
+    {
+     "conditional_on": "Infrastructure services need mapping, deployment architecture required, or cloud resources needed. Skip if no infrastructure changes and infrastructure already defined.",
+     "consumes": [
+      "performance-design",
+      "security-design",
+      "scalability-design",
+      "reliability-design",
+      "logical-components",
+      "components",
+      "services",
+      "business-logic-model"
+     ],
+     "depends_on": [
+      "units-generation",
+      "nfr-design"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Infrastructure Design",
+     "number": "3.4",
+     "per_unit": true,
+     "phase": "construction",
+     "produces": [
+      "deployment-architecture",
+      "infrastructure-services",
+      "monitoring-design",
+      "cicd-pipeline",
+      "shared-infrastructure"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-architecture-reviewer-agent",
+     "slug": "infrastructure-design",
+     "state": null
+    },
+    {
+     "conditional_on": null,
+     "consumes": [
+      "business-logic-model",
+      "business-rules",
+      "domain-entities",
+      "performance-design",
+      "security-design",
+      "deployment-architecture",
+      "unit-of-work",
+      "requirements"
+     ],
+     "depends_on": [
+      "units-generation",
+      "functional-design",
+      "nfr-requirements",
+      "nfr-design",
+      "infrastructure-design"
+     ],
+     "enabled": true,
+     "execution": "ALWAYS",
+     "gate": true,
+     "in_grid": true,
+     "lock_reason": "always",
+     "locked": true,
+     "name": "Code Generation",
+     "number": "3.5",
+     "per_unit": true,
+     "phase": "construction",
+     "produces": [
+      "code-generation-plan",
+      "code-summary"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-architecture-reviewer-agent",
+     "slug": "code-generation",
+     "state": null
+    },
+    {
+     "conditional_on": null,
+     "consumes": [
+      "code-generation-plan",
+      "code-summary"
+     ],
+     "depends_on": [
+      "code-generation"
+     ],
+     "enabled": true,
+     "execution": "ALWAYS",
+     "gate": true,
+     "in_grid": true,
+     "lock_reason": "always",
+     "locked": true,
+     "name": "Build and Test",
+     "number": "3.6",
+     "per_unit": false,
+     "phase": "construction",
+     "produces": [
+      "build-instructions",
+      "unit-test-instructions",
+      "integration-test-instructions",
+      "performance-test-instructions",
+      "security-test-instructions",
+      "build-and-test-summary",
+      "build-test-results"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "build-and-test",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute when CI pipeline needs creation or significant modification. Skip if CI already exists and is adequate.",
+     "consumes": [
+      "code-summary",
+      "build-and-test-summary",
+      "build-test-results"
+     ],
+     "depends_on": [
+      "build-and-test"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "CI Pipeline",
+     "number": "3.7",
+     "per_unit": false,
+     "phase": "construction",
+     "produces": [
+      "ci-config",
+      "quality-gates",
+      "ci-pipeline-questions"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "ci-pipeline",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute when CD pipeline needs creation or significant modification",
+     "consumes": [
+      "ci-config",
+      "quality-gates",
+      "deployment-architecture",
+      "cicd-pipeline"
+     ],
+     "depends_on": [
+      "ci-pipeline",
+      "infrastructure-design"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Deployment Pipeline",
+     "number": "4.1",
+     "per_unit": false,
+     "phase": "operation",
+     "produces": [
+      "cd-config",
+      "deployment-strategy",
+      "rollback-runbook",
+      "deployment-pipeline-questions"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "deployment-pipeline",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute when AWS environments need provisioning or validation",
+     "consumes": [
+      "deployment-architecture",
+      "infrastructure-services",
+      "cd-config"
+     ],
+     "depends_on": [
+      "infrastructure-design",
+      "deployment-pipeline"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Environment Provisioning",
+     "number": "4.2",
+     "per_unit": false,
+     "phase": "operation",
+     "produces": [
+      "environment-inventory",
+      "validation-report",
+      "environment-provisioning-questions"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "environment-provisioning",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute after deployment pipeline and environment are ready",
+     "consumes": [
+      "cd-config",
+      "deployment-strategy",
+      "environment-inventory",
+      "build-test-results"
+     ],
+     "depends_on": [
+      "deployment-pipeline",
+      "environment-provisioning"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Deployment Execution",
+     "number": "4.3",
+     "per_unit": false,
+     "phase": "operation",
+     "produces": [
+      "deployment-log",
+      "smoke-test-results",
+      "health-check-report",
+      "deployment-execution-questions"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "deployment-execution",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute when monitoring, dashboards, alarms, or tracing need configuration",
+     "consumes": [
+      "performance-design",
+      "security-design",
+      "reliability-design",
+      "monitoring-design",
+      "infrastructure-services"
+     ],
+     "depends_on": [
+      "nfr-design",
+      "infrastructure-design",
+      "deployment-execution"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Observability Setup",
+     "number": "4.4",
+     "per_unit": false,
+     "phase": "operation",
+     "produces": [
+      "dashboards",
+      "alarms",
+      "slo-config",
+      "log-queries",
+      "tracing-config",
+      "anomaly-config",
+      "observability-setup-questions"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "observability-setup",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute when operational runbooks and incident response procedures are needed",
+     "consumes": [
+      "dashboards",
+      "alarms",
+      "reliability-design",
+      "security-design",
+      "deployment-architecture"
+     ],
+     "depends_on": [
+      "observability-setup"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Incident Response",
+     "number": "4.5",
+     "per_unit": false,
+     "phase": "operation",
+     "produces": [
+      "runbooks",
+      "incident-plan",
+      "escalation-matrix",
+      "incident-response-questions"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "incident-response",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute when NFR performance targets need validation under load",
+     "consumes": [
+      "performance-requirements",
+      "scalability-requirements",
+      "performance-design",
+      "scalability-design",
+      "dashboards"
+     ],
+     "depends_on": [
+      "nfr-requirements",
+      "nfr-design",
+      "observability-setup"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Performance Validation",
+     "number": "4.6",
+     "per_unit": false,
+     "phase": "operation",
+     "produces": [
+      "load-test-plan",
+      "load-test-results",
+      "nfr-validation-matrix",
+      "performance-validation-questions"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "performance-validation",
+     "state": null
+    },
+    {
+     "conditional_on": "Execute when ongoing operational monitoring and optimization are needed",
+     "consumes": [
+      "dashboards",
+      "alarms",
+      "slo-config",
+      "deployment-log",
+      "load-test-results",
+      "incident-plan"
+     ],
+     "depends_on": [
+      "observability-setup",
+      "deployment-execution",
+      "incident-response",
+      "performance-validation"
+     ],
+     "enabled": false,
+     "execution": "CONDITIONAL",
+     "gate": true,
+     "in_grid": false,
+     "lock_reason": null,
+     "locked": false,
+     "name": "Feedback & Optimization",
+     "number": "4.7",
+     "per_unit": false,
+     "phase": "operation",
+     "produces": [
+      "slo-report",
+      "cost-analysis",
+      "drift-report",
+      "feedback-loop",
+      "feedback-optimization-questions"
+     ],
+     "review_class": "none",
+     "reviewer": null,
+     "slug": "feedback-optimization",
+     "state": null
+    }
+   ],
+   "valid": true
+  }
+ },
+ "status": 200
+}

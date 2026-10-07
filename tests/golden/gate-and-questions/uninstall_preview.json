@@ -1,0 +1,8 @@
+{
+ "body": {
+  "code": "not_installed",
+  "details": {},
+  "error": "no current Studio receipt authorizes uninstall"
+ },
+ "status": 409
+}

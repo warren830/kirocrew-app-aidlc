@@ -1,0 +1,364 @@
+{
+ "body": {
+  "action": {
+   "acknowledged_evidence_sha256": "ee5a2368f9a04bccf98fa89960523886e04219baba570bba013894be38521f33",
+   "action_id": "a_0000000000000003",
+   "advisor": {
+    "latest_draft_id": null,
+    "status": null
+   },
+   "budget": null,
+   "captured": {
+    "boundary_token": "9c2f39c325be797dee44675dcaeb4f16781df7476c6ccfcac41498e537099ed9",
+    "captured_at": "2026-09-04T10:00:00Z",
+    "evidence_digest": "46ed66dea0e7fa348c8d3b6433ad171331d52fb621a7af11afe59a8d3248bf02",
+    "is_active": false,
+    "question_digest": "f315779940d3d29adfcf0025ac5bff0b75d7d21111eccdb3a87fc99582976450",
+    "stable": true,
+    "stage_attempt": 1,
+    "state_hash": "0d090d7936fd00eb7b479a0581399ad6a53085d5156beae260abb6c80473e7c2"
+   },
+   "consequence": {
+    "key": "action.question.consequence.advances_turn",
+    "params": {
+     "checkpoint": "summary_confirmation",
+     "pending": 4,
+     "stage": "requirements-analysis"
+    }
+   },
+   "created_at": "2026-09-04T10:00:00Z",
+   "decisions": [
+    {
+     "decision": "answers",
+     "label_key": "decision.answers.label",
+     "lane": "human_lane",
+     "requires": [
+      "answers"
+     ],
+     "wire_text_template": "<label>[, <label>...] | <free text when X. Other>"
+    },
+    {
+     "decision": "confirm_summary",
+     "label_key": "decision.confirm_summary.label",
+     "lane": "human_lane",
+     "requires": [
+      "confirm"
+     ],
+     "wire_text_template": "Looks correct"
+    }
+   ],
+   "dedupe_key": "question:r_000000000001:260905-question-demo:requirements-analysis:f315779940d3d29adfcf0025ac5bff0b75d7d21111eccdb3a87fc99582976450",
+   "deep_link": "/apps/aidlc-studio?view=actions&action=a_0000000000000003",
+   "delivery": {
+    "boot_id_unchanged": null,
+    "deadline_at": null,
+    "delivered_at": null,
+    "delivering_at": null,
+    "delivery_confirmed": false,
+    "delivery_id": null,
+    "disk_baseline_unchanged": null,
+    "host": null,
+    "lane": null,
+    "outcome": null,
+    "queued_at": null,
+    "receipt": null,
+    "session_key": null,
+    "slot_key": null,
+    "slot_ran_since": null,
+    "transcript_row": null,
+    "wire_text": null
+   },
+   "evidence": {
+    "acceptance_criteria": [],
+    "artifacts": [
+     {
+      "artifact_id": "ebc3ff8f38ba035c9459ed50b82490e5ebb49940",
+      "kind": "questions",
+      "mtime": "<volatile>",
+      "name": "requirements-analysis-questions.md",
+      "phase": "inception",
+      "relpath": "aidlc/spaces/default/intents/260905-question-demo/inception/requirements-analysis/requirements-analysis-questions.md",
+      "renderable": true,
+      "sha256": "f315779940d3d29adfcf0025ac5bff0b75d7d21111eccdb3a87fc99582976450",
+      "size": 6329,
+      "stage": "requirements-analysis",
+      "unit": null
+     }
+    ],
+    "audit": {
+     "boundary_event": null,
+     "complete": true,
+     "last_event": {
+      "ts": "2026-09-05T08:00:00Z",
+      "type": "STAGE_STARTED"
+     },
+     "shards": [
+      {
+       "relpath": "aidlc/spaces/default/intents/260905-question-demo/audit/fixture-host-0f1e2d3c4b5a.md",
+       "size": 117,
+       "truncated": false
+      }
+     ]
+    },
+    "cursor_readback": null,
+    "directive": null,
+    "findings": [],
+    "git": null,
+    "markers": {
+     "engine_touch_at": null,
+     "goal_stop_present": false,
+     "human_turn_at": null,
+     "recovery": null,
+     "turn_counter": null
+    },
+    "presence": null,
+    "presence_baseline": null,
+    "questions": {
+     "host_card": null,
+     "mode": "structured",
+     "pending_checkpoint": "summary_confirmation",
+     "pending_count": 4,
+     "plan_approval": null,
+     "questions": [
+      {
+       "answer": null,
+       "answered": false,
+       "context": "背景：全仓 Go/TS/TSX/SQL 中 `provisional` 零命中，现存二分只有 `local_credits`（本地采集）与 `official_credits`（S3 报表）。`recon_daily` 另有 `trusted` / `trust_reasons` 判定。因此 official/provisional 分栏必须先定义 provisional 指什么，否则新读路径口径不可测。",
+       "index": 1,
+       "multi_select": false,
+       "options": [
+        {
+         "is_other": false,
+         "letter": "A",
+         "text": "provisional = 本地采集量（`local_credits`）中尚无对应 official 记录的部分；official = S3 报表已确认的部分。二者按 canonical person + day 从 `recon_daily` 取。"
+        },
+        {
+         "is_other": false,
+         "letter": "B",
+         "text": "provisional = `recon_daily.trusted = false` 的 user-day（含 `delta_pct` 超阈、`timestamp_uncertain`、`metering_missing`）；official = `trusted = true` 的部分。"
+        },
+        {
+         "is_other": false,
+         "letter": "C",
+         "text": "同时满足 A 与 B：只有「有 official 记录且 trusted」才计入 official，其余本地量全部计入 provisional。"
+        },
+        {
+         "is_other": false,
+         "letter": "D",
+         "text": "provisional = 全部本地采集量（无论是否有 official 对应），official 与 provisional 并列展示、允许重叠，由前端提示口径差异。"
+        },
+        {
+         "is_other": true,
+         "letter": "X",
+         "text": "Other (please specify)"
+        }
+       ],
+       "prompt": "`provisional credits` 在本仓的确切口径是什么？",
+       "required": true
+      },
+      {
+       "answer": null,
+       "answered": false,
+       "context": "背景：`fact_commit` / `fact_pull_request` / `fact_pull_request_commit` 数据齐备，但 API 只返回聚合计数，不返回 commit SHA、PR number、repo_key 或 URL；`fact_contribution_evidence*` 三张表不存在；前端无证据链接渲染。RBAC 作用域当前下推到 SQL（`visibleGitEmails`）。",
+       "index": 2,
+       "multi_select": false,
+       "options": [
+        {
+         "is_other": false,
+         "letter": "A",
+         "text": "新增一个个人维度证据端点（如 `GET /v1/metrics/user/{id}/evidence?from&to`），直接查询现有 fact 表返回 commit SHA / PR number / repo_key / URL 列表，沿用现有 `visibleGitEmails` 作用域；前端 MePage 渲染可点击链接。"
+        },
+        {
+         "is_other": false,
+         "letter": "B",
+         "text": "在现有 `GET /v1/metrics/user/{id}/daily` 响应中内联证据数组，不新增端点。"
+        },
+        {
+         "is_other": false,
+         "letter": "C",
+         "text": "先物化 `fact_contribution_evidence*` 表，再由新端点读取物化结果。"
+        },
+        {
+         "is_other": false,
+         "letter": "D",
+         "text": "仅在会话钻取页（`/sessions/:id`）暴露证据，不进入个人页。"
+        },
+        {
+         "is_other": true,
+         "letter": "X",
+         "text": "Other (please specify)"
+        }
+       ],
+       "prompt": "证据链接（commits / merged PRs）以哪种方式暴露给个人页？",
+       "required": true
+      },
+      {
+       "answer": null,
+       "answered": false,
+       "context": "背景：当前默认预设实际覆盖 31 个自然日、跨午夜不刷新；前端按浏览器本地日期格式化，服务端按 UTC 解析；非法输入静默降级；除 `handleOverview` 外多数响应不回显生效区间。`timeRange()` 被 7 个 handler 共用且无任何测试覆盖。",
+       "index": 3,
+       "multi_select": false,
+       "options": [
+        {
+         "is_other": false,
+         "letter": "A",
+         "text": "服务端以 UTC 为唯一权威，区间语义为闭区间 `[from, to]` 按日；所有相关端点响应回显生效的 `from` / `to` / `timezone`；非法或越界输入返回 400。"
+        },
+        {
+         "is_other": false,
+         "letter": "B",
+         "text": "同 A 的 UTC 与回显要求，但非法输入保持当前降级行为并附加 `warnings` 字段，不返回 400。"
+        },
+        {
+         "is_other": false,
+         "letter": "C",
+         "text": "由客户端显式传时区参数，服务端按该时区切日并在响应回显；非法输入返回 400。"
+        },
+        {
+         "is_other": false,
+         "letter": "D",
+         "text": "保持服务端 UTC 解析与现有降级行为，仅补充响应回显，不改变错误处理。"
+        },
+        {
+         "is_other": true,
+         "letter": "X",
+         "text": "Other (please specify)"
+        }
+       ],
+       "prompt": "用户自选日期区间的一致性契约如何定义？",
+       "required": true
+      },
+      {
+       "answer": null,
+       "answered": false,
+       "context": "背景：现有 `devdelta advise` 完全在本机重解析会话文件，从不调用任何 `/v1/` 端点，也不读 `agg_user_day` / `fact_commit` / `fact_pull_request` / `recon_daily`；服务端无 `/v1/optimization/*` 路由、无 recommendation 表、无 decision 记录、无复测机制。",
+       "index": 4,
+       "multi_select": false,
+       "options": [
+        {
+         "is_other": false,
+         "letter": "A",
+         "text": "新增服务端只读端点（如 `GET /v1/optimization/recommendation?person&from&to`），基于 `agg_user_day` + commit/PR 事实 + `recon_daily` 现场计算一条建议（含依据、建议行动、不确定性说明），前端个人页展示；本次不做持久化、decision 记录与复测。"
+        },
+        {
+         "is_other": false,
+         "letter": "B",
+         "text": "同 A 的服务端端点，并额外持久化 recommendation 与 decision 记录（新增表），支持后续复测。"
+        },
+        {
+         "is_other": false,
+         "letter": "C",
+         "text": "扩展本地 `devdelta advise`，让它调用现有 `/v1/` 端点补充服务端数据，不新增服务端路由。"
+        },
+        {
+         "is_other": false,
+         "letter": "D",
+         "text": "服务端端点 + 本地 `advise` 同时接入，两处共用同一判定逻辑。"
+        },
+        {
+         "is_other": true,
+         "letter": "X",
+         "text": "Other (please specify)"
+        }
+       ],
+       "prompt": "那条「由实际结果支撑的优化建议」在哪里产生并交付？",
+       "required": true
+      }
+     ],
+     "relpath": "aidlc/spaces/default/intents/260905-question-demo/inception/requirements-analysis/requirements-analysis-questions.md",
+     "sha256": "f315779940d3d29adfcf0025ac5bff0b75d7d21111eccdb3a87fc99582976450",
+     "stage": "requirements-analysis",
+     "summary_confirmation": {
+      "answer": null,
+      "answered": false,
+      "kind": "summary_confirmation",
+      "options": [
+       "Looks correct",
+       "Request changes"
+      ],
+      "present": true
+     },
+     "unit": null,
+     "unsupported_pending_count": 0
+    },
+    "review": {
+     "findings": [],
+     "findings_parsed": true,
+     "iteration": null,
+     "review_class": "advisory",
+     "reviewer": "aidlc-product-lead-agent",
+     "verdict": null
+    },
+    "session": null,
+    "state": {
+     "current_stage": "requirements-analysis",
+     "lifecycle_phase": "INCEPTION",
+     "mtime_ns": "<volatile>",
+     "relpath": "aidlc/spaces/default/intents/260905-question-demo/aidlc-state.md",
+     "revision_count": 0,
+     "sha256": "0d090d7936fd00eb7b479a0581399ad6a53085d5156beae260abb6c80473e7c2",
+     "size": 3374,
+     "stable": true,
+     "status": "Running"
+    }
+   },
+   "failure": null,
+   "headline": {
+    "key": "action.question.headline",
+    "params": {
+     "checkpoint": "summary_confirmation",
+     "pending": 4,
+     "stage": "requirements-analysis"
+    }
+   },
+   "human_text_present": false,
+   "install": null,
+   "intent": {
+    "intent_dir": "260905-question-demo",
+    "intent_key": "260905-question-demo",
+    "slug": "question-demo",
+    "title": "Implement the lightest end-to-end proof of concept from design/DevDelta-Kiro贡献证据与优化闭环设计-v0.1.md: preserve existing behavior; deliver strict rolling 30-day date ",
+    "uuid": "01a00000-0000-7000-8000-000000000002"
+   },
+   "primary": {
+    "decision": "answers",
+    "label_key": "decision.answers.label"
+   },
+   "priority_group": 2,
+   "queue_type": "question",
+   "repo": {
+    "archived": false,
+    "availability": "available",
+    "availability_detail": null,
+    "canonical_path": "<ROOT0>",
+    "label": "gate-and-questions",
+    "repo_id": "r_000000000001"
+   },
+   "resolution": {
+    "evidence": null,
+    "kind": null,
+    "reason": null,
+    "resolved_at": null
+   },
+   "risk_class": "human_lane",
+   "severity": "blocking",
+   "source": "studio",
+   "space": "default",
+   "stage": {
+    "name": "Requirements Analysis",
+    "number": "2.3",
+    "phase": "inception",
+    "slug": "requirements-analysis",
+    "unit": null
+   },
+   "status": "Queued",
+   "status_generation": 0,
+   "type": "question",
+   "updated_at": "2026-09-04T10:00:00Z",
+   "waiting_since": "<volatile>"
+  },
+  "drafts": [],
+  "transitions": []
+ },
+ "status": 200
+}

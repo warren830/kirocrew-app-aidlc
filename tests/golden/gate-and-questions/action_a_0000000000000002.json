@@ -1,0 +1,242 @@
+{
+ "body": {
+  "action": {
+   "acknowledged_evidence_sha256": "2f6bb4285337e36a0342cb2ead1325693300942226f09c7ec16599d59406411d",
+   "action_id": "a_0000000000000002",
+   "advisor": {
+    "latest_draft_id": null,
+    "status": null
+   },
+   "budget": null,
+   "captured": {
+    "boundary_token": "2b1c461d14cea5691a2611ab6134d593e84b3193910d1ec17a323264b0d5430b",
+    "captured_at": "2026-09-04T10:00:00Z",
+    "evidence_digest": "a35fb4a7fc63eeb2d13bb32c06ba10d08f056e03d9c5465e4183b111e8946b4c",
+    "is_active": true,
+    "question_digest": null,
+    "stable": true,
+    "stage_attempt": 1,
+    "state_hash": "d33649fa317b5af002e3ef5d1b268e5ff7d427592c934be86b2e65d9ddd532f4"
+   },
+   "consequence": {
+    "key": "action.gate.consequence.approve_unlocks",
+    "params": {
+     "attempt": 1,
+     "stage": "requirements-analysis"
+    }
+   },
+   "created_at": "2026-09-04T10:00:00Z",
+   "decisions": [
+    {
+     "decision": "approve",
+     "label_key": "decision.approve.label",
+     "lane": "human_lane",
+     "requires": [],
+     "wire_text_template": "Approve"
+    },
+    {
+     "decision": "request_changes",
+     "label_key": "decision.request_changes.label",
+     "lane": "human_lane",
+     "requires": [
+      "feedback"
+     ],
+     "wire_text_template": "Request Changes: <feedback>"
+    }
+   ],
+   "dedupe_key": "gate:r_000000000001:260904-gate-demo:requirements-analysis:2b1c461d14cea5691a2611ab6134d593e84b3193910d1ec17a323264b0d5430b",
+   "deep_link": "/apps/aidlc-studio?view=actions&action=a_0000000000000002",
+   "delivery": {
+    "boot_id_unchanged": null,
+    "deadline_at": null,
+    "delivered_at": null,
+    "delivering_at": null,
+    "delivery_confirmed": false,
+    "delivery_id": null,
+    "disk_baseline_unchanged": null,
+    "host": null,
+    "lane": null,
+    "outcome": null,
+    "queued_at": null,
+    "receipt": null,
+    "session_key": null,
+    "slot_key": null,
+    "slot_ran_since": null,
+    "transcript_row": null,
+    "wire_text": null
+   },
+   "evidence": {
+    "acceptance_criteria": [],
+    "artifacts": [
+     {
+      "artifact_id": "3f287599cbcef643a3687888d6d4f91493734f88",
+      "kind": "artifact",
+      "mtime": "<volatile>",
+      "name": "requirements.md",
+      "phase": "inception",
+      "relpath": "aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis/requirements.md",
+      "renderable": true,
+      "sha256": "8bef0e8ddd602dbaf381d65890649441ca1415c2af1e4816e2ee18a30715adf3",
+      "size": 153,
+      "stage": "requirements-analysis",
+      "unit": null
+     }
+    ],
+    "audit": {
+     "boundary_event": {
+      "pos": 3,
+      "shard": "fixture-host-0f1e2d3c4b5a.md",
+      "stage": "requirements-analysis",
+      "ts": "2026-09-04T09:00:03Z",
+      "type": "STAGE_AWAITING_APPROVAL"
+     },
+     "complete": true,
+     "last_event": {
+      "ts": "2026-09-04T09:00:03Z",
+      "type": "STAGE_AWAITING_APPROVAL"
+     },
+     "shards": [
+      {
+       "relpath": "aidlc/spaces/default/intents/260904-gate-demo/audit/fixture-host-0f1e2d3c4b5a.md",
+       "size": 440,
+       "truncated": false
+      }
+     ]
+    },
+    "cursor_readback": null,
+    "directive": {
+     "kind": null,
+     "matches_state": true,
+     "stage": "requirements-analysis",
+     "state_sha256": "d33649fa317b5af002e3ef5d1b268e5ff7d427592c934be86b2e65d9ddd532f4",
+     "unit": null,
+     "units": [],
+     "version": 1
+    },
+    "findings": [
+     {
+      "code": "missing_required_artifact",
+      "evidence": [
+       {
+        "detail": "requirements-analysis produces requirements-analysis-questions",
+        "kind": "file",
+        "ref": ".kiro/tools/data/stage-graph.json"
+       },
+       {
+        "detail": "no regular file for requirements-analysis-questions in this directory",
+        "kind": "file",
+        "ref": "aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis"
+       }
+      ],
+      "message_key": "finding.missing_required_artifact",
+      "params": {
+       "artifact": "requirements-analysis-questions",
+       "present": [
+        "requirements.md"
+       ],
+       "stage": "requirements-analysis",
+       "stage_dir": "aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis"
+      },
+      "severity": "blocking"
+     }
+    ],
+    "git": null,
+    "markers": {
+     "engine_touch_at": null,
+     "goal_stop_present": false,
+     "human_turn_at": null,
+     "recovery": null,
+     "turn_counter": null
+    },
+    "presence": null,
+    "presence_baseline": null,
+    "questions": null,
+    "review": {
+     "findings": [
+      {
+       "anchor": null,
+       "iteration": 1,
+       "level": "advisory",
+       "quote": null,
+       "reviewer": "reviewer-agent",
+       "title": "Consider naming the store"
+      }
+     ],
+     "findings_parsed": true,
+     "iteration": 1,
+     "review_class": "advisory",
+     "reviewer": "reviewer-agent",
+     "verdict": "READY"
+    },
+    "session": null,
+    "state": {
+     "current_stage": "requirements-analysis",
+     "lifecycle_phase": "INCEPTION",
+     "mtime_ns": "<volatile>",
+     "relpath": "aidlc/spaces/default/intents/260904-gate-demo/aidlc-state.md",
+     "revision_count": 0,
+     "sha256": "d33649fa317b5af002e3ef5d1b268e5ff7d427592c934be86b2e65d9ddd532f4",
+     "size": 3374,
+     "stable": true,
+     "status": "Running"
+    }
+   },
+   "failure": null,
+   "headline": {
+    "key": "action.gate.headline",
+    "params": {
+     "attempt": 1,
+     "stage": "requirements-analysis"
+    }
+   },
+   "human_text_present": false,
+   "install": null,
+   "intent": {
+    "intent_dir": "260904-gate-demo",
+    "intent_key": "260904-gate-demo",
+    "slug": "gate-demo",
+    "title": "Implement the lightest end-to-end proof of concept from design/DevDelta-Kiro贡献证据与优化闭环设计-v0.1.md: preserve existing behavior; deliver strict rolling 30-day date ",
+    "uuid": "01a00000-0000-7000-8000-000000000001"
+   },
+   "primary": {
+    "decision": "approve",
+    "label_key": "decision.approve.label"
+   },
+   "priority_group": 2,
+   "queue_type": "gate",
+   "repo": {
+    "archived": false,
+    "availability": "available",
+    "availability_detail": null,
+    "canonical_path": "<ROOT0>",
+    "label": "gate-and-questions",
+    "repo_id": "r_000000000001"
+   },
+   "resolution": {
+    "evidence": null,
+    "kind": null,
+    "reason": null,
+    "resolved_at": null
+   },
+   "risk_class": "human_lane",
+   "severity": "blocking",
+   "source": "studio",
+   "space": "default",
+   "stage": {
+    "name": "Requirements Analysis",
+    "number": "2.3",
+    "phase": "inception",
+    "slug": "requirements-analysis",
+    "unit": null
+   },
+   "status": "Queued",
+   "status_generation": 0,
+   "type": "gate",
+   "updated_at": "2026-09-04T10:00:00Z",
+   "waiting_since": "<volatile>"
+  },
+  "drafts": [],
+  "transitions": []
+ },
+ "status": 200
+}

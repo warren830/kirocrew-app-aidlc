@@ -1,0 +1,48 @@
+{
+ "body": {
+  "artifacts": [
+   {
+    "artifact_id": "7bce4cb7e18804408993c475202d906edddae4ec",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "aidlc-state.md",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260904-gate-demo/aidlc-state.md",
+    "renderable": true,
+    "sha256": "d33649fa317b5af002e3ef5d1b268e5ff7d427592c934be86b2e65d9ddd532f4",
+    "size": 3374,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "00d8107c3ff9847b4e55e9289072a5a3d59a546c",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "fixture-host-0f1e2d3c4b5a.md",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260904-gate-demo/audit/fixture-host-0f1e2d3c4b5a.md",
+    "renderable": true,
+    "sha256": "d8bc5379b075139781a2a2a3c81965a203545c6fa7445994bf8afcb2c23df52d",
+    "size": 440,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "3f287599cbcef643a3687888d6d4f91493734f88",
+    "kind": "artifact",
+    "mtime": "<volatile>",
+    "name": "requirements.md",
+    "phase": "inception",
+    "relpath": "aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis/requirements.md",
+    "renderable": true,
+    "sha256": "8bef0e8ddd602dbaf381d65890649441ca1415c2af1e4816e2ee18a30715adf3",
+    "size": 153,
+    "stage": "requirements-analysis",
+    "unit": null
+   }
+  ],
+  "count": 3,
+  "truncated": false
+ },
+ "status": 200
+}

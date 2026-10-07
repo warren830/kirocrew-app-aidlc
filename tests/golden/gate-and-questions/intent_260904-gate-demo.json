@@ -1,0 +1,888 @@
+{
+ "body": {
+  "intent": {
+   "actions": [
+    {
+     "action_id": "a_0000000000000001",
+     "boot_id": null,
+     "captured": {
+      "boundary_token": "2b1c461d14cea5691a2611ab6134d593e84b3193910d1ec17a323264b0d5430b",
+      "captured_at": "2026-09-04T10:00:00Z",
+      "evidence_digest": "a35fb4a7fc63eeb2d13bb32c06ba10d08f056e03d9c5465e4183b111e8946b4c",
+      "is_active": true,
+      "question_digest": null,
+      "stable": true,
+      "stage_attempt": 1,
+      "state_hash": "d33649fa317b5af002e3ef5d1b268e5ff7d427592c934be86b2e65d9ddd532f4"
+     },
+     "created_at": "2026-09-04T10:00:00Z",
+     "cursor_readback": null,
+     "deadline_at": null,
+     "dedupe_key": "recovery:r_000000000001:260904-gate-demo:requirements-analysis:2b1c461d14cea5691a2611ab6134d593e84b3193910d1ec17a323264b0d5430b",
+     "delivered_at": null,
+     "delivering_at": null,
+     "delivery_id": null,
+     "evidence": {
+      "acceptance_criteria": [],
+      "artifacts": [
+       {
+        "artifact_id": "3f287599cbcef643a3687888d6d4f91493734f88",
+        "kind": "artifact",
+        "mtime": "<volatile>",
+        "name": "requirements.md",
+        "phase": "inception",
+        "relpath": "aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis/requirements.md",
+        "renderable": true,
+        "sha256": "8bef0e8ddd602dbaf381d65890649441ca1415c2af1e4816e2ee18a30715adf3",
+        "size": 153,
+        "stage": "requirements-analysis",
+        "unit": null
+       }
+      ],
+      "audit": {
+       "boundary_event": {
+        "pos": 3,
+        "shard": "fixture-host-0f1e2d3c4b5a.md",
+        "stage": "requirements-analysis",
+        "ts": "2026-09-04T09:00:03Z",
+        "type": "STAGE_AWAITING_APPROVAL"
+       },
+       "complete": true,
+       "last_event": {
+        "ts": "2026-09-04T09:00:03Z",
+        "type": "STAGE_AWAITING_APPROVAL"
+       },
+       "shards": [
+        {
+         "relpath": "aidlc/spaces/default/intents/260904-gate-demo/audit/fixture-host-0f1e2d3c4b5a.md",
+         "size": 440,
+         "truncated": false
+        }
+       ]
+      },
+      "card": {
+       "captured_at": "2026-09-04T10:00:00Z",
+       "consequence_variant": "blocked_until_agree",
+       "decisions": [
+        "rebind_session",
+        "mark_not_delivered",
+        "acknowledge"
+       ],
+       "headline_params": {
+        "codes": [
+         "missing_required_artifact"
+        ],
+        "stage": "requirements-analysis"
+       },
+       "reason": "missing_required_artifact",
+       "related_action_id": null,
+       "severity": "critical",
+       "stable": true,
+       "stage_ref": {
+        "name": "Requirements Analysis",
+        "number": "2.3",
+        "phase": "inception",
+        "slug": "requirements-analysis",
+        "unit": null
+       }
+      },
+      "cursor_readback": null,
+      "directive": {
+       "kind": null,
+       "matches_state": true,
+       "stage": "requirements-analysis",
+       "state_sha256": "d33649fa317b5af002e3ef5d1b268e5ff7d427592c934be86b2e65d9ddd532f4",
+       "unit": null,
+       "units": [],
+       "version": 1
+      },
+      "findings": [
+       {
+        "code": "missing_required_artifact",
+        "evidence": [
+         {
+          "detail": "requirements-analysis produces requirements-analysis-questions",
+          "kind": "file",
+          "ref": ".kiro/tools/data/stage-graph.json"
+         },
+         {
+          "detail": "no regular file for requirements-analysis-questions in this directory",
+          "kind": "file",
+          "ref": "aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis"
+         }
+        ],
+        "message_key": "finding.missing_required_artifact",
+        "params": {
+         "artifact": "requirements-analysis-questions",
+         "present": [
+          "requirements.md"
+         ],
+         "stage": "requirements-analysis",
+         "stage_dir": "aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis"
+        },
+        "severity": "blocking"
+       }
+      ],
+      "git": null,
+      "markers": {
+       "engine_touch_at": null,
+       "goal_stop_present": false,
+       "human_turn_at": null,
+       "recovery": null,
+       "turn_counter": null
+      },
+      "presence": null,
+      "presence_baseline": null,
+      "questions": null,
+      "recovery_codes": [
+       "missing_required_artifact"
+      ],
+      "review": {
+       "findings": [
+        {
+         "anchor": null,
+         "iteration": 1,
+         "level": "advisory",
+         "quote": null,
+         "reviewer": "reviewer-agent",
+         "title": "Consider naming the store"
+        }
+       ],
+       "findings_parsed": true,
+       "iteration": 1,
+       "review_class": "advisory",
+       "reviewer": "reviewer-agent",
+       "verdict": "READY"
+      },
+      "session": null,
+      "state": {
+       "current_stage": "requirements-analysis",
+       "lifecycle_phase": "INCEPTION",
+       "mtime_ns": "<volatile>",
+       "relpath": "aidlc/spaces/default/intents/260904-gate-demo/aidlc-state.md",
+       "revision_count": 0,
+       "sha256": "d33649fa317b5af002e3ef5d1b268e5ff7d427592c934be86b2e65d9ddd532f4",
+       "size": 3374,
+       "stable": true,
+       "status": "Running"
+      }
+     },
+     "human_text_present": false,
+     "intent_dir": "260904-gate-demo",
+     "intent_key": "260904-gate-demo",
+     "intent_uuid": "01a00000-0000-7000-8000-000000000001",
+     "lease_generation": null,
+     "payload": null,
+     "payload_digest": null,
+     "presence_baseline": null,
+     "repo_id": "r_000000000001",
+     "resolution": null,
+     "resolved_at": null,
+     "resolved_repo_identity": "<dev:ino>",
+     "retry_fingerprint": null,
+     "risk_class": "studio_only",
+     "session_key": null,
+     "slot_key": null,
+     "source": "studio",
+     "space": "default",
+     "stage": "requirements-analysis",
+     "status": "Queued",
+     "status_generation": 0,
+     "type": "recovery",
+     "unit": null,
+     "updated_at": "2026-09-04T10:00:00Z",
+     "waiting_since": "<volatile>",
+     "wire_text": null
+    },
+    {
+     "action_id": "a_0000000000000002",
+     "boot_id": null,
+     "captured": {
+      "boundary_token": "2b1c461d14cea5691a2611ab6134d593e84b3193910d1ec17a323264b0d5430b",
+      "captured_at": "2026-09-04T10:00:00Z",
+      "evidence_digest": "a35fb4a7fc63eeb2d13bb32c06ba10d08f056e03d9c5465e4183b111e8946b4c",
+      "is_active": true,
+      "question_digest": null,
+      "stable": true,
+      "stage_attempt": 1,
+      "state_hash": "d33649fa317b5af002e3ef5d1b268e5ff7d427592c934be86b2e65d9ddd532f4"
+     },
+     "created_at": "2026-09-04T10:00:00Z",
+     "cursor_readback": null,
+     "deadline_at": null,
+     "dedupe_key": "gate:r_000000000001:260904-gate-demo:requirements-analysis:2b1c461d14cea5691a2611ab6134d593e84b3193910d1ec17a323264b0d5430b",
+     "delivered_at": null,
+     "delivering_at": null,
+     "delivery_id": null,
+     "evidence": {
+      "acceptance_criteria": [],
+      "artifacts": [
+       {
+        "artifact_id": "3f287599cbcef643a3687888d6d4f91493734f88",
+        "kind": "artifact",
+        "mtime": "<volatile>",
+        "name": "requirements.md",
+        "phase": "inception",
+        "relpath": "aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis/requirements.md",
+        "renderable": true,
+        "sha256": "8bef0e8ddd602dbaf381d65890649441ca1415c2af1e4816e2ee18a30715adf3",
+        "size": 153,
+        "stage": "requirements-analysis",
+        "unit": null
+       }
+      ],
+      "audit": {
+       "boundary_event": {
+        "pos": 3,
+        "shard": "fixture-host-0f1e2d3c4b5a.md",
+        "stage": "requirements-analysis",
+        "ts": "2026-09-04T09:00:03Z",
+        "type": "STAGE_AWAITING_APPROVAL"
+       },
+       "complete": true,
+       "last_event": {
+        "ts": "2026-09-04T09:00:03Z",
+        "type": "STAGE_AWAITING_APPROVAL"
+       },
+       "shards": [
+        {
+         "relpath": "aidlc/spaces/default/intents/260904-gate-demo/audit/fixture-host-0f1e2d3c4b5a.md",
+         "size": 440,
+         "truncated": false
+        }
+       ]
+      },
+      "card": {
+       "captured_at": "2026-09-04T10:00:00Z",
+       "consequence_variant": "approve_unlocks",
+       "decisions": [
+        "approve",
+        "request_changes"
+       ],
+       "headline_params": {
+        "attempt": 1,
+        "stage": "requirements-analysis"
+       },
+       "reason": null,
+       "related_action_id": null,
+       "severity": "blocking",
+       "stable": true,
+       "stage_ref": {
+        "name": "Requirements Analysis",
+        "number": "2.3",
+        "phase": "inception",
+        "slug": "requirements-analysis",
+        "unit": null
+       }
+      },
+      "cursor_readback": null,
+      "directive": {
+       "kind": null,
+       "matches_state": true,
+       "stage": "requirements-analysis",
+       "state_sha256": "d33649fa317b5af002e3ef5d1b268e5ff7d427592c934be86b2e65d9ddd532f4",
+       "unit": null,
+       "units": [],
+       "version": 1
+      },
+      "findings": [
+       {
+        "code": "missing_required_artifact",
+        "evidence": [
+         {
+          "detail": "requirements-analysis produces requirements-analysis-questions",
+          "kind": "file",
+          "ref": ".kiro/tools/data/stage-graph.json"
+         },
+         {
+          "detail": "no regular file for requirements-analysis-questions in this directory",
+          "kind": "file",
+          "ref": "aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis"
+         }
+        ],
+        "message_key": "finding.missing_required_artifact",
+        "params": {
+         "artifact": "requirements-analysis-questions",
+         "present": [
+          "requirements.md"
+         ],
+         "stage": "requirements-analysis",
+         "stage_dir": "aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis"
+        },
+        "severity": "blocking"
+       }
+      ],
+      "git": null,
+      "markers": {
+       "engine_touch_at": null,
+       "goal_stop_present": false,
+       "human_turn_at": null,
+       "recovery": null,
+       "turn_counter": null
+      },
+      "presence": null,
+      "presence_baseline": null,
+      "questions": null,
+      "review": {
+       "findings": [
+        {
+         "anchor": null,
+         "iteration": 1,
+         "level": "advisory",
+         "quote": null,
+         "reviewer": "reviewer-agent",
+         "title": "Consider naming the store"
+        }
+       ],
+       "findings_parsed": true,
+       "iteration": 1,
+       "review_class": "advisory",
+       "reviewer": "reviewer-agent",
+       "verdict": "READY"
+      },
+      "session": null,
+      "state": {
+       "current_stage": "requirements-analysis",
+       "lifecycle_phase": "INCEPTION",
+       "mtime_ns": "<volatile>",
+       "relpath": "aidlc/spaces/default/intents/260904-gate-demo/aidlc-state.md",
+       "revision_count": 0,
+       "sha256": "d33649fa317b5af002e3ef5d1b268e5ff7d427592c934be86b2e65d9ddd532f4",
+       "size": 3374,
+       "stable": true,
+       "status": "Running"
+      }
+     },
+     "human_text_present": false,
+     "intent_dir": "260904-gate-demo",
+     "intent_key": "260904-gate-demo",
+     "intent_uuid": "01a00000-0000-7000-8000-000000000001",
+     "lease_generation": null,
+     "payload": null,
+     "payload_digest": null,
+     "presence_baseline": null,
+     "repo_id": "r_000000000001",
+     "resolution": null,
+     "resolved_at": null,
+     "resolved_repo_identity": "<dev:ino>",
+     "retry_fingerprint": null,
+     "risk_class": "human_lane",
+     "session_key": null,
+     "slot_key": null,
+     "source": "studio",
+     "space": "default",
+     "stage": "requirements-analysis",
+     "status": "Queued",
+     "status_generation": 0,
+     "type": "gate",
+     "unit": null,
+     "updated_at": "2026-09-04T10:00:00Z",
+     "waiting_since": "<volatile>",
+     "wire_text": null
+    }
+   ],
+   "active_directive_stage": "requirements-analysis",
+   "archived": false,
+   "artifacts_count": 3,
+   "artifacts_truncated": false,
+   "audit_tail": [
+    {
+     "event": "SESSION_STARTED",
+     "fields": {
+      "Source": "startup"
+     },
+     "pos": 0,
+     "raw": "## Session Started\n**Timestamp**: 2026-09-04T09:00:00Z\n**Event**: SESSION_STARTED\n**Source**: startup",
+     "shard": "fixture-host-0f1e2d3c4b5a.md",
+     "timestamp": "2026-09-04T09:00:00Z"
+    },
+    {
+     "event": "HUMAN_TURN",
+     "fields": {},
+     "pos": 1,
+     "raw": "## Human Turn\n**Timestamp**: 2026-09-04T09:00:01Z\n**Event**: HUMAN_TURN",
+     "shard": "fixture-host-0f1e2d3c4b5a.md",
+     "timestamp": "2026-09-04T09:00:01Z"
+    },
+    {
+     "event": "STAGE_STARTED",
+     "fields": {
+      "Stage": "requirements-analysis"
+     },
+     "pos": 2,
+     "raw": "## Stage Started\n**Timestamp**: 2026-09-04T09:00:02Z\n**Event**: STAGE_STARTED\n**Stage**: requirements-analysis",
+     "shard": "fixture-host-0f1e2d3c4b5a.md",
+     "timestamp": "2026-09-04T09:00:02Z"
+    },
+    {
+     "event": "STAGE_AWAITING_APPROVAL",
+     "fields": {
+      "Stage": "requirements-analysis"
+     },
+     "pos": 3,
+     "raw": "## Stage Awaiting Approval\n**Timestamp**: 2026-09-04T09:00:03Z\n**Event**: STAGE_AWAITING_APPROVAL\n**Stage**: requirements-analysis",
+     "shard": "fixture-host-0f1e2d3c4b5a.md",
+     "timestamp": "2026-09-04T09:00:03Z"
+    }
+   ],
+   "binding": {
+    "archive_state": "active",
+    "binding_generation": 1,
+    "intent_dir": "260904-gate-demo",
+    "intent_key": "260904-gate-demo",
+    "intent_uuid": null,
+    "interrupted_at": null,
+    "keep_moving": false,
+    "last_stable_boundary": {
+     "boundary_token": "2b1c461d14cea5691a2611ab6134d593e84b3193910d1ec17a323264b0d5430b",
+     "marker": "[?]",
+     "reasons": [],
+     "recorded_at": "2026-09-04T10:00:00Z",
+     "stable": true,
+     "stage": "requirements-analysis"
+    },
+    "paused": false,
+    "paused_at": null,
+    "repo_id": "r_000000000001",
+    "session_key": null,
+    "slot_key": null,
+    "space": "default",
+    "updated_at": "2026-09-04T10:00:00Z"
+   },
+   "blocking_findings": 1,
+   "counts": {
+    "awaiting_approval": 1,
+    "completed": 7,
+    "done": 7,
+    "in_progress": 0,
+    "not_started": 25,
+    "revising": 0,
+    "skipped": 0,
+    "total": 33,
+    "unknown": 0
+   },
+   "directive": {
+    "kind": null,
+    "matches_state": true,
+    "stage": "requirements-analysis",
+    "state_sha256": "d33649fa317b5af002e3ef5d1b268e5ff7d427592c934be86b2e65d9ddd532f4",
+    "unit": null,
+    "units": [],
+    "version": 1
+   },
+   "disk": {
+    "completed": 7,
+    "current_stage": "requirements-analysis",
+    "last_updated": "2026-08-30T08:43:44Z",
+    "lifecycle_phase": "INCEPTION",
+    "next_stage": "user-stories",
+    "parked_at": null,
+    "revision_count": 0,
+    "state_version": 8,
+    "status": "Running",
+    "total_stages": 33
+   },
+   "engine": {
+    "dir": ".kiro",
+    "engine_state_version": 8,
+    "engine_version": "2.10.0",
+    "harness_name": "kiro",
+    "has_utility": true,
+    "rules_subdir": "steering",
+    "stage_count": 33
+   },
+   "findings": [
+    {
+     "code": "missing_required_artifact",
+     "evidence": [
+      {
+       "detail": "requirements-analysis produces requirements-analysis-questions",
+       "kind": "file",
+       "ref": ".kiro/tools/data/stage-graph.json"
+      },
+      {
+       "detail": "no regular file for requirements-analysis-questions in this directory",
+       "kind": "file",
+       "ref": "aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis"
+      }
+     ],
+     "message_key": "finding.missing_required_artifact",
+     "params": {
+      "artifact": "requirements-analysis-questions",
+      "present": [
+       "requirements.md"
+      ],
+      "stage": "requirements-analysis",
+      "stage_dir": "aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis"
+     },
+     "severity": "blocking"
+    }
+   ],
+   "git": {
+    "ahead": null,
+    "available": true,
+    "behind": null,
+    "branch": "main",
+    "detached": false,
+    "dirty": false,
+    "dirty_files": 0,
+    "head": "0000000000000000000000000000000000000000",
+    "head_subject": null,
+    "observed_at": "2026-09-04T10:00:00Z",
+    "reason": null,
+    "took_ms": 0,
+    "upstream": null
+   },
+   "intent_dir": "260904-gate-demo",
+   "intent_key": "260904-gate-demo",
+   "interrupted": false,
+   "is_active_cursor": true,
+   "keep_moving": false,
+   "last_activity_at": "2026-09-04T09:00:03Z",
+   "markers": {
+    "compose_pending": false,
+    "engine_touch_at": null,
+    "goal_stop_present": false,
+    "hooks_health": {},
+    "human_turn_at": null,
+    "recovery": null,
+    "turn_counter": null
+   },
+   "open_actions": 2,
+   "operational_state": "ReconciliationRequired",
+   "paused": false,
+   "phases": [
+    [
+     "Initialization",
+     "Verified"
+    ],
+    [
+     "Ideation",
+     "Verified"
+    ],
+    [
+     "Inception",
+     "Verified"
+    ],
+    [
+     "Construction",
+     "Verified"
+    ],
+    [
+     "Operation",
+     "Pending"
+    ]
+   ],
+   "questions": null,
+   "recovery": null,
+   "registry_status": "in-flight",
+   "repo_id": "r_000000000001",
+   "repo_label": "gate-and-questions",
+   "scope": "feature",
+   "session": null,
+   "slug": "gate-demo",
+   "space": "default",
+   "stable_boundary": {
+    "boundary_token": "2b1c461d14cea5691a2611ab6134d593e84b3193910d1ec17a323264b0d5430b",
+    "marker": "[?]",
+    "reasons": [],
+    "recorded_at": "2026-09-04T10:00:00Z",
+    "stable": true,
+    "stage": "requirements-analysis"
+   },
+   "stages": [
+    {
+     "mark": "x",
+     "phase": "initialization",
+     "slug": "workspace-scaffold",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "initialization",
+     "slug": "workspace-detection",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "initialization",
+     "slug": "state-init",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "ideation",
+     "slug": "intent-capture",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "market-research",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "feasibility",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "scope-definition",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "team-formation",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "rough-mockups",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "approval-handoff",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "inception",
+     "slug": "reverse-engineering",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "practices-discovery",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "?",
+     "phase": "inception",
+     "slug": "requirements-analysis",
+     "state": "awaiting_approval",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "user-stories",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "refined-mockups",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "domain-design",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "units-generation",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "contract-design",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "delivery-planning",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "construction",
+     "slug": "functional-design",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "construction",
+     "slug": "nfr-requirements",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "construction",
+     "slug": "nfr-design",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "construction",
+     "slug": "infrastructure-design",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "construction",
+     "slug": "code-generation",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "construction",
+     "slug": "build-and-test",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "construction",
+     "slug": "ci-pipeline",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "deployment-pipeline",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "environment-provisioning",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "deployment-execution",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "observability-setup",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "incident-response",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "performance-validation",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "feedback-optimization",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    }
+   ],
+   "state_sections": {
+    "Current Status": {
+     "Current Stage": "requirements-analysis",
+     "Last Updated": "2026-08-30T08:43:44Z",
+     "Lifecycle Phase": "INCEPTION",
+     "Next Stage": "user-stories",
+     "Status": "Running"
+    },
+    "Execution Plan Summary": {
+     "Completed": "7",
+     "In Progress": "none",
+     "Total Stages": "33"
+    },
+    "Phase Progress": {
+     "Construction": "Verified",
+     "Ideation": "Verified",
+     "Inception": "Verified",
+     "Initialization": "Verified",
+     "Operation": "Pending"
+    },
+    "Project Information": {
+     "Active Agent": "aidlc-quality-agent",
+     "Bolt Refs": "",
+     "Practices Affirmed Timestamp": "",
+     "Project": "Implement the lightest end-to-end proof of concept from design/DevDelta-Kiro贡献证据与优化闭环设计-v0.1.md: preserve existing behavior; deliver strict rolling 30-day date semantics, a person-scoped contribution summary linking official/provisional Kiro credits to connector-verified Git commits and merged PRs, and one result-driven optimization recommendation using existing data. No remote Agent control, no non-code connectors, no deployment, and no production changes.",
+     "Project Type": "Brownfield",
+     "Scope": "feature",
+     "Start Date": "2026-08-28T09:27:08Z",
+     "State Version": "8",
+     "Worktree Path": ""
+    },
+    "Runtime State": {
+     "Revision Count": "0",
+     "Skeleton Stance": "scope-dependent"
+    },
+    "Scope Configuration": {
+     "Depth": "Standard",
+     "Review Override": "",
+     "Stages to Execute": "0.1, 0.2, 0.3, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7",
+     "Stages to Skip": "none",
+     "Test Strategy": "Standard"
+    },
+    "Session Resume Point": {
+     "Last Completed Stage": "build-and-test",
+     "Next Action": "Workflow complete",
+     "Pending Artifacts": "none"
+    },
+    "Stage Progress": {},
+    "Workspace State": {
+     "Build System": "go modules (go.mod)",
+     "Frameworks": "Unknown",
+     "Languages": "Unknown",
+     "Project Root": "/FIXTURE/repo"
+    }
+   },
+   "title": "Implement the lightest end-to-end proof of concept from design/DevDelta-Kiro贡献证据与优化闭环设计-v0.1.md: preserve existing behavior; deliver strict rolling 30-day date ",
+   "unstable": false,
+   "uuid": "01a00000-0000-7000-8000-000000000001",
+   "warn_findings": 0
+  }
+ },
+ "status": 200
+}

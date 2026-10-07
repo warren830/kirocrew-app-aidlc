@@ -1,0 +1,217 @@
+{
+ "body": {
+  "intents": [
+   {
+    "archived": false,
+    "blocking_findings": 1,
+    "counts": {
+     "awaiting_approval": 1,
+     "completed": 7,
+     "done": 7,
+     "in_progress": 0,
+     "not_started": 25,
+     "revising": 0,
+     "skipped": 0,
+     "total": 33,
+     "unknown": 0
+    },
+    "disk": {
+     "completed": 7,
+     "current_stage": "requirements-analysis",
+     "last_updated": "2026-08-30T08:43:44Z",
+     "lifecycle_phase": "INCEPTION",
+     "next_stage": "user-stories",
+     "parked_at": null,
+     "revision_count": 0,
+     "state_version": 8,
+     "status": "Running",
+     "total_stages": 33
+    },
+    "intent_dir": "260904-gate-demo",
+    "intent_key": "260904-gate-demo",
+    "interrupted": false,
+    "is_active_cursor": true,
+    "keep_moving": false,
+    "last_activity_at": "2026-09-04T09:00:03Z",
+    "open_actions": 2,
+    "operational_state": "ReconciliationRequired",
+    "paused": false,
+    "registry_status": "in-flight",
+    "repo_id": "r_000000000001",
+    "repo_label": "gate-and-questions",
+    "scope": "feature",
+    "session": null,
+    "slug": "gate-demo",
+    "space": "default",
+    "stable_boundary": {
+     "boundary_token": "2b1c461d14cea5691a2611ab6134d593e84b3193910d1ec17a323264b0d5430b",
+     "marker": "[?]",
+     "reasons": [],
+     "recorded_at": "2026-09-04T10:00:00Z",
+     "stable": true,
+     "stage": "requirements-analysis"
+    },
+    "title": "Implement the lightest end-to-end proof of concept from design/DevDelta-Kiro贡献证据与优化闭环设计-v0.1.md: preserve existing behavior; deliver strict rolling 30-day date ",
+    "unstable": false,
+    "uuid": "01a00000-0000-7000-8000-000000000001",
+    "warn_findings": 0
+   },
+   {
+    "archived": false,
+    "blocking_findings": 0,
+    "counts": {
+     "awaiting_approval": 0,
+     "completed": 7,
+     "done": 7,
+     "in_progress": 1,
+     "not_started": 25,
+     "revising": 0,
+     "skipped": 0,
+     "total": 33,
+     "unknown": 0
+    },
+    "disk": {
+     "completed": 7,
+     "current_stage": "requirements-analysis",
+     "last_updated": "2026-08-30T08:43:44Z",
+     "lifecycle_phase": "INCEPTION",
+     "next_stage": "user-stories",
+     "parked_at": null,
+     "revision_count": 0,
+     "state_version": 8,
+     "status": "Running",
+     "total_stages": 33
+    },
+    "intent_dir": "260905-question-demo",
+    "intent_key": "260905-question-demo",
+    "interrupted": false,
+    "is_active_cursor": false,
+    "keep_moving": false,
+    "last_activity_at": "2026-09-05T08:00:00Z",
+    "open_actions": 1,
+    "operational_state": "WaitingForYou",
+    "paused": false,
+    "registry_status": "in-flight",
+    "repo_id": "r_000000000001",
+    "repo_label": "gate-and-questions",
+    "scope": "feature",
+    "session": null,
+    "slug": "question-demo",
+    "space": "default",
+    "stable_boundary": {
+     "boundary_token": "9c2f39c325be797dee44675dcaeb4f16781df7476c6ccfcac41498e537099ed9",
+     "marker": "question",
+     "reasons": [
+      "cursor_mismatch"
+     ],
+     "recorded_at": "2026-09-04T10:00:00Z",
+     "stable": false,
+     "stage": "requirements-analysis"
+    },
+    "title": "Implement the lightest end-to-end proof of concept from design/DevDelta-Kiro贡献证据与优化闭环设计-v0.1.md: preserve existing behavior; deliver strict rolling 30-day date ",
+    "unstable": false,
+    "uuid": "01a00000-0000-7000-8000-000000000002",
+    "warn_findings": 0
+   }
+  ],
+  "repo": {
+   "added_at": "<volatile>",
+   "archived": false,
+   "availability": "available",
+   "availability_detail": null,
+   "canonical_path": "<ROOT0>",
+   "counts": {
+    "blocking_findings": 1,
+    "in_flight": 0,
+    "intents": 2,
+    "open_actions": 3
+   },
+   "engine_dir": ".kiro",
+   "findings": [
+    {
+     "code": "missing_required_artifact",
+     "evidence": [
+      {
+       "detail": "requirements-analysis produces requirements-analysis-questions",
+       "kind": "file",
+       "ref": ".kiro/tools/data/stage-graph.json"
+      },
+      {
+       "detail": "no regular file for requirements-analysis-questions in this directory",
+       "kind": "file",
+       "ref": "aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis"
+      }
+     ],
+     "message_key": "finding.missing_required_artifact",
+     "params": {
+      "artifact": "requirements-analysis-questions",
+      "present": [
+       "requirements.md"
+      ],
+      "stage": "requirements-analysis",
+      "stage_dir": "aidlc/spaces/default/intents/260904-gate-demo/inception/requirements-analysis"
+     },
+     "severity": "blocking"
+    }
+   ],
+   "git": {
+    "ahead": null,
+    "available": true,
+    "behind": null,
+    "branch": "main",
+    "detached": false,
+    "dirty": false,
+    "dirty_files": 0,
+    "head": "0000000000000000000000000000000000000000",
+    "head_subject": null,
+    "observed_at": "2026-09-04T10:00:00Z",
+    "reason": null,
+    "took_ms": 0,
+    "upstream": null
+   },
+   "git_common_dir_identity": "<ROOT0>/.git",
+   "install": {
+    "bundled_engine_version": "2.10.0",
+    "drift_count": 0,
+    "engine_dir": ".kiro",
+    "engine_state_version": 8,
+    "engine_version": "2.10.0",
+    "harness_dirs": [
+     {
+      "dir": ".kiro",
+      "engine_state_version": 8,
+      "engine_version": "2.10.0",
+      "harness_name": "kiro",
+      "has_utility": true,
+      "rules_subdir": "steering",
+      "stage_count": 33
+     }
+    ],
+    "newer_installed": false,
+    "own_engine_version": "2.10.0",
+    "receipt": null,
+    "rollback_target": null,
+    "stage_count": 33,
+    "state_version_blocked": false,
+    "status": "installed",
+    "upgrade_available": false
+   },
+   "install_status": "installed",
+   "installed_engine_version": "2.10.0",
+   "label": "gate-and-questions",
+   "last_seen": "<volatile>",
+   "leases": {
+    "admin": null,
+    "execution": null
+   },
+   "legacy_console_id": null,
+   "platform": "darwin",
+   "receipt_version": null,
+   "repo_id": "r_000000000001",
+   "resolved_identity": "<dev:ino>",
+   "scanned_at": "<volatile>"
+  },
+  "transactions": []
+ },
+ "status": 200
+}

@@ -1,0 +1,72 @@
+{
+ "body": {
+  "plan": {
+   "diff": [],
+   "engine_version": null,
+   "estimate": {
+    "active_secs": {
+     "confidence": "low",
+     "high": 0,
+     "low": 0,
+     "source": "rule_band",
+     "unit": "secs"
+    },
+    "confidence": "low",
+    "coverage_lost": [],
+    "credits": null,
+    "credits_status": "unavailable",
+    "dominant": [],
+    "elapsed_secs": null,
+    "samples": 0,
+    "source": "rule_band",
+    "turns": {
+     "confidence": "low",
+     "high": 0,
+     "low": 0,
+     "source": "rule_band",
+     "unit": "turns"
+    }
+   },
+   "exact": {
+    "artifacts": 0,
+    "assumes_units": 1,
+    "gates": 0,
+    "review_intensity": {
+     "adversarial": 0,
+     "advisory": 0,
+     "none": 0
+    },
+    "stages": 0
+   },
+   "graph_stage_count": 0,
+   "issues": [
+    {
+     "code": "scope_unknown",
+     "message_key": "plan.issue.scope_unknown",
+     "params": {
+      "known": [],
+      "scope": "poc"
+     },
+     "slugs": []
+    }
+   ],
+   "products": [],
+   "request": {
+    "context": null,
+    "depth": "Standard",
+    "label": null,
+    "objective": null,
+    "overrides": {},
+    "project_type": null,
+    "review_cap": null,
+    "scope": "poc",
+    "space": "default",
+    "test_strategy": null
+   },
+   "scope_meta": null,
+   "stages": [],
+   "valid": false
+  }
+ },
+ "status": 200
+}

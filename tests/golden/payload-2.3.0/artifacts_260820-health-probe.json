@@ -1,0 +1,61 @@
+{
+ "body": {
+  "artifacts": [
+   {
+    "artifact_id": "40c6226cfb825ac946b4586d94617578febef243",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "aidlc-state.md",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260820-health-probe/aidlc-state.md",
+    "renderable": true,
+    "sha256": "e46e8beaa3c69e9feaa1f958e855236a7f5936eb1be2829724b1f501171318da",
+    "size": 3344,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "2b8480ea0134bc57928abcf4366e7cfba556ce5e",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "fixture-host-0f1e2d3c4b5a.md",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260820-health-probe/audit/fixture-host-0f1e2d3c4b5a.md",
+    "renderable": true,
+    "sha256": "825f0c709e1a80182aa5f19d08d5e18f35330e8b5daba95609c245fe69ff82f0",
+    "size": 12307,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "e2c5e437cbf864f0113d72c29fbd2fdd6135142a",
+    "kind": "artifact",
+    "mtime": "<volatile>",
+    "name": "build-test-results.md",
+    "phase": "construction",
+    "relpath": "aidlc/spaces/default/intents/260820-health-probe/construction/build-and-test/build-test-results.md",
+    "renderable": true,
+    "sha256": "3cc68711952fe751d9816cbcdeca8fb58c955098f1154f96bdf7c21944d3837e",
+    "size": 468,
+    "stage": "build-and-test",
+    "unit": null
+   },
+   {
+    "artifact_id": "0e1e683b280b8c0ef9a83266da9f32bb7c08ec60",
+    "kind": "questions",
+    "mtime": "<volatile>",
+    "name": "code-generation-questions.md",
+    "phase": "construction",
+    "relpath": "aidlc/spaces/default/intents/260820-health-probe/construction/health-probe/code-generation/code-generation-questions.md",
+    "renderable": true,
+    "sha256": "e2d99986f11fd1687e7591b787dc8f0fcf15e480a7e68e8612ed0cb36781c251",
+    "size": 662,
+    "stage": "code-generation",
+    "unit": "health-probe"
+   }
+  ],
+  "count": 4,
+  "truncated": false
+ },
+ "status": 200
+}

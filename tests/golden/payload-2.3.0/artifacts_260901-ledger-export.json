@@ -1,0 +1,100 @@
+{
+ "body": {
+  "artifacts": [
+   {
+    "artifact_id": "4a35ca33e813bcba027007fd200195c236170c8a",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "aidlc-state.md",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260901-ledger-export/aidlc-state.md",
+    "renderable": true,
+    "sha256": "33f04cc37d24c7d14bc60a58428e10f0c03d50128e5eb3b418cca5e4446029a0",
+    "size": 3016,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "2f0a08d11ec7553cbef6c20cc236079ae90b8ec7",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "fixture-host-0f1e2d3c4b5a.md",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260901-ledger-export/audit/fixture-host-0f1e2d3c4b5a.md",
+    "renderable": true,
+    "sha256": "f31cf08f20cdd5f46fc7c174237f54d8e26fd49495a5f2228c61cff367b6454e",
+    "size": 18774,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "6c4aea29722c6ee4da0b6c76644b3de1fd5b822f",
+    "kind": "questions",
+    "mtime": "<volatile>",
+    "name": "intent-capture-questions.md",
+    "phase": "ideation",
+    "relpath": "aidlc/spaces/default/intents/260901-ledger-export/ideation/intent-capture/intent-capture-questions.md",
+    "renderable": true,
+    "sha256": "0eb0fa444cb2bb0ad9f452969716349b51528e5d16415480552cec949786a4b6",
+    "size": 1723,
+    "stage": "intent-capture",
+    "unit": null
+   },
+   {
+    "artifact_id": "f6ff32e6a4c6f18367bf9149e4efb2a43da8c17c",
+    "kind": "artifact",
+    "mtime": "<volatile>",
+    "name": "intent-statement.md",
+    "phase": "ideation",
+    "relpath": "aidlc/spaces/default/intents/260901-ledger-export/ideation/intent-capture/intent-statement.md",
+    "renderable": true,
+    "sha256": "40ec0ebabf3742adfbabfc344cc119cbda2036937330747eaf09b975dc2e2f5e",
+    "size": 758,
+    "stage": "intent-capture",
+    "unit": null
+   },
+   {
+    "artifact_id": "e36cef0c0ff887278bade0b8f31b0b1bd2281866",
+    "kind": "memory",
+    "mtime": "<volatile>",
+    "name": "memory.md",
+    "phase": "inception",
+    "relpath": "aidlc/spaces/default/intents/260901-ledger-export/inception/requirements-analysis/memory.md",
+    "renderable": true,
+    "sha256": "54edd2abdeabbc9dc4c1af629a793b489dbbe8357e57920b80595b37b19e2640",
+    "size": 623,
+    "stage": "requirements-analysis",
+    "unit": null
+   },
+   {
+    "artifact_id": "d0d68e385a4b4d7fd14dac61d21a542e52e71652",
+    "kind": "questions",
+    "mtime": "<volatile>",
+    "name": "requirements-analysis-questions.md",
+    "phase": "inception",
+    "relpath": "aidlc/spaces/default/intents/260901-ledger-export/inception/requirements-analysis/requirements-analysis-questions.md",
+    "renderable": true,
+    "sha256": "93bced32300db1187327053c93b7beb1e7a244ccea2effcaa87b193061c0f26e",
+    "size": 2005,
+    "stage": "requirements-analysis",
+    "unit": null
+   },
+   {
+    "artifact_id": "d3f56b59a91441192a23c73f32593009e5d8e1cd",
+    "kind": "artifact",
+    "mtime": "<volatile>",
+    "name": "requirements.md",
+    "phase": "inception",
+    "relpath": "aidlc/spaces/default/intents/260901-ledger-export/inception/requirements-analysis/requirements.md",
+    "renderable": true,
+    "sha256": "3079e62f8868434d549763d67ec0af72e89a93a9a9ab65b4d6f3590e51960cae",
+    "size": 1075,
+    "stage": "requirements-analysis",
+    "unit": null
+   }
+  ],
+  "count": 7,
+  "truncated": false
+ },
+ "status": 200
+}

@@ -1,0 +1,87 @@
+{
+ "body": {
+  "artifacts": [
+   {
+    "artifact_id": "13a780d0942d34c39a7e22e8891f86b944f79bef",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "aidlc-state.md",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260707-trello-plugin/aidlc-state.md",
+    "renderable": true,
+    "sha256": "939ba94decc99a21fadac9c6145d1c517694065a68b30c691af91896a388519f",
+    "size": 2995,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "a57444c51562a52d72cb6b40669ac86643f44c7d",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "artifacts-index.txt",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260707-trello-plugin/artifacts-index.txt",
+    "renderable": true,
+    "sha256": "e4e09f32b26d4ebd6bf2031df12577662a0c63a98200b9cf835b82988f5dd309",
+    "size": 1908,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "e7aadc9eaf98eef1487d8482ec70c5cf3151afcc",
+    "kind": "other",
+    "mtime": "<volatile>",
+    "name": "603e5f4a8072-4c59c6cec037.md",
+    "phase": null,
+    "relpath": "aidlc/spaces/default/intents/260707-trello-plugin/audit/603e5f4a8072-4c59c6cec037.md",
+    "renderable": true,
+    "sha256": "a7215f5aa0d2634e9a2f1bb942878bf59bd5f8579573e67f6422c5e3c5dfcf45",
+    "size": 68123,
+    "stage": null,
+    "unit": null
+   },
+   {
+    "artifact_id": "c662b3a4df5137d163498c20cc640bf5be6aab50",
+    "kind": "questions",
+    "mtime": "<volatile>",
+    "name": "feasibility-questions.md",
+    "phase": "ideation",
+    "relpath": "aidlc/spaces/default/intents/260707-trello-plugin/ideation/feasibility/feasibility-questions.md",
+    "renderable": true,
+    "sha256": "b3b8160fff364b43a26b1ba08cdb6ae0c8814284fb3ae71a368b930ab980af07",
+    "size": 2136,
+    "stage": "feasibility",
+    "unit": null
+   },
+   {
+    "artifact_id": "c46f289913a5867afe70105c76811ff1eef6d9e6",
+    "kind": "questions",
+    "mtime": "<volatile>",
+    "name": "intent-capture-questions.md",
+    "phase": "ideation",
+    "relpath": "aidlc/spaces/default/intents/260707-trello-plugin/ideation/intent-capture/intent-capture-questions.md",
+    "renderable": true,
+    "sha256": "13b98abdb6597df3085dde974b816b3d6a7e13133cbf56055f959dcea04c8c8e",
+    "size": 3657,
+    "stage": "intent-capture",
+    "unit": null
+   },
+   {
+    "artifact_id": "bb166c9c9268c7e0c22267a57df15a2715ae5123",
+    "kind": "questions",
+    "mtime": "<volatile>",
+    "name": "market-research-questions.md",
+    "phase": "ideation",
+    "relpath": "aidlc/spaces/default/intents/260707-trello-plugin/ideation/market-research/market-research-questions.md",
+    "renderable": true,
+    "sha256": "2ddbc850d8e70c75e3d72ce82cab92f99ee9a56ca94aad3359883a750e998d50",
+    "size": 4010,
+    "stage": "market-research",
+    "unit": null
+   }
+  ],
+  "count": 6,
+  "truncated": false
+ },
+ "status": 200
+}

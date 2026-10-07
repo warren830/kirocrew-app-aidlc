@@ -1,0 +1,10 @@
+{
+ "body": {
+  "code": "not_installed",
+  "details": {
+   "repo_id": "r_000000000001"
+  },
+  "error": "AI-DLC is not installed in this repository"
+ },
+ "status": 409
+}
