@@ -1,23 +1,19 @@
 """Read-only git: branch, dirty set, ahead/behind, commits, prior artifact versions, bounded diffs.
 
-Studio watches git and never touches it, and every failure is *data* — an observation with
-``available=False`` and a reason — because a missing, wedged or hostile git must never hide the workflow
-state the user came to see (FR-GIT-005). The decisions that keep a read a read:
+Every failure is data (``available=False`` and a reason): a missing, wedged or hostile git must never hide
+the workflow state the user came to see (FR-GIT-005). What keeps a read a read:
 
 1. **The verb is ``argv[0]`` and nothing may precede it** (``security.assert_git_argv_readonly``): git's
-   global options are where ``-c core.fsmonitor=…``, ``-C``, ``--git-dir`` and ``--output=`` live, so the
-   repository is selected by ``cwd`` alone (review P21).
-2. **The repository's own ``.git/config`` is untrusted input.** ``GIT_CONFIG_NOSYSTEM``/``GIT_CONFIG_GLOBAL``
-   do nothing about it, and a ``core.fsmonitor`` script there runs during ``status``; so the command-valued
-   keys are pinned through ``GIT_CONFIG_COUNT`` (the one layer that outranks the repository's file) and
-   ``--no-ext-diff --no-textconv`` keep a ``.gitattributes`` converter from running during a diff.
+   global options are where ``-c``, ``-C``, ``--git-dir`` and ``--output=`` live, so the repository is
+   selected by ``cwd`` alone (review P21).
+2. **The repository's own ``.git/config`` is untrusted input**: its command-valued keys are pinned through
+   ``GIT_CONFIG_COUNT`` (the one layer that outranks it), and ``--no-ext-diff --no-textconv`` keep a
+   ``.gitattributes`` converter from running during a diff.
 3. **``GIT_OPTIONAL_LOCKS=0``**, so ``status`` cannot refresh (write) ``.git/index``.
-4. **Refuse, never truncate, anything used as evidence**: an oversized prior version is ``None``, never half
-   a file a diff view would lie about. Only the human-readable ``diff`` is truncated, and visibly.
-5. **Ahead/behind comes from ``status --porcelain=v2 --branch``**; ``rev-list`` runs only when a repository
-   has an upstream but git printed no counts.
+4. **Evidence is refused, never truncated**: an oversized prior version is ``None``. Only ``diff`` is cut,
+   visibly.
 
-Sync module: every method blocks on a subprocess; callers go through ``asyncio.to_thread``.
+Sync module: callers go through ``asyncio.to_thread``.
 """
 
 from __future__ import annotations
@@ -41,11 +37,10 @@ REASON_NOT_A_REPO = "not_a_repo"
 REASON_TIMEOUT = "timeout"
 REASON_ERROR = "error"
 
-#: Config keys whose value git runs as a program, pinned inert for every invocation. Verified against git
-#: 2.50: ``core.fsmonitor=<script>`` in a repository's own config runs it during ``status``, ``diff`` and
-#: ``ls-files``. The others do not fire today only because of an argv flag or a verb choice elsewhere in
-#: this file, so they are pinned too. Not coverable this way: a ``filter.<name>.clean`` bound by
-#: ``.gitattributes`` (the repository chooses ``<name>``), which is also how Git-LFS works honestly.
+#: Config keys git runs as a program, pinned inert for every invocation. Verified against git 2.50:
+#: ``core.fsmonitor=<script>`` in a repository's own config runs during ``status``, ``diff`` and ``ls-files``;
+#: the others are inert today only because of an argv flag or verb choice here. Not coverable this way: a
+#: ``filter.<name>.clean`` bound by ``.gitattributes``, which is also how Git-LFS works honestly.
 _GIT_CONFIG_PINS = {"core.fsmonitor": "false", "core.alternateRefsCommand": "", "core.pager": "cat",
                     "diff.external": "", "uploadpack.packObjectsHook": ""}
 
@@ -146,7 +141,8 @@ class _Run:
         return self.stdout.decode("utf-8", errors="replace")
 
     def lines(self) -> list[str]:
-        return [line.strip() for line in self.text().splitlines() if line.strip()]
+        """Non-blank stripped stdout lines of a successful run; none for a failed one."""
+        return [line.strip() for line in self.text().splitlines() if line.strip()] if self.ok else []
 
     def failure_reason(self) -> str:
         if self.spawn_reason:
@@ -221,11 +217,6 @@ class GitObserver:
         self._git_path = git_path or None
         self._clock = clock
 
-    @property
-    def git_path(self) -> str | None:
-        """The binary that would be spawned, or ``None``; ``/health`` reports it as ``tools.git``."""
-        return self._git_path
-
     @staticmethod
     def check_argv(argv: Sequence[str]) -> tuple[str, ...]:
         """Prove an argv is a read, or raise ``internal_error``: §1.3's rules (``security``), plus the exact
@@ -270,15 +261,13 @@ class GitObserver:
 
     def version(self) -> str | None:
         """``git --version`` as printed, or ``None`` when git cannot be run."""
-        run = self._run(None, _VERSION_ARGV, stdout_cap=C.MAX_TEXT_PREVIEW_BYTES)
-        lines = run.text().strip().splitlines() if run.ok else []
-        return lines[0].strip() if lines else None
+        lines = self._run(None, _VERSION_ARGV, stdout_cap=C.MAX_TEXT_PREVIEW_BYTES).lines()
+        return lines[0] if lines else None
 
     def common_dir(self, repo: Path) -> str | None:
         """``rev-parse --git-common-dir`` as an absolute realpath: what identifies a repository across its
         worktrees, so two worktrees of one clone never register as two repositories (§1.5)."""
-        run = self._run(repo, _COMMON_DIR_ARGV, stdout_cap=C.MAX_TEXT_PREVIEW_BYTES)
-        lines = run.lines() if run.ok else []
+        lines = self._run(repo, _COMMON_DIR_ARGV, stdout_cap=C.MAX_TEXT_PREVIEW_BYTES).lines()
         if not lines:
             return None
         candidate = Path(lines[0])
@@ -337,8 +326,7 @@ class GitObserver:
             return None, True
         if raw:
             return raw, False
-        run = self._run(repo, _BRANCH_ARGV, stdout_cap=C.MAX_TEXT_PREVIEW_BYTES)
-        lines = run.lines() if run.ok else []
+        lines = self._run(repo, _BRANCH_ARGV, stdout_cap=C.MAX_TEXT_PREVIEW_BYTES).lines()
         if not lines:
             return None, False
         return (None, True) if lines[0] == "HEAD" else (lines[0], False)
@@ -353,10 +341,9 @@ class GitObserver:
         return int(fields[1]), int(fields[0])
 
     def prior_version(self, repo: Path, relpath: str) -> bytes | None:
-        """The committed bytes of one artifact (``show HEAD:<relpath>``), or ``None`` when no comparison is
-        possible: untracked, unborn HEAD, git failed, or larger than ``MAX_ARTIFACT_RENDER_BYTES``. The size is
-        asked first so an oversized blob is refused before it is in memory; when that probe cannot answer the
-        read still refuses on the byte count."""
+        """The committed bytes of one artifact, or ``None`` when no comparison is possible: untracked, unborn
+        HEAD, git failed, or larger than ``MAX_ARTIFACT_RENDER_BYTES`` — probed first, so an oversized blob is
+        refused before it is in memory."""
         spec = f"HEAD:{self._safe_rel(repo, relpath, allow_tree=False)}"
         size = self._run(repo, ("cat-file", "-s", spec), stdout_cap=C.MAX_TEXT_PREVIEW_BYTES)
         text = size.text().strip() if size.ok else ""
@@ -394,14 +381,9 @@ class GitObserver:
         return out
 
     def dirty_split(self, repo: Path, owned_paths: Sequence[str]) -> dict[str, Any]:
-        """The dirty set split into receipt-owned paths (listed: the installer shows them) and everything else
-        (counted: the user's business). FR-GIT-004: an upgrade is blocked by drift in owned files, never by
-        unrelated work in progress.
-
-        ``owned_changes`` carries each owned path's porcelain status; ``available``/``reason`` keep a clean tree
-        apart from "git could not tell"; ``truncated`` means an empty ``owned_dirty`` proves nothing (the
-        receipt digests are the authoritative drift check).
-        """
+        """The dirty set split into receipt-owned paths (listed, with their porcelain status) and the rest
+        (counted): an upgrade is blocked by drift in owned files, never by unrelated work (FR-GIT-004).
+        ``truncated`` means an empty ``owned_dirty`` proves nothing; the receipt digests are the real check."""
         owned = [self._safe_rel(repo, path, allow_tree=True) for path in owned_paths if str(path).strip()]
         run = self._run(repo, _STATUS_ARGV, stdout_cap=C.MAX_SUBPROCESS_STDOUT)
         if not run.ok:

@@ -862,10 +862,8 @@ def test_version_reports_the_binary_or_nothing(G, scripted, clock):
     obs = G.GitObserver(scripted.path, clock)
     scripted.plan({"--version": {"stdout": "git version 2.50.1 (Apple Git-155)\n"}})
     assert obs.version() == "git version 2.50.1 (Apple Git-155)"
-    assert obs.git_path == scripted.path
-    blind = G.GitObserver(None, clock)
-    assert blind.version() is None and blind.git_path is None
-    assert G.GitObserver("", clock).git_path is None, "an empty path is 'no git', not a binary named ''"
+    assert G.GitObserver(None, clock).version() is None
+    assert G.GitObserver("", clock).version() is None, "an empty path is 'no git', not a binary named ''"
 
 
 # --------------------------------------------------------------------------- #

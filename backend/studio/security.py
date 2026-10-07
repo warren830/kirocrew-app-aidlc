@@ -1,17 +1,14 @@
-"""Path containment, bounded reads, redaction and subprocess hygiene — the one place that decides whether a
+"""Path containment, bounded reads, redaction and subprocess hygiene: the one place that decides whether a
 read is allowed, how much of it, and what may leave the process.
 
-* **Containment beats convenience.** A path is resolved (symlinks included) and proven inside the
-  registered root before it is opened, so a link pointing out of the repository is refused, not followed.
+* **Containment beats convenience.** A path is resolved (symlinks included) and proven inside its root before
+  it is opened, so a link out of the repository is refused, not followed.
 * **Refuse, never truncate.** Half a state file parses into a confidently wrong projection, so an oversized
   file is skipped with a reason. Append-only audit shards are the exception: they are tail-read.
-* **Fail closed without the host's security module.** Without ``is_sensitive_path`` there is no way to know
-  whether a path is protected, so every path is.
-* **Prove bypass variables are absent.** AI-DLC reads its guard switches from the environment; an operator
-  who exported one in the gateway's shell would otherwise disable the anti-forgery guard for every child.
-
-All functions are synchronous; the ones that touch the filesystem run on worker threads like every other
-blocking read.
+* **Fail closed.** Without the host's ``is_sensitive_path`` there is no way to know whether a path is
+  protected, so every path is.
+* **Bypass variables must be absent.** One exported in the gateway's shell would otherwise disable AI-DLC's
+  anti-forgery guard for every child.
 """
 
 from __future__ import annotations
@@ -59,11 +56,6 @@ def is_secret_file(path: Path) -> bool:
     return path.name in SECRET_FILENAMES
 
 
-# --------------------------------------------------------------------------- #
-# containment
-# --------------------------------------------------------------------------- #
-
-
 def realpath(path: Path | str) -> Path:
     """``os.path.realpath`` as a ``Path``, never raising for a missing component."""
     return Path(os.path.realpath(str(path)))
@@ -76,10 +68,8 @@ def _no_nul(text: str) -> str:
 
 
 def resolve_inside(root: Path, rel: str | Path, *, must_exist: bool = False) -> Path:
-    """Resolve ``rel`` under ``root`` and prove the result stays inside it, or raise ``bad_path``.
-
-    Both sides are realpaths, so a symlinked repository root still matches.
-    """
+    """Resolve ``rel`` under ``root`` and prove it stays inside, or raise ``bad_path``. Both sides are
+    realpaths, so a symlinked repository root still matches."""
     candidate = Path(_no_nul(str(rel)))
     if candidate.is_absolute():
         raise StudioError("bad_path", "path must be relative to the repository root")
@@ -125,11 +115,6 @@ def is_regular_file(path: Path) -> bool:
         return stat.S_ISREG(path.lstat().st_mode)
     except OSError:
         return False
-
-
-# --------------------------------------------------------------------------- #
-# bounded reads
-# --------------------------------------------------------------------------- #
 
 
 def bounded_read(path: Path, cap: int) -> bytes | None:
@@ -192,17 +177,9 @@ def composite_token(*parts: str) -> str:
     return sha256_text(":".join(parts))
 
 
-# --------------------------------------------------------------------------- #
-# redaction
-# --------------------------------------------------------------------------- #
-
-
 def redact(text: str) -> str:
-    """Mask credentials in text that will be shown, logged, notified or exported.
-
-    The host's scanner first (Studio inherits every pattern KiroCrew learns), then Studio's own floor:
-    this text can reach a Slack message or a diagnostics bundle, where a leak is permanent.
-    """
+    """Mask credentials in text that will be shown, logged, notified or exported: the host's scanner first
+    (Studio inherits every pattern KiroCrew learns), then Studio's own floor."""
     if not text:
         return text
     out = text
@@ -242,17 +219,9 @@ def scrub_repo_paths(text: str, allowed_roots: Sequence[str]) -> str:
     )
 
 
-# --------------------------------------------------------------------------- #
-# subprocess hygiene
-# --------------------------------------------------------------------------- #
-
-
 def build_subprocess_env() -> dict[str, str]:
-    """A minimal environment for every child process: only what a CLI needs, nothing AI-DLC/Kiro/KiroCrew.
-
-    A bypass switch in the parent is a configuration problem the operator must see, so it refuses to build
-    an environment at all rather than silently working around it.
-    """
+    """A minimal environment for every child: only what a CLI needs, nothing AI-DLC/Kiro/KiroCrew. A bypass
+    switch in the parent is a misconfiguration the operator must see, so it refuses rather than strips it."""
     present = [k for k in C.ENV_MUST_BE_ABSENT if k in os.environ]
     if present:
         raise StudioError(
@@ -273,11 +242,10 @@ def build_subprocess_env() -> dict[str, str]:
 def assert_git_argv_readonly(argv: Sequence[str]) -> None:
     """Refuse any git invocation that is not a read of the repository it runs in (§1.3, review P21).
 
-    ``argv`` excludes the binary, so the verb is ``argv[0]``. Anything before the verb is a global option and
-    that is where the dangerous ones live (``-c core.fsmonitor=…`` runs a command, ``-C``/``--git-dir`` point
-    at another repository, ``--output`` writes a file), so a leading ``-`` is refused rather than parsed and
-    every token is scanned for the deny list, ``--flag=value`` spellings included. A write verb is refused
-    wherever it appears — rejecting an argument that happens to be spelled ``add`` is the safe direction.
+    ``argv`` excludes the binary. Global options are where the dangerous ones live (``-c core.fsmonitor=…``
+    runs a command, ``-C``/``--git-dir`` point elsewhere, ``--output`` writes), so a leading ``-`` is refused
+    rather than parsed and every token is scanned, ``--flag=value`` spellings included. A write verb is refused
+    wherever it appears: rejecting an argument that happens to be spelled ``add`` is the safe direction.
     """
     tokens = [str(token) for token in argv]
     if not tokens:
@@ -328,8 +296,8 @@ def truncate_output(raw: bytes, cap: int) -> str:
 
 
 def iter_regular_files(root: Path, *, max_files: int, skip_dirs: Iterable[str] = ()) -> list[Path]:
-    """A bounded, symlink-free walk for artifact enumeration: sorted, capped by count, never descending into
-    a symlinked directory or a named runtime directory, so one huge or looping tree cannot stall a projection."""
+    """A bounded, symlink-free walk, sorted and capped by count, so one huge or looping tree cannot stall a
+    projection."""
     skip = {*skip_dirs}
     out: list[Path] = []
     stack = [root]

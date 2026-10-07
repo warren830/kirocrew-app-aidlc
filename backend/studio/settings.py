@@ -1,18 +1,14 @@
 """User preferences: defaults, a deep-merged partial ``PUT``, and validation that names the offending key.
 
-Capabilities travel with the values. A feature Studio cannot offer is reported as
-``{"available": false, "reason": <code>}`` in the same response — Slack quick actions (C13) above all —
-because a hidden setting reads as a feature nobody built, and a toggle that has to be un-rendered after a
-second fetch reads as one that might work.
+Capabilities travel with the values as ``{"available": false, "reason": <code>}`` — Slack quick actions
+(C13) above all — because a hidden setting reads as a feature nobody built.
 
-The whole document lives in one ``preferences`` row (``PREF_KEY``), so a partial ``PUT`` is one write that
-no reader can observe half-applied. A stored leaf that no longer validates — the retired v1
-``night_window`` keys, a value a newer build accepted, a hand edit — is dropped on read in favour of the
-default: a corrupt row must not take ``GET /settings`` down or smuggle a value past the validator.
+The document is one ``preferences`` row (``PREF_KEY``), so a partial ``PUT`` is one write no reader can see
+half-applied. A stored leaf that no longer validates (the retired v1 ``night_window`` keys, a hand edit) is
+dropped on read in favour of the default: a corrupt row must not take ``GET /settings`` down.
 
-The sync accessors other modules call read a cached snapshot and never touch disk, so a scheduler on the
-loop never blocks behind a worker's transaction; ``load()`` runs once at startup, and until then they
-answer with the defaults.
+The sync accessors read a cached snapshot and never touch disk; until ``load()`` runs at startup they answer
+with the defaults.
 """
 
 from __future__ import annotations

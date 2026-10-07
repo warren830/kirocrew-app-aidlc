@@ -1,23 +1,17 @@
-"""One timeline from two authorities, with the boundary between them never blurred.
-
-Studio records what **Studio** did (a repository registered, a decision submitted, a lease reclaimed);
-AI-DLC records what the **workflow** did in its own append-only audit shards. The merge rules:
+"""One timeline from two authorities: Studio records what Studio did, AI-DLC's append-only audit shards what
+the workflow did, and the boundary between them is never blurred.
 
 1. **AI-DLC rows are projected, never stored.** ``timeline`` reads ``snap.audit.events`` live and ``record``
-   refuses ``source="aidlc"`` outright: a copy would keep asserting history that a shard rotation, a ``REDO``
-   or a scope change removed from disk, and Studio would become an authority for a lifecycle it observes.
-2. **The source is part of the row.** Every entry carries ``source`` and, for AI-DLC rows, the verbatim block
-   in ``raw``, so "who says the gate was approved?" is answered by the engine's own bytes.
-3. **Keys and params, never prose** (C11): ``activity.<kind>`` for Studio, ``audit.<EVENT>`` for the audit, and
-   ``audit.unknown_event`` for a name outside the taxonomy — real installs write them (``LOOP_RUN_STARTED``;
-   FORMAT-NOTES §6), and dropping or mislabelling such a row would lose real history.
+   refuses ``source="aidlc"``: a copy would keep asserting history that a shard rotation, a ``REDO`` or a
+   scope change removed from disk.
+2. **The source is part of the row**, and an AI-DLC row carries its verbatim block in ``raw``, so "who says
+   the gate was approved?" is answered by the engine's own bytes.
+3. **Keys and params, never prose** (C11): ``activity.<kind>``, ``audit.<EVENT>``, and ``audit.unknown_event``
+   for a name outside the taxonomy, which real installs write (``LOOP_RUN_STARTED``; FORMAT-NOTES §6).
 4. **Redaction happens at the boundary that leaks.** Params are redacted at write; ``human_text`` is stored
-   verbatim (retention, not redaction, removes it); the diagnostics export redacts everything again and
-   replaces absolute paths outside the registered roots, because an audit field (``RULE_LEARNED``'s
-   ``Destination``) really carries one and an export is the one artifact that leaves the machine.
-
-``record_sync`` is the one synchronous entry point, for callers already on a worker thread
-(``EngineRunner.run_sync``); everything else runs its SQLite or redaction work in ``asyncio.to_thread``.
+   verbatim (retention removes it); the diagnostics export redacts everything again and scrubs absolute paths
+   outside the registered roots (``RULE_LEARNED``'s ``Destination`` carries one), because an export leaves
+   the machine.
 """
 
 from __future__ import annotations
@@ -87,8 +81,6 @@ AUDIT_EVENTS: tuple[str, ...] = tuple(
 _AUDIT_EVENT_SET = frozenset(AUDIT_EVENTS)
 UNKNOWN_AUDIT_MESSAGE_KEY = "audit.unknown_event"
 
-#: Only an error row and a failed sensor read as "needs looking at"; gate/question/stage rows are the normal
-#: shape of progress — the *card* asks for the decision, not the audit row.
 _ATTENTION_AUDIT_EVENTS = frozenset({C.ERROR_EVENT, "SENSOR_FAILED"})
 
 #: Per-value cap for an audit field in ``params``: a ``Feedback`` value has no bound, and the full block is in
@@ -98,15 +90,10 @@ TIMELINE_DEFAULT_LIMIT = 200
 _PARAM_KEY_RE = re.compile(r"[^a-z0-9]+")
 
 
-def severity_of_audit_event(event: "AuditEvent | Mapping[str, Any] | str") -> str:
-    """Severity band for one AI-DLC audit row (§1.17)."""
-    if isinstance(event, str):
-        name = event
-    elif isinstance(event, Mapping):
-        name = str(event.get("event", ""))
-    else:
-        name = str(getattr(event, "event", ""))
-    return "attention" if name in _ATTENTION_AUDIT_EVENTS else "info"
+def severity_of_audit_event(event: "AuditEvent") -> str:
+    """Only an error row and a failed sensor read as "needs looking at" (§1.17): gate/question/stage rows are
+    the normal shape of progress — the *card* asks for the decision, not the audit row."""
+    return "attention" if getattr(event, "event", "") in _ATTENTION_AUDIT_EVENTS else "info"
 
 
 def audit_message_key(event: str) -> str:
@@ -250,20 +237,10 @@ class ActivityProjector:
         if source not in C.SOURCE:
             raise StudioError("internal_error", f"unknown activity source {source!r}", details={"source": source})
         row = ActivityRow(
-            at=self._clock.iso(),
-            source=source,
-            kind=kind,
-            severity=severity,
-            repo_id=repo_id,
-            space=space,
-            intent_dir=intent_dir,
-            stage=stage,
-            action_id=action_id,
-            session_key=session_key,
-            message_key=f"activity.{kind}",
-            params=_normalise_params(dict(params or {})),
-            evidence=_normalise_evidence(evidence),
-            redacted=True,
+            at=self._clock.iso(), source=source, kind=kind, severity=severity, repo_id=repo_id, space=space,
+            intent_dir=intent_dir, stage=stage, action_id=action_id, session_key=session_key,
+            message_key=f"activity.{kind}", params=_normalise_params(dict(params or {})),
+            evidence=_normalise_evidence(evidence), redacted=True,
             # Verbatim on purpose: it is the user's own decision text and must match what was sent. Every read
             # path that leaves the process redacts it again.
             human_text=human_text if kind == KIND_ACTION_SUBMITTED else None,

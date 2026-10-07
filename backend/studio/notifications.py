@@ -1,13 +1,11 @@
 """Telling the user something needs them — a dashboard toast and an owner Slack DM, never a way to decide.
 
-* **No Slack quick actions.** The one host mechanism re-dispatches a click as a bare user turn on the
-  ``aidlc`` slot: no compare-and-submit, no durable ``Delivering`` record, no cursor switch (C13/review
-  P02). So no message ever ends in an ``[OPTIONS: …]`` trailer — the host would turn it into buttons — and
-  Settings reports ``slack_quick_actions`` unavailable. A Slack message is a sentence and a deep link.
-* **No evidence.** No artifact body, no submitted human text, no path beyond the repository label, and any
-  text that came from disk is redacted: this reaches a Slack workspace and the host's notification history.
-* **Failure is swallowed.** Every caller arrives after the thing worth knowing about is durable, so a Slack
-  outage or a missing host attribute must never fail the operation that earned the notification.
+* **No Slack quick actions.** The one host mechanism re-dispatches a click as a bare user turn: no
+  compare-and-submit, no durable ``Delivering`` record (C13/review P02). So no message ends in an
+  ``[OPTIONS: …]`` trailer (the host would turn it into buttons); a Slack message is a sentence and a link.
+* **No evidence.** No artifact body, no submitted human text, no path, and text from disk is redacted: this
+  reaches a Slack workspace and the host's notification history.
+* **Failure is swallowed.** Every caller arrives after the thing worth knowing about is durable.
 
 English only: the host's notification bus has no locale, and the UI renders its own localized copy.
 """
@@ -97,12 +95,8 @@ def _blocks(heading: str, context: str, *sections: str) -> list[dict]:
 
 
 class NotificationAdapter:
-    """Dashboard and Slack delivery for the events that need a human.
-
-    ``storage`` holds the dedupe ledger (a preference row, so it survives a restart), ``settings`` the
-    enablement and per-repo mute, ``activity`` the record that a notification was attempted — which is what
-    makes "I never got told" answerable.
-    """
+    """Dashboard and Slack delivery for the events that need a human. Every attempt is an Activity row, which
+    is what makes "I never got told" answerable."""
 
     #: ``{dedupe_key: iso}``. A preference rather than a table: losing it costs one duplicate notification.
     _DEDUPE_PREF = "notifications.sent"
