@@ -1,8 +1,6 @@
 """The wizard's questionnaire as advisor questions, and the advisor's letters back as a plan patch (§1.18a).
 
-A ``plan_draft`` has no card, so rather than teach the agent a second answer format the wizard's fields are
-rendered as the structured questions it already answers (one letter per question, several per phase), and
-``resolve_plan_proposal`` maps the letters back deterministically: a letter names a token the package listed or
+The agent answers in the structured-question format it already knows; a letter names a token the package listed or
 the answer is unresolved, so no model prose is ever parsed as a value and PlanService stays the only authority.
 """
 
@@ -146,13 +144,8 @@ def _row(
 def build_plan_questions(
     catalog: "PlanCatalog", *, clean: Callable[[str], str] = lambda text: text
 ) -> dict[str, Any]:
-    """Q1 scope, Q2–Q4 depth/test strategy/review cap, then one multi-select per phase (``C.PHASES`` order) that
-    has a stage to toggle. ``values`` holds the tokens the letters stand for, so no label is ever parsed.
-
-    ``clean`` (the broker's redacting funnel) is applied to every catalogue string, so ``values`` carry the same
-    spellings as ``plan.scopes``, ``plan_grid`` and ``plan_always``. These rows are never shrunk: they are the
-    request.
-    """
+    """Q1 scope, Q2–Q4 settings, then one multi-select per phase with a stage to toggle. ``values`` holds the
+    tokens the letters stand for; ``clean`` (the broker's funnel) gives them the spellings ``plan_grid`` uses."""
     names = [clean(str(meta.name)) for meta in catalog.scopes]
     descriptions = {
         clean(str(meta.name)): (clean(str(meta.description)) if meta.description else None)
@@ -192,11 +185,8 @@ def build_plan_questions(
 
 
 def stage_needs(stages: "Collection[Any]") -> dict[str, tuple[str, ...]]:
-    """Per stage, the producers of its required ``consumes`` plus ``requires_stage`` (``plan.stages[*].needs``).
-
-    Without it the model cannot know ``code-generation`` also needs ``units-generation``, and the engine refuses
-    the very proposal it was asked for.
-    """
+    """Per stage, the producers of its required ``consumes`` plus ``requires_stage`` (``plan.stages[*].needs``):
+    without it the model cannot know code-generation needs units-generation, and the engine refuses the plan."""
     producers: dict[str, set[str]] = {}
     for node in stages:
         for artifact in (*(getattr(node, "produces", ()) or ()), *(getattr(node, "optional_produces", ()) or ())):
@@ -256,12 +246,10 @@ def resolve_plan_proposal(
     always: Collection[str],
     current: PlanRequest,
 ) -> dict[str, Any]:
-    """Letters → tokens → a SELF-CONTAINED ``PlanRequest`` patch; the wizard replaces, never merges.
+    """Letters → tokens → a SELF-CONTAINED ``PlanRequest`` patch the wizard replaces, never merges.
 
-    ``scope``/``base_scope`` are the proposed scope, else the human's, else ``None`` (never ``""``). ``overrides``
-    is the complete map for that scope: the human's own overrides when it is their scope, else nothing, with each
-    answered phase rewritten as deltas against the base scope's grid row (a no-op override is dropped, and an
-    always-run stage the scope or the human selected is never turned off).
+    ``overrides`` is the complete map for the base scope (the human's own only when it is their scope), each
+    answered phase as deltas against its grid row; an always-run stage the scope or the human selected stays on.
     """
     proposal: dict[str, Any] = {"scope": None, "depth": None, "test_strategy": None, "review_cap": None,
                                 "overrides": {}, "unresolved": [], "base_scope": None}

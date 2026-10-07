@@ -1,18 +1,8 @@
 """The Advisor: a read-only second opinion that cannot touch the workflow it comments on (§1.18).
 
-It is the one place Studio hands evidence to a model other than the intent's own conversation, so:
-
-1. **The package is the agent's whole world.** No working directory, an agent granted ``thinking`` only, and the
-   repository path stripped from every string — with ``approval_mode="auto"`` the tool surface is the sandbox.
-2. **Bounded and redacted before it is sent.** Every string goes through ``_clean``; the rendered package is
-   measured and shrunk until it fits ``MAX_EVIDENCE_PACKAGE_CHARS``.
-3. **Neutrality is proved.** State, questions, directive, human-turn marker, turn counter and every audit shard
-   are snapshotted before the spawn and compared after it; any movement fails the draft (``evidence_mutated``).
-   Engine housekeeping (``NEUTRALITY_EXCLUDED_PATHS``) is excluded by never being read.
-4. **Nothing is half-parsed.** Exactly one ``json`` fence with exactly the ``DraftResult`` keys, or
-   ``bad_result`` — so a model cannot smuggle a ``submit`` or ``decision`` field into a draft.
-
-The broker never submits anything, never runs an engine verb, and never writes inside a repository.
+The package is the agent's whole world (no cwd, ``thinking`` only, every string through ``_clean``, measured
+under ``MAX_EVIDENCE_PACKAGE_CHARS``); neutrality is proved by probing six facts before and after the spawn;
+and an answer is never half-parsed, so a draft cannot carry a ``submit`` or ``decision``.
 """
 
 from __future__ import annotations
@@ -173,11 +163,8 @@ def _auto_of(row: Mapping[str, Any]) -> bool:
 
 
 def _degraded_questions(row: Mapping[str, Any]) -> bool:
-    """Whether a card's stored evidence says the host has no structured question card (FR-Q-007).
-
-    Meaningful for a question draft only — a gate card carries the same evidence blob and must not be silenced
-    by it — and "we cannot tell" (no evidence) must not read as "degraded".
-    """
+    """Whether a card's evidence says the host has no structured question card (FR-Q-007). For question drafts
+    only (a gate card carries the same blob), and "we cannot tell" must not read as "degraded"."""
     evidence = row.get("evidence_json")
     questions = evidence.get("questions") if isinstance(evidence, Mapping) else None
     return isinstance(questions, Mapping) and str(questions.get("mode") or "") == "degraded"
@@ -311,12 +298,9 @@ class AdvisorDraft(Jsonable):
 
 
 def draft_result_contract(*, kind: str, question_indices: Sequence[int] = ()) -> str:
-    """The ``DraftResult`` contract in words, generated from the constants the parser enforces.
-
-    Spelled out because naming "DraftResult" told the live model nothing: it turned its prompt's section titles
-    into JSON keys and every draft came back ``unknown_keys``. The per-kind paragraph is guidance only;
-    ``parse_draft_result`` stays the one authority.
-    """
+    """The ``DraftResult`` contract in words, generated from the constants the parser enforces: naming the type
+    told the live model nothing, and every draft came back ``unknown_keys``. ``parse_draft_result`` stays the
+    authority; the per-kind paragraph is guidance."""
     verdicts = " | ".join(f'"{name}"' for name in ADVISOR_VERDICTS)
     confidences = " | ".join(f'"{name}"' for name in ADVISOR_CONFIDENCE)
     answer_shapes = {"question_index": "<integer>", "answer": '"<text>"', "option_letters": '["A"]'}
@@ -546,11 +530,8 @@ class AdvisorBroker:
     async def request_plan(
         self, req: "plan_advice.PlanDraftRequest", repo: RepoRecord, *, user: str
     ) -> AdvisorDraft:
-        """A draft for an intent that does not exist yet (§1.18a, FR-NEW-006): the same ladder, no card.
-
-        ``repo`` is the route's ``repo_or_404`` record. Idempotent per repository and request while queued or
-        running, under a per-repository lock so two concurrent clicks spawn once.
-        """
+        """A draft for an intent that does not exist yet (§1.18a): the same ladder, no card. Idempotent per
+        repository and request while live, under a per-repository lock so two concurrent clicks spawn once."""
         spawn = await self._admit(req.locale, action_id=None, repo_id=repo.repo_id)
         if self._plan is None:  # pragma: no cover - services.py always wires one
             raise StudioError("internal_error", "the advisor has no plan service to read the catalog with",
@@ -766,11 +747,8 @@ class AdvisorBroker:
         return count
 
     async def settle_open(self, *, limit: int = C.ADVISOR_SETTLE_PER_TICK) -> int:
-        """Poll the oldest open drafts; returns how many reached a terminal status (§1.13 step 6).
-
-        Mandatory: ``poll`` is otherwise reached only from the GET route, and the host prunes a finished
-        subagent's answer after an hour — a pre-draft exists precisely because nobody has the card open.
-        """
+        """Poll the oldest open drafts; returns how many settled (§1.13 step 6). Mandatory: the host prunes a
+        finished answer after an hour, and a pre-draft exists precisely because nobody has the card open."""
         if getattr(self._ctx, "spawn", None) is None:  # this app cannot spawn, so nothing of ours is in flight
             return 0
         rows = await asyncio.to_thread(
@@ -788,11 +766,8 @@ class AdvisorBroker:
         return settled
 
     async def autodraft(self, *, limit: int = C.ADVISOR_AUTO_DRAFT_PER_TICK) -> int:
-        """Start up to ``limit`` drafts nobody clicked; returns how many started (FR-ADV-001/010, A24).
-
-        Every refusal is silent and the cheapest, most global rungs come first: no person waits on this call,
-        and a refusal row per tick for an install that never opted in would cost everything and say nothing.
-        """
+        """Start up to ``limit`` drafts nobody clicked (FR-ADV-001/010, A24). Every refusal is silent, cheapest
+        first: nobody waits on this call, and a row per tick for an install that never opted in says nothing."""
         spawn = getattr(self._ctx, "spawn", None)
         if spawn is None or not callable(getattr(spawn, "run", None)):
             return 0
@@ -899,12 +874,8 @@ class AdvisorBroker:
     def build_plan_package(
         self, req: "plan_advice.PlanDraftRequest", repo: RepoRecord, catalog: Any, signals: Any
     ) -> EvidencePackage:
-        """One bounded, redacted, path-free package for an intent that does not exist yet (§1.18a).
-
-        The questions are the wizard's questionnaire, answered through the unchanged ``suggested_answers``; the
-        ``plan`` section is the evidence. The objective, context and README are the one prompt-injection vector
-        this kind opens (PRD §16.2), so they go through ``_clean`` and the prompt names them as data.
-        """
+        """One bounded, redacted, path-free package for an intent that does not exist yet (§1.18a). The objective,
+        context and README are the injection vector this kind opens (PRD §16.2): cleaned, and named as data."""
         roots = self._roots(repo)
         clean = functools.partial(self._clean, roots=roots)
         token_clean = self._token_cleaner(repo)
@@ -1286,12 +1257,8 @@ class AdvisorBroker:
 
     @staticmethod
     def _shrink_plan(package: EvidencePackage) -> EvidencePackage:
-        """One reduction step for a plan package (§1.18a), or the same object when nothing is left.
-
-        Soft evidence goes first (README, intents, keywords, descriptions, listing, context), then the core
-        (``needs``, stage names, ``scope_grid`` rows beyond the current and first ``_GRID_ROWS_KEPT`` scopes, the
-        objective toward its floor). ``questions`` is never touched: they are what the draft is about.
-        """
+        """One reduction step for a plan package (§1.18a): soft evidence first, then the core (``needs``, names,
+        surplus ``scope_grid`` rows, the objective toward its floor). ``questions`` are what the draft is about."""
         plan = dict(package.plan or {})
         workspace = dict(plan.get("workspace") or {})
 
@@ -1426,11 +1393,8 @@ class AdvisorBroker:
     # ---- guards ----------------------------------------------------------- #
 
     async def _assert_agent_unique(self, *, action_id: str | None, repo_id: str | None = None) -> None:
-        """Exactly one agent named ``aidlc-studio-advisor`` in one of this app's own files.
-
-        kiro-cli's agent namespace is flat, so a stray file declaring the same name makes the spawn ambiguous;
-        refusing is the only safe answer — the alternative is a package sent to an agent with tools (P20/R14).
-        """
+        """Exactly one agent named ``aidlc-studio-advisor``, in one of this app's own files: the agent namespace is
+        flat, and an ambiguous spawn could send the package to an agent with tools (P20/R14)."""
         agents = await asyncio.to_thread(self._agent_lister)
         if agents is None:
             await self._refused("agent_discovery_unavailable", action_id=action_id, repo_id=repo_id)
@@ -1484,12 +1448,8 @@ class AdvisorBroker:
         return sum(1 for row in rows if _auto_of(row))
 
     def _auto_redundant(self, action_id: str, kind: str) -> bool:
-        """Whether drafting ahead for this card would add nothing. Sync; called on a thread.
-
-        * Any automatic draft for the card, in any status, is the durable half of at-most-once.
-        * A live (``ready``/in-flight) whole-card draft of the same kind is already the answer a pre-draft
-          would produce; ``failed``/``expired`` leave the human with nothing, exactly when a spawn is worth it.
-        """
+        """Whether drafting ahead adds nothing: any automatic draft for the card (the durable half of
+        at-most-once), or a live whole-card draft of the same kind (``failed``/``expired`` leave nothing)."""
         for row in self._storage.select(TABLE, {"action_id": action_id}):
             if _auto_of(row):
                 return True

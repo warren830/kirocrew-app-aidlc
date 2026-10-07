@@ -1,8 +1,7 @@
-"""What a plan will cost (§1.15). Exact counts live in ``plan.py``; these are predictions, each labelled.
+"""What a plan will cost (§1.15): predictions, each labelled with its source; exact counts live in ``plan.py``.
 
-``credits`` is always ``None``/``"unavailable"`` (KiroCrew exposes no per-turn cost, FR-EST-005), a band is
-``history_calibrated`` only once its cohort has ``CALIBRATION_MIN_SAMPLES`` rows, and elapsed time is always an
-``assumption``. Calibration rows are content-free (C17): a cohort key and integers.
+``credits`` is never invented (FR-EST-005), a band is ``history_calibrated`` only from ``CALIBRATION_MIN_SAMPLES``
+rows, and elapsed time is always an ``assumption``.
 """
 
 from __future__ import annotations
@@ -19,13 +18,9 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from .plan import PlanStage
     from .storage import Storage
 
-UNIT_TURNS = "turns"
-UNIT_SECS = "secs"
-SOURCE_RULE_BAND = "rule_band"
-SOURCE_HISTORY = "history_calibrated"
-SOURCE_ASSUMPTION = "assumption"
-CONFIDENCE_LOW = "low"
-CONFIDENCE_MEDIUM = "medium"
+UNIT_TURNS, UNIT_SECS = "turns", "secs"
+SOURCE_RULE_BAND, SOURCE_HISTORY, SOURCE_ASSUMPTION = "rule_band", "history_calibrated", "assumption"
+CONFIDENCE_LOW, CONFIDENCE_MEDIUM = "low", "medium"
 CREDITS_STATUS = "unavailable"
 
 #: Turn bands per stage class at ``Standard`` depth (§1.15 table, verbatim).
@@ -50,11 +45,8 @@ _CALIBRATION_TABLE = "calibration"
 
 
 class Jsonable:
-    """``to_json`` over a dataclass's fields in declaration order, minus ``_hidden``.
-
-    Nested objects serialise themselves, sequences become lists and mappings are copied — the shape every
-    hand-written ``to_json`` of the plan and advisor records used to spell out.
-    """
+    """``to_json`` over a dataclass's fields in declaration order, minus ``_hidden``: nested objects serialise
+    themselves, sequences become lists and mappings are copied."""
 
     __slots__ = ()
     _hidden: ClassVar[tuple[str, ...]] = ()

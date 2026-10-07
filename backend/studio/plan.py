@@ -1,14 +1,8 @@
 """The plan a user is about to commit to, and the engine verbs that may change one (§1.15).
 
-Studio never composes a workflow itself: it reads the engine's graph, grid and state, shows what a composition
-means, and changes one only through ``intent-create``, ``recompose`` and ``scope-change``/``config-change`` under
-an admin lease, verifying the result by re-reading disk rather than trusting an exit code. Three judgements:
-
-* **Locks** — no toggle is offered for a stage the engine would not let move (``ALWAYS``, ``required_by``,
-  history), because a toggle the engine ignores shows the user a plan that is not the plan.
-* **Dependencies** follow the engine's strict-diff rule (``validateGrid`` + the ``recompose`` guard): only
-  starvation this request *introduces* is an error, since the stock grids ship starved by design.
-* **Recompose** may only flip pending stages ahead of the cursor.
+Studio reads the engine's graph, grid and state and changes them only through the engine's own verbs under an
+admin lease, verifying on disk. No toggle is offered for a stage the engine would not move; only starvation a
+request *introduces* is an error (stock grids ship starved); recompose flips pending stages ahead of the cursor.
 """
 
 from __future__ import annotations
@@ -43,12 +37,8 @@ REVIEW_CAPS = ("none", "advisory", "adversarial")
 #: The effective review class is the *minimum* rank of stage, scope cap and request cap.
 REVIEW_RANK = {name: rank for rank, name in enumerate(REVIEW_CAPS)}
 
-LOCK_ALWAYS = "always"
-LOCK_COMPLETED = "completed"
-LOCK_CURRENT = "current"
-LOCK_AT_GATE = "at_gate"
-LOCK_BEHIND_CURSOR = "behind_cursor"
-LOCK_NOT_IN_GRAPH = "not_in_graph"
+LOCK_ALWAYS, LOCK_COMPLETED, LOCK_CURRENT, LOCK_AT_GATE = "always", "completed", "current", "at_gate"
+LOCK_BEHIND_CURSOR, LOCK_NOT_IN_GRAPH = "behind_cursor", "not_in_graph"
 _REQUIRED_BY_PREFIX = "required_by:"
 
 
@@ -75,21 +65,15 @@ MAX_LABEL_WORDS = 3
 #: ``recompose`` needs a Running intent that is not in autonomous construction (the plan could move under it).
 RECOMPOSE_REQUIRED_STATUS = "Running"
 AUTONOMOUS_MODE = "autonomous"
-OP_INTENT_CREATE = "intent_create"
-OP_RECOMPOSE = "recompose"
-OP_SCOPE_CHANGE = "scope_change"
-OP_CONFIG_CHANGE = "config_change"
+OP_INTENT_CREATE, OP_RECOMPOSE = "intent_create", "recompose"
+OP_SCOPE_CHANGE, OP_CONFIG_CHANGE = "scope_change", "config_change"
 _ARGUMENTS_JOINER = "\n\n"
-_DOCUMENT_OPEN = "<document>"
-_DOCUMENT_CLOSE = "</document>"
+_DOCUMENT_OPEN, _DOCUMENT_CLOSE = "<document>", "</document>"
 
 
 def _document_marker_reason(text: str) -> tuple[str | None, int]:
-    """Why the engine would refuse this ``--arguments`` paste, and the offending offset; ``(None, 0)`` if fine.
-
-    Mirrors ``authoritativeProjectDescription`` plus ``intent-create``'s directions-free guard, in the same
-    order, so a textarea typo is a 400 naming the field rather than a refused transaction under the lease.
-    """
+    """Why the engine would refuse this ``--arguments`` paste, and where (``(None, 0)`` if fine). Mirrors the
+    engine's own checks in order, so a typo is a 400 naming the field instead of a refused transaction."""
     start = text.find(_DOCUMENT_OPEN)
     stray = text.find(_DOCUMENT_CLOSE)
     if start < 0:
@@ -170,12 +154,8 @@ class PlanRequest(Jsonable):
 
 @dataclass(frozen=True, slots=True)
 class PlanStage(Jsonable):
-    """One row of the plan matrix (§3.1 wire shape).
-
-    ``in_grid`` is the composition as it stands (scope grid without an intent, the state file with one), so
-    ``in_grid != enabled`` always means "this request moved it". ``review_class`` is the EFFECTIVE class.
-    ``mode``/``summary_confirmation`` feed the estimator and are not serialised.
-    """
+    """One row of the plan matrix (§3.1). ``in_grid`` is the composition as it stands (grid, or state file), so
+    ``in_grid != enabled`` means "this request moved it"; ``mode``/``summary_confirmation`` feed the estimator."""
 
     slug: str
     number: str
@@ -318,10 +298,7 @@ class IntentCreateResult(Jsonable):
 
 @dataclass(frozen=True, slots=True)
 class PlanCatalog:
-    """Scopes, stages (graph order) and the grid between them, for the Advisor's plan questionnaire (§1.18a).
-
-    Grid values are upper-cased once here so ``grid_row`` compares against ``"EXECUTE"`` like ``_build_stages``.
-    """
+    """Scopes, stages (graph order) and the upper-cased grid between them, for the Advisor's plan draft."""
 
     scopes: tuple["ScopeMeta", ...]
     stages: tuple["StageNode", ...]
@@ -417,11 +394,8 @@ class PlanService:
     def validate(
         self, stages: Sequence[PlanStage], graph: Sequence["StageNode"], *, project_type: str | None = None
     ) -> list[PlanIssue]:
-        """The starvation this request would INTRODUCE (the engine's strict-diff rule).
-
-        With ``project_type`` unknown the conditional consumes are checked: the engine skips one only when it
-        knows the type and it differs.
-        """
+        """The starvation this request would INTRODUCE (the engine's strict-diff rule); with ``project_type``
+        unknown the conditional consumes are checked, as the engine skips one only for a known, different type."""
         satisfied = {s.slug for s in stages if s.state in _DEPENDENCY_SATISFIED_STATES}
         before = _starvations(graph, {s.slug for s in stages if s.in_grid} | satisfied, project_type)
         after = _starvations(graph, {s.slug for s in stages if s.enabled} | satisfied, project_type)
@@ -465,10 +439,8 @@ class PlanService:
         self, repo: "RepoRecord", req: PlanRequest, *, blocking_findings: Sequence["Finding"] = (),
         confirm_plan_digest: str | None = None,
     ) -> IntentCreateResult:
-        """Create an intent, apply its confirmed stage overrides, compile its runtime, and verify all on disk.
-
-        Never sends a prompt or runs ``next``: the new intent is ``Idle`` until a human presses Run (FR-RUN-001).
-        """
+        """Create an intent, apply its confirmed overrides, compile its runtime, and verify all on disk. Never
+        sends a prompt: the new intent is ``Idle`` until a human presses Run (FR-RUN-001)."""
         self._require_ready(repo)
         blocking = [f for f in blocking_findings if getattr(f, "severity", "") == "blocking"]
         if blocking:
@@ -620,11 +592,8 @@ class PlanService:
     def settings_preview(
         self, repo: "RepoRecord", snap: "IntentSnapshot", changes: Mapping[str, Any]
     ) -> dict[str, Any]:
-        """Preview ``scope-change``/``config-change``, including the engine's scope row rebuild.
-
-        A scope change resets the selection to the new grid keeping completed checkboxes; 2.7.1's serializer
-        cannot keep gate/revision marks, so those are refused before the engine touches the record.
-        """
+        """Preview ``scope-change``/``config-change``, including the engine's row rebuild: 2.7.1 cannot keep
+        gate/revision marks across a scope change, so those are refused before the engine touches the record."""
         self._require_ready(repo)
         unknown = set(changes) - {"scope", "depth", "test_strategy"}
         if unknown:
@@ -848,27 +817,19 @@ class PlanService:
                 reasons.append(lock_required_by(required_by[slug]))
             reason = _best_lock(reasons)
             phase = (node.phase if node is not None else (row.phase if row is not None else "")) or ""
+            known = node is not None
             stages.append(PlanStage(
-                slug=slug,
-                number=node.number if node is not None else "",
-                name=node.name if node is not None else slug,
-                phase=phase,
-                execution=node.execution if node is not None else "",
-                in_grid=bool(base.get(slug)),
-                enabled=is_enabled,
-                locked=reason is not None,
-                lock_reason=reason,
-                gate=phase != "initialization",
-                review_class=_effective_review_class(node, caps),
-                reviewer=node.reviewer if node is not None else None,
-                per_unit=bool(node.per_unit) if node is not None else False,
-                produces=tuple(node.produces) if node is not None else (),
-                consumes=tuple(c.artifact for c in node.consumes) if node is not None else (),
-                depends_on=tuple(node.requires_stage) if node is not None else (),
-                conditional_on=node.condition if node is not None and node.execution == "CONDITIONAL" else None,
-                state=row.state if row is not None else None,
-                mode=node.mode if node is not None else "",
-                summary_confirmation=node.summary_confirmation if node is not None else None,
+                slug=slug, number=node.number if known else "", name=node.name if known else slug, phase=phase,
+                execution=node.execution if known else "", in_grid=bool(base.get(slug)), enabled=is_enabled,
+                locked=reason is not None, lock_reason=reason, gate=phase != "initialization",
+                review_class=_effective_review_class(node, caps), reviewer=node.reviewer if known else None,
+                per_unit=bool(node.per_unit) if known else False,
+                produces=tuple(node.produces) if known else (),
+                consumes=tuple(c.artifact for c in node.consumes) if known else (),
+                depends_on=tuple(node.requires_stage) if known else (),
+                conditional_on=node.condition if known and node.execution == "CONDITIONAL" else None,
+                state=row.state if row is not None else None, mode=node.mode if known else "",
+                summary_confirmation=node.summary_confirmation if known else None,
             ))
         return tuple(stages)
 
