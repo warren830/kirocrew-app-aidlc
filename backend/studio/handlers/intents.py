@@ -43,7 +43,7 @@ _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
 GIT_COMMIT_LIMIT = 10
 
 #: Statuses in which a human-lane card can still be submitted, and is therefore blocked by a pause.
-_SUBMITTABLE = ("Draft", "Queued", "NotDelivered")
+_SUBMITTABLE = ("Queued", "NotDelivered")
 
 #: Action types whose decisions reach AI-DLC as a prompt — the ones a pause blocks (C29).
 _HUMAN_LANE_TYPES = tuple(

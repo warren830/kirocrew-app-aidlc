@@ -77,7 +77,7 @@ ACTION_STORED_FINDING_CODES: tuple[str, ...] = (
 #: would remove a blocking guard.
 _ACTION_EVIDENCE_KEYS = ("findings", "finding")
 #: "Not sure this decision landed" (§1.12/C04): dispatching another on top breaks at-most-once (PRD §12.1).
-_UNCERTAIN_ACTION_STATUSES = ("DeliveryUncertain", "ReconciliationRequired")
+_UNCERTAIN_ACTION_STATUSES = ("ReconciliationRequired",)
 #: Checkbox marks that contradict an open gate in the audit trail (§1.7 `audit_gate_without_checkbox`).
 _NON_GATE_STAGE_STATES = ("not_started", "in_progress", "skipped")
 #: ``Phase Progress`` values that mean the phase is not the one being executed.

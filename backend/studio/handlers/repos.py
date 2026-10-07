@@ -573,7 +573,7 @@ async def _repo_json(
     intent_count = len(summaries) if summaries is not None else await _count_intents(services, repo)
     body["counts"] = {
         "intents": intent_count,
-        "in_flight": sum(1 for rec in live if rec.status in ("Delivering", "Delivered", "Processing")),
+        "in_flight": sum(1 for rec in live if rec.status in ("Delivering", "Delivered")),
         "open_actions": len(live),
         "blocking_findings": sum(
             1 for finding in (findings or ()) if C.attr(finding, "severity") == "blocking"

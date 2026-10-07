@@ -964,19 +964,14 @@ def test_duplicate_identity(engine, make_facts, make_snap, poc_state):
 
 def test_delivery_uncertain_action(engine, make_snap, make_facts, poc_state):
     snap = make_snap(poc_state, intent_dir=F.DEVDELTA_POC, intent_key=F.DEVDELTA_POC)
-    uncertain = ActionView(status="DeliveryUncertain", intent_dir=F.DEVDELTA_POC,
+    uncertain = ActionView(status="ReconciliationRequired", intent_dir=F.DEVDELTA_POC,
                            intent_key=F.DEVDELTA_POC)
     finding = _one(
         engine.evaluate_intent(snap, make_facts(live_actions=[uncertain])), "delivery_uncertain_action"
     )
     assert finding.severity == "blocking"
     assert finding.params["action_id"] == uncertain.action_id
-    assert finding.params["status"] == "DeliveryUncertain"
-
-    reconciling = replace(uncertain, status="ReconciliationRequired")
-    assert "delivery_uncertain_action" in _codes(
-        engine.evaluate_intent(snap, make_facts(live_actions=[reconciling]))
-    )
+    assert finding.params["status"] == "ReconciliationRequired"
 
     queued = replace(uncertain, status="Queued")
     assert "delivery_uncertain_action" not in _codes(
@@ -986,7 +981,7 @@ def test_delivery_uncertain_action(engine, make_snap, make_facts, poc_state):
 
 def test_delivery_uncertain_action_is_scoped_to_its_intent(engine, make_snap, make_facts, poc_state):
     """A sibling intent's uncertain delivery must not block this one."""
-    other = ActionView(status="DeliveryUncertain", intent_dir="260814-review-major-remediation",
+    other = ActionView(status="ReconciliationRequired", intent_dir="260814-review-major-remediation",
                        intent_key="260814-review-major-remediation")
     findings = engine.evaluate_intent(
         make_snap(poc_state, intent_dir=F.DEVDELTA_POC, intent_key=F.DEVDELTA_POC),

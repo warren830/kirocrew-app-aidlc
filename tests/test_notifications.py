@@ -190,8 +190,8 @@ def test_delivery_uncertainty_is_its_own_notification_class(studio, clock):
     adapter = _adapter(studio, clock, host=host, storage=prefs)
     asyncio.run(adapter.notify("action", _card()))
     # The same action becoming uncertain is new information, so it notifies again — but only once.
-    asyncio.run(adapter.notify("action", _card(status="DeliveryUncertain", queue_type="delivery_uncertain")))
-    asyncio.run(adapter.notify("action", _card(status="DeliveryUncertain", queue_type="delivery_uncertain")))
+    asyncio.run(adapter.notify("action", _card(status="ReconciliationRequired", queue_type="delivery_uncertain")))
+    asyncio.run(adapter.notify("action", _card(status="ReconciliationRequired", queue_type="delivery_uncertain")))
     assert len(host.notified) == 2
 
 

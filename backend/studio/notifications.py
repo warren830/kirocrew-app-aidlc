@@ -35,7 +35,7 @@ _CARD_TITLES = {
     "install_conflict": "Install conflict",
 }
 #: A card's second notification class: the first time its delivery becomes uncertain is new information.
-_UNCERTAIN_STATUSES = ("DeliveryUncertain", "ReconciliationRequired")
+_UNCERTAIN_STATUSES = ("ReconciliationRequired",)
 
 #: The one registered Activity kind for every notification; which one it was travels in ``params.kind``.
 NOTIFICATION_ACTIVITY_KIND = "notification.sent"

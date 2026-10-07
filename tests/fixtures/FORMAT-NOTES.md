@@ -736,7 +736,7 @@ credential, and `evidence` names sources, never their contents.
   one repository would interleave writes to the same engine files, and an admin operation (cursor switch, install,
   recompose) moves the very files a decision was captured against — both are contradictions between "what Studio is
   about to do" and "what Studio is already doing" (FR-SES-007).
-- `delivery_uncertain_action`: `DeliveryUncertain` and `ReconciliationRequired` mean Studio is not sure a decision
+- `delivery_uncertain_action`: `ReconciliationRequired` means Studio is not sure a decision
   landed (§1.12/C04); dispatching a second decision on top of an unresolved one is the at-most-once violation PRD §12.1
   forbids. `RepoFacts.live_actions` may be the whole repository's live set, so rows are filtered to the intent here
   rather than trusting the caller: one intent's uncertain delivery must not block a sibling intent.

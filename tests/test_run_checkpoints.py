@@ -199,7 +199,7 @@ def test_studio_reload_preserves_an_active_conversation_and_its_lease(
         try:
             await restored.reconciler.startup()
             record = await restored.actions.get(created["action_id"])
-            assert record.status in ("Delivered", "Processing")
+            assert record.status == "Delivered"
             after = restored.scheduler.live()[0]
             assert (after.action_id, after.generation) == (lease.action_id, lease.generation)
             assert slot.running is True and slot.messages == []
@@ -248,11 +248,11 @@ def test_cold_start_cannot_treat_plan_approval_as_an_ended_turn(
         try:
             await restored.reconciler.startup()
             current = await restored.actions.get(card["action_id"])
-            assert current.status in ("Delivered", "Processing")
+            assert current.status == "Delivered"
             assert restored.scheduler.live()[0].generation == lease.generation
             restored.host.attach(fake_host)
             await restored.reconciler.reconcile_now(card["action_id"])
-            assert (await restored.actions.get(card["action_id"])).status in ("Delivered", "Processing")
+            assert (await restored.actions.get(card["action_id"])).status == "Delivered"
             assert restored.scheduler.live()
             _finish_the_turn(fake_host, scene.slot_key, wire_text="Approve Plan")
             await restored.reconciler.reconcile_now(card["action_id"])

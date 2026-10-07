@@ -73,9 +73,9 @@ DELIVERY_ROLES = ("user", "queued")
 
 #: Something may still be on the wire: rebinding would send its delivery report to a session that no longer
 #: owns it. Narrower than ``LIVE_ACTION_STATUS`` because rebinding is itself a recovery decision.
-IN_FLIGHT_ACTION_STATUS = ("Delivering", "Delivered", "Processing")
+IN_FLIGHT_ACTION_STATUS = ("Delivering", "Delivered")
 #: The decision may already have reached AI-DLC, so archiving waits for these even on a paused intent.
-ARCHIVE_BLOCKING_STATUS = IN_FLIGHT_ACTION_STATUS + ("DeliveryUncertain", "ReconciliationRequired")
+ARCHIVE_BLOCKING_STATUS = IN_FLIGHT_ACTION_STATUS + ("ReconciliationRequired",)
 
 #: Why a slot is a takeover candidate. ``current_binding`` classifies the slot §2.3 returns as ``current``.
 TAKEOVER_REASONS = ("project_match", "name_match", "current_binding")

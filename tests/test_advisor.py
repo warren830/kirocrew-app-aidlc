@@ -1359,14 +1359,13 @@ def test_an_install_wide_refusal_stops_the_pass_and_spends_no_cards_one_shot(wir
 def test_only_a_card_still_waiting_for_the_human_is_drafted_ahead(wiring, A, K):
     """``Queued`` is the whole candidate set, because it is the only status where nobody has decided.
 
-    ``Delivering``/``Delivered``/``Processing`` carry a submission already on its way to the host,
-    ``NotDelivered`` carries one whose delivery failed and can be re-queued, and ``Draft`` is a
-    submission a human is composing right now. A recommendation drafted for any of them arrives after
-    the decision it was meant to inform.
+    ``Delivering``/``Delivered`` carry a submission already on its way to the host, and ``NotDelivered``
+    carries one whose delivery failed and can be re-queued. A recommendation drafted for any of them
+    arrives after the decision it was meant to inform.
     """
     grant(wiring, REPO)
     base = K.epoch_from_iso(NOW)
-    moved = ("Draft", "Delivering", "Delivered", "Processing", "NotDelivered")
+    moved = ("Delivering", "Delivered", "NotDelivered")
     for n, status in enumerate(moved, start=1):
         card(wiring, f"a_{status}", status=status, created_at=K.iso_from_epoch(base + n))
     assert autodraft(wiring, limit=len(moved)) == 0

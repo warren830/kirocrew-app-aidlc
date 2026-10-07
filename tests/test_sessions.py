@@ -1250,7 +1250,7 @@ def test_unbind_clears_the_slot_and_records_the_reason(binder, bridge, store, st
     assert row["params"] == {"reason": "rebind_session", "previous_slot_key": SLOT}
 
 
-@pytest.mark.parametrize("status", ["Delivering", "Delivered", "Processing"])
+@pytest.mark.parametrize("status", ["Delivering", "Delivered"])
 def test_unbind_and_takeover_refuse_while_a_decision_may_be_on_the_wire(errors, binder, bridge,
                                                                        store, studio, repo_dir,
                                                                        status):
@@ -1376,8 +1376,7 @@ def test_a_paused_intent_archives_with_its_waiting_cards(registered, binder, sto
     assert run(binder.archived_intents()) == frozenset({("r_1", "default", INTENT)})
 
 
-@pytest.mark.parametrize("status", ["Delivering", "Delivered", "Processing", "DeliveryUncertain",
-                                    "ReconciliationRequired"])
+@pytest.mark.parametrize("status", ["Delivering", "Delivered", "ReconciliationRequired"])
 def test_a_decision_that_may_have_reached_aidlc_blocks_archive_even_when_paused(
     registered, errors, binder, store, status
 ):
