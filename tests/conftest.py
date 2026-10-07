@@ -251,6 +251,7 @@ class FakeSlot:
             "project": self.project,
             "app": self._app,
             "running": self.running,
+            "orchestrating": self._in_stage_execution,
             "stopping": self.stopping,
             "queue_depth": self.queue_depth,
             "stop_state": self._stop_state,
