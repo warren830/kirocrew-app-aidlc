@@ -849,24 +849,15 @@ class AdvisorBroker:
             return clean(value, TITLE_CHARS) if value else None
 
         package = EvidencePackage(
-            version=EVIDENCE_VERSION,
-            kind=req.kind,
-            action_id=req.action_id,
-            generated_at=self._clock.iso(),
-            locale=req.locale,
-            repo_label=clean(repo.label, TITLE_CHARS),
+            version=EVIDENCE_VERSION, kind=req.kind, action_id=req.action_id, generated_at=self._clock.iso(),
+            locale=req.locale, repo_label=clean(repo.label, TITLE_CHARS),
             intent={
-                "slug": clean(summary.slug, TITLE_CHARS),
-                "title": short(summary.title),
-                "scope": short(summary.scope),
-                "current_stage": short(summary.disk.current_stage),
+                "slug": clean(summary.slug, TITLE_CHARS), "title": short(summary.title),
+                "scope": short(summary.scope), "current_stage": short(summary.disk.current_stage),
                 "phase": short(summary.disk.lifecycle_phase),
             },
-            stage=stage,
-            artifacts=self._artifacts(snap, repo, roots),
-            findings=self._findings(snap, roots),
-            questions=self._questions(req, snap, roots),
-            audit_excerpt=self._audit(snap, roots),
+            stage=stage, artifacts=self._artifacts(snap, repo, roots), findings=self._findings(snap, roots),
+            questions=self._questions(req, snap, roots), audit_excerpt=self._audit(snap, roots),
             failure=self._failure(rec, roots) if req.kind == "diagnose" else None,
         )
         return self._verified(self._fit(package), roots)
@@ -913,10 +904,8 @@ class AdvisorBroker:
             "context": clean(req.context, C.MAX_PLAN_OBJECTIVE_CHARS) if req.context else None,
             "project_type": token(req.project_type),
             "current": {
-                "scope": token(current.scope) or "",
-                "depth": token(current.depth) or "",
-                "test_strategy": token(current.test_strategy),
-                "review_cap": token(current.review_cap),
+                "scope": token(current.scope) or "", "depth": token(current.depth) or "",
+                "test_strategy": token(current.test_strategy), "review_cap": token(current.review_cap),
                 "overrides": {str(slug): bool(on) for slug, on in current.overrides.items()},
             },
             "scopes": [
@@ -924,8 +913,7 @@ class AdvisorBroker:
                     "name": token_clean(meta.name),
                     "description": clean(meta.description, OPTION_CHARS) if meta.description else None,
                     "keywords": [clean(word, TITLE_CHARS) for word in meta.keywords[:MAX_OPTIONS]],
-                    "depth": token(meta.depth),
-                    "test_strategy": token(meta.test_strategy),
+                    "depth": token(meta.depth), "test_strategy": token(meta.test_strategy),
                     "review_cap": token(meta.review_cap),
                     "stage_count": sum(1 for on in catalog.grid_row(meta.name).values() if on),
                     "project_owned": bool(meta.project_owned),
@@ -934,12 +922,9 @@ class AdvisorBroker:
             ],
             "stages": [
                 {
-                    "slug": token_clean(node.slug),
-                    "number": token_clean(node.number),
-                    "name": clean(node.name, TITLE_CHARS),
-                    "phase": token_clean(node.phase),
-                    "always": node.execution == "ALWAYS",
-                    "per_unit": bool(node.per_unit),
+                    "slug": token_clean(node.slug), "number": token_clean(node.number),
+                    "name": clean(node.name, TITLE_CHARS), "phase": token_clean(node.phase),
+                    "always": node.execution == "ALWAYS", "per_unit": bool(node.per_unit),
                     # The graph's dependency edges: the first live draft proposed code-generation alone and the
                     # engine refused it with dependency_missing (units-generation).
                     "needs": [token_clean(slug) for slug in needs.get(node.slug, ())],
@@ -973,21 +958,11 @@ class AdvisorBroker:
             },
         }
         package = EvidencePackage(
-            version=EVIDENCE_VERSION,
-            kind=plan_advice.PLAN_DRAFT_KIND,
-            action_id=req.action_id,
-            generated_at=self._clock.iso(),
-            locale=req.locale,
-            repo_label=clean(repo.label, TITLE_CHARS),
+            version=EVIDENCE_VERSION, kind=plan_advice.PLAN_DRAFT_KIND, action_id=req.action_id,
+            generated_at=self._clock.iso(), locale=req.locale, repo_label=clean(repo.label, TITLE_CHARS),
             # No intent exists yet; the keys stay so every consumer sees one shape.
             intent={"slug": None, "title": None, "scope": None, "current_stage": None, "phase": None},
-            stage=None,
-            artifacts=(),
-            findings=(),
-            questions=questions,
-            audit_excerpt=(),
-            failure=None,
-            plan=plan,
+            stage=None, artifacts=(), findings=(), questions=questions, audit_excerpt=(), failure=None, plan=plan,
         )
         return self._verified(self._fit(package), roots)
 
