@@ -91,6 +91,12 @@ export interface SlotView { key: string; running: boolean; project: string; agen
 /** A KiroCrew sidebar folder (`GET /api/chat/folders`): the fields Studio reads. A person's folder has no `owner_app`. */
 export interface ChatFolder { id: string; name: string; parent_id: string; project_dir: string; order: number; owner_app?: string | null }
 export const SLOT_IDLE = 'idle'
+/**
+ * One row of the host's own `GET /api/chat/slots` (KiroCrew 0.8 `slot_projection.to_dict`), limited to
+ * the keys the UI reads. Not `SlotView`: that is Studio's backend view, which adds keys the host does not
+ * send (`in_stage_execution` is the host's `orchestrating`; sub-agent deliveries are not exposed at all).
+ */
+export interface HostSlot { key: string; title: string; project: string; agent: string; app: string; running: boolean; orchestrating: boolean; stopping: boolean; queue_depth: number; pending_approval: boolean; needs_input: boolean; subagents_running: number }
 export type BusyReason = 'running' | 'stage_execution' | 'stopping' | 'queued' | 'approval_pending' | 'subagents' | 'deliveries_inflight'
 export interface BindingView { repo_id: string; space: string; intent_dir: string; intent_key: string; intent_uuid: string | null; slot_key: string | null; session_key: string | null; binding_generation: number; archive_state: 'active' | 'archived'; paused: boolean; paused_at: string | null; interrupted_at: string | null; keep_moving: boolean; last_stable_boundary: StableBoundary | null; updated_at: string }
 

@@ -7199,7 +7199,7 @@ function Gn(e, t, n, r = !1) {
 	return i ? i.project && n && !Wn(i.project, n) || i.agent && i.agent !== "aidlc" ? {
 		ok: !1,
 		code: "slot_mismatch_preflight"
-	} : r && (i.running || i.stopping || i.in_stage_execution || i.pending_approval || i.needs_input || i.queue_depth > 0 || i.subagents_running > 0 || i.deliveries_inflight > 0) ? {
+	} : r && (i.running || i.stopping || i.orchestrating || i.pending_approval || i.needs_input || i.queue_depth > 0 || i.subagents_running > 0) ? {
 		ok: !1,
 		code: "answer_session_busy_preflight"
 	} : null : {

@@ -33,7 +33,7 @@ import type {
   PlanRequest, PreflightResponse, PreviewPlanResponse, QuestionsResponse, ReceiptsResponse,
   RecomposePreviewResponse, RecomposeResponse, RemoveRepoResponse, RepoDetailResponse,
   RepoGitResponse, RepoResponse, ReposResponse, RescanResponse, ResolvePayload, ResolveResponse,
-  ReviewResponse, SettingsResponse, SettingsValues, SlackCallbackResponse, SlotView, SubmitReceipt,
+  ReviewResponse, SettingsResponse, SettingsValues, SlackCallbackResponse, SlotView, SubmitReceipt, HostSlot,
   SubmitRequest, TakeoverPreviewResponse, TransactionAcceptedResponse, TransactionResponse, TransactionKind,
 } from './types'
 import { APP_NAME } from './app'
@@ -269,7 +269,7 @@ export interface StudioApi extends WorkspaceApi {
   restoreIntent(repoId: string, intentKey: string): Promise<BindingResponse>
 
   // -- host chat (§2.13; the second declared prefix) --------------------- //
-  listSlots(o?: ReadOptions): Promise<SlotView[]>
+  listSlots(o?: ReadOptions): Promise<HostSlot[]>
   getSlot(slotKey: string, o?: ReadOptions): Promise<Record<string, unknown>>
   /**
    * Born on the host's default agent, never a named one: KiroCrew 0.8's execution memory resolves an agent
@@ -435,7 +435,7 @@ export function useStudioApi(): StudioApi {
 
       listSlots: async (o) => {
         try {
-          return await api.get<SlotView[]>(`${CHAT_BASE}/slots`, o?.signal ? { signal: o.signal } : undefined)
+          return await api.get<HostSlot[]>(`${CHAT_BASE}/slots`, o?.signal ? { signal: o.signal } : undefined)
         } catch (error) {
           if (isAbort(error)) throw error
           throw decodeError(error)

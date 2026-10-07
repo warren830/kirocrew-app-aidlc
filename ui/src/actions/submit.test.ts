@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest'
 import { apiCalls, setApiRoutes, StubApiError } from '../test/stubs/app-sdk'
 import { useStudioApi } from '../lib/api'
 import { WIRE } from '../lib/wire.generated'
-import type { ActionCard, Question, QuestionsView, SlotView, SubmitReceipt } from '../lib/types'
+import type { ActionCard, Question, QuestionsView, HostSlot, SubmitReceipt } from '../lib/types'
 import { answerText, AUDIT_NONE_LABEL, preflightRefusal, useSubmit, wireTextFor } from './useSubmit'
 
 const BASE = '/api/apps/aidlc-studio'
@@ -70,9 +70,9 @@ function receipt(actionId: string, over: Partial<SubmitReceipt> = {}): SubmitRec
   }
 }
 
-/** Only the three fields the preflight reads; a real `SlotView` has 25 more the host fills in. */
+/** Only the fields the preflight reads; a real host row carries many more. */
 const slot = (over: Record<string, unknown> = {}) =>
-  ({ key: 'aidlc-r1-guest', project: '/work/checkout-web', agent: 'aidlc', running: false, ...over }) as unknown as SlotView
+  ({ key: 'aidlc-r1-guest', project: '/work/checkout-web', agent: 'aidlc', running: false, ...over }) as unknown as HostSlot
 
 /** Routes for a clean run; `over` replaces individual handlers. */
 function routes(actionId: string, over: Record<string, (body: unknown, path: string) => unknown> = {}) {
@@ -246,6 +246,12 @@ describe('preflightRefusal', () => {
       .toEqual({ ok: false, code: 'slot_mismatch_preflight' })
     expect(preflightRefusal([slot({ agent: 'default' })], 'aidlc-r1-guest', '/work/checkout-web'))
       .toEqual({ ok: false, code: 'slot_mismatch_preflight' })
+  })
+
+  it('treats a stage the host reports as orchestrating as busy for file answers', () => {
+    expect(preflightRefusal([slot({ orchestrating: true })], 'aidlc-r1-guest', '/work/checkout-web', true))
+      .toEqual({ ok: false, code: 'answer_session_busy_preflight' })
+    expect(preflightRefusal([slot({ orchestrating: true })], 'aidlc-r1-guest', '/work/checkout-web', false)).toBeNull()
   })
 
   it('passes a matching slot, ignoring a trailing slash', () => {

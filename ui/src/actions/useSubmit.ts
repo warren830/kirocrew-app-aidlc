@@ -33,7 +33,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { StudioApiError, type StudioApi } from '../lib/api'
 import { WIRE } from '../lib/wire.generated'
 import type {
-  ActionCard, AnswerInput, HostChatReceipt, Question, QuestionsView, ResolvePayload, SlotView,
+  ActionCard, AnswerInput, HostChatReceipt, HostSlot, Question, QuestionsView, ResolvePayload,
   SubmitPayload, SubmitReceipt,
 } from '../lib/types'
 
@@ -342,7 +342,7 @@ function samePath(a: string, b: string): boolean {
  * a false `not_delivered`, and the backend checked `slot_matches_repo` at submit time anyway.
  */
 export function preflightRefusal(
-  slots: SlotView[],
+  slots: HostSlot[],
   slotKey: string,
   canonicalPath: string,
   fileAnswers = false,
@@ -353,9 +353,8 @@ export function preflightRefusal(
   if (projectDiffers || (!!slot.agent && slot.agent !== 'aidlc')) {
     return { ok: false, code: 'slot_mismatch_preflight' }
   }
-  if (fileAnswers && (slot.running || slot.stopping || slot.in_stage_execution ||
-      slot.pending_approval || slot.needs_input || slot.queue_depth > 0 ||
-      slot.subagents_running > 0 || slot.deliveries_inflight > 0)) {
+  if (fileAnswers && (slot.running || slot.stopping || slot.orchestrating ||
+      slot.pending_approval || slot.needs_input || slot.queue_depth > 0 || slot.subagents_running > 0)) {
     return { ok: false, code: 'answer_session_busy_preflight' }
   }
   return null

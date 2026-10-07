@@ -48,7 +48,7 @@ import { Icon } from '../shell/Icon'
 import { useI18n } from '../i18n'
 import { StudioApiError, type StudioApi } from '../lib/api'
 import { unavailable } from '../lib/format'
-import type { BindingView, ChatFolder, IntentSummary, RepoRecord, SessionRef, SlotView } from '../lib/types'
+import type { BindingView, ChatFolder, HostSlot, IntentSummary, RepoRecord, SessionRef, SlotView } from '../lib/types'
 import { StartStatus, startBlockedReason, startKind, startText, useStartRun } from './StartRun'
 import { APP_NAME } from '../lib/app'
 
@@ -95,7 +95,7 @@ function samePath(a: string, b: string): boolean {
  * answer `slot_mismatch` to is worse than no offer, and a slot with no project cannot pass
  * `realpath(slot.project) == repo.canonical_path` anyway.
  */
-export function adoptableSlots(slots: SlotView[], canonicalPath: string): SlotView[] {
+export function adoptableSlots(slots: HostSlot[], canonicalPath: string): HostSlot[] {
   return slots.filter(
     (slot) => slot.agent === AIDLC_AGENT && !!slot.project && samePath(slot.project, canonicalPath),
   )
@@ -191,7 +191,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
   /** Where step 5 filed the conversation, or why it could not; the binding stands either way. */
   const [filed, setFiled] = useState<string | null>(null)
   const [folderError, setFolderError] = useState<StudioApiError | null>(null)
-  const [slots, setSlots] = useState<SlotView[] | null>(null)
+  const [slots, setSlots] = useState<HostSlot[] | null>(null)
   const [candidates, setCandidates] = useState<{ slot: SlotView; reason: string }[] | null>(null)
   /**
    * The binding the server just confirmed, which outranks the inventory row this panel was opened from:
