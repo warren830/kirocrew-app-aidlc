@@ -1537,16 +1537,11 @@ def audit_questions(
         if _audit_follows(event, decision) is not False:
             return None
 
-    prompt = decision.fields.get("Decision", "")
-    raw_options = decision.fields.get("Options", "")
-    labels = [label.strip() for label in raw_options.split(",")]
-    if (
-        not prompt.strip() or not 1 <= len(labels) <= 26 or not all(labels)
-        or len(set(labels)) != len(labels) or "[protected exact choices]" in raw_options
-        or any(len(label) > C.MAX_ANSWER_CHARS for label in labels)
-        or any(char in prompt + raw_options for char in ("\x00", "\r", "\n"))
-    ):
+    batch = _same_turn_decisions(audit, decision, stage, unit)
+    parsed = [_audit_decision_labels(e) for e in batch]
+    if any(p is None for p in parsed):
         return None
+    prompt, labels = parsed[-1]
     identity = _audit_event_identity(decision)
     origin = {
         "kind": "audit", "event": decision.event, "shard": decision.shard,
@@ -1560,19 +1555,65 @@ def audit_questions(
         ), "generation": generation},
         sort_keys=True, ensure_ascii=False,
     ))
+    if len(batch) > 1:
+        # Several questions asked in one turn are answered in one reply, which no single label can
+        # prove (A37). Keep them visible on the card and send the human to the conversation.
+        digest = _sha256(json.dumps(
+            {"batch": [_audit_event_identity(e) for e in batch], "digest": digest},
+            sort_keys=True, ensure_ascii=False,
+        ))
+    questions = tuple(
+        Question(
+            index=n, prompt=p,
+            options=tuple(QuestionOption(
+                chr(65 + i), label, len(ls) == 1 and is_audit_text_label(label),
+            ) for i, label in enumerate(ls)),
+            multi_select=False, answer=None, answered=False, raw=e.raw,
+        )
+        for n, (e, (p, ls)) in enumerate(zip(batch, parsed), start=1)
+    )
     return QuestionsFile(
         relpath=f"{record_rel}/{AUDIT_DIRNAME}/{decision.shard}",
         sha256=digest,
-        questions=(Question(
-            index=1, prompt=prompt,
-            options=tuple(QuestionOption(
-                chr(65 + i), label, len(labels) == 1 and is_audit_text_label(label),
-            ) for i, label in enumerate(labels)),
-            multi_select=False, answer=None, answered=False, raw=decision.raw,
-        ),),
-        summary_confirmation=None, plan_approval=None, pending_count=1, pending_checkpoint=None,
+        questions=questions,
+        summary_confirmation=None, plan_approval=None, pending_count=len(questions), pending_checkpoint=None,
         source_language_hint=None, origin=origin,
+        unsupported_pending_count=len(questions) if len(questions) > 1 else 0,
     )
+
+
+def _audit_decision_labels(decision: AuditEvent) -> tuple[str, list[str]] | None:
+    prompt = decision.fields.get("Decision", "")
+    raw_options = decision.fields.get("Options", "")
+    labels = [label.strip() for label in raw_options.split(",")]
+    if (
+        not prompt.strip() or not 1 <= len(labels) <= 26 or not all(labels)
+        or len(set(labels)) != len(labels) or "[protected exact choices]" in raw_options
+        or any(len(label) > C.MAX_ANSWER_CHARS for label in labels)
+        or any(char in prompt + raw_options for char in ("\x00", "\r", "\n"))
+    ):
+        return None
+    return prompt, labels
+
+
+def _same_turn_decisions(
+    audit: AuditBundle, decision: AuditEvent, stage: str, unit: str | None,
+) -> list[AuditEvent]:
+    """The unbroken run of this stage's decision rows ending at ``decision`` in its own shard.
+
+    The engine logs every structured question before presenting them, so rows written back to back
+    were asked together. Any other row in between ends the run.
+    """
+    shard = sorted((e for e in audit.events if e.shard == decision.shard), key=lambda e: e.pos)
+    index = next(i for i, e in enumerate(shard) if e.pos == decision.pos)
+    run = [decision]
+    for event in reversed(shard[:index]):
+        if event.event != "DECISION_RECORDED" or not _audit_question_scope(event, stage, unit):
+            break
+        if (event.fields.get("Attempt Generation") or None) != (decision.fields.get("Attempt Generation") or None):
+            break
+        run.insert(0, event)
+    return run
 
 
 def audit_question_answer(
@@ -1640,9 +1681,12 @@ def _closed_question_receipts(
 
     Legacy answered questions without a checkpoint receipt keep file ownership. The engine's
     confirmed-content-v1 hash normalizes newlines and trims ECMAScript trailing whitespace; it is
-    not the whole-file digest Studio captures. Verify the full normalized content here. Receipts
-    that exclude a later Assumption Confirmation section cannot match this stronger binding and
-    conservatively retain file ownership rather than trusting an unverified portion of the sheet.
+    not the whole-file digest Studio captures. Verify the full normalized content here.
+
+    AI-DLC 2.10 appends ``## Assumption Confirmation`` after the summary is confirmed, so that receipt
+    binds only the content before the heading (A37). That portion is accepted only when the section is
+    the last one in the file, its own tag is answered, and a ``QUESTION_ANSWERED`` receipt carrying the
+    same answer sits between the summary receipt and the decision. Every other byte stays bound.
     """
     if (
         not audit.complete or found.pending_count or found.pending_checkpoint
@@ -1661,6 +1705,18 @@ def _closed_question_receipts(
     if decision is None or not floors:
         return None
     receipts: list[AuditEvent] = []
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    normalized = re.sub(r"\r\n?", "\n", text)
+    confirmed_digests = {_sha256(_confirmed_content(normalized))}
+    assumption = found.assumption_confirmation
+    if assumption is not None:
+        prefix = _before_final_assumption_section(normalized)
+        if prefix is None:
+            return None
+        confirmed_digests = {_sha256(_confirmed_content(prefix))}
     for checkpoint, event_name, heading, answer in (
         (found.summary_confirmation, "SUMMARY_CONFIRMATION_RECORDED",
          C.SUMMARY_CONFIRMATION_HEADING, C.WIRE_LOOKS_CORRECT),
@@ -1694,22 +1750,54 @@ def _closed_question_receipts(
         if scope is None:
             digest = found.sha256
         elif scope == "confirmed-content-v1" and event_name == "SUMMARY_CONFIRMATION_RECORDED":
-            try:
-                text = data.decode("utf-8")
-            except UnicodeDecodeError:
+            digest = receipt.fields.get("Questions SHA-256")
+            if digest not in confirmed_digests:
                 return None
-            normalized = re.sub(r"\r\n?", "\n", text)
-            confirmed = normalized.rstrip(
-                "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006"
-                "\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
-            )
-            digest = _sha256(confirmed)
         else:
             return None
         if receipt.fields.get("Questions SHA-256") != digest:
             return None
         receipts.append(receipt)
+    if assumption is not None:
+        summary = next((r for r in receipts if r.event == "SUMMARY_CONFIRMATION_RECORDED"), None)
+        answer = (assumption.answer or "").strip()
+        if (
+            summary is None or not assumption.answered
+            or answer not in (C.WIRE_ACCEPT_ASSUMPTIONS, C.WIRE_CONVERT_ASSUMPTIONS)
+        ):
+            return None
+        answered = _audit_frontier([
+            e for e in history if e.event == "QUESTION_ANSWERED" and _audit_question_scope(e, stage, unit)
+            and (e.fields.get("Attempt Generation") or None) == generation
+            and _audit_follows(e, summary) is True and _audit_follows(decision, e) is True
+        ])
+        if len(answered) != 1 or (answered[0].fields.get("Details") or "").strip() != answer:
+            return None
+        receipts.append(answered[0])
     return receipts or None
+
+
+_CONFIRMED_CONTENT_TRAILING = (
+    "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006"
+    "\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+)
+
+
+def _confirmed_content(normalized: str) -> str:
+    """The engine's confirmed-content-v1 input: newline-normalized, ECMAScript trailing trim."""
+    return normalized.rstrip(_CONFIRMED_CONTENT_TRAILING)
+
+
+def _before_final_assumption_section(normalized: str) -> str | None:
+    """Content before the one ``## Assumption Confirmation`` heading, when that section ends the file."""
+    headings = list(re.finditer(r"^## .*$", normalized, re.MULTILINE))
+    assumption = [
+        m for m in headings
+        if m.group(0).rstrip() == f"## {C.ASSUMPTION_CONFIRMATION_HEADING}"
+    ]
+    if len(assumption) != 1 or headings[-1] is not assumption[0]:
+        return None
+    return normalized[:assumption[0].start()]
 
 
 #: Heading → ``Checkpoint.kind``. ``Post-approval Amendment`` is deliberately absent: it is a record of an

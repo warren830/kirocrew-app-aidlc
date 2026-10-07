@@ -2032,6 +2032,7 @@
   "template.questions.pending": "{total} 题中有 {n} 题未作答",
   "template.questions.recorded": "已记录的答案",
   "template.questions.required": "必答",
+  "template.questions.sameTurnBody": "AI-DLC 在同一轮里一起问了这些问题，要用一条回复全部回答，Studio 无法当作单个选项发送和确认。可以在这里先看问题，然后到原会话里回答。",
   "template.questions.selectAny": "可多选",
   "template.questions.selectOne": "单选",
   "template.questions.summaryChanges": "摘要需要修改",
