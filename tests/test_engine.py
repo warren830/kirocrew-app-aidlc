@@ -1127,16 +1127,19 @@ def _pinned_human_wire_spans(tree: ast.AST) -> list[tuple[int, int]]:
     An argv, call, modified string or different assignment is not exempt. Runtime allowlist and
     no-backend-dispatch tests still apply; this string is previewed to the user and sent by the UI.
     """
-    expected = json.loads((APP_ROOT / "docs/design/wire-text.json").read_text())["constants"][
-        "WIRE_GROUPED_ANSWER_SUFFIX"
-    ]
+    constants = json.loads((APP_ROOT / "docs/design/wire-text.json").read_text())["constants"]
+    expected = {name: constants[name] for name in PINNED_HUMAN_WIRE_NAMES}
     return [
         (node.lineno, node.end_lineno or node.lineno)
         for node in ast.walk(tree)
         if isinstance(node, ast.Assign) and len(node.targets) == 1
-        and isinstance(node.targets[0], ast.Name) and node.targets[0].id == "WIRE_GROUPED_ANSWER_SUFFIX"
-        and isinstance(node.value, ast.Constant) and node.value.value == expected
+        and isinstance(node.targets[0], ast.Name) and node.targets[0].id in expected
+        and isinstance(node.value, ast.Constant) and node.value.value == expected[node.targets[0].id]
     ]
+
+
+#: Grouped replies ask the agent to record one answer receipt; A37 adds the same-turn audit variant.
+PINNED_HUMAN_WIRE_NAMES = ("WIRE_GROUPED_ANSWER_SUFFIX", "WIRE_AUDIT_GROUPED_ANSWER_SUFFIX")
 
 
 def _code_literals(tree: ast.AST, *, allow_pinned_wire: bool = False) -> list[str]:

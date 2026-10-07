@@ -11,6 +11,7 @@ export const WIRE = {
   ANSWER_LINE: "Q{index}: {answer}",
   ANSWER_JOINER: "\n",
   MULTI_SELECT_JOINER: ", ",
+  AUDIT_GROUPED_ANSWER_SUFFIX: "\n\nStudio grouped-answer delivery: this is one human reply to the questions you asked together, in the order you asked them. Record all Q<n> answers together in ONE aidlc-log.ts answer --details call, preserving their text. Then continue the stage.",
   RUN: "/aidlc",
   RESUME: "/aidlc --resume",
   SCOPE_PREFIX: "/aidlc --scope ",

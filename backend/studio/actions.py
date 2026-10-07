@@ -840,7 +840,13 @@ def _answers_wire_text(
             )
         free_text = str(answer.get("free_text") or "").strip()
         text_input = audit_question_accepts_text(questions)
-        if questions.origin is not None and not text_input and (len(letters) != 1 or free_text):
+        batch = questions.origin is not None and int(questions.origin.get("batch_size") or 1) > 1
+        if batch and len(letters) > 1 and any(known[letter].text == C.AUDIT_NONE_LABEL for letter in letters):
+            raise StudioError(
+                "invalid_decision", "None of these cannot be combined with another choice",
+                details={"index": question.index},
+            )
+        if questions.origin is not None and not text_input and not batch and (len(letters) != 1 or free_text):
             raise StudioError(
                 "invalid_decision",
                 "an audit question requires one of its exact recorded labels",
@@ -870,6 +876,11 @@ def _answers_wire_text(
 
     if len(texts) == 1:
         return texts[0][1]
+    if questions.origin is not None and int(questions.origin.get("batch_size") or 1) > 1:
+        # The engine asked these together and expects one reply (A37); no file mapping is involved.
+        return C.WIRE_ANSWER_JOINER.join(
+            C.WIRE_ANSWER_LINE.format(index=index, answer=text) for index, text in texts
+        ) + C.WIRE_AUDIT_GROUPED_ANSWER_SUFFIX
     if not grouped_enabled:
         raise StudioError(
             "grouped_answers_unavailable",

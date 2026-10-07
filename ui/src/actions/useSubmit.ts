@@ -50,6 +50,8 @@ import type {
  */
 export const MAX_FEEDBACK_CHARS = 8000
 export const MAX_ANSWER_CHARS = 8000
+/** Mirrors `constants.AUDIT_NONE_LABEL`: Studio's own empty choice on a same-turn audit question (A37). */
+export const AUDIT_NONE_LABEL = 'None of these'
 
 /**
  * One answer as the conductor will read it, or `null` when it cannot be encoded.
@@ -145,6 +147,20 @@ export function wireTextFor(
         texts.push(text)
       }
       if (texts.length === 1) return texts[0] ?? null
+      const lines = pending
+        .map((question, position) =>
+          WIRE.ANSWER_LINE.replace('{index}', String(question.index)).replace('{answer}', texts[position] ?? ''),
+        )
+        .join(WIRE.ANSWER_JOINER)
+      // Questions AI-DLC asked together in one turn take one reply, with no capability gate (A37).
+      if (questions?.origin?.kind === 'audit' && (questions.origin.batch_size ?? 1) > 1) {
+        const contradictory = payload.answers.some((answer) => {
+          const question = pending.find((candidate) => candidate.index === answer.index)
+          return answer.option_letters.length > 1 && answer.option_letters.some((letter) =>
+            question?.options.find((option) => option.letter === letter)?.text === AUDIT_NONE_LABEL)
+        })
+        return contradictory ? null : lines + WIRE.AUDIT_GROUPED_ANSWER_SUFFIX
+      }
       // The backend advertises compatibility for this file-backed grouped reply.
       if (!groupedAnswers) return null
       return pending

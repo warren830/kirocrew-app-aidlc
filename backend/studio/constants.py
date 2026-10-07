@@ -31,7 +31,7 @@ from typing import Any, Mapping, Protocol
 
 APP_NAME = "aidlc-studio"
 #: Must equal ``app.json`` ``version`` (pinned by tests/test_manifest.py).
-APP_VERSION = "1.1.5"
+APP_VERSION = "1.1.6"
 #: Must equal ``app.json`` ``minKiroCrewVersion``. 0.3.0 is enough because Studio registers its own
 #: module namespace (see ``backend/routes.py``) instead of relying on the 0.5.0 loader, and every
 #: other host primitive it uses exists in 0.3.0.
@@ -758,6 +758,15 @@ WIRE_GROUPED_ANSWER_SUFFIX = (
     "Then present the next human checkpoint and wait."
 )
 WIRE_MULTI_SELECT_JOINER = ", "                            # multi-select labels inside one answer
+# Several audit-log questions asked in one turn (A37): one reply, one receipt.
+WIRE_AUDIT_GROUPED_ANSWER_SUFFIX = (
+    "\n\nStudio grouped-answer delivery: this is one human reply to the questions you asked together, "
+    "in the order you asked them. Record all Q<n> answers together in ONE aidlc-log.ts answer --details "
+    "call, preserving their text. Then continue the stage."
+)
+AUDIT_NONE_LABEL = "None of these"       # Studio's own choice on a multi-select audit question (A37)
+AUDIT_OTHER_LABEL = "Other"              # free-text escape on an audit question asked with others (A37)
+LEARNINGS_ADD_PROMPT = "Learnings: anything to add?"   # the engine's mandated single-choice prompt
 WIRE_RUN = "/aidlc"
 WIRE_RESUME = "/aidlc --resume"
 WIRE_SCOPE_PREFIX = "/aidlc --scope "
@@ -782,6 +791,7 @@ WIRE_TEXT = {
     "WIRE_ANSWER_JOINER": WIRE_ANSWER_JOINER,
     "WIRE_GROUPED_ANSWER_SUFFIX": WIRE_GROUPED_ANSWER_SUFFIX,
     "WIRE_MULTI_SELECT_JOINER": WIRE_MULTI_SELECT_JOINER,
+    "WIRE_AUDIT_GROUPED_ANSWER_SUFFIX": WIRE_AUDIT_GROUPED_ANSWER_SUFFIX,
     "WIRE_RUN": WIRE_RUN,
     "WIRE_RESUME": WIRE_RESUME,
     "WIRE_SCOPE_PREFIX": WIRE_SCOPE_PREFIX,

@@ -14,7 +14,7 @@ import { apiCalls, setApiRoutes, StubApiError } from '../test/stubs/app-sdk'
 import { useStudioApi } from '../lib/api'
 import { WIRE } from '../lib/wire.generated'
 import type { ActionCard, Question, QuestionsView, SlotView, SubmitReceipt } from '../lib/types'
-import { answerText, preflightRefusal, useSubmit, wireTextFor } from './useSubmit'
+import { answerText, AUDIT_NONE_LABEL, preflightRefusal, useSubmit, wireTextFor } from './useSubmit'
 
 const BASE = '/api/apps/aidlc-studio'
 const SEND_PATH = '/api/chat?ws=1'
@@ -132,6 +132,29 @@ describe('wireTextFor', () => {
   it('sends an assumption choice as the engine’s option text', () => {
     expect(wireTextFor({ decision: 'accept_assumptions' }, null, false)).toBe('A. Accept assumptions')
     expect(wireTextFor({ decision: 'convert_assumptions' }, null, false)).toBe('B. Convert to follow-up questions')
+  })
+
+  it('sends questions asked in one turn as one reply, and refuses None with another choice', () => {
+    const view = {
+      relpath: 'audit/000.md', sha256: 'x', stage: 'intent-capture', unit: null,
+      summary_confirmation: null, plan_approval: null, pending_count: 2, pending_checkpoint: null,
+      mode: 'structured', host_card: null,
+      origin: { kind: 'audit', event: 'DECISION_RECORDED', shard: '000.md', pos: 2, timestamp: 't',
+        stage: 'intent-capture', unit: null, workflow: null, attempt_generation: null, decision_sha256: 'd',
+        batch_size: 2 },
+      questions: [
+        { index: 1, prompt: 'Rules?', multi_select: true, answered: false, answer: null, required: true, context: '',
+          options: [{ letter: 'A', text: 'c1', is_other: false }, { letter: 'B', text: AUDIT_NONE_LABEL, is_other: false }] },
+        { index: 2, prompt: 'Add?', multi_select: false, answered: false, answer: null, required: true, context: '',
+          options: [{ letter: 'A', text: 'Nothing to add', is_other: false }] },
+      ],
+    } as unknown as QuestionsView
+    const answers = (first: string[]) => ({ decision: 'answers' as const, answers: [
+      { index: 1, option_letters: first, free_text: null }, { index: 2, option_letters: ['A'], free_text: null },
+    ] })
+    expect(wireTextFor(answers(['A']), view, false))
+      .toBe('Q1: c1\nQ2: Nothing to add' + WIRE.AUDIT_GROUPED_ANSWER_SUFFIX)
+    expect(wireTextFor(answers(['A', 'B']), view, false)).toBeNull()
   })
 
   it('refuses blank feedback rather than sending a bare prefix', () => {
