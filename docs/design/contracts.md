@@ -832,8 +832,6 @@ def parse_audit_shard(text: str, shard: str, shard_index: int) -> list[AuditEven
 def merge_audit(shards: list[list[AuditEvent]]) -> list[AuditEvent]
     # sort key (timestamp, shard_index, pos) — same-second cross-shard ties are "causally unordered" (04 §5.1)
 def latest_event(events: list[AuditEvent], types: Sequence[str], stage: str | None = None) -> AuditEvent | None
-def human_acted_since_resolution(events: list[AuditEvent]) -> bool | None
-    # None when no audit; else the lib.ts humanActedSinceGate rule (04 §5.4)
 
 @dataclass(frozen=True, slots=True)
 class StageNode:
@@ -918,8 +916,6 @@ class StageFileMeta:   # from .kiro/aidlc-common/stages/<phase>/<slug>.md frontm
 def parse_stage_file(text: str, slug: str) -> StageFileMeta
 
 def parse_recovery_breadcrumb(text: str) -> dict[str, str]       # {"Last validated","Current stage","State file"}
-def parse_runtime_graph(data: bytes) -> dict | None              # raw dict (derived data; never authoritative)
-def parse_traceability(data: bytes) -> dict | None
 ```
 
 #### 1.6.3 Repo-level readers (containment-checked, bounded)
