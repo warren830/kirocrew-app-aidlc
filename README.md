@@ -1,23 +1,53 @@
 # AI-DLC Studio
 
-A KiroCrew App that makes [AI-DLC Workflows](https://github.com/awslabs/aidlc-workflows) observable and
-operable across all of your repositories — without taking any authority away from it.
+**English** | [简体中文](README.zh-CN.md)
 
-The bundled AI-DLC workflow model includes five phases, 33 stages, domain-expert agents, approval
-gates, structured questions, reviewers, artifacts and an append-only audit trail. The selected plan
-determines which stages and gates apply.
+The control room for [AI-DLC Workflows](https://github.com/awslabs/aidlc-workflows) inside KiroCrew.
+Everything AI-DLC is waiting on you for sits in one queue, across all of your repositories, with the
+evidence beside it. Your decision goes back to AI-DLC as your own words, through its own conversation,
+never around it.
 
-Studio provides a UI to observe and operate that lifecycle across registered repositories.
-**Confirmed Run/Resume commands, approvals and answers travel through the intent's own AI-DLC
-conversation. AI-DLC agents and the engine perform the work, enforce workflow rules and update the
-workflow files; Studio reads the results and refreshes the interface.**
+![The Action Center with an approval gate and its evidence](assets/screenshots/action-center-gate.png)
 
-Studio also invokes allowlisted engine commands for setup and administration, including intent
-creation, plan and configuration changes, diagnostics, and space or intent selection. These
-engine-managed operations may update state, append audit records or move the active-intent cursor.
-Studio does not hand-edit workflow authority files (`aidlc-state.md`, audit shards, questions files
-or selection cursors), fabricate approval or human-turn evidence, directly invoke protected workflow
-transition commands from its backend, or set guard-bypass environment variables.
+## Why Studio
+
+AI-DLC is rigorous by design. It has five phases, 33 stages and 14 specialist agents, and it stops for a
+human wherever a decision matters: approval gates, structured questions, plan approvals, recovery choices.
+That rigor is the point of the method. It also has a cost once you use it for real work. Each intent
+runs in its own chat conversation, in its own repository, so the checkpoints scatter:
+
+- You learn that a gate has been waiting for an hour only when you scroll back through a transcript.
+- You approve a design without its reviewer findings and acceptance criteria in view.
+- You cannot see at a glance where five intents across three repositories stand.
+
+Studio removes that cost without weakening the method.
+
+## Core value
+
+- **One queue for every human decision.** Gates, questions, plan approvals, missing inputs, recovery
+  incidents, failures, circuit breakers, install conflicts and tool approvals all arrive from every
+  registered repository. They are ordered by priority, and a notification brings you back when one arrives.
+- **Decide with the evidence in view.** A gate shows the stage's artifacts, its acceptance criteria,
+  reviewer verdicts and findings, unresolved risks and earlier revisions. Questions become forms. An
+  optional read-only Advisor can draft an answer, and you review it before anything is sent.
+- **AI-DLC stays in charge.** Studio reimplements no stage and edits no workflow file. Your approval is
+  sent as your own message to the intent's AI-DLC conversation. AI-DLC's guard records it as a human turn,
+  and the engine validates it and commits the transition. Studio adds a single entry point, not a second
+  source of truth.
+- **Nothing sent twice, nothing marked done early.** Before you confirm, you see the exact text that will
+  be sent. Delivery is at most once. A decision counts as resolved only when the audit trail and the state
+  file show AI-DLC acted on it, never because a request returned 200. When delivery is uncertain, Studio
+  says so and lets you decide.
+- **The whole lifecycle at a glance.** The Workflow Map lays the plan out in phase swimlanes, with agents,
+  gates, artifacts and live state, and splits Construction into per-unit lanes. The Activity timeline says
+  for every event whether it came from AI-DLC, KiroCrew, Git or Studio.
+- **From an empty repository to the first checkpoint in a few clicks.** Install AI-DLC with a previewed,
+  receipt-backed transaction that you can roll back. Compose a plan with exact stage counts and honest
+  estimate ranges. Then one click creates the intent's conversation, files it in the sidebar under the
+  repository, and starts the workflow.
+- **Honest about its limits.** Fully unattended runs ("Keep moving") ship disabled, with the reason shown in
+  Settings, because every way of sending text to a session counts as a human turn to AI-DLC. Studio will not
+  pretend otherwise.
 
 ## What you get
 
@@ -193,6 +223,11 @@ gateway authentication itself; no API token needs to be copied into this reposit
 
 - It does not reimplement AI-DLC's stages, and it does not treat KiroCrew state as authoritative over
   AI-DLC's disk state.
+- It does not hand-edit workflow authority files (`aidlc-state.md`, audit shards, questions files or
+  selection cursors), fabricate approval or human-turn evidence, invoke protected workflow transition
+  commands from its backend, or set guard-bypass environment variables. Setup and administration
+  (intent creation, plan and configuration changes, diagnostics, space or intent selection) go through
+  allowlisted engine commands; see [How setup and administration work](#how-setup-and-administration-work).
 - It does not author or reorder stage definitions or DAG edges.
 - It does not edit artifacts. "Request changes" sends your feedback to the conversation; the AI revises.
 - It does not run a single Git write command. Branch, commit, push, merge, checkout and friends are refused
