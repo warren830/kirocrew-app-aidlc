@@ -172,7 +172,6 @@
   "activity.machine_lane.refused": "已拒绝无人值守派发。Studio 绝不伪造人类在场。",
   "activity.settings.updated": "设置已更新。",
   "activity.health.startup": "Studio 已启动。",
-  "activity.calibration.cleared": "已清除估算校准历史。",
   "audit.unknown_event": "当前版本的 Studio 不认识这个审计事件。原始块在证据抽屉中。",
   "audit.ARTIFACT_CREATED": "阶段智能体创建了产物。",
   "audit.ARTIFACT_UPDATED": "阶段智能体更新了产物。",

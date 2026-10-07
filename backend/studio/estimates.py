@@ -1,16 +1,12 @@
-"""What a plan will cost (§1.15): predictions, each labelled with its source; exact counts live in ``plan.py``.
-
-``credits`` is never invented (FR-EST-005), a band is ``history_calibrated`` only from ``CALIBRATION_MIN_SAMPLES``
-rows, and elapsed time is always an ``assumption``.
+"""What a plan will cost (§1.15): rule-band predictions, each labelled with its source; exact counts live in
+``plan.py``. ``credits`` is never invented (FR-EST-005) and elapsed time is always an ``assumption``.
 """
 
 from __future__ import annotations
 
-import json
 import math
-from collections import Counter
 from dataclasses import dataclass, fields
-from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, Mapping, Sequence
 
 from . import constants as C
 
@@ -19,8 +15,8 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from .storage import Storage
 
 UNIT_TURNS, UNIT_SECS = "turns", "secs"
-SOURCE_RULE_BAND, SOURCE_HISTORY, SOURCE_ASSUMPTION = "rule_band", "history_calibrated", "assumption"
-CONFIDENCE_LOW, CONFIDENCE_MEDIUM = "low", "medium"
+SOURCE_RULE_BAND, SOURCE_ASSUMPTION = "rule_band", "assumption"
+CONFIDENCE_LOW = "low"
 CREDITS_STATUS = "unavailable"
 
 #: Turn bands per stage class at ``Standard`` depth (§1.15 table, verbatim).
@@ -39,9 +35,6 @@ SUMMARY_CONFIRMATION_REQUIRED = "required"
 SUMMARY_CONFIRMATION_TURNS = 1
 SECS_PER_TURN_LOW, SECS_PER_TURN_HIGH = 90, 300
 ELAPSED_FACTOR_LOW, ELAPSED_FACTOR_HIGH = 3, 8
-#: p10/p90 rather than min/max, so one pathological run cannot widen every future estimate.
-CALIBRATION_LOW_PERCENTILE, CALIBRATION_HIGH_PERCENTILE = 0.10, 0.90
-_CALIBRATION_TABLE = "calibration"
 
 
 class Jsonable:
@@ -91,7 +84,8 @@ class CoverageLoss(Jsonable):
 
 @dataclass(frozen=True, slots=True)
 class Estimate(Jsonable):
-    """The whole prediction; the top-level ``source``/``confidence``/``samples`` mirror ``turns`` (§1.15)."""
+    """The whole prediction; the top-level ``source``/``confidence``/``samples`` mirror ``turns`` (§1.15).
+    ``samples`` stays on the wire and is always 0: there is no calibration history any more."""
 
     turns: Range
     active_secs: Range
@@ -133,21 +127,11 @@ def classify_stage(stage: "PlanStage") -> str:
     return _PHASE_CLASSES.get(phase, "inception_inline")
 
 
-@dataclass(frozen=True, slots=True)
-class _Cohort:
-    """What history says about one ``(scope, depth, stage_class)``; ``turns is None`` means "not enough"."""
-
-    samples: int
-    turns: tuple[int, int] | None = None
-    secs_per_turn: tuple[int, int] | None = None
-
-
 class EstimateService:
-    """Rule bands, local calibration and the refusal to invent a credit number. Sync: call off-thread."""
+    """Rule bands and the refusal to invent a credit number. Sync and pure."""
 
     def __init__(self, storage: "Storage", clock: "C.Clock") -> None:
-        self._storage = storage
-        self._clock = clock
+        """Both unused since calibration history was removed; kept so every constructor stays valid."""
 
     def estimate(
         self, stages: Sequence["PlanStage"], *, depth: str, units: int | None, scope: str
@@ -155,32 +139,23 @@ class EstimateService:
         """Bound the WHOLE plan: disabled rows feed ``coverage_lost``, and ``units=None`` prices one unit."""
         unit_count = max(1, int(units or 1))
         multiplier = DEPTH_MULTIPLIERS.get(depth, DEPTH_MULTIPLIERS[DEFAULT_DEPTH])
-        enabled = [s for s in stages if s.enabled]
-        classes = [classify_stage(stage) for stage in enabled]
-        history = self._history(scope, depth) if enabled else {}
-        cohorts = {name: _cohort(history.get(name, [])) for name in set(classes)}
-        rows: list[tuple[str, Range, int, int]] = []  # slug, turns, active_low, active_high
-        for stage, stage_class in zip(enabled, classes):
-            cohort = cohorts[stage_class]
-            turns = _stage_turns(stage, stage_class, cohort, multiplier, unit_count)
-            secs_low, secs_high = cohort.secs_per_turn or (SECS_PER_TURN_LOW, SECS_PER_TURN_HIGH)
-            rows.append((stage.slug, turns, turns.low * secs_low, turns.high * secs_high))
-        # Calibrated only when EVERY contributing class is: one guessed stage makes the total part guess.
-        calibrated = bool(enabled) and all(c.turns is not None for c in cohorts.values())
-        source = SOURCE_HISTORY if calibrated else SOURCE_RULE_BAND
-        confidence = CONFIDENCE_MEDIUM if calibrated else CONFIDENCE_LOW
-        total = Range(sum(r[1].low for r in rows), sum(r[1].high for r in rows), UNIT_TURNS, source, confidence)
-        active = Range(sum(r[2] for r in rows), sum(r[3] for r in rows), UNIT_SECS, source, confidence)
+        rows: list[tuple[str, Range]] = []
+        for stage in (s for s in stages if s.enabled):
+            rows.append((stage.slug, _stage_turns(stage, classify_stage(stage), multiplier, unit_count)))
+        total = Range(sum(r.low for _, r in rows), sum(r.high for _, r in rows), UNIT_TURNS,
+                      SOURCE_RULE_BAND, CONFIDENCE_LOW)
+        active = Range(total.low * SECS_PER_TURN_LOW, total.high * SECS_PER_TURN_HIGH, UNIT_SECS,
+                       SOURCE_RULE_BAND, CONFIDENCE_LOW)
         # An empty plan has nothing to wait for: `null`, not a 0–0 band that reads as "instant".
         elapsed = Range(active.low * ELAPSED_FACTOR_LOW, active.high * ELAPSED_FACTOR_HIGH, UNIT_SECS,
                         SOURCE_ASSUMPTION, CONFIDENCE_LOW) if rows else None
         ordered = sorted(rows, key=lambda r: (-r[1].high, r[0]))
         return Estimate(
             turns=total, active_secs=active, elapsed_secs=elapsed, credits=None, credits_status=CREDITS_STATUS,
-            source=source, confidence=confidence, samples=sum(c.samples for c in cohorts.values()),
+            source=SOURCE_RULE_BAND, confidence=CONFIDENCE_LOW, samples=0,
             dominant=tuple(
                 DominantStage(slug, int(round(turns.high * 100 / total.high)) if total.high > 0 else 0, turns)
-                for slug, turns, _low, _high in ordered
+                for slug, turns in ordered
             ),
             # `in_grid and not enabled` is exactly "the composition wanted this and the request does not".
             coverage_lost=tuple(
@@ -188,55 +163,9 @@ class EstimateService:
             ),
         )
 
-    def cohorts(self) -> list[dict[str, Any]]:
-        """Every cohort with at least one sample, for ``GET /calibration``."""
-        counts = Counter(
-            (str(row.get("scope") or ""), str(row.get("depth") or ""), str(row.get("stage_class") or ""))
-            for row in self._storage.select(_CALIBRATION_TABLE)
-        )
-        return [
-            {"scope": scope, "depth": depth, "stage_class": stage_class, "samples": samples}
-            for (scope, depth, stage_class), samples in sorted(counts.items())
-        ]
 
-    def clear(self) -> int:
-        """Delete every sample; returns how many went. Backs ``POST /calibration/clear``."""
-        ids = [row.get("id") for row in self._storage.select(_CALIBRATION_TABLE)]
-        for row_id in ids:
-            self._storage.delete(_CALIBRATION_TABLE, row_id)
-        return len(ids)
-
-    def _history(self, scope: str, depth: str) -> dict[str, list[dict[str, Any]]]:
-        """This plan's calibration rows by stage class: one query instead of one per class."""
-        out: dict[str, list[dict[str, Any]]] = {}
-        for row in self._storage.select(_CALIBRATION_TABLE, {"scope": scope, "depth": depth}):
-            out.setdefault(row.get("stage_class"), []).append(row)
-        return out
-
-
-def _cohort(rows: Sequence[Mapping[str, Any]]) -> _Cohort:
-    """A cohort's samples as bands, or as "not enough evidence" (rows without usable turns are no evidence)."""
-    turns: list[int] = []
-    ratios: list[int] = []
-    for row in rows:
-        actual = _as_dict(row.get("actual_json"))
-        observed = _non_negative_int(actual.get("turns"))
-        if observed <= 0:
-            continue
-        turns.append(observed)
-        secs = _non_negative_int(actual.get("active_secs"))
-        if secs > 0:
-            ratios.append(max(1, int(round(secs / observed))))
-    if len(turns) < C.CALIBRATION_MIN_SAMPLES:
-        return _Cohort(len(rows))
-    return _Cohort(len(rows), _band(turns), _band(ratios) if len(ratios) >= C.CALIBRATION_MIN_SAMPLES else None)
-
-
-def _stage_turns(stage: "PlanStage", stage_class: str, cohort: _Cohort, multiplier: float, units: int) -> Range:
-    """One stage's turn band. A calibrated band is used verbatim: re-applying multipliers would double-count."""
-    if cohort.turns is not None:
-        low, high = cohort.turns
-        return Range(max(0, low), max(low, high), UNIT_TURNS, SOURCE_HISTORY, CONFIDENCE_MEDIUM)
+def _stage_turns(stage: "PlanStage", stage_class: str, multiplier: float, units: int) -> Range:
+    """One stage's turn band at ``depth``, scaled per unit and uplifted for review."""
     base_low, base_high = RULE_BANDS[stage_class]
     if stage_class in PER_UNIT_CLASSES:
         base_low, base_high = base_low * units, base_high * units
@@ -246,36 +175,3 @@ def _stage_turns(stage: "PlanStage", stage_class: str, cohort: _Cohort, multipli
     if (getattr(stage, "summary_confirmation", None) or "") == SUMMARY_CONFIRMATION_REQUIRED:
         low, high = low + SUMMARY_CONFIRMATION_TURNS, high + SUMMARY_CONFIRMATION_TURNS
     return Range(low, max(low, high), UNIT_TURNS, SOURCE_RULE_BAND, CONFIDENCE_LOW)
-
-
-def _band(values: Sequence[int]) -> tuple[int, int]:
-    return _percentile(values, CALIBRATION_LOW_PERCENTILE), _percentile(values, CALIBRATION_HIGH_PERCENTILE)
-
-
-def _percentile(values: Iterable[int], q: float) -> int:
-    """Nearest-rank percentile: deterministic, so a golden test can predict it."""
-    ordered = sorted(values)
-    if not ordered:
-        return 0
-    index = int(round(q * (len(ordered) - 1)))
-    return int(ordered[max(0, min(len(ordered) - 1, index))])
-
-
-def _non_negative_int(value: Any) -> int:
-    try:
-        return max(0, int(value))
-    except (TypeError, ValueError):
-        return 0
-
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    """A ``*_json`` column that may arrive already decoded (``Storage``) or as text."""
-    if isinstance(value, Mapping):
-        return dict(value)
-    if isinstance(value, str) and value:
-        try:
-            parsed = json.loads(value)
-        except ValueError:
-            return {}
-        return dict(parsed) if isinstance(parsed, dict) else {}
-    return {}

@@ -259,9 +259,9 @@ export interface ResolveResponse { ok: true; action: ActionCard; created_action_
 export type PlanDepth = 'Minimal' | 'Standard' | 'Comprehensive'
 export interface PlanRequest { space: string; scope: string; depth: PlanDepth; test_strategy: PlanDepth | null; review_cap: 'none' | 'advisory' | 'adversarial' | null; project_type: 'Greenfield' | 'Brownfield' | null; overrides: Record<string, boolean>; objective: string | null; label: string | null; context: string | null }
 export interface PlanStage { slug: string; number: string; name: string; phase: string; execution: 'ALWAYS' | 'CONDITIONAL'; in_grid: boolean; enabled: boolean; locked: boolean; lock_reason: string | null; gate: boolean; review_class: string | null; reviewer: string | null; per_unit: boolean; produces: string[]; consumes: string[]; depends_on: string[]; conditional_on: string | null; state: StageState | null }
-export interface Range { low: number; high: number; unit: 'turns' | 'secs'; source: 'rule_band' | 'history_calibrated' | 'assumption'; confidence: 'low' | 'medium' }
+export interface Range { low: number; high: number; unit: 'turns' | 'secs'; source: 'rule_band' | 'assumption'; confidence: 'low' }
 export interface ExactCounts { stages: number; gates: number; artifacts: number; review_intensity: Record<'none' | 'advisory' | 'adversarial', number>; assumes_units: number | null }
-export interface Estimate { turns: Range; active_secs: Range; elapsed_secs: Range | null; credits: null; credits_status: 'unavailable'; source: 'rule_band' | 'history_calibrated'; confidence: 'low' | 'medium'; samples: number; dominant: { slug: string; share_pct: number; turns: Range }[]; coverage_lost: { slug: string; artifacts: string[] }[] }
+export interface Estimate { turns: Range; active_secs: Range; elapsed_secs: Range | null; credits: null; credits_status: 'unavailable'; source: 'rule_band'; confidence: 'low'; samples: number; dominant: { slug: string; share_pct: number; turns: Range }[]; coverage_lost: { slug: string; artifacts: string[] }[] }
 export interface PlanIssue { code: string; slugs: string[]; message_key: string; params: Record<string, unknown> }
 export interface PlanDiffEntry { slug: string; from_enabled: boolean; to_enabled: boolean; reason: string }
 export interface EffectivePlan { request: PlanRequest; scope_meta: Record<string, unknown> | null; stages: PlanStage[]; exact: ExactCounts; estimate: Estimate; diff: PlanDiffEntry[]; issues: PlanIssue[]; valid: boolean; products: string[]; graph_stage_count: number; engine_version: string | null }
@@ -313,7 +313,6 @@ export interface DiagnosticsBundle { generated_at: string; health: HealthRespons
 export interface ReposResponse { repos: RepoRecord[]; totals: { repos: number; unavailable: number; open_actions: number } }
 export interface RepoDetailResponse { repo: RepoRecord; intents: IntentSummary[]; transactions: TransactionResult[] }
 export interface LeasesResponse { leases: LeaseView[]; global_concurrency_cap: number; live_execution: number }
-export interface CalibrationResponse { cohorts: { scope: string; depth: string; stage_class: string; samples: number }[]; total: number; min_samples: number }
 export interface IntentsResponse { intents: IntentSummary[]; spaces: string[]; active_space: string }
 export interface ArtifactsResponse { artifacts: ArtifactMeta[]; truncated: boolean; count: number }
 export interface ArtifactResponse { artifact: ArtifactMeta; content: string | null; encoding: 'utf-8' | 'binary'; truncated: boolean; review: { verdict: string | null; findings: ReviewFinding[] } | null; toc: { level: number; text: string; anchor: string }[]; prior: { available: boolean; source: 'git' | null; diff: string | null } }
@@ -344,7 +343,6 @@ export interface RescanResponse { ok: true; scan: RepoScan }
 export interface ReceiptsResponse { receipts: Receipt[] }
 export interface TransactionResponse { transaction: TransactionResult }
 export interface PlanPreviewResponse { plan: EffectivePlan }
-export interface CalibrationClearResponse { ok: true; removed: number }
 export interface SlackCallbackResponse { ok: true; recorded: true }
 export interface MapResponse { map: MapModel }
 export interface IntentResponse { intent: IntentDetail }

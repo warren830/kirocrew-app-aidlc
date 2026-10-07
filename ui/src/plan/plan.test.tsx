@@ -39,7 +39,7 @@ function stage(over: Partial<PlanStage> & { slug: string }): PlanStage {
 }
 
 const turns: Range = { low: 70, high: 110, unit: 'turns', source: 'rule_band', confidence: 'low' }
-const secs: Range = { low: 14400, high: 25200, unit: 'secs', source: 'rule_band', confidence: 'medium' }
+const secs: Range = { low: 14400, high: 25200, unit: 'secs', source: 'rule_band', confidence: 'low' }
 const elapsed: Range = { low: 172800, high: 345600, unit: 'secs', source: 'assumption', confidence: 'low' }
 
 const STAGES: PlanStage[] = [
@@ -136,7 +136,8 @@ describe('the estimate panel', () => {
 
     const estimates = screen.getByLabelText('Estimates with source and confidence')
     expect(within(estimates).getByText('70 – 110')).toBeInTheDocument()
-    expect(within(estimates).getByText('range · rule-based band · low confidence · no local history yet')).toBeInTheDocument()
+    // Turns and active time are both rule bands; there is no local history to cite.
+    expect(within(estimates).getAllByText('range · rule-based band · low confidence')).toHaveLength(2)
     expect(within(estimates).getByText(/range · assumption · low confidence/)).toBeInTheDocument()
   })
 

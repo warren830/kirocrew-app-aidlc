@@ -1,4 +1,4 @@
-"""Health, payload, leases, diagnostics, settings, calibration, events, activity, advisor
+"""Health, payload, leases, diagnostics, settings, events, activity, advisor
 and the Slack correlation hint (§2.1, §2.5–§2.9).
 
 Two properties are worth more than the shapes here.
@@ -374,29 +374,6 @@ def test_activity_older_than_the_diagnostic_retention_is_deleted(sv, clock):
     clock.advance(2 * 86400)                       # the first row is now eight days old, the second two
     asyncio.run(sv.reconciler.tick())
     assert [row["kind"] for row in sv.storage.select("activity")] == ["settings.updated"]
-
-
-# --------------------------------------------------------------------------- #
-# calibration
-# --------------------------------------------------------------------------- #
-
-
-def test_calibration_reports_cohorts_and_the_minimum_sample_count(sv, routes, fake_host, studio):
-    status, body = call(sv, routes, "GET", "/calibration",
-                        CT.owner_request("GET", "/calibration", host=fake_host))
-    assert status == 200
-    assert body == {"cohorts": [], "total": 0,
-                    "min_samples": studio.constants.CALIBRATION_MIN_SAMPLES}
-
-
-def test_clearing_calibration_needs_an_explicit_confirmation(sv, routes, fake_host):
-    request = CT.owner_request("POST", "/calibration/clear", host=fake_host, body={})
-    status, body = call(sv, routes, "POST", "/calibration/clear", request)
-    assert status == 400 and body["code"] == "invalid_decision"
-
-    request = CT.owner_request("POST", "/calibration/clear", host=fake_host, body={"confirm": True})
-    status, body = call(sv, routes, "POST", "/calibration/clear", request)
-    assert status == 200 and body == {"ok": True, "removed": 0}
 
 
 # --------------------------------------------------------------------------- #

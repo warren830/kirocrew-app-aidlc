@@ -198,7 +198,6 @@ ACTIVITY_MAX_LIMIT = 500
 HUMAN_TEXT_RETENTION_DAYS_DEFAULT = 30
 HUMAN_TEXT_RETENTION_DAYS_MAX = 30
 ADVISOR_DRAFT_TTL_SECS = 24 * 3600
-CALIBRATION_MIN_SAMPLES = 10
 
 # advisor (§1.18, §1.18a)
 ADVISOR_AUTO_DRAFT_MAX_INFLIGHT = 2         # automatic drafts in flight across the whole installation (A24)
@@ -2151,11 +2150,11 @@ class ExactCounts: stages: int; gates: int; artifacts: int; review_intensity: di
 @dataclass(frozen=True, slots=True)
 class Range:
     low: int; high: int; unit: str                   # "turns" | "secs"
-    source: str; confidence: str                      # per-metric (FR-EST-002; review P26.4): source rule_band|history_calibrated|assumption ; confidence low|medium
+    source: str; confidence: str                      # per-metric (FR-EST-002; review P26.4): source rule_band|assumption ; confidence low
 @dataclass(frozen=True, slots=True)
 class Estimate:
     turns: Range; active_secs: Range; elapsed_secs: Range | None; credits: None; credits_status: str   # "unavailable"
-    source: str; confidence: str; samples: int          # the OVERALL source/confidence = those of `turns`; elapsed_secs carries its own ("assumption", "low")
+    source: str; confidence: str; samples: int          # the OVERALL source/confidence = those of `turns` (always rule_band/low); samples is always 0; elapsed_secs carries its own ("assumption", "low")
     dominant: tuple[DominantStage, ...]                 # DominantStage{slug, share_pct, turns: Range}
     coverage_lost: tuple[CoverageLoss, ...]             # CoverageLoss{slug, artifacts} for stages disabled by overrides
 @dataclass(frozen=True, slots=True)
@@ -2204,7 +2203,7 @@ class PlanService:
 class EstimateService:
     def __init__(self, storage: Storage, clock: Clock) -> None
     def estimate(self, stages: Sequence[PlanStage], *, depth: str, units: int | None, scope: str) -> Estimate
-    def clear(self) -> int
+        # storage, clock and scope are unused (calibration history was removed; the calibration table stays in SCHEMA)
 ```
 
 Plan rules: a stage is `locked` when `execution == "ALWAYS"` (`always`), when an enabled stage lists it in
@@ -2233,8 +2232,7 @@ Rule bands (turns per stage, Standard depth; `estimates.py::RULE_BANDS`):
 
 Multipliers: depth Minimal ×0.7, Standard ×1.0, Comprehensive ×1.4; review class advisory +30 %, adversarial +60 % of
 the stage band; `summary_confirmation == required` +1 turn. Active seconds per turn 90–300. `elapsed_secs` = active ×3
-to ×8 (`source: "assumption"`, `confidence: low`). `source = "history_calibrated"` (confidence `medium`) only when the
-cohort `(scope, depth, stage_class)` has ≥ `CALIBRATION_MIN_SAMPLES`; otherwise `rule_band` / `low`. `credits` is
+to ×8 (`source: "assumption"`, `confidence: low`). Every turn and active-time band is `rule_band` / `low`. `credits` is
 always `null` with `credits_status: "unavailable"` (FR-EST-005). `dominant` lists stages sorted by `turns.high`
 descending with `share_pct` of the total high estimate.
 
@@ -2333,7 +2331,7 @@ breaker.opened breaker.reset lease.acquired lease.released lease.reclaimed engin
 migration.previewed migration.applied advisor.requested advisor.auto_requested advisor.completed advisor.failed
 notification.sent slack.sent session.bound session.unbound session.takeover intent.created intent.paused
 intent.resumed intent.archived intent.restored intent.force_stop machine_lane.refused settings.updated
-health.startup calibration.cleared`.
+health.startup`.
 
 `advisor.auto_requested` is a separate kind from `advisor.requested` rather than a param on it (FR-ADV-010): the one
 question a user asks of a draft they did not ask for is "who started this?", and a kind is what Activity filters and
@@ -3159,14 +3157,12 @@ A `plan_draft` is never requested through this route (it has no card; see §2.3 
 draft carries `action_id: "plan:<repo_id>"`, `neutrality: null` and an extra `plan_proposal` key (§1.18a); a card draft's
 wire shape is unchanged and never carries that key.
 
-### 2.8 Settings and calibration (`handlers/settings.py`)
+### 2.8 Settings (`handlers/settings.py`)
 
 | Route | Body | Response | Errors |
 |---|---|---|---|
 | `GET /settings` | — | `{"settings": Settings.values, "capabilities": {...}, "versions": {...}, "updated_at"}` | |
 | `PUT /settings` [owner] | partial `Settings.values` | same as GET | `bad_body` (details.key/reason) |
-| `POST /calibration/clear` [owner] | `{"confirm": true}` | `{"ok": true, "removed": int}` | `invalid_decision` |
-| `GET /calibration` | — | `{"cohorts": [{"scope","depth","stage_class","samples"}], "total": int, "min_samples": 10}` | |
 
 ### 2.9 Slack correlation (`handlers/slack.py`)
 
@@ -3183,7 +3179,6 @@ opens a Slack deep link (review R09; Appendix A C24). ✗ `action_not_found`.
 ```
 GET  /health                                   GET  /payload                        GET  /leases
 GET  /diagnostics                              GET  /settings                       PUT  /settings
-GET  /calibration                              POST /calibration/clear
 GET  /events                                   GET  /events/poll                    GET  /activity
 GET  /actions                                  GET  /actions/{action_id}
 POST /actions/{action_id}/submit               POST /actions/{action_id}/delivery   POST /actions/{action_id}/retry
@@ -3474,9 +3469,9 @@ export interface DeliveryResponse { ok: true; action: ActionCard; idempotent: bo
 // ---- plan / estimates ----
 export interface PlanRequest { space: string; scope: string; depth: 'Minimal' | 'Standard' | 'Comprehensive'; test_strategy: 'Minimal' | 'Standard' | 'Comprehensive' | null; review_cap: 'none' | 'advisory' | 'adversarial' | null; project_type: 'Greenfield' | 'Brownfield' | null; overrides: Record<string, boolean>; objective: string | null; label: string | null; context: string | null }
 export interface PlanStage { slug: string; number: string; name: string; phase: string; execution: 'ALWAYS' | 'CONDITIONAL'; in_grid: boolean; enabled: boolean; locked: boolean; lock_reason: string | null; gate: boolean; review_class: string | null; reviewer: string | null; per_unit: boolean; produces: string[]; consumes: string[]; depends_on: string[]; conditional_on: string | null; state: StageState | null }
-export interface Range { low: number; high: number; unit: 'turns' | 'secs'; source: 'rule_band' | 'history_calibrated' | 'assumption'; confidence: 'low' | 'medium' }
+export interface Range { low: number; high: number; unit: 'turns' | 'secs'; source: 'rule_band' | 'assumption'; confidence: 'low' }
 export interface ExactCounts { stages: number; gates: number; artifacts: number; review_intensity: Record<'none' | 'advisory' | 'adversarial', number>; assumes_units: number | null }
-export interface Estimate { turns: Range; active_secs: Range; elapsed_secs: Range | null; credits: null; credits_status: 'unavailable'; source: 'rule_band' | 'history_calibrated'; confidence: 'low' | 'medium'; samples: number; dominant: { slug: string; share_pct: number; turns: Range }[]; coverage_lost: { slug: string; artifacts: string[] }[] }
+export interface Estimate { turns: Range; active_secs: Range; elapsed_secs: Range | null; credits: null; credits_status: 'unavailable'; source: 'rule_band'; confidence: 'low'; samples: number; dominant: { slug: string; share_pct: number; turns: Range }[]; coverage_lost: { slug: string; artifacts: string[] }[] }
 export interface PlanIssue { code: string; slugs: string[]; message_key: string; params: Record<string, unknown> }
 export interface EffectivePlan { request: PlanRequest; scope_meta: Record<string, unknown> | null; stages: PlanStage[]; exact: ExactCounts; estimate: Estimate; diff: { slug: string; from_enabled: boolean; to_enabled: boolean; reason: string }[]; issues: PlanIssue[]; valid: boolean; products: string[]; graph_stage_count: number; engine_version: string | null }
 export interface RecomposeProposal { intent_key: string; current_stage: string | null; skip: string[]; add: string[]; plan: EffectivePlan; argv_preview: string[]; allowed: boolean; refusals: PlanIssue[] }
@@ -3888,7 +3883,7 @@ Synthetic variants are built in `conftest.py` from the real files with the `fixt
 | `tests/test_actions.py` | every legal transition + every illegal pair raises IllegalTransition (exhaustive 12×12 matrix, incl. `Failed→Cancelled`); `wire_text_for` golden per decision incl. checkpoints and single vs grouped answers; submit: stale (each captured field incl. `evidence_digest`, `is_active`, null-vs-non-null), state_inconsistent, unstable, unbound, slot mismatch, `slot_busy` per reason, repo_busy, `intent_paused`/`intent_archived` on a gate approve, breaker_open only for run, `accept_as_is` refused below attempt 4, grouped answers refused while the capability is off; **two intents, cursor on B, approve on A → cursor switched to A and read back before Delivering** (review P01); cursor_mismatch releases the lease; exception after acquire releases the lease; success receipt durable before return (crash-after-CAS simulation); `record_delivery`: delivered/queued/uncertain, `not_delivered` accepted only when all four checks hold, otherwise `not_delivered_unproven` + DeliveryUncertain, client preflight codes, idempotent repeats never `illegal_transition`, late `delivered` sets `delivery_confirmed`; `resubmit` refused after confirmed delivery and on evidence-hash mismatch; retry of a Failed run inserts without collision; `cancel` legality per type; `pick_intent` runs the cursor switch under an admin lease and never a prompt; breaker thresholds (3 transient, 1 deterministic) and single notification |
 | `tests/test_reconciler.py` | startup re-evaluation of Delivering/Delivered/Processing (boot_id mismatch → never NotDelivered); ack deadline → DeliveryUncertain with evidence, then ReconciliationRequired next tick (never a dead end — review R07); `services.restart()` between send and ack → ReconciliationRequired, not NotDelivered (review R02); automatic ReconciliationRequired → NotDelivered only with all four proofs; processing deadline; `{queued:true}` waits in Delivered until the turn starts, capped (review P22); session replaced → uncertain; each resolution contract row (gate approve/reject, answers, confirm_summary, approve_plan, run/resume, prepare_commit, force_stop) using audit variants with same-second `GATE_APPROVED` (review P23); presence: `gate_approved_no_human_turn` and `gate_approved_two_human_turns` → `human_presence_anomaly` (review P04); cursor moved → `cursor_moved`; row found in another slot → `wrong_slot`; stable boundary conditions; failure classification table; retire stale cards (Failed untouched, `evidence.superseded`); `scan_fanout_bounded`; human_text purge; the advisor pass runs settle before autodraft, retention runs behind both in the same tick and retires drafts through `advisor.expire_stale`, and a raising `AdvisorBroker` does not abort the tick; the vanished-intent sweep (§1.13 step 1b): cards of an intent whose directory left the disk are retired with reason `intent_missing` only after the grace, an intent that returns inside the grace keeps every card, an unavailable repository and a truncated listing never sweep, `intents_on_disk()` follows the listing |
 | `tests/test_installer.py` | payload verify (tamper → degraded; unknown merge strategy → degraded); preview matrix per ownership × live state (table §1.14) incl. `mcp.json` (user server + token preserved, managed subtree conflict blocks) and `scope-grid.json` (the DevDelta fixture's composed `review-major-remediation` key preserved and a stale stock row refreshed → `merge_update`; a stock scope key carrying another grid blocks) and `harness.json` (a `plugins` array and `documentExtractors` config preserved; a changed `name` blocks) — A27; fragment digests golden; `state_version_migration_unconfirmed` for a v7 intent on upgrade/recovery (review P03); fault injection `before:`/`after:` every step → old install complete & receipt current, or `recovery_required` with blocking finding + card; retire/retire_blocked; newer_installed/same_version; recovery transaction clears flag; never writes outside managed paths (walk repo before/after); the foreign-harness-only repository (A26): `preview("install")` has `engine_from is None` and is offerable although `status == "installed"`, no `.claude/**` path appears in `entries`, `aidlc/**` entries of a repository with a live intent are `shell_exists`, `upgrade` and `recovery` are refused `not_installed`, and `same_version`/`newer_installed` follow `own_engine_version` rather than the foreign harness's version |
-| `tests/test_plan.py` / `tests/test_estimates.py` | lock reasons; dependency validation; exact counts golden for poc/feature/bugfix (32 & 33 graphs); recompose allowed set; create_intent via fake_bun (lease, verify, never sends); rule bands golden; calibration threshold (9 → rule_band, 10 → history_calibrated); credits always unavailable; clear; `catalog` reads scopes, grid and graph once and refuses an uninstalled repo (`not_installed`) |
+| `tests/test_plan.py` / `tests/test_estimates.py` | lock reasons; dependency validation; exact counts golden for poc/feature/bugfix (32 & 33 graphs); recompose allowed set; create_intent via fake_bun (lease, verify, never sends); rule bands golden; every band rule_band/low with samples 0; credits always unavailable; `catalog` reads scopes, grid and graph once and refuses an uninstalled repo (`not_installed`) |
 | `tests/test_plan_advice.py` | pure functions (§1.18a): `build_plan_questions` — Q1–Q4 fields and values, one `stages:<phase>` row per phase that has a choice, a phase whose stages are all ALWAYS is skipped, values in graph order, more than 26 options → `internal_error`; `resolve_plan_proposal` — letters → tokens, a verbatim option label with no letters resolves, an out-of-range letter leaves the whole row unresolved, an empty phase answer changes nothing, the ALWAYS guard, `scope`/`base_scope` always set, no-op overrides dropped, the returned map is complete |
 | `tests/test_git_observer.py` | observation parsing; write verb refusal (fake_git exit 97 never observed); prior version/diff caps; failures → `available=False` |
 | `tests/test_activity.py` | record/query/cursor; timeline merge keeps `source=aidlc` live and never stored; export redaction (paths, credentials, human_text policy) |

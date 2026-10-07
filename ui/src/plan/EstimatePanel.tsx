@@ -25,17 +25,14 @@ import { count, plural, range, unavailable } from '../lib/format'
 import type { EffectivePlan, PlanStage, Range } from '../lib/types'
 import { lockSentence } from './StageToggle'
 
-/** "range · rule-based band · low confidence [· no local history yet]". */
-export function rangeQualifier(i18n: I18n, value: Range, samples?: number): string {
+/** "range · rule-based band · low confidence". */
+export function rangeQualifier(i18n: I18n, value: Range): string {
   const sourceKey = `estimate.source.${value.source}`
-  const params = {
+  return i18n.t('estimate.qualifier', {
     kind: i18n.t('estimate.range'),
     source: i18n.has(sourceKey) ? i18n.t(sourceKey) : i18n.t('estimate.source.unknown'),
     confidence: i18n.t(`estimate.confidence.${value.confidence}`),
-  }
-  if (samples === undefined) return i18n.t('estimate.qualifier', params)
-  const text = samples > 0 ? plural(i18n, 'estimate.samples', samples) : i18n.t('estimate.samples.none')
-  return i18n.t('estimate.qualifierSamples', { ...params, samples: text })
+  })
 }
 
 function Stat({ icon, label, value, qualifier, small }: { icon: IconName; label: string; value: ReactNode; qualifier: string; small?: boolean }) {
@@ -113,7 +110,7 @@ export function EstimatePanel({ plan }: EstimatePanelProps) {
             label={t('estimate.turns')}
             small
             value={range(i18n, estimate.turns)}
-            qualifier={rangeQualifier(i18n, estimate.turns, estimate.samples)}
+            qualifier={rangeQualifier(i18n, estimate.turns)}
           />
           <Stat
             icon="clock"

@@ -26,7 +26,7 @@ import { ERROR_CODES, type ErrorCode } from './errorCodes.generated'
 import type {
   ActionDetailResponse, ActionResponse, ActionsResponse, ActivityResponse, AddRepoResponse,
   AdvisorDraftGetResponse, AdvisorDraftResponse, AdvisorKind, ArtifactResponse, ArtifactsResponse,
-  BindResponse, BindingResponse, BunToolResponse, CalibrationClearResponse, CalibrationResponse, ChatFolder, CommandResponse,
+  BindResponse, BindingResponse, BunToolResponse, ChatFolder, CommandResponse,
   DeliveryReport, DeliveryResponse, DiagnosticsBundle, DirectoryResponse, DoctorResponse, EventPollResponse,
   HealthResponse, HostChatReceipt, IntentCreateResponse, IntentGitResponse, IntentResponse,
   IntentsResponse, LeasesResponse, MapResponse, MaintenancePreview, MaintenanceResult, Organize, PauseResponse, PayloadResponse, PlanAdviseRequest, PlanPreviewResponse,
@@ -190,8 +190,6 @@ export interface StudioApi extends WorkspaceApi {
   diagnostics(opts?: { export?: boolean; includeHumanText?: boolean } & ReadOptions): Promise<DiagnosticsBundle>
   settings(o?: ReadOptions): Promise<SettingsResponse>
   putSettings(patch: DeepPartial<SettingsValues>): Promise<SettingsResponse>
-  calibration(o?: ReadOptions): Promise<CalibrationResponse>
-  clearCalibration(): Promise<CalibrationClearResponse>
 
   // -- events and activity ------------------------------------------------ //
   pollEvents(cursor: number | null, limit?: number, o?: ReadOptions): Promise<EventPollResponse>
@@ -339,8 +337,6 @@ export function useStudioApi(): StudioApi {
         ),
       settings: (o) => get('/settings', o),
       putSettings: (patch) => send('put', '/settings', patch),
-      calibration: (o) => get('/calibration', o),
-      clearCalibration: () => post('/calibration/clear', { confirm: true }),
 
       pollEvents: (cursor, limit, o) =>
         get(`/events/poll${query({ cursor, limit })}`, o),

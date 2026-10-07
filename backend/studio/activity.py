@@ -127,7 +127,6 @@ ACTIVITY_KINDS: tuple[str, ...] = (
     "machine_lane.refused",
     "settings.updated",
     "health.startup",
-    "calibration.cleared",
 )
 _KIND_SET = frozenset(ACTIVITY_KINDS)
 

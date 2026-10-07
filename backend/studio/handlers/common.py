@@ -500,8 +500,6 @@ ROUTE_ORDER: tuple[tuple[str, str], ...] = (
     ("GET", "/tools/bun"),
     ("PUT", "/tools/bun"),
     ("POST", "/tools/bun/probe"),
-    ("GET", "/calibration"),
-    ("POST", "/calibration/clear"),
     ("GET", "/events"),
     ("GET", "/events/poll"),
     ("GET", "/activity"),

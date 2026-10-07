@@ -127,7 +127,7 @@ function planFor(
     },
     estimate: {
       turns: { low: 70, high: 110, unit: 'turns', source: 'rule_band', confidence: 'low' },
-      active_secs: { low: 14400, high: 25200, unit: 'secs', source: 'rule_band', confidence: 'medium' },
+      active_secs: { low: 14400, high: 25200, unit: 'secs', source: 'rule_band', confidence: 'low' },
       elapsed_secs: null,
       credits: null,
       credits_status: 'unavailable',
