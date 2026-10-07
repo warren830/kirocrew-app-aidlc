@@ -592,10 +592,10 @@
    "last_activity_at": null,
    "markers": {
     "compose_pending": false,
-    "engine_touch_at": "2026-10-07T15:47:55Z",
+    "engine_touch_at": "<volatile>",
     "goal_stop_present": true,
     "hooks_health": {},
-    "human_turn_at": "2026-10-07T15:47:55Z",
+    "human_turn_at": "<volatile>",
     "recovery": {
      "Current stage": "build-and-test",
      "Last validated": "2026-09-02T03:53:25Z",

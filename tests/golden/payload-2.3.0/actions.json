@@ -143,9 +143,9 @@
      "findings": [],
      "git": null,
      "markers": {
-      "engine_touch_at": null,
+      "engine_touch_at": "<volatile>",
       "goal_stop_present": false,
-      "human_turn_at": null,
+      "human_turn_at": "<volatile>",
       "recovery": null,
       "turn_counter": 41
      },
@@ -510,9 +510,9 @@
      "findings": [],
      "git": null,
      "markers": {
-      "engine_touch_at": null,
+      "engine_touch_at": "<volatile>",
       "goal_stop_present": false,
-      "human_turn_at": null,
+      "human_turn_at": "<volatile>",
       "recovery": null,
       "turn_counter": 41
      },

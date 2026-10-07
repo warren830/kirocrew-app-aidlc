@@ -621,10 +621,10 @@
    "last_activity_at": "2026-08-21T16:40:09Z",
    "markers": {
     "compose_pending": false,
-    "engine_touch_at": null,
+    "engine_touch_at": "<volatile>",
     "goal_stop_present": false,
     "hooks_health": {},
-    "human_turn_at": null,
+    "human_turn_at": "<volatile>",
     "recovery": null,
     "turn_counter": 41
    },

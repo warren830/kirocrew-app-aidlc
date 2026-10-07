@@ -124,9 +124,9 @@
     ],
     "git": null,
     "markers": {
-     "engine_touch_at": null,
+     "engine_touch_at": "<volatile>",
      "goal_stop_present": false,
-     "human_turn_at": null,
+     "human_turn_at": "<volatile>",
      "recovery": {
       "Current stage": "feasibility",
       "Last validated": "2026-07-31T14:17:23Z",

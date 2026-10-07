@@ -125,9 +125,9 @@
       ],
       "git": null,
       "markers": {
-       "engine_touch_at": null,
+       "engine_touch_at": "<volatile>",
        "goal_stop_present": false,
-       "human_turn_at": null,
+       "human_turn_at": "<volatile>",
        "recovery": null,
        "turn_counter": null
       },
@@ -314,9 +314,9 @@
       ],
       "git": null,
       "markers": {
-       "engine_touch_at": null,
+       "engine_touch_at": "<volatile>",
        "goal_stop_present": false,
-       "human_turn_at": null,
+       "human_turn_at": "<volatile>",
        "recovery": null,
        "turn_counter": null
       },
@@ -541,10 +541,10 @@
    "last_activity_at": "2026-09-04T09:00:03Z",
    "markers": {
     "compose_pending": false,
-    "engine_touch_at": null,
+    "engine_touch_at": "<volatile>",
     "goal_stop_present": false,
     "hooks_health": {},
-    "human_turn_at": null,
+    "human_turn_at": "<volatile>",
     "recovery": null,
     "turn_counter": null
    },

@@ -128,7 +128,9 @@ SCENARIOS: dict[str, Callable[[Any], Path]] = {
 
 #: File modification times (and what is derived from them) are the only inputs that change between runs.
 _VOLATILE_KEYS = {"mtime", "mtime_ns", "scanned_at", "last_seen", "added_at", "checked_at", "generated_at",
-                  "waiting_since", "free_space_bytes", "st_ino", "st_dev"}
+                  "waiting_since", "free_space_bytes", "st_ino", "st_dev",
+                  # Derived from fixture file mtimes, which are the checkout time of this worktree.
+                  "engine_touch_at", "human_turn_at"}
 
 
 def _normalise(value: Any, roots: list[str]) -> Any:
