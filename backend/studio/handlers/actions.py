@@ -20,7 +20,9 @@ from aiohttp import web
 from .. import constants as C
 from ..errors import StudioError
 from ..projection import ORGANIZE_MODES, Projection
-from .common import cards_for, json_ok, parse_intent_key, query_int, query_str, read_json, route
+from .common import (
+    cards_for, json_ok, parse_intent_key, query_int, query_str, read_json, route, without_archived,
+)
 
 #: Priority band → i18n label. The four bands are the queue's own vocabulary (FR-ACT-003) and the UI
 #: catalogue has one entry each (`queue.group.*`, §3.3).
@@ -59,6 +61,10 @@ async def list_actions(services: Any, request: web.Request) -> web.Response:
         intent_dir=intent_dir,
         include_revision=include == "revision",
     )
+    if not intent_dir:
+        # An archived intent's waiting cards are set aside with it (§11.2); asking for that intent by
+        # name still shows them, so its own page is not silently empty.
+        records = await without_archived(services, records)
     if type_filter:
         records = [rec for rec in records if rec.type == type_filter]
     if status_filter:

@@ -38,6 +38,7 @@ from .common import (
     repo_or_404,
     route,
     summarize_intent,
+    without_archived,
 )
 
 _LOG = logging.getLogger("kirocrew.app.aidlc-studio")
@@ -568,7 +569,7 @@ async def _repo_json(
                 "receipt_id": prior_id, "engine_version": prior["engine_version"],
             }
 
-    live = await services.actions.list_live(repo_id=repo.repo_id)
+    live = await without_archived(services, await services.actions.list_live(repo_id=repo.repo_id))
     intent_count = len(summaries) if summaries is not None else await _count_intents(services, repo)
     body["counts"] = {
         "intents": intent_count,

@@ -1401,6 +1401,7 @@ def test_archive_refuses_a_live_card_and_restore_never_does(registered, errors, 
         run(binder.set_archived("r_1", "default", INTENT, True))
     assert caught.value.code == "action_not_submittable"
     assert caught.value.details["operation"] == "archive"
+    assert caught.value.details["reason"] == "live_not_paused"
 
     store.cas_update("actions", "a_1", 0, {"status": "StateChanged"})
     assert run(binder.set_archived("r_1", "default", INTENT, True)).archive_state == "archived"
@@ -1408,6 +1409,31 @@ def test_archive_refuses_a_live_card_and_restore_never_does(registered, errors, 
     view = run(binder.set_archived("r_1", "default", INTENT, False))
     assert view.archive_state == "active" and view.archived is False
     assert activity.kinds() == ["intent.archived", "intent.restored"]
+
+
+def test_a_paused_intent_archives_with_its_waiting_cards(registered, binder, store):
+    """PRD §11.2: Paused -> Archived. The waiting card is set aside with the intent, not closed."""
+    run(binder.get("r_1", "default", INTENT))
+    action(store, "a_1", status="Queued")
+    run(binder.set_paused("r_1", "default", INTENT, True))
+    assert run(binder.set_archived("r_1", "default", INTENT, True)).archived is True
+    assert store.get("actions", "a_1")["status"] == "Queued"
+    assert run(binder.archived_intents()) == frozenset({("r_1", "default", INTENT)})
+
+
+@pytest.mark.parametrize("status", ["Delivering", "Delivered", "Processing", "DeliveryUncertain",
+                                    "ReconciliationRequired"])
+def test_a_decision_that_may_have_reached_aidlc_blocks_archive_even_when_paused(
+    registered, errors, binder, store, status
+):
+    run(binder.get("r_1", "default", INTENT))
+    action(store, "a_1", status=status)
+    run(binder.set_paused("r_1", "default", INTENT, True))
+    with pytest.raises(errors.StudioError) as caught:
+        run(binder.set_archived("r_1", "default", INTENT, True))
+    assert caught.value.code == "action_not_submittable"
+    assert caught.value.details["reason"] == "in_flight"
+    assert run(binder.archived_intents()) == frozenset()
 
 
 def test_a_live_card_for_another_intent_does_not_block_this_one(registered, binder, store):

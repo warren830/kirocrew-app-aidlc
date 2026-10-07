@@ -425,6 +425,17 @@ async def intent_view(
     }
 
 
+async def without_archived(services: Any, records: list[Any]) -> list[Any]:
+    """Drop the cards of archived intents: the queue's and the repository counts' view (§11.2)."""
+    archived = await services.sessions.archived_intents()
+    if not archived:
+        return records
+    return [
+        rec for rec in records
+        if (C.attr(rec, "repo_id"), C.attr(rec, "space") or C.DEFAULT_SPACE, C.attr(rec, "intent_dir")) not in archived
+    ]
+
+
 async def summarize_intent(services: Any, repo: Any, snap: Any, view: Mapping[str, Any]) -> Any:
     """``IntentSummary`` from an ``intent_view`` bundle."""
     return await asyncio.to_thread(

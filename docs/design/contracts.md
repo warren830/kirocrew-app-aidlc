@@ -149,7 +149,7 @@ updating this document.
 
 ```python
 APP_NAME = "aidlc-studio"
-APP_VERSION = "1.1.2"                       # must equal app.json "version" (test pins)
+APP_VERSION = "1.1.3"                       # must equal app.json "version" (test pins)
 MIN_KIROCREW_VERSION = "0.3.0"              # == app.json minKiroCrewVersion (architecture §2/A10; review P19/R05)
 BUNDLED_ENGINE_VERSION = "2.7.1"            # == payload/manifest.json engineVersion. Tests assert equality with
 BUNDLED_STATE_VERSION = 8                   #    PayloadManifest.load(); they never compare against a literal
@@ -2952,7 +2952,7 @@ Notation below: `→ 200 {…}` success body; `✗ code` = error codes the route
 
 `GET /health` → 200
 ```json
-{"app": "aidlc-studio", "version": "1.1.2", "bundled_engine_version": "2.10.0", "min_kirocrew_version": "0.3.0",
+{"app": "aidlc-studio", "version": "1.1.3", "bundled_engine_version": "2.10.0", "min_kirocrew_version": "0.3.0",
  "boot_id": "…16 hex…",                                       // Services.boot_id; values above are examples — they come from constants/manifest
  "host_version": "0.5.0-insider.9" | null, "started_at": iso|null, "status": "healthy"|"degraded"|"error",
  "issues": [str],
@@ -3074,7 +3074,7 @@ Transactions run in the background after the 202; progress via `transaction.upda
 | `POST …/{intent}/session/unbind` [owner] | `{}` | `{"ok": true, "binding"}` | `action_not_submittable` (live action) |
 | `POST …/{intent}/session/takeover/preview` [owner] | `{}` | `{"candidates": [{"slot": SlotView, "reason": str}], "current": BindingView}` | `host_unavailable` |
 | `POST …/{intent}/session/takeover` [owner] | `{"slot_key"}` | `{"ok": true, "binding"}` | as bind + `action_not_submittable` |
-| `POST …/{intent}/archive` [owner] | `{}` | `{"ok": true, "binding"}` | `action_not_submittable` when live actions |
+| `POST …/{intent}/archive` [owner] | `{}` | `{"ok": true, "binding"}` | `action_not_submittable` with `details.reason`: `in_flight` while a card is `Delivering`/`Delivered`/`Processing`/`DeliveryUncertain`/`ReconciliationRequired` (even when paused); `live_not_paused` while other live cards exist on an unpaused intent (PRD §11.2: archive from `Paused`). An archived intent's cards stay live but leave `GET /actions` (unless `intent=` names it) and the repository's `open_actions` until restore (A35) |
 | `POST …/{intent}/restore` [owner] | `{}` | `{"ok": true, "binding"}` | |
 
 The `force-stop` action is the host-control lane (§1.12): the route commits the `Delivering` record, the UI calls the
