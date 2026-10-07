@@ -1,1438 +1,1278 @@
 {
  "body": {
-  "map": {
-   "counts": {
-    "gates": 30,
-    "stages_known": 33,
-    "stages_selected": 33
-   },
-   "graph_version": "2.10.0",
-   "intent_key": "260907-error-burst",
-   "phases": [
+  "map_inputs": {
+   "active_unit": null,
+   "artifacts": [
     {
-     "counts": {
-      "done": 3,
-      "in_scope": 3,
-      "skipped": 0,
-      "total": 3
-     },
-     "phase": "initialization",
-     "stages": [
-      {
-       "agent": "orchestrator",
-       "artifacts": [],
-       "consumes": [],
-       "dependents": [
-        "workspace-detection"
-       ],
-       "depends_on": [],
-       "elapsed_secs": null,
-       "execution": "ALWAYS",
-       "gate": false,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Workspace Scaffold",
-       "number": "0.1",
-       "per_unit": false,
-       "phase": "initialization",
-       "produces": [],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "workspace-scaffold",
-       "state": "completed",
-       "summary_confirmation": null,
-       "units": []
-      },
-      {
-       "agent": "orchestrator",
-       "artifacts": [],
-       "consumes": [],
-       "dependents": [
-        "state-init"
-       ],
-       "depends_on": [
-        "workspace-scaffold"
-       ],
-       "elapsed_secs": null,
-       "execution": "ALWAYS",
-       "gate": false,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Workspace Detection",
-       "number": "0.2",
-       "per_unit": false,
-       "phase": "initialization",
-       "produces": [],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "workspace-detection",
-       "state": "completed",
-       "summary_confirmation": null,
-       "units": []
-      },
-      {
-       "agent": "orchestrator",
-       "artifacts": [],
-       "consumes": [],
-       "dependents": [
-        "reverse-engineering",
-        "practices-discovery"
-       ],
-       "depends_on": [
-        "workspace-detection"
-       ],
-       "elapsed_secs": null,
-       "execution": "ALWAYS",
-       "gate": false,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "State Initialization",
-       "number": "0.3",
-       "per_unit": false,
-       "phase": "initialization",
-       "produces": [],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "state-init",
-       "state": "completed",
-       "summary_confirmation": null,
-       "units": []
-      }
-     ],
-     "status": "Verified"
+     "artifact_id": "4d2798156b8f8e21c4a59449bb9c3783f96857c4",
+     "kind": "other",
+     "mtime": "<volatile>",
+     "name": "aidlc-state.md",
+     "phase": null,
+     "relpath": "aidlc/spaces/default/intents/260907-error-burst/aidlc-state.md",
+     "renderable": true,
+     "sha256": "0d090d7936fd00eb7b479a0581399ad6a53085d5156beae260abb6c80473e7c2",
+     "size": 3374,
+     "stage": null,
+     "unit": null
     },
     {
-     "counts": {
-      "done": 1,
-      "in_scope": 7,
-      "skipped": 0,
-      "total": 7
-     },
-     "phase": "ideation",
-     "stages": [
-      {
-       "agent": "aidlc-product-agent",
-       "artifacts": [],
-       "consumes": [],
-       "dependents": [
-        "market-research",
-        "feasibility",
-        "scope-definition",
-        "approval-handoff"
-       ],
-       "depends_on": [],
-       "elapsed_secs": null,
-       "execution": "ALWAYS",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Intent Capture & Framing",
-       "number": "1.1",
-       "per_unit": false,
-       "phase": "ideation",
-       "produces": [
-        "intent-statement",
-        "stakeholder-map",
-        "intent-capture-questions"
-       ],
-       "review_class": "advisory",
-       "reviewer": "aidlc-product-lead-agent",
-       "skipped_reason": null,
-       "slug": "intent-capture",
-       "state": "completed",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-product-agent",
-       "artifacts": [],
-       "consumes": [
-        "intent-statement"
-       ],
-       "dependents": [
-        "feasibility"
-       ],
-       "depends_on": [
-        "intent-capture"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Market Research",
-       "number": "1.2",
-       "per_unit": false,
-       "phase": "ideation",
-       "produces": [
-        "competitive-analysis",
-        "market-trends",
-        "build-vs-buy",
-        "market-research-questions"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "market-research",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-architect-agent",
-       "artifacts": [],
-       "consumes": [
-        "intent-statement",
-        "competitive-analysis",
-        "market-trends",
-        "build-vs-buy"
-       ],
-       "dependents": [
-        "scope-definition",
-        "approval-handoff"
-       ],
-       "depends_on": [
-        "intent-capture",
-        "market-research"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Feasibility & Constraints",
-       "number": "1.3",
-       "per_unit": false,
-       "phase": "ideation",
-       "produces": [
-        "feasibility-assessment",
-        "constraint-register",
-        "raid-log",
-        "feasibility-questions"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "feasibility",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-product-agent",
-       "artifacts": [],
-       "consumes": [
-        "intent-statement",
-        "feasibility-assessment",
-        "constraint-register"
-       ],
-       "dependents": [
-        "team-formation",
-        "rough-mockups",
-        "approval-handoff"
-       ],
-       "depends_on": [
-        "intent-capture",
-        "feasibility"
-       ],
-       "elapsed_secs": null,
-       "execution": "ALWAYS",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Scope Definition",
-       "number": "1.4",
-       "per_unit": false,
-       "phase": "ideation",
-       "produces": [
-        "scope-document",
-        "intent-backlog",
-        "scope-definition-questions"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "scope-definition",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-delivery-agent",
-       "artifacts": [],
-       "consumes": [
-        "scope-document",
-        "intent-backlog",
-        "feasibility-assessment"
-       ],
-       "dependents": [
-        "rough-mockups",
-        "approval-handoff"
-       ],
-       "depends_on": [
-        "scope-definition"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Team Formation",
-       "number": "1.5",
-       "per_unit": false,
-       "phase": "ideation",
-       "produces": [
-        "team-assessment",
-        "skill-matrix",
-        "mob-composition",
-        "team-formation-questions"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "team-formation",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-design-agent",
-       "artifacts": [],
-       "consumes": [
-        "intent-statement",
-        "scope-document",
-        "intent-backlog"
-       ],
-       "dependents": [
-        "approval-handoff"
-       ],
-       "depends_on": [
-        "scope-definition",
-        "team-formation"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Rough Mockups",
-       "number": "1.6",
-       "per_unit": false,
-       "phase": "ideation",
-       "produces": [
-        "wireframes",
-        "user-flow",
-        "rough-mockups-questions"
-       ],
-       "review_class": "advisory",
-       "reviewer": "aidlc-product-lead-agent",
-       "skipped_reason": null,
-       "slug": "rough-mockups",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-delivery-agent",
-       "artifacts": [],
-       "consumes": [
-        "intent-statement",
-        "stakeholder-map",
-        "scope-document",
-        "intent-backlog",
-        "competitive-analysis",
-        "feasibility-assessment",
-        "constraint-register",
-        "team-assessment",
-        "wireframes"
-       ],
-       "dependents": [
-        "requirements-analysis"
-       ],
-       "depends_on": [
-        "intent-capture",
-        "feasibility",
-        "scope-definition",
-        "team-formation",
-        "rough-mockups"
-       ],
-       "elapsed_secs": null,
-       "execution": "ALWAYS",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Approval & Handoff",
-       "number": "1.7",
-       "per_unit": false,
-       "phase": "ideation",
-       "produces": [
-        "initiative-brief",
-        "decision-log",
-        "approval-handoff-questions"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "approval-handoff",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      }
-     ],
-     "status": "Verified"
-    },
-    {
-     "counts": {
-      "done": 1,
-      "in_scope": 9,
-      "skipped": 0,
-      "total": 9
-     },
-     "phase": "inception",
-     "stages": [
-      {
-       "agent": "aidlc-developer-agent",
-       "artifacts": [],
-       "consumes": [],
-       "dependents": [
-        "practices-discovery",
-        "requirements-analysis"
-       ],
-       "depends_on": [
-        "state-init"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "pipeline",
-       "name": "Reverse Engineering",
-       "number": "2.1",
-       "per_unit": false,
-       "phase": "inception",
-       "produces": [
-        "business-overview",
-        "architecture",
-        "code-structure",
-        "api-documentation",
-        "component-inventory",
-        "technology-stack",
-        "dependencies",
-        "code-quality-assessment",
-        "reverse-engineering-timestamp"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "reverse-engineering",
-       "state": "completed",
-       "summary_confirmation": null,
-       "units": []
-      },
-      {
-       "agent": "aidlc-pipeline-deploy-agent",
-       "artifacts": [],
-       "consumes": [
-        "code-structure",
-        "technology-stack",
-        "dependencies",
-        "code-quality-assessment",
-        "architecture",
-        "business-overview"
-       ],
-       "dependents": [],
-       "depends_on": [
-        "state-init",
-        "reverse-engineering"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "subagent",
-       "name": "Practices Discovery",
-       "number": "2.2",
-       "per_unit": false,
-       "phase": "inception",
-       "produces": [
-        "team-practices",
-        "discovered-rules",
-        "evidence",
-        "practices-discovery-timestamp"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "practices-discovery",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-product-agent",
-       "artifacts": [],
-       "consumes": [
-        "intent-statement",
-        "scope-document",
-        "business-overview",
-        "architecture",
-        "code-structure",
-        "team-practices"
-       ],
-       "dependents": [
-        "user-stories",
-        "domain-design"
-       ],
-       "depends_on": [
-        "approval-handoff",
-        "reverse-engineering"
-       ],
-       "elapsed_secs": null,
-       "execution": "ALWAYS",
-       "gate": true,
-       "in_scope": true,
-       "is_current": true,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Requirements Analysis",
-       "number": "2.3",
-       "per_unit": false,
-       "phase": "inception",
-       "produces": [
-        "requirements",
-        "requirements-analysis-questions"
-       ],
-       "review_class": "advisory",
-       "reviewer": "aidlc-product-lead-agent",
-       "skipped_reason": null,
-       "slug": "requirements-analysis",
-       "state": "in_progress",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-product-agent",
-       "artifacts": [],
-       "consumes": [
-        "requirements",
-        "business-overview",
-        "component-inventory",
-        "team-practices"
-       ],
-       "dependents": [
-        "refined-mockups"
-       ],
-       "depends_on": [
-        "requirements-analysis"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "mob",
-       "name": "User Stories",
-       "number": "2.4",
-       "per_unit": false,
-       "phase": "inception",
-       "produces": [
-        "stories",
-        "personas",
-        "user-stories-assessment",
-        "traceability"
-       ],
-       "review_class": "advisory",
-       "reviewer": "aidlc-product-lead-agent",
-       "skipped_reason": null,
-       "slug": "user-stories",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-design-agent",
-       "artifacts": [],
-       "consumes": [
-        "wireframes",
-        "user-flow",
-        "stories",
-        "requirements",
-        "team-practices"
-       ],
-       "dependents": [
-        "domain-design"
-       ],
-       "depends_on": [
-        "user-stories"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Refined Mockups",
-       "number": "2.5",
-       "per_unit": false,
-       "phase": "inception",
-       "produces": [
-        "mockups",
-        "interaction-spec",
-        "design-system-mapping",
-        "accessibility-checklist",
-        "refined-mockups-questions"
-       ],
-       "review_class": "advisory",
-       "reviewer": "aidlc-product-lead-agent",
-       "skipped_reason": null,
-       "slug": "refined-mockups",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-architect-agent",
-       "artifacts": [],
-       "consumes": [
-        "requirements",
-        "stories",
-        "architecture",
-        "component-inventory",
-        "team-practices"
-       ],
-       "dependents": [
-        "units-generation"
-       ],
-       "depends_on": [
-        "requirements-analysis",
-        "refined-mockups"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Domain Design",
-       "number": "2.6",
-       "per_unit": false,
-       "phase": "inception",
-       "produces": [
-        "components",
-        "decisions",
-        "traceability"
-       ],
-       "review_class": "advisory",
-       "reviewer": "aidlc-architecture-reviewer-agent",
-       "skipped_reason": null,
-       "slug": "domain-design",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-architect-agent",
-       "artifacts": [],
-       "consumes": [
-        "components",
-        "decisions",
-        "requirements",
-        "stories"
-       ],
-       "dependents": [
-        "contract-design",
-        "delivery-planning",
-        "functional-design",
-        "nfr-requirements",
-        "nfr-design",
-        "infrastructure-design",
-        "code-generation"
-       ],
-       "depends_on": [
-        "domain-design"
-       ],
-       "elapsed_secs": null,
-       "execution": "ALWAYS",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Units Generation",
-       "number": "2.7",
-       "per_unit": false,
-       "phase": "inception",
-       "produces": [
-        "unit-of-work",
-        "unit-of-work-dependency",
-        "unit-of-work-story-map",
-        "traceability"
-       ],
-       "review_class": "advisory",
-       "reviewer": "aidlc-architecture-reviewer-agent",
-       "skipped_reason": null,
-       "slug": "units-generation",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-architect-agent",
-       "artifacts": [],
-       "consumes": [
-        "unit-of-work",
-        "unit-of-work-dependency",
-        "components",
-        "requirements"
-       ],
-       "dependents": [
-        "functional-design"
-       ],
-       "depends_on": [
-        "units-generation"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Contract Design",
-       "number": "2.8",
-       "per_unit": false,
-       "phase": "inception",
-       "produces": [
-        "contract-summary"
-       ],
-       "review_class": "advisory",
-       "reviewer": "aidlc-architecture-reviewer-agent",
-       "skipped_reason": null,
-       "slug": "contract-design",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-delivery-agent",
-       "artifacts": [],
-       "consumes": [
-        "requirements",
-        "stories",
-        "mockups",
-        "components",
-        "unit-of-work",
-        "unit-of-work-dependency",
-        "unit-of-work-story-map",
-        "contract-summary",
-        "team-practices"
-       ],
-       "dependents": [],
-       "depends_on": [
-        "units-generation"
-       ],
-       "elapsed_secs": null,
-       "execution": "ALWAYS",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Delivery Planning",
-       "number": "2.9",
-       "per_unit": false,
-       "phase": "inception",
-       "produces": [
-        "bolt-plan",
-        "team-allocation",
-        "risk-and-sequencing-rationale",
-        "external-dependency-map",
-        "delivery-planning-questions"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "delivery-planning",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      }
-     ],
-     "status": "Verified"
-    },
-    {
-     "counts": {
-      "done": 2,
-      "in_scope": 7,
-      "skipped": 0,
-      "total": 7
-     },
-     "phase": "construction",
-     "stages": [
-      {
-       "agent": "aidlc-architect-agent",
-       "artifacts": [],
-       "consumes": [
-        "unit-of-work",
-        "unit-of-work-story-map",
-        "requirements",
-        "components",
-        "contract-summary"
-       ],
-       "dependents": [
-        "nfr-requirements",
-        "code-generation"
-       ],
-       "depends_on": [
-        "units-generation",
-        "contract-design"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Functional Design",
-       "number": "3.1",
-       "per_unit": true,
-       "phase": "construction",
-       "produces": [
-        "entities",
-        "rules",
-        "functional-spec",
-        "traceability"
-       ],
-       "review_class": "adversarial",
-       "reviewer": "aidlc-architecture-reviewer-agent",
-       "skipped_reason": null,
-       "slug": "functional-design",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-architect-agent",
-       "artifacts": [],
-       "consumes": [
-        "functional-spec",
-        "rules",
-        "requirements",
-        "contract-summary",
-        "technology-stack"
-       ],
-       "dependents": [
-        "nfr-design",
-        "code-generation",
-        "performance-validation"
-       ],
-       "depends_on": [
-        "units-generation",
-        "functional-design"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "NFR Requirements",
-       "number": "3.2",
-       "per_unit": true,
-       "phase": "construction",
-       "produces": [
-        "performance-requirements",
-        "security-requirements",
-        "scalability-requirements",
-        "reliability-requirements",
-        "observability-requirements",
-        "tech-stack-decisions",
-        "traceability"
-       ],
-       "review_class": "adversarial",
-       "reviewer": "aidlc-architecture-reviewer-agent",
-       "skipped_reason": null,
-       "slug": "nfr-requirements",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-architect-agent",
-       "artifacts": [],
-       "consumes": [
-        "performance-requirements",
-        "security-requirements",
-        "scalability-requirements",
-        "reliability-requirements",
-        "observability-requirements",
-        "tech-stack-decisions",
-        "functional-spec",
-        "contract-summary"
-       ],
-       "dependents": [
-        "infrastructure-design",
-        "code-generation",
-        "observability-setup",
-        "performance-validation"
-       ],
-       "depends_on": [
-        "units-generation",
-        "nfr-requirements"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "NFR Design",
-       "number": "3.3",
-       "per_unit": true,
-       "phase": "construction",
-       "produces": [
-        "performance-design",
-        "security-design",
-        "scalability-design",
-        "reliability-design",
-        "observability-design",
-        "logical-components",
-        "traceability"
-       ],
-       "review_class": "adversarial",
-       "reviewer": "aidlc-architecture-reviewer-agent",
-       "skipped_reason": null,
-       "slug": "nfr-design",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-aws-platform-agent",
-       "artifacts": [],
-       "consumes": [
-        "performance-design",
-        "security-design",
-        "scalability-design",
-        "reliability-design",
-        "observability-design",
-        "logical-components",
-        "components",
-        "functional-spec",
-        "contract-summary"
-       ],
-       "dependents": [
-        "code-generation",
-        "deployment-pipeline",
-        "environment-provisioning",
-        "observability-setup"
-       ],
-       "depends_on": [
-        "units-generation",
-        "nfr-design"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Infrastructure Design",
-       "number": "3.4",
-       "per_unit": true,
-       "phase": "construction",
-       "produces": [
-        "infrastructure-specification",
-        "monitoring-design",
-        "cicd-pipeline",
-        "traceability"
-       ],
-       "review_class": "adversarial",
-       "reviewer": "aidlc-architecture-reviewer-agent",
-       "skipped_reason": null,
-       "slug": "infrastructure-design",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-developer-agent",
-       "artifacts": [],
-       "consumes": [
-        "functional-spec",
-        "rules",
-        "entities",
-        "contract-summary",
-        "performance-design",
-        "security-design",
-        "infrastructure-specification",
-        "unit-of-work",
-        "requirements"
-       ],
-       "dependents": [
-        "build-and-test"
-       ],
-       "depends_on": [
-        "units-generation",
-        "functional-design",
-        "nfr-requirements",
-        "nfr-design",
-        "infrastructure-design"
-       ],
-       "elapsed_secs": null,
-       "execution": "ALWAYS",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "subagent",
-       "name": "Code Generation",
-       "number": "3.5",
-       "per_unit": true,
-       "phase": "construction",
-       "produces": [
-        "code-generation-plan",
-        "unit-test-instructions",
-        "code-summary",
-        "traceability"
-       ],
-       "review_class": "adversarial",
-       "reviewer": "aidlc-architecture-reviewer-agent",
-       "skipped_reason": null,
-       "slug": "code-generation",
-       "state": "completed",
-       "summary_confirmation": null,
-       "units": []
-      },
-      {
-       "agent": "aidlc-quality-agent",
-       "artifacts": [],
-       "consumes": [
-        "code-generation-plan",
-        "unit-test-instructions",
-        "code-summary"
-       ],
-       "dependents": [
-        "ci-pipeline"
-       ],
-       "depends_on": [
-        "code-generation"
-       ],
-       "elapsed_secs": null,
-       "execution": "ALWAYS",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Build and Test",
-       "number": "3.6",
-       "per_unit": false,
-       "phase": "construction",
-       "produces": [
-        "build-instructions",
-        "integration-test-instructions",
-        "performance-test-instructions",
-        "security-test-instructions",
-        "build-and-test-summary",
-        "build-test-results",
-        "cross-unit-traceability"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "build-and-test",
-       "state": "completed",
-       "summary_confirmation": null,
-       "units": []
-      },
-      {
-       "agent": "aidlc-pipeline-deploy-agent",
-       "artifacts": [],
-       "consumes": [
-        "code-summary",
-        "build-and-test-summary",
-        "build-test-results"
-       ],
-       "dependents": [
-        "deployment-pipeline"
-       ],
-       "depends_on": [
-        "build-and-test"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "CI Pipeline",
-       "number": "3.7",
-       "per_unit": false,
-       "phase": "construction",
-       "produces": [
-        "ci-config",
-        "quality-gates",
-        "ci-pipeline-questions"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "ci-pipeline",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      }
-     ],
-     "status": "Verified"
-    },
-    {
-     "counts": {
-      "done": 0,
-      "in_scope": 7,
-      "skipped": 0,
-      "total": 7
-     },
-     "phase": "operation",
-     "stages": [
-      {
-       "agent": "aidlc-pipeline-deploy-agent",
-       "artifacts": [],
-       "consumes": [
-        "ci-config",
-        "quality-gates",
-        "infrastructure-specification",
-        "cicd-pipeline"
-       ],
-       "dependents": [
-        "environment-provisioning",
-        "deployment-execution"
-       ],
-       "depends_on": [
-        "ci-pipeline",
-        "infrastructure-design"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Deployment Pipeline",
-       "number": "4.1",
-       "per_unit": false,
-       "phase": "operation",
-       "produces": [
-        "cd-config",
-        "deployment-strategy",
-        "rollback-runbook",
-        "deployment-pipeline-questions"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "deployment-pipeline",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-aws-platform-agent",
-       "artifacts": [],
-       "consumes": [
-        "infrastructure-specification",
-        "cd-config"
-       ],
-       "dependents": [
-        "deployment-execution"
-       ],
-       "depends_on": [
-        "infrastructure-design",
-        "deployment-pipeline"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Environment Provisioning",
-       "number": "4.2",
-       "per_unit": false,
-       "phase": "operation",
-       "produces": [
-        "environment-inventory",
-        "validation-report",
-        "environment-provisioning-questions"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "environment-provisioning",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-pipeline-deploy-agent",
-       "artifacts": [],
-       "consumes": [
-        "cd-config",
-        "deployment-strategy",
-        "environment-inventory",
-        "build-test-results"
-       ],
-       "dependents": [
-        "observability-setup",
-        "feedback-optimization"
-       ],
-       "depends_on": [
-        "deployment-pipeline",
-        "environment-provisioning"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Deployment Execution",
-       "number": "4.3",
-       "per_unit": false,
-       "phase": "operation",
-       "produces": [
-        "deployment-log",
-        "smoke-test-results",
-        "health-check-report",
-        "deployment-execution-questions"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "deployment-execution",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-operations-agent",
-       "artifacts": [],
-       "consumes": [
-        "performance-design",
-        "security-design",
-        "reliability-design",
-        "monitoring-design",
-        "infrastructure-specification"
-       ],
-       "dependents": [
-        "incident-response",
-        "performance-validation",
-        "feedback-optimization"
-       ],
-       "depends_on": [
-        "nfr-design",
-        "infrastructure-design",
-        "deployment-execution"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Observability Setup",
-       "number": "4.4",
-       "per_unit": false,
-       "phase": "operation",
-       "produces": [
-        "dashboards",
-        "alarms",
-        "slo-config",
-        "log-queries",
-        "tracing-config",
-        "anomaly-config",
-        "observability-setup-questions"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "observability-setup",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-operations-agent",
-       "artifacts": [],
-       "consumes": [
-        "dashboards",
-        "alarms",
-        "reliability-design",
-        "security-design",
-        "infrastructure-specification"
-       ],
-       "dependents": [
-        "feedback-optimization"
-       ],
-       "depends_on": [
-        "observability-setup"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Incident Response",
-       "number": "4.5",
-       "per_unit": false,
-       "phase": "operation",
-       "produces": [
-        "runbooks",
-        "incident-plan",
-        "escalation-matrix",
-        "incident-response-questions"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "incident-response",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-quality-agent",
-       "artifacts": [],
-       "consumes": [
-        "performance-requirements",
-        "scalability-requirements",
-        "performance-design",
-        "scalability-design",
-        "dashboards"
-       ],
-       "dependents": [
-        "feedback-optimization"
-       ],
-       "depends_on": [
-        "nfr-requirements",
-        "nfr-design",
-        "observability-setup"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Performance Validation",
-       "number": "4.6",
-       "per_unit": false,
-       "phase": "operation",
-       "produces": [
-        "load-test-plan",
-        "load-test-results",
-        "nfr-validation-matrix",
-        "performance-validation-questions"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "performance-validation",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      },
-      {
-       "agent": "aidlc-operations-agent",
-       "artifacts": [],
-       "consumes": [
-        "dashboards",
-        "alarms",
-        "slo-config",
-        "deployment-log",
-        "load-test-results",
-        "incident-plan"
-       ],
-       "dependents": [],
-       "depends_on": [
-        "observability-setup",
-        "deployment-execution",
-        "incident-response",
-        "performance-validation"
-       ],
-       "elapsed_secs": null,
-       "execution": "CONDITIONAL",
-       "gate": true,
-       "in_scope": true,
-       "is_current": false,
-       "is_directive": false,
-       "mode": "inline",
-       "name": "Feedback & Optimization",
-       "number": "4.7",
-       "per_unit": false,
-       "phase": "operation",
-       "produces": [
-        "slo-report",
-        "cost-analysis",
-        "drift-report",
-        "feedback-loop",
-        "feedback-optimization-questions"
-       ],
-       "review_class": null,
-       "reviewer": null,
-       "skipped_reason": null,
-       "slug": "feedback-optimization",
-       "state": "not_started",
-       "summary_confirmation": "required",
-       "units": []
-      }
-     ],
-     "status": "Pending"
+     "artifact_id": "284a4a8b3b484b829bdbd3cccd0e4ca1784e1ddd",
+     "kind": "other",
+     "mtime": "<volatile>",
+     "name": "fixture-host-0f1e2d3c4b5a.md",
+     "phase": null,
+     "relpath": "aidlc/spaces/default/intents/260907-error-burst/audit/fixture-host-0f1e2d3c4b5a.md",
+     "renderable": true,
+     "sha256": "1fe23b9a09c4daa20df0e0ec15d66a8fbc37619f7a6abe34c9647e6014b4ed8a",
+     "size": 489,
+     "stage": null,
+     "unit": null
     }
    ],
-   "stage_count": 33,
+   "attempts": {},
+   "current_stage": "requirements-analysis",
+   "directive_stage": null,
+   "graph_version": "2.10.0",
+   "intent_key": "260907-error-burst",
+   "nodes": [
+    {
+     "consumes": [],
+     "execution": "ALWAYS",
+     "lead_agent": "orchestrator",
+     "mode": "inline",
+     "name": "Workspace Scaffold",
+     "number": "0.1",
+     "per_unit": false,
+     "phase": "initialization",
+     "produces": [],
+     "requires_stage": [],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "workspace-scaffold",
+     "summary_confirmation": null
+    },
+    {
+     "consumes": [],
+     "execution": "ALWAYS",
+     "lead_agent": "orchestrator",
+     "mode": "inline",
+     "name": "Workspace Detection",
+     "number": "0.2",
+     "per_unit": false,
+     "phase": "initialization",
+     "produces": [],
+     "requires_stage": [
+      "workspace-scaffold"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "workspace-detection",
+     "summary_confirmation": null
+    },
+    {
+     "consumes": [],
+     "execution": "ALWAYS",
+     "lead_agent": "orchestrator",
+     "mode": "inline",
+     "name": "State Initialization",
+     "number": "0.3",
+     "per_unit": false,
+     "phase": "initialization",
+     "produces": [],
+     "requires_stage": [
+      "workspace-detection"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "state-init",
+     "summary_confirmation": null
+    },
+    {
+     "consumes": [],
+     "execution": "ALWAYS",
+     "lead_agent": "aidlc-product-agent",
+     "mode": "inline",
+     "name": "Intent Capture & Framing",
+     "number": "1.1",
+     "per_unit": false,
+     "phase": "ideation",
+     "produces": [
+      "intent-statement",
+      "stakeholder-map",
+      "intent-capture-questions"
+     ],
+     "requires_stage": [],
+     "review_class": "advisory",
+     "reviewer": "aidlc-product-lead-agent",
+     "slug": "intent-capture",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "intent-statement"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-product-agent",
+     "mode": "inline",
+     "name": "Market Research",
+     "number": "1.2",
+     "per_unit": false,
+     "phase": "ideation",
+     "produces": [
+      "competitive-analysis",
+      "market-trends",
+      "build-vs-buy",
+      "market-research-questions"
+     ],
+     "requires_stage": [
+      "intent-capture"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "market-research",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "intent-statement",
+      "competitive-analysis",
+      "market-trends",
+      "build-vs-buy"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-architect-agent",
+     "mode": "inline",
+     "name": "Feasibility & Constraints",
+     "number": "1.3",
+     "per_unit": false,
+     "phase": "ideation",
+     "produces": [
+      "feasibility-assessment",
+      "constraint-register",
+      "raid-log",
+      "feasibility-questions"
+     ],
+     "requires_stage": [
+      "intent-capture",
+      "market-research"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "feasibility",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "intent-statement",
+      "feasibility-assessment",
+      "constraint-register"
+     ],
+     "execution": "ALWAYS",
+     "lead_agent": "aidlc-product-agent",
+     "mode": "inline",
+     "name": "Scope Definition",
+     "number": "1.4",
+     "per_unit": false,
+     "phase": "ideation",
+     "produces": [
+      "scope-document",
+      "intent-backlog",
+      "scope-definition-questions"
+     ],
+     "requires_stage": [
+      "intent-capture",
+      "feasibility"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "scope-definition",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "scope-document",
+      "intent-backlog",
+      "feasibility-assessment"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-delivery-agent",
+     "mode": "inline",
+     "name": "Team Formation",
+     "number": "1.5",
+     "per_unit": false,
+     "phase": "ideation",
+     "produces": [
+      "team-assessment",
+      "skill-matrix",
+      "mob-composition",
+      "team-formation-questions"
+     ],
+     "requires_stage": [
+      "scope-definition"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "team-formation",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "intent-statement",
+      "scope-document",
+      "intent-backlog"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-design-agent",
+     "mode": "inline",
+     "name": "Rough Mockups",
+     "number": "1.6",
+     "per_unit": false,
+     "phase": "ideation",
+     "produces": [
+      "wireframes",
+      "user-flow",
+      "rough-mockups-questions"
+     ],
+     "requires_stage": [
+      "scope-definition",
+      "team-formation"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-product-lead-agent",
+     "slug": "rough-mockups",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "intent-statement",
+      "stakeholder-map",
+      "scope-document",
+      "intent-backlog",
+      "competitive-analysis",
+      "feasibility-assessment",
+      "constraint-register",
+      "team-assessment",
+      "wireframes"
+     ],
+     "execution": "ALWAYS",
+     "lead_agent": "aidlc-delivery-agent",
+     "mode": "inline",
+     "name": "Approval & Handoff",
+     "number": "1.7",
+     "per_unit": false,
+     "phase": "ideation",
+     "produces": [
+      "initiative-brief",
+      "decision-log",
+      "approval-handoff-questions"
+     ],
+     "requires_stage": [
+      "intent-capture",
+      "feasibility",
+      "scope-definition",
+      "team-formation",
+      "rough-mockups"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "approval-handoff",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-developer-agent",
+     "mode": "pipeline",
+     "name": "Reverse Engineering",
+     "number": "2.1",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "business-overview",
+      "architecture",
+      "code-structure",
+      "api-documentation",
+      "component-inventory",
+      "technology-stack",
+      "dependencies",
+      "code-quality-assessment",
+      "reverse-engineering-timestamp"
+     ],
+     "requires_stage": [
+      "state-init"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "reverse-engineering",
+     "summary_confirmation": null
+    },
+    {
+     "consumes": [
+      "code-structure",
+      "technology-stack",
+      "dependencies",
+      "code-quality-assessment",
+      "architecture",
+      "business-overview"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-pipeline-deploy-agent",
+     "mode": "subagent",
+     "name": "Practices Discovery",
+     "number": "2.2",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "team-practices",
+      "discovered-rules",
+      "evidence",
+      "practices-discovery-timestamp"
+     ],
+     "requires_stage": [
+      "state-init",
+      "reverse-engineering"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "practices-discovery",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "intent-statement",
+      "scope-document",
+      "business-overview",
+      "architecture",
+      "code-structure",
+      "team-practices"
+     ],
+     "execution": "ALWAYS",
+     "lead_agent": "aidlc-product-agent",
+     "mode": "inline",
+     "name": "Requirements Analysis",
+     "number": "2.3",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "requirements",
+      "requirements-analysis-questions"
+     ],
+     "requires_stage": [
+      "approval-handoff",
+      "reverse-engineering"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-product-lead-agent",
+     "slug": "requirements-analysis",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "requirements",
+      "business-overview",
+      "component-inventory",
+      "team-practices"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-product-agent",
+     "mode": "mob",
+     "name": "User Stories",
+     "number": "2.4",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "stories",
+      "personas",
+      "user-stories-assessment",
+      "traceability"
+     ],
+     "requires_stage": [
+      "requirements-analysis"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-product-lead-agent",
+     "slug": "user-stories",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "wireframes",
+      "user-flow",
+      "stories",
+      "requirements",
+      "team-practices"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-design-agent",
+     "mode": "inline",
+     "name": "Refined Mockups",
+     "number": "2.5",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "mockups",
+      "interaction-spec",
+      "design-system-mapping",
+      "accessibility-checklist",
+      "refined-mockups-questions"
+     ],
+     "requires_stage": [
+      "user-stories"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-product-lead-agent",
+     "slug": "refined-mockups",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "requirements",
+      "stories",
+      "architecture",
+      "component-inventory",
+      "team-practices"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-architect-agent",
+     "mode": "inline",
+     "name": "Domain Design",
+     "number": "2.6",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "components",
+      "decisions",
+      "traceability"
+     ],
+     "requires_stage": [
+      "requirements-analysis",
+      "refined-mockups"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-architecture-reviewer-agent",
+     "slug": "domain-design",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "components",
+      "decisions",
+      "requirements",
+      "stories"
+     ],
+     "execution": "ALWAYS",
+     "lead_agent": "aidlc-architect-agent",
+     "mode": "inline",
+     "name": "Units Generation",
+     "number": "2.7",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "unit-of-work",
+      "unit-of-work-dependency",
+      "unit-of-work-story-map",
+      "traceability"
+     ],
+     "requires_stage": [
+      "domain-design"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-architecture-reviewer-agent",
+     "slug": "units-generation",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "unit-of-work",
+      "unit-of-work-dependency",
+      "components",
+      "requirements"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-architect-agent",
+     "mode": "inline",
+     "name": "Contract Design",
+     "number": "2.8",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "contract-summary"
+     ],
+     "requires_stage": [
+      "units-generation"
+     ],
+     "review_class": "advisory",
+     "reviewer": "aidlc-architecture-reviewer-agent",
+     "slug": "contract-design",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "requirements",
+      "stories",
+      "mockups",
+      "components",
+      "unit-of-work",
+      "unit-of-work-dependency",
+      "unit-of-work-story-map",
+      "contract-summary",
+      "team-practices"
+     ],
+     "execution": "ALWAYS",
+     "lead_agent": "aidlc-delivery-agent",
+     "mode": "inline",
+     "name": "Delivery Planning",
+     "number": "2.9",
+     "per_unit": false,
+     "phase": "inception",
+     "produces": [
+      "bolt-plan",
+      "team-allocation",
+      "risk-and-sequencing-rationale",
+      "external-dependency-map",
+      "delivery-planning-questions"
+     ],
+     "requires_stage": [
+      "units-generation"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "delivery-planning",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "unit-of-work",
+      "unit-of-work-story-map",
+      "requirements",
+      "components",
+      "contract-summary"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-architect-agent",
+     "mode": "inline",
+     "name": "Functional Design",
+     "number": "3.1",
+     "per_unit": true,
+     "phase": "construction",
+     "produces": [
+      "entities",
+      "rules",
+      "functional-spec",
+      "traceability"
+     ],
+     "requires_stage": [
+      "units-generation",
+      "contract-design"
+     ],
+     "review_class": "adversarial",
+     "reviewer": "aidlc-architecture-reviewer-agent",
+     "slug": "functional-design",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "functional-spec",
+      "rules",
+      "requirements",
+      "contract-summary",
+      "technology-stack"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-architect-agent",
+     "mode": "inline",
+     "name": "NFR Requirements",
+     "number": "3.2",
+     "per_unit": true,
+     "phase": "construction",
+     "produces": [
+      "performance-requirements",
+      "security-requirements",
+      "scalability-requirements",
+      "reliability-requirements",
+      "observability-requirements",
+      "tech-stack-decisions",
+      "traceability"
+     ],
+     "requires_stage": [
+      "units-generation",
+      "functional-design"
+     ],
+     "review_class": "adversarial",
+     "reviewer": "aidlc-architecture-reviewer-agent",
+     "slug": "nfr-requirements",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "performance-requirements",
+      "security-requirements",
+      "scalability-requirements",
+      "reliability-requirements",
+      "observability-requirements",
+      "tech-stack-decisions",
+      "functional-spec",
+      "contract-summary"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-architect-agent",
+     "mode": "inline",
+     "name": "NFR Design",
+     "number": "3.3",
+     "per_unit": true,
+     "phase": "construction",
+     "produces": [
+      "performance-design",
+      "security-design",
+      "scalability-design",
+      "reliability-design",
+      "observability-design",
+      "logical-components",
+      "traceability"
+     ],
+     "requires_stage": [
+      "units-generation",
+      "nfr-requirements"
+     ],
+     "review_class": "adversarial",
+     "reviewer": "aidlc-architecture-reviewer-agent",
+     "slug": "nfr-design",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "performance-design",
+      "security-design",
+      "scalability-design",
+      "reliability-design",
+      "observability-design",
+      "logical-components",
+      "components",
+      "functional-spec",
+      "contract-summary"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-aws-platform-agent",
+     "mode": "inline",
+     "name": "Infrastructure Design",
+     "number": "3.4",
+     "per_unit": true,
+     "phase": "construction",
+     "produces": [
+      "infrastructure-specification",
+      "monitoring-design",
+      "cicd-pipeline",
+      "traceability"
+     ],
+     "requires_stage": [
+      "units-generation",
+      "nfr-design"
+     ],
+     "review_class": "adversarial",
+     "reviewer": "aidlc-architecture-reviewer-agent",
+     "slug": "infrastructure-design",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "functional-spec",
+      "rules",
+      "entities",
+      "contract-summary",
+      "performance-design",
+      "security-design",
+      "infrastructure-specification",
+      "unit-of-work",
+      "requirements"
+     ],
+     "execution": "ALWAYS",
+     "lead_agent": "aidlc-developer-agent",
+     "mode": "subagent",
+     "name": "Code Generation",
+     "number": "3.5",
+     "per_unit": true,
+     "phase": "construction",
+     "produces": [
+      "code-generation-plan",
+      "unit-test-instructions",
+      "code-summary",
+      "traceability"
+     ],
+     "requires_stage": [
+      "units-generation",
+      "functional-design",
+      "nfr-requirements",
+      "nfr-design",
+      "infrastructure-design"
+     ],
+     "review_class": "adversarial",
+     "reviewer": "aidlc-architecture-reviewer-agent",
+     "slug": "code-generation",
+     "summary_confirmation": null
+    },
+    {
+     "consumes": [
+      "code-generation-plan",
+      "unit-test-instructions",
+      "code-summary"
+     ],
+     "execution": "ALWAYS",
+     "lead_agent": "aidlc-quality-agent",
+     "mode": "inline",
+     "name": "Build and Test",
+     "number": "3.6",
+     "per_unit": false,
+     "phase": "construction",
+     "produces": [
+      "build-instructions",
+      "integration-test-instructions",
+      "performance-test-instructions",
+      "security-test-instructions",
+      "build-and-test-summary",
+      "build-test-results",
+      "cross-unit-traceability"
+     ],
+     "requires_stage": [
+      "code-generation"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "build-and-test",
+     "summary_confirmation": null
+    },
+    {
+     "consumes": [
+      "code-summary",
+      "build-and-test-summary",
+      "build-test-results"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-pipeline-deploy-agent",
+     "mode": "inline",
+     "name": "CI Pipeline",
+     "number": "3.7",
+     "per_unit": false,
+     "phase": "construction",
+     "produces": [
+      "ci-config",
+      "quality-gates",
+      "ci-pipeline-questions"
+     ],
+     "requires_stage": [
+      "build-and-test"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "ci-pipeline",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "ci-config",
+      "quality-gates",
+      "infrastructure-specification",
+      "cicd-pipeline"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-pipeline-deploy-agent",
+     "mode": "inline",
+     "name": "Deployment Pipeline",
+     "number": "4.1",
+     "per_unit": false,
+     "phase": "operation",
+     "produces": [
+      "cd-config",
+      "deployment-strategy",
+      "rollback-runbook",
+      "deployment-pipeline-questions"
+     ],
+     "requires_stage": [
+      "ci-pipeline",
+      "infrastructure-design"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "deployment-pipeline",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "infrastructure-specification",
+      "cd-config"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-aws-platform-agent",
+     "mode": "inline",
+     "name": "Environment Provisioning",
+     "number": "4.2",
+     "per_unit": false,
+     "phase": "operation",
+     "produces": [
+      "environment-inventory",
+      "validation-report",
+      "environment-provisioning-questions"
+     ],
+     "requires_stage": [
+      "infrastructure-design",
+      "deployment-pipeline"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "environment-provisioning",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "cd-config",
+      "deployment-strategy",
+      "environment-inventory",
+      "build-test-results"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-pipeline-deploy-agent",
+     "mode": "inline",
+     "name": "Deployment Execution",
+     "number": "4.3",
+     "per_unit": false,
+     "phase": "operation",
+     "produces": [
+      "deployment-log",
+      "smoke-test-results",
+      "health-check-report",
+      "deployment-execution-questions"
+     ],
+     "requires_stage": [
+      "deployment-pipeline",
+      "environment-provisioning"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "deployment-execution",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "performance-design",
+      "security-design",
+      "reliability-design",
+      "monitoring-design",
+      "infrastructure-specification"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-operations-agent",
+     "mode": "inline",
+     "name": "Observability Setup",
+     "number": "4.4",
+     "per_unit": false,
+     "phase": "operation",
+     "produces": [
+      "dashboards",
+      "alarms",
+      "slo-config",
+      "log-queries",
+      "tracing-config",
+      "anomaly-config",
+      "observability-setup-questions"
+     ],
+     "requires_stage": [
+      "nfr-design",
+      "infrastructure-design",
+      "deployment-execution"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "observability-setup",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "dashboards",
+      "alarms",
+      "reliability-design",
+      "security-design",
+      "infrastructure-specification"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-operations-agent",
+     "mode": "inline",
+     "name": "Incident Response",
+     "number": "4.5",
+     "per_unit": false,
+     "phase": "operation",
+     "produces": [
+      "runbooks",
+      "incident-plan",
+      "escalation-matrix",
+      "incident-response-questions"
+     ],
+     "requires_stage": [
+      "observability-setup"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "incident-response",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "performance-requirements",
+      "scalability-requirements",
+      "performance-design",
+      "scalability-design",
+      "dashboards"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-quality-agent",
+     "mode": "inline",
+     "name": "Performance Validation",
+     "number": "4.6",
+     "per_unit": false,
+     "phase": "operation",
+     "produces": [
+      "load-test-plan",
+      "load-test-results",
+      "nfr-validation-matrix",
+      "performance-validation-questions"
+     ],
+     "requires_stage": [
+      "nfr-requirements",
+      "nfr-design",
+      "observability-setup"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "performance-validation",
+     "summary_confirmation": "required"
+    },
+    {
+     "consumes": [
+      "dashboards",
+      "alarms",
+      "slo-config",
+      "deployment-log",
+      "load-test-results",
+      "incident-plan"
+     ],
+     "execution": "CONDITIONAL",
+     "lead_agent": "aidlc-operations-agent",
+     "mode": "inline",
+     "name": "Feedback & Optimization",
+     "number": "4.7",
+     "per_unit": false,
+     "phase": "operation",
+     "produces": [
+      "slo-report",
+      "cost-analysis",
+      "drift-report",
+      "feedback-loop",
+      "feedback-optimization-questions"
+     ],
+     "requires_stage": [
+      "observability-setup",
+      "deployment-execution",
+      "incident-response",
+      "performance-validation"
+     ],
+     "review_class": null,
+     "reviewer": null,
+     "slug": "feedback-optimization",
+     "summary_confirmation": "required"
+    }
+   ],
+   "now": 1788516000.0,
+   "phases": [
+    [
+     "Initialization",
+     "Verified"
+    ],
+    [
+     "Ideation",
+     "Verified"
+    ],
+    [
+     "Inception",
+     "Verified"
+    ],
+    [
+     "Construction",
+     "Verified"
+    ],
+    [
+     "Operation",
+     "Pending"
+    ]
+   ],
+   "rows": [
+    {
+     "mark": "x",
+     "phase": "initialization",
+     "slug": "workspace-scaffold",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "initialization",
+     "slug": "workspace-detection",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "initialization",
+     "slug": "state-init",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "ideation",
+     "slug": "intent-capture",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "market-research",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "feasibility",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "scope-definition",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "team-formation",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "rough-mockups",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "ideation",
+     "slug": "approval-handoff",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "inception",
+     "slug": "reverse-engineering",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "practices-discovery",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "-",
+     "phase": "inception",
+     "slug": "requirements-analysis",
+     "state": "in_progress",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "user-stories",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "refined-mockups",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "domain-design",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "units-generation",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "contract-design",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "inception",
+     "slug": "delivery-planning",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "construction",
+     "slug": "functional-design",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "construction",
+     "slug": "nfr-requirements",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "construction",
+     "slug": "nfr-design",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "construction",
+     "slug": "infrastructure-design",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "construction",
+     "slug": "code-generation",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": "x",
+     "phase": "construction",
+     "slug": "build-and-test",
+     "state": "completed",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "construction",
+     "slug": "ci-pipeline",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "deployment-pipeline",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "environment-provisioning",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "deployment-execution",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "observability-setup",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "incident-response",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "performance-validation",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    },
+    {
+     "mark": " ",
+     "phase": "operation",
+     "slug": "feedback-optimization",
+     "state": "not_started",
+     "suffix": "EXECUTE"
+    }
+   ],
+   "scope_grid": {
+    "approval-handoff": "EXECUTE",
+    "build-and-test": "EXECUTE",
+    "ci-pipeline": "EXECUTE",
+    "code-generation": "EXECUTE",
+    "contract-design": "EXECUTE",
+    "delivery-planning": "EXECUTE",
+    "deployment-execution": "EXECUTE",
+    "deployment-pipeline": "EXECUTE",
+    "domain-design": "EXECUTE",
+    "environment-provisioning": "EXECUTE",
+    "feasibility": "EXECUTE",
+    "feedback-optimization": "EXECUTE",
+    "functional-design": "EXECUTE",
+    "incident-response": "EXECUTE",
+    "infrastructure-design": "EXECUTE",
+    "intent-capture": "EXECUTE",
+    "market-research": "EXECUTE",
+    "nfr-design": "EXECUTE",
+    "nfr-requirements": "EXECUTE",
+    "observability-setup": "EXECUTE",
+    "performance-validation": "EXECUTE",
+    "practices-discovery": "EXECUTE",
+    "refined-mockups": "EXECUTE",
+    "requirements-analysis": "EXECUTE",
+    "reverse-engineering": "EXECUTE",
+    "rough-mockups": "EXECUTE",
+    "scope-definition": "EXECUTE",
+    "state-init": "EXECUTE",
+    "team-formation": "EXECUTE",
+    "units-generation": "EXECUTE",
+    "user-stories": "EXECUTE",
+    "workspace-detection": "EXECUTE",
+    "workspace-scaffold": "EXECUTE"
+   },
+   "skip_reasons": {},
+   "status": "Running",
    "units": []
   }
  },

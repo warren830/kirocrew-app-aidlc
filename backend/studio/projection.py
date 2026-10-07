@@ -80,10 +80,6 @@ __all__ = [
     "IntentDetail",
     "IntentSnapshot",
     "IntentSummary",
-    "MapModel",
-    "MapPhase",
-    "MapStage",
-    "MapUnit",
     "MarkersView",
     "PRIORITY_GROUP",
     "Projection",
@@ -887,108 +883,6 @@ class IntentDetail(IntentSummary):
             }
         )
         return out
-
-
-@dataclass(frozen=True, slots=True)
-class MapUnit:
-    unit: str
-    state: str
-    artifacts: tuple[ArtifactMeta, ...]
-
-    def to_json(self) -> dict[str, Any]:
-        return {"unit": self.unit, "state": self.state, "artifacts": [a.to_json() for a in self.artifacts]}
-
-
-@dataclass(frozen=True, slots=True)
-class MapStage:
-    slug: str
-    number: str
-    name: str
-    phase: str
-    state: str
-    execution: str
-    in_scope: bool
-    mode: str
-    agent: str
-    reviewer: str | None
-    review_class: str | None
-    gate: bool
-    per_unit: bool
-    summary_confirmation: str | None
-    consumes: tuple[str, ...]
-    produces: tuple[str, ...]
-    depends_on: tuple[str, ...]
-    dependents: tuple[str, ...]
-    elapsed_secs: int | None
-    artifacts: tuple[ArtifactMeta, ...]
-    skipped_reason: str | None
-    units: tuple[MapUnit, ...]
-    is_current: bool
-    is_directive: bool
-
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "slug": self.slug,
-            "number": self.number,
-            "name": self.name,
-            "phase": self.phase,
-            "state": self.state,
-            "execution": self.execution,
-            "in_scope": self.in_scope,
-            "mode": self.mode,
-            "agent": self.agent,
-            "reviewer": self.reviewer,
-            "review_class": self.review_class,
-            "gate": self.gate,
-            "per_unit": self.per_unit,
-            "summary_confirmation": self.summary_confirmation,
-            "consumes": list(self.consumes),
-            "produces": list(self.produces),
-            "depends_on": list(self.depends_on),
-            "dependents": list(self.dependents),
-            "elapsed_secs": self.elapsed_secs,
-            "artifacts": [a.to_json() for a in self.artifacts],
-            "skipped_reason": self.skipped_reason,
-            "units": [unit.to_json() for unit in self.units],
-            "is_current": self.is_current,
-            "is_directive": self.is_directive,
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class MapPhase:
-    phase: str
-    status: str
-    stages: tuple[MapStage, ...]
-    counts: dict[str, int]
-
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "phase": self.phase,
-            "status": self.status,
-            "stages": [stage.to_json() for stage in self.stages],
-            "counts": dict(self.counts),
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class MapModel:
-    intent_key: str
-    phases: tuple[MapPhase, ...]
-    counts: dict[str, int]
-    units: tuple[str, ...]
-    graph_version: str | None
-    stage_count: int
-
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "intent_key": self.intent_key,
-            "phases": [phase.to_json() for phase in self.phases],
-            "counts": dict(self.counts),
-            "units": list(self.units),
-            "graph_version": self.graph_version,
-            "stage_count": self.stage_count,
-        }
 
 
 # --------------------------------------------------------------------------- #
@@ -2475,192 +2369,75 @@ class Projection:
 
     # -- map ---------------------------------------------------------------- #
 
-    def map(self, snap: IntentSnapshot) -> MapModel:
-        """The stage graph joined with the state file's rows, grouped into the five phases.
+    def map_inputs(self, snap: IntentSnapshot) -> dict[str, Any]:
+        """The facts the intent map is drawn from; `ui/src/map/buildMap.ts` assembles them.
 
-        Union, not intersection: a stage the graph knows but the state file does not list is `excluded`
-        (the plan did not select it), and a row the graph does not know is still shown — that pair is
-        exactly what `stage_graph_drift` warns about, and dropping either side would hide it.
+        Joining the graph with the state rows, grouping artifacts and counting are presentation, so they
+        live in the UI. What stays here needs a reader: the artifact walk, the skip reasons parsed out of
+        the state file and each stage's latest attempt read from the audit. `now` travels with them so an
+        open attempt is measured against this server's clock, exactly as when the server did the sum.
         """
-        rows = {row.slug: row for row in (snap.state.stages if snap.state is not None else ())}
-        nodes = list(snap.graph)
-        known = {node.slug for node in nodes}
-        by_stage = self._artifacts_by_stage(snap)
-        dependents = self._dependents(nodes)
-        skip_reasons = self._skip_reasons(snap)
-        completed = snap.state is not None and (snap.state.status or "").strip().lower() == "completed"
-        # Keep the last stage on the snapshot for navigation; terminal maps have no execution cursor.
-        current = None if completed else snap.stage or (snap.state.current_stage if snap.state is not None else None)
-        directive_stage = (
-            snap.directive.stage
-            if not completed and snap.directive is not None and snap.directive.matches_state else None
-        )
-
-        stages: list[MapStage] = []
-        for node in nodes:
-            stages.append(
-                self._map_stage(
-                    snap, node.slug, node, rows.get(node.slug), by_stage, dependents, skip_reasons,
-                    current, directive_stage,
-                )
-            )
-        for slug, row in rows.items():
-            if slug in known:
-                continue
-            stages.append(
-                self._map_stage(
-                    snap, slug, None, row, by_stage, dependents, skip_reasons, current, directive_stage
-                )
-            )
-
-        phase_status = {
-            name.strip().lower(): value.strip()
-            for name, value in (snap.state.phases if snap.state is not None else ())
+        state = snap.state
+        directive = snap.directive
+        metas, _truncated = self.artifacts(snap)
+        return {
+            "intent_key": snap.intent_key,
+            "graph_version": snap.engine.engine_version if snap.engine is not None else None,
+            "now": self._clock.now(),
+            "nodes": [
+                {
+                    "slug": node.slug, "number": node.number, "name": node.name, "phase": node.phase,
+                    "execution": node.execution, "mode": node.mode, "lead_agent": node.lead_agent,
+                    "reviewer": node.reviewer, "review_class": node.review_class,
+                    "summary_confirmation": node.summary_confirmation, "per_unit": node.per_unit,
+                    "consumes": [consume.artifact for consume in node.consumes],
+                    "produces": list(node.produces), "requires_stage": list(node.requires_stage),
+                }
+                for node in snap.graph
+            ],
+            "rows": [row.to_json() for row in state.stages] if state is not None else [],
+            "status": state.status if state is not None else None,
+            "phases": [list(pair) for pair in state.phases] if state is not None else [],
+            "current_stage": snap.stage or (state.current_stage if state is not None else None),
+            "directive_stage": directive.stage if directive is not None and directive.matches_state else None,
+            # Only this intent's scope: it is what a suffixless legacy row falls back to.
+            "scope_grid": dict(snap.grid.get(self._scope(snap) or "", {})),
+            "units": list(snap.units),
+            "active_unit": snap.unit,
+            "artifacts": [meta.to_json() for meta in metas],
+            "skip_reasons": self._skip_reasons(snap),
+            "attempts": self._attempts(snap),
         }
-        phases: list[MapPhase] = []
-        for name in C.PHASES:
-            members = tuple(stage for stage in stages if stage.phase == name)
-            if not members:
-                continue
-            phases.append(
-                MapPhase(
-                    phase=name,
-                    status=phase_status.get(name, "Unknown"),
-                    stages=members,
-                    counts={
-                        "total": len(members),
-                        "in_scope": sum(1 for s in members if s.in_scope),
-                        "done": sum(1 for s in members if s.state in C.DONE_STAGE_STATES),
-                        "skipped": sum(1 for s in members if s.state == "skipped" or s.skipped_reason),
-                    },
-                )
-            )
-        extra = tuple(stage for stage in stages if stage.phase not in C.PHASES)
-        if extra:
-            phases.append(
-                MapPhase(
-                    phase="unknown",
-                    status="Unknown",
-                    stages=extra,
-                    counts={"total": len(extra), "in_scope": sum(1 for s in extra if s.in_scope),
-                            "done": 0, "skipped": 0},
-                )
-            )
-
-        return MapModel(
-            intent_key=snap.intent_key,
-            phases=tuple(phases),
-            counts={
-                "stages_known": len(stages),
-                "stages_selected": sum(1 for stage in stages if stage.in_scope),
-                "gates": sum(1 for stage in stages if stage.gate and stage.in_scope),
-            },
-            units=snap.units,
-            graph_version=snap.engine.engine_version if snap.engine is not None else None,
-            stage_count=len(nodes) or len(rows),
-        )
-
-    def _map_stage(
-        self,
-        snap: IntentSnapshot,
-        slug: str,
-        node: StageNode | None,
-        row: StageRow | None,
-        by_stage: Mapping[tuple[str, str | None], tuple[ArtifactMeta, ...]],
-        dependents: Mapping[str, tuple[str, ...]],
-        skip_reasons: Mapping[str, str | None],
-        current: str | None,
-        directive_stage: str | None,
-    ) -> MapStage:
-        phase = (node.phase if node is not None else None) or (row.phase if row is not None else None) or "unknown"
-        suffix = (row.suffix or "").strip().upper() if row is not None else ""
-        in_scope = suffix.startswith("EXECUTE") if row is not None else False
-        if row is not None and node is not None and not suffix:
-            # effectivePlanAction resolves explicit state suffixes before the current scope grid.
-            # Without grid metadata, keep known legacy rows visible like PlanService's live-plan
-            # default (except jump-skipped rows). This fallback never invents an absent state row.
-            action = (snap.grid.get(self._scope(snap) or "", {}).get(slug) or "").strip().upper()
-            in_scope = action == "EXECUTE" if action in {"EXECUTE", "SKIP"} else row.state != "skipped"
-        state = row.state if row is not None else "excluded"
-        if not in_scope and state == "not_started":
-            state = "excluded"
-        per_unit = node.per_unit if node is not None else slug in C.PER_UNIT_STAGES
-        return MapStage(
-            slug=slug,
-            number=node.number if node is not None else "",
-            name=node.name if node is not None else slug.replace("-", " ").title(),
-            phase=phase,
-            state=state,
-            execution=node.execution if node is not None else "ALWAYS",
-            in_scope=in_scope,
-            mode=node.mode if node is not None else "",
-            agent=node.lead_agent if node is not None else "",
-            reviewer=node.reviewer if node is not None else None,
-            review_class=node.review_class if node is not None else None,
-            # Only selected, non-initialization stages contribute a gate to this plan.
-            gate=in_scope and phase != "initialization",
-            per_unit=per_unit,
-            summary_confirmation=node.summary_confirmation if node is not None else None,
-            consumes=tuple(c.artifact for c in node.consumes) if node is not None else (),
-            produces=tuple(node.produces) if node is not None else (),
-            depends_on=tuple(node.requires_stage) if node is not None else (),
-            dependents=dependents.get(slug, ()),
-            elapsed_secs=self._elapsed(snap, slug, state),
-            artifacts=by_stage.get((slug, None), ()),
-            skipped_reason=skip_reasons.get(slug),
-            units=self._map_units(snap, slug, per_unit, state, by_stage),
-            is_current=slug == current,
-            is_directive=slug == directive_stage,
-        )
-
-    def _map_units(
-        self,
-        snap: IntentSnapshot,
-        slug: str,
-        per_unit: bool,
-        stage_state: str,
-        by_stage: Mapping[tuple[str, str | None], tuple[ArtifactMeta, ...]],
-    ) -> tuple[MapUnit, ...]:
-        """Per-unit sub-rows for a Construction stage.
-
-        The state file has ONE row per stage and writes a literal `Per unit: [TBD]` line
-        (FORMAT-NOTES §3), so there is no per-unit mark on disk. The state shown here is therefore
-        presentational and derived from two observable facts — whether this unit is the state file's
-        `Active Unit`, and whether the unit's stage directory holds any file — and never authorises a
-        decision.
-        """
-        if not per_unit or not snap.units:
-            return ()
-        out: list[MapUnit] = []
-        for unit in snap.units:
-            artifacts = by_stage.get((slug, unit), ())
-            if unit == snap.unit:
-                state = stage_state
-            elif artifacts:
-                state = "completed"
-            else:
-                state = "not_started"
-            out.append(MapUnit(unit=unit, state=state, artifacts=artifacts))
-        return tuple(out)
-
-    def _artifacts_by_stage(
-        self, snap: IntentSnapshot
-    ) -> dict[tuple[str, str | None], tuple[ArtifactMeta, ...]]:
-        grouped: dict[tuple[str, str | None], list[ArtifactMeta]] = {}
-        metas, _ = self.artifacts(snap)
-        for meta in metas:
-            if meta.stage is None:
-                continue
-            grouped.setdefault((meta.stage, meta.unit), []).append(meta)
-        return {key: tuple(value) for key, value in grouped.items()}
 
     @staticmethod
-    def _dependents(nodes: Sequence[StageNode]) -> dict[str, tuple[str, ...]]:
-        out: dict[str, list[str]] = {}
-        for node in nodes:
-            for required in node.requires_stage:
-                out.setdefault(required, []).append(node.slug)
-        return {key: tuple(value) for key, value in out.items()}
+    def _attempts(snap: IntentSnapshot) -> dict[str, dict[str, float | None]]:
+        """Each stage's latest attempt in epoch seconds: `started`, and `ended` (`None` while it runs).
+
+        The latest `STAGE_STARTED`, so a revised stage reports the current pass rather than its whole
+        history, closed by the first `STAGE_COMPLETED`/`STAGE_SKIPPED` after it. An attempt whose
+        timestamps do not parse is left out: its length is unknown, so the map shows none.
+        """
+        events = list(snap.audit.events)
+        out: dict[str, dict[str, float | None]] = {}
+        for slug in dict.fromkeys(event.fields.get("Stage") for event in events if event.event == "STAGE_STARTED"):
+            started = latest_event(events, ("STAGE_STARTED",), slug) if slug else None
+            begin = _epoch(started.timestamp) if started is not None else None
+            if started is None or begin is None:
+                continue
+            closing = next(
+                (
+                    event
+                    for event in events
+                    if event.event in ("STAGE_COMPLETED", "STAGE_SKIPPED")
+                    and event.fields.get("Stage") == slug
+                    and event.sort_key > started.sort_key
+                ),
+                None,
+            )
+            end = _epoch(closing.timestamp) if closing is not None else None
+            if closing is None or end is not None:
+                out[slug] = {"started": begin, "ended": end}
+        return out
 
     @staticmethod
     def _skip_reasons(snap: IntentSnapshot) -> dict[str, str | None]:
@@ -2696,36 +2473,6 @@ class Projection:
             else:
                 out.setdefault(inner.strip(), None)
         return out
-
-    def _elapsed(self, snap: IntentSnapshot, slug: str, state: str) -> int | None:
-        """Wall time of the latest attempt at this stage; `None` when it never started.
-
-        Measured `STAGE_STARTED → STAGE_COMPLETED` of the *latest* attempt, so a revised stage reports
-        the current pass rather than the whole history. A stage still in flight is measured to `now`.
-        """
-        events = list(snap.audit.events)
-        started = latest_event(events, ("STAGE_STARTED",), slug)
-        if started is None:
-            return None
-        begin = _epoch(started.timestamp)
-        if begin is None:
-            return None
-        end_event = next(
-            (
-                event
-                for event in events
-                if event.event in ("STAGE_COMPLETED", "STAGE_SKIPPED")
-                and event.fields.get("Stage") == slug
-                and event.sort_key > started.sort_key
-            ),
-            None,
-        )
-        if end_event is not None:
-            end = _epoch(end_event.timestamp)
-            return max(0, int(end - begin)) if end is not None else None
-        if state in ("in_progress", "awaiting_approval", "revising"):
-            return max(0, int(self._clock.now() - begin))
-        return None
 
     # -- sorting ------------------------------------------------------------ #
 

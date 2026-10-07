@@ -13,10 +13,12 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { setApiRoutes, navigations } from '../test/stubs/app-sdk'
+import { MAP_NOW, mapInputs, mapNode, stageRow } from '../test/fixtures'
 import { I18nProvider } from '../i18n'
 import { useStudioApi } from '../lib/api'
+import { PHASES } from '../lib/enums.generated'
 import { useStudioRoute } from '../lib/route'
-import type { ActionCard, ArtifactMeta, MapPhase, MapStage, MapUnit } from '../lib/types'
+import type { ActionCard, ArtifactMeta, MapInputs } from '../lib/types'
 import { MapPage } from './MapView'
 
 const BASE = '/api/apps/aidlc-studio'
@@ -45,114 +47,64 @@ function artifact(name: string, over: Partial<ArtifactMeta> = {}): ArtifactMeta 
   }
 }
 
-function stage(over: Partial<MapStage> & Pick<MapStage, 'slug' | 'number' | 'phase'>): MapStage {
-  return {
-    name: over.slug.replace(/-/g, ' '),
-    state: 'not_started',
-    execution: 'ALWAYS',
-    in_scope: true,
-    mode: 'inline',
-    agent: 'orchestrator',
-    reviewer: null,
-    review_class: null,
-    gate: true,
-    per_unit: false,
-    summary_confirmation: null,
-    consumes: [],
-    produces: [],
-    depends_on: [],
-    dependents: [],
-    elapsed_secs: null,
-    artifacts: [],
-    skipped_reason: null,
-    units: [],
-    is_current: false,
-    is_directive: false,
-    ...over,
-  }
-}
-
-function unit(name: string, over: Partial<MapUnit> = {}): MapUnit {
-  return { unit: name, state: 'not_started', artifacts: [], ...over }
-}
-
-function phase(name: string, stages: MapStage[], over: Partial<MapPhase> = {}): MapPhase {
-  return {
-    phase: name,
-    status: 'Complete',
-    stages,
-    counts: {
-      total: stages.length,
-      in_scope: stages.filter((s) => s.in_scope).length,
-      done: stages.filter((s) => s.state === 'completed').length,
-      skipped: stages.filter((s) => s.state === 'skipped' || s.skipped_reason).length,
-    },
-    ...over,
-  }
-}
-
-const REQUIREMENTS = stage({
-  slug: 'requirements-analysis',
-  number: '2.3',
-  phase: 'inception',
-  state: 'awaiting_approval',
-  agent: 'aidlc-product-agent',
-  reviewer: 'aidlc-product-lead-agent',
-  review_class: 'advisory',
-  elapsed_secs: 5400,
-  is_current: true,
-  is_directive: true,
-  summary_confirmation: 'required',
-  depends_on: ['approval-handoff', 'reverse-engineering'],
-  dependents: ['user-stories', 'functional-design'],
-  consumes: ['intent-statement', 'scope-document'],
-  produces: ['requirements', 'requirements-analysis-questions'],
-  artifacts: [artifact('requirements.md'), artifact('requirements-analysis-questions.md', { kind: 'questions' })],
-})
-
-const CODE_GENERATION = stage({
-  slug: 'code-generation',
-  number: '3.5',
-  phase: 'construction',
-  per_unit: true,
-  agent: 'aidlc-developer-agent',
-  units: [
-    unit('unit-1-guest-cart', { state: 'in_progress' }),
-    unit('unit-2-payment', { artifacts: [artifact('code.md', { stage: 'code-generation', unit: 'unit-2-payment' })] }),
-  ],
-})
-
-function mapModel() {
-  return {
+/**
+ * What `GET …/map` sends for the plan these tests read: nine stages, seven selected, the current one at
+ * its Gate. `buildMap` turns it into the lanes, so the page is tested on the model the server's facts make.
+ */
+function mapFixture(): MapInputs {
+  return mapInputs({
     intent_key: INTENT,
-    phases: [
-      // Deliberately out of lifecycle order: the view must sort them back (FR-MAP-001).
-      phase('construction', [CODE_GENERATION, stage({ slug: 'build-and-test', number: '3.6', phase: 'construction' })]),
-      phase('initialization', [stage({ slug: 'workspace-scaffold', number: '0.1', phase: 'initialization', state: 'completed', gate: false })]),
-      phase('ideation', [
-        stage({ slug: 'approval-handoff', number: '1.7', phase: 'ideation', state: 'completed' }),
-        stage({
-          slug: 'market-research',
-          number: '1.2',
-          phase: 'ideation',
-          state: 'skipped',
-          in_scope: false,
-          execution: 'CONDITIONAL',
-          skipped_reason: 'Scope preset "feature" excludes market research.',
-        }),
-      ]),
-      phase('inception', [
-        stage({ slug: 'reverse-engineering', number: '2.1', phase: 'inception', state: 'excluded', in_scope: false, execution: 'CONDITIONAL' }),
-        REQUIREMENTS,
-        stage({ slug: 'user-stories', number: '2.4', phase: 'inception' }),
-      ]),
-      phase('operation', [stage({ slug: 'deployment-pipeline', number: '4.1', phase: 'operation' })]),
+    // Deliberately out of lifecycle order: the lanes must still come out in it (FR-MAP-001).
+    nodes: [
+      mapNode({ slug: 'code-generation', number: '3.5', phase: 'construction', per_unit: true, lead_agent: 'aidlc-developer-agent' }),
+      mapNode({ slug: 'build-and-test', number: '3.6', phase: 'construction' }),
+      mapNode({ slug: 'workspace-scaffold', number: '0.1', phase: 'initialization' }),
+      mapNode({ slug: 'approval-handoff', number: '1.7', phase: 'ideation' }),
+      mapNode({ slug: 'market-research', number: '1.2', phase: 'ideation', execution: 'CONDITIONAL' }),
+      mapNode({ slug: 'reverse-engineering', number: '2.1', phase: 'inception', execution: 'CONDITIONAL' }),
+      mapNode({
+        slug: 'requirements-analysis',
+        number: '2.3',
+        phase: 'inception',
+        lead_agent: 'aidlc-product-agent',
+        reviewer: 'aidlc-product-lead-agent',
+        review_class: 'advisory',
+        summary_confirmation: 'required',
+        requires_stage: ['approval-handoff', 'reverse-engineering'],
+        consumes: ['intent-statement', 'scope-document'],
+        produces: ['requirements', 'requirements-analysis-questions'],
+      }),
+      mapNode({ slug: 'user-stories', number: '2.4', phase: 'inception', requires_stage: ['requirements-analysis'] }),
+      mapNode({ slug: 'deployment-pipeline', number: '4.1', phase: 'operation' }),
     ],
-    counts: { stages_known: 9, stages_selected: 7, gates: 8 },
+    rows: [
+      stageRow('workspace-scaffold', 'completed'),
+      stageRow('approval-handoff', 'completed'),
+      stageRow('market-research', 'skipped', { suffix: 'SKIP' }),
+      stageRow('reverse-engineering', 'not_started', { suffix: 'SKIP' }),
+      stageRow('requirements-analysis', 'awaiting_approval'),
+      stageRow('user-stories'),
+      stageRow('code-generation'),
+      stageRow('build-and-test'),
+      stageRow('deployment-pipeline'),
+    ],
+    phases: PHASES.map((phase): [string, string] => [phase, 'Complete']),
+    current_stage: 'requirements-analysis',
+    directive_stage: 'requirements-analysis',
     units: ['unit-1-guest-cart', 'unit-2-payment'],
-    graph_version: '2.6.2',
-    stage_count: 9,
-  }
+    artifacts: [
+      artifact('requirements.md'),
+      artifact('requirements-analysis-questions.md', { kind: 'questions' }),
+      artifact('code.md', { stage: 'code-generation', unit: 'unit-2-payment' }),
+    ],
+    skip_reasons: { 'market-research': 'Scope preset "feature" excludes market research.', 'reverse-engineering': null },
+    attempts: { 'requirements-analysis': { started: MAP_NOW - 5400, ended: null } },
+  })
+}
+
+/** The same plan with the named rows taken out of it. */
+function unselecting(inputs: MapInputs, slugs: string[]): MapInputs {
+  return { ...inputs, rows: inputs.rows.map((row) => (slugs.includes(row.slug) ? { ...row, suffix: 'SKIP' } : row)) }
 }
 
 function intentDetail(over: Record<string, unknown> = {}) {
@@ -216,7 +168,7 @@ function gateCard(over: Record<string, unknown> = {}): ActionCard {
 
 function installRoutes(over: Record<string, unknown> = {}) {
   setApiRoutes({
-    [`GET ${INTENT_PATH}/map`]: () => ({ map: over['map'] ?? mapModel() }),
+    [`GET ${INTENT_PATH}/map`]: () => ({ map_inputs: over['map'] ?? mapFixture() }),
     [`GET ${INTENT_PATH}`]: () => ({ intent: over['intent'] ?? intentDetail() }),
     [`GET ${INTENT_PATH}/review`]: () => over['review'] ?? reviewResponse(),
   })
@@ -311,13 +263,7 @@ describe('the workflow map', () => {
   })
 
   it('omits empty phases and excludes hidden stages from the table and dependency inspector', async () => {
-    const model = mapModel()
-    for (const phase of model.phases) {
-      if (phase.phase === 'ideation' || phase.phase === 'operation') {
-        phase.stages = phase.stages.map((stage) => ({ ...stage, in_scope: false }))
-      }
-    }
-    installRoutes({ map: model })
+    installRoutes({ map: unselecting(mapFixture(), ['approval-handoff', 'market-research', 'deployment-pipeline']) })
     mount({ search: `?view=map&repo=${REPO}&intent=${INTENT}&stage=requirements-analysis` })
     const canvas = await screen.findByRole('list', { name: 'Workflow map swimlanes' })
     expect([...canvas.querySelectorAll('.studio-lane')].map((lane) => lane.getAttribute('data-phase')))
@@ -536,11 +482,8 @@ describe('the workflow map', () => {
   })
 
   it('offers the full workflow when no stage is selected instead of rendering an empty canvas', async () => {
-    const model = mapModel()
-    model.phases = model.phases.map((phase) => ({
-      ...phase, stages: phase.stages.map((stage) => ({ ...stage, in_scope: false })),
-    }))
-    installRoutes({ map: model })
+    const inputs = mapFixture()
+    installRoutes({ map: unselecting(inputs, inputs.rows.map((row) => row.slug)) })
     mount()
     expect(await screen.findByText('No stages are selected in this plan. Show all stages to inspect the full workflow.'))
       .toBeInTheDocument()
@@ -554,9 +497,9 @@ describe('the workflow map', () => {
     const next = 'default~250902-second'
     const nextPath = `${BASE}/repos/${REPO}/intents/${next}`
     setApiRoutes({
-      [`GET ${INTENT_PATH}/map`]: () => ({ map: mapModel() }),
+      [`GET ${INTENT_PATH}/map`]: () => ({ map_inputs: mapFixture() }),
       [`GET ${INTENT_PATH}`]: () => ({ intent: intentDetail() }),
-      [`GET ${nextPath}/map`]: () => ({ map: { ...mapModel(), intent_key: next } }),
+      [`GET ${nextPath}/map`]: () => ({ map_inputs: { ...mapFixture(), intent_key: next } }),
       [`GET ${nextPath}`]: () => ({ intent: intentDetail({ intent_key: next, slug: 'another-intent' }) }),
     })
     mount()
@@ -572,13 +515,14 @@ describe('the workflow map', () => {
   })
 
   it('retains a selected stage skipped during execution and counts it as done', async () => {
-    const model = mapModel()
-    model.phases = model.phases.map((phase) => ({
-      ...phase,
-      stages: phase.stages.map((stage) => stage.slug === 'user-stories'
-        ? { ...stage, state: 'skipped' as const, skipped_reason: 'No user-facing change.' } : stage),
-    }))
-    installRoutes({ map: model })
+    const inputs = mapFixture()
+    installRoutes({
+      map: {
+        ...inputs,
+        rows: inputs.rows.map((row) => (row.slug === 'user-stories' ? stageRow('user-stories', 'skipped') : row)),
+        skip_reasons: { ...inputs.skip_reasons, 'user-stories': 'No user-facing change.' },
+      },
+    })
     mount()
     const skipped = await screen.findByRole('button', { name: /Stage 2.4 user-stories/ })
     expect(skipped).toHaveAttribute('data-state', 'skipped')

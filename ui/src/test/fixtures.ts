@@ -6,11 +6,12 @@
  * backend now sends, and the test would then assert on a card the server can no longer produce.
  *
  * The per-area suites keep their own local factories (they need dozens of variants each); this module
- * exists for the integration tests, which need one ordinary card and the five shell reads.
+ * exists for the integration tests, which need one ordinary card, the five shell reads and a map's inputs.
  */
 
 import type {
-  ActionCard, ActionType, ActionsResponse, ArtifactMeta, DecisionSpec, Decision, ReviewFinding, Severity, SettingsResponse,
+  ActionCard, ActionType, ActionsResponse, ArtifactMeta, DecisionSpec, Decision, MapInputs, MapNode, ReviewFinding,
+  Severity, SettingsResponse, StageRow, StageState,
 } from '../lib/types'
 import type { RouteHandler } from './stubs/app-sdk'
 
@@ -60,6 +61,58 @@ export function artifactMeta(over: Partial<ArtifactMeta> = {}): ArtifactMeta {
     sha256: 'sha-art',
     kind: 'artifact',
     renderable: true,
+    ...over,
+  }
+}
+
+/** `2026-09-04T10:00:00Z`, the backend tests' clock: the server `now` every map fixture is measured to. */
+export const MAP_NOW = 1_788_516_000
+
+/** One stage-graph node as `GET …/map` sends it. */
+export function mapNode(over: Partial<MapNode> & Pick<MapNode, 'slug' | 'number' | 'phase'>): MapNode {
+  return {
+    name: over.slug.replace(/-/g, ' '),
+    execution: 'ALWAYS',
+    mode: 'inline',
+    lead_agent: 'orchestrator',
+    reviewer: null,
+    review_class: null,
+    summary_confirmation: null,
+    per_unit: false,
+    consumes: [],
+    produces: [],
+    requires_stage: [],
+    ...over,
+  }
+}
+
+const MARKS: Record<StageState, string> = {
+  not_started: ' ', in_progress: '-', awaiting_approval: '?', revising: 'r', completed: 'x', skipped: 's', unknown: '!',
+}
+
+/** One state-file row, selected (`EXECUTE`) unless `over` says otherwise. */
+export function stageRow(slug: string, state: StageState = 'not_started', over: Partial<StageRow> = {}): StageRow {
+  return { slug, mark: MARKS[state], state, phase: null, suffix: 'EXECUTE', ...over }
+}
+
+/** `GET …/map` for an intent with nothing on disk yet; tests add the graph, rows and facts they need. */
+export function mapInputs(over: Partial<MapInputs> = {}): MapInputs {
+  return {
+    intent_key: 'default~250901-guest',
+    graph_version: '2.6.2',
+    now: MAP_NOW,
+    nodes: [],
+    rows: [],
+    status: 'Running',
+    phases: [],
+    current_stage: null,
+    directive_stage: null,
+    scope_grid: {},
+    units: [],
+    active_unit: null,
+    artifacts: [],
+    skip_reasons: {},
+    attempts: {},
     ...over,
   }
 }

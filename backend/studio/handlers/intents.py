@@ -135,16 +135,15 @@ async def get_intent(services: Any, request: web.Request) -> web.Response:
 
 
 async def get_map(services: Any, request: web.Request) -> web.Response:
-    """``GET …/{intent}/map`` — the stage graph joined with the state file.
+    """``GET …/{intent}/map`` — the facts the UI joins into the map (``ui/src/map/buildMap.ts``).
 
-    ``density`` is validated and then ignored on purpose: the model carries every stage, its unit lanes
+    ``density`` is validated and then ignored on purpose: the inputs carry every stage, its unit lanes
     and its dependencies, and which of them to draw is a rendering decision the client makes without a
     second round trip.
     """
     query_str(request, "density", "overview", choices=("overview", "detailed", "dependencies"))
     _repo, snap = await _repo_and_snapshot(services, request)
-    model = await asyncio.to_thread(services.projection.map, snap)
-    return json_ok({"map": model.to_json()})
+    return json_ok({"map_inputs": await asyncio.to_thread(services.projection.map_inputs, snap)})
 
 
 async def list_artifacts(services: Any, request: web.Request) -> web.Response:

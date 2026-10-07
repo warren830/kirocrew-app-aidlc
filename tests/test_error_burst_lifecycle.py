@@ -240,12 +240,13 @@ def test_completed_map_keeps_last_stage_and_truthful_executed_skipped_counts(sna
         *errors(), event("STAGE_COMPLETED", 40, Stage=NEXT),
         event("STAGE_STARTED", 41, Stage=FINAL), event("WORKFLOW_COMPLETED", 42),
     ], stage=FINAL, status="Completed", marks=marks)
-    model = projection.map(snap)
-    stages = [stage for phase in model.phases for stage in phase.stages]
+    inputs = projection.map_inputs(snap)
+    rows = inputs["rows"]
     assert snap.stage == snap.state.current_stage == FINAL
-    assert next(stage for stage in stages if stage.slug == FINAL).state == "skipped"
-    assert len(stages) == 33
-    assert sum(stage.state == "completed" for stage in stages) == 7
-    assert sum(stage.state == "skipped" for stage in stages) == 2
-    assert not any(stage.is_current or stage.is_directive for stage in stages)
+    # The cursor is sent as it is; `buildMap` drops it for a `Completed` status (buildMap.test.ts).
+    assert (inputs["status"], inputs["current_stage"], inputs["directive_stage"]) == ("Completed", FINAL, FINAL)
+    assert next(row for row in rows if row["slug"] == FINAL)["state"] == "skipped"
+    assert len(rows) == 33
+    assert sum(row["state"] == "completed" for row in rows) == 7
+    assert sum(row["state"] == "skipped" for row in rows) == 2
     assert failure(projection, snap) is None

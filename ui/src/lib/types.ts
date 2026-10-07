@@ -184,7 +184,19 @@ export interface QuestionsView { relpath: string; sha256: string; stage: string;
 export interface IntentDetail extends IntentSummary { state_sections: Record<string, Record<string, string>>; phases: [string, string][]; stages: StageRow[]; findings: Finding[]; actions: ActionCard[]; directive: Directive | null; recovery: Record<string, string> | null; markers: MarkersView; audit_tail: AuditEventView[]; questions: QuestionsView | null; artifacts_count: number; artifacts_truncated: boolean; git: GitObservation | null; binding: BindingView | null; engine: HarnessDir | null; active_directive_stage: string | null }
 
 // ---- map ----
-export interface MapUnit { unit: string; state: StageState; artifacts: ArtifactMeta[] }
+/** One stage-graph node, only the fields the map reads. */
+export interface MapNode { slug: string; number: string; name: string; phase: string; execution: MapStage['execution']; mode: string; lead_agent: string; reviewer: string | null; review_class: string | null; summary_confirmation: string | null; per_unit: boolean; consumes: string[]; produces: string[]; requires_stage: string[] }
+/** A stage's latest attempt in epoch seconds; `ended` is null while it runs. */
+export interface MapAttempt { started: number; ended: number | null }
+/**
+ * What `GET …/map` sends: the facts `buildMap` assembles into a `MapModel`. `now` is the server's clock
+ * (epoch seconds) so an open attempt is measured against it; `current_stage` and `directive_stage` are
+ * raw, and a `Completed` `status` clears them; `scope_grid` is only this intent's scope; `skip_reasons`
+ * and `attempts` are parsed server-side because they need the state file and the audit.
+ */
+export interface MapInputs { intent_key: string; graph_version: string | null; now: number; nodes: MapNode[]; rows: StageRow[]; status: string | null; phases: [string, string][]; current_stage: string | null; directive_stage: string | null; scope_grid: Record<string, string>; units: string[]; active_unit: string | null; artifacts: ArtifactMeta[]; skip_reasons: Record<string, string | null>; attempts: Record<string, MapAttempt> }
+/** `state` is the stage's own for the active unit, so it can be `excluded` too. */
+export interface MapUnit { unit: string; state: StageState | 'excluded'; artifacts: ArtifactMeta[] }
 /** `phase` is a `Phase` for every stage the graph knows and the literal `"unknown"` for a state-file
  *  row it does not, which is what `stage_graph_drift` reports; hence `string`, not `Phase`. */
 export interface MapStage { slug: string; number: string; name: string; phase: string; state: StageState | 'excluded'; execution: 'ALWAYS' | 'CONDITIONAL'; in_scope: boolean; mode: string; agent: string; reviewer: string | null; review_class: string | null; gate: boolean; per_unit: boolean; summary_confirmation: string | null; consumes: string[]; produces: string[]; depends_on: string[]; dependents: string[]; elapsed_secs: number | null; artifacts: ArtifactMeta[]; skipped_reason: string | null; units: MapUnit[]; is_current: boolean; is_directive: boolean }
@@ -346,7 +358,7 @@ export interface TransactionResponse { transaction: TransactionResult }
 export interface PlanPreviewResponse { plan: EffectivePlan }
 export interface CalibrationClearResponse { ok: true; removed: number }
 export interface SlackCallbackResponse { ok: true; recorded: true }
-export interface MapResponse { map: MapModel }
+export interface MapResponse { map_inputs: MapInputs }
 export interface IntentResponse { intent: IntentDetail }
 export interface DirectoryResponse {
   path: string

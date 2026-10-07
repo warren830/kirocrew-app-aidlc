@@ -18,8 +18,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { I18nProvider } from '../i18n'
 import { EMPTY_ROUTE, buildRoute, parseRoute } from '../lib/route'
-import type { MapModel, MapPhase, MapStage } from '../lib/types'
-import { API_BASE, actionCard, reviewFinding, shellRoutes } from '../test/fixtures'
+import { API_BASE, actionCard, mapInputs, mapNode, reviewFinding, shellRoutes, stageRow } from '../test/fixtures'
 import { setApiRoutes } from '../test/stubs/app-sdk'
 import { StudioApp } from './StudioApp'
 
@@ -37,50 +36,6 @@ const reviewed = actionCard({
     },
   },
 })
-
-function mapStage(over: Partial<MapStage> & Pick<MapStage, 'slug' | 'number' | 'phase'>): MapStage {
-  return {
-    name: over.slug.replace(/-/g, ' '),
-    state: 'not_started',
-    execution: 'ALWAYS',
-    in_scope: true,
-    mode: 'inline',
-    agent: 'orchestrator',
-    reviewer: null,
-    review_class: null,
-    gate: true,
-    per_unit: false,
-    summary_confirmation: null,
-    consumes: [],
-    produces: [],
-    depends_on: [],
-    dependents: [],
-    elapsed_secs: null,
-    artifacts: [],
-    skipped_reason: null,
-    units: [],
-    is_current: false,
-    is_directive: false,
-    ...over,
-  }
-}
-
-function mapModel(stages: MapStage[]): MapModel {
-  const phase: MapPhase = {
-    phase: 'inception',
-    status: 'InProgress',
-    stages,
-    counts: { total: stages.length, in_scope: stages.length, done: 0, skipped: 0 },
-  }
-  return {
-    intent_key: 'default~250901-guest',
-    phases: [phase],
-    counts: { stages_known: stages.length, stages_selected: stages.length, gates: stages.length },
-    units: [],
-    graph_version: '2.6.2',
-    stage_count: stages.length,
-  }
-}
 
 /** What a reload does: the app is constructed from `location` alone, with no in-memory state. */
 function reloadAt(url: string) {
@@ -135,10 +90,13 @@ describe('a deep link', () => {
     setApiRoutes({
       ...shellRoutes([reviewed]),
       [`GET ${API_BASE}/repos/r_1/intents/${INTENT}/map`]: () => ({
-        map: mapModel([
-          mapStage({ slug: 'functional-design', number: '2.3', phase: 'inception', state: 'awaiting_approval' }),
-          mapStage({ slug: 'user-stories', number: '2.4', phase: 'inception' }),
-        ]),
+        map_inputs: mapInputs({
+          nodes: [
+            mapNode({ slug: 'functional-design', number: '2.3', phase: 'inception' }),
+            mapNode({ slug: 'user-stories', number: '2.4', phase: 'inception' }),
+          ],
+          rows: [stageRow('functional-design', 'awaiting_approval'), stageRow('user-stories')],
+        }),
       }),
       // The intent read and the review read are deliberately absent: a deep link must still land on the
       // stage when a secondary read fails, or a slow repo turns every shared link into an empty canvas.
