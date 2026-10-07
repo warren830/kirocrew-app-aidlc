@@ -996,7 +996,7 @@ def test_delivery_uncertain_action_is_scoped_to_its_intent(engine, make_snap, ma
 
 
 def test_lease_conflict(engine, studio, make_snap, make_facts, poc_state):
-    lease = studio.storage.LeaseRecord(
+    lease = studio.leases.LeaseRecord(
         kind="execution",
         resolved_repo_identity="16777220:99001",
         generation=4,
@@ -1022,7 +1022,7 @@ def test_lease_conflict(engine, studio, make_snap, make_facts, poc_state):
 
 def test_lease_for_another_repository_is_not_a_conflict(engine, studio, make_snap, make_facts,
                                                         poc_state):
-    lease = studio.storage.LeaseRecord(
+    lease = studio.leases.LeaseRecord(
         kind="admin",
         resolved_repo_identity="16777220:70707",
         generation=1,

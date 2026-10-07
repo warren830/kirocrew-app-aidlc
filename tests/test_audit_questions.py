@@ -130,7 +130,7 @@ def test_audit_text_content_is_sent_verbatim_and_reconciled(sv, routes, fake_hos
     asyncio.run(sv.reconciler.reconcile_now(card["action_id"]))
     assert _row(sv, card["action_id"])["status"] == "ResolvedNoTransition"
     assert _row(sv, card["action_id"])["resolution_json"]["reason"] == "question_answered"
-    assert not sv.storage.lease_list()
+    assert not sv.scheduler.live()
     assert _tree_digest(scene.root) == answered
 
 
@@ -157,7 +157,7 @@ def test_legacy_placeholder_reply_releases_lease_but_keeps_the_question_open(
     os.utime(marker, ns=(2_000_000_000, 2_000_000_000))
     asyncio.run(sv.reconciler.reconcile_now(card["action_id"]))
     assert _row(sv, card["action_id"])["status"] == "Processing"
-    assert sv.storage.lease_list()
+    assert sv.scheduler.live()
     _finish_the_turn(fake_host, scene.slot_key, wire_text="Free-text note")
     before = _tree_digest(scene.root)
     if restart:
@@ -169,7 +169,7 @@ def test_legacy_placeholder_reply_releases_lease_but_keeps_the_question_open(
     assert old_row["status"] == "ResolvedNoTransition"
     assert old_row["resolution_json"]["reason"] == "answer_requires_text"
     assert old_row["wire_text"] == "Free-text note"
-    assert not sv.storage.lease_list()
+    assert not sv.scheduler.live()
     new_card = question_card(sv, routes, fake_host, scene)
     assert new_card["action_id"] != card["action_id"]
     assert new_card["evidence"]["questions"]["pending_count"] == 1
@@ -203,7 +203,7 @@ def test_label_only_recovery_requires_same_text_prompt_and_proven_human_turn(
     row = _row(sv, card["action_id"])
     assert row["status"] in ("Processing", "DeliveryUncertain", "ReconciliationRequired")
     assert (row.get("resolution_json") or {}).get("reason") != "answer_requires_text"
-    assert sv.storage.lease_list()
+    assert bool(sv.scheduler.live()) == (row["status"] == "Processing")  # only in flight holds the repo
     assert _tree_digest(scene.root) == before
 
 

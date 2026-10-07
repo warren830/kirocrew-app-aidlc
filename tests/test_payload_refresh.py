@@ -168,7 +168,7 @@ def test_same_version_refresh_is_offered_and_commits_through_api(refresh_env):
     assert STATE not in current.by_path()
     assert installer.receipt(env.old_receipt.receipt_id).status == "superseded"
     assert env.services.storage.get("repos", env.repo.repo_id)["receipt_version"] == current.receipt_id
-    assert env.services.storage.lease_list() == []
+    assert env.services.scheduler.live() == []
     assert _install_json(env)["upgrade_available"] is False
     assert env.request("POST", prefix + "/preview")[1]["code"] == "same_version_installed"
 
@@ -317,7 +317,7 @@ def test_reserved_refresh_rechecks_receipt_before_staging(refresh_env):
     assert result.status == "failed" and "install_conflict" in result.error
     assert not any(s.name == "stage_payload" for s in result.steps)
     assert _tree(env.root) == env.before
-    assert env.services.storage.lease_list() == []
+    assert env.services.scheduler.live() == []
 
 
 @pytest.mark.parametrize("boundary", ["after:verify_staging", "after:acquire_admin_lease"])
@@ -338,7 +338,7 @@ def test_refresh_rechecks_receipt_under_lease_before_writing(refresh_env, bounda
     assert not any(s.name == "backup" for s in result.steps)
     assert _tree(env.root) == env.before
     assert installer.current_receipt(env.repo.repo_id).receipt_id == env.old_receipt.receipt_id
-    assert env.services.storage.lease_list() == []
+    assert env.services.scheduler.live() == []
 
 
 def test_refresh_rechecks_repository_identity_after_staging(refresh_env):
@@ -359,7 +359,7 @@ def test_refresh_rechecks_repository_identity_after_staging(refresh_env):
     assert _tree(env.root) == env.before
     assert _tree(env.root.with_name("original-repository")) == env.before
     assert installer.current_receipt(env.repo.repo_id) == env.old_receipt
-    assert env.services.storage.lease_list() == []
+    assert env.services.scheduler.live() == []
 
 
 def test_missing_manifest_digest_cannot_offer_a_refresh(refresh_env):

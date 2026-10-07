@@ -131,10 +131,10 @@ def test_recorded_plan_approval_settles_only_the_original_reply(
         assert row["status"] == "ResolvedNoTransition"
         assert row["resolution_json"]["reason"] == "plan_approval_recorded_before_reset"
         assert row["resolution_json"]["evidence"]["current_plan_requires_approval"] is True
-        assert not sv.storage.lease_list()
+        assert not sv.scheduler.live()
     else:
         assert row["status"] in ("Processing", "DeliveryUncertain", "ReconciliationRequired")
-        assert sv.storage.lease_list()
+        assert bool(sv.scheduler.live()) == (row["status"] == "Processing")  # only in flight holds the repo
     assert len(fake_host.get_slot(scene.slot_key).messages) == 2
     assert _tree_digest(scene.root) == before
 
@@ -271,5 +271,5 @@ def test_recorded_plan_approval_uses_the_engines_two_digests(sv, routes, fake_ho
     assert row["status"] == "ResolvedNoTransition", row["resolution_json"]
     assert row["resolution_json"]["reason"] == "plan_approval_recorded_before_reset"
     assert row["resolution_json"]["evidence"]["current_plan_requires_approval"] is True
-    assert not sv.storage.lease_list()
+    assert not sv.scheduler.live()
     assert len(fake_host.get_slot(scene.slot_key).messages) == 2

@@ -156,7 +156,7 @@ def test_rollback_faults_restore_the_current_engine_or_commit_atomically(upgrade
         assert result.status in {"failed", "rolled_back"}, result
         assert tree(root) == before
         assert up.installer.current_receipt(repo.repo_id).receipt_id == receipt.receipt_id
-    assert up.store.lease_get("admin", repo.resolved_identity) is None
+    assert up.lease() is None
 
 
 def test_rollback_rechecks_unchanged_owned_files_before_commit(upgraded):
@@ -207,13 +207,15 @@ def test_rollback_does_not_need_the_bundled_payload(upgraded, tmp_path):
 def test_rollback_never_preempts_an_existing_lease(studio, upgraded, kind):
     root, repo, up, _ = upgraded
     before = tree(root)
-    fields = {"repo_id": repo.repo_id, **({"operation_type": "repo_metadata"} if kind == "admin"
-                                        else {"action_id": "active"})}
-    grant = up.store.lease_acquire(kind, repo.resolved_identity, fields)
+    if kind == "admin":
+        grant = run(up.scheduler.acquire_admin(repo, operation_type="repo_metadata", transaction_id=None))
+    else:
+        grant = run(up.scheduler.acquire_execution(repo, intent_uuid=None, session_key=None, action_id="active"))
     with pytest.raises(studio.errors.LeaseHeld):
         rollback(up, repo)
     assert tree(root) == before
-    assert up.store.lease_get(kind, repo.resolved_identity).generation == grant.generation
+    assert run(up.scheduler.get(repo.resolved_identity)).generation == grant.generation
+    run(up.scheduler.release(grant))
 
 
 def test_rollback_record_commit_is_atomic(upgraded, monkeypatch):
@@ -254,7 +256,7 @@ def test_failed_version_rollback_can_be_recovered_and_retried(upgraded):
     assert rollback(up, repo).status == "committed"
 
 
-def test_real_process_death_during_version_rollback_recovers(studio, upgraded, clock):
+def test_real_process_death_during_version_rollback_recovers(studio, upgraded):
     root, repo, up, _ = upgraded
     before = tree(root)
     plan = up.installer.preview(repo, "rollback")
@@ -276,12 +278,10 @@ def test_real_process_death_during_version_rollback_recovers(studio, upgraded, c
         process.join()
         pytest.fail("isolated rollback process did not exit")
     assert process.exitcode == 77
-    up.installer._boot_id = up.installer._scheduler._boot_id = "rollback-restarted"
     assert run(up.installer.settle_abandoned()) == [pending.transaction_id]
     dead = up.installer.transaction(pending.transaction_id)
     assert dead.status == "recovery_required" and (Path(dead.failed_dir) / "transaction.json").is_file()
-    clock.advance(studio.constants.LEASE_STALE_SECS + 1)
-    assert run(up.installer._scheduler.startup_sweep()) == []
+    # The child died holding the lock; the recovery can take it only because the kernel let go.
     result = run(up.installer.recover_rollback(
         repo, transaction_id=dead.transaction_id, confirm_digest=plan.digest(),
     ))
@@ -345,23 +345,6 @@ def test_rollback_rejects_a_mismatched_reserved_confirmation(studio, upgraded):
             transaction_id=pending.transaction_id,
         ))
     assert tree(root) == before
-
-
-def test_rollback_lease_loss_stops_before_any_version_write(upgraded):
-    root, repo, up, _ = upgraded
-    before = tree(root)
-
-    def replace_lease():
-        held = up.store.lease_get("admin", repo.resolved_identity)
-        up.store.lease_release("admin", repo.resolved_identity, held.generation)
-        up.store.lease_acquire("execution", repo.resolved_identity, {
-            "repo_id": repo.repo_id, "action_id": "new-owner",
-        })
-
-    up.fault.on("before:restore_version", replace_lease)
-    result = rollback(up, repo)
-    assert result.status == "recovery_required" and tree(root) == before
-    assert up.store.lease_get("execution", repo.resolved_identity).action_id == "new-owner"
 
 
 def test_rollback_rejects_root_replacement_at_a_file_boundary(upgraded, tmp_path):

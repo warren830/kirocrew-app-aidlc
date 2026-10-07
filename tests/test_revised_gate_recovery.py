@@ -38,7 +38,7 @@ def test_revision_return_uses_ordered_audit_proof_and_releases_only_its_lease(
     _finish_the_turn(fake_host, scene.slot_key, wire_text=wire)
     fake_host.get_slot(scene.slot_key).messages[-1]["content"] = "Revision ready for review."
     assert _report(sv, routes, fake_host, card["action_id"], receipt)[0] == 200
-    assert sv.storage.lease_list()
+    assert sv.scheduler.live()
 
     blocks = []
     if case == "crosses_old_tail_limit":
@@ -106,10 +106,10 @@ def test_revision_return_uses_ordered_audit_proof_and_releases_only_its_lease(
         assert row["status"] == "StateChanged"
         assert row["resolution_json"]["reason"] == "gate_revision_returned"
         assert row["resolution_json"]["evidence"]["presence"]["ok"] is True
-        assert not sv.storage.lease_list()
+        assert not sv.scheduler.live()
     else:
         assert row["status"] in ("Processing", "DeliveryUncertain", "ReconciliationRequired")
-        assert sv.storage.lease_list()
+        assert bool(sv.scheduler.live()) == (row["status"] == "Processing")  # only in flight holds the repo
     assert len(fake_host.get_slot(scene.slot_key).messages) == 2
     assert row["wire_text"] == wire
     assert _tree_digest(scene.root) == before
@@ -168,12 +168,12 @@ def test_unit_revision_return_accepts_solo_rows_and_ignores_other_units(
     if case == "other_unit_active":
         # Blank-Unit rows belong to whichever unit runs now; that is no longer this action's.
         assert row["status"] in ("Processing", "DeliveryUncertain", "ReconciliationRequired")
-        assert sv.storage.lease_list()
+        assert bool(sv.scheduler.live()) == (row["status"] == "Processing")  # only in flight holds the repo
     else:
         assert row["status"] == "StateChanged"
         assert row["resolution_json"]["reason"] == "gate_revision_returned"
         assert row["resolution_json"]["evidence"]["returned_gate"]["timestamp"] == "2026-09-04T10:00:21Z"
-        assert not sv.storage.lease_list()
+        assert not sv.scheduler.live()
 
 
 @pytest.mark.parametrize("truncated", ["never", "now", "at_capture"])

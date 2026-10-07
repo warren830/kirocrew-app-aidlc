@@ -1916,11 +1916,10 @@ class Installer:
         """Answer 409 at once while the repository is leased; advisory, ``acquire_admin`` is the authority."""
         if not repo.resolved_identity:
             return
-        for kind in ("execution", "admin"):
-            record = await asyncio.to_thread(self._storage.lease_get, kind, repo.resolved_identity)
-            if record is not None:
-                raise LeaseHeld("repository is busy", details={
-                    "kind": kind, "repo_id": repo.repo_id, "operation_type": record.operation_type})
+        record = await self._scheduler.get(repo.resolved_identity)
+        if record is not None:
+            raise LeaseHeld("repository is busy", details={
+                "kind": record.kind, "repo_id": repo.repo_id, "operation_type": record.operation_type})
 
     async def run(self, repo: "RepoRecord", kind: str, *, plan_digest: str, transaction_id: str | None = None,
                   target_receipt_id: str | None = None) -> TransactionResult:
@@ -2066,18 +2065,16 @@ class Installer:
                 return await asyncio.to_thread(self.transaction, txid)
             plan, candidates = await asyncio.to_thread(self._confirmed_plan, repo, kind, digest,
                                                        confirmation.get("target_receipt_id"))
-            await self._step(steps, txid, repo, "backup", self._backup_receipt_op, journal, plan, candidates, repo,
-                             grant)
+            await self._step(steps, txid, repo, "backup", self._backup_receipt_op, journal, plan, candidates, repo)
             snapshot = await asyncio.to_thread(self._load_journal, repo, kind, txid)
             journal.backups = {f["path"]: f["before"] for f in snapshot["files"]}
             applied = ((("remove_files", "remove"), ("remove_fragments", "remove_fragment")) if kind == "uninstall"
                        else (("restore_version", None),))
             for name, action in applied:
-                await self._step(steps, txid, repo, name, self._apply_receipt_op, snapshot, repo, grant, action)
-            await self._step(steps, txid, repo, f"post_{kind}_validate", self._validate_receipt_op, snapshot, repo,
-                             grant)
+                await self._step(steps, txid, repo, name, self._apply_receipt_op, snapshot, repo, action)
+            await self._step(steps, txid, repo, f"post_{kind}_validate", self._validate_receipt_op, snapshot, repo)
             detail = await self._step(steps, txid, repo, f"commit_{kind}", self._commit_receipt_op, snapshot, repo,
-                                      steps, grant)
+                                      steps)
             journal.receipt_id = detail.get("receipt_id")
             status = "committed"
         except Exception as exc:  # every reversible failure has a durable outcome
@@ -2088,12 +2085,12 @@ class Installer:
                 if grant is None and current["status"] != "staged":
                     raise  # this caller never claimed the row; another invocation owns its outcome
                 if isinstance(exc, LeaseHeld):
-                    held = await asyncio.to_thread(self._storage.lease_get, "admin", repo.resolved_identity)
+                    held = await self._scheduler.get(repo.resolved_identity)
                     if held is not None and held.transaction_id == txid:
                         raise  # another invocation of this same reserved id holds the lease
                 error = self._error_text(exc)
                 if snapshot is not None:
-                    status = await self._restore_receipt_op(snapshot, repo, steps, error, grant)
+                    status = await self._restore_receipt_op(snapshot, repo, steps, error)
                 failed_dir = await asyncio.to_thread(self._archive_failure, journal, steps, error)
         finally:
             if grant is not None:
@@ -2101,7 +2098,7 @@ class Installer:
         return await self._finish(txid, repo, status, steps, journal, error, failed_dir)
 
     def _backup_receipt_op(self, journal: _Journal, plan: PreviewPlan, candidates: dict[str, bytes | None] | None,
-                           repo: "RepoRecord", grant: "LeaseGrant") -> dict:
+                           repo: "RepoRecord") -> dict:
         """Back up each path the plan changes (a rollback also stores the bytes it will write), then a journal
         binding them to the confirmed plan and the prior repository row."""
         kind = plan.kind
@@ -2115,7 +2112,6 @@ class Installer:
             if entry.action not in _APPLIED[kind]:
                 continue
             if kind == "rollback":
-                self._heartbeat(grant)
                 root = self._uninstall_root(repo, receipt)
             path = self._safe_path(root, entry.path)
             before, unreadable = _live_bytes(path)
@@ -2191,11 +2187,8 @@ class Installer:
         except (KeyError, TypeError, ValueError) as exc:
             raise StudioError("install_recovery_required", f"invalid {kind} journal") from exc
 
-    def _heartbeat(self, grant: "LeaseGrant") -> None:
-        self._storage.lease_heartbeat(grant.kind, grant.resolved_repo_identity, grant.generation, None)
-
-    def _apply_receipt_op(self, snapshot: dict, repo: "RepoRecord", grant: "LeaseGrant", action: str | None) -> dict:
-        """Apply journaled changes path by path, re-proving root, lease and before-bytes at every path."""
+    def _apply_receipt_op(self, snapshot: dict, repo: "RepoRecord", action: str | None) -> dict:
+        """Apply journaled changes path by path, re-proving root and before-bytes at every path."""
         kind = "rollback" if "target_receipt_id" in snapshot else "uninstall"
         receipt = self.receipt(snapshot["receipt_id"])
         owned = receipt.by_path()
@@ -2207,7 +2200,6 @@ class Installer:
                 continue
             rel = f["path"]
             self._fault(f"before:{kind}_path:{rel}")
-            self._heartbeat(grant)
             target = self._safe_path(self._uninstall_root(repo, receipt), rel)
             live, unreadable = _live_bytes(target)
             if unreadable or _digest_of(live) != f["before"]:
@@ -2233,10 +2225,9 @@ class Installer:
             self._fault(f"after:{kind}_path:{rel}")
         return {"restored" if kind == "rollback" else "changed": changed}
 
-    def _validate_receipt_op(self, snapshot: dict, repo: "RepoRecord", grant: "LeaseGrant") -> dict:
+    def _validate_receipt_op(self, snapshot: dict, repo: "RepoRecord") -> dict:
         """Every journaled path holds its planned bytes; a rollback also proves every file of the old receipt,
         workflow-state compatibility and the restored engine's own version."""
-        self._heartbeat(grant)
         receipt = self.receipt(snapshot["receipt_id"])
         root = self._uninstall_root(repo, receipt)
         for f in snapshot["files"]:
@@ -2251,7 +2242,6 @@ class Installer:
         target = self.receipt(snapshot["target_receipt_id"])
         expected = {e["path"]: e["payload_sha256"] for e in snapshot["plan"]["entries"]}
         for rf in target.files:  # identical paths join the new receipt too: an edit there must not slip through
-            self._heartbeat(grant)
             live, unreadable = _live_bytes(self._safe_path(self._uninstall_root(repo, receipt), rf.path))
             if unreadable or _digest_of(live) != expected[rf.path]:
                 raise StudioError("install_conflict", "old engine receipt would claim changed content",
@@ -2265,10 +2255,9 @@ class Installer:
             raise StudioError("install_conflict", "restored engine failed version validation")
         return {**verified, "engine_version": target.engine_version}
 
-    def _commit_receipt_op(self, snapshot: dict, repo: "RepoRecord", steps: list[StepRecord],
-                           grant: "LeaseGrant") -> dict:
+    def _commit_receipt_op(self, snapshot: dict, repo: "RepoRecord", steps: list[StepRecord]) -> dict:
         """Receipt, repository and transaction rows in one SQLite transaction: the point of no return."""
-        self._validate_receipt_op(snapshot, repo, grant)
+        self._validate_receipt_op(snapshot, repo)
         txid, receipt_id = snapshot["transaction_id"], snapshot["receipt_id"]
         rollback = "target_receipt_id" in snapshot
         if rollback:
@@ -2283,7 +2272,6 @@ class Installer:
             detail = {"removed_receipt_id": receipt_id}
         completed = [*steps[:-1], replace(steps[-1], ok=True, finished_at=now, detail=detail)]
         with self._storage._txn():
-            self._heartbeat(grant)
             current = self.current_receipt(repo.repo_id)
             if current is None or current.receipt_id != receipt_id:
                 raise StudioError("install_conflict",
@@ -2305,15 +2293,15 @@ class Installer:
         return detail
 
     async def _restore_receipt_op(self, snapshot: dict, repo: "RepoRecord", steps: list[StepRecord],
-                                  error: str | None, grant: "LeaseGrant") -> str:
+                                  error: str | None) -> str:
         """Put every journaled path back to its before-image and re-prove it, else ``recovery_required``."""
         txid = snapshot["transaction_id"]
         await asyncio.to_thread(self._storage.update, "install_transactions", txid,
                                 {"status": "rolling_back", "error": error})
         await self._publish(txid, repo.repo_id, "rolling_back")
         try:
-            await self._step(steps, txid, repo, "restore_backups", self._restore_journaled, snapshot, repo, grant)
-            await self._step(steps, txid, repo, "reverify_old_receipt", self._verify_journaled, snapshot, repo, grant)
+            await self._step(steps, txid, repo, "restore_backups", self._restore_journaled, snapshot, repo)
+            await self._step(steps, txid, repo, "reverify_old_receipt", self._verify_journaled, snapshot, repo)
         except Exception as exc:
             steps[-1] = replace(steps[-1], ok=False, finished_at=self._clock.iso(),
                                 detail={"error": self._error_text(exc)})
@@ -2321,13 +2309,12 @@ class Installer:
             return "recovery_required"
         return "rolled_back"
 
-    def _restore_journaled(self, snapshot: dict, repo: "RepoRecord", grant: "LeaseGrant") -> dict:
+    def _restore_journaled(self, snapshot: dict, repo: "RepoRecord") -> dict:
         receipt = self.receipt(snapshot["receipt_id"])
         self._uninstall_root(repo, receipt)
         backup = self._failure_path(C.BACKUP_DIRNAME, snapshot["transaction_id"])
         restored = 0
         for f in snapshot["files"]:
-            self._heartbeat(grant)
             target = self._safe_path(self._uninstall_root(repo, receipt), f["path"])
             live, unreadable = _live_bytes(target)
             if unreadable or (target.exists() and not security.is_regular_file(target)):
@@ -2348,8 +2335,7 @@ class Installer:
             restored += 1
         return {"restored": restored}
 
-    def _verify_journaled(self, snapshot: dict, repo: "RepoRecord", grant: "LeaseGrant") -> dict:
-        self._heartbeat(grant)
+    def _verify_journaled(self, snapshot: dict, repo: "RepoRecord") -> dict:
         root = self._uninstall_root(repo, self.receipt(snapshot["receipt_id"]))
         for f in snapshot["files"]:
             if _digest_of(_read_bytes(self._safe_path(root, f["path"]))) != f["before"]:
@@ -2381,7 +2367,7 @@ class Installer:
             return await self._recover_receipt_operation(repo, row["kind"], txid, original, recovery_digest=plan_digest)
         except LeaseHeld:  # a lease taken after the advisory check must leave a retryable durable outcome
             current = await asyncio.to_thread(self._storage.get, "install_transactions", txid)
-            held = await asyncio.to_thread(self._storage.lease_get, "admin", repo.resolved_identity)
+            held = await self._scheduler.get(repo.resolved_identity)
             if current["status"] == "staged" and not (held and held.transaction_id == txid):
                 await asyncio.to_thread(self._storage.update, "install_transactions", txid, {
                     "status": "recovery_required", "error": "repo_busy", "finished_at": self._clock.iso()})
@@ -2409,11 +2395,11 @@ class Installer:
                 return await asyncio.to_thread(self.transaction, txid)
             if recovery_digest is not None:
                 await asyncio.to_thread(self._check_receipt_recovery, repo, recovery_digest, txid)
-            status = await self._restore_receipt_op(snapshot, repo, steps, error, grant)
+            status = await self._restore_receipt_op(snapshot, repo, steps, error)
             failed_dir = await asyncio.to_thread(self._archive_failure, journal, steps, error)
         except Exception as exc:
             if grant is None:
-                held = await asyncio.to_thread(self._storage.lease_get, "admin", repo.resolved_identity)
+                held = await self._scheduler.get(repo.resolved_identity)
                 if held is not None and held.transaction_id == txid:
                     raise
             error = self._error_text(exc)
@@ -2427,23 +2413,21 @@ class Installer:
     # ---- startup settlement and preconditions ---- #
 
     async def settle_abandoned(self) -> list[str]:
-        """Settle transactions whose process died, before the startup lease sweep: ``staged``/``leased`` → ``failed``,
-        later ones (or a journaled uninstall/rollback) → ``recovery_required``, unfinished commits finished; rows
-        leased by this ``boot_id`` are live. Returns the ids settled."""
+        """Settle transactions whose process died: ``staged``/``leased`` → ``failed``, later ones (or a journaled
+        uninstall/rollback) → ``recovery_required``, unfinished commits finished; a row whose admin lease this
+        process holds is live. Returns the ids settled."""
         rows = await asyncio.to_thread(self._storage.select, "install_transactions")
         candidates = [row for row in rows
                       if str(row.get("status") or "") not in _SETTLED_STATUS or row.get("status") == "committed"]
         if not candidates:
             return []
-        leases = await asyncio.to_thread(self._storage.select, "admin_leases")
-        mine = {str(row.get("transaction_id") or "") for row in leases
-                if row.get("transaction_id") and str(row.get("boot_id") or "") == self._boot_id} - {""}
+        mine = {rec.transaction_id for rec in await self._scheduler.list() if rec.kind == "admin"} - {None}
         settled: list[str] = []
         cleanup_failures: list[tuple[str, StudioError]] = []
         now = self._clock.iso()
         for row in candidates:
             txid, status, repo_id = (str(row.get(key) or "") for key in ("transaction_id", "status", "repo_id"))
-            if not txid or (self._boot_id and txid in mine):
+            if not txid or txid in mine:
                 continue
             if status == "committed":
                 try:
@@ -2628,8 +2612,7 @@ class Installer:
         return grant
 
     async def _release_step(self, steps: list[StepRecord], txid: str, repo: "RepoRecord", grant: "LeaseGrant") -> None:
-        """Give the lease back; a failure here never changes the outcome (the lease stays reclaimable from its
-        settled transaction row, §1.10)."""
+        """Give the lease back; a failure here never changes the outcome."""
         steps.append(StepRecord("release_lease", self._clock.iso(), None, None, {}))
         index = len(steps) - 1
         ok, detail = True, {"generation": grant.generation}
@@ -2992,7 +2975,6 @@ class Installer:
         info = root.stat()
         if str(root) != repo.canonical_path or f"{info.st_dev}:{info.st_ino}" != repo.resolved_identity:
             raise StudioError("install_recovery_required", "cancelled repository identity changed")
-        self._storage.lease_heartbeat("admin", repo.resolved_identity, journal.lease_generation, None)
         live, unreadable = _live_bytes(self._safe_path(root, rel))
         if unreadable or _digest_of(live) != journal.written.get(rel):
             raise StudioError("install_recovery_required", "user edited a cancellation rollback target",

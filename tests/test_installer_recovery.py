@@ -48,7 +48,7 @@ def test_generic_recovery_preview_begin_run_restores_original_transaction(interr
     ))
     assert recovered.status == "rolled_back" and tree(root) == before
     assert harness.store.get("repos", repo.repo_id)["install_status"] == "installed"
-    assert harness.store.lease_get("admin", repo.resolved_identity) is None
+    assert harness.lease() is None
     assert run(harness.installer.run(
         repo, "recovery", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
     )) == recovered
@@ -88,7 +88,7 @@ def test_generic_recovery_confirmation_is_rechecked_under_the_new_lease(
     ))
     assert result.status == "recovery_required"
     assert (root / target).read_bytes() == changed
-    assert harness.store.lease_get("admin", repo.resolved_identity) is None
+    assert harness.lease() is None
 
 
 def test_generic_recovery_stale_preview_is_refused_before_reservation(studio, interrupted):
@@ -167,20 +167,18 @@ def test_generic_recovery_lease_race_returns_a_retryable_outcome(interrupted):
     root, repo, harness, _, failed = interrupted
     plan = harness.installer.preview(repo, "recovery")
     pending = run(harness.installer.begin(repo, "recovery", plan_digest=plan.digest()))
-    harness.store.lease_acquire("execution", repo.resolved_identity, {
-        "repo_id": repo.repo_id, "action_id": "new-owner",
-    })
+    grant = run(harness.scheduler.acquire_execution(repo, intent_uuid=None, session_key=None,
+                                                    action_id="new-owner"))
     before = tree(root)
     result = run(harness.installer.run(
         repo, "recovery", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
     ))
     assert result.status == "recovery_required" and result.error == "repo_busy"
     assert tree(root) == before
+    run(harness.scheduler.release(grant))
 
 
-def test_process_death_during_generic_recovery_can_use_the_same_application_flow(
-    studio, interrupted, clock,
-):
+def test_process_death_during_generic_recovery_can_use_the_same_application_flow(studio, interrupted):
     root, repo, harness, before, failed = interrupted
     plan = harness.installer.preview(repo, "recovery")
     pending = run(harness.installer.begin(repo, "recovery", plan_digest=plan.digest()))
@@ -201,11 +199,9 @@ def test_process_death_during_generic_recovery_can_use_the_same_application_flow
         process.join()
         pytest.fail("isolated recovery process did not exit")
     assert process.exitcode == 77
-    harness.installer._boot_id = harness.installer._scheduler._boot_id = "recovery-restarted"
+    # The child died holding the lock; the recovery below can only take it because the kernel let go.
     assert run(harness.installer.settle_abandoned()) == [pending.transaction_id]
     assert harness.installer.transaction(failed.transaction_id).status == "recovery_required"
-    clock.advance(studio.constants.LEASE_STALE_SECS + 1)
-    assert run(harness.installer._scheduler.startup_sweep()) == []
     again = harness.installer.preview(repo, "recovery")
     result = run(harness.installer.run(repo, "recovery", plan_digest=again.digest()))
     assert result.status == "rolled_back" and result.transaction_id == failed.transaction_id

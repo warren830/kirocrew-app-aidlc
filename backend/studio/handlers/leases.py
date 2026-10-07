@@ -1,8 +1,7 @@
 """``GET /leases`` (§2.1) — who currently holds what, and how close the cap is.
 
-Read-only by construction: a lease is released by the operation that took it or reclaimed against
-positive proof (FR-SES-007), never by a user pressing something in a list. So there is no route here
-that ends a lease.
+Read-only by construction: a lease ends when the operation that took it does, never because a user
+pressed something in a list. So there is no route here that ends a lease.
 """
 
 from __future__ import annotations
@@ -31,13 +30,7 @@ async def get_leases(services: Any, request: web.Request) -> web.Response:
     for rec in records:
         if rec.kind == "execution":
             live_execution += 1
-        views.append(
-            lease_view(
-                rec,
-                intent_key=await intent_key_for_lease(services, rec),
-                orphaned=services.scheduler.is_stale(rec),
-            )
-        )
+        views.append(lease_view(rec, intent_key=await intent_key_for_lease(services, rec)))
     return json_ok(
         {
             "leases": views,

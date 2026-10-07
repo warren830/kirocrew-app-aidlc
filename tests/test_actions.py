@@ -323,7 +323,18 @@ async def delivering(w, A):
 
 
 def leases_held(w) -> list[Any]:
-    return w.store.lease_list()
+    return w.scheduler.live()
+
+
+def in_flight(w, action_id: str = "a_other", **over) -> str:
+    """Another dispatched action of this repository with its turn on the wire: an execution lease."""
+    now = w.clock.iso()
+    row = {"action_id": action_id, "type": "gate", "risk_class": "human_lane", "repo_id": REPO_ID,
+           "resolved_repo_identity": IDENTITY, "intent_dir": INTENT, "space": "default",
+           "status": "Delivering", "lease_generation": 7, "created_at": now, "updated_at": now,
+           "delivering_at": now, "waiting_since": now, **over}
+    w.store.insert("actions", row)
+    return action_id
 
 
 # --------------------------------------------------------------------------- #
@@ -1373,12 +1384,7 @@ def test_a_second_submit_for_the_same_intent_answers_repo_busy(world, A, studio)
     async def scenario():
         await bind(world)
         gate = pick(await seed(world), "gate")
-        uuid = snapshot(world).row.uuid
-        world.store.lease_acquire(
-            "execution",
-            IDENTITY,
-            {"repo_id": REPO_ID, "action_id": "a_other", "intent_uuid": uuid},
-        )
+        in_flight(world, intent_uuid=snapshot(world).row.uuid)
         with pytest.raises(studio.errors.StudioError) as exc:
             await approve(world, A, rec=gate)
         assert exc.value.code == "repo_busy"
@@ -1393,19 +1399,22 @@ def test_other_intent_or_admin_lease_is_busy_not_file_disagreement(world, A, stu
     async def scenario():
         await bind(world)
         gate = pick(await seed(world), "gate")
-        fields = {"repo_id": REPO_ID}
         if kind == "execution":
-            fields.update(action_id="a_other", intent_uuid="01a00000-0000-7000-8000-000000000002")
+            in_flight(world, intent_uuid="01a00000-0000-7000-8000-000000000002")
+            generation = 7
         else:
-            fields.update(operation_type="install", transaction_id="tx_other")
-        held = world.store.lease_acquire(kind, IDENTITY, fields)
+            grant = await world.scheduler.acquire_admin(world.repo, operation_type="install",
+                                                        transaction_id="tx_other")
+            generation = grant.generation
         with pytest.raises(studio.errors.StudioError) as exc:
             await approve(world, A, rec=gate)
         assert exc.value.code == "repo_busy"
         owner = exc.value.details["owner"]
         assert owner["action_id"] == "a_other" if kind == "execution" else owner["operation_type"] == "install"
-        assert leases_held(world)[0].generation == held.generation
+        assert leases_held(world)[0].generation == generation
         assert (await world.broker.get(gate.action_id)).delivery_id is None
+        if kind == "admin":
+            await world.scheduler.release(grant)
     run(scenario())
 
 
@@ -1421,13 +1430,14 @@ def test_the_cursor_is_switched_and_read_back_before_the_record_is_committed(wor
         assert gate.captured.is_active is False
 
         seen: dict[str, str] = {}
-        original = world.store.deliver_under_lease
+        original = world.store.cas_update
 
-        def spy(*args, **kwargs):
-            seen["cursor_at_cas"] = cursor.read_text().strip()
-            return original(*args, **kwargs)
+        def spy(table, key, expected, values):
+            if values.get("status") == "Delivering":
+                seen["cursor_at_cas"] = cursor.read_text().strip()
+            return original(table, key, expected, values)
 
-        world.store.deliver_under_lease = spy  # type: ignore[assignment]
+        world.store.cas_update = spy  # type: ignore[assignment]
         try:
             receipt = await world.broker.submit(
                 gate.action_id,
@@ -1437,7 +1447,7 @@ def test_the_cursor_is_switched_and_read_back_before_the_record_is_committed(wor
                 user="owner-1",
             )
         finally:
-            world.store.deliver_under_lease = original  # type: ignore[assignment]
+            world.store.cas_update = original  # type: ignore[assignment]
 
         assert seen["cursor_at_cas"] == INTENT, "the switch must precede the durable record"
         assert cursor.read_text().strip() == INTENT
@@ -1507,27 +1517,6 @@ def test_any_failure_after_the_lease_is_taken_releases_it(world, A, monkeypatch)
         with pytest.raises(RuntimeError):
             await approve(world, A, rec=gate)
         assert leases_held(world) == []
-        assert (await world.broker.get(gate.action_id)).status == "Queued"
-
-    run(scenario())
-
-
-def test_a_lease_that_moved_between_acquire_and_the_cas_refuses_lease_lost(world, A, studio, monkeypatch):
-    async def scenario():
-        await bind(world)
-        gate = pick(await seed(world), "gate")
-        real = world.reader.presence_baseline
-
-        def steal(*args, **kwargs):
-            # Somebody reclaimed the lease while the cursor switch was running.
-            world.store.lease_release("execution", IDENTITY, world.store.lease_get("execution", IDENTITY).generation)
-            world.store.lease_acquire("execution", IDENTITY, {"repo_id": REPO_ID, "action_id": "a_other"})
-            return real(*args, **kwargs)
-
-        monkeypatch.setattr(world.reader, "presence_baseline", steal)
-        with pytest.raises(studio.errors.StudioError) as exc:
-            await approve(world, A, rec=gate)
-        assert exc.value.code == "lease_lost"
         assert (await world.broker.get(gate.action_id)).status == "Queued"
 
     run(scenario())
@@ -1646,7 +1635,8 @@ def test_a_delivered_report_without_the_hosts_ok_is_refused(world, A, studio):
     run(scenario())
 
 
-def test_an_uncertain_report_keeps_the_lease_for_reconciliation(world, A):
+def test_an_uncertain_report_gives_the_repository_back(world, A):
+    """Only in-flight rows hold a repository; the reconciler still owns the uncertain one."""
     async def scenario():
         rec, receipt = await delivering(world, A)
         after, _ = await world.broker.record_delivery(
@@ -1657,7 +1647,7 @@ def test_an_uncertain_report_keeps_the_lease_for_reconciliation(world, A):
             receipt=None,
         )
         assert after.status == "DeliveryUncertain"
-        assert [lease.kind for lease in leases_held(world)] == ["execution"]
+        assert leases_held(world) == []
 
     run(scenario())
 
@@ -2476,7 +2466,7 @@ def test_clock_only_refresh_during_submit_keeps_one_delivery(
         rec = pick(await seed(world), "question")
         payload = {"decision": "answers", "answers": [{"index": 1, "option_letters": ["B"]}]}
         loop = asyncio.get_running_loop()
-        original = world.store.deliver_under_lease
+        original = world.store.cas_update
         refreshes = []
 
         async def refresh_before_cas():
@@ -2491,12 +2481,13 @@ def test_clock_only_refresh_during_submit_keeps_one_delivery(
                     )
                 assert exc.value.code == "repo_busy"
 
-        def interleaved(*args, **kwargs):
+        def interleaved(table, key, expected, values):
             # Run a real derived-card refresh after submit's reads, immediately before its real CAS.
-            asyncio.run_coroutine_threadsafe(refresh_before_cas(), loop).result(timeout=10)
-            return original(*args, **kwargs)
+            if values.get("status") == "Delivering":
+                asyncio.run_coroutine_threadsafe(refresh_before_cas(), loop).result(timeout=10)
+            return original(table, key, expected, values)
 
-        monkeypatch.setattr(world.store, "deliver_under_lease", interleaved)
+        monkeypatch.setattr(world.store, "cas_update", interleaved)
         receipt = await world.broker.submit(
             rec.action_id, captured=captured_of(rec, A), payload=payload,
             client_wire_text="SQLite", user="owner-1",
@@ -2532,7 +2523,7 @@ def test_meaningful_refresh_during_submit_still_refuses_the_original_generation(
         await bind(world)
         rec = pick(await seed(world), "question")
         loop = asyncio.get_running_loop()
-        original = world.store.deliver_under_lease
+        original = world.store.cas_update
         refreshed = []
 
         async def change_evidence():
@@ -2541,11 +2532,12 @@ def test_meaningful_refresh_during_submit_still_refuses_the_original_generation(
             path.write_text(path.read_text() + "\nA changed requirement must be reviewed.\n")
             refreshed.append(pick(await seed(world), "question"))
 
-        def interleaved(*args, **kwargs):
-            asyncio.run_coroutine_threadsafe(change_evidence(), loop).result(timeout=10)
-            return original(*args, **kwargs)
+        def interleaved(table, key, expected, values):
+            if values.get("status") == "Delivering":
+                asyncio.run_coroutine_threadsafe(change_evidence(), loop).result(timeout=10)
+            return original(table, key, expected, values)
 
-        monkeypatch.setattr(world.store, "deliver_under_lease", interleaved)
+        monkeypatch.setattr(world.store, "cas_update", interleaved)
         with pytest.raises(world.S.errors.StaleGeneration) as exc:
             await world.broker.submit(
                 rec.action_id, captured=captured_of(rec, A),
@@ -2766,7 +2758,7 @@ def test_unsupported_followups_refuse_cached_card_decisions_before_delivery(worl
         assert exc.value.code == "invalid_decision"
         assert exc.value.details["reason"] == "unsupported_question_format"
         assert (await world.broker.get(question.action_id)).delivery_id is None
-        assert world.store.lease_list() == []
+        assert leases_held(world) == []
         assert world.fake_host.get_slot(SLOT).messages == []
         assert path.read_text() == text
     run(scenario())
@@ -2829,7 +2821,7 @@ def test_unavailable_repository_is_refused_before_snapshot_or_dispatch(world, A,
             )
         assert exc.value.code == "repo_unavailable"
         assert exc.value.details["detail"] == "path_missing"
-        assert world.store.lease_list() == []
+        assert leases_held(world) == []
         assert (await world.broker.get(gate.action_id)).delivery_id is None
     run(scenario())
 

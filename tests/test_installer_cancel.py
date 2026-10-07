@@ -63,7 +63,7 @@ def test_running_upgrade_cancel_restores_bytes_receipt_and_releases_lease(
     assert result.status == ("failed" if method == "_stage_payload" else "rolled_back")
     assert tree(root) == before
     assert upgrade.installer.current_receipt(repo.repo_id).receipt_id == receipt.receipt_id
-    assert upgrade.store.lease_get("admin", repo.resolved_identity) is None
+    assert upgrade.lease() is None
     again = run(upgrade.installer.cancel(repo, transaction_id=result.transaction_id))
     assert again == result
 
@@ -123,7 +123,7 @@ def test_cancel_rollback_failure_keeps_evidence_and_requires_recovery(
     assert (Path(result.failed_dir) / "transaction.json").is_file()
     assert Path(upgrade.store.get("install_transactions", result.transaction_id)["backup_dir"]).is_dir()
     assert upgrade.installer.current_receipt(repo.repo_id) is not None
-    assert upgrade.store.lease_get("admin", repo.resolved_identity) is None
+    assert upgrade.lease() is None
 
 
 def test_cancel_restores_original_file_permissions(h, installed, make_harness, payload_v2, monkeypatch):
@@ -135,9 +135,7 @@ def test_cancel_restores_original_file_permissions(h, installed, make_harness, p
     assert (root / OWNED).stat().st_mode & 0o777 == 0o751
 
 
-def test_process_death_during_cancel_keeps_recovery_evidence(
-    studio, h, installed, make_harness, payload_v2, clock,
-):
+def test_process_death_during_cancel_keeps_recovery_evidence(studio, h, installed, make_harness, payload_v2):
     _, repo = installed
     upgrade = make_harness(payload_v2)
     plan = upgrade.installer.preview(repo, "upgrade")
@@ -165,30 +163,11 @@ def test_process_death_during_cancel_keeps_recovery_evidence(
         pytest.fail("isolated cancellation process did not exit")
     assert process.exitcode == 77
     assert upgrade.store.get("install_transactions", pending.transaction_id)["error"] == "cancel_requested"
-    upgrade.installer._boot_id = upgrade.installer._scheduler._boot_id = "restarted-cancel"
     assert run(upgrade.installer.settle_abandoned()) == [pending.transaction_id]
     outcome = upgrade.installer.transaction(pending.transaction_id)
     assert outcome.status == "recovery_required"
     assert (Path(outcome.failed_dir) / "transaction.json").is_file()
     assert upgrade.store.get("repos", repo.repo_id)["install_status"] == "recovery_required"
-    clock.advance(studio.constants.LEASE_STALE_SECS + 1)
-    assert run(upgrade.installer._scheduler.startup_sweep()) == []
-
-
-def test_cancel_cannot_restore_under_a_replaced_lease(h, installed, make_harness, payload_v2, monkeypatch):
-    root, repo = installed
-    upgrade = make_harness(payload_v2)
-
-    def replace_lease():
-        held = upgrade.store.lease_get("admin", repo.resolved_identity)
-        upgrade.store.lease_release("admin", repo.resolved_identity, held.generation)
-        upgrade.store.lease_acquire("execution", repo.resolved_identity, {
-            "repo_id": repo.repo_id, "action_id": "new-owner",
-        })
-
-    result = run(cancel_during(
-        upgrade, repo, "upgrade", "_write_files", monkeypatch, edit=replace_lease,
-    ))
-    assert result.status == "recovery_required" and result.error == "cancelled"
-    assert not (root / OWNED).exists()  # restoration would write under the new execution owner
-    assert upgrade.store.lease_get("execution", repo.resolved_identity).action_id == "new-owner"
+    # The child died holding the lock: taking it again proves the kernel released it.
+    run(upgrade.scheduler.release(run(upgrade.scheduler.acquire_admin(repo, operation_type="recovery",
+                                                                      transaction_id=None))))

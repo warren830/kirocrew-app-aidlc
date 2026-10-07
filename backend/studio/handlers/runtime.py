@@ -27,14 +27,13 @@ def _signature(snap: Any) -> tuple[str, str | None]:
     return snap.state_sha256, C.attr(snap.row, "uuid")
 
 
-async def _guard(services: Any, repo: Any, grant: Any) -> None:
+async def _guard(services: Any, repo: Any) -> None:
     await asyncio.to_thread(services.repos.require_current_identity, repo)
     current = await repo_or_404(services, repo.repo_id)
     services.plan._require_ready(current)
     if current.engine_dir != repo.engine_dir:
         raise StudioError("state_inconsistent", "the installed engine changed")
     services.scheduler.require_host_idle(repo)
-    await services.scheduler.heartbeat(grant)
 
 
 async def _compile(services: Any, repo: Any, snap: Any) -> dict[str, Any]:
@@ -43,13 +42,13 @@ async def _compile(services: Any, repo: Any, snap: Any) -> dict[str, Any]:
         repo, operation_type="cursor_switch", transaction_id=None,
     )
     try:
-        await _guard(services, repo, grant)
+        await _guard(services, repo)
         fresh = await snapshot_or_404(services, repo, snap.intent_key)
         if _signature(fresh) != expected:
             raise StudioError("unstable_read", "the intent changed before runtime compilation")
         root = Path(repo.canonical_path)
         engine_dir = services.plan._engine_dir(repo, fresh)
-        await _guard(services, repo, grant)
+        await _guard(services, repo)
         cursor = await asyncio.to_thread(
             services.engine.switch_cursor_sync, root, engine_dir,
             fresh.space, fresh.intent_dir, expected[1],
@@ -64,7 +63,7 @@ async def _compile(services: Any, repo: Any, snap: Any) -> dict[str, Any]:
 
         # The compile verb resolves the calling session/cursor. Verify that selection first, then
         # guard the identity, host and state again immediately before invoking the writing tool.
-        await _guard(services, repo, grant)
+        await _guard(services, repo)
         active = await snapshot_or_404(services, repo, snap.intent_key)
         if _signature(active) != expected:
             raise StudioError("unstable_read", "the state changed before runtime compilation")
@@ -76,7 +75,7 @@ async def _compile(services: Any, repo: Any, snap: Any) -> dict[str, Any]:
         )
         services.plan._require_engine_ok(result)
 
-        await _guard(services, repo, grant)
+        await _guard(services, repo)
         observed = await snapshot_or_404(services, repo, snap.intent_key)
         if _signature(observed) != expected:
             raise StudioError("unstable_read", "the state changed during runtime compilation")

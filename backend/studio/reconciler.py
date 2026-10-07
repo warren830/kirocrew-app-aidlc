@@ -28,9 +28,8 @@ row carries the ``boot_id`` that committed it; when that differs, ``NotDelivered
 by construction (review R02).
 
 **Nothing may starve the loop.** Repository walks run on Studio's own two-worker pool under a
-semaphore with a per-tick wall budget, and lease heartbeats run in a task that never waits on a scan —
-64 repositories × a 10 s walk on the host's shared executor would stall chat persistence and spawns,
-and a heartbeat that drifted behind a scan would let a healthy submit look abandoned (review R11/C32).
+semaphore with a per-tick wall budget — 64 repositories × a 10 s walk on the host's shared executor
+would stall chat persistence and spawns (review R11/C32).
 """
 
 from __future__ import annotations
@@ -50,14 +49,13 @@ from . import sessions as _sessions
 from .aidlc_reader import audit_question_accepts_text, audit_question_answer
 from .consistency import RepoFacts
 from .errors import IllegalTransition, StaleGeneration, StudioError
-from .leases import LeaseGrant
 from .projection import run_unavailable_reason
 from .repo_registry import RepoScan
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .projection import StableBoundary
     from .repo_registry import RepoRecord
-    from .storage import LeaseRecord
+    from .leases import LeaseRecord
 
 __all__ = [
     "FINGERPRINT_RULES",
@@ -98,9 +96,9 @@ RECONCILABLE_STATUS: tuple[str, ...] = (
     "ReconciliationRequired",
 )
 
-#: Re-evaluated by ``startup()`` before any loop, lease sweep or scan runs (§1.13). These are the rows
-#: that were mid-flight when the previous process stopped, so every later decision — a reclaim, a
-#: derived card, a delivery report — must see Studio's re-reading of them first.
+#: Re-evaluated by ``startup()`` before any loop or scan runs (§1.13). These are the rows that were
+#: mid-flight when the previous process stopped, so every later decision — a derived card, a delivery
+#: report — must see Studio's re-reading of them first.
 STARTUP_STATUS: tuple[str, ...] = ("Delivering", "Delivered", "Processing", "DeliveryUncertain")
 
 #: Statuses that mean the host was handed something and has not answered yet.
@@ -200,7 +198,6 @@ class StartupReport:
     transactions_settled: tuple[str, ...]
     actions_reevaluated: int
     boot_id_mismatches: int
-    orphaned_leases: tuple[str, ...]
     repos_scanned: int
     repos_pending: int
     within_budget: bool
@@ -218,7 +215,6 @@ class StartupReport:
             "transactions_settled": list(self.transactions_settled),
             "actions_reevaluated": self.actions_reevaluated,
             "boot_id_mismatches": self.boot_id_mismatches,
-            "orphaned_leases": list(self.orphaned_leases),
             "repos_scanned": self.repos_scanned,
             "repos_pending": self.repos_pending,
             "within_budget": self.within_budget,
@@ -458,11 +454,10 @@ class Reconciler:
     # ---- startup ---------------------------------------------------------- #
 
     async def startup(self) -> StartupReport:
-        """Ordered startup: integrity, payload, in-flight actions, lease sweep, first full scan.
+        """Ordered startup: integrity, payload, in-flight actions, abandoned transactions, first full scan.
 
         The order is the contract's and each step is a precondition of the next. Re-evaluating every
-        in-flight action *before* the lease sweep is what stops a reclaim from being decided against a
-        stale status; doing it before the first scan is what stops a derived card from being minted for a
+        in-flight action before the first scan is what stops a derived card from being minted for a
         boundary a delivered decision has already closed.
 
         Bounded by ``HOST_STARTUP_HOOK_BUDGET_SECS``: the gateway detaches an app whose ``on_startup``
@@ -482,11 +477,8 @@ class Reconciler:
 
         reevaluated, boot_mismatches = await self._startup_actions(deadline, issues)
 
-        # Before the lease sweep, and in this order for a reason: a transaction abandoned by process
-        # death holds an admin lease that `_prove_admin` refuses to reclaim until the transaction has
-        # settled. Settling first is what makes that lease reclaimable in the same pass instead of one
-        # restart later — and marks the repository `recovery_required` so a person is told the tree may
-        # be half written rather than finding a repository that simply never runs again.
+        # A transaction abandoned by process death is settled here, and its repository marked
+        # `recovery_required`, so a person is told the tree may be half written.
         settled: tuple[str, ...] = ()
         installer = getattr(self._s, "installer", None)
         if installer is not None:
@@ -496,18 +488,6 @@ class Reconciler:
                 issues.append(f"settle_abandoned:{exc.code}")
         if settled:
             issues.append(f"transactions_settled:{len(settled)}")
-
-        orphans: tuple[str, ...] = ()
-        if clock.monotonic() < deadline:
-            try:
-                orphans = tuple(
-                    str(_attr(rec, "resolved_repo_identity") or "")
-                    for rec in await self._s.scheduler.startup_sweep()
-                )
-            except StudioError as exc:
-                issues.append(f"lease_sweep:{exc.code}")
-        else:
-            issues.append("lease_sweep_deferred")
 
         scanned, pending = await self._startup_scan(deadline, issues)
 
@@ -523,7 +503,6 @@ class Reconciler:
             transactions_settled=settled,
             actions_reevaluated=reevaluated,
             boot_id_mismatches=boot_mismatches,
-            orphaned_leases=orphans,
             repos_scanned=scanned,
             repos_pending=pending,
             within_budget=clock.monotonic() <= deadline,
@@ -609,17 +588,9 @@ class Reconciler:
     # ---- loops ------------------------------------------------------------ #
 
     async def run_forever(self) -> None:
-        """Run the heartbeat loop and the tick loop as two independent tasks (review R11).
-
-        Independent because they have opposite failure modes: a tick may legitimately take seconds of
-        disk time, while a heartbeat that is late by that much makes a live lease look abandoned to the
-        reclaim rules. Sharing one task would couple them.
-        """
+        """Run the tick loop as a task until cancelled."""
         self._running = True
-        self._tasks = [
-            asyncio.create_task(self.heartbeat_loop(), name="aidlc-studio-heartbeat"),
-            asyncio.create_task(self.tick_loop(), name="aidlc-studio-tick"),
-        ]
+        self._tasks = [asyncio.create_task(self.tick_loop(), name="aidlc-studio-tick")]
         try:
             await asyncio.gather(*self._tasks)
         except asyncio.CancelledError:
@@ -633,17 +604,6 @@ class Reconciler:
                     await task
             self._tasks = []
 
-    async def heartbeat_loop(self) -> None:
-        """Refresh every live execution lease whose action is still in flight. Never awaits a scan."""
-        while True:
-            try:
-                await self.heartbeat_once()
-            except asyncio.CancelledError:
-                raise
-            except Exception:  # pragma: no cover - defensive: a loop must not die
-                _LOG.exception("reconciler heartbeat failed")
-            await asyncio.sleep(C.LEASE_HEARTBEAT_SECS)
-
     async def tick_loop(self) -> None:
         while True:
             try:
@@ -654,46 +614,11 @@ class Reconciler:
                 _LOG.exception("reconciler tick failed")
             await asyncio.sleep(C.RECONCILE_INTERVAL_SECS)
 
-    async def heartbeat_once(self) -> int:
-        """One heartbeat pass; returns how many leases were refreshed.
-
-        A lease whose action already settled is *not* heartbeaten: keeping it warm would hide it from the
-        reclaim rules that are the only way it ever comes back.
-        """
-        refreshed = 0
-        for rec in await self._s.scheduler.list():
-            if _attr(rec, "kind") != "execution":
-                continue
-            action_id = _attr(rec, "action_id")
-            if not action_id:
-                continue
-            row = await self._to_thread(self._s.storage.get, "actions", str(action_id))
-            if row is None or row.get("status") not in IN_FLIGHT_STATUS:
-                continue
-            observed = self._observed_busy_state(row.get("slot_key"))
-            try:
-                await self._s.scheduler.heartbeat(
-                    LeaseGrant.from_record(rec), observed_busy_state=observed
-                )
-                refreshed += 1
-            except StaleGeneration:
-                # Somebody proved this holder dead and took the lease; abandoning it is the contract.
-                continue
-        return refreshed
-
-    def _observed_busy_state(self, slot_key: Any) -> str | None:
-        if not slot_key:
-            return None
-        view = self._s.host.slot(str(slot_key))
-        if view is None:
-            return "slot_absent"
-        return ",".join(_busy_reasons(view)) or "idle"
-
     async def tick(self) -> None:
         """One reconciliation pass over the whole registry (§1.13 steps 1-8).
 
         Scans come first so that the actions reconciled in step 2 are judged against evidence read in
-        this tick, and so that the boundary a reclaim decision needs was computed from the same read.
+        this tick.
         """
         clock = self._s.clock
         started = clock.monotonic()
@@ -701,7 +626,6 @@ class Reconciler:
 
         await self._scan_pass(started)
         await self._reconcile_open_actions()
-        await self._reclaim_pass()
         # The advisor pass sits exactly here. After steps 1-5 because the ``Queued`` set it drafts for is
         # the one this tick just derived and reconciled — a card a scan retired seconds ago must never
         # draw a spawn. Before retention because a draft this pass settles is still handed to
@@ -1039,7 +963,7 @@ class Reconciler:
             snap,
             live_actions=live,
             busy_reasons=_busy_reasons(slot),
-            lease_active=self._execution_lease_warm(repo, leases),
+            lease_active=self._repo_in_flight(repo, leases),
         )
         # An unchanged boundary keeps the time it was FIRST seen. Without this, `recorded_at` is the
         # time of this look, so both dedupes downstream compared two values that could never be equal:
@@ -1054,27 +978,15 @@ class Reconciler:
             )
         return boundary
 
-    def _execution_lease_warm(
-        self, repo: "RepoRecord", leases: Sequence["LeaseRecord"]
-    ) -> bool:
-        """Is an execution lease for this repository still heartbeating?
-
-        Two heartbeat intervals, per §1.13: one missed beat is a busy worker thread, two is a holder
-        that stopped reporting — and only the second is a reason to keep calling the boundary unstable.
-        """
-        now = self._s.clock.iso()
-        for lease in leases:
-            if _attr(lease, "kind") != "execution":
-                continue
-            if _attr(lease, "repo_id") != repo.repo_id and (
-                not repo.resolved_identity
-                or _attr(lease, "resolved_repo_identity") != repo.resolved_identity
-            ):
-                continue
-            age = _elapsed(_attr(lease, "heartbeat_at"), now)
-            if age is None or age <= C.LEASE_HEARTBEAT_SECS * 2:
-                return True
-        return False
+    def _repo_in_flight(self, repo: "RepoRecord", leases: Sequence["LeaseRecord"]) -> bool:
+        """Does this repository have a turn in flight? Its execution lease is exactly that."""
+        identity = repo.resolved_identity
+        return any(
+            _attr(lease, "kind") == "execution"
+            and (_attr(lease, "repo_id") == repo.repo_id
+                 or bool(identity) and _attr(lease, "resolved_repo_identity") == identity)
+            for lease in leases
+        )
 
     async def _publish_intent(self, key: str, summary: Any, boundary: Any) -> None:
         payload = _json_of(summary)
@@ -1616,7 +1528,7 @@ class Reconciler:
     # ---- resolution outcome ---------------------------------------------- #
 
     async def _settle(self, rec: Any, snap: Any, resolution: Resolution) -> Any:
-        """Commit a resolution: transition, release the lease, force the card's retirement."""
+        """Commit a resolution: transition, then force the card's retirement."""
         to_status = "StateChanged" if resolution.outcome == "state_changed" else "ResolvedNoTransition"
         # `resolved_at` and `resolution_json` are composed by the broker's own terminal write from the
         # reason and evidence handed over here (§1.12); writing them from this side would give one record
@@ -1624,7 +1536,6 @@ class Reconciler:
         rec = await self._transition(
             rec, to_status, reason=resolution.reason, evidence=resolution.evidence
         )
-        await self._release_lease(rec)
         if str(_attr(rec, "type") or "") == "force_stop":
             await self._settle_force_stop(rec)
         self._forget(rec)
@@ -1667,7 +1578,6 @@ class Reconciler:
             # it anyway would count a breaker strike against a decision that has already settled.
             _LOG.debug("failure for %s skipped: %s", _attr(rec, "action_id"), exc)
             return await self._s.actions.get(_attr(rec, "action_id"))
-        await self._release_lease(rec)
         self._forget(rec)
         if opened:
             _LOG.info("breaker opened for %s (%s)", _attr(rec, "intent_dir"), fingerprint)
@@ -2326,32 +2236,6 @@ class Reconciler:
             return None
         return (dict(_attr(state, "project", {}) or {}).get("Scope") or "").strip() or None
 
-    # ---- tick step 5: reclaim -------------------------------------------- #
-
-    async def _reclaim_pass(self) -> int:
-        """Offer every lease to the scheduler's proof rules; it decides, this only supplies the boundary."""
-        reclaimed = 0
-        for rec in await self._s.scheduler.list():
-            boundary = await self._boundary_for_lease(rec)
-            try:
-                if await self._s.scheduler.try_reclaim(rec, boundary=boundary):
-                    reclaimed += 1
-            except StudioError as exc:  # pragma: no cover - defensive
-                _LOG.debug("reclaim of %s refused: %s", _attr(rec, "resolved_repo_identity"), exc)
-        return reclaimed
-
-    async def _boundary_for_lease(self, rec: "LeaseRecord") -> Any:
-        action_id = _attr(rec, "action_id")
-        if not action_id:
-            return None
-        row = await self._to_thread(self._s.storage.get, "actions", str(action_id))
-        if row is None:
-            return None
-        binding = await self._s.sessions.get(
-            str(row.get("repo_id")), str(row.get("space")), str(row.get("intent_dir"))
-        )
-        return _attr(binding, "last_stable_boundary")
-
     # ---- tick step 6: advisor -------------------------------------------- #
 
     async def _advisor_pass(self) -> tuple[int, int]:
@@ -2503,23 +2387,6 @@ class Reconciler:
         out = [f for f in (existing or []) if isinstance(f, Mapping) and f.get("code") != code]
         out.append({"code": code, "params": {k: v for k, v in dict(params).items() if k != "ok"}})
         return out
-
-    async def _release_lease(self, rec: Any) -> None:
-        """Give back the execution lease this action held — and only that one.
-
-        The action id is compared before releasing: by the time an action resolves the lease may already
-        belong to another dispatch, and releasing that one would let two turns into one repository.
-        """
-        identity = _attr(rec, "resolved_repo_identity")
-        if not identity:
-            return
-        lease = await self._s.scheduler.get(str(identity))
-        if lease is None or _attr(lease, "kind") != "execution":
-            return
-        if str(_attr(lease, "action_id") or "") != str(_attr(rec, "action_id")):
-            return
-        with contextlib.suppress(StudioError):
-            await self._s.scheduler.release(LeaseGrant.from_record(lease))
 
     # ---- small helpers ---------------------------------------------------- #
 

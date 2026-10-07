@@ -186,7 +186,7 @@ def test_failure_at_every_uninstall_step_is_atomic(studio, h, installed, marker)
         assert h.installer.current_receipt(repo.repo_id).receipt_id == receipt.receipt_id
         assert h.store.get("repos", repo.repo_id)["receipt_version"] == receipt.receipt_id
         assert (Path(result.failed_dir) / "transaction.json").is_file()
-    held = h.store.lease_get("admin", repo.resolved_identity)
+    held = h.lease()
     if held is not None:
         assert result.status in studio.leases.TRANSACTION_SETTLED_STATUS
 
@@ -376,13 +376,15 @@ def test_stale_digest_and_transaction_identity_are_rejected(studio, h, installed
 def test_uninstall_never_preempts_a_lease(studio, h, installed, kind):
     root, repo = installed
     before = tree(root)
-    fields = {"repo_id": repo.repo_id}
-    fields.update({"operation_type": "install"} if kind == "admin" else {"action_id": "busy"})
-    held = h.store.lease_acquire(kind, repo.resolved_identity, fields)
+    if kind == "admin":
+        held = run(h.scheduler.acquire_admin(repo, operation_type="install", transaction_id=None))
+    else:
+        held = run(h.scheduler.acquire_execution(repo, intent_uuid=None, session_key=None, action_id="busy"))
     with pytest.raises(studio.errors.LeaseHeld):
         uninstall(h, repo)
     assert tree(root) == before
-    assert h.store.lease_get(kind, repo.resolved_identity).generation == held.generation
+    assert run(h.scheduler.get(repo.resolved_identity)).generation == held.generation
+    run(h.scheduler.release(held))
 
 
 def test_uninstall_uses_a_real_admin_lease_through_commit(h, installed):
@@ -390,7 +392,7 @@ def test_uninstall_uses_a_real_admin_lease_through_commit(h, installed):
     observed = []
 
     def check():
-        lease = h.store.lease_get("admin", repo.resolved_identity)
+        lease = h.lease()
         assert lease is not None and lease.operation_type == "recovery"
         assert h.store.get("install_transactions", lease.transaction_id)["kind"] == "uninstall"
         observed.append(lease.generation)
@@ -400,7 +402,7 @@ def test_uninstall_uses_a_real_admin_lease_through_commit(h, installed):
         h.fault.on(marker, check)
     assert uninstall(h, repo).status == "committed"
     assert len(observed) == 5 and len(set(observed)) == 1
-    assert h.store.lease_get("admin", repo.resolved_identity) is None
+    assert h.lease() is None
 
 
 def test_user_edit_after_backup_is_never_removed_or_rolled_over(h, installed):
@@ -449,7 +451,7 @@ def test_failed_rollback_can_be_recovered_then_uninstalled(h, installed):
     assert uninstall(h, repo).status == "committed"
 
 
-def test_real_process_death_settlement_and_recovery(studio, h, installed, clock):
+def test_real_process_death_settlement_and_recovery(studio, h, installed):
     root, repo = installed
     before = tree(root)
     plan = h.installer.preview(repo, "uninstall")
@@ -472,14 +474,11 @@ def test_real_process_death_settlement_and_recovery(studio, h, installed, clock)
         pytest.fail("isolated uninstall process did not exit")
     assert process.exitcode == 77
     assert not (root / OWNED).exists()
-    h.installer._boot_id = h.installer._scheduler._boot_id = "boot-restarted"
     assert run(h.installer.settle_abandoned()) == [reserved.transaction_id]
     dead = h.installer.transaction(reserved.transaction_id)
     assert dead.status == "recovery_required"
     assert (Path(dead.failed_dir) / "transaction.json").is_file()
-    clock.advance(studio.constants.LEASE_STALE_SECS + 1)
-    assert run(h.installer._scheduler.startup_sweep()) == []
-    assert h.store.lease_get("admin", repo.resolved_identity) is None
+    # The child died holding the lock; the recovery can take it only because the kernel let go.
     recovered = run(h.installer.recover_uninstall(
         repo, transaction_id=dead.transaction_id, confirm_digest=plan.digest(),
     ))
@@ -543,25 +542,7 @@ def test_uninstall_rejects_symlink_boundaries(studio, h, installed, tmp_path, lo
     else:
         assert h.installer.preview(repo, "uninstall").blocking
     assert sentinel.read_bytes() == b"do not touch"
-    assert h.store.lease_get("admin", repo.resolved_identity) is None
-
-
-def test_lost_admin_lease_stops_removal_and_rollback(h, installed):
-    root, repo = installed
-    before = tree(root)
-
-    def replace_lease():
-        held = h.store.lease_get("admin", repo.resolved_identity)
-        h.store.lease_release("admin", repo.resolved_identity, held.generation)
-        h.store.lease_acquire("execution", repo.resolved_identity, {
-            "repo_id": repo.repo_id, "action_id": "new-owner",
-        })
-
-    h.fault.on("before:remove_files", replace_lease)
-    result = uninstall(h, repo)
-    assert result.status == "recovery_required"
-    assert tree(root) == before
-    assert h.store.lease_get("execution", repo.resolved_identity).action_id == "new-owner"
+    assert h.lease() is None
 
 
 def test_root_replacement_at_a_file_boundary_cannot_delete_new_repository(

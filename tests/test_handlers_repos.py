@@ -269,7 +269,7 @@ def test_doctor_runs_the_engine_verb_under_an_admin_lease_and_releases_it(sv, ro
     assert status == 200 and body["ok"] is True
     assert body["result"]["verb_key"] == "utility.doctor"
     assert body["result"]["ok"] is True
-    assert sv.storage.lease_list() == []
+    assert sv.scheduler.live() == []
 
 
 # --------------------------------------------------------------------------- #

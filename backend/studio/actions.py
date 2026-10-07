@@ -60,7 +60,6 @@ from .aidlc_reader import (
 from .consistency import ACTION_STORED_FINDING_CODES, RepoFacts
 from .engine import CursorReadback
 from .errors import IllegalTransition, StaleGeneration, StudioError
-from .leases import LeaseGrant
 from .projection import (
     SEED_SEVERITY,
     SEVERITY_RANK,
@@ -1384,8 +1383,8 @@ class HumanActionBroker:
         child process; the lease is taken only once the decision is known to be legal; the cursor switch
         happens under the lease and before anything is durable; the durable ``Delivering`` record is
         committed *before* this function returns, therefore before the browser can send (PRD §11.5).
-        From the moment the lease is held, every exception path releases it (C31/P15) — a lease left
-        behind by a failed submit would make the repository permanently ``repo_busy``.
+        The grant is released on every path once that CAS is decided (C31/P15): from then on the
+        in-flight action is what holds the repository, and a grant left behind would keep it ``repo_busy``.
         """
         rec = await self.get(action_id)
         if rec.status not in SUBMITTABLE_STATUSES:
@@ -1650,6 +1649,8 @@ class HumanActionBroker:
                 "slot_key": slot_key,
                 "session_key": binding.session_key or view.session_key,
                 "lease_generation": grant.generation,
+                # The identity the grant locked: the in-flight row is the execution lease from here on.
+                "resolved_repo_identity": repo.resolved_identity,
                 "delivering_at": now,
                 "deadline_at": deadline,
                 "wire_text": wire_text,
@@ -1663,16 +1664,10 @@ class HumanActionBroker:
                 "source": source,
             }
             generation = await asyncio.to_thread(
-                self._storage.deliver_under_lease,
-                rec.action_id,
-                rec.status_generation,
-                identity=repo.resolved_identity or "",
-                lease_generation=grant.generation,
-                new_values=values,
+                self._storage.cas_update, _ACTIONS, rec.action_id, rec.status_generation, values
             )
-        except BaseException:
+        finally:
             await self._scheduler.release(grant)
-            raise
 
         after = await self.get(rec.action_id)
         await self._record_transition(
@@ -1848,7 +1843,6 @@ class HumanActionBroker:
                 reason="not_delivered_proven",
                 evidence={"checks": checks, "outcome": "not_delivered"},
             )
-            await self._release_lease(final)
             return final, False
 
         # Terminal, or NotDelivered: nothing left to move. The report is kept as evidence so a support
@@ -1921,7 +1915,6 @@ class HumanActionBroker:
                     **({"client_preflight": receipt.get("code")} if preflight else {}),
                 },
             )
-            await self._release_lease(final)
             return final
         await self._transition(
             rec,
@@ -2234,7 +2227,6 @@ class HumanActionBroker:
                 **({"receipt": dict(receipt)} if receipt else {}),
             },
         )
-        await self._release_lease(updated)
         return updated
 
     async def _resubmit(
@@ -2408,7 +2400,7 @@ class HumanActionBroker:
     ) -> ActionRecord:
         """Move one action, validating against ``ALLOWED_TRANSITIONS`` and the caller's generation.
 
-        The only status writer other than ``submit``'s lease-bound CAS. ``IllegalTransition`` for a
+        The only status writer other than ``submit``'s ``Delivering`` CAS. ``IllegalTransition`` for a
         pair outside the graph and ``StaleGeneration`` for a lost CAS are both refusals, never retried
         here: something else already moved this record, and the whole point of the record is that two
         writers cannot both be right about a decision.
@@ -2471,7 +2463,6 @@ class HumanActionBroker:
             values={"retry_fingerprint": fingerprint},
         )
         opened = await self._write_breaker(strike)
-        await self._release_lease(updated)
         if opened:
             await self._open_breaker_card(updated, failure)
         return updated, opened
@@ -2785,7 +2776,7 @@ class HumanActionBroker:
         live = await self.list_live(
             repo_id=repo.repo_id, space=snap.space, intent_dir=snap.intent_dir, include_revision=True
         )
-        leases = await asyncio.to_thread(self._storage.lease_list)
+        leases = await self._scheduler.list()
         slot_key = getattr(binding, "slot_key", None)
         facts = RepoFacts(
             now=self._clock.iso(),
@@ -3078,24 +3069,6 @@ class HumanActionBroker:
         except StaleGeneration:
             logger.debug("aidlc-studio: evidence patch for %s lost the CAS", rec.action_id)
         return await self.get(rec.action_id)
-
-    async def _release_lease(self, rec: ActionRecord) -> None:
-        """Give back the execution lease a settled action was holding.
-
-        Reconstructed from the row rather than kept in memory: the process that acquired it may be
-        gone (that is the whole reason the generation is on the row), and releasing with a stale
-        generation is a no-op Storage refuses rather than a write over the new owner.
-        """
-        if rec.lease_generation is None or not rec.resolved_repo_identity:
-            return
-        grant = LeaseGrant(
-            kind="execution",
-            resolved_repo_identity=rec.resolved_repo_identity,
-            generation=int(rec.lease_generation),
-            acquired_at=rec.delivering_at or rec.created_at,
-            repo_id=rec.repo_id,
-        )
-        await self._scheduler.release(grant)
 
     # ---- breakers --------------------------------------------------------- #
 

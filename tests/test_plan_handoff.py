@@ -66,7 +66,8 @@ def test_plan_settles_after_questions_handoff_without_answering_learnings(
                 )
         await sv.reconciler.reconcile_now(rec.action_id)
         assert (await sv.actions.get(rec.action_id)).status == rec.status
-        assert sv.storage.lease_list(), "a plan receipt cannot end a still-running turn"
+        # A plan receipt cannot end a still-running turn; only the in-flight row holds the repository.
+        assert bool(sv.scheduler.live()) is not uncertain
         _finish_the_turn(fake_host, scene.slot_key, wire_text="Approve Plan")
         before = _tree_digest(scene.root)
         await sv.reconciler.reconcile_now(rec.action_id)
@@ -74,7 +75,7 @@ def test_plan_settles_after_questions_handoff_without_answering_learnings(
         assert after.status == "ResolvedNoTransition"
         assert after.resolution["reason"] == "plan_approved"
         assert after.delivery_id == receipt["delivery_id"]
-        assert not sv.storage.lease_list()
+        assert not sv.scheduler.live()
         assert _tree_digest(scene.root) == before
 
     asyncio.run(settle())
@@ -154,4 +155,4 @@ def test_handoff_receipt_repeats_the_engines_blanked_prompt_digest(sv, routes, f
     after = asyncio.run(sv.actions.get(card["action_id"]))
     assert after.status == "ResolvedNoTransition", after.resolution
     assert after.resolution["reason"] == "plan_approved"
-    assert not sv.storage.lease_list()
+    assert not sv.scheduler.live()

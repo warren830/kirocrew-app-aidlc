@@ -131,9 +131,8 @@ findings keep `FINDING_SEVERITY`; when a finding is projected into the timeline 
 `asyncio.to_thread` uses the default executor and is reserved for short calls (`Storage.*`, single-file reads,
 `EngineRunner`/`GitObserver` subprocess waits). The one private pool (`scan_pool`, 2 workers) exists only for
 `Reconciler.scan_repo` / `AidlcReader.list_artifacts` / `evidence_digest` hashing; at most `SCAN_CONCURRENCY` scans run
-at once (`asyncio.Semaphore`), and a test asserts it (`test_reconciler.py::test_scan_fanout_bounded`). Lease heartbeats
-run in their own task independent of scans (§1.13). `Storage` holds one SQLite connection guarded by `Storage._lock`;
-every public method is one transaction (see §1.4).
+at once (`asyncio.Semaphore`), and a test asserts it (`test_reconciler.py::test_scan_fanout_bounded`). `Storage` holds
+one SQLite connection guarded by `Storage._lock`; every public method is one transaction (see §1.4).
 
 ---
 
@@ -177,7 +176,6 @@ SUBPROCESS_TIMEOUT_SECS = 60.0
 ENGINE_READ_TIMEOUT_SECS = 20.0
 GIT_TIMEOUT_SECS = 15.0
 RECONCILE_INTERVAL_SECS = 5.0
-LEASE_HEARTBEAT_SECS = 15.0
 SCAN_CONCURRENCY = 2                        # concurrent scan_repo calls (asyncio.Semaphore); review R11
 SCAN_POOL_WORKERS = 2                       # Services.scan_pool size
 SCAN_TICK_BUDGET_SECS = 4.0                 # per-tick wall budget for scans; repos without open actions are round-robined across ticks
@@ -435,30 +433,10 @@ class Storage:
                    new_values: Mapping[str, Any]) -> int
         # one BEGIN IMMEDIATE: SELECT gen; if gen != expected → raise StaleGeneration(details={"expected","actual"})
         # UPDATE … SET <new_values>, <gen_col> = gen+1, <ts_col> = now; return gen+1
-        # Data-driven (review R06): the lease tables have no updated_at column, so the timestamp column is per table:
+        # Data-driven (review R06): the timestamp column is per table:
         #   CAS_TABLES = {"actions": ("status_generation", "updated_at"), "intent_bindings": ("binding_generation", "updated_at"),
         #                 "execution_leases": ("generation", "heartbeat_at"), "admin_leases": ("generation", "heartbeat_at")}
-        # anything else → ValueError. test_storage.py exercises cas_update on every CAS_TABLES entry.
-    def deliver_under_lease(self, action_id: str, expected_generation: int, *, identity: str, lease_generation: int,
-                            new_values: Mapping[str, Any]) -> int
-        # ONE BEGIN IMMEDIATE transaction (review P15): (1) SELECT execution_leases WHERE resolved_repo_identity=identity;
-        # row absent or generation != lease_generation → raise StudioError("lease_lost"); (2) cas_update("actions", …) to
-        # status "Delivering" with new_values; (3) UPDATE execution_leases SET action_id=action_id. Either both the lease
-        # still names this caller AND the Delivering record exist after commit, or neither changed.
-
-    # ---- leases (single transactions keyed by resolved_repo_identity) ----
-    def lease_get(self, kind: LeaseKind, identity: str) -> LeaseRecord | None
-    def lease_list(self) -> list[LeaseRecord]
-    def lease_acquire(self, kind: LeaseKind, identity: str, fields: Mapping[str, Any]) -> LeaseRecord
-        # BEGIN IMMEDIATE; if a row of EITHER kind exists for identity → raise LeaseHeld(owner=that row)
-        # insert with generation = (max generation ever seen for identity, tracked in lease_generations) + 1
-    def lease_heartbeat(self, kind: LeaseKind, identity: str, generation: int,
-                        observed_busy_state: str | None = None) -> LeaseRecord   # StaleGeneration if gen differs or row absent
-    def lease_release(self, kind: LeaseKind, identity: str, generation: int) -> None  # StaleGeneration if gen differs; deletes row
-    def lease_reclaim(self, kind: LeaseKind, identity: str, generation: int, *, reason: str,
-                      evidence: Mapping[str, Any]) -> None
-        # deletes row AND writes an activity row (source=studio, kind="lease.reclaimed"); caller (RepoScheduler)
-        # is responsible for having proven the owner is dead (§1.10) — Storage does not check time
+        # anything else → ValueError. The two lease tables are unused since P2a (§1.10) and are dropped by a later storage step.
 
     # ---- events ring ----
     def event_append(self, type: str, payload: Mapping[str, Any]) -> int        # returns seq; trims to EVENTS_RING_SIZE
@@ -478,13 +456,6 @@ class Storage:
     # ---- housekeeping ----
     def vacuum_if_needed(self) -> None
     def integrity_check(self) -> list[str]          # PRAGMA quick_check lines; [] when ok
-
-@dataclass(frozen=True, slots=True)
-class LeaseRecord:
-    kind: LeaseKind; resolved_repo_identity: str; generation: int; acquired_at: str; heartbeat_at: str
-    intent_uuid: str | None; session_key: str | None; action_id: str | None; observed_busy_state: str | None
-    operation_type: str | None; transaction_id: str | None
-    repo_id: str            # denormalised for the API (looked up at acquire)
 
 @dataclass(frozen=True, slots=True)
 class EventRecord:  seq: int; at: str; type: str; payload: dict
@@ -657,7 +628,7 @@ adds a column, an index or a `SCHEMA_V1` bump. Do not migrate one in — the at-
 `request_json`, and a duplicated boolean would be two truths about the same draft with no rule for which wins.
 
 Storage must NOT: parse AI-DLC files, touch any path outside `ctx.data_dir`, hold the lock across an
-`await` (it is sync), or decide lease reclaim eligibility.
+`await` (it is sync), or decide who holds a repository (§1.10).
 
 ### 1.5 `repo_registry.py`
 
@@ -1340,56 +1311,66 @@ duration_ms`; stdout/stderr only in `evidence_json`, redacted).
 
 ### 1.10 `leases.py` — `RepoScheduler`
 
-Async facade over `Storage` lease primitives (each call is one `to_thread`). Owns the "mutually exclusive per
-identity" rule, the global concurrency cap, and reclaim proof.
+Who may touch one repository: one turn at a time, and none during admin work. Nothing is persisted:
+
+* **An execution lease is derived.** A repository holds one exactly while it has an action dispatched under an
+  execution grant (`actions.lease_generation` is set) in `Delivering`/`Delivered`/`Processing`. The action leaving
+  those statuses is the release. A `force_stop` is in flight too but takes no lease; `DeliveryUncertain` and
+  `ReconciliationRequired` hold nothing — the submit-time slot checks keep a second turn out of a busy session.
+* **A per-repository OS file lock** serialises admin operations and the submit window:
+  `fcntl.flock(LOCK_EX | LOCK_NB)` on `<data_dir>/locks/<sha256(resolved_identity)[:24]>.lock`. `flock` belongs to the
+  open file description, so a second grant in the same process is refused like one from another process, and the kernel
+  drops it when the process dies — no heartbeat, no reclaim, no orphans.
 
 ```python
+ADMIN_OPERATION_TYPES = ("install", "upgrade", "recovery", "intent_create", "recompose", "scope_change",
+                         "config_change", "cursor_switch", "doctor", "repo_metadata")
+IN_FLIGHT_ACTION_STATUS = frozenset({"Delivering", "Delivered", "Processing"})
+TRANSACTION_SETTLED_STATUS = frozenset({"committed", "rolled_back", "recovery_required", "failed"})
+RETRY_AFTER_SECS = 15
+
+@dataclass(frozen=True, slots=True)
+class LeaseRecord:      # a held grant, or derived from the newest in-flight action of a repository
+    kind: LeaseKind; resolved_repo_identity: str; generation: int; acquired_at: str; heartbeat_at: str  # == acquired_at
+    intent_uuid: str | None; session_key: str | None; action_id: str | None; observed_busy_state: str | None  # always None
+    operation_type: str | None; transaction_id: str | None; repo_id: str; orphaned: bool = False             # always False
+
 @dataclass(frozen=True, slots=True)
 class LeaseGrant: kind: str; resolved_repo_identity: str; generation: int; acquired_at: str; repo_id: str
 
 class RepoScheduler:
-    def __init__(self, storage: Storage, host: HostBridge, settings: SettingsService, clock: Clock, activity: ActivityProjector) -> None
+    def __init__(self, storage: Storage, host: HostBridge, settings: SettingsService, clock: Clock, activity: ActivityProjector,
+                 *, busy_reasons: Callable | None = None) -> None    # lock dir = Path(storage.path).parent / "locks"
 
     async def acquire_execution(self, repo: RepoRecord, *, intent_uuid: str | None, session_key: str | None, action_id: str) -> LeaseGrant
-        # raises LeaseHeld (409 repo_busy) with details.owner = LeaseView of the holder (either kind) and retry_after_secs = LEASE_HEARTBEAT_SECS
-        # raises StudioError("rate_limited", details={"cap": n}) when live execution leases across repos >= settings.global_concurrency_cap
+        # takes the file lock, then (under it) refuses when another in-flight action holds the repository, then the cap:
+        # raises LeaseHeld (409 repo_busy) with details {"kind", "owner": LeaseView, "retry_after_secs"}; kind/owner are None
+        #   when another process holds the lock
+        # raises StudioError("rate_limited", details={"cap","live_execution","repo_ids","retry_after_secs"}) when repositories
+        #   OTHER than this one with a turn in flight or a held execution grant >= settings.global_concurrency_cap (floored at 1)
         # raises StudioError("identity_unprovable") when repo.resolved_identity is None; StudioError("repo_unavailable") when availability != available
-    async def acquire_admin(self, repo: RepoRecord, *, operation_type: str, transaction_id: str) -> LeaseGrant
-        # operation_type ∈ {"install","upgrade","recovery","intent_create","recompose","scope_change","config_change","cursor_switch","doctor"}
-        # queues behind execution: raises LeaseHeld with retry_after_secs; NEVER preempts
-    async def heartbeat(self, grant: LeaseGrant, *, observed_busy_state: str | None = None) -> None   # StaleGeneration → caller must abandon its work
-    async def release(self, grant: LeaseGrant) -> None
+        # The caller (HumanActionBroker.submit) switches the cursor, CASes its action to Delivering (stamping lease_generation)
+        # and releases the grant on EVERY path; from that CAS on the in-flight row is what holds the repository.
+    async def acquire_admin(self, repo: RepoRecord, *, operation_type: str, transaction_id: str | None) -> LeaseGrant
+        # operation_type ∈ ADMIN_OPERATION_TYPES (ValueError otherwise); holds the file lock until release(grant)
+        # refuses while a turn is in flight (LeaseHeld); NEVER preempts; not capped
+    def require_host_idle(self, repo: RepoRecord) -> None       # repo_busy while any slot of the repository reports a busy reason
+    async def release(self, grant: LeaseGrant) -> None          # a grant no longer held is recorded (stale: true), never raised
     async def get(self, identity: str) -> LeaseRecord | None
-    async def list(self) -> list[LeaseRecord]
-    async def try_reclaim(self, rec: LeaseRecord, *, boundary: StableBoundary | None) -> bool
-        # Execution lease may be reclaimed ONLY when ALL hold:
-        #   (a) host attached and `busy_reasons(slot)` is empty for the slot bound to rec.session_key (running, in_stage_execution,
-        #       stop_state, queue_depth, approvals_pending, subagents_running/queued, deliveries_inflight all clear — the same
-        #       predicate as submit step 5; review P12), OR the slot no longer exists in state._slots AND state.sessions.is_busy(session_key) is False;
-        #   (b) the action rec.action_id is terminal or absent, or the reconciler has moved it to DeliveryUncertain/ReconciliationRequired,
-        #   (b') OR the action is still `Queued`/`NotDelivered` — it never reached `Delivering`, so nothing was dispatched
-        #       (a crash between acquire and the Delivering CAS); reclaim reason "never_dispatched" (review P15);
-        #   (b'') OR the action is settled AND `actions.lease_generation` still equals rec.generation — the holder reached
-        #       `deliver_under_lease` (which writes that stamp inside the transaction that checks the lease row) and then died
-        #       before releasing, so the lease is debris; reclaim reason "release_lost";
-        #   (c) boundary is not None and boundary.stable is True (waived for (b'): nothing ran, the boundary cannot have moved;
-        #       waived for (b''): requiring a boundary there deadlocks the repository, because the lease refuses every dispatch
-        #       and only a dispatch can carry the intent to its next boundary — observed live, 18 hours wedged).
-        # Admin lease may be reclaimed ONLY when the transaction rec.transaction_id has status in {committed, rolled_back, recovery_required, failed}.
-        # Heartbeat age is NEVER an input (FR-SES-007). Returns True when reclaimed (Storage.lease_reclaim + Activity "lease.reclaimed").
-        # The action half of the proof is re-asserted inside `Storage.lease_reclaim`'s own transaction
-        # (`expect_action=(action_id, statuses)` from `RECLAIM_ACTION_GUARD`): the proof and the delete are two
-        # transactions and `deliver_under_lease` moves an action Queued → Delivering WITHOUT touching the lease
-        # generation, so a generation-only guard would cut a decision already on the wire and let a second submit
-        # dispatch a second turn (C31). StaleGeneration → try_reclaim returns False and nothing is retried.
-    async def startup_sweep(self) -> list[LeaseRecord]     # returns leases that could not be reclaimed (shown on /leases as "orphaned")
+    async def list(self) -> list[LeaseRecord]                   # oldest first; per repository a held grant, else its newest in-flight action
+    def live(self) -> list[LeaseRecord]                         # list() for a worker thread (Services.health)
 ```
+
+Generations are strictly increasing within the process and seeded from the clock in microseconds
+(`max(last + 1, now_us)`), so a restart does not reuse one. They are stamped on `actions.lease_generation`, engine runs
+and installer journals; engine admin verbs only require one to be present. Activity rows: `lease.acquired`,
+`lease.released` (`params.stale`); `lease.reclaimed` is no longer written.
 
 `LeaseView` JSON (shared with §2): `{kind, repo_id, resolved_repo_identity, generation, acquired_at, heartbeat_at,
 intent_uuid, intent_key, session_key, action_id, operation_type, transaction_id, observed_busy_state, orphaned: bool}`.
 
-RepoScheduler must NOT reclaim on age, preempt, or grant an admin lease while an execution lease exists (and vice
-versa) — the Storage primitive already enforces exclusivity; the scheduler adds the cap and the proof rules.
+RepoScheduler must NOT preempt a holder, grant an admin lease while a turn is in flight, or grant an execution lease while
+an admin operation holds the lock.
 
 ### 1.11 `sessions.py` — `HostBridge`, `SessionBinder`
 
@@ -1424,7 +1405,7 @@ BUSY_REASONS = ("running", "stage_execution", "stopping", "queued", "approval_pe
 def busy_reasons(view: SlotView) -> tuple[str, ...]
     # running → "running"; in_stage_execution → "stage_execution"; stop_state != "idle" or stopping → "stopping"; queue_depth > 0 → "queued";
     # approvals_pending > 0 → "approval_pending"; subagents_running + subagents_queued > 0 → "subagents"; deliveries_inflight > 0 → "deliveries_inflight".
-    # Empty tuple == dispatchable. Used by submit step 5, try_reclaim (a) and the stable-boundary "session_busy" condition.
+    # Empty tuple == dispatchable. Used by submit step 5, RepoScheduler.require_host_idle and the stable-boundary "session_busy" condition.
 
 @dataclass(frozen=True, slots=True)
 class TranscriptRow: role: str; content: str; ts: str; cls: str; meta: dict
@@ -1686,7 +1667,8 @@ class HumanActionBroker:
         # 4  blocking findings → 409 state_inconsistent (details.findings) ; snap.stable False → 409 unstable_read
         # 5  binding must have slot_key (else session_unbound); view = host.slot(slot_key) must exist and host.slot_matches_repo(view, canonical_path)
         #    (else slot_mismatch); busy_reasons(view) must be empty else 409 slot_busy with details.reasons (review P12)
-        # 6  grant = scheduler.acquire_execution(...)  (409 repo_busy). From here on ANY exception releases the grant before re-raising (review P15).
+        # 6  grant = scheduler.acquire_execution(...)  (409 repo_busy / rate_limited). The grant is released in a `finally` once step 9 is
+        #    decided, success or failure (review P15): from the Delivering CAS on, the in-flight row is what holds the repository (§1.10).
         # 7  cursor switch — UNCONDITIONAL for every human-lane decision (FR-SES-006, P-05; review P01/R01):
         #    readback = engine.switch_cursor_sync(repo, engine_dir, space, intent_dir, expected_uuid) (to_thread, under the grant; the
         #    space/intent verbs are skipped when the cursor already names this intent but the read-back always runs).
@@ -1694,11 +1676,11 @@ class HumanActionBroker:
         #    otherwise release grant → 409 cursor_mismatch (details.mismatch). The CursorReadback is persisted in cursor_readback_json.
         # 8  presence = reader.presence_baseline(...) from a fresh audit read (review P04/R02); human_text = payload text;
         #    payload_digest = sha256(canonical json of payload)
-        # 9  storage.deliver_under_lease(action_id, gen, identity=…, lease_generation=grant.generation, new_values={status: "Delivering",
-        #    delivery_id, slot_key, session_key, lease_generation, delivering_at, deadline_at = now + DELIVERY_ACK_DEADLINE_SECS, wire_text,
-        #    payload_json, payload_digest, human_text, cursor_readback_json, presence_baseline_json, boot_id}) — ONE transaction that also
-        #    verifies the lease still carries grant.generation (lease_lost otherwise). Durable (synchronous=FULL) before return, therefore
-        #    before any host call (PRD §11.5).
+        # 9  storage.cas_update("actions", action_id, gen, {status: "Delivering", delivery_id, slot_key, session_key,
+        #    lease_generation = grant.generation, resolved_repo_identity, delivering_at, deadline_at = now + DELIVERY_ACK_DEADLINE_SECS,
+        #    wire_text, payload_json, payload_digest, human_text, cursor_readback_json, presence_baseline_json, boot_id}). The grant's file
+        #    lock is held across it, so nothing else can take the repository in between. Durable (synchronous=FULL) before return,
+        #    therefore before any host call (PRD §11.5).
         # 10 events "action.updated"; return SubmitReceipt(lane="human_lane", host = HostCall("POST", "/api/chat?ws=1",
         #    {"message": wire_text, "slot": slot_key, "agent": "aidlc", "meta": {"studio_action_id": action_id, "studio_delivery_id": delivery_id}}))
         #    `agent` makes the host itself refuse a slot whose agent differs (kc:chat_handlers.py:406-459 → 409 "slot agent mismatch",
@@ -1716,9 +1698,9 @@ class HumanActionBroker:
         #                 canonical slot and for every slot in slots_for_project(canonical_path); (ii) the canonical slot has not started a
         #                 turn since delivering_at (running False and last_turn_ts unchanged) — or, for slot_missing, host.slot(slot_key) is None;
         #                 (iii) reader.presence_baseline(...) == presence_baseline_json byte-for-byte; (iv) row.boot_id == services.boot_id.
-        #                 All four hold → Delivering → NotDelivered and the execution lease is released. Otherwise → raise not_delivered_unproven
+        #                 All four hold → Delivering → NotDelivered, which gives the repository back. Otherwise → raise not_delivered_unproven
         #                 AFTER CASing the row to DeliveryUncertain with the report kept in evidence.receipt (the host may have enqueued it).
-        #   uncertain   : → DeliveryUncertain (lease kept until reconciliation)
+        #   uncertain   : → DeliveryUncertain (no longer in flight, so the repository is free; the slot checks guard the session)
         # From Delivered/Processing: delivered → (unchanged, idempotent=True); not_delivered/uncertain → illegal_transition (the host already said ok).
         # From DeliveryUncertain/ReconciliationRequired (a late report after the 90 s ack deadline; review P05/R07/R16):
         #   delivered   : evidence.delivery_confirmed = true, evidence.receipt = receipt; NO status change; idempotent=False, 200.
@@ -1822,15 +1804,13 @@ class Reconciler:
     def __init__(self, services: "Services") -> None
     async def startup(self) -> StartupReport
         # order: storage integrity_check → payload verify (Installer.verify_payload) → for every action in
-        # (Delivering, Delivered, Processing, DeliveryUncertain): reconcile_action(now) → scheduler.startup_sweep() → first full scan of every repo.
+        # (Delivering, Delivered, Processing, DeliveryUncertain): reconcile_action(now) → installer.settle_abandoned() → first full scan of every repo.
         # Every Delivering/Delivered/Processing row whose boot_id != services.boot_id gets evidence.boot_id_unchanged = false: after a
         # restart the host's in-memory transcript may be gone, so such an action can never be auto-proven NotDelivered (review R02).
         # Must complete within HOST_STARTUP_HOOK_BUDGET_SECS or move remaining work into the loops (hooks.on_startup awaits only
         # the storage open + task creation; StartupReport is published as event "health.updated")
     async def run_forever(self) -> None
-        # TWO independent tasks (review R11): heartbeat_loop — every LEASE_HEARTBEAT_SECS heartbeat each live execution lease whose action
-        # is Delivering/Delivered/Processing (observed_busy_state from HostBridge), never waiting on a scan; tick_loop — every
-        # RECONCILE_INTERVAL_SECS: tick(). Exceptions logged, never propagate.
+        # one task, tick_loop — every RECONCILE_INTERVAL_SECS: tick(). Exceptions logged, never propagate.
     async def tick(self) -> None
         # 1 scan scheduling: repos with open actions first, then the rest round-robin (cursor kept across ticks); scans run on
         #   services.scan_pool under asyncio.Semaphore(SCAN_CONCURRENCY); no new scan is started once SCAN_TICK_BUDGET_SECS of the tick has
@@ -1854,7 +1834,7 @@ class Reconciler:
         #   Delivered/Processing with now > deadline_at, or session terminated/replaced (slot missing, or linked_session_key changed) →
         #     DeliveryUncertain → (next tick) ReconciliationRequired.
         # 4 compute StableBoundary per intent, store via SessionBinder.record_stable_boundary when changed
-        # 5 try_reclaim for leases whose action is terminal/uncertain/never dispatched (§1.10)
+        # 5 (retired in P2a: nothing is reclaimed — an execution lease ends with its action's flight, an admin lock with its process)
         # 6 _advisor_pass: advisor.settle_open() and THEN advisor.autodraft() (§1.18, A24). Settle first, always: the pass that starts new
         #   drafts must never be the reason a finished one went unread past the host's result TTL, and settling frees inflight slots the same
         #   tick. After step 1 so a card derived by this tick's scan can be drafted by it. Every exception is caught inside the pass: an
@@ -1876,7 +1856,7 @@ class Reconciler:
         # forgets the timers instead of sweeping: neither proves an intent is gone. The same listing feeds Reconciler.intents_on_disk(),
         # which is GET /health counts.intents (§2.1).
     async def reconcile_action(self, rec: ActionRecord, snap: IntentSnapshot | None = None) -> ActionRecord
-        # applies the §1.12 resolution table (incl. presence and cursor rules); on resolution: release execution lease; retire the derived card
+        # applies the §1.12 resolution table (incl. presence and cursor rules); on resolution (which ends the execution lease): retire the derived card
         # whose boundary is gone; on evidence of ERROR_LOGGED burst or host error row → record_failure with fingerprint classification (§1.13.1);
         # human_presence_anomaly / cursor_moved / wrong_slot → ReconciliationRequired with the finding stored on the action + Activity row
     async def reconcile_now(self, action_id: str) -> ActionRecord     # POST /actions/{id}/reconcile
@@ -1898,10 +1878,10 @@ Failure fingerprint classes: host ACP transport messages (`stream closed`, `conn
 Stable boundary evaluation (PRD §12.2) — all must hold: `snap.stable`; marker ∈ {row `[?]`/`[R]`, `questions.pending_count > 0`
 or `questions.pending_checkpoint`, `parked_at`, `status == Completed`, latest `PHASE_COMPLETED`/`STAGE_COMPLETED` newer than any
 `STAGE_STARTED` with no directive whose `matches_state`}; no action for the intent in `Delivering/Delivered/Processing/DeliveryUncertain`;
-bound slot `busy_reasons(view) == ()` and no execution lease heartbeat within `LEASE_HEARTBEAT_SECS * 2`; active space/intent
-cursor equals the intent (`is_active`) or the intent is not the cursor target and no lease exists.
+bound slot `busy_reasons(view) == ()` and no execution lease on the repository (no in-flight action, no held grant); active
+space/intent cursor equals the intent (`is_active`) or the intent is not the cursor target and no lease exists.
 
-Reconciler must NOT send prompts, stop turns, replay decisions, reclaim on age, move `Delivering → NotDelivered`, or run
+Reconciler must NOT send prompts, stop turns, replay decisions, release or take a lease, move `Delivering → NotDelivered`, or run
 `explicit_user_only` verbs.
 
 ### 1.14 `installer.py` — `Installer`
@@ -3873,13 +3853,13 @@ Synthetic variants are built in `conftest.py` from the real files with the `fixt
 | `tests/test_loader.py` | `load_backend("0.3.0")` (no parent packages) and `load_backend("0.5.0")` both link; every studio module imports relatively; `on_shutdown` removes every `_aidlc_studio_backend*` key; the host's `unload` prefix `_kirocrew_app_aidlc-studio.` leaves nothing dangling |
 | `tests/test_constants.py` | enums verbatim vs PRD strings; `ERROR_CODES` covers every code used (`grep StudioError\(`); every `WIRE_*` equals `docs/design/wire-text.json` `constants.*` and the UI's `wire.json` export; `BUNDLED_ENGINE_VERSION/BUNDLED_STATE_VERSION/BUNDLED_STAGE_COUNT` equal the manifest; `HUMAN_LANE_DECISIONS ∪ HOST_CONTROL_DECISIONS ∪ STUDIO_ONLY_DECISIONS` == every decision in `DECISIONS` and the three sets are disjoint |
 | `tests/test_security.py` | `resolve_inside` traversal/symlink escape/NUL/`must_exist`; `bounded_read` refuses oversize; `build_subprocess_env` strips and asserts; `assert_git_argv_readonly` denies every `GIT_WRITE_VERBS` member as `argv[0]`, denies `["--no-decorate","log"]`, `["-c","core.fsmonitor=x","status"]`, `["log","--output=/tmp/x"]`, `["-C","/","status"]`, accepts `["log","--no-decorate","-n","3"]`; `is_secret_file`; `redact`/`scrub_repo_paths` |
-| `tests/test_storage.py` | DDL applies on empty file; PRAGMAs; `cas_update` success/StaleGeneration/unknown table **on every `CAS_TABLES` entry** (lease tables have no `updated_at` — review R06); `deliver_under_lease` commits both or neither (lease_lost when the lease generation moved); partial unique index: a second live row with the same `dedupe_key` raises, a live row beside a Failed/Cancelled twin does not; lease acquire/heartbeat/release/exclusivity/reclaim writes activity; events ring trim; activity paging; pref roundtrip; concurrency (two threads CAS on one row → exactly one wins) |
+| `tests/test_storage.py` | DDL applies on empty file; PRAGMAs; `cas_update` success/StaleGeneration/unknown table on `actions` and `intent_bindings`; a committed `Delivering` CAS is visible to a second connection; partial unique index: a second live row with the same `dedupe_key` raises, a live row beside a Failed/Cancelled twin does not; events ring trim; activity paging; pref roundtrip; concurrency (two threads CAS on one row → exactly one wins) |
 | `tests/test_repo_registry.py` | identity dev:ino vs fallback; case-aliased path dedupe (`duplicate_identity`); sensitive path refusal; relative path; rebind rules; availability states; `detect_install` per fixture (`payload`, `devdelta`, `v230`, `older`); preflight report shape; **fake_bun is never invoked with `--project-dir` during preflight/add/detect_install** (review P13); `own_engine_version` (A26): a repository whose only harness is `.claude` reports `status == "installed"`, `engine_dir == ".claude"` and `own_engine_version is None`; a `.kiro` repository reports its own harness version there; a repository holding both reports `.kiro` in both places; the unreadable-root branch reports the record's `installed_engine_version` only when `engine_dir == STUDIO_HARNESS_DIR`, else None |
 | `tests/test_aidlc_reader.py` | `parse_state_file` on every fixture state (32/33, v7/v8, real 2.1.1, synthetic v9/header-only/contradictory, Skeleton Stance without blank line); checkbox marks incl. `X/s/r`, en dash, `--`; intents.json legacy match; cursors (missing `active-space` → `default`); directive validation; audit split/merge/tie order/unknown events (`LOOP_RUN_STARTED`)/CRLF; questions: `- A.` and `A.` options, blank tags, `[Answer]: A, B`, multi-line `- ` continuation, `## Consolidated Summary Confirmation`, `## Plan Approval` (blank and `Approve Plan`), `## Post-approval Amendment` followed by a pending `## Q4.` (review P09); scope frontmatter (incl. project-composed); stage graph 32 & 33; review section; `stable_read` unstable path; token formulas incl. `evidence_digest` and `presence_baseline` (golden values); `read_workspace_signals` (dot-entries and symlinks skipped, the first cap in sorted order and `truncated` only past the cap, no recursion, README handed over whole — the broker cuts; a symlinked README or manifest skipped even when its target is inside the repository) |
 | `tests/test_consistency.py` | one test per finding code (positive + negative) incl. `interrupted_session`, `state_unreadable` grace via `first_unreadable_at`; blocking set; severity table |
 | `tests/test_projection.py` | operational state table (every rule, precedence) incl. gate card present → `WaitingForYou`, + Queued run → `Queued`, Interrupted → ReconciliationRequired → Queued (review P08/P17); card derivation per type incl. dedupe_key, question card decisions per pending checkpoint, `accept_as_is` offered only at `stage_attempt >= 4`; `sort_actions` golden order; map model (phases, per-unit, skipped reasons, dependents); artifacts listing caps/truncation; artifact_id |
 | `tests/test_engine.py` | argv builders for every verb (golden argv, `intent-create` spelled exactly); kwargs validation; env scrub via fake_bun exit 98; deny list (fake_bun exit 99 never observed); `switch_cursor_sync` happy path + each mismatch code; explicit_user_only guard; static grep for denied tools in `backend/`; `test_allowlist_matches_payload_help` against the real payload with a real `bun` when present (review R04) |
-| `tests/test_leases.py` | exclusivity execution↔admin; cap; heartbeat stale; `try_reclaim` refuses on age alone, on any `busy_reasons`, on unstable boundary; reclaims only with proof; `never_dispatched` reclaim for a lease whose action is still Queued (review P15); `release_lost` reclaim for a settled action still stamped with this lease's generation, and its refusal for an earlier or unreadable stamp; startup sweep |
+| `tests/test_leases.py` | an in-flight dispatched action is the execution lease (view fields, blocks admin work) and leaving flight releases it; uncertain/queued/terminal rows and a force stop hold nothing; the submit window and admin grants are exclusive; a second scheduler on the same data dir is refused by the file lock; a forked child that dies holding the lock leaves nothing held; generations increase and survive a restart; global cap across repositories (incl. two concurrent acquires); stale release recorded, not raised; `require_host_idle` |
 | `tests/test_sessions.py` | HostBridge feature detection (missing attrs → capability unavailable, no raise; missing `_in_stage_execution` → False); SlotView mapping from `to_dict` incl. busy predicates and `busy_reasons` golden; bind/slot_mismatch/slot_busy; takeover preview candidates; `recent_rows` includes `queued` rows; `find_delivery_row` matches `meta.studio_delivery_id` before content |
 | `tests/test_actions.py` | every legal transition + every illegal pair raises IllegalTransition (exhaustive 12×12 matrix, incl. `Failed→Cancelled`); `wire_text_for` golden per decision incl. checkpoints and single vs grouped answers; submit: stale (each captured field incl. `evidence_digest`, `is_active`, null-vs-non-null), state_inconsistent, unstable, unbound, slot mismatch, `slot_busy` per reason, repo_busy, `intent_paused`/`intent_archived` on a gate approve, breaker_open only for run, `accept_as_is` refused below attempt 4, grouped answers refused while the capability is off; **two intents, cursor on B, approve on A → cursor switched to A and read back before Delivering** (review P01); cursor_mismatch releases the lease; exception after acquire releases the lease; success receipt durable before return (crash-after-CAS simulation); `record_delivery`: delivered/queued/uncertain, `not_delivered` accepted only when all four checks hold, otherwise `not_delivered_unproven` + DeliveryUncertain, client preflight codes, idempotent repeats never `illegal_transition`, late `delivered` sets `delivery_confirmed`; `resubmit` refused after confirmed delivery and on evidence-hash mismatch; retry of a Failed run inserts without collision; `cancel` legality per type; `pick_intent` runs the cursor switch under an admin lease and never a prompt; breaker thresholds (3 transient, 1 deterministic) and single notification |
 | `tests/test_reconciler.py` | startup re-evaluation of Delivering/Delivered/Processing (boot_id mismatch → never NotDelivered); ack deadline → DeliveryUncertain with evidence, then ReconciliationRequired next tick (never a dead end — review R07); `services.restart()` between send and ack → ReconciliationRequired, not NotDelivered (review R02); automatic ReconciliationRequired → NotDelivered only with all four proofs; processing deadline; `{queued:true}` waits in Delivered until the turn starts, capped (review P22); session replaced → uncertain; each resolution contract row (gate approve/reject, answers, confirm_summary, approve_plan, run/resume, prepare_commit, force_stop) using audit variants with same-second `GATE_APPROVED` (review P23); presence: `gate_approved_no_human_turn` and `gate_approved_two_human_turns` → `human_presence_anomaly` (review P04); cursor moved → `cursor_moved`; row found in another slot → `wrong_slot`; stable boundary conditions; failure classification table; retire stale cards (Failed untouched, `evidence.superseded`); `scan_fanout_bounded`; human_text purge; the advisor pass runs settle before autodraft, retention runs behind both in the same tick and retires drafts through `advisor.expire_stale`, and a raising `AdvisorBroker` does not abort the tick; the vanished-intent sweep (§1.13 step 1b): cards of an intent whose directory left the disk are retired with reason `intent_missing` only after the grace, an intent that returns inside the grace keeps every card, an unavailable repository and a truncated listing never sweep, `intents_on_disk()` follows the listing |
@@ -3949,8 +3929,8 @@ plus `tsc --noEmit`, `vite build`, `node --check ui/dist/index.mjs`.
 | C28 | `force_stop` is a third lane, `host_control`: the route commits `Queued → Delivering` immediately with `host = POST /api/chat/slots/<slot>/stop`, no execution lease, no cursor switch, no wire text; the UI reports via `/actions/{id}/delivery`; resolution = slot idle; `interrupted_at` is set at resolution and cleared **only** by the recovery card's `acknowledge` (finding `interrupted_session`), so `Interrupted → ReconciliationRequired → Queued|Paused` is the only path. | FR-RUN-004 (confirmed, durably recorded), PRD §11.2/§12.2 (mid-stage interruption always requires manual takeover) (review P16/P17). |
 | C29 | Pause blocks every human-lane dispatch (`submit` refuses `intent_paused`), not only run/resume; an open breaker blocks only run/resume. `accept_as_is` is offered/accepted only when `stage_attempt >= 4`. | FR-RUN-003/§12.5 "prevents future turns"; PRD §11.4 disables only Keep moving; the conductor adds `Accept as-is` after three rejection cycles (05 §5.1) (review P11/P24). |
 | C30 | Compare-and-submit set = `state_hash, boundary_token, question_digest, stage_attempt, evidence_digest, is_active`; null vs non-null is a difference; `evidence_digest` = sha256 over the stage's produced artifacts (always hashed) + the parsed Review section. | FR-ACT-009/010 "artifact evidence snapshot" / "required evidence differs" (review P14/P26.3). |
-| C31 | Lease acquire and the `Delivering` CAS are tied by `Storage.deliver_under_lease` (one transaction verifying the lease generation); any exception after acquire releases the grant; a lease whose action never left `Queued`/`NotDelivered` is reclaimable as `never_dispatched`, and one whose settled action still carries the lease's own generation is reclaimable as `release_lost` (the crash after the CAS, where the release never ran). | The cursor-switch subprocess sits between acquire and CAS, so a single transaction cannot span both; the reclaim rule closes the crash window without ever reclaiming on age (FR-SES-007) (review P15). |
-| C32 | Reconciler concurrency: heartbeats in their own task; scans on a private 2-worker pool under `Semaphore(SCAN_CONCURRENCY)` with a per-tick budget and round-robin; `to_thread` (host default executor) only for short calls. Revises the earlier "never a private pool" rule. | 64 repos × 10 s walks on the host's default executor would stall chat persistence and spawns; sequential scans would drift heartbeats (review R11). |
+| C31 | The submit holds the repository's file lock from acquire through the `Delivering` CAS and releases it on every path; from the CAS on, the in-flight action is the execution lease (P2a, superseding `Storage.deliver_under_lease` and the `never_dispatched`/`release_lost` reclaims). | The cursor-switch subprocess sits between acquire and CAS, so a single transaction cannot span both; a lock the kernel drops on process death closes the crash window without any reclaim (FR-SES-007) (review P15). |
+| C32 | Reconciler concurrency: scans on a private 2-worker pool under `Semaphore(SCAN_CONCURRENCY)` with a per-tick budget and round-robin; `to_thread` (host default executor) only for short calls. Revises the earlier "never a private pool" rule. | 64 repos × 10 s walks on the host's default executor would stall chat persistence and spawns; sequential scans would drift heartbeats (review R11). |
 | C33 | `dedupe_key` uniqueness is a partial index over live statuses; `upsert_derived` re-creates a Queued card when only terminal rows hold the key (`evidence.superseded_action_id`); derived cards can be cancelled only from `NotDelivered`. | Retry of a Failed run and resubmit after ReconciliationRequired reuse the key; a dismissed Queued gate card would otherwise hide a live `[?]` (FR-ACT-007) (review P06/R12). |
 | C34 | Questions grammar: `OPTION_LINE_RE` accepts `- A.`; `## Plan Approval` / `## Consolidated Summary Confirmation` / `## Post-approval Amendment` are checkpoint sections; multi-line answers continue on `- ` lines; new decisions `confirm_summary`, `approve_plan`, `request_plan_changes` with their own wire constants. | Real fixtures (FORMAT-NOTES §7; `plan-approval-guard` enforces the plan checkpoint); FR-Q-007/G1 (review P09). |
 | C35 | Preflight executes nothing from the candidate repo (`bun --version` only); engine verbs run only for registered, available repos from owner routes, `submit`, `resolve(pick_intent)` or the installer's own payload validation. | Repo-resident TypeScript on an unregistered path is untrusted data (PRD §16.2, FR-INST-001) (review P13). |
