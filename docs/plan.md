@@ -85,8 +85,14 @@
 | sessions | 1,975 | 1,193 | 只支持 0.8 的 slot 字段（`orchestrating`、`pending_approval_info`）；能力探测一条路径 |
 | aidlc_reader + consistency | 4,612 | 3,356 | `WireRecord` 替代 23 个手写 `to_json`；长注释移到 `tests/fixtures/FORMAT-NOTES.md` §11–12；删 3 个无调用方的函数 |
 | installer + maintenance | 5,501 | 3,616 | 卸载与回滚共用一个步骤执行器；每项安全检查只留一份。离 2.8k 目标差约 800 行：剩下的是卸载/回滚日志恢复、JSON 键合并、旧回执归属规则，都有测试钉住，再减就要删功能或安全检查 |
+| advisor + plan + plan_advice + estimates | 5,644 | 3,342 | 卡片、计划、自动三种起草共用一条启动路径；`Jsonable` 替代 18 个手写 `to_json`；删 `scope_change`/`config_change`（只有测试调用）和校准写入。71 份输出逐字节一致 |
 
-后端合计 40,608 → 35,317 行。每次合并后全量测试通过，77 个金样视图逐字节一致。
+后端合计 40,608 → 33,015 行。每次合并后全量测试通过，77 个金样视图逐字节一致。
+
+调整：
+- plan_advice 问卷保留：它就是 Advisor 看到的提示词，删掉会改变计划建议的质量（原计划要删）。
+- 校准没有写入方了，`GET /calibration` 永远为空，估算永远用规则区间：放进 P5a 整个删掉（路由、表、UI）。
+- P2 拆成两步：P2a 租约（派生忙状态 + 每仓库文件锁，接口不变，先做），P2b 决策状态机（合并状态，等 P2a 合入后做）。
 
 ## 金样变更记录
 
