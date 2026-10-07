@@ -617,8 +617,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"enum.actionStatus.Cancelled": "Cancelled",
 	"enum.actionStatus.Delivered": "Sent",
 	"enum.actionStatus.Delivering": "Sending",
-	"enum.actionStatus.DeliveryUncertain": "Delivery uncertain",
-	"enum.actionStatus.Draft": "Draft",
 	"enum.actionStatus.Failed": "Failed",
 	"enum.actionStatus.NotDelivered": "Not sent",
 	"enum.actionStatus.Processing": "Being processed",
@@ -1011,7 +1009,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"intents.busy": "Working…",
 	"intents.col.actions": "Actions",
 	"intents.col.intent": "Intent",
-	"intents.col.keepMoving": "Keep moving",
 	"intents.col.repo": "Repo",
 	"intents.col.stage": "Stage",
 	"intents.col.state": "State",
@@ -1057,9 +1054,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"intents.filter.state": "State",
 	"intents.filter.stateAll": "Every state",
 	"intents.filters": "Filters",
-	"intents.keepMoving.breaker": "Repeated failures also stopped dispatch for this intent.",
-	"intents.keepMoving.unavailable": "Unavailable",
-	"intents.keepMoving.why": "Unattended continuation needs a machine lane that has not been proven, so Keep moving cannot be switched on for any intent.",
 	"intents.lede": "Multiple intents may be in flight in one repository. Turns serialize per repository; different repositories run in parallel.",
 	"intents.newIntent": "New intent",
 	"intents.noSession": "no conversation bound",
@@ -2879,8 +2873,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"enum.actionStatus.Cancelled": "已取消",
 	"enum.actionStatus.Delivered": "已发送",
 	"enum.actionStatus.Delivering": "发送中",
-	"enum.actionStatus.DeliveryUncertain": "送达状态未知",
-	"enum.actionStatus.Draft": "草稿",
 	"enum.actionStatus.Failed": "失败",
 	"enum.actionStatus.NotDelivered": "未发送",
 	"enum.actionStatus.Processing": "处理中",
@@ -3273,7 +3265,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"intents.busy": "处理中…",
 	"intents.col.actions": "操作",
 	"intents.col.intent": "意图",
-	"intents.col.keepMoving": "Keep moving",
 	"intents.col.repo": "仓库",
 	"intents.col.stage": "阶段",
 	"intents.col.state": "状态",
@@ -3319,9 +3310,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"intents.filter.state": "状态",
 	"intents.filter.stateAll": "全部状态",
 	"intents.filters": "筛选",
-	"intents.keepMoving.breaker": "连续失败也已经停止了这个意图的派发。",
-	"intents.keepMoving.unavailable": "不可用",
-	"intents.keepMoving.why": "无人值守的继续执行需要一条尚未验证的机器通道，因此任何意图都无法开启 Keep moving。",
 	"intents.lede": "一个仓库里可以同时有多个意图在推进。同一仓库的回合串行执行，不同仓库并行执行。",
 	"intents.newIntent": "新建意图",
 	"intents.noSession": "未绑定会话",
@@ -4897,7 +4885,6 @@ function Te() {
 			prepareCommit: (e, t) => r(i(e, t, "/prepare-commit"), {}),
 			pause: (e, t, n) => r(i(e, t, "/pause"), { paused: n }),
 			forceStop: (e, t) => r(i(e, t, "/force-stop"), { confirm: !0 }),
-			keepMoving: (e, t, n) => r(i(e, t, "/keep-moving"), { enabled: n }),
 			bindSession: (e, t, n) => r(i(e, t, "/session/bind"), { slot_key: n }),
 			unbindSession: (e, t) => r(i(e, t, "/session/unbind"), {}),
 			takeoverPreview: (e, t) => r(i(e, t, "/session/takeover/preview"), {}),
@@ -5173,11 +5160,7 @@ function Ke() {
 }
 //#endregion
 //#region src/lib/useResource.ts
-var qe = 2e3, Je = 15e3, Ye = 2e4, Xe = /* @__PURE__ */ new Map(), Ze = [
-	"Delivering",
-	"Delivered",
-	"Processing"
-];
+var qe = 2e3, Je = 15e3, Ye = 2e4, Xe = /* @__PURE__ */ new Map(), Ze = ["Delivering", "Delivered"];
 function Qe(e) {
 	if (!e || typeof e != "object") return !1;
 	let t = e;
@@ -5564,10 +5547,8 @@ function ct(e) {
 	return e.repo.availability !== void 0 && e.repo.availability !== "available";
 }
 var lt = /* @__PURE__ */ new Set([
-	"Draft",
 	"Delivering",
 	"Delivered",
-	"Processing",
 	...ot
 ]);
 function ut(e) {
@@ -7567,14 +7548,9 @@ var $n = [
 	"delivery.step.delivered",
 	"delivery.step.processing",
 	"delivery.step.stateChanged"
-], er = [
-	"Draft",
-	"Queued",
-	"Cancelled"
-], tr = ["DeliveryUncertain", "ReconciliationRequired"];
+], er = ["Queued", "Cancelled"], tr = ["ReconciliationRequired"];
 function nr(e) {
 	switch (e) {
-		case "Draft":
 		case "Queued":
 		case "Cancelled": return {
 			index: 0,
@@ -7584,17 +7560,12 @@ function nr(e) {
 			index: 1,
 			failed: !1
 		};
-		case "NotDelivered": return {
-			index: 1,
-			failed: !0
-		};
-		case "DeliveryUncertain":
+		case "NotDelivered":
 		case "ReconciliationRequired": return {
 			index: 1,
 			failed: !0
 		};
-		case "Delivered":
-		case "Processing": return {
+		case "Delivered": return {
 			index: 2,
 			failed: !1
 		};
@@ -7624,10 +7595,10 @@ var ir = {
 	cancelled: "close"
 };
 function ar(e) {
-	return e === "StateChanged" ? "ok" : e === "NotDelivered" || e === "Failed" || tr.includes(e) ? "danger" : e === "Delivering" || e === "Delivered" || e === "Processing" ? "accent" : "neutral";
+	return e === "StateChanged" ? "ok" : e === "NotDelivered" || e === "Failed" || tr.includes(e) ? "danger" : e === "Delivering" || e === "Delivered" ? "accent" : "neutral";
 }
-function or(e, t, n) {
-	return t === "ResolvedNoTransition" && (n === "answer_not_verified_at_gate" || n === "answer_not_verified") ? e.t("delivery.answerNotVerified") : t === "ResolvedNoTransition" && n === "plan_approval_recorded_before_reset" ? e.t("delivery.previousPlanApproval") : e.t(t === "ResolvedNoTransition" && n === "answer_requires_text" ? "delivery.answerNeedsText" : `enum.actionStatus.${t}`);
+function or(e, t, n, r) {
+	return t === "Delivered" && r ? e.t("enum.actionStatus.Processing") : t === "ResolvedNoTransition" && (n === "answer_not_verified_at_gate" || n === "answer_not_verified") ? e.t("delivery.answerNotVerified") : t === "ResolvedNoTransition" && n === "plan_approval_recorded_before_reset" ? e.t("delivery.previousPlanApproval") : e.t(t === "ResolvedNoTransition" && n === "answer_requires_text" ? "delivery.answerNeedsText" : `enum.actionStatus.${t}`);
 }
 function sr(e, t) {
 	return t === null ? e.t("common.unavailable") : e.t(t ? "delivery.fact.yes" : "delivery.fact.no");
@@ -7676,7 +7647,7 @@ function cr({ card: e }) {
 					/* @__PURE__ */ m(X, {
 						tone: ar(r),
 						icon: a ? "warn" : void 0,
-						children: or(t, r, e.resolution.reason)
+						children: or(t, r, e.resolution.reason, i.turn_started_at)
 					}),
 					i.queued_at ? /* @__PURE__ */ m(X, {
 						icon: "clock",
@@ -7999,7 +7970,7 @@ function yr({ card: e, onOpenCurrent: t }) {
 					}),
 					/* @__PURE__ */ m(X, {
 						tone: ar(e.status),
-						children: or(n, e.status, e.resolution.reason)
+						children: or(n, e.status, e.resolution.reason, e.delivery.turn_started_at)
 					}),
 					y ? /* @__PURE__ */ m(X, {
 						tone: "info",
@@ -9256,7 +9227,7 @@ function gi(e, t) {
 		repo: t.repo.label,
 		intent: t.intent.title ?? t.intent.slug,
 		stage: pr(t, e.t("common.none")),
-		state: or(e, t.status, t.resolution.reason)
+		state: or(e, t.status, t.resolution.reason, t.delivery.turn_started_at)
 	});
 }
 function _i(e) {
@@ -10281,11 +10252,7 @@ function Hi(e, t) {
 	return !e || e.free_text !== t.free_text || e.option_letters.length !== t.option_letters.length ? !1 : e.option_letters.every((e, n) => e === t.option_letters[n]);
 }
 function Ui({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, go: c }) {
-	let u = U(), { t: f } = u, g = Di(e, s, t?.drafts), _ = e.evidence.questions, v = _?.questions ?? [], y = jn(_), b = _?.unsupported_pending_count ?? 0, x = y.length > 0 || b > 0, S = _?.mode === "degraded" || b > 0, w = _?.origin?.kind === "audit" && (_.origin.batch_size ?? 1) > 1, T = [
-		"Draft",
-		"Queued",
-		"NotDelivered"
-	].includes(e.status), E = T && !S && !a, [D, O] = d(!1), k = _?.pending_checkpoint === "summary_confirmation" ? _.summary_confirmation : _?.pending_checkpoint === "assumption_confirmation" ? _.assumption_confirmation ?? null : _?.pending_checkpoint === "plan_approval" ? _.plan_approval : null, A = e.decisions.some((e) => e.decision === "request_plan_changes" || e.decision === "confirm_summary"), j = e.decisions.some((e) => e.decision === "confirm_summary"), M = (e, t, i) => r({ answers: {
+	let u = U(), { t: f } = u, g = Di(e, s, t?.drafts), _ = e.evidence.questions, v = _?.questions ?? [], y = jn(_), b = _?.unsupported_pending_count ?? 0, x = y.length > 0 || b > 0, S = _?.mode === "degraded" || b > 0, w = _?.origin?.kind === "audit" && (_.origin.batch_size ?? 1) > 1, T = ["Queued", "NotDelivered"].includes(e.status), E = T && !S && !a, [D, O] = d(!1), k = _?.pending_checkpoint === "summary_confirmation" ? _.summary_confirmation : _?.pending_checkpoint === "assumption_confirmation" ? _.assumption_confirmation ?? null : _?.pending_checkpoint === "plan_approval" ? _.plan_approval : null, A = e.decisions.some((e) => e.decision === "request_plan_changes" || e.decision === "confirm_summary"), j = e.decisions.some((e) => e.decision === "confirm_summary"), M = (e, t, i) => r({ answers: {
 		...n.answers,
 		[String(e)]: {
 			option_letters: t,
@@ -10630,7 +10597,7 @@ function Gi(e) {
 	return e.unit ?? (Array.isArray(e.units) ? e.units.join(", ") : "");
 }
 function Ki({ card: e, detail: t, api: n, go: r }) {
-	let i = U(), { t: a } = i, o = Di(e, n, t?.drafts), s = e.evidence, c = e.delivery, l = st(e), u = e.headline.params.codes, d = Array.isArray(u) && u.includes("session_lost_mid_stage") || e.headline.params.reason === "session_lost_mid_stage", f = c.delivery_confirmed === !0, p = e.status === "DeliveryUncertain" || e.status === "ReconciliationRequired" || c.outcome === "uncertain";
+	let i = U(), { t: a } = i, o = Di(e, n, t?.drafts), s = e.evidence, c = e.delivery, l = st(e), u = e.headline.params.codes, d = Array.isArray(u) && u.includes("session_lost_mid_stage") || e.headline.params.reason === "session_lost_mid_stage", f = c.delivery_confirmed === !0, p = e.status === "ReconciliationRequired" || c.outcome === "uncertain";
 	return /* @__PURE__ */ h("section", {
 		className: "studio-template",
 		"data-type": e.type,
@@ -13196,12 +13163,7 @@ function eo({ intent: e, layout: t, actions: n }) {
 			className: "studio-row-sub studio-mono",
 			children: i("intents.stage.next", { stage: e.disk.next_stage })
 		}) : null
-	] }), l = /* @__PURE__ */ m(X, {
-		icon: "warn",
-		tone: "warn",
-		title: i("intents.keepMoving.why"),
-		children: i("intents.keepMoving.unavailable")
-	});
+	] });
 	return t === "card" ? /* @__PURE__ */ h("li", {
 		className: "studio-intent-card",
 		"data-state": e.operational_state,
@@ -13221,13 +13183,6 @@ function eo({ intent: e, layout: t, actions: n }) {
 				className: "studio-col",
 				children: c
 			}),
-			/* @__PURE__ */ h("div", {
-				className: "studio-row studio-wrap",
-				children: [/* @__PURE__ */ m("span", {
-					className: "studio-row-sub",
-					children: i("intents.col.keepMoving")
-				}), l]
-			}),
 			/* @__PURE__ */ m("div", {
 				className: "studio-row studio-wrap",
 				children: n
@@ -13243,7 +13198,6 @@ function eo({ intent: e, layout: t, actions: n }) {
 			/* @__PURE__ */ m("td", { children: o }),
 			/* @__PURE__ */ m("td", { children: s }),
 			/* @__PURE__ */ m("td", { children: c }),
-			/* @__PURE__ */ m("td", { children: l }),
 			/* @__PURE__ */ m("td", { children: n })
 		]
 	});
@@ -13266,7 +13220,7 @@ function to({ repo: e, message: t, layout: n }) {
 	}) : /* @__PURE__ */ m("tr", {
 		"data-tone": "warn",
 		children: /* @__PURE__ */ m("td", {
-			colSpan: 6,
+			colSpan: 5,
 			children: /* @__PURE__ */ h("span", {
 				className: "studio-row",
 				children: [/* @__PURE__ */ m(Y, {
@@ -13338,10 +13292,6 @@ function ao({ intents: e, failures: t, narrow: n, renderActions: r }) {
 				/* @__PURE__ */ m("th", {
 					scope: "col",
 					children: a("intents.col.stage")
-				}),
-				/* @__PURE__ */ m("th", {
-					scope: "col",
-					children: a("intents.col.keepMoving")
 				}),
 				/* @__PURE__ */ m("th", {
 					scope: "col",
@@ -14168,13 +14118,6 @@ function So({ route: e, go: t }) {
 					narrow: c,
 					renderActions: F
 				}),
-				A.length > 0 ? /* @__PURE__ */ h("p", {
-					className: "studio-consequence",
-					children: [/* @__PURE__ */ m(Y, {
-						name: "lock",
-						size: 13
-					}), /* @__PURE__ */ m("span", { children: r("intents.keepMoving.why") })]
-				}) : null,
 				/* @__PURE__ */ m("p", {
 					className: "studio-sr",
 					role: "status",
