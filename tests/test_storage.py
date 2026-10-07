@@ -684,6 +684,14 @@ def test_activity_purge_clears_only_what_retention_allows(store, S, clock):
     assert store.activity_purge_human_text("2026-09-01T00:00:00Z") == 0     # idempotent
 
 
+def test_activity_delete_before_drops_only_rows_older_than_the_cutoff(store, S):
+    old_id = store.activity_append(activity_row(S, at="2026-08-01T00:00:00Z", kind="repo.added"))
+    edge_id = store.activity_append(activity_row(S, at="2026-09-01T00:00:00Z", kind="repo.added"))
+    assert store.activity_delete_before("2026-09-01T00:00:00Z") == 1
+    assert [r.id for r in store.activity_query(S.ActivityQuery(limit=10))[0]] == [edge_id]
+    assert old_id != edge_id and store.activity_delete_before("2026-09-01T00:00:00Z") == 0
+
+
 # --------------------------------------------------------------------------- #
 # preferences and housekeeping
 # --------------------------------------------------------------------------- #

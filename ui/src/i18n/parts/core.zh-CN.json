@@ -159,7 +159,6 @@
   "a11y.queueRow": "{type}，{repo}，{intent}，{stage}，{severity}，已等待 {duration}。{primary}",
   "a11y.skipToDetail": "跳到决策区",
   "a11y.refreshing": "证据正在刷新",
-  "unavailable.machineLane": "不可用 — 尚未验证机器通道（S12）",
   "common.retry": "重试",
   "common.cancel": "取消",
   "common.close": "关闭",

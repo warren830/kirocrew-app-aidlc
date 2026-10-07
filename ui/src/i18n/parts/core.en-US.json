@@ -159,7 +159,6 @@
   "a11y.queueRow": "{type}, {repo}, {intent}, {stage}, {severity}, waiting {duration}. {primary}",
   "a11y.skipToDetail": "Skip to decision",
   "a11y.refreshing": "Evidence is refreshing",
-  "unavailable.machineLane": "Unavailable — no machine lane has been proven (S12)",
   "common.retry": "Retry",
   "common.cancel": "Cancel",
   "common.close": "Close",

@@ -258,7 +258,7 @@ export interface StudioApi extends WorkspaceApi {
    * Always rejects with `machine_lane_unavailable` (§2.3). Present so the client surface matches the
    * route table and so the one place that could ever call it is the one place that documents why it
    * cannot: every KiroCrew path to kiro-cli mints a `HUMAN_TURN`, so unattended continuation would
-   * forge human presence in AI-DLC's audit trail. Settings renders `unavailable.machineLane` instead.
+   * forge human presence in AI-DLC's audit trail.
    */
   keepMoving(repoId: string, intentKey: string, enabled: boolean): Promise<never>
   bindSession(repoId: string, intentKey: string, slotKey: string): Promise<BindResponse>

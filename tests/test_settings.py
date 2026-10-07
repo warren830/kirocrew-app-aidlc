@@ -4,8 +4,8 @@ Three properties matter more than the rest, and most of the file is about them:
 
 * **The defaults are the contract.** ``DEFAULTS`` is compared against the literal from contracts §1.21,
   not against itself, so a "harmless" default change has to be made in the contract too.
-* **A machine-lane feature can never be switched on** — not by a ``PUT`` (409, nothing stored), and not
-  by editing the SQLite row by hand (forced back to the default on read). Both paths are exercised.
+* **A stored row can never serve a value the validator would refuse** — a hand edit, a value a newer
+  build accepted, or the retired v1 ``night_window`` keys all degrade to the default on read.
 * **Validation names the key.** Every rejection is asserted on ``details.key`` and ``details.reason``,
   because "invalid settings" with no key is what the UI cannot act on.
 
@@ -124,13 +124,6 @@ CONTRACT_DEFAULTS = {
     "queue_organize": "priority",
     "global_concurrency_cap": 2,
     "slack": {"enabled": False, "muted_repo_ids": []},
-    "night_window": {
-        "enabled": False,
-        "start_local": "22:00",
-        "end_local": "06:00",
-        "turn_cap": 40,
-        "credit_cap": None,
-    },
     "diagnostics": {"retention_days": 30, "export_include_human_text": False},
     "human_text_retention_days": 30,
     "advisor": {"enabled": True, "auto_draft_repo_ids": []},
@@ -344,12 +337,8 @@ def err(excinfo):
         ({"advisor": {"enabled": 1}}, "advisor.enabled", "type"),
         ({"installer": {"run_doctor_after_install": None}}, "installer.run_doctor_after_install", "type"),
         ({"notifications": {"dashboard": "on"}}, "notifications.dashboard", "type"),
-        ({"night_window": {"start_local": "9:00"}}, "night_window.start_local", "format"),
-        ({"night_window": {"start_local": "24:00"}}, "night_window.start_local", "format"),
-        ({"night_window": {"end_local": "22:00:00"}}, "night_window.end_local", "format"),
-        ({"night_window": {"end_local": 2200}}, "night_window.end_local", "type"),
-        ({"night_window": {"turn_cap": 0}}, "night_window.turn_cap", "range"),
-        ({"night_window": {"turn_cap": 100000}}, "night_window.turn_cap", "range"),
+        # The machine-lane window is gone; a client that still sends it is told the key does not exist.
+        ({"night_window": {"enabled": False}}, "night_window", "unknown_key"),
         ({"slack": {"muted_repo_ids": "r_1"}}, "slack.muted_repo_ids", "type"),
         ({"slack": {"muted_repo_ids": [1]}}, "slack.muted_repo_ids", "type"),
         ({"slack": {"muted_repo_ids": [""]}}, "slack.muted_repo_ids", "type"),
@@ -448,10 +437,6 @@ def test_validate_is_pure_and_reports_dotted_keys(svc, M):
         "bogus: unknown_key",
     ]
     assert svc.validate("nope") == ["settings: not_an_object"]
-    assert svc.validate({"night_window": {"enabled": True, "credit_cap": 100}}) == [
-        "night_window.enabled: machine_lane_unavailable",
-        "night_window.credit_cap: credits_unobservable",
-    ]
 
 
 def test_valid_values_round_trip(svc, M):
@@ -461,7 +446,6 @@ def test_valid_values_round_trip(svc, M):
         "queue_organize": "repo",
         "global_concurrency_cap": 8,
         "slack": {"enabled": True, "muted_repo_ids": ["r_000000000001"]},
-        "night_window": {"enabled": False, "start_local": "00:00", "end_local": "23:59", "turn_cap": 1, "credit_cap": None},
         "diagnostics": {"retention_days": 1, "export_include_human_text": True},
         "human_text_retention_days": 30,
         "advisor": {"enabled": False, "auto_draft_repo_ids": ["r_000000000001"]},
@@ -473,98 +457,20 @@ def test_valid_values_round_trip(svc, M):
 
 
 # --------------------------------------------------------------------------- #
-# machine-lane refusal
+# the retired night window
 # --------------------------------------------------------------------------- #
 
 
-def test_enabling_the_night_window_is_refused_with_409(svc, store, M):
-    with pytest.raises(Exception) as excinfo:
-        run(svc.put({"night_window": {"enabled": True}}))
-    code, details = err(excinfo)
-    assert (code, excinfo.value.status) == ("machine_lane_unavailable", 409)
-    assert details == {
-        "key": "night_window.enabled",
-        "capability": "night_window",
-        "reason": M.REASON_MACHINE_LANE,
-    }
-    assert stored(store, M) is None
-    assert run(svc.get()).values["night_window"]["enabled"] is False
-
-
-def test_a_refused_patch_stores_none_of_its_other_keys(svc, store, M):
-    with pytest.raises(Exception):
-        run(svc.put({"density": "comfortable", "night_window": {"turn_cap": 5, "enabled": True}}))
-    assert stored(store, M) is None
-    values = run(svc.get()).values
-    assert values["density"] == "compact"
-    assert values["night_window"]["turn_cap"] == 40
-
-
-def test_setting_a_credit_cap_is_refused_with_409(svc, store, M):
-    with pytest.raises(Exception) as excinfo:
-        run(svc.put({"night_window": {"credit_cap": 100}}))
-    code, details = err(excinfo)
-    assert (code, excinfo.value.status) == ("machine_lane_unavailable", 409)
-    assert details == {
-        "key": "night_window.credit_cap",
-        "capability": "credit_cap",
-        "reason": M.REASON_CREDITS,
-    }
-    assert stored(store, M) is None
-
-
-def test_truthy_lookalikes_are_refused_too(svc):
-    """``0 == False`` in Python; "off" must be identity, not equality."""
-    for value in (1, "true", [], {}, 0.0):
-        with pytest.raises(Exception) as excinfo:
-            run(svc.put({"night_window": {"enabled": value}}))
-        assert excinfo.value.code == "machine_lane_unavailable"
-
-
-def test_the_capability_refusal_beats_a_validation_error(svc):
-    with pytest.raises(Exception) as excinfo:
-        run(svc.put({"locale": "klingon", "night_window": {"enabled": True}}))
-    assert excinfo.value.code == "machine_lane_unavailable"
-
-
-def test_writing_the_safe_value_explicitly_is_allowed(svc, store, M):
-    settings = run(svc.put({"night_window": {"enabled": False, "credit_cap": None, "turn_cap": 12}}))
-    assert settings.values["night_window"] == {
-        "enabled": False,
-        "start_local": "22:00",
-        "end_local": "06:00",
-        "turn_cap": 12,
-        "credit_cap": None,
-    }
-    assert stored(store, M)["values"]["night_window"]["turn_cap"] == 12
-
-
-def test_locked_keys_are_forced_even_if_an_override_slips_past_the_reader(M):
-    """The second line of defence, asserted directly.
-
-    Every reader in the process goes through ``_effective``, so "the night window is off" must not
-    depend on the decoder having dropped the value first — one future caller that merges an override
-    dict some other way would otherwise re-open the machine lane.
-    """
-    values = M._effective({"night_window": {"enabled": True, "credit_cap": 9, "turn_cap": 3}})
-    assert values["night_window"]["enabled"] is False
-    assert values["night_window"]["credit_cap"] is None
-    assert values["night_window"]["turn_cap"] == 3
-
-
-def test_a_hand_edited_row_cannot_arm_the_machine_lane(svc, store, M):
-    """The refusal is not only in ``put``: ``sqlite3`` is on every developer's machine."""
+def test_a_stored_v1_night_window_is_ignored_on_read_and_dropped_on_write(svc, store, M):
+    """A v1 row carries the machine-lane window Studio no longer has; it must neither be served nor kept."""
     store.pref_set(
         M.PREF_KEY,
-        {"values": {"night_window": {"enabled": True, "credit_cap": 500, "turn_cap": 9}}, "updated_at": "x"},
+        {"values": {"night_window": {"enabled": True, "turn_cap": 9}, "locale": "en-US"}, "updated_at": "x"},
     )
-    night = run(svc.get()).values["night_window"]
-    assert night["enabled"] is False
-    assert night["credit_cap"] is None
-    assert night["turn_cap"] == 9  # the harmless neighbour is kept
-    # and the next write drops the forbidden keys from the row for good
+    values = run(svc.get()).values
+    assert "night_window" not in values and values["locale"] == "en-US"
     run(svc.put({"density": "comfortable"}))
-    assert stored(store, M)["values"] == {"night_window": {"turn_cap": 9}, "density": "comfortable"}
+    assert stored(store, M)["values"] == {"locale": "en-US", "density": "comfortable"}
 
 
 # --------------------------------------------------------------------------- #
@@ -579,12 +485,11 @@ def test_capability_block_shape_and_order(svc, M):
         assert sorted(entry) == ["available", "reason"]
 
 
-def test_machine_lane_capabilities_are_always_unavailable(svc, M):
+def test_studio_owned_capabilities(svc, M):
     caps = run(svc.get()).capabilities
-    assert caps["night_window"] == {"available": False, "reason": "machine_lane_unavailable"}
-    assert caps["credit_cap"] == {"available": False, "reason": "credits_unobservable"}
     assert caps["slack_quick_actions"] == {"available": False, "reason": "host_seam_unavailable"}
     assert caps["grouped_answers"] == {"available": True, "reason": None}
+    assert "night_window" not in caps and "credit_cap" not in caps
 
 
 def test_grouped_answers_is_verified_and_only_a_constant_can_disable_it(M, K, store, clock, monkeypatch):
@@ -668,7 +573,6 @@ def test_sync_accessors_serve_defaults_before_load_then_the_stored_values(M, sto
         },
     )
     svc = M.SettingsService(store, Bridge(), clock)
-    assert svc.loaded() is False
     assert svc.global_concurrency_cap() == 2
     assert svc.human_text_retention_days() == 30
     # The reconciler reads the auto-draft grant through this accessor on the loop, and a tick can land
@@ -677,7 +581,6 @@ def test_sync_accessors_serve_defaults_before_load_then_the_stored_values(M, sto
     assert svc.advisor() == {"enabled": True, "auto_draft_repo_ids": []}
 
     run(svc.get())
-    assert svc.loaded() is True
     assert svc.global_concurrency_cap() == 4
     assert svc.human_text_retention_days() == 3
     assert svc.slack() == {"enabled": True, "muted_repo_ids": ["r_000000000001"]}

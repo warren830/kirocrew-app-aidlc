@@ -329,8 +329,7 @@ def test_settings_returns_values_capabilities_and_versions(sv, routes, fake_host
                         CT.owner_request("GET", "/settings", host=fake_host))
     assert status == 200
     assert set(body) == {"settings", "capabilities", "versions", "updated_at"}
-    assert body["capabilities"]["night_window"] == {"available": False,
-                                                   "reason": "machine_lane_unavailable"}
+    assert "night_window" not in body["settings"] and "night_window" not in body["capabilities"]
     assert body["capabilities"]["slack_quick_actions"]["available"] is False
     assert body["versions"]["studio"] == sv.settings.versions()["studio"]
 
@@ -355,11 +354,26 @@ def test_put_settings_refuses_an_unknown_value_without_storing_anything(sv, rout
     assert sv.settings.values()["locale"] != "kl-KL"
 
 
-def test_put_settings_refuses_a_capability_that_does_not_exist_in_this_version(sv, routes, fake_host):
+def test_put_settings_refuses_the_retired_night_window_as_an_unknown_key(sv, routes, fake_host):
     request = CT.owner_request("PUT", "/settings", host=fake_host,
                                body={"night_window": {"enabled": True}})
     status, body = call(sv, routes, "PUT", "/settings", request)
-    assert status == 409 and body["code"] == "machine_lane_unavailable"
+    assert status == 400 and body["code"] == "bad_body"
+    assert (body["details"]["key"], body["details"]["reason"]) == ("night_window", "unknown_key")
+
+
+def test_activity_older_than_the_diagnostic_retention_is_deleted(sv, clock):
+    """``diagnostics.retention_days`` is how long Studio keeps its own Activity rows (the retention pass)."""
+    asyncio.run(sv.settings.put({"diagnostics": {"retention_days": 7}}))
+    asyncio.run(sv.activity.record(kind="health.startup"))
+    clock.advance(6 * 86400)
+    asyncio.run(sv.activity.record(kind="settings.updated"))
+    asyncio.run(sv.reconciler.tick())
+    assert sorted(row["kind"] for row in sv.storage.select("activity")) == ["health.startup", "settings.updated"]
+
+    clock.advance(2 * 86400)                       # the first row is now eight days old, the second two
+    asyncio.run(sv.reconciler.tick())
+    assert [row["kind"] for row in sv.storage.select("activity")] == ["settings.updated"]
 
 
 # --------------------------------------------------------------------------- #

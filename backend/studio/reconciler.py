@@ -2391,10 +2391,15 @@ class Reconciler:
     # ---- tick step 7: retention ------------------------------------------ #
 
     async def _retention_pass(self) -> tuple[int, int]:
-        """Purge verbatim human text past its retention and expire advisor drafts."""
+        """Purge verbatim human text past its retention, delete Activity rows older than
+        ``diagnostics.retention_days``, and expire advisor drafts."""
         days = int(self._s.settings.human_text_retention_days())
         cutoff = C.iso_from_epoch(self._s.clock.now() - days * 86400)
         purged = await self._to_thread(self._s.storage.activity_purge_human_text, cutoff)
+        keep = int(self._s.settings.diagnostics()["retention_days"])
+        await self._to_thread(
+            self._s.storage.activity_delete_before, C.iso_from_epoch(self._s.clock.now() - keep * 86400)
+        )
         expired = await self._expire_drafts()
         return int(purged), expired
 

@@ -267,7 +267,7 @@ function shellRoutes(): Record<string, RouteHandler> {
     }),
     [`GET ${BASE}/leases`]: () => ({ leases: [], global_concurrency_cap: 3, live_execution: 0 }),
     [`GET ${BASE}/settings`]: () => ({
-      settings: { night_window: { enabled: false, start_local: '22:00', end_local: '06:00' } },
+      settings: {},
       capabilities: {},
       versions: {},
       updated_at: null,
@@ -319,7 +319,7 @@ describe('the repository list', () => {
       [`POST ${BASE}/repos/r_1/intents/plan/preview`]: () => new Promise(() => {}),
       [`GET ${BASE}/health`]: () => ({ status: 'healthy', issues: [], tools: { bun: { found: true, searched: [] } } }),
       [`GET ${BASE}/settings`]: () => ({
-        settings: { night_window: { enabled: false }, advisor: { enabled: false } },
+        settings: { advisor: { enabled: false } },
         capabilities: { advisor: { available: false } }, versions: {}, updated_at: null,
       }),
     })
