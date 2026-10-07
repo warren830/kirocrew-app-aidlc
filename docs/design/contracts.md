@@ -2207,15 +2207,10 @@ class PlanService:
         # verify on disk: new dir in list_intent_dirs, intents.json row, active-intent == dir; parse state (state_version);
         # NEVER submits a prompt; returns paused (Idle) intent; Activity kind "intent.created"
     async def recompose(self, repo, snap, *, skip, add, proposal_digest: str) -> RecomposeResult      # admin lease "recompose"; refuses when Status != Running or autonomy autonomous (recompose_not_allowed)
-    async def scope_change(self, repo, snap, *, scope, depth, test_strategy) -> EngineResult          # admin lease
-    async def config_change(self, repo, snap, *, depth, test_strategy) -> EngineResult
 
 class EstimateService:
     def __init__(self, storage: Storage, clock: Clock) -> None
     def estimate(self, stages: Sequence[PlanStage], *, depth: str, units: int | None, scope: str) -> Estimate
-    def record_actual(self, sample: CalibrationSample) -> None      # CalibrationSample{scope, depth, stage_class, model_class, review_iterations, test_secs, est: Range-ish dict, actual: {turns, active_secs}, intent_ref = sha256(uuid)[:12]}
-    def cohort_samples(self, scope: str, depth: str, stage_class: str) -> int
-    def est_vs_actual(self, intent_ref: str) -> list[dict]
     def clear(self) -> int
 ```
 
