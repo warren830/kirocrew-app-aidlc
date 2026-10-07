@@ -144,6 +144,13 @@ def gen_enums() -> str:
         f"export const DEEP_LINK_BASE = {ts_string(C.DEEP_LINK_BASE)}",
         "",
     ]
+    lines += [
+        "/** Stages run once per Construction unit: the map's unit lanes for a stage the graph does not know. */",
+        "export const PER_UNIT_STAGES: readonly string[] = ["
+        + ", ".join(ts_string(v) for v in C.PER_UNIT_STAGES)
+        + "]",
+        "",
+    ]
     return "\n".join(lines)
 
 

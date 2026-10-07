@@ -1058,21 +1058,21 @@ class StableBoundary:            # PRD §12.2 — all five conditions evaluated
     stage: str | None; marker: str | None     # "[?]" | "[R]" | "question" | "parked" | "completed" | "phase_complete"
     boundary_token: str | None; recorded_at: str
 
-@dataclass(frozen=True, slots=True)
-class MapStage:
-    slug: str; number: str; name: str; phase: str; state: str          # STAGE_STATE | "excluded"
-    execution: str; in_scope: bool; mode: str; agent: str; reviewer: str | None; review_class: str | None
-    gate: bool; per_unit: bool; summary_confirmation: str | None   # gate only when in_scope and phase != initialization
-    consumes: tuple[str, ...]; produces: tuple[str, ...]; depends_on: tuple[str, ...]; dependents: tuple[str, ...]
-    elapsed_secs: int | None            # STAGE_STARTED→STAGE_COMPLETED (latest attempt) or →now when in progress
-    artifacts: tuple[ArtifactMeta, ...]; skipped_reason: str | None      # from suffix "SKIP: …" or scope grid
-    units: tuple[MapUnit, ...]          # per-unit sub-rows: MapUnit{unit, state, artifacts}
-    is_current: bool; is_directive: bool
-@dataclass(frozen=True, slots=True)
-class MapModel:
-    intent_key: str; phases: tuple[MapPhase, ...]    # MapPhase{phase, status, stages: tuple[MapStage,...], counts: {total, in_scope, done, skipped}}
-    counts: dict[str, int]              # stages_known, stages_selected, gates (exact)
-    units: tuple[str, ...]; graph_version: str | None; stage_count: int
+# The intent map is assembled in the UI (`ui/src/map/buildMap.ts` builds the §3.1 `MapModel`); the projection
+# only collects what the join needs and what takes a reader. `map_inputs(snap)` returns MapInputs (§3.1):
+#   intent_key; graph_version; now               # server clock, epoch seconds: an open attempt is measured to it
+#   nodes: [{slug, number, name, phase, execution, mode, lead_agent, reviewer, review_class,
+#            summary_confirmation, per_unit, consumes: [artifact], produces, requires_stage}]   # graph order
+#   rows: [StageRow]; status; phases: [[name, status]]   # the state file's, in file order
+#   current_stage                                # snapshot stage, else the state file's; dropped by a Completed status
+#   directive_stage                              # only when the directive's digest matches the state file
+#   scope_grid: {slug: "EXECUTE"|"SKIP"}         # this intent's scope only (state Scope before the registry's)
+#   units; active_unit; artifacts: [ArtifactMeta]   # the record listing of `artifacts()`, grouped in the UI
+#   skip_reasons: {slug: str | None}             # parsed from the row suffix "SKIP: …" and `Stages to Skip`
+#   attempts: {slug: {started, ended | None}}    # epoch seconds: latest STAGE_STARTED → first STAGE_COMPLETED/SKIPPED
+#                                                # after it; an attempt whose times do not parse is absent
+# In the model: elapsed_secs = ended - started, or now - started while in_progress/awaiting_approval/revising;
+# gate only when in_scope and phase != initialization; a stage outside the five phases goes to one "unknown" lane.
 
 # MapModel keeps the full graph/state union for explicit full-workflow inspection.
 # MapPage defaults to in_scope stages from recorded EXECUTE/SKIP choices, including overrides.
@@ -1098,7 +1098,7 @@ class Projection:
     def derive_cards(self, snap: IntentSnapshot, *, findings: list[Finding], binding: BindingView | None,
                      install: InstallHealth, breakers: list[BreakerRow], live_actions: list[ActionRecord]) -> list[CardSeed]
         # CardSeed = everything HumanActionBroker.upsert_derived needs (type, stage, unit, severity, captured, evidence, dedupe_key)
-    def map(self, snap: IntentSnapshot) -> MapModel
+    def map_inputs(self, snap: IntentSnapshot) -> dict    # MapInputs (§3.1); ui/src/map/buildMap.ts joins them
     def artifacts(self, snap: IntentSnapshot) -> tuple[list[ArtifactMeta], bool]    # (metas, truncated)
     def operational_state(self, ...) -> str      # pure function, exposed for tests
     @staticmethod
@@ -2995,7 +2995,7 @@ Transactions run in the background after the 202; progress via `transaction.upda
 |---|---|---|---|
 | `GET /repos/{repo_id}/intents` `?space=&state=&include_archived=0|1&q=` | — | `{"intents": [IntentSummary], "spaces": [str], "active_space": str}` | `repo_not_found`, `repo_unavailable` |
 | `GET /repos/{repo_id}/intents/{intent}` | — | `{"intent": IntentDetail}` | `intent_not_found` |
-| `GET …/{intent}/map` `?density=overview|detailed|dependencies` | — | `{"map": MapModel}` | |
+| `GET …/{intent}/map` `?density=overview|detailed|dependencies` | — | `{"map_inputs": MapInputs}` — the UI assembles the `MapModel` (`buildMap`) | |
 | `GET …/{intent}/artifacts` `?stage=&unit=&kind=` | — | `{"artifacts": [ArtifactMeta], "truncated": bool, "count": int}` | |
 | `GET …/{intent}/artifacts/{artifact_id}` | — | `{"artifact": ArtifactMeta, "content": str|null, "encoding": "utf-8"|"binary", "truncated": bool, "review": {"verdict", "findings": [ReviewFinding]}|null, "toc": [{"level","text","anchor"}], "prior": {"available": bool, "source": "git"|null, "diff": str|null}}` — `?raw=1` → `text/markdown; charset=utf-8` body, `X-Artifact-Sha256` header | `artifact_not_found`, `too_large` |
 | `GET …/{intent}/questions` | — | `{"questions": QuestionsView|null, "mode": "degraded"|"structured", "host_cards": [HostQuestionCard], "slot_key": str|null}` | |
@@ -3361,7 +3361,10 @@ export interface QuestionsView { relpath: string; sha256: string; stage: string;
 export interface IntentDetail extends IntentSummary { state_sections: Record<string, Record<string, string>>; phases: [string, string][]; stages: StageRow[]; findings: Finding[]; actions: ActionCard[]; directive: Directive | null; recovery: Record<string, string> | null; markers: MarkersView; audit_tail: AuditEventView[]; questions: QuestionsView | null; artifacts_count: number; artifacts_truncated: boolean; git: GitObservation | null; binding: BindingView | null; engine: HarnessDir | null; active_directive_stage: string | null }
 
 // ---- map ----
-export interface MapUnit { unit: string; state: StageState; artifacts: ArtifactMeta[] }
+export interface MapNode { slug: string; number: string; name: string; phase: string; execution: MapStage['execution']; mode: string; lead_agent: string; reviewer: string | null; review_class: string | null; summary_confirmation: string | null; per_unit: boolean; consumes: string[]; produces: string[]; requires_stage: string[] }
+export interface MapAttempt { started: number; ended: number | null }   // epoch seconds
+export interface MapInputs { intent_key: string; graph_version: string | null; now: number; nodes: MapNode[]; rows: StageRow[]; status: string | null; phases: [string, string][]; current_stage: string | null; directive_stage: string | null; scope_grid: Record<string, string>; units: string[]; active_unit: string | null; artifacts: ArtifactMeta[]; skip_reasons: Record<string, string | null>; attempts: Record<string, MapAttempt> }   // GET …/map; buildMap(MapInputs) → MapModel
+export interface MapUnit { unit: string; state: StageState | 'excluded'; artifacts: ArtifactMeta[] }   // the active unit mirrors its stage
 export interface MapStage { slug: string; number: string; name: string; phase: string; state: StageState | 'excluded'; execution: 'ALWAYS' | 'CONDITIONAL'; in_scope: boolean; mode: string; agent: string; reviewer: string | null; review_class: string | null; gate: boolean; per_unit: boolean; summary_confirmation: string | null; consumes: string[]; produces: string[]; depends_on: string[]; dependents: string[]; elapsed_secs: number | null; artifacts: ArtifactMeta[]; skipped_reason: string | null; units: MapUnit[]; is_current: boolean; is_directive: boolean }
 export interface MapPhase { phase: string; status: string; stages: MapStage[]; counts: { total: number; in_scope: number; done: number; skipped: number } }
 export interface MapModel { intent_key: string; phases: MapPhase[]; counts: { stages_known: number; stages_selected: number; gates: number }; units: string[]; graph_version: string | null; stage_count: number }
@@ -3831,7 +3834,7 @@ Synthetic variants are built in `conftest.py` from the real files with the `fixt
 | `tests/test_repo_registry.py` | identity dev:ino vs fallback; case-aliased path dedupe (`duplicate_identity`); sensitive path refusal; relative path; rebind rules; availability states; `detect_install` per fixture (`payload`, `devdelta`, `v230`, `older`); preflight report shape; **fake_bun is never invoked with `--project-dir` during preflight/add/detect_install** (review P13); `own_engine_version` (A26): a repository whose only harness is `.claude` reports `status == "installed"`, `engine_dir == ".claude"` and `own_engine_version is None`; a `.kiro` repository reports its own harness version there; a repository holding both reports `.kiro` in both places; the unreadable-root branch reports the record's `installed_engine_version` only when `engine_dir == STUDIO_HARNESS_DIR`, else None |
 | `tests/test_aidlc_reader.py` | `parse_state_file` on every fixture state (32/33, v7/v8, real 2.1.1, synthetic v9/header-only/contradictory, Skeleton Stance without blank line); checkbox marks incl. `X/s/r`, en dash, `--`; intents.json legacy match; cursors (missing `active-space` → `default`); directive validation; audit split/merge/tie order/unknown events (`LOOP_RUN_STARTED`)/CRLF; questions: `- A.` and `A.` options, blank tags, `[Answer]: A, B`, multi-line `- ` continuation, `## Consolidated Summary Confirmation`, `## Plan Approval` (blank and `Approve Plan`), `## Post-approval Amendment` followed by a pending `## Q4.` (review P09); scope frontmatter (incl. project-composed); stage graph 32 & 33; review section; `stable_read` unstable path; token formulas incl. `evidence_digest` and `presence_baseline` (golden values); `read_workspace_signals` (dot-entries and symlinks skipped, the first cap in sorted order and `truncated` only past the cap, no recursion, README handed over whole — the broker cuts; a symlinked README or manifest skipped even when its target is inside the repository) |
 | `tests/test_consistency.py` | one test per finding code (positive + negative) incl. `interrupted_session`, `state_unreadable` grace via `first_unreadable_at`; blocking set; severity table |
-| `tests/test_projection.py` | operational state table (every rule, precedence) incl. gate card present → `WaitingForYou`, + Queued run → `Queued`, Interrupted → ReconciliationRequired → Queued (review P08/P17); card derivation per type incl. dedupe_key, question card decisions per pending checkpoint, `accept_as_is` offered only at `stage_attempt >= 4`; `sort_actions` golden order; map model (phases, per-unit, skipped reasons, dependents); artifacts listing caps/truncation; artifact_id |
+| `tests/test_projection.py` | operational state table (every rule, precedence) incl. gate card present → `WaitingForYou`, + Queued run → `Queued`, Interrupted → ReconciliationRequired → Queued (review P08/P17); card derivation per type incl. dedupe_key, question card decisions per pending checkpoint, `accept_as_is` offered only at `stage_attempt >= 4`; `sort_actions` golden order; map inputs (skip reasons, latest attempts, the scope's grid column, both sides of a graph drift); artifacts listing caps/truncation; artifact_id |
 | `tests/test_engine.py` | argv builders for every verb (golden argv, `intent-create` spelled exactly); kwargs validation; env scrub via fake_bun exit 98; deny list (fake_bun exit 99 never observed); `switch_cursor_sync` happy path + each mismatch code; explicit_user_only guard; static grep for denied tools in `backend/`; `test_allowlist_matches_payload_help` against the real payload with a real `bun` when present (review R04) |
 | `tests/test_leases.py` | an in-flight dispatched action is the execution lease (view fields, blocks admin work) and leaving flight releases it; uncertain/queued/terminal rows and a force stop hold nothing; the submit window and admin grants are exclusive; a second scheduler on the same data dir is refused by the file lock; a forked child that dies holding the lock leaves nothing held; generations increase and survive a restart; global cap across repositories (incl. two concurrent acquires); stale release recorded, not raised; `require_host_idle`, and a turn running in another session of the repository refuses both grant kinds |
 | `tests/test_sessions.py` | HostBridge feature detection (missing attrs → capability unavailable, no raise; missing `_in_stage_execution` → False); SlotView mapping from `to_dict` incl. busy predicates and `busy_reasons` golden; bind/slot_mismatch/slot_busy; takeover preview candidates; `recent_rows` includes `queued` rows; `find_delivery_row` matches `meta.studio_delivery_id` before content |
@@ -3853,7 +3856,8 @@ Synthetic variants are built in `conftest.py` from the real files with the `fixt
 
 Frontend (`ui/`, vitest): `i18n.parity.test.ts` (identical key sets, non-empty, `errors.<code>` covers `errorCodes.ts`),
 `route.test.ts` (parse/build round trip, defaults, injection-safe params), `sort.test.ts` (golden order for a 12-card
-fixture per organize mode; equal priority → oldest first), `wire.test.ts` (`WIRE` equals `docs/design/wire-text.json`
+fixture per organize mode; equal priority → oldest first), `buildMap.test.ts` (recorded v1 maps replayed from the
+backend's recorded `map_inputs`; one test per assembly rule), `wire.test.ts` (`WIRE` equals `docs/design/wire-text.json`
 `constants.*`; `wireTextFor` golden per decision incl. `answers` single/grouped/gated and the `golden.*` strings),
 `submit.test.ts` (two-phase state machine: stale, slot preflight `slot_missing`/`slot_mismatch_preflight`, delivered,
 queued, not_delivered, uncertain, delivery-report retry with `idempotent: true`, force-stop path), `reducers.test.ts`, `wizard.test.tsx` (the four steps and digest-bound Create; `the Advisor in the Preset step`:

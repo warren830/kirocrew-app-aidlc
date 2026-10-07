@@ -4,9 +4,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { I18nProvider } from '../i18n'
 import { buildRoute, EMPTY_ROUTE, parseRoute, type StudioRoute } from '../lib/route'
-import type { ArtifactMeta, ArtifactResponse, MapStage } from '../lib/types'
+import type { ArtifactMeta, ArtifactResponse } from '../lib/types'
 import { StudioApp } from '../shell/StudioApp'
-import { API_BASE, actionCard, artifactMeta, shellRoutes } from '../test/fixtures'
+import { API_BASE, actionCard, artifactMeta, mapInputs, mapNode, shellRoutes, stageRow } from '../test/fixtures'
 import { apiCalls, setApiRoutes, StubApiError, type RouteHandler } from '../test/stubs/app-sdk'
 
 const REPO = 'r_1'
@@ -44,26 +44,7 @@ function body(meta: ArtifactMeta): ArtifactResponse {
   }
 }
 
-function stage(slug: string, artifacts: ArtifactMeta[], over: Partial<MapStage> = {}): MapStage {
-  return {
-    slug, number: '3.5', name: slug, phase: 'construction', state: 'in_progress',
-    execution: 'ALWAYS', in_scope: true, mode: 'inline', agent: 'aidlc-developer-agent',
-    reviewer: null, review_class: null, gate: false, per_unit: true, summary_confirmation: null,
-    consumes: [], produces: [], depends_on: [], dependents: [], elapsed_secs: null, artifacts,
-    skipped_reason: null, units: [], is_current: true, is_directive: true, ...over,
-  }
-}
-
 function install(over: Record<string, RouteHandler> = {}) {
-  const stages = [
-    stage('requirements-analysis', [requirements], { state: 'completed', is_current: false, is_directive: false }),
-    stage('code-generation', [plan], {
-      units: [
-        { unit: UNIT, state: 'in_progress', artifacts: [unitPlan, unitCode] },
-        { unit: otherUnit.unit, state: 'not_started', artifacts: [otherUnit] },
-      ],
-    }),
-  ]
   const listing: RouteHandler = (_request, path) => {
     const query = new URL(path, 'http://localhost').searchParams
     const artifacts = files.filter((meta) =>
@@ -76,11 +57,16 @@ function install(over: Record<string, RouteHandler> = {}) {
     [`GET ${ROOT}/artifacts*`]: listing,
     ...Object.fromEntries(files.map((meta) => [`GET ${ROOT}/artifacts/${meta.artifact_id}`, () => body(meta)])),
     [`GET ${ROOT}/map`]: () => ({
-      map: {
-        intent_key: INTENT, graph_version: '2.7.1', stage_count: 2, units: [UNIT, otherUnit.unit],
-        counts: { stages_known: 2, stages_selected: 2, gates: 0 },
-        phases: [{ phase: 'construction', status: 'InProgress', stages, counts: { total: 2, in_scope: 2, done: 1, skipped: 0 } }],
-      },
+      map_inputs: mapInputs({
+        intent_key: INTENT, graph_version: '2.7.1', units: [UNIT, otherUnit.unit], active_unit: UNIT,
+        nodes: ['requirements-analysis', 'code-generation'].map((slug) => mapNode({
+          slug, number: '3.5', name: slug, phase: 'construction', lead_agent: 'aidlc-developer-agent',
+          per_unit: slug === 'code-generation',
+        })),
+        rows: [stageRow('requirements-analysis', 'completed'), stageRow('code-generation', 'in_progress')],
+        phases: [['Construction', 'InProgress']],
+        current_stage: 'code-generation', directive_stage: 'code-generation', artifacts: files,
+      }),
     }),
     [`GET ${ROOT}`]: () => ({
       intent: { repo_id: REPO, repo_label: 'calculator', slug: INTENT, archived: false, paused: false, audit_tail: [] },

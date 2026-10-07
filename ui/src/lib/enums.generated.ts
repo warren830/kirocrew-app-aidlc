@@ -57,3 +57,6 @@ export const TERMINAL_ACTION_STATUS: readonly ActionStatus[] = ["StateChanged", 
 export const MACHINE_LANE_REASON = "s12_unproven"
 export const ACCEPT_AS_IS_MIN_ATTEMPT = 4
 export const DEEP_LINK_BASE = "/apps/aidlc-studio"
+
+/** Stages run once per Construction unit: the map's unit lanes for a stage the graph does not know. */
+export const PER_UNIT_STAGES: readonly string[] = ["functional-design", "nfr-requirements", "nfr-design", "infrastructure-design", "code-generation"]

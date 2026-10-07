@@ -178,15 +178,19 @@ def test_an_unknown_intent_is_a_404_and_a_malformed_key_is_a_400(sv, routes, fak
     assert status == 400 and body["code"] == "bad_param"
 
 
-def test_the_map_joins_the_graph_with_the_state_file(sv, routes, fake_host, repo):
+def test_the_map_sends_the_graph_and_the_state_rows_for_the_ui_to_join(sv, routes, fake_host, repo):
     path = base(repo, "/map")
     status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))
-    assert status == 200
-    model = body["map"]
-    assert set(model) == {"intent_key", "phases", "counts", "units", "graph_version", "stage_count"}
-    assert model["intent_key"] == INTENT
-    stages = [stage for phase in model["phases"] for stage in phase["stages"]]
-    assert any(stage["slug"] == STAGE for stage in stages)
+    assert status == 200 and set(body) == {"map_inputs"}
+    inputs = body["map_inputs"]
+    assert set(inputs) == {
+        "intent_key", "graph_version", "now", "nodes", "rows", "status", "phases", "current_stage",
+        "directive_stage", "scope_grid", "units", "active_unit", "artifacts", "skip_reasons", "attempts",
+    }
+    assert inputs["intent_key"] == INTENT
+    assert any(node["slug"] == STAGE for node in inputs["nodes"])
+    assert any(row["slug"] == STAGE and row["state"] == "awaiting_approval" for row in inputs["rows"])
+    assert inputs["current_stage"] == inputs["directive_stage"] == STAGE
 
 
 def test_the_map_refuses_an_unknown_density(sv, routes, fake_host, repo):

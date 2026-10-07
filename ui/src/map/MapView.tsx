@@ -3,6 +3,8 @@
  *
  * The decisions worth knowing before changing anything here:
  *
+ *  - **The server sends facts, not the model.** `GET …/map` returns the graph, the state rows and what
+ *    only a reader can parse; `buildMap` joins them into the lanes here.
  *  - **Density is a rendering choice, not a query.** `GET …/map` validates `?density=` and then ignores
  *    it, because the model already carries every stage, its unit lanes and its edges. So the resource
  *    key deliberately excludes density: switching Overview → Dependencies must not cost a round trip or
@@ -37,6 +39,7 @@ import { Chip } from '../shell/Chip'
 import { Icon } from '../shell/Icon'
 import { useShellData } from '../shell/StudioApp'
 import type { ViewProps } from '../shell/ViewRouter'
+import { buildMap } from './buildMap'
 import { DensityControl } from './DensityControl'
 import { DependencyOverlay } from './DependencyOverlay'
 import { PhaseAccordion } from './PhaseAccordion'
@@ -141,7 +144,7 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
     { interval: 0 },
   )
 
-  const model = mapRes.data?.map ?? null
+  const model = useMemo(() => (mapRes.data ? buildMap(mapRes.data.map_inputs) : null), [mapRes.data])
   const detail = intentRes.data?.intent ?? null
 
   const graphPhases = useMemo<MapPhase[]>(() => {

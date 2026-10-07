@@ -1325,51 +1325,42 @@ def test_priority_group_table_covers_every_action_type(proj_mod, C):
 
 
 # --------------------------------------------------------------------------- #
-# map model
+# map inputs (the assembly is `ui/src/map/buildMap.ts`, pinned by `buildMap.test.ts`)
 # --------------------------------------------------------------------------- #
 
-
-def test_map_model_shape_and_counts(projection, repo_record, gate_repo, C):
-    snap = projection.snapshot(repo_record(gate_repo), "default", GATE_DIR)
-    model = projection.map(snap)
-    assert model.intent_key == GATE_DIR
-    assert [phase.phase for phase in model.phases] == list(C.PHASES)
-    assert model.stage_count == 33
-    assert model.graph_version == C.BUNDLED_ENGINE_VERSION
-    assert model.counts["stages_known"] == 33
-    total = sum(phase.counts["total"] for phase in model.phases)
-    assert total == 33
-    body = model.to_json()
-    assert set(body) == {"intent_key", "phases", "counts", "units", "graph_version", "stage_count"}
-    assert set(body["phases"][0]) == {"phase", "status", "stages", "counts"}
+MAP_INPUT_KEYS = {
+    "intent_key", "graph_version", "now", "nodes", "rows", "status", "phases", "current_stage",
+    "directive_stage", "scope_grid", "units", "active_unit", "artifacts", "skip_reasons", "attempts",
+}
+MAP_NODE_KEYS = {
+    "slug", "number", "name", "phase", "execution", "mode", "lead_agent", "reviewer", "review_class",
+    "summary_confirmation", "per_unit", "consumes", "produces", "requires_stage",
+}
 
 
-def test_map_stage_joins_graph_and_state_row(projection, repo_record, gate_repo):
-    model = projection.map(projection.snapshot(repo_record(gate_repo), "default", GATE_DIR))
-    stages = {stage.slug: stage for phase in model.phases for stage in phase.stages}
-    gate = stages[GATE_STAGE]
-    assert gate.number == "2.3"
-    assert gate.name == "Requirements Analysis"
-    assert gate.phase == "inception"
-    assert gate.state == "awaiting_approval"
-    assert gate.in_scope is True
-    assert gate.gate is True
-    assert gate.is_current is True
-    assert gate.is_directive is True
-    assert "requirements.md" in {a.name for a in gate.artifacts}
-    assert gate.summary_confirmation == "required"
-    # initialization stages never gate (FORMAT-NOTES §4: the graph has no `gate` key)
-    assert stages["workspace-scaffold"].gate is False
+def test_map_inputs_carry_the_graph_the_rows_and_the_cursor(projection, repo_record, gate_repo, clock, C):
+    inputs = projection.map_inputs(projection.snapshot(repo_record(gate_repo), "default", GATE_DIR))
+    assert set(inputs) == MAP_INPUT_KEYS
+    assert json.loads(json.dumps(inputs)) == inputs        # JSON-native: the route sends it as it is
+    assert inputs["intent_key"] == GATE_DIR
+    assert inputs["graph_version"] == C.BUNDLED_ENGINE_VERSION
+    assert inputs["now"] == clock.now()
+    assert len(inputs["nodes"]) == 33 and all(set(node) == MAP_NODE_KEYS for node in inputs["nodes"])
+    nodes = {node["slug"]: node for node in inputs["nodes"]}
+    gate = nodes[GATE_STAGE]
+    assert (gate["number"], gate["name"], gate["phase"]) == ("2.3", "Requirements Analysis", "inception")
+    assert gate["summary_confirmation"] == "required"
+    assert all(isinstance(name, str) for node in inputs["nodes"] for name in node["consumes"])
+    assert "workspace-scaffold" in nodes["workspace-detection"]["requires_stage"]
+    rows = {row["slug"]: row for row in inputs["rows"]}
+    assert len(rows) == 33 and rows[GATE_STAGE]["state"] == "awaiting_approval"
+    assert inputs["status"] == "Running"
+    assert inputs["current_stage"] == inputs["directive_stage"] == GATE_STAGE
+    assert {name.strip().lower(): value for name, value in inputs["phases"]}["initialization"] == "Verified"
+    assert any(meta["name"] == "requirements.md" and meta["stage"] == GATE_STAGE for meta in inputs["artifacts"])
 
 
-def test_map_dependencies_are_bidirectional(projection, repo_record, gate_repo):
-    model = projection.map(projection.snapshot(repo_record(gate_repo), "default", GATE_DIR))
-    stages = {stage.slug: stage for phase in model.phases for stage in phase.stages}
-    assert "workspace-scaffold" in stages["workspace-detection"].depends_on
-    assert "workspace-detection" in stages["workspace-scaffold"].dependents
-
-
-def test_map_skipped_reason_from_row_suffix_and_from_stages_to_skip(projection, repo_record, repo_builder):
+def test_map_inputs_skip_reasons_from_row_suffix_and_from_stages_to_skip(projection, repo_record, repo_builder):
     """Both spellings are real (FORMAT-NOTES §3)."""
     state = F.state_text(
         F.DEVDELTA_REMEDIATION,
@@ -1386,59 +1377,12 @@ def test_map_skipped_reason_from_row_suffix_and_from_stages_to_skip(projection, 
         .with_intent(GATE_DIR, state=state, audit=F.gate_open_audit(GATE_STAGE))
         .build()
     )
-    model = projection.map(projection.snapshot(repo_record(root), "default", GATE_DIR))
-    stages = {stage.slug: stage for phase in model.phases for stage in phase.stages}
-    assert stages["market-research"].in_scope is False
-    assert stages["market-research"].skipped_reason is None       # suffix is a bare "SKIP"
-    assert stages["intent-capture"].skipped_reason == "greenfield"
-    assert stages[GATE_STAGE].in_scope is True
-
-
-@pytest.mark.parametrize("mark, expected_state", [
-    (" ", "excluded"), ("S", "skipped"), ("x", "completed"),
-])
-def test_map_out_of_plan_rows_remain_visible_without_gates(
-    projection, repo_record, repo_builder, mark, expected_state,
-):
-    slug = "deployment-execution"
-    state = F.state_text(marks={slug: mark}, modes={slug: "SKIP"})
-    root = (
-        repo_builder.with_engine("payload").with_workspace()
-        .with_intent(GATE_DIR, state=state).build()
-    )
-    model = projection.map(projection.snapshot(repo_record(root), "default", GATE_DIR))
-    rows = {stage["slug"]: stage for phase in model.to_json()["phases"] for stage in phase["stages"]}
-    assert len(rows) == 33
-    assert rows[slug]["in_scope"] is False
-    assert rows[slug]["state"] == expected_state
-    assert rows[slug]["gate"] is False
-    assert model.counts["gates"] == sum(row["gate"] for row in rows.values())
-
-
-def test_map_effective_stage_selection_overrides_the_scope_preset(
-    projection, repo_record, repo_builder,
-):
-    state = F.state_text(
-        fields={"Scope": "express", "Status": "Running", "Current Stage": GATE_STAGE},
-        marks={"user-stories": " ", "deployment-execution": " "},
-        modes={"user-stories": "EXECUTE", "deployment-execution": "SKIP"},
-    )
-    root = (
-        repo_builder.with_engine("payload").with_workspace()
-        .with_intent(GATE_DIR, state=state).build()
-    )
-    snap = projection.snapshot(repo_record(root), "default", GATE_DIR)
-    assert snap.grid["express"]["user-stories"] == "SKIP"
-    assert snap.grid["express"]["deployment-execution"] == "EXECUTE"
-    model = projection.map(snap)
-    stages = {stage.slug: stage for phase in model.phases for stage in phase.stages}
-    assert stages["user-stories"].in_scope is True
-    assert stages["user-stories"].state == "not_started"
-    assert stages["user-stories"].gate is True
-    assert stages["deployment-execution"].in_scope is False
-    assert stages["deployment-execution"].state == "excluded"
-    assert stages["deployment-execution"].gate is False
-    assert all(not stage.gate for stage in stages.values() if stage.phase == "initialization")
+    inputs = projection.map_inputs(projection.snapshot(repo_record(root), "default", GATE_DIR))
+    reasons = inputs["skip_reasons"]
+    assert next(row for row in inputs["rows"] if row["slug"] == "market-research")["suffix"] == "SKIP"
+    assert "market-research" in reasons and reasons["market-research"] is None    # a bare "SKIP"
+    assert reasons["intent-capture"] == "greenfield"
+    assert GATE_STAGE not in reasons
 
 
 def _legacy_map_snapshot(
@@ -1460,83 +1404,20 @@ def _legacy_map_snapshot(
     return snap
 
 
-@pytest.mark.parametrize("mark, expected_state", [
-    ("?", "awaiting_approval"), ("-", "in_progress"), (" ", "not_started"), ("x", "completed"),
-])
-def test_map_suffixless_rows_use_the_current_scope_grid(
-    projection, repo_record, repo_builder, mark, expected_state,
-):
-    snap = _legacy_map_snapshot(projection, repo_record, repo_builder, mark=mark)
-    assert snap.grid["feature"][GATE_STAGE] == "EXECUTE"
-    model = projection.map(snap)
-    stages = {stage.slug: stage for phase in model.phases for stage in phase.stages}
-    stage = stages[GATE_STAGE]
-    assert stage.in_scope is True and stage.gate is True
-    assert stage.state == expected_state and stage.is_current is True
-    assert stages["workspace-scaffold"].in_scope is True
-    assert stages["workspace-scaffold"].gate is False
-
-
-def test_map_suffixless_rows_use_state_scope_before_birth_scope(
-    projection, repo_record, repo_builder,
-):
+def test_map_inputs_send_the_state_scope_grid_before_the_birth_scope(projection, repo_record, repo_builder):
+    """A suffixless legacy row falls back to this column, so it must be the scope the workflow runs now."""
     slug = "user-stories"
     snap = _legacy_map_snapshot(projection, repo_record, repo_builder, mark=" ", stage=slug)
-    assert snap.state.project["Scope"] == "feature"
-    assert snap.row.scope == "poc"
-    assert snap.grid["feature"][slug] == "EXECUTE"
-    assert snap.grid["poc"][slug] == "SKIP"
-    model = projection.map(snap)
-    stage = next(stage for phase in model.phases for stage in phase.stages if stage.slug == slug)
-    assert stage.in_scope is True and stage.gate is True
-    assert stage.state == "not_started" and stage.is_current is True
+    assert snap.state.project["Scope"] == "feature" and snap.row.scope == "poc"
+    assert (snap.grid["feature"][slug], snap.grid["poc"][slug]) == ("EXECUTE", "SKIP")
+    inputs = projection.map_inputs(snap)
+    assert inputs["scope_grid"] == snap.grid["feature"]
+    assert next(row for row in inputs["rows"] if row["slug"] == slug)["suffix"] is None
+    assert projection.map_inputs(replace(snap, grid={}))["scope_grid"] == {}
 
 
-@pytest.mark.parametrize("missing", ["grid", "scope", "stage"])
-@pytest.mark.parametrize("mark, selected", [("?", True), ("S", False)])
-def test_map_suffixless_known_rows_survive_an_unknown_grid(
-    projection, repo_record, repo_builder, missing, mark, selected,
-):
-    snap = _legacy_map_snapshot(projection, repo_record, repo_builder, mark=mark)
-    grid = {scope: dict(stages) for scope, stages in snap.grid.items()}
-    if missing == "grid":
-        grid.clear()
-    elif missing == "scope":
-        grid.pop("feature")
-    else:
-        grid["feature"].pop(GATE_STAGE)
-    model = projection.map(replace(snap, grid=grid))
-    stage = next(stage for phase in model.phases for stage in phase.stages if stage.slug == GATE_STAGE)
-    assert stage.in_scope is selected and stage.gate is selected
-    assert stage.state == ("awaiting_approval" if selected else "skipped")
-
-
-def test_map_suffixless_rows_respect_grid_skip_and_missing_nodes(
-    projection, repo_record, repo_builder,
-):
-    snap = _legacy_map_snapshot(projection, repo_record, repo_builder, mark=" ")
-    grid = {scope: dict(stages) for scope, stages in snap.grid.items()}
-    grid["feature"][GATE_STAGE] = "SKIP"
-    variants = [
-        replace(snap, grid=grid),
-        replace(snap, graph=tuple(node for node in snap.graph if node.slug != GATE_STAGE)),
-        replace(snap, state=replace(
-            snap.state, stages=[row for row in snap.state.stages if row.slug != GATE_STAGE]
-        )),
-    ]
-    for variant in variants:
-        model = projection.map(variant)
-        stage = next(
-            stage for phase in model.phases for stage in phase.stages if stage.slug == GATE_STAGE
-        )
-        assert stage.in_scope is False and stage.gate is False
-        assert stage.state == "excluded"
-
-
-def test_map_marks_a_graph_stage_the_plan_never_selected_as_excluded(
-    projection, repo_record, repo_builder
-):
-    """A v7 record (32 rows) read against the bundled 33-stage graph — the real drift case."""
+def test_map_inputs_keep_both_sides_of_a_graph_drift(projection, repo_record, repo_builder):
+    """A v7 record (32 rows) read against the bundled 33-stage graph; `buildMap` shows the union."""
     state = F.state_text(F.PAYLOAD_GATE_OPEN, tree=F.PAYLOAD_230)
     root = (
         repo_builder.with_engine("payload")
@@ -1544,18 +1425,14 @@ def test_map_marks_a_graph_stage_the_plan_never_selected_as_excluded(
         .with_intent(GATE_DIR, state=state, audit=F.gate_open_audit(GATE_STAGE))
         .build()
     )
-    model = projection.map(projection.snapshot(repo_record(root), "default", GATE_DIR))
-    stages = {stage.slug: stage for phase in model.phases for stage in phase.stages}
-    assert stages["contract-design"].state == "excluded"   # in the 33-graph, not in a v7 state file
-    assert stages["contract-design"].in_scope is False
-    assert stages["contract-design"].gate is False
-    assert "application-design" in stages                 # the v7 row the 33-graph does not know
-    assert stages["application-design"].number == ""
-    assert stages["application-design"].in_scope is True
-    assert stages["application-design"].gate is True
+    inputs = projection.map_inputs(projection.snapshot(repo_record(root), "default", GATE_DIR))
+    nodes = {node["slug"] for node in inputs["nodes"]}
+    rows = {row["slug"] for row in inputs["rows"]}
+    assert "contract-design" in nodes - rows       # in the 33-graph, not in a v7 state file
+    assert "application-design" in rows - nodes    # the v7 row the 33-graph does not know
 
 
-def test_map_per_unit_stages_expand_into_sub_rows(projection, repo_record, repo_builder):
+def test_map_inputs_carry_units_and_each_artifacts_stage_and_unit(projection, repo_record, repo_builder):
     """The real per-unit Construction layout (FORMAT-NOTES §8)."""
     state = F.state_text(
         marks={"code-generation": "-"},
@@ -1577,25 +1454,27 @@ def test_map_per_unit_stages_expand_into_sub_rows(projection, repo_record, repo_
     )
     snap = projection.snapshot(repo_record(root), "default", GATE_DIR)
     assert snap.units == ("ledger-export",)
-    model = projection.map(snap)
-    stages = {stage.slug: stage for phase in model.phases for stage in phase.stages}
-    codegen = stages["code-generation"]
-    assert codegen.per_unit is True
-    assert [unit.unit for unit in codegen.units] == ["ledger-export"]
-    assert {a.name for a in codegen.units[0].artifacts} == {"code-generation-plan.md"}
+    inputs = projection.map_inputs(snap)
+    assert inputs["units"] == ["ledger-export"]
+    nodes = {node["slug"]: node for node in inputs["nodes"]}
     # a once-per-workflow construction stage has no unit sub-rows
-    assert stages["build-and-test"].per_unit is False
-    assert stages["build-and-test"].units == ()
-    assert {a.name for a in stages["build-and-test"].artifacts} == {"build-test-results.md"}
-    assert model.units == ("ledger-export",)
+    assert nodes["code-generation"]["per_unit"] is True and nodes["build-and-test"]["per_unit"] is False
+    placed = {(meta["name"], meta["stage"], meta["unit"]) for meta in inputs["artifacts"]}
+    assert ("code-generation-plan.md", "code-generation", "ledger-export") in placed
+    assert ("build-test-results.md", "build-and-test", None) in placed
 
 
-def test_map_elapsed_measures_the_latest_attempt(projection, repo_record, repo_builder, clock):
+def test_map_inputs_attempts_are_each_stages_latest_attempt(projection, repo_record, repo_builder, clock, C):
     audit = F.audit_text(
         F.audit_block("STAGE_STARTED", "2026-09-04T08:00:00Z", Stage=GATE_STAGE),
         F.audit_block("STAGE_COMPLETED", "2026-09-04T08:10:00Z", Stage=GATE_STAGE),
         F.audit_block("STAGE_STARTED", "2026-09-04T09:00:00Z", Stage=GATE_STAGE),
         F.audit_block("STAGE_AWAITING_APPROVAL", "2026-09-04T09:00:03Z", Stage=GATE_STAGE),
+        F.audit_block("STAGE_STARTED", "2026-09-04T06:00:00Z", Stage="market-research"),
+        F.audit_block("STAGE_SKIPPED", "2026-09-04T06:05:00Z", Stage="market-research"),
+        F.audit_block("STAGE_STARTED", "2026-09-04T05:00:00Z", Stage="feasibility"),
+        F.audit_block("STAGE_COMPLETED", "yesterday", Stage="feasibility"),
+        F.audit_block("STAGE_STARTED", "soon", Stage="scope-definition"),
     )
     root = (
         repo_builder.with_engine("payload")
@@ -1603,22 +1482,26 @@ def test_map_elapsed_measures_the_latest_attempt(projection, repo_record, repo_b
         .with_intent(GATE_DIR, state=_gate_state(), audit=audit)
         .build()
     )
-    model = projection.map(projection.snapshot(repo_record(root), "default", GATE_DIR))
-    stages = {stage.slug: stage for phase in model.phases for stage in phase.stages}
-    # the stage is still open, so it is measured to now (10:00) from the LATEST start (09:00)
-    assert stages[GATE_STAGE].elapsed_secs == 3600
-    assert stages["workspace-scaffold"].elapsed_secs is None
+    inputs = projection.map_inputs(projection.snapshot(repo_record(root), "default", GATE_DIR))
+    at = C.epoch_from_iso
+    # The open attempt is the LATEST start (09:00), which the UI measures to `now` (10:00). An attempt
+    # whose start or end does not parse is absent: its length is unknown.
+    assert inputs["attempts"] == {
+        GATE_STAGE: {"started": at("2026-09-04T09:00:00Z"), "ended": None},
+        "market-research": {"started": at("2026-09-04T06:00:00Z"), "ended": at("2026-09-04T06:05:00Z")},
+    }
+    assert inputs["now"] == clock.now() == at("2026-09-04T10:00:00Z")
 
 
 @pytest.mark.parametrize("zone", ["America/Los_Angeles", "Europe/Berlin", "UTC"])
-def test_map_elapsed_is_the_same_in_a_dst_timezone(
-    projection, repo_record, repo_builder, monkeypatch, request, zone
+def test_map_inputs_attempt_times_are_the_same_in_a_dst_timezone(
+    projection, repo_record, repo_builder, monkeypatch, request, clock, zone
 ):
     """An audit timestamp is UTC; converting it must not go through local time.
 
     The obvious local spelling (``mktime`` minus ``time.timezone``) is an hour off for half the year in
-    any DST zone, which showed here as "running for 2h" two minutes after a stage started. The machine
-    this suite is usually run on has no DST, so the zone is forced.
+    any DST zone, which showed on the map as "running for 2h" two minutes after a stage started. The
+    machine this suite is usually run on has no DST, so the zone is forced.
     """
     import time as time_module
 
@@ -1633,25 +1516,17 @@ def test_map_elapsed_is_the_same_in_a_dst_timezone(
         .with_intent(GATE_DIR, state=_gate_state(), audit=audit)
         .build()
     )
-    model = projection.map(projection.snapshot(repo_record(root), "default", GATE_DIR))
-    stages = {stage.slug: stage for phase in model.phases for stage in phase.stages}
-    assert stages[GATE_STAGE].elapsed_secs == 3600
+    inputs = projection.map_inputs(projection.snapshot(repo_record(root), "default", GATE_DIR))
+    assert clock.now() - inputs["attempts"][GATE_STAGE]["started"] == 3600
 
 
-def test_map_phase_status_comes_from_the_state_file(projection, repo_record, gate_repo):
-    model = projection.map(projection.snapshot(repo_record(gate_repo), "default", GATE_DIR))
-    status = {phase.phase: phase.status for phase in model.phases}
-    assert status["initialization"] == "Verified"
-    assert set(status) == set(("initialization", "ideation", "inception", "construction", "operation"))
-
-
-def test_map_of_an_unreadable_state_is_empty_but_valid(projection, repo_record, missing_repo):
-    model = projection.map(
+def test_map_inputs_of_an_unreadable_state_are_empty_but_valid(projection, repo_record, missing_repo):
+    inputs = projection.map_inputs(
         projection.snapshot(repo_record(missing_repo, availability="unavailable"), "default", GATE_DIR)
     )
-    assert model.phases == ()
-    assert model.counts == {"stages_known": 0, "stages_selected": 0, "gates": 0}
-    json.dumps(model.to_json())
+    assert (inputs["nodes"], inputs["rows"], inputs["phases"], inputs["status"]) == ([], [], [], None)
+    assert inputs["skip_reasons"] == {} and inputs["attempts"] == {}
+    json.dumps(inputs)
 
 
 # --------------------------------------------------------------------------- #
@@ -1919,7 +1794,7 @@ def test_the_read_model_never_writes_into_a_registered_repository(projection, re
     snap = projection.snapshot(repo_record(gate_repo), "default", GATE_DIR)
     projection.summarize(snap)
     projection.detail(snap)
-    projection.map(snap)
+    projection.map_inputs(snap)
     projection.artifacts(snap)
     projection.stable_boundary(snap)
     _seeds(projection, snap, breakers=[BreakerStub()], install=InstallStub())
@@ -1946,7 +1821,7 @@ def test_a_malformed_intent_dir_is_refused_rather_than_served_as_empty(
     assert exc.value.code == "bad_path"
 
 
-def test_map_without_an_engine_still_renders_the_state_rows(projection, repo_record, repo_builder):
+def test_map_inputs_without_an_engine_still_carry_the_state_rows(projection, repo_record, repo_builder):
     """A repo whose harness was removed still has a workflow on disk; the map must show it."""
     root = (
         repo_builder.with_workspace()
@@ -1955,14 +1830,11 @@ def test_map_without_an_engine_still_renders_the_state_rows(projection, repo_rec
     )
     snap = projection.snapshot(repo_record(root), "default", GATE_DIR)
     assert snap.engine is None and snap.graph == ()
-    model = projection.map(snap)
-    stages = {stage.slug: stage for phase in model.phases for stage in phase.stages}
-    assert len(stages) == 33
-    assert stages[GATE_STAGE].number == ""            # unknown without the graph, never invented
-    assert stages[GATE_STAGE].state == "awaiting_approval"
-    assert stages[GATE_STAGE].in_scope is True
-    assert model.stage_count == 33
-    assert model.graph_version is None
+    inputs = projection.map_inputs(snap)
+    assert inputs["nodes"] == [] and inputs["graph_version"] is None
+    rows = {row["slug"]: row for row in inputs["rows"]}
+    assert len(rows) == 33
+    assert (rows[GATE_STAGE]["state"], rows[GATE_STAGE]["suffix"]) == ("awaiting_approval", "EXECUTE")
 
 
 #: §1.12 `DECISIONS` (action type → allowed decision kinds). Mirrored here so a derived card that offers
@@ -2050,7 +1922,7 @@ def test_the_whole_read_model_never_writes_to_the_repository(projection, repo_re
     findings = [FindingStub("gate_without_audit_row", "blocking")]
     projection.summarize(snap, findings=findings)
     projection.detail(snap, findings=findings)
-    projection.map(snap)
+    projection.map_inputs(snap)
     projection.artifacts(snap)
     projection.evidence(snap, findings=findings)
     projection.questions_view(snap)
