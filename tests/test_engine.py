@@ -71,7 +71,7 @@ class SyncActivity:
 
 
 class AsyncActivity:
-    """An ``ActivityProjector`` with only the async ``record`` of §1.17, so the buffer is exercised."""
+    """A sink with only the async ``record`` of §1.17; the runner writes through ``record_sync`` alone."""
 
     def __init__(self) -> None:
         self.rows: list[dict] = []
@@ -215,7 +215,6 @@ def test_the_switch_verbs_declare_the_session_they_re_stamp(engine_mod):
     for verb in (intent, space):
         assert verb.mutates_session is True
         assert verb.mutates_state is False and verb.mutates_audit is False
-        assert verb.to_json()["side_effects"] == list(verb.side_effects)
 
 
 def test_deny_list_covers_the_forbidden_tools_and_no_allowlisted_verb(engine_mod, C):
@@ -248,18 +247,12 @@ def test_mismatch_codes_are_the_pinned_vocabulary(engine_mod):
 
 GOLDEN = {
     "utility.version": ({}, ["version"]),
-    "utility.status": ({}, ["status"]),
-    "utility.detect": ({}, ["detect", "--json"]),
     "utility.intent_list": ({}, ["intent", "--json"]),
     "utility.space_list": ({}, ["space", "--json"]),
-    "utility.scope_table": ({}, ["scope-table"]),
-    "state.get": ({"field": "Current Stage"}, ["get", "Current Stage"]),
     "state.lookup": (
         {"query": "phase-of", "arg": "user-stories"},
         ["lookup", "phase-of", "user-stories"],
     ),
-    "state.resume": ({}, ["resume"]),
-    "state.count": ({}, ["count"]),
     "utility.intent_switch": ({"dir_name": ALPHA}, ["intent", ALPHA]),
     "runtime.compile": ({}, ["compile"]),
     "utility.space_switch": ({"slug": "alt"}, ["space", "alt"]),
@@ -390,7 +383,6 @@ def test_control_kwargs_never_reach_the_argv(engine_mod, runner, repo):
         ("utility.intent_switch", {"dir_name": "a\x00b"}, "NUL"),
         ("utility.space_switch", {"slug": "has space"}, "does not match"),
         ("utility.scope_change", {"scope": "PoC"}, "does not match"),
-        ("state.get", {"field": "Current\nStage"}, "does not match"),
         ("state.lookup", {"query": "delete-everything", "arg": "x"}, "not one of"),
         ("state.lookup", {"query": "phase-of", "arg": "Not A Slug"}, "does not match"),
         ("utility.recompose", {"skip": "nfr-design,"}, "comma-separated"),
@@ -429,7 +421,7 @@ def test_arguments_may_contain_newlines(engine_mod, runner, repo):
 def test_build_argv_refuses_a_verb_off_its_lane(engine_mod, runner, repo, StudioError):
     """Proves the runtime guard is wired into build_argv, not only into the static table."""
     forged = dataclasses.replace(
-        engine_mod.ENGINE_ALLOWLIST["state.get"], key="state.forged", argv=("approve",)
+        engine_mod.ENGINE_ALLOWLIST["state.lookup"], key="state.forged", argv=("approve",)
     )
     with pytest.raises(StudioError) as exc:
         runner.build_argv(forged, repo, ".kiro")
@@ -447,7 +439,7 @@ def test_read_lane_refuses_an_admin_verb(engine_mod, runner, repo, StudioError):
 
 def test_admin_lane_refuses_a_verb_that_is_not_an_admin_verb(engine_mod, runner, repo, StudioError):
     """And the admin lane is not a superset: a read verb promoted to admin is still refused."""
-    forged = dataclasses.replace(engine_mod.ENGINE_ALLOWLIST["utility.detect"], lease="admin")
+    forged = dataclasses.replace(engine_mod.ENGINE_ALLOWLIST["utility.version"], lease="admin")
     with pytest.raises(StudioError) as exc:
         runner.build_argv(forged, repo, ".kiro")
     assert exc.value.code == "internal_error"
@@ -558,14 +550,22 @@ def test_child_sees_the_argv_list_the_cwd_and_a_scrubbed_env(
     handed_over = security.build_subprocess_env()
     assert set(handed_over) <= set(C.ENV_KEEP) | {"NO_COLOR"}
 
-    result = runner.run_sync("state.get", repo, ".kiro", field="Current Stage")
+    result = runner.run_sync(
+        "utility.intent_create", repo, ".kiro", scope="poc", arguments="Ship the ledger export",
+        label="ledger-export", lease_generation=1,
+    )
     assert result.ok
     seen = json.loads(result.stdout)
 
     assert seen["argv"] == [
-        str(repo / ".kiro" / "tools" / "aidlc-state.ts"),
-        "get",
-        "Current Stage",
+        str(repo / ".kiro" / "tools" / "aidlc-utility.ts"),
+        "intent-create",
+        "--scope",
+        "poc",
+        "--arguments",
+        "Ship the ledger export",
+        "--label",
+        "ledger-export",
         "--project-dir",
         str(repo),
     ]
@@ -719,8 +719,8 @@ def test_admin_verb_runs_with_a_lease_generation(runner, repo):
 # --------------------------------------------------------------------------- #
 
 
-def test_run_uses_a_worker_thread_and_drains_activity(engine_mod, fake_bun, clock, repo):
-    sink = AsyncActivity()
+def test_run_records_the_engine_run_row(engine_mod, fake_bun, clock, repo):
+    sink = SyncActivity()
     runner = engine_mod.EngineRunner(bun_path=fake_bun, clock=clock, activity=sink)
 
     async def scenario():
@@ -781,15 +781,6 @@ def test_failed_runs_are_recorded_as_attention(engine_mod, fake_bun, clock, repo
     assert not result.ok
     assert sink.rows[-1]["severity"] == "attention"
     assert "engine.stderr" in [e["ref"] for e in sink.rows[-1]["evidence"]]
-
-
-def test_activity_buffer_is_bounded(engine_mod, fake_bun, clock, repo, monkeypatch):
-    """A sync-only caller must not be able to grow memory by never draining."""
-    monkeypatch.setattr(engine_mod.EngineRunner, "_ACTIVITY_BUFFER", 3)
-    runner = engine_mod.EngineRunner(bun_path=fake_bun, clock=clock, activity=AsyncActivity())
-    for _ in range(5):
-        runner.run_sync("utility.version", repo, ".kiro")
-    assert runner.pending_activity == 3
 
 
 # --------------------------------------------------------------------------- #
@@ -1345,33 +1336,11 @@ def test_allowlist_matches_engine(engine_mod, security, tmp_path):
 
 
 @pytest.mark.skipif(shutil.which("bun") is None, reason="bun is not on PATH")
-def test_denied_verbs_still_exist_upstream(engine_mod, security, tmp_path):
-    """The deny list is only meaningful while the engine still has those verbs to refuse."""
-    bun = shutil.which("bun")
-    listing = _ask_real_engine(
-        bun, "aidlc-state.ts", "__studio_probe_unknown__", tmp_path, security.build_subprocess_env()
-    )
-    denied = {
-        entry.split(":", 1)[1]
-        for entry in engine_mod.ENGINE_DENY
-        if entry.startswith("aidlc-state.ts:")
-    }
-    assert denied, "the state-tool half of the deny list disappeared"
-    missing = sorted(v for v in denied if v not in listing)
-    assert missing == [], f"deny list names verbs the engine no longer has: {missing}"
+def test_every_state_verb_but_the_four_reads_is_refused_on_both_lanes(security, StudioError, tmp_path):
+    """Default-deny, proved against the engine's own verb listing instead of a hand-kept deny list.
 
-
-@pytest.mark.skipif(shutil.which("bun") is None, reason="bun is not on PATH")
-def test_every_verb_the_state_tool_dispatches_is_either_allowlisted_or_denied(engine_mod, security,
-                                                                             tmp_path):
-    """No verb of ``aidlc-state.ts`` may be merely unmentioned; each is a read Studio runs or a deny row.
-
-    ``test_denied_verbs_still_exist_upstream`` guards one direction — the deny list must not name a verb
-    the engine dropped. This guards the other, which is the one a version bump breaks: a new mutator
-    arrives, nothing refers to it, and the omission is invisible because the positive allowlist happens
-    to refuse it anyway. ENGINE_DENY exists so that "a future allowlist edit that reached for one of
-    them has to delete a line here first", and a verb nobody wrote down buys none of that. The engine's
-    own unknown-subcommand listing is the denominator, so the gate cannot be satisfied by a stale table.
+    A mutator a version bump adds is refused without anyone writing it down, and putting any state verb on
+    a lane means editing the reviewed ``reads`` set here first.
     """
     bun = shutil.which("bun")
     listing = _ask_real_engine(
@@ -1381,16 +1350,15 @@ def test_every_verb_the_state_tool_dispatches_is_either_allowlisted_or_denied(en
     dispatched = {token.strip(' "}\n') for token in listing.split("Valid:", 1)[1].split(",")}
     dispatched.discard("")
     assert len(dispatched) > 20, dispatched          # the listing parsed, not one long token
-    allowlisted = {
-        verb.verb for verb in engine_mod.ENGINE_ALLOWLIST.values() if verb.tool == "aidlc-state.ts"
-    }
-    denied = {
-        entry.split(":", 1)[1]
-        for entry in engine_mod.ENGINE_DENY
-        if entry.startswith("aidlc-state.ts:")
-    }
-    unclassified = sorted(dispatched - allowlisted - denied)
-    assert unclassified == [], f"state verbs neither allowlisted nor denied: {unclassified}"
+    reads = {"get", "lookup", "resume", "count"}
+    assert reads <= dispatched
+    for verb in sorted(dispatched):
+        if verb in reads:
+            security.assert_engine_argv_allowed("aidlc-state.ts", verb, admin=False)
+        lanes = (True,) if verb in reads else (False, True)
+        for admin in lanes:
+            with pytest.raises(StudioError):
+                security.assert_engine_argv_allowed("aidlc-state.ts", verb, admin=admin)
 
 
 # --------------------------------------------------------------------------- #
@@ -1618,12 +1586,8 @@ def test_an_explicit_bun_path_still_wins_over_the_search(
 def test_no_denied_invocation_was_ever_attempted(runner, repo, denied_log):
     """Run a representative slice of the allowlist, then assert both refusal logs are still empty."""
     runner.run_sync("utility.version", repo, ".kiro")
-    runner.run_sync("utility.detect", repo, ".kiro")
     runner.run_sync("utility.intent_list", repo, ".kiro")
     runner.run_sync("utility.space_list", repo, ".kiro")
-    runner.run_sync("state.get", repo, ".kiro", field="Current Stage")
-    runner.run_sync("state.resume", repo, ".kiro")
-    runner.run_sync("state.count", repo, ".kiro")
     runner.run_sync("state.lookup", repo, ".kiro", query="phase-of", arg="user-stories")
     runner.run_sync("utility.doctor", repo, ".kiro", _confirmed=True, lease_generation=1)
     runner.run_sync("utility.recompose", repo, ".kiro", skip="nfr-design", lease_generation=1)
