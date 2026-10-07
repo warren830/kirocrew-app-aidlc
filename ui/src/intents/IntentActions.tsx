@@ -76,6 +76,9 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
     if (pending) confirmRef.current?.focus()
   }, [pending])
 
+  /** Waiting decisions and not paused: archiving goes through Paused first (PRD §11.2). */
+  const archiveNeedsPause = !intent.archived && !intent.paused && intent.open_actions > 0
+
   const fail = useCallback((caught: unknown) => {
     setError(caught instanceof StudioApiError ? caught : new StudioApiError('internal_error', String(caught), {}, 0))
   }, [])
@@ -99,6 +102,8 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
             : t('intents.unpaused.done'),
         )
       } else if (pending === 'archive') {
+        // PRD §11.2 archives from Paused: one confirmation names both steps, so nothing happens unasked.
+        if (archiveNeedsPause) await api.pause(intent.repo_id, intent.intent_key, true)
         await api.archiveIntent(intent.repo_id, intent.intent_key)
         onChanged(t('intents.archived.done'))
       } else {
@@ -111,7 +116,7 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
     } finally {
       setBusy(false)
     }
-  }, [api, intent, pending, onChanged, fail, i18n, t, run])
+  }, [api, intent, pending, onChanged, fail, i18n, t, run, archiveNeedsPause])
 
   const bound = Boolean(intent.session?.slot_key)
   // Unbound, a start would be refused `session_unbound`: the conversation button creates, binds and starts.
@@ -126,6 +131,17 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
       })
 
   const starting = pending === 'run' || pending === 'resume'
+  const pauseFirst = pending === 'archive' && archiveNeedsPause
+
+  /** The backend's archive refusals say why in `details.reason`; the generic code text does not. */
+  const errorText = (e: StudioApiError): string => {
+    if (e.code === 'action_not_submittable' && e.details['operation'] === 'archive') {
+      return e.details['reason'] === 'in_flight'
+        ? t('intents.archive.inFlight')
+        : plural(i18n, 'intents.archive.pauseFirst', Math.max(1, intent.open_actions))
+    }
+    return e.known ? t(`errors.${e.code}`) : e.message
+  }
 
   return (
     <div className="studio-col studio-intent-actions" role="group" aria-label={t('intents.action.a11y', { intent: intent.intent_dir })}>
@@ -234,7 +250,7 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
       {error ? (
         <p className="studio-banner" data-tone="danger" role="alert">
           <Icon name="warn" size={13} />
-          <span className="studio-grow">{error.known ? t(`errors.${error.code}`) : error.message}</span>
+          <span className="studio-grow">{errorText(error)}</span>
         </p>
       ) : null}
 
@@ -257,8 +273,18 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
             if (event.key === 'Escape') setPending(null)
           }}
         >
-          <h3>{t(`intents.confirm.${pending}.title`)}</h3>
-          <p>{t(`intents.confirm.${pending}.body`, { text: starting ? startText(pending as StartKind) : '' })}</p>
+          <h3>{t(pauseFirst ? 'intents.confirm.archive.pauseFirst.title' : `intents.confirm.${pending}.title`)}</h3>
+          <p>
+            {pauseFirst
+              ? plural(i18n, 'intents.confirm.archive.pauseFirst.body', intent.open_actions)
+              : t(`intents.confirm.${pending}.body`, { text: starting ? startText(pending as StartKind) : '' })}
+          </p>
+          {pending === 'archive' && !pauseFirst && intent.open_actions > 0 ? (
+            <p className="studio-consequence">
+              <Icon name="info" size={13} />
+              <span>{plural(i18n, 'intents.confirm.archive.hidden', intent.open_actions)}</span>
+            </p>
+          ) : null}
           {pending === 'pause' && intent.open_actions > 0 ? (
             <p className="studio-consequence" data-tone="warn">
               <Icon name="warn" size={13} />
@@ -273,7 +299,9 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
               disabled={busy}
               onClick={() => void confirm()}
             >
-              {starting ? t('intents.start.send', { text: startText(pending as StartKind) }) : t('intents.confirm.go')}
+              {starting
+                ? t('intents.start.send', { text: startText(pending as StartKind) })
+                : pauseFirst ? t('intents.confirm.archive.pauseFirst.go') : t('intents.confirm.go')}
             </button>
             <button type="button" className="studio-btn studio-btn-sm" disabled={busy} onClick={() => setPending(null)}>
               {t('common.cancel')}

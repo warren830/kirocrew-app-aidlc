@@ -1006,6 +1006,9 @@ var D = Object.defineProperty, O = (e, t) => {
 	"intents.approval.waiting": "The conversation is waiting for you to approve a tool call.",
 	"intents.approval.waitingFor": "{label} is waiting for you to approve a tool call.",
 	"intents.approval.where": "Allow, trust or reject it in the conversation.",
+	"intents.archive.inFlight": "A decision for this intent is being delivered, or its outcome is not settled yet. Archive it once that decision has an outcome.",
+	"intents.archive.pauseFirst_one": "It still has {n} decision waiting for you. Pause it, then archive.",
+	"intents.archive.pauseFirst_other": "It still has {n} decisions waiting for you. Pause it, then archive.",
 	"intents.archived.done": "Archived in Studio only. No AI-DLC file changed.",
 	"intents.archivedChip": "Archived",
 	"intents.blocking_one": "{n} blocking finding",
@@ -1018,6 +1021,12 @@ var D = Object.defineProperty, O = (e, t) => {
 	"intents.col.stage": "Stage",
 	"intents.col.state": "State",
 	"intents.confirm.archive.body": "Archiving hides the intent from the default views. It changes no AI-DLC file on disk and can be undone.",
+	"intents.confirm.archive.hidden_one": "Its {n} waiting decision is hidden from the Action Center until you restore it.",
+	"intents.confirm.archive.hidden_other": "Its {n} waiting decisions are hidden from the Action Center until you restore it.",
+	"intents.confirm.archive.pauseFirst.body_one": "It still has {n} decision waiting for you, so it is paused first: while paused, nothing is sent to its conversation. The waiting decision is hidden from the Action Center while the intent is archived and comes back when you restore it. No AI-DLC file on disk changes.",
+	"intents.confirm.archive.pauseFirst.body_other": "It still has {n} decisions waiting for you, so it is paused first: while paused, nothing is sent to its conversation. The waiting decisions are hidden from the Action Center while the intent is archived and come back when you restore it. No AI-DLC file on disk changes.",
+	"intents.confirm.archive.pauseFirst.go": "Pause and archive",
+	"intents.confirm.archive.pauseFirst.title": "Pause and archive this intent?",
 	"intents.confirm.archive.title": "Archive this intent?",
 	"intents.confirm.go": "Confirm",
 	"intents.confirm.pause.blocked_one": "{n} waiting decision will refuse to send while this intent is paused.",
@@ -3278,6 +3287,9 @@ var D = Object.defineProperty, O = (e, t) => {
 	"intents.approval.waiting": "会话在等你批准一个工具调用。",
 	"intents.approval.waitingFor": "{label} 在等你批准一个工具调用。",
 	"intents.approval.where": "在会话里选择允许、信任或拒绝。",
+	"intents.archive.inFlight": "这个意图有一个决策正在送达，或者结果还没确定。等它有了结果再归档。",
+	"intents.archive.pauseFirst_one": "它还有 {n} 个决策在等你处理。先暂停，再归档。",
+	"intents.archive.pauseFirst_other": "它还有 {n} 个决策在等你处理。先暂停，再归档。",
 	"intents.archived.done": "只在 Studio 中归档。没有改动任何 AI-DLC 文件。",
 	"intents.archivedChip": "已归档",
 	"intents.blocking_one": "{n} 条阻塞发现",
@@ -3290,6 +3302,12 @@ var D = Object.defineProperty, O = (e, t) => {
 	"intents.col.stage": "阶段",
 	"intents.col.state": "状态",
 	"intents.confirm.archive.body": "归档只是在默认视图里隐藏它，不会改动磁盘上任何 AI-DLC 文件，并且可以撤销。",
+	"intents.confirm.archive.hidden_one": "恢复之前，它的 {n} 个待处理决策会从待办中心隐藏。",
+	"intents.confirm.archive.hidden_other": "恢复之前，它的 {n} 个待处理决策会从待办中心隐藏。",
+	"intents.confirm.archive.pauseFirst.body_one": "它还有 {n} 个决策在等你处理，所以会先暂停：暂停期间不会往它的会话发送任何内容。归档期间这个决策会从待办中心隐藏，恢复后重新出现。磁盘上的 AI-DLC 文件不会有任何改动。",
+	"intents.confirm.archive.pauseFirst.body_other": "它还有 {n} 个决策在等你处理，所以会先暂停：暂停期间不会往它的会话发送任何内容。归档期间这些决策会从待办中心隐藏，恢复后重新出现。磁盘上的 AI-DLC 文件不会有任何改动。",
+	"intents.confirm.archive.pauseFirst.go": "暂停并归档",
+	"intents.confirm.archive.pauseFirst.title": "暂停并归档这个意图？",
 	"intents.confirm.archive.title": "归档这个意图？",
 	"intents.confirm.go": "确认",
 	"intents.confirm.pause.blocked_one": "暂停期间，{n} 个等待中的决策将拒绝发送。",
@@ -12826,9 +12844,9 @@ function Wa({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 	]), o(() => {
 		g && S.current?.focus();
 	}, [g]);
-	let T = i((e) => {
+	let T = !t.archived && !t.paused && t.open_actions > 0, E = i((e) => {
 		x(e instanceof U ? e : new U("internal_error", String(e), {}, 0));
-	}, []), E = i(async () => {
+	}, []), D = i(async () => {
 		if (g) {
 			if (g === "run" || g === "resume") {
 				_(null), x(null), await C.start(t, g);
@@ -12839,10 +12857,10 @@ function Wa({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 				if (g === "pause" || g === "unpause") {
 					let n = await e.pause(t.repo_id, t.intent_key, g === "pause");
 					a(g === "pause" ? q(f, "intents.paused.done", n.blocked_actions.length) : p("intents.unpaused.done"));
-				} else g === "archive" ? (await e.archiveIntent(t.repo_id, t.intent_key), a(p("intents.archived.done"))) : (await e.restoreIntent(t.repo_id, t.intent_key), a(p("intents.restored.done")));
+				} else g === "archive" ? (T && await e.pause(t.repo_id, t.intent_key, !0), await e.archiveIntent(t.repo_id, t.intent_key), a(p("intents.archived.done"))) : (await e.restoreIntent(t.repo_id, t.intent_key), a(p("intents.restored.done")));
 				_(null);
 			} catch (e) {
-				T(e);
+				E(e);
 			} finally {
 				y(!1);
 			}
@@ -12852,14 +12870,15 @@ function Wa({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 		t,
 		g,
 		a,
-		T,
+		E,
 		f,
 		p,
-		C
-	]), D = !!t.session?.slot_key, O = Ba(t, p) ?? (D ? null : p("intents.run.disabledUnbound")), k = !!t.disk.parked_at, A = t.disk.status === "Running" && !t.archived, j = A ? null : p("plan.issue.recompose_not_allowed", {
+		C,
+		T
+	]), O = !!t.session?.slot_key, k = Ba(t, p) ?? (O ? null : p("intents.run.disabledUnbound")), A = !!t.disk.parked_at, j = t.disk.status === "Running" && !t.archived, M = j ? null : p("plan.issue.recompose_not_allowed", {
 		required_status: "Running",
 		status: t.disk.status ?? p("common.unavailable")
-	}), M = g === "run" || g === "resume";
+	}), N = g === "run" || g === "resume", P = g === "archive" && T, F = (e) => e.code === "action_not_submittable" && e.details.operation === "archive" ? e.details.reason === "in_flight" ? p("intents.archive.inFlight") : q(f, "intents.archive.pauseFirst", Math.max(1, t.open_actions)) : e.known ? p(`errors.${e.code}`) : e.message;
 	return /* @__PURE__ */ h("div", {
 		className: "studio-col studio-intent-actions",
 		role: "group",
@@ -12868,11 +12887,11 @@ function Wa({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 			/* @__PURE__ */ h("div", {
 				className: "studio-row studio-wrap",
 				children: [
-					k ? /* @__PURE__ */ h("button", {
+					A ? /* @__PURE__ */ h("button", {
 						type: "button",
 						className: "studio-btn studio-btn-sm",
-						disabled: v || C.busy || O !== null,
-						...O ? { title: O } : {},
+						disabled: v || C.busy || k !== null,
+						...k ? { title: k } : {},
 						onClick: () => _("resume"),
 						children: [/* @__PURE__ */ m(Y, {
 							name: "play",
@@ -12881,8 +12900,8 @@ function Wa({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 					}) : /* @__PURE__ */ h("button", {
 						type: "button",
 						className: "studio-btn studio-btn-sm",
-						disabled: v || C.busy || O !== null,
-						...O ? { title: O } : {},
+						disabled: v || C.busy || k !== null,
+						...k ? { title: k } : {},
 						onClick: () => _("run"),
 						children: [/* @__PURE__ */ m(Y, {
 							name: "play",
@@ -12891,13 +12910,13 @@ function Wa({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 					}),
 					/* @__PURE__ */ h("button", {
 						type: "button",
-						className: `studio-btn studio-btn-sm${D ? "" : " studio-btn-primary"}`,
+						className: `studio-btn studio-btn-sm${O ? "" : " studio-btn-primary"}`,
 						disabled: v,
 						onClick: () => c(t),
 						children: [/* @__PURE__ */ m(Y, {
 							name: "link",
 							size: 13
-						}), p(D ? "intents.action.session" : "intents.action.bindSession")]
+						}), p(O ? "intents.action.session" : "intents.action.bindSession")]
 					}),
 					t.open_actions > 0 ? /* @__PURE__ */ h("button", {
 						type: "button",
@@ -12935,8 +12954,8 @@ function Wa({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 					/* @__PURE__ */ h("button", {
 						type: "button",
 						className: "studio-btn studio-btn-sm",
-						disabled: v || !A,
-						...j ? { title: j } : {},
+						disabled: v || !j,
+						...M ? { title: M } : {},
 						onClick: () => s(t),
 						children: [/* @__PURE__ */ m(Y, {
 							name: "doc",
@@ -12986,7 +13005,7 @@ function Wa({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 					size: 13
 				}), /* @__PURE__ */ m("span", {
 					className: "studio-grow",
-					children: b.known ? p(`errors.${b.code}`) : b.message
+					children: F(b)
 				})]
 			}) : null,
 			/* @__PURE__ */ m(Ha, { run: C }),
@@ -13003,8 +13022,15 @@ function Wa({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 					e.key === "Escape" && _(null);
 				},
 				children: [
-					/* @__PURE__ */ m("h3", { children: p(`intents.confirm.${g}.title`) }),
-					/* @__PURE__ */ m("p", { children: p(`intents.confirm.${g}.body`, { text: M ? Ra(g) : "" }) }),
+					/* @__PURE__ */ m("h3", { children: p(P ? "intents.confirm.archive.pauseFirst.title" : `intents.confirm.${g}.title`) }),
+					/* @__PURE__ */ m("p", { children: P ? q(f, "intents.confirm.archive.pauseFirst.body", t.open_actions) : p(`intents.confirm.${g}.body`, { text: N ? Ra(g) : "" }) }),
+					g === "archive" && !P && t.open_actions > 0 ? /* @__PURE__ */ h("p", {
+						className: "studio-consequence",
+						children: [/* @__PURE__ */ m(Y, {
+							name: "info",
+							size: 13
+						}), /* @__PURE__ */ m("span", { children: q(f, "intents.confirm.archive.hidden", t.open_actions) })]
+					}) : null,
 					g === "pause" && t.open_actions > 0 ? /* @__PURE__ */ h("p", {
 						className: "studio-consequence",
 						"data-tone": "warn",
@@ -13020,8 +13046,8 @@ function Wa({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 							className: "studio-btn studio-btn-primary studio-btn-sm",
 							ref: S,
 							disabled: v,
-							onClick: () => void E(),
-							children: M ? p("intents.start.send", { text: Ra(g) }) : p("intents.confirm.go")
+							onClick: () => void D(),
+							children: N ? p("intents.start.send", { text: Ra(g) }) : p(P ? "intents.confirm.archive.pauseFirst.go" : "intents.confirm.go")
 						}), /* @__PURE__ */ m("button", {
 							type: "button",
 							className: "studio-btn studio-btn-sm",

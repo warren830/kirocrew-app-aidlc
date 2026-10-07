@@ -928,8 +928,9 @@ class Reconciler:
 
         binding = await self._s.sessions.get(repo.repo_id, space, intent_dir)
         slot = self._s.host.slot(binding.slot_key) if binding.slot_key else None
-        if slot is not None and slot.approval is not None:
+        if slot is not None and slot.approval is not None and not binding.archived:
             # A run parked on a host tool approval waits silently in the chat; say so once per approval.
+            # Not for an archived intent: the user set it aside, and the queue does not list it either.
             try:
                 await self._s.notifications.notify_tool_approval(
                     repo_id=repo.repo_id, repo_label=repo.label, intent_key=snap.intent_key,

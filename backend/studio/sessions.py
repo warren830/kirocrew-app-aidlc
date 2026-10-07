@@ -143,6 +143,9 @@ DELIVERY_ROLES = ("user", "queued")
 #: decision offered on a ``ReconciliationRequired`` card, so blocking on every live card would deadlock
 #: the recovery path.
 IN_FLIGHT_ACTION_STATUS = ("Delivering", "Delivered", "Processing")
+#: Statuses whose decision may already have reached AI-DLC. Archiving waits for these to settle even on a
+#: paused intent: hiding one would hide the only place a delivered-but-unconfirmed decision is accounted for.
+ARCHIVE_BLOCKING_STATUS = IN_FLIGHT_ACTION_STATUS + ("DeliveryUncertain", "ReconciliationRequired")
 
 #: Why a slot is offered as a takeover candidate. ``current_binding`` is the classification of the slot
 #: the preview *excludes* — §2.3 returns it separately as ``current`` — and is therefore never attached
@@ -1578,6 +1581,14 @@ class SessionBinder:
             })
         return out
 
+    async def archived_intents(self) -> frozenset[tuple[str, str, str]]:
+        """``(repo_id, space, intent_dir)`` of every archived intent: what the queue sets aside (§11.2)."""
+        rows = await asyncio.to_thread(self._storage.select, _BINDINGS, {"archive_state": ARCHIVE_ARCHIVED})
+        return frozenset(
+            (_text(row.get("repo_id")), _text(row.get("space")) or C.DEFAULT_SPACE, _text(row.get("intent_dir")))
+            for row in rows
+        )
+
     async def canonical_slot_name(self, repo_id: str, intent_dir: str) -> str:
         """The slot name Studio asks the UI to create for this intent (§0.1)."""
         return C.SLOT_KEY_TEMPLATE.format(repo_id=repo_id, intent_dir=intent_dir)
@@ -1764,14 +1775,21 @@ class SessionBinder:
     ) -> BindingView:
         """Archive or restore the intent in Studio's own view (AI-DLC's files are untouched).
 
-        Archiving is refused while any card for the intent is still live: an archived intent is hidden
-        from the queue, and hiding a live card would lose the decision rather than close it. Restoring
-        is always allowed.
+        PRD §11.2 archives an intent from ``Paused`` (or a state with nothing waiting), never straight from
+        ``WaitingForYou``. So a card that only waits on the human refuses the archive until the intent is
+        paused; once paused, its waiting cards are set aside with it — hidden from the queue while it is
+        archived, back when it is restored, because they are derived from a boundary still on disk. A
+        decision that may already have reached AI-DLC (``ARCHIVE_BLOCKING_STATUS``) refuses it either way.
+        Restoring is always allowed.
         """
         row = await self._ensure(repo_id, space, intent_dir)
         want = bool(archived)
         if want:
-            await self._refuse_when_live(repo_id, space, intent_dir, operation="archive")
+            await self._refuse_when_in_flight(
+                repo_id, space, intent_dir, operation="archive", statuses=ARCHIVE_BLOCKING_STATUS
+            )
+            if not row.get("paused"):
+                await self._refuse_when_live(repo_id, space, intent_dir, operation="archive")
         updated = await self._cas(
             row, {"archive_state": ARCHIVE_ARCHIVED if want else ARCHIVE_ACTIVE}, retry=True
         )
@@ -1908,15 +1926,22 @@ class SessionBinder:
         )
 
     async def _refuse_when_in_flight(
-        self, repo_id: str, space: str, intent_dir: str, *, operation: str
+        self,
+        repo_id: str,
+        space: str,
+        intent_dir: str,
+        *,
+        operation: str,
+        statuses: Sequence[str] = IN_FLIGHT_ACTION_STATUS,
     ) -> None:
-        rows = await self._actions_in(repo_id, space, intent_dir, IN_FLIGHT_ACTION_STATUS)
+        rows = await self._actions_in(repo_id, space, intent_dir, statuses)
         if rows:
             raise StudioError(
                 "action_not_submittable",
                 "a decision for this intent may still be in flight",
                 details={
                     "operation": operation,
+                    "reason": "in_flight",
                     "action_ids": [_text(r.get("action_id")) for r in rows],
                     "statuses": sorted({_text(r.get("status")) for r in rows}),
                 },
@@ -1932,6 +1957,7 @@ class SessionBinder:
                 "this intent still has live cards in the queue",
                 details={
                     "operation": operation,
+                    "reason": "live_not_paused",
                     "action_ids": [_text(r.get("action_id")) for r in rows],
                     "statuses": sorted({_text(r.get("status")) for r in rows}),
                 },

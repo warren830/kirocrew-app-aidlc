@@ -793,6 +793,35 @@ def test_archiving_is_refused_while_a_card_is_live(sv, routes, fake_host, repo, 
     assert status == 409 and body["code"] == "action_not_submittable"
 
 
+def test_a_paused_intent_archives_and_its_cards_leave_the_queue_until_restored(
+    sv, routes, fake_host, repo, slot, runnable_demo
+):
+    run = base(repo, "/run")
+    status, body = call(sv, routes, "POST", run, CT.owner_request("POST", run, host=fake_host, body={}))
+    assert status == 201
+    queued = body["action_id"]
+
+    def queue(**query: str) -> list[str]:
+        request = CT.owner_request("GET", "/actions", host=fake_host, query=query)
+        status, listed = call(sv, routes, "GET", "/actions", request)
+        assert status == 200, listed
+        return [card["action_id"] for card in listed["actions"]]
+
+    pause, archive, restore = base(repo, "/pause"), base(repo, "/archive"), base(repo, "/restore")
+    status, body = call(sv, routes, "POST", archive, CT.owner_request("POST", archive, host=fake_host, body={}))
+    assert status == 409 and body["details"]["reason"] == "live_not_paused"
+
+    call(sv, routes, "POST", pause, CT.owner_request("POST", pause, host=fake_host, body={"paused": True}))
+    status, _ = call(sv, routes, "POST", archive, CT.owner_request("POST", archive, host=fake_host, body={}))
+    assert status == 200
+    assert queued not in queue()
+    # The intent's own page still names it.
+    assert queued in queue(intent=INTENT)
+
+    call(sv, routes, "POST", restore, CT.owner_request("POST", restore, host=fake_host, body={}))
+    assert queued in queue()
+
+
 # --------------------------------------------------------------------------- #
 # helpers
 # --------------------------------------------------------------------------- #

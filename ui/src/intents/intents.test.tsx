@@ -110,6 +110,60 @@ describe('the intents inventory', () => {
     expect(onChanged).toHaveBeenCalledWith('Paused. 2 waiting decisions will now refuse to send.')
   })
 
+  it('archives an intent that is waiting on you by pausing it first, in one confirmation', async () => {
+    const calls: string[] = []
+    const api = {
+      pause: vi.fn(async () => {
+        calls.push('pause')
+        return { ok: true as const, binding: {} as never, blocked_actions: ['a_1', 'a_2'] }
+      }),
+      archiveIntent: vi.fn(async () => {
+        calls.push('archive')
+        return { ok: true as const, binding: {} as never }
+      }),
+    } as unknown as StudioApi
+    const onChanged = vi.fn()
+    render(
+      <I18nProvider>
+        <IntentActions api={api} intent={INTENT} onGo={() => {}} onQueued={() => {}} onChanged={onChanged} onRecompose={() => {}} onSession={() => {}} />
+      </I18nProvider>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'Archive' }))
+    // PRD §11.2 archives from Paused: the confirmation says so before anything happens.
+    expect(screen.getByText('Pause and archive this intent?')).toBeInTheDocument()
+    expect(screen.getByText(/It still has 2 decisions waiting for you, so it is paused first/)).toBeInTheDocument()
+    expect(calls).toEqual([])
+
+    await userEvent.click(screen.getByRole('button', { name: 'Pause and archive' }))
+    await waitFor(() => expect(calls).toEqual(['pause', 'archive']))
+    expect(api.pause).toHaveBeenCalledWith('r_1', 'default~250901-guest-checkout', true)
+    expect(onChanged).toHaveBeenCalledWith('Archived in Studio only. No AI-DLC file changed.')
+  })
+
+  it('says a decision is still on its way when the backend refuses an archive for that', async () => {
+    const api = {
+      pause: vi.fn(),
+      archiveIntent: vi.fn(async () => {
+        throw new StudioApiError('action_not_submittable', 'a decision for this intent may still be in flight',
+          { operation: 'archive', reason: 'in_flight' }, 409)
+      }),
+    } as unknown as StudioApi
+    render(
+      <I18nProvider>
+        <IntentActions api={api} intent={{ ...INTENT, paused: true }} onGo={() => {}} onQueued={() => {}} onChanged={() => {}} onRecompose={() => {}} onSession={() => {}} />
+      </I18nProvider>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'Archive' }))
+    expect(screen.getByText('Archive this intent?')).toBeInTheDocument()
+    expect(screen.getByText('Its 2 waiting decisions are hidden from the Action Center until you restore it.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+    expect(await screen.findByText(/A decision for this intent is being delivered/)).toBeInTheDocument()
+    expect(api.pause).not.toHaveBeenCalled()
+  })
+
   it('points at the Action Center when the run could not be sent', async () => {
     const runnable = { ...INTENT, operational_state: 'Idle' as const,
       counts: { ...INTENT.counts, awaiting_approval: 0 } }
