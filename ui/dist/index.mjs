@@ -64,7 +64,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"activity.advisor.requested": "Advisor draft requested. It reads only; it cannot move the workflow.",
 	"activity.breaker.opened": "Circuit opened after repeated matching failures. No further dispatch until it is reset.",
 	"activity.breaker.reset": "Circuit reset.",
-	"activity.calibration.cleared": "Estimate calibration history cleared.",
 	"activity.engine.run": "AI-DLC engine command run.",
 	"activity.evidence.action": "Action",
 	"activity.evidence.at": "Recorded at",
@@ -714,7 +713,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"errors.feedback_required": "Requesting changes needs a note saying what to change.",
 	"errors.git_missing": "git is not available, so repository observation is off.",
 	"errors.grouped_answers_unavailable": "Answering several questions in one message is not yet verified, so answer them one at a time or open the conversation.",
-	"errors.host_submission_unavailable": "Sending to the conversation is unavailable on this KiroCrew version.",
 	"errors.host_unavailable": "KiroCrew's session service is unavailable.",
 	"errors.identity_unprovable": "The repository's identity cannot be proven, so it cannot run work.",
 	"errors.illegal_transition": "That state change is not permitted.",
@@ -724,9 +722,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"errors.intent_not_found": "That intent is not on disk.",
 	"errors.intent_paused": "This intent is paused.",
 	"errors.internal_error": "Something went wrong inside AI-DLC Studio.",
-	"errors.internal_secret_invalid": "That request was not signed by this gateway.",
 	"errors.invalid_decision": "That decision is not offered for this item.",
-	"errors.invalid_settings": "Those settings are not valid.",
 	"errors.lease_lost": "The repository lease changed while the decision was being prepared, so nothing was sent.",
 	"errors.legacy_layout": "This repository uses the older AI-DLC layout.",
 	"errors.machine_lane_unavailable": "Unattended work is unavailable: no machine lane has been proven.",
@@ -750,16 +746,13 @@ var D = Object.defineProperty, O = (e, t) => {
 	"errors.sensitive_path": "That location is protected and cannot be read.",
 	"errors.session_busy": "The conversation is busy with a turn.",
 	"errors.session_unbound": "This intent has no conversation bound yet.",
-	"errors.slack_unavailable": "Slack is not connected.",
 	"errors.slot_busy": "The conversation is busy.",
 	"errors.slot_mismatch": "That conversation belongs to a different repository or agent.",
-	"errors.stage_not_found": "That stage is not in the installed stage graph.",
 	"errors.stale_generation": "Something else changed this record first.",
 	"errors.state_inconsistent": "AI-DLC's files disagree with each other, so nothing will be sent until that is resolved.",
 	"errors.state_version_migration_unconfirmed": "This repository's AI-DLC state is an older version, and upgrading it is not yet proven safe.",
 	"errors.storage_error": "Studio's own storage could not be written.",
 	"errors.storage_unavailable": "Studio's storage is not open.",
-	"errors.takeover_not_safe": "Taking over is only safe at a stable boundary.",
 	"errors.too_large": "That file is too large to show.",
 	"errors.too_many_repos": "The repository limit has been reached.",
 	"errors.transaction_not_found": "That transaction is not recorded.",
@@ -771,7 +764,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"estimate.a11y.exact": "Exact counts",
 	"estimate.active": "Active execution",
 	"estimate.confidence.low": "low confidence",
-	"estimate.confidence.medium": "medium confidence",
 	"estimate.coverage.item": "{slug} is off, so {artifacts} will not exist.",
 	"estimate.coverage.itemNone": "{slug} is off; it declares no artifact.",
 	"estimate.coverage.title": "Coverage you have already given up",
@@ -807,13 +799,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"estimate.exact.stages": "Stages selected",
 	"estimate.exact.title": "Exact counts",
 	"estimate.qualifier": "{kind} · {source} · {confidence}",
-	"estimate.qualifierSamples": "{kind} · {source} · {confidence} · {samples}",
 	"estimate.range": "range",
-	"estimate.samples.none": "no local history yet",
-	"estimate.samples_one": "{n} local sample",
-	"estimate.samples_other": "{n} local samples",
 	"estimate.source.assumption": "assumption",
-	"estimate.source.history_calibrated": "calibrated from local history",
 	"estimate.source.rule_band": "rule-based band",
 	"estimate.source.unknown": "source not stated",
 	"estimate.turns": "Turns",
@@ -1743,8 +1730,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"settings.concurrency.title": "Global concurrency",
 	"settings.concurrency.value_one": "{n} repository",
 	"settings.concurrency.value_other": "{n} repositories",
-	"settings.creditCap.desc": "Credit consumption is not observable from the available signals, so a cap cannot be enforced and is disabled rather than estimated.",
-	"settings.creditCap.title": "Credit cap",
 	"settings.dashboard.desc": "The count on the KiroCrew rail and the in-page banners.",
 	"settings.dashboard.label": "Show dashboard notifications",
 	"settings.dashboard.title": "Dashboard notifications",
@@ -1759,7 +1744,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"settings.diagnostics.humanText.desc": "Off by default. While it is off the backend refuses to put the text you submitted into any export, whatever the export asks for.",
 	"settings.diagnostics.humanText.label": "Allow prompt bodies in a diagnostic export",
 	"settings.diagnostics.humanText.title": "Prompt bodies in exports",
-	"settings.diagnostics.retention.desc": "How long Studio keeps its own activity rows and transaction records.",
+	"settings.diagnostics.retention.desc": "How long Studio keeps its own activity rows. Older rows are deleted.",
 	"settings.diagnostics.retention.label": "Days of history",
 	"settings.diagnostics.retention.title": "Diagnostic retention",
 	"settings.diagnostics.retention.value_one": "{n} day",
@@ -1775,12 +1760,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"settings.locale.overridden": "Overriding the dashboard for Studio only.",
 	"settings.locale.title": "Language",
 	"settings.locale.zh-CN": "简体中文 (zh-CN)",
-	"settings.night.desc": "Unattended continuation is not available. Every KiroCrew path into the agent mints a protected HUMAN_TURN, so a machine dispatch would forge human presence in the AI-DLC audit trail.",
-	"settings.night.end": "End",
-	"settings.night.start": "Start",
-	"settings.night.storedOnly": "The window is stored so it is ready if a trusted machine lane is ever proven. Nothing acts on it today.",
-	"settings.night.title": "Night work window",
-	"settings.night.window": "{start} – {end} local",
 	"settings.page.error": "Settings could not be read: {message}",
 	"settings.page.lede": "Studio-owned preferences. Nothing here changes AI-DLC files.",
 	"settings.page.reading": "Reading settings…",
@@ -1799,14 +1778,11 @@ var D = Object.defineProperty, O = (e, t) => {
 	"settings.queue.repo": "Repository",
 	"settings.queue.title": "Queue organization",
 	"settings.queue.type": "Action type",
-	"settings.reason.credits_unobservable": "credit use is not observable",
 	"settings.reason.host_capability_unavailable": "the host reports it unavailable",
 	"settings.reason.host_capability_unknown": "the host does not report this capability",
 	"settings.reason.host_not_attached": "Studio is not attached to the dashboard",
 	"settings.reason.host_seam_unavailable": "the host offers no seam for it",
-	"settings.reason.machine_lane_unavailable": "no trusted machine lane is proven",
 	"settings.reason.other": "{raw}",
-	"settings.reason.s12_unproven": "no trusted machine lane is proven",
 	"settings.reason.s1_s2_unverified": "the grouped-answer transport is unverified",
 	"settings.section.about": "About",
 	"settings.section.advisor": "Advisor",
@@ -1827,9 +1803,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"settings.slack.quickActions.desc": "Deciding from Slack needs a host seam that does not exist, so every Slack message deep-links back here instead.",
 	"settings.slack.quickActions.title": "Slack quick actions",
 	"settings.slack.title": "Slack notifications",
-	"settings.turnCap.desc": "Checked before dispatch and never interrupting a running turn. Stored, but inert while the window is unavailable.",
-	"settings.turnCap.label": "Turns per window",
-	"settings.turnCap.title": "Turn cap per window",
 	"settings.unavailable": "Unavailable",
 	"settings.unavailableWhy": "Unavailable — {reason}",
 	"shell.a11y.primaryNav": "Primary",
@@ -1863,8 +1836,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"shell.strip.expand": "Show execution status",
 	"shell.strip.leases_one": "{n} repo lease held",
 	"shell.strip.leases_other": "{n} repo leases held",
-	"shell.strip.nightOff": "Night window off",
-	"shell.strip.nightOn": "Night window {start} – {end}",
 	"shell.strip.polling": "Polling for updates",
 	"shell.strip.pollingWhy": "The live event stream is not connected, so Studio is re-reading on a timer. Nothing is missed; updates are slower.",
 	"shell.strip.running_one": "{n} turn running",
@@ -2119,7 +2090,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"template.recovery.turnCounter": "turn {n}",
 	"template.recovery.uncertainAlert": "This delivery cannot be proved either way. Nothing is replayed automatically, and this intent stays blocked until the evidence agrees.",
 	"template.recovery.yes": "yes",
-	"unavailable.machineLane": "Unavailable — no machine lane has been proven (S12)",
 	"wizard.a11y.stepper": "New intent steps",
 	"wizard.advisor.applied": "Filled in from the Advisor's proposal. Nothing has been created — review and change anything before you press Create.",
 	"wizard.advisor.ask": "Let the Advisor propose these settings",
@@ -2356,7 +2326,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"activity.advisor.requested": "已请求顾问草稿。它只读取，无法推动工作流。",
 	"activity.breaker.opened": "在重复出现同类失败后熔断器已打开。在重置之前不再派发。",
 	"activity.breaker.reset": "熔断器已重置。",
-	"activity.calibration.cleared": "已清除估算校准历史。",
 	"activity.engine.run": "已运行 AI-DLC 引擎命令。",
 	"activity.evidence.action": "操作",
 	"activity.evidence.at": "记录时间",
@@ -3006,7 +2975,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"errors.feedback_required": "请求修改时必须说明要改什么。",
 	"errors.git_missing": "git 不可用，仓库观察已关闭。",
 	"errors.grouped_answers_unavailable": "一次回答多个问题的方式尚未验证，请逐个作答或打开会话。",
-	"errors.host_submission_unavailable": "当前 KiroCrew 版本无法向会话发送内容。",
 	"errors.host_unavailable": "KiroCrew 会话服务不可用。",
 	"errors.identity_unprovable": "无法确认仓库身份，因此不能执行工作。",
 	"errors.illegal_transition": "不允许该状态变更。",
@@ -3016,9 +2984,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"errors.intent_not_found": "磁盘上没有该意图。",
 	"errors.intent_paused": "该意图已暂停。",
 	"errors.internal_error": "AI-DLC Studio 内部出错。",
-	"errors.internal_secret_invalid": "该请求未由本网关签名。",
 	"errors.invalid_decision": "该操作不适用于此条目。",
-	"errors.invalid_settings": "设置无效。",
 	"errors.lease_lost": "准备决定期间仓库租约发生变化，因此未发送任何内容。",
 	"errors.legacy_layout": "该仓库使用较旧的 AI-DLC 布局。",
 	"errors.machine_lane_unavailable": "无人值守执行不可用：尚未验证机器通道。",
@@ -3042,16 +3008,13 @@ var D = Object.defineProperty, O = (e, t) => {
 	"errors.sensitive_path": "该位置受保护，无法读取。",
 	"errors.session_busy": "会话正在处理一轮对话。",
 	"errors.session_unbound": "该意图尚未绑定会话。",
-	"errors.slack_unavailable": "Slack 未连接。",
 	"errors.slot_busy": "会话正忙。",
 	"errors.slot_mismatch": "该会话属于其他仓库或代理。",
-	"errors.stage_not_found": "已安装的阶段图中没有该阶段。",
 	"errors.stale_generation": "该记录已被其他操作先行修改。",
 	"errors.state_inconsistent": "AI-DLC 的文件互相矛盾，解决之前不会发送任何内容。",
 	"errors.state_version_migration_unconfirmed": "该仓库的 AI-DLC 状态为旧版本，升级尚未被证明安全。",
 	"errors.storage_error": "无法写入 Studio 自身的存储。",
 	"errors.storage_unavailable": "Studio 存储未打开。",
-	"errors.takeover_not_safe": "只有在稳定边界处接管才安全。",
 	"errors.too_large": "文件过大，无法显示。",
 	"errors.too_many_repos": "已达到仓库数量上限。",
 	"errors.transaction_not_found": "没有该事务记录。",
@@ -3063,7 +3026,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"estimate.a11y.exact": "精确计数",
 	"estimate.active": "实际执行时长",
 	"estimate.confidence.low": "低置信度",
-	"estimate.confidence.medium": "中等置信度",
 	"estimate.coverage.item": "{slug} 已关闭，因此不会有 {artifacts}。",
 	"estimate.coverage.itemNone": "{slug} 已关闭；它没有声明产物。",
 	"estimate.coverage.title": "你已经放弃的覆盖范围",
@@ -3099,13 +3061,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"estimate.exact.stages": "已选阶段",
 	"estimate.exact.title": "精确计数",
 	"estimate.qualifier": "{kind} · {source} · {confidence}",
-	"estimate.qualifierSamples": "{kind} · {source} · {confidence} · {samples}",
 	"estimate.range": "区间",
-	"estimate.samples.none": "还没有本地历史",
-	"estimate.samples_one": "{n} 个本地样本",
-	"estimate.samples_other": "{n} 个本地样本",
 	"estimate.source.assumption": "假设",
-	"estimate.source.history_calibrated": "由本地历史校准",
 	"estimate.source.rule_band": "基于规则的区间",
 	"estimate.source.unknown": "未说明来源",
 	"estimate.turns": "回合数",
@@ -4035,8 +3992,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"settings.concurrency.title": "全局并发",
 	"settings.concurrency.value_one": "{n} 个仓库",
 	"settings.concurrency.value_other": "{n} 个仓库",
-	"settings.creditCap.desc": "从现有信号无法观测额度消耗，因此无法执行上限；它被禁用而不是被估算。",
-	"settings.creditCap.title": "额度上限",
 	"settings.dashboard.desc": "KiroCrew 侧栏上的计数以及页面内的横幅。",
 	"settings.dashboard.label": "显示仪表盘通知",
 	"settings.dashboard.title": "仪表盘通知",
@@ -4051,7 +4006,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"settings.diagnostics.humanText.desc": "默认关闭。关闭时，无论导出如何请求，后端都会拒绝把你提交的文字放进任何导出。",
 	"settings.diagnostics.humanText.label": "允许在诊断导出中包含提示正文",
 	"settings.diagnostics.humanText.title": "导出中的提示正文",
-	"settings.diagnostics.retention.desc": "Studio 保留自身活动记录与事务记录的时长。",
+	"settings.diagnostics.retention.desc": "Studio 保留自身活动记录的时长，更早的记录会被删除。",
 	"settings.diagnostics.retention.label": "保留天数",
 	"settings.diagnostics.retention.title": "诊断保留期",
 	"settings.diagnostics.retention.value_one": "{n} 天",
@@ -4067,12 +4022,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"settings.locale.overridden": "仅为 Studio 覆盖仪表盘的选择。",
 	"settings.locale.title": "语言",
 	"settings.locale.zh-CN": "简体中文 (zh-CN)",
-	"settings.night.desc": "无人值守的自动推进不可用。KiroCrew 通往智能体的每条路径都会产生受保护的 HUMAN_TURN，因此机器派发会在 AI-DLC 审计轨迹中伪造人类在场。",
-	"settings.night.end": "结束",
-	"settings.night.start": "开始",
-	"settings.night.storedOnly": "该时段会被保存，以便将来证明存在可信机器通道时可直接使用。目前它不会触发任何行为。",
-	"settings.night.title": "夜间工作时段",
-	"settings.night.window": "本地时间 {start} – {end}",
 	"settings.page.error": "无法读取设置：{message}",
 	"settings.page.lede": "Studio 自己的偏好设置。这里的任何设置都不会改动 AI-DLC 的文件。",
 	"settings.page.reading": "正在读取设置…",
@@ -4091,14 +4040,11 @@ var D = Object.defineProperty, O = (e, t) => {
 	"settings.queue.repo": "仓库",
 	"settings.queue.title": "队列组织方式",
 	"settings.queue.type": "操作类型",
-	"settings.reason.credits_unobservable": "额度消耗无法观测",
 	"settings.reason.host_capability_unavailable": "宿主报告其不可用",
 	"settings.reason.host_capability_unknown": "宿主没有报告此能力",
 	"settings.reason.host_not_attached": "Studio 尚未接入仪表盘",
 	"settings.reason.host_seam_unavailable": "宿主没有提供相应接口",
-	"settings.reason.machine_lane_unavailable": "尚未证明存在可信的机器通道",
 	"settings.reason.other": "{raw}",
-	"settings.reason.s12_unproven": "尚未证明存在可信的机器通道",
 	"settings.reason.s1_s2_unverified": "分组答案的传输方式尚未验证",
 	"settings.section.about": "关于",
 	"settings.section.advisor": "顾问",
@@ -4119,9 +4065,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"settings.slack.quickActions.desc": "在 Slack 内做决定需要宿主提供的接口，而该接口并不存在，因此每条 Slack 消息只会深链回到这里。",
 	"settings.slack.quickActions.title": "Slack 快捷操作",
 	"settings.slack.title": "Slack 通知",
-	"settings.turnCap.desc": "在派发前检查，绝不打断正在进行的回合。会被保存，但在时段不可用期间不生效。",
-	"settings.turnCap.label": "每个时段的回合数",
-	"settings.turnCap.title": "每个时段的回合上限",
 	"settings.unavailable": "不可用",
 	"settings.unavailableWhy": "不可用 —— {reason}",
 	"shell.a11y.primaryNav": "主导航",
@@ -4155,8 +4098,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"shell.strip.expand": "显示执行状态",
 	"shell.strip.leases_one": "持有 {n} 个仓库租约",
 	"shell.strip.leases_other": "持有 {n} 个仓库租约",
-	"shell.strip.nightOff": "夜间窗口已关闭",
-	"shell.strip.nightOn": "夜间窗口 {start} – {end}",
 	"shell.strip.polling": "正在轮询更新",
 	"shell.strip.pollingWhy": "实时事件流未连接，Studio 正在按定时重新读取。不会遗漏任何内容，只是更新更慢。",
 	"shell.strip.running_one": "{n} 个回合正在运行",
@@ -4411,7 +4352,6 @@ var D = Object.defineProperty, O = (e, t) => {
 	"template.recovery.turnCounter": "第 {n} 轮",
 	"template.recovery.uncertainAlert": "这次送达无法证明成功或失败。系统不会自动重放；在证据一致之前，该 intent 保持阻塞。",
 	"template.recovery.yes": "是",
-	"unavailable.machineLane": "不可用 — 尚未验证机器通道（S12）",
 	"wizard.a11y.stepper": "新建意图步骤",
 	"wizard.advisor.applied": "已按 Advisor 的建议填好。尚未创建任何内容——按下「Create」之前请逐项核对，可以随意修改。",
 	"wizard.advisor.ask": "让 Advisor 推荐这些设置",
@@ -4766,7 +4706,6 @@ var he = {
 	feedback_required: 400,
 	git_missing: 503,
 	grouped_answers_unavailable: 409,
-	host_submission_unavailable: 503,
 	host_unavailable: 503,
 	identity_unprovable: 409,
 	illegal_transition: 409,
@@ -4776,9 +4715,7 @@ var he = {
 	intent_not_found: 404,
 	intent_paused: 409,
 	internal_error: 500,
-	internal_secret_invalid: 403,
 	invalid_decision: 400,
-	invalid_settings: 400,
 	lease_lost: 409,
 	legacy_layout: 409,
 	machine_lane_unavailable: 409,
@@ -4802,16 +4739,13 @@ var he = {
 	sensitive_path: 403,
 	session_busy: 409,
 	session_unbound: 409,
-	slack_unavailable: 503,
 	slot_busy: 409,
 	slot_mismatch: 409,
-	stage_not_found: 404,
 	stale_generation: 409,
 	state_inconsistent: 409,
 	state_version_migration_unconfirmed: 409,
 	storage_error: 500,
 	storage_unavailable: 503,
-	takeover_not_safe: 409,
 	too_large: 413,
 	too_many_repos: 429,
 	transaction_not_found: 404,
@@ -4892,8 +4826,6 @@ function Te() {
 			})}`, e),
 			settings: (e) => t("/settings", e),
 			putSettings: (e) => n("put", "/settings", e),
-			calibration: (e) => t("/calibration", e),
-			clearCalibration: () => r("/calibration/clear", { confirm: !0 }),
 			pollEvents: (e, n, r) => t(`/events/poll${we({
 				cursor: e,
 				limit: n
@@ -5906,87 +5838,79 @@ function Lt() {
 		return !0;
 	}
 }
-function Rt({ running: e, leases: t, circuits: n, critical: r, nightWindow: a, streamMode: o }) {
-	let s = U(), { t: c } = s, [l, u] = d(Lt), f = i(() => {
-		u((e) => {
+function Rt({ running: e, leases: t, circuits: n, critical: r, streamMode: a }) {
+	let o = U(), { t: s } = o, [c, l] = d(Lt), u = i(() => {
+		l((e) => {
 			let t = !e;
 			try {
 				localStorage.setItem(It, t ? "open" : "closed");
 			} catch {}
 			return t;
 		});
-	}, []), g = (n ?? 0) + (r ?? 0), _ = (e ?? 0) > 0, v = l ? "" : g > 0 ? q(s, "shell.strip.alerts", g) : c("shell.strip.clear");
+	}, []), f = (n ?? 0) + (r ?? 0), g = (e ?? 0) > 0, _ = c ? "" : f > 0 ? q(o, "shell.strip.alerts", f) : s("shell.strip.clear");
 	return /* @__PURE__ */ h("div", {
 		className: "studio-strip",
-		"data-open": l ? "true" : "false",
+		"data-open": c ? "true" : "false",
 		children: [
 			/* @__PURE__ */ m("button", {
 				type: "button",
 				className: "studio-icon-btn studio-strip-toggle",
-				"aria-expanded": l,
-				"aria-label": c(l ? "shell.strip.collapse" : "shell.strip.expand"),
-				onClick: f,
+				"aria-expanded": c,
+				"aria-label": s(c ? "shell.strip.collapse" : "shell.strip.expand"),
+				onClick: u,
 				children: /* @__PURE__ */ m(Y, {
-					name: l ? "chevronDown" : "chevron",
+					name: c ? "chevronDown" : "chevron",
 					size: 14
 				})
 			}),
-			l ? /* @__PURE__ */ h(p, { children: [
+			c ? /* @__PURE__ */ h(p, { children: [
 				/* @__PURE__ */ h(X, {
-					tone: _ ? "accent" : "neutral",
-					children: [_ ? /* @__PURE__ */ m("span", {
+					tone: g ? "accent" : "neutral",
+					children: [g ? /* @__PURE__ */ m("span", {
 						className: "studio-pulse",
 						"aria-hidden": !0
 					}) : /* @__PURE__ */ m(Y, {
 						name: "pause",
 						size: 11,
 						strokeWidth: 2
-					}), e === null ? c("common.unavailable") : q(s, "shell.strip.running", e)]
+					}), e === null ? s("common.unavailable") : q(o, "shell.strip.running", e)]
 				}),
 				/* @__PURE__ */ m(X, {
 					icon: "lock",
-					children: t === null ? c("common.unavailable") : q(s, "shell.strip.leases", t)
+					children: t === null ? s("common.unavailable") : q(o, "shell.strip.leases", t)
 				}),
 				(n ?? 0) > 0 ? /* @__PURE__ */ m(X, {
 					tone: "warn",
 					icon: "clock",
-					children: q(s, "shell.strip.circuits", n ?? 0)
+					children: q(o, "shell.strip.circuits", n ?? 0)
 				}) : null,
 				(r ?? 0) > 0 ? /* @__PURE__ */ m(X, {
 					tone: "danger",
 					icon: "recovery",
-					children: q(s, "shell.strip.critical", r ?? 0)
+					children: q(o, "shell.strip.critical", r ?? 0)
 				}) : null,
-				/* @__PURE__ */ m(X, {
-					icon: "moon",
-					title: a?.enabled ? void 0 : c("unavailable.machineLane"),
-					children: a?.enabled ? c("shell.strip.nightOn", {
-						start: a.start,
-						end: a.end
-					}) : c("shell.strip.nightOff")
-				}),
-				o === "live" ? null : /* @__PURE__ */ m(X, {
+				a === "live" ? null : /* @__PURE__ */ m(X, {
 					tone: "warn",
 					icon: "refresh",
-					title: c("shell.strip.pollingWhy"),
-					children: c("shell.strip.polling")
+					title: s("shell.strip.pollingWhy"),
+					children: s("shell.strip.polling")
 				})
 			] }) : /* @__PURE__ */ m("span", {
 				className: "studio-strip-summary",
-				children: g > 0 ? /* @__PURE__ */ m(X, {
+				children: f > 0 ? /* @__PURE__ */ m(X, {
 					tone: "danger",
 					icon: "warn",
-					children: q(s, "shell.strip.alerts", g)
+					children: q(o, "shell.strip.alerts", f)
 				}) : /* @__PURE__ */ m(X, {
 					icon: "check",
-					children: c("shell.strip.clear")
+					children: s("shell.strip.clear")
 				})
 			}),
 			/* @__PURE__ */ m("span", {
 				className: "studio-sr",
 				role: "status",
 				"aria-live": "polite",
-				children: v
+				children: _
 			})
 		]
 	});
@@ -8996,7 +8920,7 @@ function ii(e, t, n) {
 	].join(" ").toLowerCase();
 }
 function ai({ route: e, go: t }) {
-	let n = U(), { t: r } = n, { api: a, actions: s, settings: c, setQueueCount: u } = Bl(), [f, p] = Kr(), [g, _] = d(""), v = l(() => s.data ? ut(s.data) : null, [s.data]), y = v?.actions ?? [], x = v?.counts.total ?? null, S = l(() => {
+	let n = U(), { t: r } = n, { api: a, actions: s, settings: c, setQueueCount: u } = Il(), [f, p] = Kr(), [g, _] = d(""), v = l(() => s.data ? ut(s.data) : null, [s.data]), y = v?.actions ?? [], x = v?.counts.total ?? null, S = l(() => {
 		let e = g.trim().toLowerCase();
 		return Jt(e ? y.filter((t) => {
 			let i = r(`enum.actionType.${t.queue_type}`);
@@ -11950,17 +11874,12 @@ function Oa({ stage: e, onToggle: t, busy: n, showState: r }) {
 }
 //#endregion
 //#region src/plan/EstimatePanel.tsx
-function ka(e, t, n) {
-	let r = `estimate.source.${t.source}`, i = {
+function ka(e, t) {
+	let n = `estimate.source.${t.source}`;
+	return e.t("estimate.qualifier", {
 		kind: e.t("estimate.range"),
-		source: e.has(r) ? e.t(r) : e.t("estimate.source.unknown"),
+		source: e.has(n) ? e.t(n) : e.t("estimate.source.unknown"),
 		confidence: e.t(`estimate.confidence.${t.confidence}`)
-	};
-	if (n === void 0) return e.t("estimate.qualifier", i);
-	let a = n > 0 ? q(e, "estimate.samples", n) : e.t("estimate.samples.none");
-	return e.t("estimate.qualifierSamples", {
-		...i,
-		samples: a
 	});
 }
 function Aa({ icon: e, label: t, value: n, qualifier: r, small: i }) {
@@ -12047,7 +11966,7 @@ function ja({ plan: e }) {
 						label: n("estimate.turns"),
 						small: !0,
 						value: Me(t, i.turns),
-						qualifier: ka(t, i.turns, i.samples)
+						qualifier: ka(t, i.turns)
 					}),
 					/* @__PURE__ */ m(Aa, {
 						icon: "clock",
@@ -13989,7 +13908,7 @@ async function bo(e, t, n, r, i) {
 	};
 }
 function xo({ route: e, go: t }) {
-	let n = U(), { t: r } = n, { api: a, repos: s } = Bl(), c = oe(), [u, f] = d(yo), [p, g] = d(""), [_, v] = d(null), [y, b] = d(null), [x, S] = d(null), [C, w] = d(null);
+	let n = U(), { t: r } = n, { api: a, repos: s } = Il(), c = oe(), [u, f] = d(yo), [p, g] = d(""), [_, v] = d(null), [y, b] = d(null), [x, S] = d(null), [C, w] = d(null);
 	o(() => {
 		w(null);
 	}, [e.repo]), o(() => {
@@ -15657,7 +15576,7 @@ function is({ phases: e, intentLabel: t, selectedStage: n, onSelect: r }) {
 	});
 }
 function as({ route: e, go: t }) {
-	let n = Bl();
+	let n = Il();
 	return /* @__PURE__ */ m(ts, {
 		api: n.api,
 		route: e,
@@ -16881,7 +16800,7 @@ function Us(e) {
 	return e.availability === "available" ? e.install.status === "recovery_required" ? "recovery_required" : e.install.status === "not_installed" ? "not_installed" : null : "availability";
 }
 function Ws({ route: e, go: t }) {
-	let n = U(), { t: r } = n, { api: a, repos: s, health: c, settings: f } = Bl(), p = f.data ? f.data.settings.advisor.enabled && f.data.capabilities.advisor.available : null, g = s.data?.repos ?? [], [_, v] = d("work"), [y, b] = d(() => ({
+	let n = U(), { t: r } = n, { api: a, repos: s, health: c, settings: f } = Il(), p = f.data ? f.data.settings.advisor.enabled && f.data.capabilities.advisor.available : null, g = s.data?.repos ?? [], [_, v] = d("work"), [y, b] = d(() => ({
 		...Ms,
 		repo: e.repo
 	})), [x, S] = d(null), [C, w] = d(null), [T, E] = d(!1), [D, O] = d(!1), [k, A] = d(null), [j, M] = d(null), [N, P] = d(null), [F, I] = d(!1), [L, R] = d([]), [z, B] = d(null), [V, H] = d({}), [ee, te] = d(0), ne = g.find((e) => e.repo_id === y.repo) ?? null, re = ne ? Us(ne) : null, ie = J(ne && !re ? `wizard-spaces:${ne.repo_id}` : null, i((e) => a.intents(y.repo, {}, { signal: e }), [a, y.repo]), {
@@ -20113,7 +20032,7 @@ var sl = {
 	repoId: ""
 };
 function cl({ route: e, go: t }) {
-	let n = U(), { t: r } = n, { api: a, repos: s } = Bl(), c = ol(), [l, f] = d(sl), [g, _] = d(null), [v, y] = d(null), [b, x] = d(null), [S, C] = d(null), w = u(0), [T, E] = d(""), [D, O] = d(""), [k, A] = d(!1), [j, M] = d(""), N = J(k ? "repos-with-archived" : null, i((e) => a.repos(!0, { signal: e }), [a]), { revalidateOn: [
+	let n = U(), { t: r } = n, { api: a, repos: s } = Il(), c = ol(), [l, f] = d(sl), [g, _] = d(null), [v, y] = d(null), [b, x] = d(null), [S, C] = d(null), w = u(0), [T, E] = d(""), [D, O] = d(""), [k, A] = d(!1), [j, M] = d(""), N = J(k ? "repos-with-archived" : null, i((e) => a.repos(!0, { signal: e }), [a]), { revalidateOn: [
 		"repo.updated",
 		"repo.removed",
 		"reset"
@@ -20628,7 +20547,7 @@ var ll = /* @__PURE__ */ O({ default: () => cl });
 function ul({ health: e, versions: t, onOpenActivity: n }) {
 	let r = U(), { t: i } = r, a = i("common.unavailable"), o = t?.studio ?? e?.version ?? a, s = t?.bundled_engine ?? e?.bundled_engine_version ?? a, c = t?.min_kirocrew ?? e?.min_kirocrew_version ?? a, l = t?.host ?? e?.host_version ?? null;
 	return /* @__PURE__ */ h(p, { children: [
-		/* @__PURE__ */ m(kl, {
+		/* @__PURE__ */ m(wl, {
 			id: "aidlc-about-versions",
 			title: i("settings.about.title"),
 			description: i("settings.about.desc"),
@@ -20673,7 +20592,7 @@ function ul({ health: e, versions: t, onOpenActivity: n }) {
 				]
 			})
 		}),
-		/* @__PURE__ */ m(kl, {
+		/* @__PURE__ */ m(wl, {
 			id: "aidlc-about-update",
 			title: i("settings.about.updateState"),
 			description: i("settings.about.updateDesc"),
@@ -20682,7 +20601,7 @@ function ul({ health: e, versions: t, onOpenActivity: n }) {
 				children: i("settings.about.updateChip")
 			})
 		}),
-		e ? /* @__PURE__ */ m(kl, {
+		e ? /* @__PURE__ */ m(wl, {
 			id: "aidlc-about-health",
 			title: i("settings.about.status"),
 			description: e.issues.length > 0 ? e.issues.join(" · ") : i(`settings.about.status.${e.status}`),
@@ -20783,7 +20702,7 @@ function fl({ api: e, tool: t, onChanged: n }) {
 			f(!1);
 		}
 	};
-	return /* @__PURE__ */ m(kl, {
+	return /* @__PURE__ */ m(wl, {
 		id: "aidlc-bun",
 		title: r("settings.bun.title"),
 		description: r("settings.bun.desc"),
@@ -20857,13 +20776,13 @@ function pl({ control: e, repos: t }) {
 		e.save({ advisor: { auto_draft_repo_ids: [...new Set(r)] } });
 	};
 	return /* @__PURE__ */ h(p, { children: [
-		/* @__PURE__ */ m(kl, {
+		/* @__PURE__ */ m(wl, {
 			id: "aidlc-set-advisor",
 			title: r("settings.advisor.title"),
 			description: r("settings.advisor.desc"),
 			children: (t) => /* @__PURE__ */ h("div", {
 				className: "studio-row studio-wrapchips",
-				children: [a ? null : /* @__PURE__ */ m(jl, { capability: i }), /* @__PURE__ */ h("label", {
+				children: [a ? null : /* @__PURE__ */ m(El, { capability: i }), /* @__PURE__ */ h("label", {
 					className: "studio-check",
 					children: [/* @__PURE__ */ m("input", {
 						type: "checkbox",
@@ -20875,7 +20794,7 @@ function pl({ control: e, repos: t }) {
 				})]
 			})
 		}),
-		/* @__PURE__ */ m(kl, {
+		/* @__PURE__ */ m(wl, {
 			id: "aidlc-set-advisor-auto",
 			title: r("settings.advisor.autoDraft.title"),
 			description: r("settings.advisor.autoDraft.desc"),
@@ -20928,7 +20847,7 @@ function pl({ control: e, repos: t }) {
 				})] })
 			})
 		}),
-		/* @__PURE__ */ m(kl, {
+		/* @__PURE__ */ m(wl, {
 			id: "aidlc-set-advisor-model",
 			title: r("settings.advisor.model.title"),
 			description: r("settings.advisor.model.desc"),
@@ -20945,241 +20864,73 @@ function pl({ control: e, repos: t }) {
 var ml = {
 	lo: 1,
 	hi: 8
-}, hl = {
-	lo: 1,
-	hi: 1e3
-}, gl = /^([01]\d|2[0-3]):[0-5]\d$/;
-function _l({ id: e, label: t, value: n, lo: r, hi: i, disabled: a, describedBy: s, onCommit: c }) {
-	let [l, u] = d(String(n));
-	o(() => u(String(n)), [n]);
-	let f = () => {
-		let e = Number(l);
-		if (!Number.isInteger(e) || e < r || e > i) {
-			u(String(n));
-			return;
-		}
-		e !== n && c(e);
-	};
-	return /* @__PURE__ */ h("label", {
-		className: "studio-sfield",
-		htmlFor: e,
-		children: [/* @__PURE__ */ m("span", {
-			className: "studio-sr",
-			children: t
-		}), /* @__PURE__ */ m("input", {
-			id: e,
-			type: "number",
-			className: "studio-mono studio-num",
-			min: r,
-			max: i,
-			step: 1,
-			value: l,
-			disabled: a,
-			"aria-describedby": s,
-			onChange: (e) => u(e.target.value),
-			onBlur: f,
-			onKeyDown: (e) => {
-				e.key === "Enter" && f();
-			}
-		})]
-	});
-}
-function vl({ id: e, label: t, value: n, disabled: r, describedBy: i, onCommit: a }) {
-	let [s, c] = d(n);
-	o(() => c(n), [n]);
-	let l = () => {
-		if (!gl.test(s)) {
-			c(n);
-			return;
-		}
-		s !== n && a(s);
-	};
-	return /* @__PURE__ */ h("label", {
-		className: "studio-sfield",
-		htmlFor: e,
-		children: [/* @__PURE__ */ m("span", {
-			className: "studio-sr",
-			children: t
-		}), /* @__PURE__ */ m("input", {
-			id: e,
-			type: "time",
-			className: "studio-mono",
-			value: s,
-			disabled: r,
-			"aria-describedby": i,
-			onChange: (e) => c(e.target.value),
-			onBlur: l,
-			onKeyDown: (e) => {
-				e.key === "Enter" && l();
-			}
-		})]
-	});
-}
-function yl({ control: e }) {
-	let t = U(), { t: n } = t, r = e.values.night_window;
-	return /* @__PURE__ */ h(p, { children: [
-		/* @__PURE__ */ m(kl, {
-			id: "aidlc-set-night",
-			title: n("settings.night.title"),
-			description: n("settings.night.desc"),
-			children: (t) => /* @__PURE__ */ h("div", {
-				className: "studio-col",
-				"aria-describedby": t,
-				children: [
-					/* @__PURE__ */ m(jl, { capability: e.capabilities.night_window }),
-					/* @__PURE__ */ m(X, {
-						mono: !0,
-						icon: "moon",
-						children: n("settings.night.window", {
-							start: r.start_local,
-							end: r.end_local
-						})
-					}),
-					/* @__PURE__ */ h("div", {
-						className: "studio-row",
-						children: [/* @__PURE__ */ m(vl, {
-							id: "aidlc-set-night-start",
-							label: n("settings.night.start"),
-							value: r.start_local,
-							disabled: e.busy,
-							describedBy: t,
-							onCommit: (t) => e.save({ night_window: { start_local: t } })
-						}), /* @__PURE__ */ m(vl, {
-							id: "aidlc-set-night-end",
-							label: n("settings.night.end"),
-							value: r.end_local,
-							disabled: e.busy,
-							describedBy: t,
-							onCommit: (t) => e.save({ night_window: { end_local: t } })
-						})]
-					}),
-					/* @__PURE__ */ m("span", {
-						className: "studio-muted studio-small",
-						children: n("settings.night.storedOnly")
-					})
-				]
-			})
-		}),
-		/* @__PURE__ */ m(kl, {
-			id: "aidlc-set-turncap",
-			title: n("settings.turnCap.title"),
-			description: n("settings.turnCap.desc"),
-			children: (t) => /* @__PURE__ */ m(_l, {
-				id: "aidlc-set-turncap-input",
-				label: n("settings.turnCap.label"),
-				value: r.turn_cap,
-				lo: hl.lo,
-				hi: hl.hi,
+};
+function hl({ control: e }) {
+	let t = U(), { t: n } = t;
+	return /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ m(wl, {
+		id: "aidlc-set-concurrency",
+		title: n("settings.concurrency.title"),
+		description: n("settings.concurrency.desc"),
+		children: (r) => /* @__PURE__ */ h("div", {
+			className: "studio-row studio-wrapchips",
+			children: [/* @__PURE__ */ m(Dl, {
+				id: "aidlc-set-concurrency-input",
+				label: n("settings.concurrency.label"),
+				value: e.values.global_concurrency_cap,
+				lo: ml.lo,
+				hi: ml.hi,
 				disabled: e.busy,
-				describedBy: t,
-				onCommit: (t) => e.save({ night_window: { turn_cap: t } })
-			})
-		}),
-		/* @__PURE__ */ m(kl, {
-			id: "aidlc-set-creditcap",
-			title: n("settings.creditCap.title"),
-			description: n("settings.creditCap.desc"),
-			children: () => /* @__PURE__ */ m(jl, { capability: e.capabilities.credit_cap })
-		}),
-		/* @__PURE__ */ m(kl, {
-			id: "aidlc-set-concurrency",
-			title: n("settings.concurrency.title"),
-			description: n("settings.concurrency.desc"),
-			children: (r) => /* @__PURE__ */ h("div", {
-				className: "studio-row studio-wrapchips",
-				children: [/* @__PURE__ */ m(_l, {
-					id: "aidlc-set-concurrency-input",
-					label: n("settings.concurrency.label"),
-					value: e.values.global_concurrency_cap,
-					lo: ml.lo,
-					hi: ml.hi,
-					disabled: e.busy,
-					describedBy: r,
-					onCommit: (t) => e.save({ global_concurrency_cap: t })
-				}), /* @__PURE__ */ m("span", {
-					className: "studio-muted",
-					children: q(t, "settings.concurrency.value", e.values.global_concurrency_cap)
-				})]
-			})
-		}),
-		/* @__PURE__ */ m(kl, {
-			id: "aidlc-set-doctor",
-			title: n("settings.doctor.title"),
-			description: n("settings.doctor.desc"),
-			children: (t) => /* @__PURE__ */ h("label", {
-				className: "studio-check",
-				children: [/* @__PURE__ */ m("input", {
-					type: "checkbox",
-					checked: e.values.installer.run_doctor_after_install,
-					disabled: e.busy,
-					"aria-describedby": t,
-					onChange: (t) => e.save({ installer: { run_doctor_after_install: t.target.checked } })
-				}), /* @__PURE__ */ h("span", { children: [
-					/* @__PURE__ */ m(Y, {
-						name: "check",
-						size: 13
-					}),
-					" ",
-					n("settings.doctor.label")
-				] })]
-			})
+				describedBy: r,
+				onCommit: (t) => e.save({ global_concurrency_cap: t })
+			}), /* @__PURE__ */ m("span", {
+				className: "studio-muted",
+				children: q(t, "settings.concurrency.value", e.values.global_concurrency_cap)
+			})]
 		})
-	] });
+	}), /* @__PURE__ */ m(wl, {
+		id: "aidlc-set-doctor",
+		title: n("settings.doctor.title"),
+		description: n("settings.doctor.desc"),
+		children: (t) => /* @__PURE__ */ h("label", {
+			className: "studio-check",
+			children: [/* @__PURE__ */ m("input", {
+				type: "checkbox",
+				checked: e.values.installer.run_doctor_after_install,
+				disabled: e.busy,
+				"aria-describedby": t,
+				onChange: (t) => e.save({ installer: { run_doctor_after_install: t.target.checked } })
+			}), /* @__PURE__ */ h("span", { children: [
+				/* @__PURE__ */ m(Y, {
+					name: "check",
+					size: 13
+				}),
+				" ",
+				n("settings.doctor.label")
+			] })]
+		})
+	})] });
 }
 //#endregion
 //#region src/settings/DiagnosticsSetting.tsx
-var bl = {
+var gl = {
 	lo: 1,
 	hi: 30
 };
-function xl({ id: e, label: t, value: n, disabled: r, describedBy: i, onCommit: a }) {
-	let [s, c] = d(String(n));
-	o(() => c(String(n)), [n]);
-	let l = () => {
-		let e = Number(s);
-		if (!Number.isInteger(e) || e < bl.lo || e > bl.hi) {
-			c(String(n));
-			return;
-		}
-		e !== n && a(e);
-	};
-	return /* @__PURE__ */ h("label", {
-		className: "studio-sfield",
-		htmlFor: e,
-		children: [/* @__PURE__ */ m("span", {
-			className: "studio-sr",
-			children: t
-		}), /* @__PURE__ */ m("input", {
-			id: e,
-			type: "number",
-			className: "studio-mono studio-num",
-			min: bl.lo,
-			max: bl.hi,
-			step: 1,
-			value: s,
-			disabled: r,
-			"aria-describedby": i,
-			onChange: (e) => c(e.target.value),
-			onBlur: l,
-			onKeyDown: (e) => {
-				e.key === "Enter" && l();
-			}
-		})]
-	});
-}
-function Sl({ control: e }) {
+function _l({ control: e }) {
 	let t = U(), { t: n } = t, r = e.values.diagnostics.export_include_human_text;
 	return /* @__PURE__ */ h(p, { children: [
-		/* @__PURE__ */ m(kl, {
+		/* @__PURE__ */ m(wl, {
 			id: "aidlc-set-retention",
 			title: n("settings.diagnostics.retention.title"),
 			description: n("settings.diagnostics.retention.desc"),
 			children: (r) => /* @__PURE__ */ h("div", {
 				className: "studio-row studio-wrapchips",
-				children: [/* @__PURE__ */ m(xl, {
+				children: [/* @__PURE__ */ m(Dl, {
 					id: "aidlc-set-retention-input",
 					label: n("settings.diagnostics.retention.label"),
 					value: e.values.diagnostics.retention_days,
+					lo: gl.lo,
+					hi: gl.hi,
 					disabled: e.busy,
 					describedBy: r,
 					onCommit: (t) => e.save({ diagnostics: { retention_days: t } })
@@ -21189,7 +20940,7 @@ function Sl({ control: e }) {
 				})]
 			})
 		}),
-		/* @__PURE__ */ m(kl, {
+		/* @__PURE__ */ m(wl, {
 			id: "aidlc-set-humantext",
 			title: n("settings.diagnostics.humanText.title"),
 			description: n("settings.diagnostics.humanText.desc"),
@@ -21211,16 +20962,18 @@ function Sl({ control: e }) {
 				] })]
 			})
 		}),
-		/* @__PURE__ */ m(kl, {
+		/* @__PURE__ */ m(wl, {
 			id: "aidlc-set-humanretention",
 			title: n("settings.diagnostics.humanRetention.title"),
 			description: n("settings.diagnostics.humanRetention.desc"),
 			children: (r) => /* @__PURE__ */ h("div", {
 				className: "studio-row studio-wrapchips",
-				children: [/* @__PURE__ */ m(xl, {
+				children: [/* @__PURE__ */ m(Dl, {
 					id: "aidlc-set-humanretention-input",
 					label: n("settings.diagnostics.humanRetention.label"),
 					value: e.values.human_text_retention_days,
+					lo: gl.lo,
+					hi: gl.hi,
 					disabled: e.busy,
 					describedBy: r,
 					onCommit: (t) => e.save({ human_text_retention_days: t })
@@ -21235,16 +20988,16 @@ function Sl({ control: e }) {
 }
 //#endregion
 //#region src/settings/LocaleSetting.tsx
-var Cl = [
+var vl = [
 	"auto",
 	"en-US",
 	"zh-CN"
-], wl = ["compact", "comfortable"];
-function Tl({ control: e }) {
+], yl = ["compact", "comfortable"];
+function bl({ control: e }) {
 	let { t } = U(), n = ie(), r = e.values.locale, i = (t) => {
 		ae(t === "auto" ? null : t), e.save({ locale: t });
 	};
-	return /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ m(kl, {
+	return /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ m(wl, {
 		id: "aidlc-set-locale",
 		title: t("settings.locale.title"),
 		description: t("settings.locale.desc"),
@@ -21260,7 +21013,7 @@ function Tl({ control: e }) {
 					disabled: e.busy,
 					"aria-describedby": a,
 					onChange: (e) => i(e.target.value),
-					children: Cl.map((e) => /* @__PURE__ */ m("option", {
+					children: vl.map((e) => /* @__PURE__ */ m("option", {
 						value: e,
 						children: t(e === "auto" ? "settings.locale.auto" : `settings.locale.${e}`)
 					}, e))
@@ -21270,7 +21023,7 @@ function Tl({ control: e }) {
 				children: r === "auto" ? t("settings.locale.following", { locale: t(`settings.locale.${n}`) }) : t("settings.locale.overridden")
 			})]
 		})
-	}), /* @__PURE__ */ m(kl, {
+	}), /* @__PURE__ */ m(wl, {
 		id: "aidlc-set-density",
 		title: t("settings.density.title"),
 		description: t("settings.density.desc"),
@@ -21284,7 +21037,7 @@ function Tl({ control: e }) {
 				disabled: e.busy,
 				"aria-describedby": n,
 				onChange: (t) => e.save({ density: t.target.value }),
-				children: wl.map((e) => /* @__PURE__ */ m("option", {
+				children: yl.map((e) => /* @__PURE__ */ m("option", {
 					value: e,
 					children: t(`settings.density.${e}`)
 				}, e))
@@ -21294,20 +21047,20 @@ function Tl({ control: e }) {
 }
 //#endregion
 //#region src/settings/QueueSetting.tsx
-var El = [
+var xl = [
 	"priority",
 	"repo",
 	"type",
 	"oldest"
 ];
-function Dl({ control: e }) {
+function Sl({ control: e }) {
 	let { t } = U(), n = (t) => {
 		try {
 			localStorage.setItem(R, t);
 		} catch {}
 		e.save({ queue_organize: t });
 	};
-	return /* @__PURE__ */ m(kl, {
+	return /* @__PURE__ */ m(wl, {
 		id: "aidlc-set-organize",
 		title: t("settings.queue.title"),
 		description: t("settings.queue.desc"),
@@ -21323,7 +21076,7 @@ function Dl({ control: e }) {
 					disabled: e.busy,
 					"aria-describedby": r,
 					onChange: (e) => n(e.target.value),
-					children: El.map((e) => /* @__PURE__ */ m("option", {
+					children: xl.map((e) => /* @__PURE__ */ m("option", {
 						value: e,
 						children: t(`settings.queue.${e}`)
 					}, e))
@@ -21337,19 +21090,19 @@ function Dl({ control: e }) {
 }
 //#endregion
 //#region src/settings/SlackSetting.tsx
-function Ol({ control: e, repos: t }) {
+function Cl({ control: e, repos: t }) {
 	let n = U(), { t: r } = n, i = e.capabilities.slack, a = i?.available !== !1, o = e.values.slack.muted_repo_ids, s = new Set(t.map((e) => e.repo_id)), c = o.filter((e) => !s.has(e)), l = (t, n) => {
 		let r = n ? [...o, t] : o.filter((e) => e !== t);
 		e.save({ slack: { muted_repo_ids: [...new Set(r)] } });
 	};
 	return /* @__PURE__ */ h(p, { children: [
-		/* @__PURE__ */ m(kl, {
+		/* @__PURE__ */ m(wl, {
 			id: "aidlc-set-slack",
 			title: r("settings.slack.title"),
 			description: r("settings.slack.desc"),
 			children: (t) => /* @__PURE__ */ h("div", {
 				className: "studio-row studio-wrapchips",
-				children: [a ? null : /* @__PURE__ */ m(jl, { capability: i }), /* @__PURE__ */ h("label", {
+				children: [a ? null : /* @__PURE__ */ m(El, { capability: i }), /* @__PURE__ */ h("label", {
 					className: "studio-check",
 					children: [/* @__PURE__ */ m("input", {
 						type: "checkbox",
@@ -21368,13 +21121,13 @@ function Ol({ control: e, repos: t }) {
 				})]
 			})
 		}),
-		/* @__PURE__ */ m(kl, {
+		/* @__PURE__ */ m(wl, {
 			id: "aidlc-set-slack-quick",
 			title: r("settings.slack.quickActions.title"),
 			description: r("settings.slack.quickActions.desc"),
-			children: () => /* @__PURE__ */ m(jl, { capability: e.capabilities.slack_quick_actions })
+			children: () => /* @__PURE__ */ m(El, { capability: e.capabilities.slack_quick_actions })
 		}),
-		/* @__PURE__ */ m(kl, {
+		/* @__PURE__ */ m(wl, {
 			id: "aidlc-set-slack-mute",
 			title: r("settings.slack.mute.title"),
 			description: r("settings.slack.mute.desc"),
@@ -21424,7 +21177,7 @@ function Ol({ control: e, repos: t }) {
 				})] })
 			})
 		}),
-		/* @__PURE__ */ m(kl, {
+		/* @__PURE__ */ m(wl, {
 			id: "aidlc-set-dashboard",
 			title: r("settings.dashboard.title"),
 			description: r("settings.dashboard.desc"),
@@ -21443,7 +21196,7 @@ function Ol({ control: e, repos: t }) {
 }
 //#endregion
 //#region src/settings/SettingsView.tsx
-function kl({ id: e, title: t, description: n, children: r }) {
+function wl({ id: e, title: t, description: n, children: r }) {
 	let i = `${e}-desc`;
 	return /* @__PURE__ */ h("div", {
 		className: "studio-mrow",
@@ -21464,7 +21217,7 @@ function kl({ id: e, title: t, description: n, children: r }) {
 		})]
 	});
 }
-function Al({ title: e, children: t }) {
+function Tl({ title: e, children: t }) {
 	return /* @__PURE__ */ h("section", {
 		className: "studio-block",
 		children: [/* @__PURE__ */ m("h3", { children: e }), /* @__PURE__ */ m("div", {
@@ -21473,7 +21226,7 @@ function Al({ title: e, children: t }) {
 		})]
 	});
 }
-function jl({ capability: e }) {
+function El({ capability: e }) {
 	let { t, has: n } = U(), r = e?.reason ?? null, i = r && n(`settings.reason.${r}`) ? t(`settings.reason.${r}`) : null;
 	return /* @__PURE__ */ m(X, {
 		tone: "warn",
@@ -21481,14 +21234,49 @@ function jl({ capability: e }) {
 		children: i ? t("settings.unavailableWhy", { reason: i }) : r ? t("settings.unavailableWhy", { reason: t("settings.reason.other", { raw: r }) }) : t("settings.unavailable")
 	});
 }
-function Ml(e, t) {
+function Dl({ id: e, label: t, value: n, lo: r, hi: i, disabled: a, describedBy: s, onCommit: c }) {
+	let [l, u] = d(String(n));
+	o(() => u(String(n)), [n]);
+	let f = () => {
+		let e = Number(l);
+		if (!Number.isInteger(e) || e < r || e > i) {
+			u(String(n));
+			return;
+		}
+		e !== n && c(e);
+	};
+	return /* @__PURE__ */ h("label", {
+		className: "studio-sfield",
+		htmlFor: e,
+		children: [/* @__PURE__ */ m("span", {
+			className: "studio-sr",
+			children: t
+		}), /* @__PURE__ */ m("input", {
+			id: e,
+			type: "number",
+			className: "studio-mono studio-num",
+			min: r,
+			max: i,
+			step: 1,
+			value: l,
+			disabled: a,
+			"aria-describedby": s,
+			onChange: (e) => u(e.target.value),
+			onBlur: f,
+			onKeyDown: (e) => {
+				e.key === "Enter" && f();
+			}
+		})]
+	});
+}
+function Ol(e, t) {
 	return e ? t ? (e.updated_at ?? "") >= (t.updated_at ?? "") ? e : t : e : t;
 }
-function Nl({ go: e }) {
+function kl({ go: e }) {
 	let t = U(), { t: n } = t, r = Te(), a = J("settings", i((e) => r.settings({ signal: e }), [r]), {
 		interval: 0,
 		revalidateOn: ["settings.updated", "reset"]
-	}), o = J("health", i((e) => r.health({ signal: e }), [r]), { interval: 6e4 }), s = J("repos", i((e) => r.repos(!1, { signal: e }), [r]), { interval: 6e4 }), c = a.refresh, [u, f] = d(null), [g, _] = d(!1), [v, y] = d(null), b = Ml(u, a.data), x = i((e) => {
+	}), o = J("health", i((e) => r.health({ signal: e }), [r]), { interval: 6e4 }), s = J("repos", i((e) => r.repos(!1, { signal: e }), [r]), { interval: 6e4 }), c = a.refresh, [u, f] = d(null), [g, _] = d(!1), [v, y] = d(null), b = Ol(u, a.data), x = i((e) => {
 		_(!0), y(n("settings.page.saving")), r.putSettings(e).then((e) => {
 			f(e), y(n("settings.page.saved"));
 		}).catch((e) => {
@@ -21562,41 +21350,41 @@ function Nl({ go: e }) {
 					]
 				}) : null,
 				S ? /* @__PURE__ */ h(p, { children: [
-					/* @__PURE__ */ m(Al, {
+					/* @__PURE__ */ m(Tl, {
 						title: n("settings.section.locale"),
-						children: /* @__PURE__ */ m(Tl, { control: S })
+						children: /* @__PURE__ */ m(bl, { control: S })
 					}),
-					/* @__PURE__ */ m(Al, {
+					/* @__PURE__ */ m(Tl, {
 						title: n("settings.section.queue"),
-						children: /* @__PURE__ */ m(Dl, { control: S })
+						children: /* @__PURE__ */ m(Sl, { control: S })
 					}),
-					/* @__PURE__ */ m(Al, {
+					/* @__PURE__ */ m(Tl, {
 						title: n("settings.section.automation"),
-						children: /* @__PURE__ */ m(yl, { control: S })
+						children: /* @__PURE__ */ m(hl, { control: S })
 					}),
-					/* @__PURE__ */ m(Al, {
+					/* @__PURE__ */ m(Tl, {
 						title: n("settings.section.advisor"),
 						children: /* @__PURE__ */ m(pl, {
 							control: S,
 							repos: s.data?.repos ?? null
 						})
 					}),
-					/* @__PURE__ */ m(Al, {
+					/* @__PURE__ */ m(Tl, {
 						title: n("settings.section.notifications"),
-						children: /* @__PURE__ */ m(Ol, {
+						children: /* @__PURE__ */ m(Cl, {
 							control: S,
 							repos: s.data?.repos ?? []
 						})
 					}),
-					/* @__PURE__ */ m(Al, {
+					/* @__PURE__ */ m(Tl, {
 						title: n("settings.section.diagnostics"),
-						children: /* @__PURE__ */ m(Sl, { control: S })
+						children: /* @__PURE__ */ m(_l, { control: S })
 					})
 				] }) : /* @__PURE__ */ m("p", {
 					className: "studio-muted",
 					children: n("settings.page.reading")
 				}),
-				/* @__PURE__ */ h(Al, {
+				/* @__PURE__ */ h(Tl, {
 					title: n("settings.section.about"),
 					children: [/* @__PURE__ */ m(fl, {
 						api: r,
@@ -21614,8 +21402,8 @@ function Nl({ go: e }) {
 }
 //#endregion
 //#region src/views/settings/index.tsx
-var Pl = /* @__PURE__ */ O({ default: () => Nl }), Fl = /* @__PURE__ */ new Map();
-function Il() {
+var Al = /* @__PURE__ */ O({ default: () => kl }), jl = /* @__PURE__ */ new Map();
+function Ml() {
 	let e = /* @__PURE__ */ new Map(), t = /* #__PURE__ */ Object.assign({
 		"../views/actions/index.tsx": Qi,
 		"../views/activity/index.tsx": wa,
@@ -21623,7 +21411,7 @@ function Il() {
 		"../views/map/index.tsx": os,
 		"../views/new-intent/index.tsx": Ks,
 		"../views/repos/index.tsx": ll,
-		"../views/settings/index.tsx": Pl
+		"../views/settings/index.tsx": Al
 	});
 	for (let [n, r] of Object.entries(t)) {
 		let t = /\/views\/([^/]+)\/index\.tsx$/.exec(n)?.[1];
@@ -21631,19 +21419,19 @@ function Il() {
 		let i = r.default;
 		typeof i == "function" && e.set(t, i);
 	}
-	for (let [t, n] of Fl) e.set(t, n);
+	for (let [t, n] of jl) e.set(t, n);
 	return e;
 }
-function Ll(e) {
+function Nl(e) {
 	return e === "new-intent" ? "nav.newIntent" : `nav.${e}`;
 }
-function Rl({ route: e, go: t }) {
-	let { t: n } = U(), r = l(() => Il(), [e.view]).get(e.view);
+function Pl({ route: e, go: t }) {
+	let { t: n } = U(), r = l(() => Ml(), [e.view]).get(e.view);
 	if (r) return /* @__PURE__ */ m(r, {
 		route: e,
 		go: t
 	});
-	let i = n(Ll(e.view));
+	let i = n(Nl(e.view));
 	return /* @__PURE__ */ h("div", {
 		className: "studio-page studio-placeholder",
 		children: [/* @__PURE__ */ h("h1", { children: [
@@ -21661,20 +21449,20 @@ function Rl({ route: e, go: t }) {
 }
 //#endregion
 //#region src/shell/StudioApp.tsx
-var zl = t(null);
-function Bl() {
-	let e = a(zl);
+var Fl = t(null);
+function Il() {
+	let e = a(Fl);
 	if (!e) throw Error("useShellData() must be called inside StudioApp");
 	return e;
 }
-function Vl() {
+function Ll() {
 	let e = Te(), t = i((t) => e.pollEvents(t), [e]);
 	return /* @__PURE__ */ m(We, {
 		poll: t,
-		children: /* @__PURE__ */ m(Hl, { api: e })
+		children: /* @__PURE__ */ m(Rl, { api: e })
 	});
 }
-function Hl({ api: e }) {
+function Rl({ api: e }) {
 	let t = U(), { t: n } = t, r = ee(), [a, s] = jt(), c = Ke(), u = v(), [f, p] = d(null), [g, _] = d(!1), y = J(`actions:${a.repo}:${a.intent}`, i((t) => e.actions({
 		repo: a.repo || void 0,
 		intent: a.intent || void 0
@@ -21697,11 +21485,7 @@ function Hl({ api: e }) {
 	o(() => {
 		u(D ?? 0);
 	}, [D, u]);
-	let O = l(() => y.data?.actions.filter((e) => e.failure?.breaker_open).length ?? null, [y.data]), k = S.data ? {
-		enabled: S.data.settings.night_window.enabled,
-		start: S.data.settings.night_window.start_local,
-		end: S.data.settings.night_window.end_local
-	} : null, A = l(() => ({
+	let O = l(() => y.data?.actions.filter((e) => e.failure?.breaker_open).length ?? null, [y.data]), k = l(() => ({
 		api: e,
 		route: a,
 		go: s,
@@ -21720,11 +21504,11 @@ function Hl({ api: e }) {
 		x,
 		S,
 		C
-	]), j = wt(a), M = n(Ll(a.view)), N = C.data && C.data.status !== "healthy" ? C.data.issues.length : 0;
+	]), A = wt(a), j = n(Nl(a.view)), M = C.data && C.data.status !== "healthy" ? C.data.issues.length : 0;
 	return /* @__PURE__ */ h("div", {
 		className: "studio",
 		"data-mode": r,
-		"data-pane": j,
+		"data-pane": A,
 		"data-view": a.view,
 		children: [
 			/* @__PURE__ */ m("a", {
@@ -21736,7 +21520,7 @@ function Hl({ api: e }) {
 				route: a,
 				go: s,
 				queueCount: D,
-				showBack: j === "detail" && a.view === "actions",
+				showBack: A === "detail" && a.view === "actions",
 				onBack: () => s({
 					action: "",
 					artifact: ""
@@ -21753,7 +21537,6 @@ function Hl({ api: e }) {
 					leases: x.data?.leases.length ?? null,
 					circuits: O,
 					critical: T?.counts.critical ?? null,
-					nightWindow: k,
 					streamMode: c.mode
 				})
 			}),
@@ -21778,7 +21561,7 @@ function Hl({ api: e }) {
 					})
 				]
 			}) : null,
-			N > 0 ? /* @__PURE__ */ h("div", {
+			M > 0 ? /* @__PURE__ */ h("div", {
 				className: "studio-banner",
 				"data-tone": "warn",
 				role: "status",
@@ -21789,7 +21572,7 @@ function Hl({ api: e }) {
 					}),
 					/* @__PURE__ */ m("span", {
 						className: "studio-grow",
-						children: q(t, "shell.banner.degraded", N)
+						children: q(t, "shell.banner.degraded", M)
 					}),
 					/* @__PURE__ */ m("button", {
 						type: "button",
@@ -21802,12 +21585,12 @@ function Hl({ api: e }) {
 			/* @__PURE__ */ m("main", {
 				className: "studio-view",
 				id: "studio-view",
-				children: /* @__PURE__ */ h(zl.Provider, {
-					value: A,
+				children: /* @__PURE__ */ h(Fl.Provider, {
+					value: k,
 					children: [/* @__PURE__ */ m(Mt, {
-						where: M,
+						where: j,
 						resetKey: a.view,
-						children: /* @__PURE__ */ m(Rl, {
+						children: /* @__PURE__ */ m(Pl, {
 							route: a,
 							go: s
 						})
@@ -21834,8 +21617,8 @@ function Hl({ api: e }) {
 //#endregion
 //#region src/main.tsx
 ce();
-function Ul() {
-	return /* @__PURE__ */ m(me, { children: /* @__PURE__ */ m(Vl, {}) });
+function zl() {
+	return /* @__PURE__ */ m(me, { children: /* @__PURE__ */ m(Ll, {}) });
 }
 //#endregion
-export { Ul as default };
+export { zl as default };
