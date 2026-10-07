@@ -149,7 +149,7 @@ updating this document.
 
 ```python
 APP_NAME = "aidlc-studio"
-APP_VERSION = "1.1.1"                       # must equal app.json "version" (test pins)
+APP_VERSION = "1.1.2"                       # must equal app.json "version" (test pins)
 MIN_KIROCREW_VERSION = "0.3.0"              # == app.json minKiroCrewVersion (architecture §2/A10; review P19/R05)
 BUNDLED_ENGINE_VERSION = "2.7.1"            # == payload/manifest.json engineVersion. Tests assert equality with
 BUNDLED_STATE_VERSION = 8                   #    PayloadManifest.load(); they never compare against a literal
@@ -2952,7 +2952,7 @@ Notation below: `→ 200 {…}` success body; `✗ code` = error codes the route
 
 `GET /health` → 200
 ```json
-{"app": "aidlc-studio", "version": "1.1.1", "bundled_engine_version": "2.10.0", "min_kirocrew_version": "0.3.0",
+{"app": "aidlc-studio", "version": "1.1.2", "bundled_engine_version": "2.10.0", "min_kirocrew_version": "0.3.0",
  "boot_id": "…16 hex…",                                       // Services.boot_id; values above are examples — they come from constants/manifest
  "host_version": "0.5.0-insider.9" | null, "started_at": iso|null, "status": "healthy"|"degraded"|"error",
  "issues": [str],
@@ -3308,10 +3308,10 @@ then live. Heartbeat comment `: ping\n\n` every `SSE_HEARTBEAT_SECS`. The handle
 
 | Purpose | Call | Receipt |
 |---|---|---|
-| create canonical slot | `POST /api/chat/slots {"name": slot_key, "agent": "aidlc"}` (the handler reads only `name`, `agent`, `model`, `folder_id` — `kc:chat_handlers.py:1975-1983`; a `title` key is ignored) | slot dict (`key`, `agent`, `project`, …) |
+| create canonical slot | `POST /api/chat/slots {"name": slot_key}` — no agent: KiroCrew 0.8 resolves an agent named at birth as a crew member and refuses `aidlc` (architecture A34); a `title` key is ignored | slot dict (`key`, `agent`, `project`, …) |
 | title the slot (review R15) | `PATCH /api/chat/slots/{key}/title {"title": "<repo label> / <intent slug>"}` (`kc:dashboard/routes/sessions.py:32`) | `{"ok": true, …}` |
-| bind project (must be BEFORE agent if agent set separately; `02 §3.1`) | `POST /api/chat/slots/{key}/project {"project": canonical_path}` | `{"ok": true, "project": "<realpath>"}`; 403 when sensitive |
-| set agent (only if not set at create) | `POST /api/chat/slots/{key}/agent {"agent": "aidlc"}` | `{"ok", "agent", "workspace"}` |
+| bind project (must be BEFORE agent; `02 §3.1`) | `POST /api/chat/slots/{key}/project {"project": canonical_path}` | `{"ok": true, "project": "<realpath>"}`; 403 when sensitive |
+| set agent (after project) | `POST /api/chat/slots/{key}/agent {"agent": "aidlc", "agent_kind": "template"}` | `{"ok", "agent", "agent_kind", "workspace"}` |
 | **pre-send slot preflight** (review R08) | `GET /api/chat/slots` (list; each entry is `slot.to_dict()` with `key`, `project`, `agent`) — immediately before the human-lane send, find `key == slot_key`; absent → report `not_delivered` with `{"ok": false, "code": "slot_missing"}`; `realpath(project) != canonical_path` or `agent != "aidlc"` → `{"ok": false, "code": "slot_mismatch_preflight"}`. Never send in either case (the host's `POST /api/chat` silently `get_or_create_slot`s an unknown name, `kc:chat_handlers.py:283`) | `[{key, project, agent, running, …}]` |
 | inspect slot | `GET /api/chat/slots/{key}` (404 when the slot does not exist; body has NO project/agent) | `{key, title, running, stopping, messages: [...], queue, …}` |
 | human-lane submit | `POST /api/chat?ws=1 {"message": wire_text, "slot": slot_key, "agent": "aidlc", "meta": {"studio_action_id", "studio_delivery_id"}}` — exactly `SubmitReceipt.host.body` | `{"ok": true, "slot", "mid"?}` or `{"ok": true, "queued": true}`; 4xx `{"error","code"?}` (incl. 409 `slot agent mismatch`) |
@@ -3333,8 +3333,9 @@ other chat can be adopted, and the user is the one who decides which chat that i
 **Which view performs these calls.** `ui/src/intents/SessionPanel.tsx` — opened from the intent inventory
 (`IntentsView`, button `intents.action.bindSession` on the row) — is the ONLY place in Studio that creates a host slot.
 It runs the first four rows of this table in order for one intent: `POST /api/chat/slots` (name
-`aidlc-studio-{repo_id}-{intent_dir}`, mirroring `constants.SLOT_KEY_TEMPLATE`, agent `aidlc`), then the title `PATCH`,
-then the project `POST`, then Studio's own `POST …/{intent}/session/bind` with the slot key the host answered with. Each
+`aidlc-studio-{repo_id}-{intent_dir}`, mirroring `constants.SLOT_KEY_TEMPLATE`, no agent), then the title `PATCH`,
+then the project `POST`, then the agent `POST`, then Studio's own `POST …/{intent}/session/bind` with the slot key the
+host answered with, then files it in the sidebar. Each
 refusal is reported by step number with the server's own body, and `session/bind` is not reached when an earlier step
 failed. The same panel lists `GET /api/chat/slots` filtered to `agent == "aidlc"` and `realpath(project) ==
 canonical_path` so an existing chat can be adopted instead of a second one created, and it renders

@@ -287,13 +287,14 @@ const mount = (intent: IntentSummary, onChanged?: (message?: string) => void) =>
 const folder = (over: Partial<ChatFolder>): ChatFolder =>
   ({ id: 'f', name: 'f', parent_id: '', project_dir: '', order: 0, ...over }) as ChatFolder
 
-/** Steps 1-4 answered, and a host folder store that hands out ids in order. */
+/** Steps 1-5 answered, and a host folder store that hands out ids in order. */
 function bindRoutes(folders: ChatFolder[], extra: Record<string, (body: unknown) => unknown> = {}) {
   let made = 0
   setApiRoutes({
-    [`POST ${CHAT}/slots`]: () => ({ key: SLOT, agent: 'aidlc', project: '' }),
+    [`POST ${CHAT}/slots`]: () => ({ key: SLOT, agent: 'default', agent_kind: 'member', project: '' }),
     [`PATCH ${CHAT}/slots/${SLOT}/title`]: () => ({ ok: true }),
     [`POST ${CHAT}/slots/${SLOT}/project`]: () => ({ ok: true, project: '/work/checkout-web' }),
+    [`POST ${CHAT}/slots/${SLOT}/agent`]: () => ({ ok: true, agent: 'aidlc', agent_kind: 'template' }),
     [`POST ${INTENT_PATH}/session/bind`]: () => ({
       ok: true,
       binding: { slot_key: SLOT, session_key: 'ses_7' },
@@ -306,10 +307,12 @@ function bindRoutes(folders: ChatFolder[], extra: Record<string, (body: unknown)
   })
 }
 
-const FIRST_FOUR = [
-  { method: 'POST', path: `${CHAT}/slots`, body: { name: SLOT, agent: 'aidlc' } },
+/** Born on the host default, pointed at the repo, and only then switched to the repo's own aidlc agent. */
+const BEFORE_FOLDER = [
+  { method: 'POST', path: `${CHAT}/slots`, body: { name: SLOT } },
   { method: 'PATCH', path: `${CHAT}/slots/${SLOT}/title`, body: { title: 'checkout-web / guest-checkout' } },
   { method: 'POST', path: `${CHAT}/slots/${SLOT}/project`, body: { project: '/work/checkout-web' } },
+  { method: 'POST', path: `${CHAT}/slots/${SLOT}/agent`, body: { agent: 'aidlc', agent_kind: 'template' } },
   { method: 'POST', path: `${INTENT_PATH}/session/bind`, body: { slot_key: SLOT } },
 ]
 
@@ -329,7 +332,7 @@ describe('the canonical conversation panel', () => {
       await screen.findByText('Filed in the sidebar under Checkout / 250901-guest-checkout.'),
     ).toBeInTheDocument()
     expect(apiCalls).toEqual([
-      ...FIRST_FOUR,
+      ...BEFORE_FOLDER,
       { method: 'GET', path: `${CHAT}/folders`, body: undefined },
       {
         method: 'POST', path: `${CHAT}/folders`,
@@ -420,7 +423,7 @@ describe('the canonical conversation panel', () => {
     expect(
       await screen.findByText('Filed in the sidebar under Checkout / 250901-guest-checkout.'),
     ).toBeInTheDocument()
-    expect(apiCalls.slice(4)).toEqual([
+    expect(apiCalls.slice(BEFORE_FOLDER.length)).toEqual([
       { method: 'GET', path: `${CHAT}/folders`, body: undefined },
       { method: 'PATCH', path: `${CHAT}/slots/${SLOT}/folder`, body: { folder_id: 'f_intent' } },
     ])
@@ -435,7 +438,7 @@ describe('the canonical conversation panel', () => {
     expect(
       await screen.findByText('Filed in the sidebar under checkout-web / 250901-guest-checkout.'),
     ).toBeInTheDocument()
-    expect(apiCalls.slice(4)).toEqual([
+    expect(apiCalls.slice(BEFORE_FOLDER.length)).toEqual([
       { method: 'GET', path: `${CHAT}/folders`, body: undefined },
       { method: 'POST', path: `${CHAT}/folders`, body: { name: 'checkout-web', project_dir: '/work/checkout-web' } },
       {
@@ -499,7 +502,7 @@ describe('the canonical conversation panel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Create and bind the conversation' }))
 
     expect(
-      await screen.findByText(/Step 3 of 5 was refused \(point it at this repository\)/),
+      await screen.findByText(/Step 3 of 6 was refused \(point it at this repository\)/),
     ).toBeInTheDocument()
     // The host's own words, verbatim: a 403 with no code would otherwise read as "you are not the owner".
     expect(screen.getByText(/refusing a sensitive path: \/work\/checkout-web/)).toBeInTheDocument()
@@ -541,6 +544,43 @@ describe('the canonical conversation panel', () => {
     )
     expect(screen.getByText('ses_2')).toBeInTheDocument()
     expect(onChanged).toHaveBeenCalledWith('Bound to aidlc-hand-made.')
+  })
+
+  it('reports a refused agent switch as its own step and binds nothing', async () => {
+    // KiroCrew 0.8 refuses `aidlc` for a slot that does not yet have the repository as its project; the
+    // switch now comes after step 3, and a refusal there must not be mistaken for a create or bind failure.
+    setApiRoutes({
+      [`POST ${CHAT}/slots`]: () => ({ key: SLOT }),
+      [`PATCH ${CHAT}/slots/${SLOT}/title`]: () => ({ ok: true }),
+      [`POST ${CHAT}/slots/${SLOT}/project`]: () => ({ ok: true, project: '/work/checkout-web' }),
+      [`POST ${CHAT}/slots/${SLOT}/agent`]: () => {
+        throw new StubApiError(409, { error: 'the selected agent choice is not available', code: 'agent_choice_unavailable' })
+      },
+      [`POST ${INTENT_PATH}/session/bind`]: () => ({ ok: true, binding: { slot_key: SLOT }, slot: null }),
+    })
+    mount(UNBOUND)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create and bind the conversation' }))
+
+    expect(
+      await screen.findByText(/Step 4 of 6 was refused \(switch it to the aidlc agent\)/),
+    ).toBeInTheDocument()
+    expect(apiCalls.map((call) => call.path)).not.toContain(`${INTENT_PATH}/session/bind`)
+  })
+
+  it('numbers a refused bind of an existing conversation as the bind step', async () => {
+    setApiRoutes({
+      [`GET ${CHAT}/slots`]: () => [slot({ key: 'aidlc-hand-made', project: '/work/checkout-web' })],
+      [`POST ${INTENT_PATH}/session/bind`]: () => {
+        throw new StubApiError(409, { error: 'the slot is not bound to this repository', code: 'slot_mismatch' })
+      },
+    })
+    mount(UNBOUND)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bind an existing conversation' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Bind this one' }))
+
+    expect(await screen.findByText(/Step 5 of 6 was refused \(bind it to this intent\)/)).toBeInTheDocument()
   })
 
   it('shows the bound conversation and unbinds it', async () => {

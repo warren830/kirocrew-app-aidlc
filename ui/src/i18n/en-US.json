@@ -1099,6 +1099,7 @@
   "intents.session.reason.project_match": "Open on this repository",
   "intents.session.running": "A turn is running",
   "intents.session.serverSaid": "The server said:",
+  "intents.session.step.agent": "switch it to the aidlc agent",
   "intents.session.step.bind": "bind it to this intent",
   "intents.session.step.create": "create the conversation",
   "intents.session.step.folder": "file it under the repository's sidebar folder",

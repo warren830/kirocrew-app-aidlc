@@ -64,6 +64,7 @@
   "intents.session.step.create": "创建会话",
   "intents.session.step.title": "设置标题",
   "intents.session.step.project": "把它指向本仓库",
+  "intents.session.step.agent": "切换到 aidlc 代理",
   "intents.session.step.bind": "把它绑定到这个意图",
   "intents.session.step.folder": "放进本仓库的侧栏文件夹",
   "intents.session.folder.filed": "已放进侧栏文件夹：{path}。",
