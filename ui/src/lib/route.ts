@@ -18,6 +18,7 @@
 
 import { useCallback, useSyncExternalStore } from 'react'
 import { useNavigate } from '@kirocrew/app-sdk'
+import { APP_NAME } from './app'
 
 /** The six nav destinations plus the wizard. `new-intent` is reached from the top bar, not the rail. */
 export const VIEWS = ['actions', 'repos', 'intents', 'map', 'activity', 'settings', 'new-intent'] as const
@@ -31,7 +32,7 @@ export const DEFAULT_TAB: Tab = 'decision'
 export const DEFAULT_SPACE = 'default'
 
 /** The app's own page URL. Never a deeper path: the host router would not match it. */
-export const PAGE_PATH = '/apps/aidlc-studio'
+export const PAGE_PATH = `/apps/${APP_NAME}`
 
 /**
  * §3.2's grammar. Covers `r_…`, `a_…`, `space~250901-slug`, `functional-design`, `unit-1`, hashes and
@@ -163,7 +164,7 @@ export function paneFor(route: StudioRoute): 'list' | 'detail' {
  * `location`, so the parsed value is cached and only rebuilt when the URL text actually changed.
  * Without the cache every render would produce a new object and React would loop.
  */
-const ROUTE_EVENT = 'aidlc-studio:route'
+const ROUTE_EVENT = `${APP_NAME}:route`
 
 let cachedSearch: string | null = null
 let cachedHash: string | null = null

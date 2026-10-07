@@ -36,9 +36,10 @@ import type {
   ReviewResponse, SettingsResponse, SettingsValues, SlackCallbackResponse, SlotView, SubmitReceipt,
   SubmitRequest, TakeoverPreviewResponse, TransactionAcceptedResponse, TransactionResponse, TransactionKind,
 } from './types'
+import { APP_NAME } from './app'
 
 /** Studio's own routes. The host mounts `AppRoute.path`s under this prefix (`01 §1.2`). */
-export const API_BASE = '/api/apps/aidlc-studio'
+export const API_BASE = `/api/apps/${APP_NAME}`
 /** The host's chat API — the only other prefix in `permissions.api` (§2.13). */
 export const CHAT_BASE = '/api/chat'
 

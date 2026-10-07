@@ -18,9 +18,10 @@ import { plural } from '../lib/format'
 import type { StreamMode } from '../lib/sse'
 import { Chip } from './Chip'
 import { Icon } from './Icon'
+import { APP_NAME } from '../lib/app'
 
 /** Remembered per browser, not per session: an operator who folds it away meant it. */
-const STRIP_KEY = 'aidlc-studio:strip'
+const STRIP_KEY = `${APP_NAME}:strip`
 
 export interface StatusStripProps {
   /** Turns executing right now (`/leases.live_execution`). */

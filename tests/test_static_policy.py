@@ -394,8 +394,8 @@ def test_the_bridge_never_imports_a_private_host_module():
 def test_every_intra_package_import_is_relative():
     """An absolute ``import backend.studio.x`` cannot resolve: the app is loaded by file path.
 
-    ``backend/routes.py`` and ``backend/hooks.py`` are exempt in the other direction — they must NOT use
-    a relative import, which ``test_loader.py`` pins.
+    ``backend/routes.py`` and ``backend/hooks.py`` are exempt: they import ``studio`` relatively, through
+    the parent packages the 0.8 loader registers, which ``test_loader.py`` pins.
     """
     offences = []
     for path, tree in parsed():
@@ -404,21 +404,22 @@ def test_every_intra_package_import_is_relative():
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.level == 0:
                 module = node.module or ""
-                if module.split(".")[0] in {"backend", "studio", "_aidlc_studio_backend"}:
+                if module.split(".")[0] in {"backend", "studio", "_kirocrew_app_aidlc-studio"}:
                     offences.append(f"{path.name}:{node.lineno}: from {module}")
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name.split(".")[0] in {"backend", "studio", "_aidlc_studio_backend"}:
+                    if alias.name.split(".")[0] in {"backend", "studio", "_kirocrew_app_aidlc-studio"}:
                         offences.append(f"{path.name}:{node.lineno}: import {alias.name}")
     assert offences == [], offences
 
 
-def test_the_entry_points_use_no_relative_import():
-    """On the 0.3.0 loader there is no parent package, so a relative import here fails at enable time."""
+def test_the_entry_points_import_studio_only_relatively():
+    """The 0.8 loader registers the parent packages, so ``from . import studio`` is the one import that
+    resolves inside this app's tree; an absolute import of the backend would not resolve at all."""
     for name in ("routes.py", "hooks.py"):
         tree = ast.parse((BACKEND / name).read_text("utf-8"))
-        levels = [n.level for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)]
-        assert all(level == 0 for level in levels), name
+        relative = [n for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.level > 0]
+        assert [(n.level, n.module, [a.name for a in n.names]) for n in relative] == [(1, None, ["studio"])], name
 
 
 # --------------------------------------------------------------------------- #

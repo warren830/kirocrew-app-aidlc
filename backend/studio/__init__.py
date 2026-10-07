@@ -1,8 +1,8 @@
 """AI-DLC Studio backend package.
 
-Imported through the private namespace ``_aidlc_studio_backend.studio`` that ``backend/routes.py``
-registers, so the modules below are reachable as attributes (``studio.services``,
-``studio.handlers.common``) from the two thin entry points the host loads.
+Imported by the two thin entry points the host loads (``backend/routes.py``, ``backend/hooks.py``) as
+``_kirocrew_app_<name>.backend.studio``, so the modules below are reachable as attributes
+(``studio.services``, ``studio.handlers.common``).
 
 The imports are eager on purpose: a syntax or wiring error should surface while the gateway is
 registering the app — where it is logged and reported as degraded hook health — rather than on the

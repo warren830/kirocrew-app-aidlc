@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import multiprocessing
 import os
 from pathlib import Path
 
 import pytest
+
+from conftest import fork_process
 
 from test_installer import (
     BOOT,
@@ -462,7 +463,7 @@ def test_real_process_death_settlement_and_recovery(studio, h, installed, clock)
             repo, confirm_digest=plan.digest(), transaction_id=reserved.transaction_id,
         ))
 
-    process = multiprocessing.get_context("fork").Process(target=child)
+    process = fork_process(child)
     process.start()
     process.join(15)
     if process.is_alive():

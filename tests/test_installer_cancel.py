@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-import multiprocessing
 import os
 import threading
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
+
+from conftest import fork_process
 
 from test_installer import (
     I, do, h, insert_repo, make_harness, payload_v1, payload_v2, reload_repo, run, store, tree,
@@ -155,7 +156,7 @@ def test_process_death_during_cancel_keeps_recovery_evidence(
             repo, "upgrade", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
         ))
 
-    process = multiprocessing.get_context("fork").Process(target=child)
+    process = fork_process(child)
     process.start()
     process.join(15)
     if process.is_alive():

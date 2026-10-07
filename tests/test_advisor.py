@@ -114,7 +114,7 @@ class FakeActions:
         self.extra: dict[str, Any] = {}
 
     async def get(self, action_id: str) -> Any:
-        from _aidlc_studio_backend.studio.errors import StudioError
+        StudioError = CT.studio_module("errors").StudioError
 
         found = self.extra.get(action_id)
         if found is None and self.rec is not None and action_id == self.rec.action_id:
@@ -270,7 +270,7 @@ def request_draft(w, A, **over: Any):
 
 
 def rows_of(w, kind: str) -> list:
-    from _aidlc_studio_backend.studio.storage import ActivityQuery
+    ActivityQuery = CT.studio_module("storage").ActivityQuery
 
     rows, _ = asyncio.run(w.activity.query(ActivityQuery(kind=kind, limit=100)))
     return rows
@@ -344,7 +344,7 @@ def test_the_automatic_kinds_are_an_explicit_table_and_never_a_rejection(A):
 
 
 def studio_action_types() -> tuple[str, ...]:
-    from _aidlc_studio_backend.studio.constants import ACTION_TYPE
+    ACTION_TYPE = CT.studio_module("constants").ACTION_TYPE
 
     return ACTION_TYPE
 
@@ -541,7 +541,7 @@ def _append_audit(repo: Path, block: str) -> None:
 
 
 def _build(w, A, request_obj):
-    from _aidlc_studio_backend.studio.repo_registry import RepoRecord
+    RepoRecord = CT.studio_module("repo_registry").RepoRecord
 
     repo = RepoRecord.from_row(w.store.get("repos", REPO))
     snap = w.projection.snapshot(repo, "default", INTENT)
@@ -1173,7 +1173,7 @@ def test_a_clicked_draft_is_still_recorded_as_a_click(wiring, A):
 def test_a_client_cannot_claim_through_the_route_that_its_request_was_automatic(wiring, A):
     """§2.7. ``auto`` licenses a pre-filled question form, so a body that could set it could pre-fill
     the client's own answers into a form the human then submits."""
-    from _aidlc_studio_backend.studio.handlers import advisor as handler
+    handler = CT.studio_module("handlers.advisor")
 
     services = SimpleNamespace(advisor=wiring.broker)
     request = CT.owner_request(
@@ -1507,7 +1507,7 @@ def plan_advice_module(A):
 
 
 def plan_req(A, **over: Any):
-    from _aidlc_studio_backend.studio.plan import PlanRequest
+    PlanRequest = CT.studio_module("plan").PlanRequest
 
     base = dict(
         repo_id=REPO,
@@ -1523,7 +1523,7 @@ def plan_req(A, **over: Any):
 
 
 def repo_record(w):
-    from _aidlc_studio_backend.studio.repo_registry import RepoRecord
+    RepoRecord = CT.studio_module("repo_registry").RepoRecord
 
     return RepoRecord.from_row(w.store.get("repos", REPO))
 
@@ -1727,7 +1727,7 @@ def test_a_plan_draft_never_turns_off_a_stage_that_always_runs(wiring, A):
 def test_a_plan_draft_is_settled_without_a_neutrality_probe(wiring, A):
     """There is no intent to keep neutral (FR-ADV-007): the card table is never read, ``neutrality`` is
     ``None``, nothing fails ``evidence_mutated`` and no ``critical`` row is written."""
-    from _aidlc_studio_backend.studio.storage import ActivityQuery
+    ActivityQuery = CT.studio_module("storage").ActivityQuery
 
     wiring.actions.rec = None
     draft, _package = settle_plan(
@@ -1906,7 +1906,7 @@ def test_a_crowded_catalogue_still_fits_the_package_cap(wiring, A, K, P):
     much context: the package carries Q1's 26 scopes (its ``scopes`` and ``scope_grid`` are the scopes
     the agent can actually pick) and ``_fit`` brings the rest under ``MAX_EVIDENCE_PACKAGE_CHARS``
     without touching a question row (§1.18a)."""
-    from _aidlc_studio_backend.studio.aidlc_reader import ScopeMeta
+    ScopeMeta = CT.studio_module("aidlc_reader").ScopeMeta
 
     rec = repo_record(wiring)
     real = wiring.plan.catalog(rec, ".kiro")

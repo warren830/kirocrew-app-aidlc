@@ -22,8 +22,6 @@ any problem, which is what CI runs.
 from __future__ import annotations
 
 import argparse
-import importlib.machinery
-import importlib.util
 import json
 import re
 import sys
@@ -51,13 +49,11 @@ ENUM_GROUPS = {
 
 
 def load_backend(name: str):
-    ns = "_aidlc_studio_backend"
-    if ns not in sys.modules:
-        spec = importlib.machinery.ModuleSpec(ns, None, is_package=True)
-        mod = importlib.util.module_from_spec(spec)
-        mod.__path__ = [str(ROOT / "backend")]  # type: ignore[attr-defined]
-        sys.modules[ns] = mod
-    return importlib.import_module(f"{ns}.studio.{name}")
+    """Import one backend/studio module the way the gateway does (``scripts/_backend.py``)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import _backend  # noqa: PLC0415 - script-local helper
+
+    return _backend.studio(name)
 
 
 def merge(locale: str) -> tuple[dict[str, str], list[str]]:

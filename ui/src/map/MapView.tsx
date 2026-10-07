@@ -43,9 +43,10 @@ import { PhaseAccordion } from './PhaseAccordion'
 import { PhaseLane } from './PhaseLane'
 import { StageInspector } from './StageInspector'
 import { artifactCountLabel, stageBadge, type Density, type Relation } from './StageCard'
+import { APP_NAME } from '../lib/app'
 
 /** Remembered per browser: an operator who works in Detailed means it. */
-const DENSITY_KEY = 'aidlc-studio:mapDensity'
+const DENSITY_KEY = `${APP_NAME}:mapDensity`
 /** The breakpoint at which the stylesheet has already given up on the canvas. */
 const ACCORDION_QUERY = '(max-width: 900px)'
 /** Queue types that mean the record and Studio disagree; the only assertive message on this page. */

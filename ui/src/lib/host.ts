@@ -16,6 +16,7 @@
  */
 
 import { useCallback, useSyncExternalStore } from 'react'
+import { APP_NAME } from './app'
 
 export type HostMode = 'dark' | 'light'
 export type StudioLocale = 'en-US' | 'zh-CN'
@@ -26,8 +27,9 @@ const DEFAULT_LOCALE: StudioLocale = 'en-US'
 /** The dashboard's own mirror of the user's language choice; `''` means "follow the browser". */
 const HOST_LANG_KEY = 'mc-lang'
 /** Studio's optional override, set from its Settings page. */
-export const STUDIO_LOCALE_KEY = 'aidlc-studio:locale'
-export const STUDIO_ORGANIZE_KEY = 'aidlc-studio:organize'
+export const STUDIO_LOCALE_KEY = `${APP_NAME}:locale`
+export const STUDIO_ORGANIZE_KEY = `${APP_NAME}:organize`
+const LOCALE_CHANGED_EVENT = `${APP_NAME}:locale-changed`
 
 const MOBILE_QUERY = '(max-width: 767px)'
 
@@ -93,11 +95,11 @@ export function useHostLocale(): StudioLocale {
     const detach = subscribeToAttributes(['lang'])(onChange)
     // `storage` only fires in OTHER tabs, so Studio's own Settings page dispatches this event itself.
     window.addEventListener('storage', onChange)
-    window.addEventListener('aidlc-studio:locale-changed', onChange)
+    window.addEventListener(LOCALE_CHANGED_EVENT, onChange)
     return () => {
       detach()
       window.removeEventListener('storage', onChange)
-      window.removeEventListener('aidlc-studio:locale-changed', onChange)
+      window.removeEventListener(LOCALE_CHANGED_EVENT, onChange)
     }
   }, [])
   return useSyncExternalStore(subscribe, readLocale, () => DEFAULT_LOCALE)
@@ -111,7 +113,7 @@ export function setStudioLocale(locale: StudioLocale | null): void {
   } catch {
     // A locale that cannot be persisted still applies for this session.
   }
-  window.dispatchEvent(new CustomEvent('aidlc-studio:locale-changed'))
+  window.dispatchEvent(new CustomEvent(LOCALE_CHANGED_EVENT))
 }
 
 /**
@@ -155,7 +157,7 @@ export function usePrefersReducedMotion(): boolean {
  * Load Studio's stylesheet once. The host does not load app CSS, and the bundle cannot rely on Tailwind
  * classes it did not compile, so the layout lives in a real stylesheet served from the app's ui/ path.
  */
-export function ensureStylesheet(href = '/apps/aidlc-studio/ui/dist/style.css', id = 'aidlc-studio-css'): void {
+export function ensureStylesheet(href = `/apps/${APP_NAME}/ui/dist/style.css`, id = `${APP_NAME}-css`): void {
   if (typeof document === 'undefined' || document.getElementById(id)) return
   const link = document.createElement('link')
   link.id = id

@@ -65,18 +65,14 @@ def test_identity_matches_the_constants_module(raw, studio):
     assert raw["name"] == studio.constants.APP_NAME
     assert raw["version"] == studio.constants.APP_VERSION
     assert raw["minKiroCrewVersion"] == studio.constants.MIN_KIROCREW_VERSION
-    assert studio.constants.MIN_KIROCREW_VERSION == "0.3.0"
+    assert studio.constants.MIN_KIROCREW_VERSION == "0.8.0"
 
 
-def test_the_kirocrew_floor_is_the_one_the_bootstrap_supports(raw):
-    """0.3.0 is only honest because ``backend/routes.py`` registers its own namespace (C26/A10).
-
-    If the floor is ever raised, that bootstrap becomes dead weight; if the bootstrap is ever removed,
-    this floor becomes a lie and the app fails to load on 0.3.0 with a ``ModuleNotFoundError``.
-    """
+def test_the_kirocrew_floor_is_the_loader_the_entry_points_need(raw):
+    """0.8 registers the app's parent packages, which is what ``from . import studio`` relies on."""
     text = (APP_ROOT / "backend" / "routes.py").read_text("utf-8")
-    assert "_aidlc_studio_backend" in text
-    assert raw["minKiroCrewVersion"] == "0.3.0"
+    assert "from . import studio" in text
+    assert raw["minKiroCrewVersion"] == "0.8.0"
 
 
 # --------------------------------------------------------------------------- #

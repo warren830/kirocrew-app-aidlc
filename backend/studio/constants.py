@@ -29,13 +29,24 @@ from typing import Any, Mapping, Protocol
 # identity
 # --------------------------------------------------------------------------- #
 
-APP_NAME = "aidlc-studio"
+#: The name ``app.json`` ships with. The name the host installed this copy under can differ (a
+#: side-by-side development install), and that one is :data:`APP_NAME`.
+DEFAULT_APP_NAME = "aidlc-studio"
+
+
+def _installed_name(module_name: str) -> str:
+    """The app name the host loaded this module under: KiroCrew 0.8 imports an app's backend as
+    ``_kirocrew_app_<name>.backend…``. Anything else (a script, a REPL) gets the shipped name."""
+    head, prefix = module_name.split(".", 1)[0], "_kirocrew_app_"
+    return head[len(prefix):] if head.startswith(prefix) and len(head) > len(prefix) else DEFAULT_APP_NAME
+
+
+APP_NAME = _installed_name(__name__)
 #: Must equal ``app.json`` ``version`` (pinned by tests/test_manifest.py).
 APP_VERSION = "1.1.6"
-#: Must equal ``app.json`` ``minKiroCrewVersion``. 0.3.0 is enough because Studio registers its own
-#: module namespace (see ``backend/routes.py``) instead of relying on the 0.5.0 loader, and every
-#: other host primitive it uses exists in 0.3.0.
-MIN_KIROCREW_VERSION = "0.3.0"
+#: Must equal ``app.json`` ``minKiroCrewVersion``: the 0.8 loader registers the app's parent packages,
+#: which is what lets ``backend/routes.py`` import ``studio`` relatively.
+MIN_KIROCREW_VERSION = "0.8.0"
 #: Must equal ``payload/manifest.json`` ``engineVersion``.
 BUNDLED_ENGINE_VERSION = "2.10.0"
 #: What the bundled engine writes. Code and tests read these from ``payload/manifest.json`` rather than
@@ -139,7 +150,7 @@ ADVISOR_TIMEOUT_SECS = 300.0
 #: among the files this app owns (`kc:apps/spawn_sdk.py:173-181`), so the string in the JSON, the string
 #: passed to ``spawn.run`` and the string the uniqueness check looks for must be one constant: two
 #: spellings would make the advisor start refusing after a rename with nothing to point at (C25).
-ADVISOR_AGENT_NAME = "aidlc-studio-advisor"
+ADVISOR_AGENT_NAME = f"{APP_NAME}-advisor"
 
 #: How many *automatic* advisor drafts may be queued or running at once across the whole installation
 #: (FR-ADV-010). The pre-draft opt-in turns one open card into one subagent, and a repository can easily
@@ -809,9 +820,9 @@ ACCEPT_AS_IS_MIN_ATTEMPT = 4
 # --------------------------------------------------------------------------- #
 
 #: Must equal ``app.json`` ``permissions.events``.
-HOST_EVENT_ACTION = "aidlc-studio:action"
-HOST_EVENT_REPO = "aidlc-studio:repo"
-HOST_EVENT_TRANSACTION = "aidlc-studio:transaction"
+HOST_EVENT_ACTION = f"{APP_NAME}:action"
+HOST_EVENT_REPO = f"{APP_NAME}:repo"
+HOST_EVENT_TRANSACTION = f"{APP_NAME}:transaction"
 HOST_EVENTS = (HOST_EVENT_ACTION, HOST_EVENT_REPO, HOST_EVENT_TRANSACTION)
 
 #: Host chat endpoints the UI calls with the owner's own cookie (declared in ``permissions.api``).
@@ -820,9 +831,9 @@ HOST_CHAT_SEND_PATH = "/api/chat?ws=1"
 HOST_CHAT_SLOTS_PATH = "/api/chat/slots"
 
 #: Slot name Studio asks the UI to create for an intent's canonical session.
-SLOT_KEY_TEMPLATE = "aidlc-studio-{repo_id}-{intent_dir}"
+SLOT_KEY_TEMPLATE = APP_NAME + "-{repo_id}-{intent_dir}"
 
-DEEP_LINK_BASE = "/apps/aidlc-studio"
+DEEP_LINK_BASE = f"/apps/{APP_NAME}"
 #: Machine-lane features stay off until a host-authenticated non-human submission path is proven
 #: (PRD P-08 / S12). The string is a code the UI translates, not prose.
 MACHINE_LANE_REASON = "s12_unproven"

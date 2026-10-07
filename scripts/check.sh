@@ -15,7 +15,8 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 
-PY="${PY:-/Users/ychchen/warren_ws/kirocrew/.venv/bin/python}"
+# The test venv runs on the gateway's own runtime (scripts/test-venv.sh creates it).
+PY="${PY:-${KC_TEST_VENV:-$HOME/.venvs/aidlc-studio-test}/bin/python}"
 BUNDLE_PY="${BUNDLE_PY:-/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/bin/python3.12}"
 # `dirname ""` is ".", so a missing node used to surface later as "env: ./npx: No such file".
 NODE_BIN="${NODE_BIN:-$(command -v node >/dev/null 2>&1 && dirname "$(command -v node)")}"
@@ -142,17 +143,26 @@ bundle_clean() {
 if [ "$SCOPE" != "frontend" ]; then
   step "app manifest and release assets" manifest_valid
   step "bundled AI-DLC payload integrity" payload_intact
-  step "backend tests" "$PY" -m pytest tests -q -o addopts=
-  step "backend imports under the gateway's own interpreter" "$BUNDLE_PY" - <<'PYEOF'
-import importlib, importlib.machinery, importlib.util, sys, warnings, logging
+  if [ ! -x "$PY" ]; then
+    step "test venv" sh -c 'echo "no test venv at $0: run scripts/test-venv.sh" >&2; exit 1' "$PY"
+  else
+    step "backend tests" "$PY" -m pytest tests -q -o addopts= -n "${PYTEST_WORKERS:-8}" -p no:cacheprovider
+  fi
+  # The gateway's own interpreter and loader, with the trust gate opened: a frozen stdlib and the real
+  # module_loader are a different import environment than any test harness.
+  step "backend loads through the gateway's own loader" env KIROCREW_HOME="$(mktemp -d)" "$BUNDLE_PY" - <<'PYEOF'
+import json, sys, warnings, logging
 warnings.filterwarnings("ignore"); logging.disable(logging.WARNING)
 from pathlib import Path
-ns = "_aidlc_studio_backend"
-mod = importlib.util.module_from_spec(importlib.machinery.ModuleSpec(ns, None, is_package=True))
-mod.__path__ = [str(Path.cwd() / "backend")]
-sys.modules[ns] = mod
-studio = importlib.import_module(f"{ns}.studio")
-print("imports on the live gateway interpreter:", len(studio.__all__), "modules")
+from kiro_crew.apps import module_loader as ML
+ML.app_execution_denied = lambda *a, **k: None
+root = Path.cwd()
+name = json.loads((root / "app.json").read_text())["name"]
+hooks = json.loads((root / "app.json").read_text())["backend"]["hooks"]
+for path in hooks.values():
+    ML.load_app_module(name, root, path)
+studio = sys.modules[f"_kirocrew_app_{name}.backend.studio"]
+print(f"loaded {len(hooks)} hooks and {len(studio.__all__)} modules on the gateway's interpreter")
 PYEOF
 fi
 

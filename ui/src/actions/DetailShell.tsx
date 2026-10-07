@@ -48,6 +48,7 @@ import { DetailHeader } from './DetailHeader'
 import { DetailTabs, tabsFor } from './DetailTabs'
 import { isRefreshing } from './QueueRow'
 import { IDLE, pendingQuestions, useSubmit, wireTextFor } from './useSubmit'
+import { APP_NAME } from '../lib/app'
 
 // --------------------------------------------------------------------------- //
 // drafts
@@ -81,7 +82,7 @@ export const EMPTY_DRAFT: ActionDraft = {
   advisorApplied: null,
 }
 
-const DRAFT_PREFIX = 'aidlc-studio:draft:'
+const DRAFT_PREFIX = `${APP_NAME}:draft:`
 
 function readDraft(actionId: string): ActionDraft {
   try {

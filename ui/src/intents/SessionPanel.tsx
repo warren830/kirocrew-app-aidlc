@@ -50,6 +50,7 @@ import { StudioApiError, type StudioApi } from '../lib/api'
 import { unavailable } from '../lib/format'
 import type { BindingView, ChatFolder, IntentSummary, RepoRecord, SessionRef, SlotView } from '../lib/types'
 import { StartStatus, startBlockedReason, startKind, startText, useStartRun } from './StartRun'
+import { APP_NAME } from '../lib/app'
 
 /** The agent an AI-DLC conversation runs. `SessionBinder.bind` refuses every other one (§1.11). */
 const AIDLC_AGENT = 'aidlc'
@@ -78,7 +79,7 @@ const BIND_STEP = STEP_KEYS.indexOf('intents.session.step.bind') + 1
  * conversation would then be invisible to the takeover search.
  */
 export function canonicalSlotKey(repoId: string, intentDir: string): string {
-  return `aidlc-studio-${repoId}-${intentDir}`
+  return `${APP_NAME}-${repoId}-${intentDir}`
 }
 
 /** Normalised for comparison: the host reports realpaths, and a trailing slash is not a difference. */

@@ -10,7 +10,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-APP="aidlc-studio"
 KCAPI="$ROOT/scripts/kcapi.sh"
 BUILD=1; DEV=0
 for a in "$@"; do
@@ -35,6 +34,8 @@ case "$PY3" in
      exit 1 ;;
 esac
 export KC_PY="$PY3"
+# The name to install under is the one in app.json (scripts/dev-slug.sh stages a renamed copy).
+APP="$("$PY3" -c 'import json,sys; print(json.load(open(sys.argv[1]))["name"])' "$ROOT/app.json")"
 
 if [ "$BUILD" = 1 ] && [ -f "$ROOT/ui/package.json" ]; then
   if [ -z "${NODE_BIN:-}" ]; then

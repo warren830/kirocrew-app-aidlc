@@ -423,7 +423,7 @@ def _arm_advisor(sv: Any, fake_ctx: Any, monkeypatch: pytest.MonkeyPatch) -> Non
     the test process, so an unarmed broker refuses every draft with ``advisor_unavailable``. The
     spawn itself is ``fake_ctx.spawn`` already (``conftest``): recorded, never run.
     """
-    from _aidlc_studio_backend.studio import advisor as A  # noqa: PLC0415 - one call site
+    A = CT.studio_module("advisor")
 
     agent = SimpleNamespace(name=A.ADVISOR_AGENT_NAME, filename="aidlc-studio--advisor.json")
     monkeypatch.setattr(sv.advisor, "_agent_lister", lambda: [agent])
@@ -525,7 +525,7 @@ def test_plan_advise_never_records_an_automatic_request(sv, routes, fake_host, r
 
 def test_creating_an_intent_is_refused_while_the_repository_contradicts_itself(sv, routes, fake_host,
                                                                               repo, monkeypatch):
-    from _aidlc_studio_backend.studio.consistency import Finding  # noqa: PLC0415 - one call site
+    Finding = CT.studio_module("consistency").Finding
 
     blocking = Finding(code="install_recovery_required", severity="blocking",
                        message_key="finding.install_recovery_required", params={}, evidence=())

@@ -58,3 +58,24 @@
 | P6 | 安装器 | 同上 + 故障注入测试 |
 | P7 | AI-DLC 文件解析整理 | 同上 |
 | P8 | 全量检查、gateway 端到端、与 v1 在同一批仓库上对比、发布准备 | 端到端通过 |
+
+## 进度
+
+### P0（2026-10-08）
+- 基线：v1.1.6 在新目录全部 11 道检查通过（后端 2899 个测试、UI 466 个）。
+- 测试改在 KiroCrew 0.8 运行时上跑：`scripts/test-venv.sh` 用桌面版自带的 Python 建 venv（共享它的
+  site-packages，只额外装 pytest/xdist）。`check.sh` 默认用它，并用网关自己的 `module_loader` 加载三个 hook。
+- 金样：`tests/test_golden.py` 录下 6 个场景（裸仓库、devdelta 2.6.2、payload 2.3.0、older 2.1.1、
+  关卡+问题、修订+错误爆发）的仓库、intent、详情、流程图、产物、卡片、安装/升级/卸载预览、计划预览。
+- 最低 KiroCrew 提到 0.8.0：`backend/routes.py`、`hooks.py` 去掉自建命名空间，直接 `from . import studio`
+  （0.8 加载器注册父包、失败回滚、停用时卸载）。
+- App 名运行时决定：后端取自宿主给的包名（`_kirocrew_app_<name>`），UI 取自 bundle 自己的 URL；
+  `scripts/dev-slug.sh <name>` 生成改名副本并安装。已在本机网关以 `aidlc-studio-next` 与 v1 并排装上，
+  83 个路由注册、启动正常、health 为 healthy。
+- 0.8 上 fork 出来的子进程继承了宿主路径检查的死线程池，导致 6 个“进程崩溃”测试误报；`conftest.fork_process`
+  在子进程里重建线程池。
+- 待办：无头浏览器拿不到 owner 会话（v1 同样如此），UI 实机检查留到 P8 在桌面版里做。
+
+## 金样变更记录
+
+（每次有意改变金样输出都记在这里：哪个阶段、哪个视图、改了什么、为什么。）

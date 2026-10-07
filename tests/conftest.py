@@ -41,9 +41,10 @@ PAYLOAD = APP_ROOT / "payload"
 
 sys.path.insert(0, str(APP_ROOT / "tests"))  # so `import fixtures` resolves to tests/fixtures/
 
-#: The namespace ``backend/routes.py`` creates for itself; tests must use the same one so the module
-#: objects (and therefore the Services registry) are shared.
-STUDIO_NS = "_aidlc_studio_backend"
+#: The package KiroCrew 0.8 loads the backend into (``_kirocrew_app_<name>.backend``); tests load the
+#: entry points the same way, so the module objects (and the Services registry) are the gateway's.
+HOST_NS = "_kirocrew_app_aidlc-studio"
+STUDIO_NS = f"{HOST_NS}.backend"
 
 _LOADED: dict[str, ModuleType] = {}
 
@@ -69,26 +70,46 @@ def _load_entry(rel: str, dotted: str) -> ModuleType:
 
 
 def load_backend() -> ModuleType:
-    """Load ``backend/routes.py`` (and ``backend/hooks.py``) and return the routes module.
-
-    Mirrors the gateway: the host registers ``_kirocrew_app_aidlc-studio[.backend[.studio]]`` on 0.5.0
-    and nothing on 0.3.0, and Studio's own bootstrap covers both. Loading through the *host* name here
-    proves the bootstrap does not depend on it.
+    """Load ``backend/routes.py`` (and ``backend/hooks.py``) the way KiroCrew 0.8 does and return the
+    routes module: parent packages registered first, each entry file executed under its dotted name.
+    ``tests/test_loader.py`` drives the gateway's real loader to prove the two agree.
     """
     if "routes" in _LOADED:
         return _LOADED["routes"]
-    host_ns = "_kirocrew_app_aidlc-studio"
-    _register_namespace(host_ns, APP_ROOT)
-    _register_namespace(f"{host_ns}.backend", APP_ROOT / "backend")
-    routes = _load_entry("backend/routes.py", f"{host_ns}.backend.routes")
-    hooks = _load_entry("backend/hooks.py", f"{host_ns}.backend.hooks")
+    _register_namespace(HOST_NS, APP_ROOT)
+    _register_namespace(STUDIO_NS, APP_ROOT / "backend")
+    routes = _load_entry("backend/routes.py", f"{STUDIO_NS}.routes")
+    hooks = _load_entry("backend/hooks.py", f"{STUDIO_NS}.hooks")
     _LOADED["routes"] = routes
     _LOADED["hooks"] = hooks
     return routes
 
 
+def fork_process(target: Callable[[], Any]) -> Any:
+    """A forked child for the process-death tests that can still use the host's path checks.
+
+    kiro_crew 0.8 resolves sensitive paths through a process-wide pool whose workers do not survive
+    ``fork()``; a child that inherited the dead pool would refuse every path as unverifiable. The child
+    therefore starts with a fresh one.
+    """
+    import multiprocessing
+    import threading
+
+    def child() -> None:
+        try:
+            import kiro_crew.executors as executors
+
+            executors._path_resolve_pool = None
+            executors._lock = threading.Lock()
+        except ImportError:  # pragma: no cover - older runtimes have no such pool
+            pass
+        target()
+
+    return multiprocessing.get_context("fork").Process(target=child)
+
+
 def studio_module(name: str) -> ModuleType:
-    """Import one ``backend/studio/<name>.py`` through the app's own namespace."""
+    """Import one ``backend/studio/<name>.py`` from the package the entry points loaded."""
     load_backend()
     return importlib.import_module(f"{STUDIO_NS}.studio.{name}")
 

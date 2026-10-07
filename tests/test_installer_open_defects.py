@@ -7,14 +7,13 @@ directory. The shipped payload is only read by the existing miniature fixtures.
 from __future__ import annotations
 
 import json
-import multiprocessing
 import os
 import shutil
 from pathlib import Path
 
 import pytest
 
-from conftest import RepoBuilder
+from conftest import RepoBuilder, fork_process
 from test_installer import (
     BOOT,
     IDENTITY,
@@ -363,7 +362,7 @@ def test_restart_finishes_committed_install_without_orphaning_staging(
             h.fault.on(marker, lambda: os._exit(77))
         run(h.installer.run(repo, "install", plan_digest=plan.digest(), transaction_id=txid))
 
-    process = multiprocessing.get_context("fork").Process(target=child)
+    process = fork_process(child)
     process.start()
     process.join(15)
     if process.is_alive():
@@ -462,7 +461,7 @@ def test_committed_cleanup_error_does_not_strand_another_repos_interrupted_insta
             other, "install", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
         ))
 
-    process = multiprocessing.get_context("fork").Process(target=child)
+    process = fork_process(child)
     process.start()
     process.join(15)
     if process.is_alive():

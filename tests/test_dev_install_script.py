@@ -26,6 +26,7 @@ def run_installer(tmp_path: Path, *, quoted_checkout=False, build=False, install
     (root / "scripts").mkdir(parents=True)
     (root / "ui").mkdir()
     (root / "ui/package.json").write_text("{}")
+    (root / "app.json").write_text('{"name": "aidlc-studio"}\n')
     shutil.copy2(INSTALLER, root / "scripts/dev-install.sh")
     tools = tmp_path / "tools"
     tools.mkdir()

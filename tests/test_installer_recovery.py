@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
-import multiprocessing
 import os
 
 import pytest
+
+from conftest import fork_process
 
 from test_installer import (
     I, do, h, make_harness, payload_v1, payload_v2, reload_repo, run, store, tree,
@@ -192,7 +193,7 @@ def test_process_death_during_generic_recovery_can_use_the_same_application_flow
             repo, "recovery", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
         ))
 
-    process = multiprocessing.get_context("fork").Process(target=child)
+    process = fork_process(child)
     process.start()
     process.join(15)
     if process.is_alive():
