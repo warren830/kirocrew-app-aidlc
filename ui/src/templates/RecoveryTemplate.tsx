@@ -65,10 +65,7 @@ export function RecoveryTemplate({ card, detail, api, go }: TemplateProps) {
   const missingSession = (Array.isArray(codes) && codes.includes('session_lost_mid_stage'))
     || card.headline.params.reason === 'session_lost_mid_stage'
   const deliveryConfirmed = delivery.delivery_confirmed === true
-  const needsReconciliation =
-    card.status === 'DeliveryUncertain' ||
-    card.status === 'ReconciliationRequired' ||
-    delivery.outcome === 'uncertain'
+  const needsReconciliation = card.status === 'ReconciliationRequired' || delivery.outcome === 'uncertain'
 
   return (
     <section className="studio-template" data-type={card.type} aria-label={templateLabel(i18n, card)}>

@@ -228,14 +228,9 @@ def test_an_unreadable_slot_table_is_never_proof_that_nothing_was_sent(world, A,
         assert exc.value.code == "not_delivered_unproven"
         assert exc.value.details["checks"]["row_absent"] is False
 
-        uncertain = await world.broker.get(rec.action_id)
-        escalated = await world.broker.transition(
-            uncertain.action_id,
-            "ReconciliationRequired",
-            expected_generation=uncertain.status_generation,
-            reason="ack deadline",
-            evidence={},
-        )
+        # The refused claim already handed the decision to a human; a late claim meets the same proofs.
+        escalated = await world.broker.get(rec.action_id)
+        assert escalated.status == "ReconciliationRequired"
         world.host.attach(DriftedHost(world.fake_host))
         assert world.host.capabilities()["slots"].available is False
 

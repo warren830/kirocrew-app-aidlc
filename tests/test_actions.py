@@ -6,13 +6,13 @@ prompt that reaches the AI-DLC conductor is recorded in someone's audit trail fo
 
 Four properties carry the file.
 
-1. **The transition graph is exhaustive.** All 144 status pairs are exercised, not just the legal ones:
+1. **The transition graph is exhaustive.** All 81 status pairs are exercised, not just the legal ones:
    an extra edge is how a "helpful" retry re-sends a decision that is already in flight.
 2. **Compare-and-submit is per field.** Each of the six captured fields is perturbed on its own, and
    ``null`` vs non-``null`` is a difference — a gate whose artifact was rewritten under the reader must
    go stale even though the state file did not move.
 3. **``NotDelivered`` is proven, never reported.** Each of the four proofs is broken in turn and the
-   answer must be ``not_delivered_unproven`` plus ``DeliveryUncertain``; the whole point is that a
+   answer must be ``not_delivered_unproven`` plus ``ReconciliationRequired``; the whole point is that a
    gateway restart between the browser's send and its report can never look like "never sent".
 4. **The lane is two-phase.** The backend commits, the browser sends. The tests assert the host's slot
    was never written to and that the module's source contains no host dispatch symbol at all.
@@ -223,7 +223,6 @@ def world(studio, fake_ctx, fake_host, clock, ids, fake_bun, repo_builder, repo_
         ids,
         BOOT,
     )
-    machine = S.actions.MachineActionBroker(broker, activity, clock)
 
     fake_host.add_slot(SLOT, project=str(root), agent="aidlc", app="")
     host.attach(fake_host)
@@ -245,7 +244,6 @@ def world(studio, fake_ctx, fake_host, clock, ids, fake_bun, repo_builder, repo_
         engine=engine,
         notifications=notifications,
         broker=broker,
-        machine=machine,
         repo=repo,
         clock=clock,
         ids=ids,
@@ -346,9 +344,12 @@ def in_flight(w, action_id: str = "a_other", **over) -> str:
 def test_the_transition_table_is_the_prd_graph_and_nothing_more(A, C):
     assert A.ALLOWED_TRANSITIONS == {k: frozenset(v) for k, v in C.ALLOWED_TRANSITIONS.items()}
     assert set(A.ALLOWED_TRANSITIONS) == set(C.ACTION_STATUS)
-    # The two cancels PRD §11.1 sanctions, and the four dead ends it names.
-    assert "Cancelled" in A.ALLOWED_TRANSITIONS["Draft"]
+    # The cancel PRD §11.1 sanctions, the four dead ends it names, and the two merged states: a turn running
+    # is still `Delivered`, and every doubt about a delivery is `ReconciliationRequired` from its first moment.
     assert "Cancelled" in A.ALLOWED_TRANSITIONS["Queued"]
+    assert {"Draft", "Processing", "DeliveryUncertain"}.isdisjoint(C.ACTION_STATUS)
+    assert "ReconciliationRequired" in A.ALLOWED_TRANSITIONS["Delivering"]
+    assert {"StateChanged", "ResolvedNoTransition", "Failed", "ReconciliationRequired"} == A.ALLOWED_TRANSITIONS["Delivered"]
     for terminal in ("StateChanged", "ResolvedNoTransition", "Failed", "Cancelled"):
         assert A.ALLOWED_TRANSITIONS[terminal] == frozenset()
     # `Failed → Cancelled` is exactly the edge retire_stale must not use (review P07).
@@ -356,7 +357,7 @@ def test_the_transition_table_is_the_prd_graph_and_nothing_more(A, C):
 
 
 def test_every_status_pair_is_allowed_or_refused_exactly_as_the_table_says(world, A, C, studio):
-    """The whole 12×12 matrix. An edge outside the table is how a decision gets replayed."""
+    """The whole 9×9 matrix. An edge outside the table is how a decision gets replayed."""
     errors = studio.errors
 
     async def scenario():
@@ -389,7 +390,7 @@ def test_every_status_pair_is_allowed_or_refused_exactly_as_the_table_says(world
                     unchanged = await world.broker.get(rec.action_id)
                     assert unchanged.status == from_status
                     illegal.append((from_status, to_status))
-        assert len(legal) + len(illegal) == 144
+        assert len(legal) + len(illegal) == len(C.ACTION_STATUS) ** 2 == 81
         assert len(legal) == sum(len(v) for v in A.ALLOWED_TRANSITIONS.values())
 
     run(scenario())
@@ -1264,7 +1265,8 @@ def test_a_force_stop_receipt_resolves_through_delivered(world, A):
             http_status=200,
             receipt={"ok": True, "info": "not running"},
         )
-        assert (after.status, idempotent) == ("Processing", False)
+        assert (after.status, idempotent) == ("Delivered", False)
+        assert after.evidence["turn_started_at"] == after.delivered_at, "a stop is never queued behind a turn"
         assert after.evidence["receipt"]["info"] == "not running"
         assert leases_held(world) == [], "the host-control lane never took a lease"
 
@@ -1579,7 +1581,8 @@ def test_a_row_that_is_not_submittable_is_refused_first(world, A, studio):
 # --------------------------------------------------------------------------- #
 
 
-def test_a_delivered_receipt_moves_the_action_into_processing(world, A):
+def test_a_delivered_receipt_starts_the_turn_in_one_transition(world, A, C):
+    """The host ran it now, so ``Delivered`` already carries ``turn_started_at`` and the turn's deadline."""
     async def scenario():
         rec, receipt = await delivering(world, A)
         after, idempotent = await world.broker.record_delivery(
@@ -1590,20 +1593,20 @@ def test_a_delivered_receipt_moves_the_action_into_processing(world, A):
             receipt={"ok": True, "slot": SLOT, "mid": "m1"},
         )
         assert idempotent is False
-        assert after.status == "Processing"
-        assert after.delivered_at
+        assert after.status == "Delivered"
+        assert after.delivered_at and after.evidence["turn_started_at"] == after.delivered_at
+        assert "queued_at" not in after.evidence
         assert after.evidence["receipt"]["mid"] == "m1"
-        assert after.deadline_at and after.deadline_at > after.delivered_at
+        assert after.deadline_at == C.iso_from_epoch(world.clock.now() + world.host.turn_timeout_secs())
+        card = await world.broker.card(after, None)
+        assert card["delivery"]["turn_started_at"] == after.delivered_at
         transitions = world.store.select("action_transitions", {"action_id": rec.action_id})
-        assert [(t["from_status"], t["to_status"]) for t in transitions][-2:] == [
-            ("Delivering", "Delivered"),
-            ("Delivered", "Processing"),
-        ]
+        assert [(t["from_status"], t["to_status"]) for t in transitions][-1:] == [("Delivering", "Delivered")]
 
     run(scenario())
 
 
-def test_a_queued_receipt_waits_in_delivered(world, A):
+def test_a_queued_receipt_waits_in_delivered(world, A, C):
     async def scenario():
         rec, receipt = await delivering(world, A)
         after, _ = await world.broker.record_delivery(
@@ -1614,7 +1617,10 @@ def test_a_queued_receipt_waits_in_delivered(world, A):
             receipt={"ok": True, "queued": True},
         )
         assert after.status == "Delivered", "the processing clock starts when the turn starts (P22)"
-        assert after.evidence["queued_at"]
+        assert after.evidence["queued_at"] and "turn_started_at" not in after.evidence
+        assert after.deadline_at == C.iso_from_epoch(
+            world.clock.now() + C.DELIVERED_QUEUED_WAIT_FACTOR * world.host.turn_timeout_secs()
+        )
 
     run(scenario())
 
@@ -1647,7 +1653,7 @@ def test_an_uncertain_report_gives_the_repository_back(world, A):
             http_status=None,
             receipt=None,
         )
-        assert after.status == "DeliveryUncertain"
+        assert after.status == "ReconciliationRequired"
         assert leases_held(world) == []
 
     run(scenario())
@@ -1677,7 +1683,7 @@ def test_not_delivered_is_accepted_only_with_the_backends_own_proof(world, A):
 
 
 @pytest.mark.parametrize("broken", ["row_absent", "slot_idle", "disk_baseline_unchanged"])
-def test_a_broken_proof_yields_delivery_uncertain_and_never_not_delivered(world, A, studio, broken):
+def test_a_broken_proof_yields_reconciliation_required_and_never_not_delivered(world, A, studio, broken):
     async def scenario():
         rec, receipt = await delivering(world, A)
         if broken == "row_absent":
@@ -1698,7 +1704,7 @@ def test_a_broken_proof_yields_delivery_uncertain_and_never_not_delivered(world,
         assert exc.value.code == "not_delivered_unproven"
         assert exc.value.details["checks"][broken] is False
         after = await world.broker.get(rec.action_id)
-        assert after.status == "DeliveryUncertain", "the host may have enqueued it after all"
+        assert after.status == "ReconciliationRequired", "the host may have enqueued it after all"
         assert after.evidence["receipt"]["error"] == "slot agent mismatch"
 
     run(scenario())
@@ -1724,7 +1730,7 @@ def test_a_not_delivered_report_without_an_authoritative_receipt_is_unproven(wor
             "disk_baseline_unchanged",
             "boot_unchanged",
         }
-        assert (await world.broker.get(rec.action_id)).status == "DeliveryUncertain"
+        assert (await world.broker.get(rec.action_id)).status == "ReconciliationRequired"
 
     run(scenario())
 
@@ -1762,7 +1768,7 @@ def test_a_preflight_code_the_backend_can_disprove_is_refused(world, A, studio):
             )
         assert exc.value.code == "not_delivered_unproven"
         assert exc.value.details["checks"]["slot_idle"] is False
-        assert (await world.broker.get(rec.action_id)).status == "DeliveryUncertain"
+        assert (await world.broker.get(rec.action_id)).status == "ReconciliationRequired"
 
     run(scenario())
 
@@ -1800,7 +1806,7 @@ def test_a_restart_between_the_send_and_the_ack_can_never_prove_non_delivery(wor
             )
         assert exc.value.code == "not_delivered_unproven"
         assert exc.value.details["checks"]["boot_unchanged"] is False
-        assert (await restarted.get(rec.action_id)).status == "DeliveryUncertain"
+        assert (await restarted.get(rec.action_id)).status == "ReconciliationRequired"
 
     run(scenario())
 
@@ -1823,7 +1829,7 @@ def test_delivery_reports_are_idempotent_and_a_conflicting_one_is_refused(world,
             receipt={"ok": True},
         )
         assert (idem1, idem2) == (False, True)
-        assert again.status == first.status == "Processing"
+        assert again.status == first.status == "Delivered"
         assert again.status_generation == first.status_generation
 
         with pytest.raises(studio.errors.IllegalTransition):
@@ -1865,24 +1871,75 @@ def test_a_late_delivered_report_marks_the_decision_confirmed_and_blocks_replay(
             receipt={"ok": True, "mid": "late"},
         )
         assert idempotent is False
-        assert after.status == "DeliveryUncertain", "a late report records evidence, not a status"
+        assert after.status == "ReconciliationRequired", "a late report records evidence, not a status"
         assert after.evidence["delivery_confirmed"] is True
 
-        reconciling = await world.broker.transition(
-            after.action_id,
-            "ReconciliationRequired",
-            expected_generation=after.status_generation,
-            reason="ack deadline",
-            evidence={},
-        )
         with pytest.raises(studio.errors.StudioError) as exc:
             await world.broker.resolve(
-                reconciling.action_id,
+                after.action_id,
                 decision="resubmit",
                 payload={"acknowledged_evidence_sha256": "whatever"},
                 user="owner-1",
             )
         assert exc.value.code == "not_delivered_unproven"
+
+    run(scenario())
+
+
+def test_a_late_not_delivered_report_needs_a_4xx_and_all_four_checks(world, A, studio):
+    """From ``ReconciliationRequired`` a browser report can still prove absence — but only the host's own
+    4xx counts (a client preflight code is a pre-send hint, believed only while the row is ``Delivering``),
+    and only with all four checks holding."""
+    async def scenario():
+        rec, receipt = await delivering(world, A)
+        uncertain, _ = await world.broker.record_delivery(
+            rec.action_id, delivery_id=receipt.delivery_id, outcome="uncertain", http_status=None, receipt=None)
+        assert uncertain.status == "ReconciliationRequired"
+        world.fake_host._slots.pop(SLOT)
+        with pytest.raises(studio.errors.StudioError) as exc:
+            await world.broker.record_delivery(
+                rec.action_id, delivery_id=receipt.delivery_id, outcome="not_delivered", http_status=None,
+                receipt={"ok": False, "code": "slot_missing"})
+        assert exc.value.code == "not_delivered_unproven"
+        assert exc.value.details["reason"] == "receipt_not_authoritative"
+        unproven = await world.broker.get(rec.action_id)
+        assert unproven.status == "ReconciliationRequired" and unproven.evidence["late_report_at"]
+
+        world.fake_host.add_slot(SLOT, project=str(world.root), agent="aidlc", app="")
+        world.fake_host.append_user_row(SLOT, "Approve", TS)
+        with pytest.raises(studio.errors.StudioError) as seen:
+            await world.broker.record_delivery(
+                rec.action_id, delivery_id=receipt.delivery_id, outcome="not_delivered", http_status=409,
+                receipt={"error": "slot agent mismatch"})
+        assert seen.value.details["checks"]["row_absent"] is False
+        assert (await world.broker.get(rec.action_id)).status == "ReconciliationRequired"
+
+        world.fake_host.get_slot(SLOT).messages.clear()
+        proven, idempotent = await world.broker.record_delivery(
+            rec.action_id, delivery_id=receipt.delivery_id, outcome="not_delivered", http_status=409,
+            receipt={"error": "slot agent mismatch"})
+        assert (proven.status, idempotent) == ("NotDelivered", False)
+        assert all(proven.evidence["checks"].values()) and proven.evidence["authoritative_4xx"] is True
+
+    run(scenario())
+
+
+def test_an_evidence_patch_writes_only_what_changed(world, A):
+    """The reconciler re-stamps the same evidence every tick: an unchanged stamp must not bump the
+    generation (a quiet recovery card would go stale under a browser on every scan), a changed one must."""
+    async def scenario():
+        rec = await _reconciliation_required(world, A)
+        first = await world.broker.patch_evidence(rec, {"delivery_confirmed": True})
+        assert first.status_generation == rec.status_generation + 1
+        assert first.evidence["delivery_confirmed"] is True and first.status == rec.status
+        before = world.store.get("actions", rec.action_id)
+        again = await world.broker.patch_evidence(first, {"delivery_confirmed": True})
+        after = world.store.get("actions", rec.action_id)
+        assert again.status_generation == first.status_generation
+        assert (after["updated_at"], after["evidence_json"]) == (before["updated_at"], before["evidence_json"])
+        # A lost CAS is not an error: the other writer's row is at least as new.
+        stale = await world.broker.patch_evidence(rec, {"other": 1})
+        assert stale.status_generation == first.status_generation and "other" not in stale.evidence
 
     run(scenario())
 
@@ -1893,6 +1950,7 @@ def test_a_late_delivered_report_marks_the_decision_confirmed_and_blocks_replay(
 
 
 async def _reconciliation_required(world, A):
+    """An uncertain report is already the human's to decide: no intermediate status to wait through."""
     rec, receipt = await delivering(world, A)
     uncertain, _ = await world.broker.record_delivery(
         rec.action_id,
@@ -1901,13 +1959,8 @@ async def _reconciliation_required(world, A):
         http_status=None,
         receipt=None,
     )
-    return await world.broker.transition(
-        uncertain.action_id,
-        "ReconciliationRequired",
-        expected_generation=uncertain.status_generation,
-        reason="ack deadline passed",
-        evidence={},
-    )
+    assert uncertain.status == "ReconciliationRequired"
+    return uncertain
 
 
 def test_resubmit_needs_the_evidence_hash_the_ui_displayed(world, A, studio):
@@ -1953,21 +2006,25 @@ def test_resubmit_supersedes_the_old_row_and_keeps_one_live_card_per_boundary(wo
 
 
 def test_resubmit_and_mark_not_delivered_only_exist_in_reconciliation_required(world, A, studio):
+    """R07: only once the reconciler looked and could not tell. A decision still in flight does not offer
+    them, and a card whose type names `mark_not_delivered` (recovery, always Queued) is refused by status."""
     async def scenario():
         rec, receipt = await delivering(world, A)
-        uncertain, _ = await world.broker.record_delivery(
-            rec.action_id,
-            delivery_id=receipt.delivery_id,
-            outcome="uncertain",
-            http_status=None,
-            receipt=None,
+        delivered, _ = await world.broker.record_delivery(
+            rec.action_id, delivery_id=receipt.delivery_id, outcome="delivered", http_status=200,
+            receipt={"ok": True},
         )
         for decision in ("resubmit", "mark_not_delivered"):
-            with pytest.raises(studio.errors.IllegalTransition) as exc:
-                await world.broker.resolve(
-                    uncertain.action_id, decision=decision, payload={}, user="owner-1"
-                )
-            assert exc.value.details["from"] == "DeliveryUncertain"
+            with pytest.raises(studio.errors.StudioError) as exc:
+                await world.broker.resolve(delivered.action_id, decision=decision, payload={}, user="owner-1")
+            assert exc.value.code == "invalid_decision", decision
+
+        recovery = await _row_in(world, "Queued")
+        world.store.cas_update("actions", recovery.action_id, recovery.status_generation, {"type": "recovery"})
+        with pytest.raises(studio.errors.IllegalTransition) as illegal:
+            await world.broker.resolve(recovery.action_id, decision="mark_not_delivered", payload={}, user="owner-1")
+        assert illegal.value.details["from"] == "Queued"
+        assert (await world.broker.get(recovery.action_id)).status == "Queued"
 
     run(scenario())
 
@@ -1996,7 +2053,7 @@ def test_mark_not_delivered_needs_a_receipt_or_the_reconcilers_proof(world, A, s
 def test_mark_not_delivered_accepts_the_reconcilers_four_proofs(world, A):
     async def scenario():
         rec = await _reconciliation_required(world, A)
-        await world.broker._patch_evidence(
+        await world.broker.patch_evidence(
             rec,
             {
                 "transcript_row_absent": True,
@@ -2027,7 +2084,7 @@ def test_retry_requeues_a_proven_non_delivery_and_refuses_a_confirmed_one(world,
         assert requeued.status == "Queued"
         assert requeued.action_id == proven.action_id, "at-most-once is intact: nothing was enqueued"
 
-        confirmed = await world.broker._patch_evidence(requeued, {"delivery_confirmed": True})
+        confirmed = await world.broker.patch_evidence(requeued, {"delivery_confirmed": True})
         await world.broker.transition(
             confirmed.action_id,
             "Delivering",
@@ -2060,13 +2117,13 @@ def test_retry_of_a_failed_run_creates_a_new_action_without_a_dedupe_collision(w
         assert again.action_id == command.action_id, "one live command per boundary"
 
         moved = command
-        for status in ("Delivering", "Delivered", "Processing"):
+        for status in ("Delivering", "Delivered"):
             moved = await world.broker.transition(
                 moved.action_id,
                 status,
                 expected_generation=moved.status_generation,
-                reason="drive to Processing",
-                evidence={},
+                reason="drive to a running turn",
+                evidence={"turn_started_at": world.clock.iso()} if status == "Delivered" else {},
             )
         failed, opened = await world.broker.record_failure(
             moved,
@@ -2267,7 +2324,7 @@ def test_a_studio_only_decision_is_refused_on_the_wrong_card(world, studio):
 # --------------------------------------------------------------------------- #
 
 
-async def _processing_command(world, kind: str = "run"):
+async def _running_command(world, kind: str = "run"):
     # These tests exercise delivery/failure, so start where a turn is applicable.
     record = world.builder.record(INTENT)
     (record / "aidlc-state.md").write_text(_state_with({STAGE: "-"}))
@@ -2279,13 +2336,13 @@ async def _processing_command(world, kind: str = "run"):
         ))
     await bind(world)
     rec = await world.broker.create_command(kind, world.repo, "default", INTENT, snap=snapshot(world))
-    for status in ("Delivering", "Delivered", "Processing"):
+    for status in ("Delivering", "Delivered"):
         rec = await world.broker.transition(
             rec.action_id,
             status,
             expected_generation=rec.status_generation,
             reason="drive",
-            evidence={},
+            evidence={"turn_started_at": world.clock.iso()} if status == "Delivered" else {},
         )
     return rec
 
@@ -2294,7 +2351,7 @@ def test_three_transient_failures_open_the_breaker_once(world, A):
     async def scenario():
         opened_flags = []
         for attempt in range(3):
-            rec = await _processing_command(world)
+            rec = await _running_command(world)
             failed, opened = await world.broker.record_failure(
                 rec,
                 fingerprint="transport.stream_closed:abc123",
@@ -2305,7 +2362,7 @@ def test_three_transient_failures_open_the_breaker_once(world, A):
             opened_flags.append(opened)
             assert failed.evidence["failure"]["count"] == attempt + 1
             # Retire the failure card so the next attempt can derive a fresh command.
-            await world.broker._patch_evidence(failed, {"superseded": True})
+            await world.broker.patch_evidence(failed, {"superseded": True})
         assert opened_flags == [False, False, True], "the third identical transport error is not transient"
         breaker = world.store.get("breakers", f"{REPO_ID}:{INTENT}:transport.stream_closed:abc123")
         assert breaker["count"] == 3 and breaker["opened_at"]
@@ -2326,7 +2383,7 @@ def test_three_transient_failures_open_the_breaker_once(world, A):
 
 def test_a_deterministic_failure_opens_the_breaker_immediately(world, A):
     async def scenario():
-        rec = await _processing_command(world)
+        rec = await _running_command(world)
         failed, opened = await world.broker.record_failure(
             rec,
             fingerprint="guard.refusing_to_record:def456",
@@ -2366,7 +2423,7 @@ def test_a_failure_can_only_be_recorded_against_an_inflight_action(world, studio
 
 def test_retry_now_on_a_failure_card_resets_the_breaker_and_starts_a_new_attempt(world):
     async def scenario():
-        rec = await _processing_command(world)
+        rec = await _running_command(world)
         failed, opened = await world.broker.record_failure(
             rec,
             fingerprint="guard.x:1",
@@ -2888,6 +2945,11 @@ def test_the_card_is_the_shape_the_ui_type_pins(world, A, C):
         }
         assert set(card["captured"]) == set(A.COMPARED_CAPTURED_FIELDS) | {"captured_at", "stable"}
         assert card["delivery"]["delivery_id"] is None and card["delivery"]["lane"] is None
+        assert set(card["delivery"]) == {
+            "lane", "delivery_id", "slot_key", "session_key", "wire_text", "host", "delivering_at", "delivered_at",
+            "queued_at", "deadline_at", "receipt", "outcome", "delivery_confirmed",
+            "boot_id_unchanged", "transcript_row", "slot_ran_since", "disk_baseline_unchanged",
+        }
         assert card["deep_link"] == f"{C.DEEP_LINK_BASE}?view=actions&action={gate.action_id}"
         assert card["human_text_present"] is False
         assert card["budget"] is None
@@ -3007,7 +3069,7 @@ def test_an_uncertain_card_is_retyped_and_offers_the_uncertain_decisions(world, 
 def test_confirmed_delivery_does_not_offer_undelivered_or_resubmit(world, A):
     async def scenario():
         rec = await _reconciliation_required(world, A)
-        rec = await world.broker._patch_evidence(rec, {"delivery_confirmed": True})
+        rec = await world.broker.patch_evidence(rec, {"delivery_confirmed": True})
         card = await world.broker.card(rec, snapshot(world))
         assert [d["decision"] for d in card["decisions"]] == ["reconcile"]
 
@@ -3056,65 +3118,5 @@ def test_every_transition_publishes_an_event_and_an_activity_row(world, A):
         rows = world.store.select("action_transitions", {"action_id": gate.action_id})
         assert rows[-1]["to_status"] == "Delivering"
         assert rows[-1]["reason"] == "submitted:approve"
-
-    run(scenario())
-
-
-# --------------------------------------------------------------------------- #
-# 10. the machine lane
-# --------------------------------------------------------------------------- #
-
-
-def test_the_machine_lane_always_refuses_and_records_the_refusal(world, C, studio):
-    async def scenario():
-        with pytest.raises(studio.errors.StudioError) as exc:
-            await world.machine.dispatch("run", REPO_ID, INTENT)
-        assert exc.value.code == "machine_lane_unavailable"
-        assert exc.value.details["reason"] == C.MACHINE_LANE_REASON
-        rows = [r for r in world.store.select("activity") if r["kind"] == "machine_lane.refused"]
-        assert len(rows) == 1
-
-    run(scenario())
-
-
-def test_marker_movement_opens_the_deterministic_breaker(world, A):
-    async def scenario():
-        rec = await _processing_command(world)
-        before = SimpleNamespace(human_turn_mtime_ns=1, turn_counter=7)
-        await world.machine.assert_no_human_marker_movement(
-            before, before, repo_id=REPO_ID, intent_key=INTENT
-        )
-        assert (await world.broker.get(rec.action_id)).status == "Processing"
-
-        after = SimpleNamespace(human_turn_mtime_ns=2, turn_counter=8)
-        await world.machine.assert_no_human_marker_movement(
-            before, after, repo_id=REPO_ID, intent_key=INTENT
-        )
-        failed = await world.broker.get(rec.action_id)
-        assert failed.status == "Failed"
-        assert failed.evidence["failure"]["fingerprint_class"] == "human_marker_movement"
-        assert failed.evidence["failure"]["breaker_open"] is True
-        breakers = [
-            row
-            for row in world.store.select("breakers")
-            if row["fingerprint_class"] == "human_marker_movement"
-        ]
-        assert len(breakers) == 1 and breakers[0]["opened_at"]
-
-    run(scenario())
-
-
-def test_marker_movement_without_an_inflight_action_still_opens_the_breaker(world):
-    async def scenario():
-        await world.machine.assert_no_human_marker_movement(
-            SimpleNamespace(human_turn_mtime_ns=1, turn_counter=1),
-            SimpleNamespace(human_turn_mtime_ns=9, turn_counter=1),
-            repo_id=REPO_ID,
-            intent_key=INTENT,
-        )
-        breakers = world.store.select("breakers")
-        assert len(breakers) == 1
-        assert breakers[0]["fingerprint_class"] == "human_marker_movement"
-        assert breakers[0]["opened_at"]
 
     run(scenario())

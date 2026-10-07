@@ -13,7 +13,7 @@ export function isRepositoryUnavailable(card: Pick<ActionCard, 'repo'>): boolean
 
 /** These records remain available for delivery tracking, but are not waiting for another decision. */
 const NOT_WAITING: ReadonlySet<ActionCard['status']> = new Set([
-  'Draft', 'Delivering', 'Delivered', 'Processing', ...CLOSED,
+  'Delivering', 'Delivered', ...CLOSED,
 ])
 
 /**

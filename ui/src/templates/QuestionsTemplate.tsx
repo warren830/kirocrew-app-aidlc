@@ -97,7 +97,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
   const degraded = view?.mode === 'degraded' || unsupportedPending > 0
   // Several questions AI-DLC asked in one turn (A37): answered here together, sent as one reply.
   const sameTurn = view?.origin?.kind === 'audit' && (view.origin.batch_size ?? 1) > 1
-  const answerable = ['Draft', 'Queued', 'NotDelivered'].includes(card.status)
+  const answerable = ['Queued', 'NotDelivered'].includes(card.status)
   const editable = answerable && !degraded && !refreshing
   // Nothing is preselected: `summaryChoice` has a stored default because the payload builder needs one,
   // so the control shows a selection only after the user has made it.

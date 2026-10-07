@@ -563,7 +563,6 @@ ROUTE_ORDER: tuple[tuple[str, str], ...] = (
     ("POST", f"{_INTENT}/pause"),
     ("POST", f"{_INTENT}/force-stop"),
     ("POST", f"{_INTENT}/prepare-commit"),
-    ("POST", f"{_INTENT}/keep-moving"),
     ("POST", f"{_INTENT}/session/bind"),
     ("POST", f"{_INTENT}/session/unbind"),
     ("POST", f"{_INTENT}/session/takeover/preview"),

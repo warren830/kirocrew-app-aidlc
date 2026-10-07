@@ -13,6 +13,12 @@ version 2 and are no longer written. Also removed because nothing called them: `
 `errors.Unstable` (the `unstable_read` code is unchanged), `VOLATILE_RUNTIME_PATHS` and `NOTIFY_KINDS`
 (`notifications._TYPE_TO_KIND` is what decides which cards notify).
 
+2026-10-08 amendment (P2b): Studio stores nine action statuses, not PRD §11's twelve (§0.5). `Draft` was never
+created; `Processing` is a `Delivered` row with `evidence.turn_started_at` (the card's `delivery.turn_started_at`; the
+UI still says "Being processed"); `DeliveryUncertain` is `ReconciliationRequired` from the first moment of doubt.
+Storage version 3 rewrites older rows (§1.4). `MachineActionBroker`, the always-refusing `POST …/keep-moving` route,
+`api.keepMoving` and the Intents page's keep-moving column are removed: with no machine lane there is nothing to refuse.
+
 Status: **binding** for implementation. Companion to `docs/design/architecture.md` (module layout,
 authority model, decision log) and `docs/AI-DLC-Studio-PRD.md` (invariants §6, enums §11, API list §15).
 Where this document is more specific than the architecture, this document wins; where it disagrees with
@@ -91,9 +97,8 @@ Composite tokens concatenate **strings** with `:` and hash their UTF-8 bytes.
 ### 0.5 Canonical enums (verbatim, PRD §11)
 
 ```python
-ACTION_STATUS = ("Draft", "Queued", "Delivering", "Delivered", "Processing", "StateChanged",
-                 "ResolvedNoTransition", "NotDelivered", "DeliveryUncertain", "ReconciliationRequired",
-                 "Failed", "Cancelled")
+ACTION_STATUS = ("Queued", "Delivering", "Delivered", "StateChanged", "ResolvedNoTransition", "NotDelivered",
+                 "ReconciliationRequired", "Failed", "Cancelled")     # PRD §11's twelve with three folded (below)
 INTENT_STATE  = ("Idle", "Queued", "Running", "WaitingForYou", "Paused", "Parked", "Interrupted",
                  "ReconciliationRequired", "RetryEligible", "CircuitOpen", "Failed", "Completed", "Archived")
 ACTION_TYPE   = ("gate", "revision", "question", "missing_input", "recovery", "delivery_uncertain",
@@ -110,11 +115,16 @@ OWNERSHIP     = ("framework", "framework-mutable", "merge", "shell")
 STAGE_STATE   = ("not_started", "in_progress", "awaiting_approval", "revising", "completed", "skipped", "unknown")
 ```
 
-Live (queue-visible) action statuses: `Queued Delivering Delivered Processing DeliveryUncertain
-ReconciliationRequired NotDelivered Failed`. Terminal: `StateChanged ResolvedNoTransition Cancelled`.
-`Draft` is never visible in the queue. `LIVE_STATUSES` (the set used by the `actions_live_dedupe` partial index and
-by `upsert_derived`) = `Queued Delivering Delivered Processing DeliveryUncertain ReconciliationRequired NotDelivered`
-— `Failed` is terminal for dedupe purposes (a new card for the same boundary may coexist with an old Failed row).
+Live (queue-visible) action statuses: `Queued Delivering Delivered ReconciliationRequired NotDelivered Failed`.
+Terminal: `StateChanged ResolvedNoTransition Cancelled`. `LIVE_STATUSES` (the set used by the `actions_live_dedupe`
+partial index and by `upsert_derived`) = `Queued Delivering Delivered ReconciliationRequired NotDelivered` — `Failed`
+is terminal for dedupe purposes (a new card for the same boundary may coexist with an old Failed row).
+
+PRD §11 lists three more, folded into their neighbours because each was only a waypoint. `Draft` was never created.
+`Processing` only recorded that the turn had started: it is a `Delivered` row with `evidence.turn_started_at`, set at
+the ack, or by the reconciler once a queued message's turn starts (the card's `delivery.turn_started_at`, omitted until
+then so a card that never had a turn keeps its wire shape; the label `enum.actionStatus.Processing` still names it). `DeliveryUncertain` always continued to `ReconciliationRequired` on the
+next tick, so the move now happens at once.
 
 `SEVERITY` is the single severity vocabulary for Activity rows **and** timeline entries (review P26.5). Consistency
 findings keep `FINDING_SEVERITY`; when a finding is projected into the timeline it is mapped `blocking → blocking`,
@@ -593,6 +603,12 @@ free-text `message` (strings must be translatable); `advisor_drafts.spawn_id/err
 adds a column, an index or a `SCHEMA_V1` bump. Do not migrate one in — the at-most-once check reads
 `request_json`, and a duplicated boolean would be two truths about the same draft with no rule for which wins.
 
+`SCHEMA_VERSION = 3`. `MIGRATIONS[3]` (`SCHEMA_V3`) rewrites rows from before the status merge (§0.5): `Processing` →
+`Delivered` with `evidence.turn_started_at` (from `delivered_at` when missing: a row that never recorded it was not
+queued), `DeliveryUncertain` → `ReconciliationRequired`, `Draft` → `Queued`, the same two renames in
+`action_transitions` (`Processing` history rows keep their label), and recreates `actions_live_dedupe` over
+`Queued Delivering Delivered ReconciliationRequired NotDelivered`. The DDL above stays as version 1 shipped.
+
 Storage must NOT: parse AI-DLC files, touch any path outside `ctx.data_dir`, hold the lock across an
 `await` (it is sync), or decide who holds a repository (§1.10).
 
@@ -995,7 +1011,7 @@ Finding codes (exhaustive for v1; `blocking` blocks Run/Submit with `409 state_i
 | `receipt_drift` | warn | `InstallHealth.status == "drift"` |
 | `install_recovery_required` | blocking | repo `install_status == recovery_required` |
 | `duplicate_identity` | blocking | two registered repos resolve to one identity (repo-level) |
-| `delivery_uncertain_action` | blocking | any action for the intent in `DeliveryUncertain`/`ReconciliationRequired` |
+| `delivery_uncertain_action` | blocking | any action for the intent in `ReconciliationRequired` |
 | `lease_conflict` | blocking | execution lease held for the identity by another intent, or admin lease held |
 | `state_unreadable` | blocking | state missing/oversized/`header_only` and `now - facts.first_unreadable_at > STATE_UNREADABLE_GRACE_SECS` (the reconciler tracks first-unreadable time per intent and passes it in; before the grace period the finding is `info`) |
 | `interrupted_session` | blocking | `binding.interrupted_at` set AND the bound slot is not running/stopping (the force stop has landed). Cleared only by the recovery card's `acknowledge` (review P17) |
@@ -1108,13 +1124,13 @@ class Projection:
 Operational state derivation (first match wins):
 
 1. `binding.archive_state == "archived"` → `Archived`
-2. any blocking finding (incl. `interrupted_session`), or any action `DeliveryUncertain`/`ReconciliationRequired` → `ReconciliationRequired`
+2. any blocking finding (incl. `interrupted_session`), or any action `ReconciliationRequired` → `ReconciliationRequired`
 3. `binding.interrupted_at` set and the bound slot is still `running`/`stopping` (force stop in flight) → `Interrupted`
    (once the slot stops, rule 2 takes over through `interrupted_session`; PRD §11.2 `Interrupted → ReconciliationRequired`; review P17)
 4. breaker open for this intent → `CircuitOpen`
 5. `state.status == "Completed"` → `Completed`
 6. `state.parked_at` present → `Parked`
-7. bound slot `running == True` or any action `Delivered`/`Processing` → `Running`
+7. bound slot `running == True` or any action `Delivered` → `Running`
 8. any **command** action (`type ∈ run, resume, prepare_commit, force_stop`) in `Queued`/`Delivering`, or any action of any
    type in `Delivering` → `Queued` (a derived card sitting in `Queued` is NOT a queued turn; review P08)
 9. any row `[?]`/`[R]`, or `questions.pending_count > 0`, or `questions.pending_checkpoint` set → `WaitingForYou`
@@ -1135,7 +1151,7 @@ Card derivation (one seed per live boundary; `dedupe_key` per §0.1):
 | `question` | current stage's questions file has `pending_count > 0` OR `pending_checkpoint` is set (blank summary confirmation / blank plan approval; review P09), OR host reports `needs_input` for the bound slot | current stage | blocking | + question_digest, evidence_digest, is_active. `decisions` depend on what is pending: Q tags → `answers`; `summary_confirmation` → `confirm_summary`; `assumption_confirmation` → `accept_assumptions`, `convert_assumptions` (A36); `plan_approval` → `approve_plan`, `request_plan_changes` |
 | `missing_input` | no state and records exist but cursor null/dangling (intent pick → studio-only `pick_intent`, admin lane), or `Scope` empty (→ human-lane `provide_input kind=scope`) | none | blocking | state_hash may be null |
 | `recovery` | any blocking finding except `delivery_uncertain_action`/`lease_conflict` (incl. `interrupted_session`); or session lost mid-stage (bound slot gone and row `[-]`) | current stage | critical | |
-| `delivery_uncertain` | an action is `DeliveryUncertain`/`ReconciliationRequired` (the card IS that action, re-typed for the queue: `queue_type`) | that action's stage | critical | |
+| `delivery_uncertain` | an action is `ReconciliationRequired` (the card IS that action, re-typed for the queue: `queue_type`) | that action's stage | critical | |
 | `failure` | newest action `Failed` (deterministic), or ≥3 `ERROR_LOGGED` within 10 min for the current stage, or host turn error row after `delivered_at` | current stage | attention | |
 | `circuit_breaker` | breaker row `opened_at` not null | current stage | attention | |
 | `install_conflict` | `install_status == recovery_required`, or last transaction status `failed` with blocking preview entries | none | attention | |
@@ -1280,9 +1296,9 @@ duration_ms`; stdout/stderr only in `evidence_json`, redacted).
 Who may touch one repository: one turn at a time, and none during admin work. Nothing is persisted:
 
 * **An execution lease is derived.** A repository holds one exactly while it has an action dispatched under an
-  execution grant (`actions.lease_generation` is set) in `Delivering`/`Delivered`/`Processing`. The action leaving
-  those statuses is the release. A `force_stop` is in flight too but takes no lease; `DeliveryUncertain` and
-  `ReconciliationRequired` hold nothing — instead every grant (execution and admin) calls `require_host_idle`, so a turn still running in any session of the repository (an uncertain delivery, or one started by hand) refuses it with `repo_busy`.
+  execution grant (`actions.lease_generation` is set) in `Delivering`/`Delivered` (which covers the running turn). The
+  action leaving those statuses is the release. A `force_stop` is in flight too but takes no lease;
+  `ReconciliationRequired` holds nothing — instead every grant (execution and admin) calls `require_host_idle`, so a turn still running in any session of the repository (an uncertain delivery, or one started by hand) refuses it with `repo_busy`.
 * **A per-repository OS file lock** serialises admin operations and the submit window:
   `fcntl.flock(LOCK_EX | LOCK_NB)` on `<data_dir>/locks/<sha256(resolved_identity)[:24]>.lock`. `flock` belongs to the
   open file description, so a second grant in the same process is refused like one from another process, and the kernel
@@ -1291,7 +1307,7 @@ Who may touch one repository: one turn at a time, and none during admin work. No
 ```python
 ADMIN_OPERATION_TYPES = ("install", "upgrade", "recovery", "intent_create", "recompose", "scope_change",
                          "config_change", "cursor_switch", "doctor", "repo_metadata")
-IN_FLIGHT_ACTION_STATUS = frozenset({"Delivering", "Delivered", "Processing"})
+IN_FLIGHT_ACTION_STATUS = frozenset({"Delivering", "Delivered"})
 TRANSACTION_SETTLED_STATUS = frozenset({"committed", "rolled_back", "recovery_required", "failed"})
 RETRY_AFTER_SECS = 15
 
@@ -1459,7 +1475,7 @@ class SessionBinder:
     async def unbind(self, repo_id, space, intent_dir, *, reason: str) -> BindingView
     async def takeover_preview(self, repo: RepoRecord, space, intent_dir) -> list[TakeoverCandidate]
         # slots_for_project(repo.canonical_path) ∪ slots_by_prefix(f"aidlc-studio-{repo_id}-"), excluding the current binding
-    async def takeover(self, repo, space, intent_dir, *, slot_key: str) -> BindingView       # = bind after preview; refuses when any action for the intent is Delivering/Delivered/Processing (StudioError action_not_submittable)
+    async def takeover(self, repo, space, intent_dir, *, slot_key: str) -> BindingView       # = bind after preview; refuses when any action for the intent is Delivering/Delivered (StudioError action_not_submittable)
     async def canonical_slot_name(self, repo_id: str, intent_dir: str) -> str                  # f"aidlc-studio-{repo_id}-{intent_dir}"
     async def set_paused(self, repo_id, space, intent_dir, paused: bool) -> BindingView
     async def set_interrupted(self, repo_id, space, intent_dir, at: str | None) -> BindingView
@@ -1473,7 +1489,7 @@ class SessionBinder:
 SessionBinder must NOT create host slots (the UI does, in `ui/src/intents/SessionPanel.tsx`; §2.13), send prompts, or
 stop turns.
 
-### 1.12 `actions.py` — `HumanActionBroker`, `MachineActionBroker`
+### 1.12 `actions.py` — `HumanActionBroker`
 
 Async. Owns `actions`, `action_transitions`, `breakers`. Every status change goes through `_transition()` which
 validates against `ALLOWED_TRANSITIONS`, performs `Storage.cas_update`, appends `action_transitions`, appends an
@@ -1489,20 +1505,18 @@ Three lanes (review P16/R01):
 
 ```python
 ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
-    "Draft":                  frozenset({"Queued", "Cancelled"}),
     "Queued":                 frozenset({"Delivering", "Cancelled"}),
-    "Delivering":             frozenset({"Delivered", "NotDelivered", "DeliveryUncertain"}),
-    "Delivered":              frozenset({"Processing", "DeliveryUncertain"}),
-    "Processing":             frozenset({"StateChanged", "ResolvedNoTransition", "DeliveryUncertain", "Failed"}),
-    "DeliveryUncertain":      frozenset({"ReconciliationRequired"}),
+    "Delivering":             frozenset({"Delivered", "NotDelivered", "ReconciliationRequired"}),
+    "Delivered":              frozenset({"StateChanged", "ResolvedNoTransition", "ReconciliationRequired", "Failed"}),
     "ReconciliationRequired": frozenset({"StateChanged", "ResolvedNoTransition", "NotDelivered", "Failed"}),
     "NotDelivered":           frozenset({"Queued", "Cancelled"}),
     "StateChanged": frozenset(), "ResolvedNoTransition": frozenset(), "Failed": frozenset(), "Cancelled": frozenset(),
 }
-# Exactly PRD §11.1 plus Draft→Cancelled and Queued→Cancelled (PRD §11.1 rules: "provably safe in Draft/Queued").
-# `Failed` is terminal: retire_stale never touches it (review P07). The "user row found" case is realised as
-# DeliveryUncertain → ReconciliationRequired with evidence.delivery_confirmed = true; the reconciler then resolves
-# ReconciliationRequired → StateChanged/ResolvedNoTransition from disk evidence. No edge outside the PRD graph exists.
+# PRD §11.1 plus Queued→Cancelled (PRD §11.1 rules: "provably safe in Draft/Queued"), with Processing folded into
+# Delivered and DeliveryUncertain into ReconciliationRequired (§0.5): every edge is a PRD edge or two of them joined
+# through a folded state. `Failed` is terminal: retire_stale never touches it (review P07). The "user row found" case is
+# ReconciliationRequired with evidence.delivery_confirmed = true; the reconciler then resolves it → StateChanged/
+# ResolvedNoTransition from disk evidence.
 
 DECISIONS: dict[str, tuple[str, ...]] = {   # action type → allowed decision kinds
     "gate":              ("approve", "request_changes", "accept_as_is"),   # accept_as_is is OFFERED (card.decisions) only when
@@ -1595,7 +1609,7 @@ class HumanActionBroker:
     # ---- derivation (called by the reconciler after each snapshot) ----
     async def upsert_derived(self, seeds: list[CardSeed]) -> list[ActionRecord]
         # For each seed: if a LIVE row (status ∈ LIVE_STATUSES) holds seed.dedupe_key → refresh evidence_json/captured when its
-        # status ∈ (Queued, NotDelivered), never touch Delivering..ReconciliationRequired rows. If NO live row holds the key →
+        # status ∈ (Queued, NotDelivered), never touch Delivering/Delivered/ReconciliationRequired rows. If NO live row holds the key →
         # INSERT a new Queued row (the partial index permits it even when a Cancelled/Failed row has the same key) with
         # evidence.superseded_action_id = the newest terminal row for that key, if any — a boundary that is still on disk always
         # has a live card (FR-ACT-007; review R12). Returns live rows for the intent.
@@ -1654,34 +1668,38 @@ class HumanActionBroker:
 
     async def record_delivery(self, action_id: str, *, delivery_id: str, outcome: str, http_status: int | None, receipt: dict | None) -> tuple[ActionRecord, bool]
         # returns (record, idempotent). delivery_id must match the row (else delivery_ack_invalid); outcome ∈ delivered|not_delivered|uncertain.
+        # A Queued row (re-queued by retry) has no delivery in flight: any report for it → delivery_ack_invalid.
         # From Delivering:
-        #   delivered   : requires receipt.ok == True. → Delivered (delivered_at). If receipt.queued is true → STAY Delivered with
-        #                 evidence.queued_at = now; the reconciler starts the processing deadline when it observes the turn start (review P22).
-        #                 Otherwise → Processing immediately, deadline_at = delivered_at + host.turn_timeout_secs. Same for host_control
-        #                 (force_stop) receipts {ok:true} / {ok:true, info:"not running"}.
+        #   delivered   : requires receipt.ok == True. → Delivered (delivered_at). If receipt.queued is true: evidence.queued_at = now and
+        #                 deadline_at = now + DELIVERED_QUEUED_WAIT_FACTOR × turn timeout; the reconciler stamps evidence.turn_started_at and
+        #                 restarts the turn deadline when it observes the turn start (review P22). Otherwise evidence.turn_started_at = now,
+        #                 deadline_at = now + host.turn_timeout_secs. Same for host_control (force_stop) receipts {ok:true} /
+        #                 {ok:true, info:"not running"}.
         #   not_delivered: requires (http_status in 400..499 AND receipt is the host error body) OR receipt.code ∈ CLIENT_PREFLIGHT_CODES.
         #                 The backend then verifies INDEPENDENTLY of the client (review P05/R02): (i) host.find_delivery_row(...) is None for the
         #                 canonical slot and for every slot in slots_for_project(canonical_path); (ii) the canonical slot has not started a
         #                 turn since delivering_at (running False and last_turn_ts unchanged) — or, for slot_missing, host.slot(slot_key) is None;
         #                 (iii) reader.presence_baseline(...) == presence_baseline_json byte-for-byte; (iv) row.boot_id == services.boot_id.
         #                 All four hold → Delivering → NotDelivered, which gives the repository back. Otherwise → raise not_delivered_unproven
-        #                 AFTER CASing the row to DeliveryUncertain with the report kept in evidence.receipt (the host may have enqueued it).
-        #   uncertain   : → DeliveryUncertain (no longer in flight, so the repository is free; the slot checks guard the session)
-        # From Delivered/Processing: delivered → (unchanged, idempotent=True); not_delivered/uncertain → illegal_transition (the host already said ok).
-        # From DeliveryUncertain/ReconciliationRequired (a late report after the 90 s ack deadline; review P05/R07/R16):
+        #                 (details.checks; details.reason "evidence" | "receipt_not_authoritative") AFTER CASing the row to
+        #                 ReconciliationRequired with the report kept in evidence.receipt (the host may have enqueued it).
+        #   uncertain   : → ReconciliationRequired (no longer in flight, so the repository is free; the slot checks guard the session)
+        # From Delivered: delivered → (unchanged, idempotent=True); not_delivered/uncertain → illegal_transition (the host already said ok).
+        # From ReconciliationRequired (a late report after the 90 s ack deadline; review P05/R07/R16):
         #   delivered   : evidence.delivery_confirmed = true, evidence.receipt = receipt; NO status change; idempotent=False, 200.
-        #   not_delivered with authoritative 4xx: evidence.authoritative_4xx = true; from ReconciliationRequired run checks (i)-(iv) and on
-        #                 success → NotDelivered; from DeliveryUncertain only the evidence is recorded (the reconciler continues
-        #                 DeliveryUncertain → ReconciliationRequired → NotDelivered on its next tick).
+        #   not_delivered: checks (i)-(iv) run; an authoritative 4xx with all four → NotDelivered. Otherwise the report is kept in evidence
+        #                 (evidence.authoritative_4xx) and not_delivered_unproven is raised with the checks. A client preflight code counts
+        #                 only while Delivering.
         #   uncertain   : unchanged, idempotent=True.
-        # From a terminal status: unchanged, idempotent=True (recorded in evidence.late_reports). record_delivery never raises
-        # illegal_transition for a repeated report with the same delivery_id and outcome.
+        # From NotDelivered or a terminal status: unchanged, idempotent=True (recorded in evidence.late_reports; a late delivered also sets
+        # evidence.delivery_confirmed, which closes retry). record_delivery never raises illegal_transition for a repeated report with the
+        # same delivery_id and outcome.
     async def retry(self, action_id: str, *, user: str) -> ActionRecord
         # NotDelivered → Queued (same action id; at-most-once preserved because nothing was enqueued);
         # Failed run/resume/prepare_commit: resets breakers row(s) for the intent and creates a NEW action of the same type (new
         # action_id; the Failed row is not live, so the dedupe index allows it) — returns the new one; else retry_not_allowed
     async def cancel(self, action_id: str, *, user: str) -> ActionRecord
-        # command actions (run/resume/prepare_commit/force_stop): Draft/Queued/NotDelivered → Cancelled.
+        # command actions (run/resume/prepare_commit/force_stop): Queued/NotDelivered → Cancelled.
         # derived cards (gate/question/missing_input/recovery/delivery_uncertain/failure/circuit_breaker/install_conflict/budget_stop): ONLY
         # NotDelivered → Cancelled — a Queued derived card cannot be dismissed while its boundary is on disk (FR-ACT-007; review R12).
         # Everything else → cancel_not_safe.
@@ -1707,23 +1725,24 @@ class HumanActionBroker:
         #                         resolves on the next scan when active-intent == intent_dir. Never a prompt (would mint HUMAN_TURN).
     async def get(self, action_id) -> ActionRecord
     async def list_live(self, *, repo_id=None, space=None, intent_dir=None, include_revision=False) -> list[ActionRecord]
-    async def list_for_intent(self, repo_id, space, intent_dir, *, include_terminal=False, limit=50) -> list[ActionRecord]
     async def card(self, rec: ActionRecord, snap: IntentSnapshot | None) -> ActionCard    # joins live projection evidence (§2.11)
 
     # ---- transitions used by the reconciler ----
     async def transition(self, action_id: str, to_status: str, *, expected_generation: int, reason: str, evidence: dict) -> ActionRecord
         # IllegalTransition when to_status not in ALLOWED_TRANSITIONS[current]; StaleGeneration on CAS failure
+    async def patch_evidence(self, rec: ActionRecord, patch: dict, *, values: dict | None = None) -> ActionRecord
+        # merges patch into evidence_json (and values into the row) with no status change, still a CAS on status_generation (a lost CAS
+        # is not an error); writes nothing when nothing changed, because every write bumps the generation an open tab holds
     async def record_failure(self, rec: ActionRecord, *, fingerprint: str, fingerprint_class: str, summary: str, evidence: dict) -> tuple[ActionRecord, bool]
-        # Processing/ReconciliationRequired → Failed; breaker count++ ; opens at BREAKER_TRANSIENT_THRESHOLD for transient classes, immediately for
-        # deterministic; returns (rec, breaker_opened); opening creates one circuit_breaker card + one notification
-
-class MachineActionBroker:      # always refuses (architecture §3.2)
-    async def dispatch(self, *a, **k) -> NoReturn   # writes Activity kind="machine_lane.refused" and raises StudioError("machine_lane_unavailable", details={"reason": "S12 unproven"})
-    async def assert_no_human_marker_movement(self, before: Markers, after: Markers, *, repo_id, intent_key) -> None
-        # if after.human_turn_mtime_ns != before.human_turn_mtime_ns or turn_counter moved → record_failure(fingerprint "human_marker_movement", deterministic) — the FR-SES-010 breaker home
+        # Delivered/ReconciliationRequired → Failed (the transition table refuses any other status); breaker count++, written after the
+        # status CAS; opens at BREAKER_TRANSIENT_THRESHOLD for transient classes, immediately for deterministic; returns (rec,
+        # breaker_opened); opening creates one circuit_breaker card + one notification
 ```
 
-Resolution contracts (what the reconciler needs to see after `Processing`; evaluated in `reconciler.py` using data
+There is no machine lane (architecture §3.2) and so no machine broker: nothing in Studio can start an unattended turn.
+
+Resolution contracts (what the reconciler needs to see once the turn has started — `Delivered` with
+`turn_started_at`, or `ReconciliationRequired` with delivery confirmed; evaluated in `reconciler.py` using data
 from this table). Rules that apply to every row:
 
 - **"new X"** means an audit event of type X whose `ts >= delivering_at` **and** whose `(shard_index, pos)` sorts after
@@ -1754,7 +1773,7 @@ from this table). Rules that apply to every row:
 | missing_input / pick_intent (studio-only) | — | immediately at `resolve()` once the read-back is ok; the card retires when `active-intent == intent_dir` on the next scan |
 | run / resume | any stage row state changed, or `Current Stage` changed, or new MOVEMENT_EVENTS row, after delivering_at AND turn ended | turn ended with none of the above (e.g. engine emitted `ask`/`done`/`parked` → also refreshes cards) |
 | prepare_commit | — | turn ended |
-| force_stop (host_control) | — | delivery report `delivered` (host `{ok:true}` or `{ok:true, info:"not running"|"stop already in progress"}`) → `Delivered → Processing`; resolves when the slot reports `running == False` and `stop_state == "idle"`; on resolution `SessionBinder.set_interrupted(now)` + Activity `intent.force_stop` |
+| force_stop (host_control) | — | delivery report `delivered` (host `{ok:true}` or `{ok:true, info:"not running"|"stop already in progress"}`) → `Delivered` (turn started at the ack); resolves when the slot reports `running == False` and `stop_state == "idle"`; on resolution `SessionBinder.set_interrupted(now)` + Activity `intent.force_stop` |
 | studio-only decisions | — | immediately at `resolve()` (they never enter `Delivering`) |
 
 HumanActionBroker must NOT call the host to send prompts or stop turns, write AI-DLC files, replay after `Delivering`,
@@ -1770,8 +1789,8 @@ class Reconciler:
     def __init__(self, services: "Services") -> None
     async def startup(self) -> StartupReport
         # order: storage integrity_check → payload verify (Installer.verify_payload) → for every action in
-        # (Delivering, Delivered, Processing, DeliveryUncertain): reconcile_action(now) → installer.settle_abandoned() → first full scan of every repo.
-        # Every Delivering/Delivered/Processing row whose boot_id != services.boot_id gets evidence.boot_id_unchanged = false: after a
+        # (Delivering, Delivered): reconcile_action(now) → installer.settle_abandoned() → first full scan of every repo.
+        # Every Delivering/Delivered row whose boot_id != services.boot_id gets evidence.boot_id_unchanged = false: after a
         # restart the host's in-memory transcript may be gone, so such an action can never be auto-proven NotDelivered (review R02).
         # Must complete within HOST_STARTUP_HOOK_BUDGET_SECS or move remaining work into the loops (hooks.on_startup awaits only
         # the storage open + task creation; StartupReport is published as event "health.updated")
@@ -1783,22 +1802,27 @@ class Reconciler:
         #   elapsed (the remainder leads the next tick); per repo REPO_SCAN_DEADLINE_SECS; skip repos scanned < 2 s ago unless they have open actions
         # 2 for each intent with open actions: reconcile_action for each (presence + cursor checks, §1.12 table)
         # 3 deadlines and delivery evidence (review P05/R02/R07):
-        #   Delivering with now > deadline_at (no ack) → DeliveryUncertain in ONE CAS with evidence = {transcript_row: {slot_key, ts, role}|null
-        #     (host.find_delivery_row on the canonical slot, then slots_for_project(canonical_path) → wrong_slot when found elsewhere),
+        #   Every move to ReconciliationRequired is ONE CAS (reason ack_deadline, queued_wait_exceeded, session_replaced, turn_deadline, or the
+        #     anomaly's code) carrying evidence = {transcript_row: {slot_key, ts, role}|null (host.find_delivery_row on the canonical slot, then
+        #     slots_for_project(canonical_path) → wrong_slot when found elsewhere), transcript_row_absent (false when a slot read failed),
         #     slot_ran_since: bool|null (running went True or last_turn_ts advanced after delivering_at; null when the slot is gone),
         #     disk_movement: {human_turn_delta, marker_advanced, resolution_event_seen} vs presence_baseline, disk_baseline_unchanged: bool,
-        #     boot_id_unchanged: bool}. The reconciler NEVER moves Delivering → NotDelivered.
-        #   DeliveryUncertain → ReconciliationRequired ALWAYS on the next tick (PRD §11.1 graph; review R07), evidence extended with
-        #     delivery_confirmed = (transcript_row found in the canonical slot) OR disk_movement.human_turn_delta >= 1 OR resolution_event_seen.
-        #   ReconciliationRequired: delivery_confirmed → apply the §1.12 table from disk (→ StateChanged/ResolvedNoTransition, presence and cursor
-        #     rules included) or Failed on a classified error; wrong_slot → stays for the human with finding wrong_slot; otherwise the reconciler
-        #     moves ReconciliationRequired → NotDelivered ONLY when transcript_row is null AND slot_ran_since is False AND disk_baseline_unchanged
-        #     AND boot_id_unchanged; in every other case the exit is the human's mark_not_delivered (with a 4xx) or resubmit (§1.12).
-        #   Delivered with evidence.queued_at (host said {queued:true}; review P22): when the turn is observed to start (running False → True after
-        #     delivered_at, or the queued row became a user row followed by an assistant row) → Processing with deadline_at = start + turn_timeout;
-        #     if nothing starts within DELIVERED_QUEUED_WAIT_FACTOR × turn_timeout → DeliveryUncertain.
-        #   Delivered/Processing with now > deadline_at, or session terminated/replaced (slot missing, or linked_session_key changed) →
-        #     DeliveryUncertain → (next tick) ReconciliationRequired.
+        #     boot_id_unchanged: bool, delivery_confirmed = (transcript_row found in the canonical slot) OR disk_movement.human_turn_delta >= 1
+        #     OR resolution_event_seen}. A refused resolution's findings move with it.
+        #   Delivering with now > deadline_at (no ack) → ReconciliationRequired (ack_deadline; review R07). The reconciler NEVER moves
+        #     Delivering → NotDelivered.
+        #   ReconciliationRequired: the evidence is refreshed every tick (written only when it changed). delivery_confirmed → apply the §1.12
+        #     table from disk (→ StateChanged/ResolvedNoTransition, presence and cursor rules included) or Failed on a classified error once the
+        #     turn ended; wrong_slot → stays for the human with finding wrong_slot; otherwise the reconciler moves ReconciliationRequired →
+        #     NotDelivered ONLY when transcript_row_absent AND slot_ran_since is False AND disk_baseline_unchanged AND boot_id_unchanged; in
+        #     every other case the exit is the human's mark_not_delivered (with a 4xx) or resubmit (§1.12).
+        #   Delivered without evidence.turn_started_at (host said {queued:true}; review P22): when the turn is observed to start (the slot went
+        #     busy after delivering_at, or the queued row became a user row followed by an assistant row) → evidence.turn_started_at = now and
+        #     deadline_at = now + turn_timeout, no status change; if nothing starts within DELIVERED_QUEUED_WAIT_FACTOR × turn_timeout of
+        #     delivered_at → ReconciliationRequired (queued_wait_exceeded).
+        #   Delivered with turn_started_at: the §1.12 table (presence/cursor anomaly → ReconciliationRequired with the finding; a classified
+        #     error once the turn ended → Failed); session terminated/replaced (slot missing, or linked_session_key changed) → session_replaced;
+        #     now > deadline_at → turn_deadline.
         # 4 compute StableBoundary per intent, store via SessionBinder.record_stable_boundary when changed
         # 5 (retired in P2a: nothing is reclaimed — an execution lease ends with its action's flight, an admin lock with its process)
         # 6 _advisor_pass: advisor.settle_open() and THEN advisor.autodraft() (§1.18, A24). Settle first, always: the pass that starts new
@@ -1839,11 +1863,12 @@ Failure fingerprint classes: host ACP transport messages (`stream closed`, `conn
 `rate limit`, `429`, `throttl` → `rate_limit`; `turn exceeded the .* ceiling` / `TimeoutError` → `acp_timeout`;
 `ERROR_LOGGED` with `Refusing to` → `guard`; `Unknown intent|Ambiguous intent|Invalid scope|Cannot use` → `validation`;
 `EACCES|permission denied` → `permission`; `bun: command not found|Cannot find module` → `dependency`; anything else →
-`config` (deterministic). `human_marker_movement` is reserved for `MachineActionBroker`.
+`config` (deterministic). `human_marker_movement` is still listed as deterministic, but nothing produces it since
+`MachineActionBroker` was removed.
 
 Stable boundary evaluation (PRD §12.2) — all must hold: `snap.stable`; marker ∈ {row `[?]`/`[R]`, `questions.pending_count > 0`
 or `questions.pending_checkpoint`, `parked_at`, `status == Completed`, latest `PHASE_COMPLETED`/`STAGE_COMPLETED` newer than any
-`STAGE_STARTED` with no directive whose `matches_state`}; no action for the intent in `Delivering/Delivered/Processing/DeliveryUncertain`;
+`STAGE_STARTED` with no directive whose `matches_state`}; no action for the intent in `Delivering/Delivered`;
 bound slot `busy_reasons(view) == ()` and no execution lease on the repository (no in-flight action, no held grant); active
 space/intent cursor equals the intent (`is_active`) or the intent is not the cursor target and no lease exists.
 
@@ -2783,7 +2808,7 @@ class Services:
     ctx: AppContext; clock: Clock; ids: IdFactory
     storage: Storage; settings: SettingsService; repos: RepoRegistry; reader: AidlcReader
     consistency: ConsistencyEngine; projection: Projection; engine: EngineRunner; scheduler: RepoScheduler
-    host: HostBridge; sessions: SessionBinder; actions: HumanActionBroker; machine: MachineActionBroker
+    host: HostBridge; sessions: SessionBinder; actions: HumanActionBroker
     reconciler: Reconciler; installer: Installer; plan: PlanService; estimates: EstimateService
     git: GitObserver; activity: ActivityProjector; advisor: AdvisorBroker; notifications: NotificationAdapter
     events: EventLog; migration: MigrationService
@@ -3012,12 +3037,11 @@ Transactions run in the background after the 202; progress via `transaction.upda
 | `POST …/{intent}/pause` [owner] | `{"paused": bool}` | `{"ok": true, "binding": BindingView, "blocked_actions": [action_id]}` — the live human-lane cards that `submit` will now refuse with `intent_paused` (review P11) | |
 | `POST …/{intent}/force-stop` [owner] | `{"confirm": true}` | 201 `SubmitReceipt` with `lane: "host_control"`, `status: "Delivering"`, `wire_text: null`, `lease_generation: null`, `host: {"method": "POST", "path": "/api/chat/slots/<slot>/stop", "body": {}}` (review P16) | `invalid_decision`, `session_unbound` |
 | `POST …/{intent}/prepare-commit` [owner] | `{}` | 201 as run (type `prepare_commit`) | as run |
-| `POST …/{intent}/keep-moving` [owner] | `{"enabled": bool}` | — | always `409 machine_lane_unavailable` `{"details": {"reason": "S12 unproven"}}` |
 | `POST …/{intent}/session/bind` [owner] | `{"slot_key": str}` | `{"ok": true, "binding": BindingView, "slot": SlotView}` | `slot_mismatch`, `slot_busy`, `host_unavailable` |
 | `POST …/{intent}/session/unbind` [owner] | `{}` | `{"ok": true, "binding"}` | `action_not_submittable` (live action) |
 | `POST …/{intent}/session/takeover/preview` [owner] | `{}` | `{"candidates": [{"slot": SlotView, "reason": str}], "current": BindingView}` | `host_unavailable` |
 | `POST …/{intent}/session/takeover` [owner] | `{"slot_key"}` | `{"ok": true, "binding"}` | as bind + `action_not_submittable` |
-| `POST …/{intent}/archive` [owner] | `{}` | `{"ok": true, "binding"}` | `action_not_submittable` with `details.reason`: `in_flight` while a card is `Delivering`/`Delivered`/`Processing`/`DeliveryUncertain`/`ReconciliationRequired` (even when paused); `live_not_paused` while other live cards exist on an unpaused intent (PRD §11.2: archive from `Paused`). An archived intent's cards stay live but leave `GET /actions` (unless `intent=` names it) and the repository's `open_actions` until restore (A35) |
+| `POST …/{intent}/archive` [owner] | `{}` | `{"ok": true, "binding"}` | `action_not_submittable` with `details.reason`: `in_flight` while a card is `Delivering`/`Delivered`/`ReconciliationRequired` (even when paused); `live_not_paused` while other live cards exist on an unpaused intent (PRD §11.2: archive from `Paused`). An archived intent's cards stay live but leave `GET /actions` (unless `intent=` names it) and the repository's `open_actions` until restore (A35) |
 | `POST …/{intent}/restore` [owner] | `{}` | `{"ok": true, "binding"}` | |
 
 The `force-stop` action is the host-control lane (§1.12): the route commits the `Delivering` record, the UI calls the
@@ -3038,7 +3062,7 @@ and `permissions.api` stays at the two architecture prefixes (review R13).
 | `GET /actions` `?organize=priority|repo|type|oldest&repo=&space=&intent=&type=&status=&include=revision&limit=` | — | `{"actions": [ActionCard], "organize": str, "groups": [{"key": str, "label_key": str, "action_ids": [str]}], "counts": {"total","critical","blocking","attention","info"}, "generated_at": iso}` | |
 | `GET /actions/{action_id}` | — | `{"action": ActionCard, "transitions": [{"from_status","to_status","generation","at","reason","evidence"}], "drafts": [AdvisorDraft (summary)]}` | `action_not_found` |
 | `POST /actions/{action_id}/submit` [owner] | `SubmitRequest` | 200 `SubmitReceipt` | `action_not_submittable`, `invalid_decision`, `feedback_required`, `answers_incomplete`, `grouped_answers_unavailable`, `intent_paused`, `intent_archived`, `breaker_open` (run/resume only), `action_stale` (details.card), `state_inconsistent` (details.findings), `unstable_read`, `session_unbound`, `slot_mismatch`, `slot_busy` (details.reasons), `repo_busy`, `cursor_mismatch` (details.mismatch), `lease_lost`, `rate_limited`, `host_unavailable` |
-| `POST /actions/{action_id}/delivery` [owner] | `DeliveryReport` | `{"ok": true, "action": ActionCard, "idempotent": bool}` | `delivery_ack_invalid`, `illegal_transition` (only a conflicting outcome after the host said ok), `not_delivered_unproven` (row moved to DeliveryUncertain; details.checks = {row_absent, slot_idle, disk_unchanged, boot_unchanged}) |
+| `POST /actions/{action_id}/delivery` [owner] | `DeliveryReport` | `{"ok": true, "action": ActionCard, "idempotent": bool}` | `delivery_ack_invalid`, `illegal_transition` (only a conflicting outcome after the host said ok), `not_delivered_unproven` (a `Delivering` row moves to `ReconciliationRequired`; details.checks = {row_absent, slot_idle, disk_baseline_unchanged, boot_unchanged}, details.reason = `evidence`|`receipt_not_authoritative`) |
 | `POST /actions/{action_id}/retry` [owner] | `{}` | `{"ok": true, "action": ActionCard}` (may be a NEW run action) | `retry_not_allowed` (retry resets an open breaker; it never raises `breaker_open`) |
 | `POST /actions/{action_id}/reconcile` [owner] | `{}` | `{"ok": true, "action": ActionCard}` | `action_not_found` |
 | `POST /actions/{action_id}/cancel` [owner] | `{"reason": str|null}` | `{"ok": true, "action": ActionCard}` | `cancel_not_safe` |
@@ -3154,7 +3178,7 @@ GET  …/{intent}/artifacts/{artifact_id}        GET  …/{intent}/questions    
 GET  …/{intent}/git                            GET  …/{intent}/activity
 POST …/{intent}/recompose/preview              POST …/{intent}/recompose
 POST …/{intent}/run                            POST …/{intent}/resume               POST …/{intent}/pause
-POST …/{intent}/force-stop                     POST …/{intent}/prepare-commit       POST …/{intent}/keep-moving
+POST …/{intent}/force-stop                     POST …/{intent}/prepare-commit
 POST …/{intent}/session/bind                   POST …/{intent}/session/unbind
 POST …/{intent}/session/takeover/preview       POST …/{intent}/session/takeover
 POST …/{intent}/archive                        POST …/{intent}/restore
@@ -3169,7 +3193,7 @@ name (`config manifest enable disable update uninstall open dev token migrate-cl
 
 ```json
 {
-  "action_id": "a_…", "type": ACTION_TYPE, "queue_type": ACTION_TYPE,          // queue_type = "delivery_uncertain" when status ∈ DeliveryUncertain/ReconciliationRequired, else type
+  "action_id": "a_…", "type": ACTION_TYPE, "queue_type": ACTION_TYPE,          // queue_type = "delivery_uncertain" when status == ReconciliationRequired, else type
   "status": ACTION_STATUS, "status_generation": int, "source": SOURCE, "risk_class": RISK_CLASS,
   "severity": SEVERITY, "priority_group": 1|2|3|4,
   "repo": {"repo_id": str, "label": str, "canonical_path": str, "availability": Availability, "availability_detail": str | None, "archived": bool},
@@ -3202,7 +3226,9 @@ name (`config manifest enable disable update uninstall open dev token migrate-cl
   },
   "delivery": {"lane": "human_lane"|"host_control"|null, "delivery_id": str|null, "slot_key": str|null, "session_key": str|null, "wire_text": str|null,
                "host": {"method": str, "path": str, "body": {}} | null,
-               "delivering_at": iso|null, "delivered_at": iso|null, "queued_at": iso|null, "deadline_at": iso|null, "receipt": {}|null,
+               "delivering_at": iso|null, "delivered_at": iso|null, "queued_at": iso|null,
+               "turn_started_at"?: iso,                        // omitted until the turn starts; then the UI's "Being processed"
+               "deadline_at": iso|null, "receipt": {}|null,
                "outcome": "delivered"|"not_delivered"|"uncertain"|null, "delivery_confirmed": bool, "boot_id_unchanged": bool|null,
                "transcript_row": {"slot_key": str, "ts": str, "role": str}|null, "slot_ran_since": bool|null, "disk_baseline_unchanged": bool|null},
   "resolution": {"kind": "state_changed"|"no_transition"|"failed"|"cancelled"|null, "resolved_at": iso|null,
@@ -3294,8 +3320,8 @@ preflight (review R08) still calls `GET /api/chat/slots` itself from the submit 
 
 ```ts
 // ---- enums (verbatim wire strings) ----
-export type ActionStatus = 'Draft' | 'Queued' | 'Delivering' | 'Delivered' | 'Processing' | 'StateChanged'
-  | 'ResolvedNoTransition' | 'NotDelivered' | 'DeliveryUncertain' | 'ReconciliationRequired' | 'Failed' | 'Cancelled'
+export type ActionStatus = 'Queued' | 'Delivering' | 'Delivered' | 'StateChanged' | 'ResolvedNoTransition'
+  | 'NotDelivered' | 'ReconciliationRequired' | 'Failed' | 'Cancelled'
 export type IntentState = 'Idle' | 'Queued' | 'Running' | 'WaitingForYou' | 'Paused' | 'Parked' | 'Interrupted'
   | 'ReconciliationRequired' | 'RetryEligible' | 'CircuitOpen' | 'Failed' | 'Completed' | 'Archived'
 export type ActionType = 'gate' | 'revision' | 'question' | 'missing_input' | 'recovery' | 'delivery_uncertain'
@@ -3387,7 +3413,7 @@ export interface ActionEvidence {
   questions: QuestionsView | null; git: GitObservation | null; markers: Pick<MarkersView, 'human_turn_at' | 'engine_touch_at' | 'turn_counter' | 'goal_stop_present' | 'recovery'>
   presence_baseline: PresenceBaseline | null; presence: PresenceCheck | null; cursor_readback: CursorReadback | null
 }
-export interface Delivery { lane: Lane | null; delivery_id: string | null; slot_key: string | null; session_key: string | null; wire_text: string | null; host: HostCall | null; delivering_at: string | null; delivered_at: string | null; queued_at: string | null; deadline_at: string | null; receipt: Record<string, unknown> | null; outcome: 'delivered' | 'not_delivered' | 'uncertain' | null; delivery_confirmed: boolean; boot_id_unchanged: boolean | null; transcript_row: { slot_key: string; ts: string; role: string } | null; slot_ran_since: boolean | null; disk_baseline_unchanged: boolean | null }
+export interface Delivery { lane: Lane | null; delivery_id: string | null; slot_key: string | null; session_key: string | null; wire_text: string | null; host: HostCall | null; delivering_at: string | null; delivered_at: string | null; queued_at: string | null; turn_started_at?: string; deadline_at: string | null; receipt: Record<string, unknown> | null; outcome: 'delivered' | 'not_delivered' | 'uncertain' | null; delivery_confirmed: boolean; boot_id_unchanged: boolean | null; transcript_row: { slot_key: string; ts: string; role: string } | null; slot_ran_since: boolean | null; disk_baseline_unchanged: boolean | null }
 export interface Resolution { kind: 'state_changed' | 'no_transition' | 'failed' | 'cancelled' | null; resolved_at: string | null; evidence: { events?: unknown[]; rows?: unknown[]; presence: PresenceCheck | null; is_active: boolean | null } | null; reason: string | null }
 export interface FailureInfo { fingerprint: string; fingerprint_class: string; summary_key: string; count: number; breaker_open: boolean; history: { at: string; outcome: string; backoff_secs: number }[]; stderr_excerpt: string | null }
 export interface InstallInfo { receipt_id: string | null; engine_version: string | null; bundled_engine_version: string; drift: PreviewEntry[]; transaction_id: string | null }
@@ -3487,7 +3513,7 @@ keys chosen in code). Parity test asserts identical key sets and no empty values
 |---|---|---|
 | `nav.*` | shell | `nav.actions`, `nav.repos`, `nav.intents`, `nav.map`, `nav.activity`, `nav.settings`, `nav.newIntent` |
 | `scope.*` | scope bar | `scope.allRepos`, `scope.registered_other` (`{n} registered`), `scope.crumbNoScan` |
-| `enum.actionStatus.<ActionStatus>` | shared | `enum.actionStatus.DeliveryUncertain` |
+| `enum.actionStatus.<ActionStatus>` | shared | `enum.actionStatus.ReconciliationRequired`; `enum.actionStatus.Processing` labels a `Delivered` card whose `delivery.turn_started_at` is set |
 | `enum.intentState.<IntentState>` | shared | `enum.intentState.WaitingForYou` |
 | `enum.actionType.<ActionType>` | shared | `enum.actionType.gate` |
 | `enum.severity.<Severity>` / `enum.findingSeverity.*` / `enum.source.*` / `enum.stageState.*` / `enum.installStatus.*` / `enum.availability.*` / `enum.ownership.*` / `enum.previewAction.*` / `enum.transactionStatus.*` / `enum.lane.*` | shared | |
@@ -3615,7 +3641,7 @@ re-sorts locally after filtering. The organize choice persists in `localStorage[
   refetch the affected list; on `transaction.updated` refetch the transaction; store `lastEventId` in memory only.
   On `error` → exponential backoff 1 s → 30 s, and switch to polling until reconnected.
 - Polling fallback / complement (`useResource(key, fetcher, {interval})`): 2 s while any visible card is
-  `Delivering`/`Delivered`/`Processing` or any bound slot is `running`; 15 s otherwise; paused when
+  `Delivering`/`Delivered` or any bound slot is `running`; 15 s otherwise; paused when
   `document.hidden`. `useResource` returns `{data, error, loading, refetch, stale}` and dedupes concurrent fetches per key.
 - Two-phase submit (client side, `actions/submit.ts`; the same state machine drives `force_stop` with `receipt.host` pointing at `/stop`):
   1. `POST /actions/{id}/submit` → `SubmitReceipt` (on `action_stale` replace the card with `details.card` and show `errors.action_stale`;
@@ -3838,8 +3864,8 @@ Synthetic variants are built in `conftest.py` from the real files with the `fixt
 | `tests/test_engine.py` | argv builders for every verb (golden argv, `intent-create` spelled exactly); kwargs validation; env scrub via fake_bun exit 98; deny list (fake_bun exit 99 never observed); `switch_cursor_sync` happy path + each mismatch code; explicit_user_only guard; static grep for denied tools in `backend/`; `test_allowlist_matches_payload_help` against the real payload with a real `bun` when present (review R04) |
 | `tests/test_leases.py` | an in-flight dispatched action is the execution lease (view fields, blocks admin work) and leaving flight releases it; uncertain/queued/terminal rows and a force stop hold nothing; the submit window and admin grants are exclusive; a second scheduler on the same data dir is refused by the file lock; a forked child that dies holding the lock leaves nothing held; generations increase and survive a restart; global cap across repositories (incl. two concurrent acquires); stale release recorded, not raised; `require_host_idle`, and a turn running in another session of the repository refuses both grant kinds |
 | `tests/test_sessions.py` | HostBridge feature detection (missing attrs → capability unavailable, no raise; missing `_in_stage_execution` → False); SlotView mapping from `to_dict` incl. busy predicates and `busy_reasons` golden; bind/slot_mismatch/slot_busy; takeover preview candidates; `recent_rows` includes `queued` rows; `find_delivery_row` matches `meta.studio_delivery_id` before content |
-| `tests/test_actions.py` | every legal transition + every illegal pair raises IllegalTransition (exhaustive 12×12 matrix, incl. `Failed→Cancelled`); `wire_text_for` golden per decision incl. checkpoints and single vs grouped answers; submit: stale (each captured field incl. `evidence_digest`, `is_active`, null-vs-non-null), state_inconsistent, unstable, unbound, slot mismatch, `slot_busy` per reason, repo_busy, `intent_paused`/`intent_archived` on a gate approve, breaker_open only for run, `accept_as_is` refused below attempt 4, grouped answers refused while the capability is off; **two intents, cursor on B, approve on A → cursor switched to A and read back before Delivering** (review P01); cursor_mismatch releases the lease; exception after acquire releases the lease; success receipt durable before return (crash-after-CAS simulation); `record_delivery`: delivered/queued/uncertain, `not_delivered` accepted only when all four checks hold, otherwise `not_delivered_unproven` + DeliveryUncertain, client preflight codes, idempotent repeats never `illegal_transition`, late `delivered` sets `delivery_confirmed`; `resubmit` refused after confirmed delivery and on evidence-hash mismatch; retry of a Failed run inserts without collision; `cancel` legality per type; `pick_intent` runs the cursor switch under an admin lease and never a prompt; breaker thresholds (3 transient, 1 deterministic) and single notification |
-| `tests/test_reconciler.py` | startup re-evaluation of Delivering/Delivered/Processing (boot_id mismatch → never NotDelivered); ack deadline → DeliveryUncertain with evidence, then ReconciliationRequired next tick (never a dead end — review R07); `services.restart()` between send and ack → ReconciliationRequired, not NotDelivered (review R02); automatic ReconciliationRequired → NotDelivered only with all four proofs; processing deadline; `{queued:true}` waits in Delivered until the turn starts, capped (review P22); session replaced → uncertain; each resolution contract row (gate approve/reject, answers, confirm_summary, approve_plan, run/resume, prepare_commit, force_stop) using audit variants with same-second `GATE_APPROVED` (review P23); presence: `gate_approved_no_human_turn` and `gate_approved_two_human_turns` → `human_presence_anomaly` (review P04); cursor moved → `cursor_moved`; row found in another slot → `wrong_slot`; stable boundary conditions; failure classification table; retire stale cards (Failed untouched, `evidence.superseded`); `scan_fanout_bounded`; human_text purge; the advisor pass runs settle before autodraft, retention runs behind both in the same tick and retires drafts through `advisor.expire_stale`, and a raising `AdvisorBroker` does not abort the tick; the vanished-intent sweep (§1.13 step 1b): cards of an intent whose directory left the disk are retired with reason `intent_missing` only after the grace, an intent that returns inside the grace keeps every card, an unavailable repository and a truncated listing never sweep, `intents_on_disk()` follows the listing |
+| `tests/test_actions.py` | every legal transition + every illegal pair raises IllegalTransition (exhaustive 9×9 matrix, incl. `Failed→Cancelled`); `wire_text_for` golden per decision incl. checkpoints and single vs grouped answers; submit: stale (each captured field incl. `evidence_digest`, `is_active`, null-vs-non-null), state_inconsistent, unstable, unbound, slot mismatch, `slot_busy` per reason, repo_busy, `intent_paused`/`intent_archived` on a gate approve, breaker_open only for run, `accept_as_is` refused below attempt 4, grouped answers refused while the capability is off; **two intents, cursor on B, approve on A → cursor switched to A and read back before Delivering** (review P01); cursor_mismatch releases the lease; exception after acquire releases the lease; success receipt durable before return (crash-after-CAS simulation); `record_delivery`: delivered/queued/uncertain, `not_delivered` accepted only when all four checks hold, otherwise `not_delivered_unproven` + ReconciliationRequired, client preflight codes, idempotent repeats never `illegal_transition`, late `delivered` sets `delivery_confirmed`; `resubmit` refused after confirmed delivery and on evidence-hash mismatch; retry of a Failed run inserts without collision; `cancel` legality per type; `pick_intent` runs the cursor switch under an admin lease and never a prompt; breaker thresholds (3 transient, 1 deterministic) and single notification |
+| `tests/test_reconciler.py` | startup re-evaluation of Delivering/Delivered (boot_id mismatch → never NotDelivered); ack deadline → ReconciliationRequired with evidence in one tick (never a dead end — review R07); `services.restart()` between send and ack → ReconciliationRequired, not NotDelivered (review R02); automatic ReconciliationRequired → NotDelivered only with all four proofs; turn deadline; `{queued:true}` waits in Delivered until the turn starts (then `turn_started_at`), capped (review P22); session replaced → ReconciliationRequired; each resolution contract row (gate approve/reject, answers, confirm_summary, approve_plan, run/resume, prepare_commit, force_stop) using audit variants with same-second `GATE_APPROVED` (review P23); presence: `gate_approved_no_human_turn` and `gate_approved_two_human_turns` → `human_presence_anomaly` (review P04); cursor moved → `cursor_moved`; row found in another slot → `wrong_slot`; stable boundary conditions; failure classification table; retire stale cards (Failed untouched, `evidence.superseded`); `scan_fanout_bounded`; human_text purge; the advisor pass runs settle before autodraft, retention runs behind both in the same tick and retires drafts through `advisor.expire_stale`, and a raising `AdvisorBroker` does not abort the tick; the vanished-intent sweep (§1.13 step 1b): cards of an intent whose directory left the disk are retired with reason `intent_missing` only after the grace, an intent that returns inside the grace keeps every card, an unavailable repository and a truncated listing never sweep, `intents_on_disk()` follows the listing |
 | `tests/test_installer.py` | payload verify (tamper → degraded; unknown merge strategy → degraded); preview matrix per ownership × live state (table §1.14) incl. `mcp.json` (user server + token preserved, managed subtree conflict blocks) and `scope-grid.json` (the DevDelta fixture's composed `review-major-remediation` key preserved and a stale stock row refreshed → `merge_update`; a stock scope key carrying another grid blocks) and `harness.json` (a `plugins` array and `documentExtractors` config preserved; a changed `name` blocks) — A27; fragment digests golden; `state_version_migration_unconfirmed` for a v7 intent on upgrade/recovery (review P03); fault injection `before:`/`after:` every step → old install complete & receipt current, or `recovery_required` with blocking finding + card; retire/retire_blocked; newer_installed/same_version; recovery transaction clears flag; never writes outside managed paths (walk repo before/after); the foreign-harness-only repository (A26): `preview("install")` has `engine_from is None` and is offerable although `status == "installed"`, no `.claude/**` path appears in `entries`, `aidlc/**` entries of a repository with a live intent are `shell_exists`, `upgrade` and `recovery` are refused `not_installed`, and `same_version`/`newer_installed` follow `own_engine_version` rather than the foreign harness's version |
 | `tests/test_plan.py` / `tests/test_estimates.py` | lock reasons; dependency validation; exact counts golden for poc/feature/bugfix (32 & 33 graphs); recompose allowed set; create_intent via fake_bun (lease, verify, never sends); rule bands golden; every band rule_band/low with samples 0; credits always unavailable; `catalog` reads scopes, grid and graph once and refuses an uninstalled repo (`not_installed`) |
 | `tests/test_plan_advice.py` | pure functions (§1.18a): `build_plan_questions` — Q1–Q4 fields and values, one `stages:<phase>` row per phase that has a choice, a phase whose stages are all ALWAYS is skipped, values in graph order, more than 26 options → `internal_error`; `resolve_plan_proposal` — letters → tokens, a verbatim option label with no letters resolves, an out-of-range letter leaves the whole row unresolved, an empty phase answer changes nothing, the ALWAYS guard, `scope`/`base_scope` always set, no-op overrides dropped, the returned map is complete |
@@ -3880,7 +3906,7 @@ plus `tsc --noEmit`, `vite build`, `node --check ui/dist/index.mjs`.
 | C01 | `repo_id` is random (`r_`+12 hex), not derived from the identity. | Rebind must keep the id while the identity changes (FR-REP-009); the prototype's path-hash id had the case-alias hazard (`07 §3.2`). |
 | C02 | `intent_key = intent_dir` for space `default`, else `space~intent_dir`; one path param carries both. | Dir names are unique only per space; `~` is outside `INTENT_DIR_RE`, so it is an unambiguous separator and keeps PRD §15 route shapes. |
 | C03 | `intent_bindings` gets a surrogate `binding_key` PK + UNIQUE triple; several additive columns on `actions`/`repos`. | One generic `cas_update` needs a single-column key; `paused`/`interrupted_at` have no other home in architecture §4. |
-| C04 | Transition graph = PRD §11.1 + `Draft→Cancelled`, `Queued→Cancelled`; `Failed` is terminal (retire_stale marks `evidence.superseded` instead); the "user row found" case is `ReconciliationRequired` with `delivery_confirmed=true`, never a `DeliveryUncertain→Delivered` edge; `DeliveryUncertain` always continues to `ReconciliationRequired` on the next tick. | PRD §11.1 rules sanction those cancels; adding an edge outside the PRD graph would violate "no alternate state list"; a state with no reconciler-driven exit is a dead end (review P07/R07). |
+| C04 | Transition graph = PRD §11.1 + `Queued→Cancelled`, with `Processing` folded into `Delivered` and `DeliveryUncertain` into `ReconciliationRequired` (P2b, §0.5); `Failed` is terminal (retire_stale marks `evidence.superseded` instead); the "user row found" case is `ReconciliationRequired` with `delivery_confirmed=true`, never an edge back to `Delivered`. | PRD §11.1 rules sanction that cancel; adding an edge outside the PRD graph would violate "no alternate state list", and every merged edge is two PRD edges through a waypoint; a state with no reconciler-driven exit is a dead end (review P07/R07). |
 | C05 | `stage_attempt = 1 + count(STAGE_REVISING for stage)`. | `Revision Count` is workflow-global; the per-stage revising rows are the only durable per-stage attempt counter. |
 | C06 | `directive_state_digest_mismatch` is `info`, not `warn`. | The engine treats a mismatched marker as absent; it occurs after every state write (`04 §3.2`), so it is expected, not a contradiction. |
 | C07 | `receipt_drift` is `warn`; only `install_recovery_required`/`install_conflict` are blocking. | FR-ACT-008: maintenance upgrades never enter the blocking queue. |
@@ -3939,7 +3965,7 @@ proposed), **fix (modified)** (changed, but not exactly as proposed — rational
 | P02 | §1.19 Slack `quick=True` / C13 | fix | Quick actions removed from v1; `slack_quick_action_eligible` → `(False, "host_seam_unavailable")`; no slot linking, no `[OPTIONS:]` trailer; settings key dropped; capability exposed (C13, Appendix B8). |
 | P03 | §1.1/§1.14/§2.1 version pins 2.3.0 vs 2.6.2; missing `state_version_migration_unconfirmed` | fix | `BUNDLED_ENGINE_VERSION = "2.6.2"`, `BUNDLED_STATE_VERSION`, `BUNDLED_STAGE_COUNT`; manifest is the source in code and tests; new error code; `PreviewPlan.state_versions_found/state_version_blocked`; version rules; HarnessDir/RepoBuilder/health/payload text (C21). Later re-pinned to 2.7.1 by C21 — the manifest-is-the-source mechanism this row installed is what made that a payload swap rather than a code change. |
 | P04 | §1.12 no human-presence baseline for the human lane | fix | `presence_baseline_json` at step 8; presence rule in the resolution table; `human_presence_anomaly` finding; `evidence.presence` on the card; reconciler tests (C23). |
-| P05 | §1.12 `not_delivered` accepted on the client's word; late reports raise | fix | Backend verifies row absence (user+queued, all repo slots), slot idle, disk baseline, boot id before `NotDelivered`, else `not_delivered_unproven` + `DeliveryUncertain`; late/repeated reports idempotent; `delivered` after the deadline sets `delivery_confirmed` (C24). |
+| P05 | §1.12 `not_delivered` accepted on the client's word; late reports raise | fix | Backend verifies row absence (user+queued, all repo slots), slot idle, disk baseline, boot id before `NotDelivered`, else `not_delivered_unproven` + `ReconciliationRequired` (`DeliveryUncertain` before P2b); late/repeated reports idempotent; `delivered` after the deadline sets `delivery_confirmed` (C24). |
 | P06 | §1.12 resubmit replays a delivered decision; `dedupe_key UNIQUE` collides | fix | `resubmit` refused when `delivery_confirmed`, requires `acknowledged_evidence_sha256`; partial unique index `actions_live_dedupe`; tests (C24/C33). |
 | P07 | §1.12 `retire_stale` moves Failed → Cancelled | fix | Failed dropped from `retire_stale`; `evidence.superseded = true` via non-status update; 12×12 matrix includes `Failed→Cancelled` (C04). |
 | P08 | §1.8 rule 8 shadows `WaitingForYou` | fix | Rule 8 restricted to command actions (or any type in `Delivering`); projection tests pinned. |
@@ -3967,7 +3993,7 @@ proposed), **fix (modified)** (changed, but not exactly as proposed — rational
 | R04 | §1.9 `intent-birth` renamed to `intent-create` in 2.6.2 | fix | Verb key `utility.intent_create`, argv `intent-create` (+ `?--review`); admin operation type `intent_create`; fake_bun dies on the old name; real-payload `help` test (C27). |
 | R05 | §1.1/§1.25/§4.1 loader mechanism vs architecture §4.0/A10 | fix | Same as P19 (C26). |
 | R06 | §1.4 `cas_update` writes `updated_at` on lease tables that lack it | fix | `CAS_TABLES` with a per-table timestamp column (`heartbeat_at` for leases); test on every table. |
-| R07 | §1.12/§1.13 `DeliveryUncertain` dead end | fix | Reconciler always continues `DeliveryUncertain → ReconciliationRequired` next tick with evidence; `mark_not_delivered`/`resubmit` only from `ReconciliationRequired`; `record_delivery` idempotent elsewhere (C04/C24). |
+| R07 | §1.12/§1.13 `DeliveryUncertain` dead end | fix | Reconciler always continues `DeliveryUncertain → ReconciliationRequired` next tick with evidence (P2b: the move now happens at once, §0.5); `mark_not_delivered`/`resubmit` only from `ReconciliationRequired`; `record_delivery` idempotent elsewhere (C04/C24). |
 | R08 | §2.4/§2.13/§3.6 host auto-creates a missing slot | fix (modified) | `agent: "aidlc"` and `meta` in the send body; client preflight via `GET /api/chat/slots` (the list carries `project`/`agent`; the detail route does not, verified `kc:chat_handlers.py:1918-1950`); `slot_missing`/`slot_mismatch_preflight` client codes verified server-side; `wrong_slot` finding for a row found in another slot (C24). |
 | R09 | §1.24/§2.9 internal-secret auth mode unreachable | fix | Route is `[owner]`; `require_internal_or_owner`, `internal_request`, `internal_secret_invalid` removed; rationale recorded (C24). |
 | R10 | §4.2 fixture layout does not match what the harvester produced | fix | §4.2 rewritten to the produced layout (FORMAT-NOTES §1); synthetic variants generated in conftest; `aidlc-older` in the matrix; `with_engine` sources. |

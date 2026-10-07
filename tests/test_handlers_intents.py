@@ -1,6 +1,6 @@
 """Intent routes (§2.3): the read model, the plan, the session binding, the dispatch commands.
 
-The read routes are checked for shape, but the four properties below are what this file is really for,
+The read routes are checked for shape, but the three properties below are what this file is really for,
 because each of them is a way a click could reach AI-DLC when it must not:
 
 * **Run creates a card; it does not send.** ``POST …/run`` answers ``201`` with a ``Queued`` action, and
@@ -9,7 +9,6 @@ because each of them is a way a click could reach AI-DLC when it must not:
   cards it just blocked so the UI can grey them out instead of letting a user earn a 409.
 * **Force stop is the host-control lane**: a confirmed, durable record with the host's own stop call and
   no wire text (C28).
-* **``keep-moving`` always refuses**, on the record. There is no machine lane in v1 (§3.2, S12).
 
 A read route must also never mint a card: the queue is the reconciler's, and a GET that derived actions
 would make the queue depend on who was looking at it.
@@ -697,16 +696,6 @@ def test_force_stop_commits_a_delivering_record_and_hands_over_the_host_call(sv,
     # Durable before the browser can act on it.
     row = sv.storage.get("actions", body["action_id"])
     assert row["status"] == "Delivering" and row["boot_id"]
-
-
-def test_keep_moving_always_refuses_and_records_the_attempt(sv, routes, fake_host, repo, studio):
-    path = base(repo, "/keep-moving")
-    request = CT.owner_request("POST", path, host=fake_host, body={"enabled": True})
-    status, body = call(sv, routes, "POST", path, request)
-    assert status == 409 and body["code"] == "machine_lane_unavailable"
-    assert body["details"]["reason"] == studio.constants.MACHINE_LANE_REASON
-    rows = sv.storage.select("activity", {"kind": "machine_lane.refused"})
-    assert len(rows) == 1
 
 
 # --------------------------------------------------------------------------- #

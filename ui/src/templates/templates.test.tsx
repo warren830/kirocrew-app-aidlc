@@ -281,7 +281,7 @@ describe('every template', () => {
     for (const type of types) expect(typeof templateFor(card({ type }))).toBe('function')
     // A gate whose delivery is unproven must not show the gate body again: the decision is now about the
     // delivery, and re-offering the artifact is how a stage gets approved twice.
-    expect(templateFor(card({ type: 'gate', queue_type: 'delivery_uncertain', status: 'DeliveryUncertain' }))).toBe(
+    expect(templateFor(card({ type: 'gate', queue_type: 'delivery_uncertain', status: 'ReconciliationRequired' }))).toBe(
       RecoveryTemplate,
     )
   })
@@ -630,7 +630,7 @@ describe('questions template', () => {
     expect(apiCalls.filter((call) => call.method !== 'GET')).toHaveLength(0)
   })
 
-  it.each(['Processing', 'ResolvedNoTransition'] as const)(
+  it.each(['Delivered', 'ResolvedNoTransition'] as const)(
     'keeps %s questions read-only and hides ready-to-send and draft controls',
     (status) => {
       setApiRoutes({})
@@ -1046,7 +1046,7 @@ describe('recovery template', () => {
     card({
       type: 'gate',
       queue_type: 'delivery_uncertain',
-      status: 'DeliveryUncertain',
+      status: 'ReconciliationRequired',
       severity: 'critical',
       risk_class: 'studio_only',
       decisions: [spec('reconcile'), spec('mark_not_delivered', ['confirm']), spec('resubmit', ['confirm'])],

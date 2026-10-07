@@ -5,9 +5,9 @@
  * and hiding any of it would let a user believe an HTTP 200 was an approval. Success is observed state
  * movement, never a receipt (FR-GATE-007), so the strip says so in words whenever a send has happened.
  *
- * The uncertain case is the reason this component exists. `DeliveryUncertain` /
- * `ReconciliationRequired` can outlive delivery uncertainty: a transcript may prove receipt while the
- * workflow still needs reconciliation. Without that proof the strip:
+ * The uncertain case is the reason this component exists. `ReconciliationRequired` can outlive delivery
+ * uncertainty: a transcript may prove receipt while the workflow still needs reconciliation. Without that
+ * proof the strip:
  *   - announces it assertively (PRD §10.3 reserves assertive for exactly this),
  *   - states plainly that Studio is watching the disk and will not send again, and
  *   - prints the four facts the backend's own proof depends on, verbatim, so the user can decide
@@ -29,32 +29,28 @@ type StepState = 'done' | 'now' | 'future' | 'failed' | 'unchanged' | 'cancelled
 const STEP_KEYS = ['delivery.step.queued', 'delivery.step.delivered', 'delivery.step.processing', 'delivery.step.stateChanged'] as const
 
 /** Statuses where nothing has been handed to the host yet. */
-const BEFORE_SEND: readonly ActionStatus[] = ['Draft', 'Queued', 'Cancelled']
+const BEFORE_SEND: readonly ActionStatus[] = ['Queued', 'Cancelled']
 /** Statuses where Studio cannot prove what happened. */
-export const UNCERTAIN_STATUSES: readonly ActionStatus[] = ['DeliveryUncertain', 'ReconciliationRequired']
+export const UNCERTAIN_STATUSES: readonly ActionStatus[] = ['ReconciliationRequired']
 
 /**
  * Which step is current, and whether it failed there.
  *
- * `Delivered` sits on "Agent processing" even when the host queued the message, because the host has
- * accepted it; a `queued_at` adds its own chip rather than moving the marker backwards, which would
- * read as the send being undone.
+ * `Delivered` sits on "Agent processing" whether or not its turn has started, even when the host queued
+ * the message, because the host has accepted it; a `queued_at` adds its own chip rather than moving the
+ * marker backwards, which would read as the send being undone.
  */
 export function stepIndex(status: ActionStatus): { index: number; failed: boolean } {
   switch (status) {
-    case 'Draft':
     case 'Queued':
     case 'Cancelled':
       return { index: 0, failed: false }
     case 'Delivering':
       return { index: 1, failed: false }
     case 'NotDelivered':
-      return { index: 1, failed: true }
-    case 'DeliveryUncertain':
     case 'ReconciliationRequired':
       return { index: 1, failed: true }
     case 'Delivered':
-    case 'Processing':
       return { index: 2, failed: false }
     case 'Failed':
       return { index: 3, failed: true }
@@ -77,11 +73,18 @@ const STEP_ICON: Record<StepState, IconName> = { done: 'check', now: 'clock', fu
 export function statusTone(status: ActionStatus): ChipTone {
   if (status === 'StateChanged') return 'ok'
   if (status === 'NotDelivered' || status === 'Failed' || UNCERTAIN_STATUSES.includes(status)) return 'danger'
-  if (status === 'Delivering' || status === 'Delivered' || status === 'Processing') return 'accent'
+  if (status === 'Delivering' || status === 'Delivered') return 'accent'
   return 'neutral'
 }
 
-export function statusLabel(i18n: I18n, status: ActionStatus, reason?: string | null): string {
+/**
+ * A status in words. The backend folds the running turn into `Delivered` and records its start as
+ * `delivery.turn_started_at`; pass it, and a turn that is running reads "being processed" as it always did.
+ */
+export function statusLabel(
+  i18n: I18n, status: ActionStatus, reason?: string | null, turnStartedAt?: string | null,
+): string {
+  if (status === 'Delivered' && turnStartedAt) return i18n.t('enum.actionStatus.Processing')
   // A receipt for this question was recorded, but not with the reply that was sent.
   if (status === 'ResolvedNoTransition'
     && (reason === 'answer_not_verified_at_gate' || reason === 'answer_not_verified')) {
@@ -153,7 +156,7 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
 
       <div className="studio-drow">
         <Chip tone={statusTone(status)} icon={needsReconciliation ? 'warn' : undefined}>
-          {statusLabel(i18n, status, card.resolution.reason)}
+          {statusLabel(i18n, status, card.resolution.reason, delivery.turn_started_at)}
         </Chip>
         {delivery.queued_at ? <Chip icon="clock">{t('delivery.queuedInSlot')}</Chip> : null}
         {noTransition ? <Chip icon="info">{t(remainingLabel)}</Chip> : null}

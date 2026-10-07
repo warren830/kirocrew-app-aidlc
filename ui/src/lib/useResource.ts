@@ -9,7 +9,7 @@
  *    the action disappeared. `data` only ever changes to a newer *successful* answer; `stale` says
  *    whether a refetch is in flight and `error` says the newest attempt failed while `data` still
  *    holds what was true.
- *  - **The interval follows the work.** Anything mid-flight (`Delivering`/`Delivered`/`Processing`) or
+ *  - **The interval follows the work.** Anything mid-flight (`Delivering`/`Delivered`) or
  *    a bound slot that is running means the answer changes in seconds, so the poll runs at 2 s; an
  *    idle registry runs at 15 s (§3.6). Polling never runs while the tab is hidden.
  *  - **Concurrent readers share one request.** Two components asking for `/actions` in the same tick
@@ -68,7 +68,7 @@ export interface ResourceOptions<T> {
 /** In-flight requests by key, so two subscribers in one tick share one HTTP call. */
 const inflight = new Map<string, Promise<unknown>>()
 
-const LIVE_STATUSES: readonly string[] = ['Delivering', 'Delivered', 'Processing']
+const LIVE_STATUSES: readonly string[] = ['Delivering', 'Delivered']
 
 /**
  * Does this payload describe work in progress?

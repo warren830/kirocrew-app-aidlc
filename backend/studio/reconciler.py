@@ -3,11 +3,10 @@
 Every other module is allowed to refuse: a handler answers 409, the broker declines a transition, the
 scheduler withholds a lease. This one cannot. Once the ``Delivering`` row is durable the decision may
 already be in the model's mouth, so the only honest answers left are "it landed"
-(``StateChanged``/``ResolvedNoTransition``), "we cannot tell" (``DeliveryUncertain`` →
-``ReconciliationRequired``) and — with four independent proofs, never on a client's word — "it never
-left" (``NotDelivered``). Nothing here sends a prompt, stops a turn, replays a decision, writes an
-AI-DLC file or runs a protected engine verb: the reconciler reads disk, reads the host, and moves
-Studio's own rows.
+(``StateChanged``/``ResolvedNoTransition``), "we cannot tell" (``ReconciliationRequired``) and — with
+four independent proofs, never on a client's word — "it never left" (``NotDelivered``). Nothing here
+sends a prompt, stops a turn, replays a decision, writes an AI-DLC file or runs a protected engine verb:
+the reconciler reads disk, reads the host, and moves Studio's own rows.
 
 Four kinds of care run through the whole module.
 
@@ -46,7 +45,8 @@ from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from . import constants as C
 from . import sessions as _sessions
-from .aidlc_reader import audit_question_accepts_text, audit_question_answer
+from .actions import ABSENCE_PROOF
+from .aidlc_reader import WireRecord, audit_question_accepts_text, audit_question_answer
 from .consistency import RepoFacts
 from .errors import IllegalTransition, StaleGeneration, StudioError
 from .projection import run_unavailable_reason
@@ -86,28 +86,19 @@ SCAN_TICK_BUDGET_SECS: float = C.SCAN_TICK_BUDGET_SECS
 #: an open action is always re-walked: its evidence is what a human is waiting on.
 REPO_SCAN_MIN_INTERVAL_SECS: float = 2.0
 
-#: Statuses ``reconcile_action`` has something to say about. ``Queued``/``NotDelivered`` are the human's
-#: to move, and the terminal four are done.
-RECONCILABLE_STATUS: tuple[str, ...] = (
-    "Delivering",
-    "Delivered",
-    "Processing",
-    "DeliveryUncertain",
-    "ReconciliationRequired",
-)
+#: Statuses ``reconcile_action`` has something to say about: ``Queued``/``NotDelivered`` are the human's to
+#: move, and the terminal four are done.
+RECONCILABLE_STATUS: tuple[str, ...] = ("Delivering", "Delivered", "ReconciliationRequired")
 
-#: Re-evaluated by ``startup()`` before any loop or scan runs (§1.13). These are the rows that were
-#: mid-flight when the previous process stopped, so every later decision — a derived card, a delivery
-#: report — must see Studio's re-reading of them first.
-STARTUP_STATUS: tuple[str, ...] = ("Delivering", "Delivered", "Processing", "DeliveryUncertain")
+#: In flight when the previous process stopped, so re-read by ``startup()`` before any loop or scan runs
+#: (§1.13): every later decision — a derived card, a delivery report — must see that re-reading first.
+STARTUP_STATUS: tuple[str, ...] = ("Delivering", "Delivered")
 
-#: Statuses that mean the host was handed something and has not answered yet.
-IN_FLIGHT_STATUS: tuple[str, ...] = ("Delivering", "Delivered", "Processing")
+#: The host was handed something and has not answered yet.
+IN_FLIGHT_STATUS: tuple[str, ...] = STARTUP_STATUS
 
-#: ``PresenceBaseline`` fields compared when asking "did anything on disk move?". ``taken_at`` is
-#: excluded on purpose: it is the clock of the read, not a fact about the record, so including it would
-#: make every comparison false and ``NotDelivered`` unreachable. §1.12's "byte-for-byte" is read as
-#: "every recorded fact identical" — see the module report.
+#: ``PresenceBaseline`` fields compared for "did anything on disk move?". Not ``taken_at``: it is the clock
+#: of the read, and comparing it would make every comparison false and ``NotDelivered`` unreachable.
 PRESENCE_COMPARED_FIELDS: tuple[str, ...] = (
     "human_turn_events",
     "human_turn_events_partial",
@@ -118,14 +109,13 @@ PRESENCE_COMPARED_FIELDS: tuple[str, ...] = (
     "state_sha256",
 )
 
-#: How many new ``ERROR_LOGGED`` rows inside ``_ERROR_BURST_WINDOW_SECS`` count as a failure rather than
-#: as a conductor mistake. FORMAT-NOTES §6 is explicit that single ``ERROR_LOGGED`` rows are routine
-#: ("Unknown subcommand…"), so one row must never fail an action.
+#: New ``ERROR_LOGGED`` rows inside the window that count as a failure rather than a conductor mistake: single
+#: rows are routine (FORMAT-NOTES §6), so one must never fail an action.
 _ERROR_BURST_COUNT = 3
 _ERROR_BURST_WINDOW_SECS = 600
 
-#: Ordered failure classification (§1.13.1). First match wins, so the table is read top to bottom and
-#: the order is part of the contract: a throttled ACP stream is ``rate_limit``, not ``transport``.
+#: Ordered failure classification (§1.13.1): first match wins, so a throttled ACP stream is ``rate_limit``,
+#: not ``transport``.
 FINGERPRINT_RULES: tuple[tuple[str, "re.Pattern[str]"], ...] = (
     ("rate_limit", re.compile(r"rate limit|429|throttl")),
     ("acp_timeout", re.compile(r"turn exceeded the .*ceiling|timeouterror|timed out")),
@@ -136,18 +126,22 @@ FINGERPRINT_RULES: tuple[tuple[str, "re.Pattern[str]"], ...] = (
     ("dependency", re.compile(r"bun: command not found|cannot find module")),
 )
 
-#: Everything a fingerprint must forget so the same failure fingerprints the same twice: shell colour,
-#: absolute paths, long hex ids, and any run of digits (pids, ports, byte counts, timestamps).
+#: What a fingerprint forgets so one failure fingerprints the same twice: colour, absolute paths, long hex
+#: ids and any run of digits (pids, ports, byte counts, timestamps).
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 _PATH_RE = re.compile(r"(?:[a-z]:)?(?:/[^\s'\"]+)+")
 _HEX_RE = re.compile(r"\b[0-9a-f]{8,}\b")
 _NUM_RE = re.compile(r"\d+")
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
+_SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}")
 _MAX_NORMALISED_CHARS = 400
 _MAX_SLUG_CHARS = 48
 
-#: Pending reasons that are not "wait longer" but "a human must look". They are also the finding codes,
-#: because the reason a resolution was refused is exactly what the recovery card has to say.
+#: A contract row that only waits for the turn to end: ``(outcome, reason)`` by whether it has.
+_TURN_OUTCOME = {True: ("no_transition", "turn_ended"), False: ("pending", "turn_running")}
+
+#: Pending reasons that mean "a human must look", not "wait longer". They double as the finding codes: why a
+#: resolution was refused is exactly what the recovery card has to say.
 _ANOMALY_REASONS = ("human_presence_anomaly", "cursor_moved")
 
 
@@ -157,13 +151,10 @@ _ANOMALY_REASONS = ("human_presence_anomaly", "cursor_moved")
 
 
 @dataclass(frozen=True, slots=True)
-class Resolution:
-    """The reconciler's reading of one dispatched decision against the disk.
-
-    ``outcome`` is deliberately four-valued. "Pending" is not a failure and not a resolution — it is the
-    normal answer for most ticks, and collapsing it into either of the terminal answers is how a decision
-    would be declared landed before the engine committed it.
-    """
+class Resolution(WireRecord):
+    """The reconciler's reading of one dispatched decision against the disk. ``outcome`` is four-valued on
+    purpose: "pending" is the normal answer on most ticks, and folding it into a terminal one is how a
+    decision would be declared landed before the engine committed it."""
 
     outcome: str  # "state_changed" | "no_transition" | "pending" | "failed"
     reason: str
@@ -172,9 +163,6 @@ class Resolution:
     @property
     def resolved(self) -> bool:
         return self.outcome in ("state_changed", "no_transition")
-
-    def to_json(self) -> dict[str, Any]:
-        return {"outcome": self.outcome, "reason": self.reason, "evidence": dict(self.evidence)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -261,48 +249,39 @@ def _json_of(value: Any) -> Any:
 
 
 def presence_unchanged(baseline: Any, fresh: Any) -> bool:
-    """Is every recorded presence fact identical between the submit-time baseline and a fresh read?
-
-    The disk half of the ``NotDelivered`` proof (C24). ``False`` when either side is missing: a decision
-    with no baseline cannot be proven undelivered from disk, and answering ``True`` there would hand the
-    at-most-once guarantee to whichever caller forgot to record one.
-    """
+    """Is every recorded presence fact identical between the submit-time baseline and a fresh read? The disk
+    half of the ``NotDelivered`` proof (C24); ``False`` when either side is missing, or the at-most-once
+    guarantee would belong to whichever caller forgot to record one."""
     if baseline is None or fresh is None:
         return False
     for name in PRESENCE_COMPARED_FIELDS:
-        left = _attr(baseline, name)
-        right = _attr(fresh, name)
+        left, right = _attr(baseline, name), _attr(fresh, name)
         if isinstance(left, Mapping) or isinstance(right, Mapping):
-            if dict(left or {}) != dict(right or {}):
-                return False
-            continue
+            left, right = dict(left or {}), dict(right or {})
         if left != right:
             return False
     return True
 
 
+def _storable(evidence: Mapping[str, Any]) -> dict[str, Any]:
+    """Evidence without the parsed ``AuditEvent`` objects, which stay in this module: the store takes JSON."""
+    return {key: value for key, value in evidence.items() if key != "audit_error_events"}
+
+
 def _normalise_message(text: str) -> str:
-    """Collapse a failure message to the part that identifies the failure and nothing else."""
+    """A failure message reduced to the part that identifies the failure."""
     out = _ANSI_RE.sub("", str(text or "")).strip().lower()
-    out = _PATH_RE.sub("<path>", out)
-    out = _HEX_RE.sub("<id>", out)
-    out = _NUM_RE.sub("<n>", out)
-    out = re.sub(r"\s+", " ", out).strip()
-    return out[:_MAX_NORMALISED_CHARS]
+    out = _NUM_RE.sub("<n>", _HEX_RE.sub("<id>", _PATH_RE.sub("<path>", out)))
+    return re.sub(r"\s+", " ", out).strip()[:_MAX_NORMALISED_CHARS]
 
 
 def _slug_of(normalised: str) -> str:
-    slug = _SLUG_RE.sub("-", normalised).strip("-")
-    return slug[:_MAX_SLUG_CHARS].strip("-") or "unknown"
+    return _SLUG_RE.sub("-", normalised).strip("-")[:_MAX_SLUG_CHARS].strip("-") or "unknown"
 
 
 def _error_text(event: Any) -> str:
-    """The human-meaningful half of an ``ERROR_LOGGED`` row.
-
-    Field names are version-specific (FORMAT-NOTES §6), so the three that carry a message are tried in
-    order and the event name is the last resort — a fingerprint over an empty string would merge every
-    unlabelled failure into one breaker.
-    """
+    """The meaningful half of an ``ERROR_LOGGED`` row. Field names vary by version (FORMAT-NOTES §6); the
+    event name is the last resort, since a fingerprint of "" would merge every unlabelled failure."""
     fields = _attr(event, "fields", {}) or {}
     for key in ("Error", "Message", "Details"):
         value = str(fields.get(key) or "").strip()
@@ -315,29 +294,21 @@ def _event_order(event: Any) -> tuple[int, int]:
     return int(_attr(event, "shard_index", 0) or 0), int(_attr(event, "pos", 0) or 0)
 
 
-_SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}")
-
-
 def _unit_scoped(event: Any, unit: Any, snap: Any) -> bool:
-    """Is this main-workflow audit row about the action's unit?
-
-    Only team gates write ``Unit`` on gate rows (``teamGateFields``); a solo gate row carries Stage,
-    Feedback and a revision count and nothing else. A blank Unit therefore belongs to the unit the
-    engine is running now, which must still be the action's — the reader's question floors accept a
-    blank Unit for the same reason. A recorded Unit must match exactly.
-    """
+    """Is this main-workflow row about the action's unit? Only team gates write ``Unit`` on gate rows, so a
+    blank Unit belongs to the unit running now, which must still be the action's (the reader's question
+    floors read it the same way). A recorded Unit must match exactly."""
     fields = _attr(event, "fields", {}) or {}
     if fields.get("Workflow"):
         return False
-    recorded = str(fields.get("Unit") or "").strip() or None
-    expected = unit or None
+    recorded, expected = str(fields.get("Unit") or "").strip() or None, unit or None
     if recorded is not None:
         return recorded == expected
     return expected is None or _attr(snap, "unit") == expected
 
 
 def _iso_gt(left: Any, right: Any) -> bool:
-    """``left > right`` for two ISO-8601 UTC second-precision stamps; ``False`` when either is absent."""
+    """``left > right`` for two second-precision UTC stamps; ``False`` when either is absent."""
     return bool(left) and bool(right) and str(left) > str(right)
 
 
@@ -375,8 +346,7 @@ def _carry_recorded_at(previous: Any, boundary: Any) -> Any:
 
 
 def _elapsed(since: Any, now: Any) -> float | None:
-    a = C.epoch_from_iso(since)
-    b = C.epoch_from_iso(now)
+    a, b = C.epoch_from_iso(since), C.epoch_from_iso(now)
     return None if a is None or b is None else b - a
 
 
@@ -1011,292 +981,177 @@ class Reconciler:
     async def _reconcile_open_actions(self) -> int:
         """Reconcile every action the host might still be working on, one snapshot per intent."""
         rows = await self._to_thread(
-            self._s.storage.select,
-            "actions",
-            {"status": list(RECONCILABLE_STATUS)},
-            order_by="created_at ASC",
+            self._s.storage.select, "actions", {"status": list(RECONCILABLE_STATUS)}, order_by="created_at ASC"
         )
         done = 0
-        snapshots: dict[str, Any] = {}
+        snapshots: dict[tuple[str, str, str], Any] = {}
         for row in rows:
-            action_id = str(row.get("action_id"))
             try:
-                rec = await self._s.actions.get(action_id)
+                rec = await self._s.actions.get(str(row.get("action_id")))
             except StudioError:
                 continue
-            key = f"{rec.repo_id}:{rec.space}:{rec.intent_dir}"
+            key = (rec.repo_id, rec.space, rec.intent_dir)
             if key not in snapshots:
                 snapshots[key] = await self._snapshot_for(rec)
             try:
                 await self.reconcile_action(rec, snapshots[key])
                 done += 1
             except (StudioError, OSError) as exc:
-                _LOG.warning("reconcile of %s failed: %s", action_id, exc)
+                _LOG.warning("reconcile of %s failed: %s", rec.action_id, exc)
         return done
 
     async def _snapshot_for(self, rec: Any) -> Any | None:
         try:
             repo = await self._to_thread(self._s.repos.get, rec.repo_id)
-        except StudioError:
-            return None
-        key = f"{rec.repo_id}:{rec.space}:{rec.intent_dir}"
-        try:
-            return await self._in_pool(
-                functools.partial(
-                    self._s.projection.snapshot,
-                    repo,
-                    rec.space,
-                    rec.intent_dir,
-                    first_unreadable_at=self._first_unreadable.get(key),
-                )
-            )
+            return await self._in_pool(functools.partial(
+                self._s.projection.snapshot, repo, rec.space, rec.intent_dir,
+                first_unreadable_at=self._first_unreadable.get(f"{rec.repo_id}:{rec.space}:{rec.intent_dir}"),
+            ))
         except (StudioError, OSError):
             return None
 
     async def reconcile_now(self, action_id: str) -> Any:
-        """``POST /actions/{id}/reconcile`` — one action, right now, on the caller's request."""
+        """``POST /actions/{id}/reconcile``: one action, now, on the caller's request."""
         rec = await self._s.actions.get(action_id)
         return await self.reconcile_action(rec, await self._snapshot_for(rec))
 
     async def reconcile_action(self, rec: Any, snap: Any | None = None) -> Any:
-        """Move one action as far as today's evidence allows, and no further.
-
-        Dispatches on status because each status has exactly one legal question. A never-sent
-        Run/Resume may retire when its purpose expires; no terminal or undelivered record is reopened.
-        """
-        status = str(_attr(rec, "status") or "")
-        if status == "Queued" and _attr(rec, "type") in ("run", "resume"):
-            return await self._retire_obsolete_run(
-                rec, snap if snap is not None else await self._snapshot_for(rec),
-            )
-        if status not in RECONCILABLE_STATUS:
+        """Move one action as far as today's evidence allows, and no further. A never-sent Run/Resume may
+        retire when its purpose expires; no terminal or undelivered record is reopened."""
+        if rec.status == "Queued" and rec.type in ("run", "resume"):
+            return await self._retire_obsolete_run(rec, snap if snap is not None else await self._snapshot_for(rec))
+        if rec.status not in RECONCILABLE_STATUS:
             return rec
-        if snap is None and status != "Delivering":
+        if snap is None and rec.status != "Delivering":
             snap = await self._snapshot_for(rec)
-
         slot = self._slot_for(rec)
         self._observe_run(rec, slot)
-
-        if status == "Delivering":
-            return await self._reconcile_delivering(rec, snap, slot)
-        if status == "Delivered":
+        if rec.status == "Delivered":
             return await self._reconcile_delivered(rec, snap, slot)
-        if status == "Processing":
-            return await self._reconcile_processing(rec, snap, slot)
-        if status == "DeliveryUncertain":
-            return await self._reconcile_uncertain(rec, snap, slot)
-        return await self._reconcile_required(rec, snap, slot)
-
-    # ---- per-status bodies ------------------------------------------------ #
-
-    async def _reconcile_delivering(self, rec: Any, snap: Any, slot: Any) -> Any:
-        """The browser never reported. After the ack deadline the answer becomes "we cannot tell".
-
-        Never ``NotDelivered``: this path has no authoritative 4xx and no client report, so the only
-        thing that is certain is the uncertainty (§1.13 "The reconciler NEVER moves Delivering →
-        NotDelivered").
-        """
+        if rec.status == "ReconciliationRequired":
+            return await self._reconcile_required(rec, snap, slot)
+        # Delivering, and the browser never reported. Never `NotDelivered` from here: with no report and no
+        # 4xx, the uncertainty is the only certain thing (§1.13).
         if not self._past_deadline(rec):
             return rec
-        if snap is None:
-            snap = await self._snapshot_for(rec)
-        evidence = await self._delivery_evidence(rec, snap, slot)
-        return await self._transition(
-            rec, "DeliveryUncertain", reason="ack_deadline", evidence=evidence
-        )
+        snap = snap if snap is not None else await self._snapshot_for(rec)
+        return await self._to_reconciliation(rec, snap, slot, reason="ack_deadline")
 
     async def _reconcile_delivered(self, rec: Any, snap: Any, slot: Any) -> Any:
-        """A delivered decision either starts its turn or runs out of patience (review P22)."""
-        evidence = dict(_attr(rec, "evidence", {}) or {})
-        queued_at = evidence.get("queued_at")
-        delivered_at = _attr(rec, "delivered_at")
+        """Wait for a queued message's turn to start (P22), then look for the resolution it declared."""
         timeout = self._turn_timeout()
-
-        if queued_at:
+        if not rec.evidence.get("turn_started_at"):
+            now = self._s.clock.iso()
             if self._turn_started(rec, slot, snap):
-                deadline = self._deadline_from(self._s.clock.iso(), timeout)
-                return await self._transition(
-                    rec,
-                    "Processing",
-                    reason="queued_turn_started",
-                    evidence={"turn_started_at": self._s.clock.iso()},
-                    values={"deadline_at": deadline},
-                )
-            waited = _elapsed(delivered_at, self._s.clock.iso())
+                # The turn timeout counts from the turn's own start, never from the host's ack.
+                return await self._stamp(rec, {"turn_started_at": now}, deadline_at=self._deadline_from(now, timeout))
+            waited = _elapsed(rec.delivered_at, now)
             if waited is not None and waited > C.DELIVERED_QUEUED_WAIT_FACTOR * timeout:
-                return await self._to_uncertain(rec, snap, slot, reason="queued_wait_exceeded")
+                return await self._to_reconciliation(rec, snap, slot, reason="queued_wait_exceeded")
             return rec
-
-        if self._session_replaced(rec, slot):
-            return await self._to_uncertain(rec, snap, slot, reason="session_replaced")
-        if self._past_deadline(rec):
-            return await self._to_uncertain(rec, snap, slot, reason="delivery_deadline")
-        return rec
-
-    async def _retire_obsolete_run(self, rec: Any, snap: Any | None) -> Any:
-        """A never-sent Run may expire; an in-flight or uncertain delivery never does."""
-        if (
-            snap is None or _attr(rec, "type") not in ("run", "resume")
-            or _attr(rec, "status") != "Queued"
-            or _attr(rec, "delivery_id") or _attr(rec, "delivering_at")
-        ):
-            return rec
-        reason = run_unavailable_reason(snap, stage=_attr(rec, "stage"), unit=_attr(rec, "unit"))
-        if reason is None:
-            return rec
-        try:
-            return await self._s.actions.transition(
-                rec.action_id, "Cancelled", expected_generation=rec.status_generation,
-                reason="command_superseded", evidence={
-                    "superseded": True, "command_unavailable_reason": reason, "current_stage": snap.stage,
-                },
-            )
-        except StaleGeneration:
-            # A concurrent submit owns the new generation. Never adopt it to cancel its delivery.
-            return await self._s.actions.get(rec.action_id)
-
-    async def _reconcile_processing(self, rec: Any, snap: Any, slot: Any) -> Any:
-        """The turn is running (or was). Look for the resolution the decision declared.
-
-        An anomaly leaves through ``DeliveryUncertain`` rather than straight to
-        ``ReconciliationRequired``: ``Processing`` has no edge to it in PRD §11.1, and the next tick
-        escalates with the finding carried on the row (C04). Inventing the shortcut would put a state
-        outside the transition graph into the durable record.
-        """
         if snap is not None:
             resolution = self.evaluate_resolution(rec, snap, slot)
             if resolution.resolved:
                 return await self._settle(rec, snap, resolution)
             if resolution.reason in _ANOMALY_REASONS:
-                return await self._to_uncertain(
-                    rec, snap, slot, reason=resolution.reason, extra=resolution.evidence
-                )
-            # Tool discovery and recoverable retries can emit several audit errors during one turn.
-            # Keep the lease while the agent is working; its final answer evidence gets first refusal.
+                return await self._to_reconciliation(rec, snap, slot, reason=resolution.reason,
+                                                     extra=resolution.evidence)
+            # Tool discovery and recoverable retries can log several errors in one turn: keep the lease while
+            # the agent works, and give its final answer first refusal.
             failure = self._classified_failure(rec, snap) if self._turn_ended(rec, slot, snap) else None
             if failure is not None:
                 return await self._fail(rec, snap, failure)
         if self._session_replaced(rec, slot):
-            return await self._to_uncertain(rec, snap, slot, reason="session_replaced")
+            return await self._to_reconciliation(rec, snap, slot, reason="session_replaced")
         if self._past_deadline(rec):
-            return await self._to_uncertain(rec, snap, slot, reason="turn_deadline")
+            return await self._to_reconciliation(rec, snap, slot, reason="turn_deadline")
         return rec
 
-    async def _reconcile_uncertain(self, rec: Any, snap: Any, slot: Any) -> Any:
-        """``DeliveryUncertain`` always continues to ``ReconciliationRequired`` (C04/review R07).
-
-        A status with no reconciler-driven exit is a dead end, and a dead end in this graph means a
-        boundary nobody can act on. The evidence gathered here is what the human's ``resubmit`` /
-        ``mark_not_delivered`` decision is checked against, so it is recomputed rather than reused.
-        """
-        evidence = await self._delivery_evidence(rec, snap, slot)
-        previous = dict(_attr(rec, "evidence", {}) or {})
-        confirmed = bool(previous.get("delivery_confirmed")) or self._delivery_confirmed(evidence)
-        evidence["delivery_confirmed"] = confirmed
-        return await self._transition(
-            rec, "ReconciliationRequired", reason="uncertain_escalated", evidence=evidence
-        )
+    async def _retire_obsolete_run(self, rec: Any, snap: Any | None) -> Any:
+        """A never-sent Run may expire; an in-flight or uncertain delivery never does."""
+        if (snap is None or rec.type not in ("run", "resume") or rec.status != "Queued" or rec.delivery_id
+                or rec.delivering_at):
+            return rec
+        reason = run_unavailable_reason(snap, stage=rec.stage, unit=rec.unit)
+        if reason is None:
+            return rec
+        try:
+            return await self._s.actions.transition(
+                rec.action_id, "Cancelled", expected_generation=rec.status_generation, reason="command_superseded",
+                evidence={"superseded": True, "command_unavailable_reason": reason, "current_stage": snap.stage},
+            )
+        except StaleGeneration:
+            # A concurrent submit owns the new generation: never adopt it to cancel its delivery.
+            return await self._s.actions.get(rec.action_id)
 
     async def _reconcile_required(self, rec: Any, snap: Any, slot: Any) -> Any:
-        """Resolve from disk when delivery is confirmed; otherwise prove absence or wait for a human."""
+        """Resolve from disk once delivery is confirmed; otherwise prove absence or wait for a human."""
         evidence = await self._delivery_evidence(rec, snap, slot)
-        previous = dict(_attr(rec, "evidence", {}) or {})
-        confirmed = bool(previous.get("delivery_confirmed")) or self._delivery_confirmed(evidence)
+        confirmed = bool(rec.evidence.get("delivery_confirmed")) or self._delivery_confirmed(evidence)
         evidence["delivery_confirmed"] = confirmed
-
         if confirmed:
             if snap is not None:
-                resolution = self.evaluate_resolution(rec, snap, slot)
-                if resolution.resolved:
-                    await self._stamp_evidence(rec, evidence)
-                    rec = await self._s.actions.get(rec.action_id)
-                    return await self._settle(rec, snap, resolution)
-                evidence = self._carry_findings(evidence, resolution)
-                failure = self._classified_failure(rec, snap) if self._turn_ended(rec, slot, snap) else None
-                if failure is not None:
-                    await self._stamp_evidence(rec, evidence)
-                    rec = await self._s.actions.get(rec.action_id)
-                    return await self._fail(rec, snap, failure)
-            return await self._stamp_evidence(rec, evidence)
-
+                resolution, failure = self.evaluate_resolution(rec, snap, slot), None
+                if not resolution.resolved:
+                    evidence["findings"] = self._merge_findings(evidence.get("findings"),
+                                                                resolution.evidence.get("findings"))
+                    failure = self._classified_failure(rec, snap) if self._turn_ended(rec, slot, snap) else None
+                if resolution.resolved or failure is not None:
+                    rec = await self._stamp(rec, evidence)
+                    return await (self._fail(rec, snap, failure) if failure else self._settle(rec, snap, resolution))
+            return await self._stamp(rec, evidence)
         if evidence.get("wrong_slot"):
-            evidence["findings"] = self._with_finding(
-                evidence.get("findings"), "wrong_slot", {"slot_key": evidence["wrong_slot"]}
-            )
-            rec = await self._stamp_evidence(rec, evidence)
-            await self._record(
-                "action.updated",
-                severity="critical",
-                rec=rec,
-                params={"finding": "wrong_slot", "slot_key": evidence["wrong_slot"]},
-            )
+            evidence["findings"] = self._with_finding(evidence.get("findings"), "wrong_slot",
+                                                      {"slot_key": evidence["wrong_slot"]})
+            rec = await self._stamp(rec, evidence)
+            await self._record("action.updated", severity="critical", rec=rec,
+                               params={"finding": "wrong_slot", "slot_key": evidence["wrong_slot"]})
             return rec
+        if all(evidence.get(key) is value for key, value in ABSENCE_PROOF.items()):
+            return await self._transition(rec, "NotDelivered", reason="proven_not_delivered", evidence=evidence)
+        return await self._stamp(rec, evidence)
 
-        if (
-            evidence.get("transcript_row_absent") is True
-            and evidence.get("slot_ran_since") is False
-            and evidence.get("disk_baseline_unchanged") is True
-            and evidence.get("boot_id_unchanged") is True
-        ):
-            return await self._transition(
-                rec, "NotDelivered", reason="proven_not_delivered", evidence=evidence
-            )
-        return await self._stamp_evidence(rec, evidence)
+    async def _to_reconciliation(
+        self, rec: Any, snap: Any, slot: Any, *, reason: str, extra: Mapping[str, Any] | None = None
+    ) -> Any:
+        """Hand a dispatched decision to a human with every fact Studio can honestly state (C04/R07): what
+        ``resubmit``/``mark_not_delivered`` are checked against, plus a refused resolution's findings, which
+        ``ConsistencyEngine`` lifts into the blocking set (P04/R01) — dropped, they would unblock the intent."""
+        evidence = await self._delivery_evidence(rec, snap, slot)
+        if extra:
+            evidence = {**evidence, **extra, "findings": self._merge_findings(extra.get("findings"), None)}
+        evidence["delivery_confirmed"] = (bool(rec.evidence.get("delivery_confirmed"))
+                                          or self._delivery_confirmed(evidence))
+        moved = await self._transition(rec, "ReconciliationRequired", reason=reason, evidence=evidence)
+        if reason in _ANOMALY_REASONS:
+            await self._record("action.updated", severity="critical", rec=moved,
+                               params={"finding": reason, "presence": evidence.get("disk_movement")})
+        return moved
 
     # ---- resolution contracts (§1.12 table) ------------------------------- #
 
     def evaluate_resolution(self, rec: Any, snap: Any, slot: Any = None) -> Resolution:
-        """Apply the resolution-contract row for this action's decision, plus presence and cursor.
-
-        Public so a test can assert one table row against fixture bytes without driving a whole tick.
-        The presence and cursor rules are applied *after* the row matches, because they are what turns a
-        matched row into a resolution Studio is willing to sign: the disk may have moved for a reason
-        that has nothing to do with the decision Studio sent.
-        """
-        decision = self._decision_of(rec)
-        row = self._contract_row(rec, snap, slot, decision)
+        """The contract row for this action's decision, then presence and cursor, which turn a matched row into
+        one Studio will sign: the disk may have moved for reasons unrelated to what was sent. Both apply to the
+        prompt lane only; a force stop puts nothing before the model and never switched the cursor."""
+        row = self._contract_row(rec, snap, slot, self._decision_of(rec))
         if not row.resolved:
             return row
-
-        evidence = dict(row.evidence)
         presence = self._presence(rec, snap)
-        evidence["presence"] = presence
-        evidence["is_active"] = _attr(snap, "is_active")
-        # Both rules are scoped to the lane that sent a prompt. `host_control` (force stop) puts nothing
-        # in front of the model and never switched the cursor, so requiring a human turn or a matching
-        # cursor there would refuse a stop that provably worked — see the module report.
-        human_lane = str(_attr(rec, "risk_class") or "") == "human_lane"
-
-        if human_lane and presence.get("ok") is not True:
-            return Resolution(
-                "pending",
-                "human_presence_anomaly",
-                {
-                    **evidence,
-                    "findings": self._with_finding(
-                        evidence.get("findings"), "human_presence_anomaly", presence
-                    ),
-                },
-            )
-        if human_lane and _attr(snap, "is_active") is False:
-            return Resolution(
-                "pending",
-                "cursor_moved",
-                {
-                    **evidence,
-                    "findings": self._with_finding(
-                        evidence.get("findings"),
-                        "cursor_moved",
-                        {"cursor": _attr(snap, "cursor"), "intent_dir": _attr(snap, "intent_dir")},
-                    ),
-                },
-            )
-        return Resolution(row.outcome, row.reason, evidence)
+        evidence = {**row.evidence, "presence": presence, "is_active": _attr(snap, "is_active")}
+        human = rec.risk_class == "human_lane"
+        if human and presence.get("ok") is not True:
+            code, params = "human_presence_anomaly", presence
+        elif human and _attr(snap, "is_active") is False:
+            code, params = "cursor_moved", {"cursor": _attr(snap, "cursor"), "intent_dir": _attr(snap, "intent_dir")}
+        else:
+            return Resolution(row.outcome, row.reason, evidence)
+        findings = self._with_finding(evidence.get("findings"), code, params)
+        return Resolution("pending", code, {**evidence, "findings": findings})
 
     def _contract_row(self, rec: Any, snap: Any, slot: Any, decision: str) -> Resolution:
         """The type/decision row of the §1.12 table, with no presence or cursor judgement yet."""
-        action_type = str(_attr(rec, "type") or "")
-        stage = _attr(rec, "stage")
+        action_type, stage = rec.type, rec.stage
         ended = self._turn_ended(rec, slot, snap)
         seen: dict[str, Any] = {"turn_ended": ended}
 
@@ -1312,74 +1167,54 @@ class Reconciler:
         if action_type == "gate" and decision == "request_changes":
             rejected = self._newest_new(rec, snap, ("GATE_REJECTED",), stage)
             revising = self._newest_new(rec, snap, ("STAGE_REVISING",), stage)
-            seen["gate_rejected"] = _json_of(rejected)
-            seen["stage_revising"] = _json_of(revising)
+            seen.update(gate_rejected=_json_of(rejected), stage_revising=_json_of(revising))
             if rejected is not None and revising is not None and self._row_mark(snap, stage) in ("R", "r"):
                 return Resolution("state_changed", "gate_rejected", seen)
-            if ended:
-                returned = self._returned_revision_gate(rec, snap, stage)
-                if returned is not None:
-                    return Resolution("state_changed", "gate_revision_returned", {
-                        **seen, "returned_gate": _json_of(returned),
-                    })
+            returned = self._returned_revision_gate(rec, snap, stage) if ended else None
+            if returned is not None:
+                seen["returned_gate"] = _json_of(returned)
+                return Resolution("state_changed", "gate_revision_returned", seen)
             return Resolution("pending", "no_gate_rejected", seen)
 
         if action_type == "question":
             return self._question_row(rec, snap, decision, stage, ended, seen)
 
         if action_type == "missing_input" and decision == "provide_input":
-            payload = dict(_attr(rec, "payload", {}) or {})
-            if payload.get("kind") == "scope":
-                current = self._scope_of(snap)
-                seen["scope"] = current
-                if current and current == str(payload.get("scope") or "").strip():
-                    return Resolution("state_changed", "scope_recorded", seen)
-                return Resolution("pending", "scope_unchanged", seen)
-            return (
-                Resolution("no_transition", "turn_ended", seen)
-                if ended
-                else Resolution("pending", "turn_running", seen)
-            )
+            payload = rec.payload or {}
+            if payload.get("kind") != "scope":
+                return Resolution(*_TURN_OUTCOME[bool(ended)], seen)
+            seen["scope"] = current = self._scope_of(snap)
+            if current and current == str(payload.get("scope") or "").strip():
+                return Resolution("state_changed", "scope_recorded", seen)
+            return Resolution("pending", "scope_unchanged", seen)
 
         if action_type in ("run", "resume"):
-            moved = self._state_moved(rec, snap)
             movement = self._newest_new(rec, snap, C.MOVEMENT_EVENTS, None)
-            seen["state_moved"] = moved
-            seen["movement_event"] = _json_of(movement)
+            seen.update(state_moved=self._state_moved(rec, snap), movement_event=_json_of(movement))
             if not ended:
                 return Resolution("pending", "turn_running", seen)
-            if moved or movement is not None:
+            if seen["state_moved"] or movement is not None:
                 return Resolution("state_changed", "workflow_moved", seen)
             return Resolution("no_transition", "turn_ended_without_movement", seen)
 
         if action_type == "prepare_commit":
-            return (
-                Resolution("no_transition", "turn_ended", seen)
-                if ended
-                else Resolution("pending", "turn_running", seen)
-            )
+            return Resolution(*_TURN_OUTCOME[bool(ended)], seen)
 
         if action_type == "force_stop":
             if slot is None:
-                # The slot is gone, so nothing is running in it. `set_interrupted` still fires: the
-                # user asked for a stop and the durable record must say it took effect (C28).
+                # Nothing runs in a slot that is gone; `set_interrupted` still fires, because the user asked
+                # for a stop and the durable record must say it took effect (C28).
                 return Resolution("no_transition", "slot_absent", seen)
-            idle = not _attr(slot, "running", False) and str(_attr(slot, "stop_state", "idle")) == "idle"
-            seen["slot_idle"] = idle
-            return (
-                Resolution("no_transition", "slot_idle", seen)
-                if idle
-                else Resolution("pending", "stop_in_progress", seen)
-            )
+            seen["slot_idle"] = not _attr(slot, "running", False) and str(_attr(slot, "stop_state", "idle")) == "idle"
+            return Resolution("no_transition", "slot_idle", seen) if seen["slot_idle"] else Resolution(
+                "pending", "stop_in_progress", seen)
 
         return Resolution("pending", "no_contract_row", seen)
 
-    def _question_row(
-        self, rec: Any, snap: Any, decision: str, stage: Any, ended: bool, seen: dict[str, Any]
-    ) -> Resolution:
-        """The four question rows. All of them are ``ResolvedNoTransition``: answering a question moves
-        the conversation on, it does not close a gate, so declaring ``StateChanged`` would claim a
-        lifecycle move AI-DLC did not make."""
+    def _question_row(self, rec: Any, snap: Any, decision: str, stage: Any, ended: bool,
+                      seen: dict[str, Any]) -> Resolution:
+        """The question rows, all ``ResolvedNoTransition``: an answer moves the conversation on, it does not
+        close a gate, so ``StateChanged`` would claim a lifecycle move AI-DLC did not make."""
         questions = _attr(snap, "questions")
         digest_changed = self._digest_changed(rec, snap)
         seen["question_digest_changed"] = digest_changed
@@ -1387,56 +1222,9 @@ class Reconciler:
             return Resolution("pending", "turn_running", seen)
 
         if decision == "answers":
-            origin = (dict(_attr(rec, "evidence", {}) or {}).get("questions") or {}).get("origin")
+            origin = (rec.evidence.get("questions") or {}).get("origin")
             if isinstance(origin, dict) and origin.get("kind") == "audit":
-                if origin.get("unit") is not None and (
-                    _attr(snap, "unit") != origin["unit"]
-                    or _attr(snap, "audit_question_attempt") != (
-                        origin.get("attempt_generation"), True
-                    )
-                ):
-                    return Resolution("pending", "question_attempt_changed", seen)
-                answered = audit_question_answer(
-                    _attr(snap, "audit"), origin,
-                    str(_attr(rec, "wire_text") or ""), str(_attr(rec, "delivering_at") or ""),
-                    project_dir=_attr(snap, "canonical_path"),
-                )
-                seen["question_answered"] = _json_of(answered)
-                # Older Studio versions sent a free-text marker as an enum label. An idle,
-                # proven human turn cannot answer that prompt without a note. Retire only this
-                # attempt; the unchanged audit decision remains pending and gets a fresh card.
-                live_origin = _attr(questions, "origin") or {}
-                payload = dict(_attr(rec, "payload", {}) or {})
-                supplied = payload.get("answers") or []
-                if (
-                    answered is None and audit_question_accepts_text(questions)
-                    and live_origin.get("decision_sha256") == origin.get("decision_sha256")
-                    and len(supplied) == 1 and isinstance(supplied[0], dict)
-                    and not str(supplied[0].get("free_text") or "").strip()
-                    and _attr(rec, "wire_text") == questions.questions[0].options[0].text
-                ):
-                    return Resolution("no_transition", "answer_requires_text", seen)
-                receipt = self._unverified_receipt(rec, snap, origin, stage) if answered is None else None
-                if receipt is not None:
-                    # The receipt belongs to this question but does not verify our reply. The ended
-                    # turn and that receipt permit retiring its lease — whether AI-DLC then opened a
-                    # gate or asked a follow-up — never replay or an "answered" claim. Presence and
-                    # cursor checks still run in evaluate_resolution.
-                    gate = self._next_gate(rec, snap, stage, origin.get("unit"))
-                    return Resolution(
-                        "no_transition",
-                        "answer_not_verified_at_gate" if gate is not None else "answer_not_verified",
-                        {
-                            **seen, "answer_verified": False,
-                            "recorded_answer": _json_of(receipt),
-                            "next_gate": _json_of(gate),
-                        },
-                    )
-                return Resolution(
-                    "no_transition" if answered is not None else "pending",
-                    "question_answered" if answered is not None else "answers_not_recorded",
-                    seen,
-                )
+                return self._audit_answer_row(rec, snap, questions, origin, stage, seen)
             answered = self._newest_new(rec, snap, ("QUESTION_ANSWERED",), stage)
             seen["question_answered"] = _json_of(answered)
             if answered is not None:
@@ -1448,23 +1236,17 @@ class Reconciler:
         if decision == "confirm_summary":
             recorded = self._newest_new(rec, snap, ("SUMMARY_CONFIRMATION_RECORDED",), stage)
             seen["summary_confirmation_recorded"] = _json_of(recorded)
-            confirmation = _attr(questions, "summary_confirmation")
-            if recorded is not None:
-                return Resolution("no_transition", "summary_confirmed", seen)
-            if digest_changed and bool(_attr(confirmation, "answered", False)):
+            answered = bool(_attr(_attr(questions, "summary_confirmation"), "answered", False))
+            if recorded is not None or (digest_changed and answered):
                 return Resolution("no_transition", "summary_confirmed", seen)
             return Resolution("pending", "summary_not_confirmed", seen)
 
         if decision in ("accept_assumptions", "convert_assumptions"):
-            # The engine fills the tag with the chosen option verbatim and logs it as an ordinary
-            # QUESTION_ANSWERED (intent-capture Step 5). Either proof must name *this* choice: a reply
-            # that recorded the other option did not carry out the decision the human confirmed.
-            chosen = (
-                C.WIRE_ACCEPT_ASSUMPTIONS if decision == "accept_assumptions" else C.WIRE_CONVERT_ASSUMPTIONS
-            )
+            # The engine fills the tag with the chosen option and logs a QUESTION_ANSWERED (intent-capture Step 5);
+            # either proof must name *this* choice, or the reply did not carry out what the human confirmed.
+            chosen = C.WIRE_ACCEPT_ASSUMPTIONS if decision == "accept_assumptions" else C.WIRE_CONVERT_ASSUMPTIONS
             confirmation = _attr(questions, "assumption_confirmation")
-            answer = str(_attr(confirmation, "answer", "") or "").strip()
-            seen["assumption_answer"] = answer
+            seen["assumption_answer"] = answer = str(_attr(confirmation, "answer", "") or "").strip()
             if digest_changed and _attr(confirmation, "answered", False) and answer.startswith(chosen):
                 return Resolution("no_transition", "assumptions_recorded", seen)
             answered = self._newest_new(rec, snap, ("QUESTION_ANSWERED",), stage)
@@ -1475,88 +1257,93 @@ class Reconciler:
             return Resolution("pending", "assumptions_not_recorded", seen)
 
         if decision == "approve_plan":
-            plan = _attr(questions, "plan_approval")
-            answer = str(_attr(plan, "answer", "") or "")
-            seen["plan_answer"] = answer
-            if digest_changed and _attr(plan, "answered", False) and answer.startswith(C.WIRE_APPROVE_PLAN):
-                return Resolution("no_transition", "plan_approved", seen)
-            # A later Learnings prompt can now own `snap.questions`. The reader retains the
-            # file and its validated closure receipts from that same coherent snapshot; match
-            # the original plan's path, scope and dispatch boundary before settling its action.
-            closed = _attr(questions, "closed_file")
-            origin = _attr(questions, "origin") or {}
-            captured_question = (_attr(rec, "evidence", {}) or {}).get("questions") or {}
-            if (
-                closed is not None and origin.get("kind") == "audit"
-                and origin.get("stage") == stage and origin.get("unit") == _attr(rec, "unit")
-                and _attr(closed, "relpath") == captured_question.get("relpath")
-                and _attr(closed, "sha256") != _attr(_attr(rec, "captured"), "question_digest")
-            ):
-                new_receipts = self._new_events(rec, snap, ("PLAN_APPROVAL_RECORDED",), stage)
-                receipt = next((
-                    event for event in (_attr(questions, "closed_file_receipts", ()) or ())
-                    if event in new_receipts
-                    and self._receipt_prompt_matches(rec, snap, stage, event)
-                    and event.fields.get("Intent") in (None, _attr(rec, "intent_uuid"))
-                ), None)
-                if receipt is not None:
-                    seen["plan_approval_recorded"] = _json_of(receipt)
-                    seen["approved_questions_file"] = _attr(closed, "relpath")
-                    return Resolution("no_transition", "plan_approved", seen)
-            if _attr(plan, "present", False) and not _attr(plan, "answered", False):
-                receipt = self._historical_plan_approval(rec, snap, stage, questions)
-                if receipt is not None:
-                    return Resolution("no_transition", "plan_approval_recorded_before_reset", {
-                        **seen, "plan_approval_recorded": _json_of(receipt),
-                        "current_plan_requires_approval": True,
-                    })
-            return Resolution("pending", "plan_not_approved", seen)
+            return self._plan_approval_row(rec, snap, questions, stage, digest_changed, seen)
 
         if decision == "request_plan_changes":
             plan = _attr(questions, "plan_approval")
-            answer = str(_attr(plan, "answer", "") or "").strip()
-            seen["plan_answer"] = answer
-            holds_request = answer.lower().startswith("request changes")
-            cleared = bool(_attr(plan, "present", False)) and not bool(_attr(plan, "answered", False))
-            seen["plan_cleared"] = cleared
-            if digest_changed and (holds_request or cleared):
+            seen["plan_answer"] = answer = str(_attr(plan, "answer", "") or "").strip()
+            seen["plan_cleared"] = bool(_attr(plan, "present", False)) and not bool(_attr(plan, "answered", False))
+            if digest_changed and (answer.lower().startswith("request changes") or seen["plan_cleared"]):
                 return Resolution("no_transition", "plan_changes_requested", seen)
             return Resolution("pending", "plan_unchanged", seen)
 
         return Resolution("pending", "no_contract_row", seen)
 
-    # ---- resolution outcome ---------------------------------------------- #
+    def _audit_answer_row(self, rec: Any, snap: Any, questions: Any, origin: Mapping[str, Any], stage: Any,
+                          seen: dict[str, Any]) -> Resolution:
+        """An audit-recorded question: settled by the engine's receipt for exactly this question."""
+        if origin.get("unit") is not None and (
+            _attr(snap, "unit") != origin["unit"]
+            or _attr(snap, "audit_question_attempt") != (origin.get("attempt_generation"), True)
+        ):
+            return Resolution("pending", "question_attempt_changed", seen)
+        answered = audit_question_answer(_attr(snap, "audit"), origin, str(rec.wire_text or ""),
+                                         str(rec.delivering_at or ""), project_dir=_attr(snap, "canonical_path"))
+        seen["question_answered"] = _json_of(answered)
+        if answered is not None:
+            return Resolution("no_transition", "question_answered", seen)
+        # Older Studio versions sent a free-text marker as an enum label, which a proven human turn cannot answer
+        # without a note: retire this attempt only, so the still-pending audit decision gets a fresh card.
+        supplied = (rec.payload or {}).get("answers") or []
+        if (audit_question_accepts_text(questions)
+                and (_attr(questions, "origin") or {}).get("decision_sha256") == origin.get("decision_sha256")
+                and len(supplied) == 1 and isinstance(supplied[0], dict)
+                and not str(supplied[0].get("free_text") or "").strip()
+                and rec.wire_text == questions.questions[0].options[0].text):
+            return Resolution("no_transition", "answer_requires_text", seen)
+        receipt = self._unverified_receipt(rec, snap, origin, stage)
+        if receipt is None:
+            return Resolution("pending", "answers_not_recorded", seen)
+        # A receipt for this question that does not verify our reply retires the lease, whether AI-DLC then opened
+        # a gate or asked a follow-up — never a replay, and never an "answered" claim.
+        gate = self._next_gate(rec, snap, stage, origin.get("unit"))
+        seen.update(answer_verified=False, recorded_answer=_json_of(receipt), next_gate=_json_of(gate))
+        reason = "answer_not_verified_at_gate" if gate is not None else "answer_not_verified"
+        return Resolution("no_transition", reason, seen)
+
+    def _plan_approval_row(self, rec: Any, snap: Any, questions: Any, stage: Any, digest_changed: bool,
+                           seen: dict[str, Any]) -> Resolution:
+        plan = _attr(questions, "plan_approval")
+        seen["plan_answer"] = answer = str(_attr(plan, "answer", "") or "")
+        if digest_changed and _attr(plan, "answered", False) and answer.startswith(C.WIRE_APPROVE_PLAN):
+            return Resolution("no_transition", "plan_approved", seen)
+        # A later Learnings prompt can own `snap.questions` by now; the reader keeps the closed file and its
+        # validated receipts from the same snapshot, matched on the plan's path, scope and dispatch boundary.
+        closed, origin = _attr(questions, "closed_file"), _attr(questions, "origin") or {}
+        captured_question = rec.evidence.get("questions") or {}
+        if (closed is not None and origin.get("kind") == "audit" and origin.get("stage") == stage
+                and origin.get("unit") == rec.unit and _attr(closed, "relpath") == captured_question.get("relpath")
+                and _attr(closed, "sha256") != _attr(rec.captured, "question_digest")):
+            fresh = self._new_events(rec, snap, ("PLAN_APPROVAL_RECORDED",), stage)
+            receipt = next((
+                event for event in (_attr(questions, "closed_file_receipts", ()) or ())
+                if event in fresh and self._receipt_prompt_matches(rec, snap, stage, event)
+                and event.fields.get("Intent") in (None, rec.intent_uuid)
+            ), None)
+            if receipt is not None:
+                seen.update(plan_approval_recorded=_json_of(receipt), approved_questions_file=_attr(closed, "relpath"))
+                return Resolution("no_transition", "plan_approved", seen)
+        if _attr(plan, "present", False) and not _attr(plan, "answered", False):
+            receipt = self._historical_plan_approval(rec, snap, stage, questions)
+            if receipt is not None:
+                return Resolution("no_transition", "plan_approval_recorded_before_reset", {
+                    **seen, "plan_approval_recorded": _json_of(receipt), "current_plan_requires_approval": True})
+        return Resolution("pending", "plan_not_approved", seen)
+
+    # ---- resolution outcome and failure classification -------------------- #
 
     async def _settle(self, rec: Any, snap: Any, resolution: Resolution) -> Any:
-        """Commit a resolution: transition, then force the card's retirement."""
+        """Commit a resolution. ``resolved_at`` and ``resolution_json`` are composed by the broker's own terminal
+        write from the reason and evidence handed over (§1.12): one record, one author."""
         to_status = "StateChanged" if resolution.outcome == "state_changed" else "ResolvedNoTransition"
-        # `resolved_at` and `resolution_json` are composed by the broker's own terminal write from the
-        # reason and evidence handed over here (§1.12); writing them from this side would give one record
-        # two authors.
-        rec = await self._transition(
-            rec, to_status, reason=resolution.reason, evidence=resolution.evidence
-        )
-        if str(_attr(rec, "type") or "") == "force_stop":
-            await self._settle_force_stop(rec)
+        rec = await self._transition(rec, to_status, reason=resolution.reason, evidence=resolution.evidence)
+        if rec.type == "force_stop":
+            # A resolved force stop is a durable interruption (C28/P17), cleared only by the recovery card's
+            # `acknowledge`: PRD §11.2 requires a manual takeover after a mid-stage interruption.
+            await self._s.sessions.set_interrupted(rec.repo_id, rec.space, rec.intent_dir, self._s.clock.iso())
+            await self._record("intent.force_stop", severity="attention", rec=rec, params={"slot_key": rec.slot_key})
         self._forget(rec)
         return rec
-
-    async def _settle_force_stop(self, rec: Any) -> None:
-        """A resolved force stop is a durable interruption (C28/review P17).
-
-        ``interrupted_at`` is written here and cleared only by the recovery card's ``acknowledge``, so
-        ``Interrupted → ReconciliationRequired → Queued|Paused`` stays the only way back: PRD §11.2
-        requires manual takeover after a mid-stage interruption.
-        """
-        await self._s.sessions.set_interrupted(
-            rec.repo_id, rec.space, rec.intent_dir, self._s.clock.iso()
-        )
-        await self._record(
-            "intent.force_stop",
-            severity="attention",
-            rec=rec,
-            params={"slot_key": _attr(rec, "slot_key")},
-        )
 
     async def _fail(self, rec: Any, snap: Any, resolution: Resolution) -> Any:
         fingerprint, cls, summary_key = self.classify_failure(
@@ -1565,204 +1352,92 @@ class Reconciler:
         )
         try:
             rec, opened = await self._s.actions.record_failure(
-                rec,
-                fingerprint=fingerprint,
-                fingerprint_class=cls,
-                summary=summary_key,
-                # The parsed `AuditEvent` objects stay inside this module: everything that crosses into
-                # the store must be JSON, and their `to_json()` form is already in `audit_errors`.
-                evidence={k: v for k, v in resolution.evidence.items() if k != "audit_error_events"},
-            )
+                rec, fingerprint=fingerprint, fingerprint_class=cls, summary=summary_key,
+                evidence=_storable(resolution.evidence))
         except (IllegalTransition, StaleGeneration) as exc:
-            # The row moved between the read and the verdict (a delivery report, a second pass). Failing
-            # it anyway would count a breaker strike against a decision that has already settled.
-            _LOG.debug("failure for %s skipped: %s", _attr(rec, "action_id"), exc)
-            return await self._s.actions.get(_attr(rec, "action_id"))
+            # The row moved between the read and the verdict; failing it anyway would strike the breaker for a
+            # decision that has already settled.
+            _LOG.debug("failure for %s skipped: %s", rec.action_id, exc)
+            return await self._s.actions.get(rec.action_id)
         self._forget(rec)
         if opened:
-            _LOG.info("breaker opened for %s (%s)", _attr(rec, "intent_dir"), fingerprint)
+            _LOG.info("breaker opened for %s (%s)", rec.intent_dir, fingerprint)
         return rec
-
-    async def _to_uncertain(
-        self, rec: Any, snap: Any, slot: Any, *, reason: str, extra: Mapping[str, Any] | None = None
-    ) -> Any:
-        evidence = await self._delivery_evidence(rec, snap, slot)
-        if extra:
-            evidence = self._carry_findings({**evidence, **dict(extra)}, None)
-            evidence["findings"] = self._merge_findings(
-                evidence.get("findings"), dict(extra).get("findings")
-            )
-        moved = await self._transition(rec, "DeliveryUncertain", reason=reason, evidence=evidence)
-        if reason in _ANOMALY_REASONS:
-            await self._record(
-                "action.updated",
-                severity="critical",
-                rec=moved,
-                params={"finding": reason, "presence": evidence.get("disk_movement")},
-            )
-        return moved
-
-    def _carry_findings(
-        self, evidence: dict[str, Any], resolution: "Resolution | None"
-    ) -> dict[str, Any]:
-        """Fold a pending resolution's findings into the evidence blob that is about to be written.
-
-        Findings the reconciler discovers (`human_presence_anomaly`, `cursor_moved`, `wrong_slot`) live on
-        the action row because that is where `ConsistencyEngine` lifts them back out into the blocking set
-        (review P04/R01/R08). Losing them on a status move would silently unblock the intent.
-        """
-        if resolution is not None:
-            evidence["findings"] = self._merge_findings(
-                evidence.get("findings"), resolution.evidence.get("findings")
-            )
-        return evidence
 
     @staticmethod
     def _merge_findings(left: Any, right: Any) -> list[dict]:
-        out: list[dict] = []
-        seen: set[str] = set()
-        for group in (left or [], right or []):
-            for item in group:
-                if not isinstance(item, Mapping):
-                    continue
-                code = str(item.get("code") or "")
-                if not code or code in seen:
-                    continue
-                seen.add(code)
-                out.append({"code": code, "params": dict(item.get("params") or {})})
-        return out
+        merged: dict[str, dict] = {}
+        for item in [*(left or []), *(right or [])]:
+            code = str(item.get("code") or "") if isinstance(item, Mapping) else ""
+            if code:
+                merged.setdefault(code, {"code": code, "params": dict(item.get("params") or {})})
+        return list(merged.values())
 
-    # ---- failure classification ------------------------------------------ #
-
-    def classify_failure(
-        self, *, host_error: str | None, audit_errors: Sequence[Any]
-    ) -> tuple[str, str, str]:
-        """``(fingerprint, fingerprint_class, summary_key)`` — deterministic for the same failure.
-
-        One message is chosen rather than the whole burst: three identical ``ERROR_LOGGED`` rows and one
-        are the same failure, and a fingerprint that changed with the row count would never reach the
-        breaker's transient threshold. The host's own error wins when there is one — it describes the
-        transport, which is the layer that actually failed.
-        """
+    def classify_failure(self, *, host_error: str | None, audit_errors: Sequence[Any]) -> tuple[str, str, str]:
+        """``(fingerprint, fingerprint_class, summary_key)`` from one message, not the burst: a fingerprint that
+        changed with the count would never reach the transient threshold. The host's error wins (it describes the
+        layer that failed); the class is read from the readable text, the fingerprint from the scrubbed one."""
         message = str(host_error or "").strip()
         if not message and audit_errors:
-            newest = max(audit_errors, key=lambda e: _attr(e, "sort_key", ("", 0, 0)))
-            message = _error_text(newest)
-        # Classified against the readable text and fingerprinted against the scrubbed one: the class
-        # patterns include literal numbers (`429`) and paths, which the fingerprint has to forget so the
-        # same failure fingerprints the same twice.
-        readable = re.sub(r"\s+", " ", str(message or "")).strip().lower()
+            message = _error_text(max(audit_errors, key=lambda e: _attr(e, "sort_key", ("", 0, 0))))
+        readable = re.sub(r"\s+", " ", message).strip().lower()
         normalised = _normalise_message(message)
-        cls = "config"
-        for name, pattern in FINGERPRINT_RULES:
-            if pattern.search(readable):
-                cls = name
-                break
+        cls = next((name for name, pattern in FINGERPRINT_RULES if pattern.search(readable)), "config")
         digest = hashlib.sha256(normalised.encode("utf-8")).hexdigest()[:6]
         return f"{cls}.{_slug_of(normalised)}:{digest}", cls, f"template.failure.{cls}"
 
     def _classified_failure(self, rec: Any, snap: Any) -> Resolution | None:
-        """A burst of new ``ERROR_LOGGED`` rows, or a host error on the receipt, means failure.
-
-        The burst threshold is the point: FORMAT-NOTES §6 records that single ``ERROR_LOGGED`` rows are
-        the conductor correcting itself ("Unknown subcommand: set-status"), so failing an action on one
-        would turn AI-DLC's normal self-correction into a breaker.
-        """
-        receipt = dict(_attr(rec, "evidence", {}) or {}).get("receipt") or {}
+        """A host error on the receipt, or a burst of new ``ERROR_LOGGED`` rows; a single row is the conductor
+        correcting itself (FORMAT-NOTES §6), and failing on it would turn self-correction into a breaker."""
+        receipt = rec.evidence.get("receipt") or {}
         host_error = receipt.get("error") if isinstance(receipt, Mapping) else None
-        errors = [
-            event
-            for event in self._new_events(rec, snap, (C.ERROR_EVENT,), None)
-            if self._within_burst_window(rec, event)
-        ]
+        errors = [event for event in self._new_events(rec, snap, (C.ERROR_EVENT,), None)
+                  if (gap := _elapsed(rec.delivering_at, _attr(event, "timestamp"))) is None
+                  or gap <= _ERROR_BURST_WINDOW_SECS]
         if not host_error and len(errors) < _ERROR_BURST_COUNT:
             return None
-        return Resolution(
-            "failed",
-            "error_burst" if not host_error else "host_error",
-            {
-                "host_error": host_error,
-                "audit_error_events": errors,
-                "audit_errors": [_json_of(e) for e in errors],
-            },
-        )
+        return Resolution("failed", "host_error" if host_error else "error_burst", {
+            "host_error": host_error, "audit_error_events": errors, "audit_errors": [_json_of(e) for e in errors]})
 
-    def _within_burst_window(self, rec: Any, event: Any) -> bool:
-        newest = _attr(event, "timestamp")
-        since = _attr(rec, "delivering_at")
-        gap = _elapsed(since, newest)
-        return gap is None or gap <= _ERROR_BURST_WINDOW_SECS
-
-    # ---- delivery evidence ----------------------------------------------- #
+    # ---- delivery evidence, presence, turn -------------------------------- #
 
     async def _delivery_evidence(self, rec: Any, snap: Any, slot: Any) -> dict[str, Any]:
-        """Everything Studio can honestly say about whether this dispatch reached the host.
-
-        Six independent facts, assembled in one place because they are only meaningful together: a
-        missing transcript row means nothing on its own (process memory is emptied by a restart), and a
-        quiet slot means nothing either if the disk moved.
-        """
+        """Everything Studio can honestly say about whether this dispatch reached the host. The facts only mean
+        something together: a restart empties the transcript, and a quiet slot means nothing if the disk moved."""
         host = self._s.host
-        slot_key = str(_attr(rec, "slot_key") or "")
-        since = str(_attr(rec, "delivering_at") or "")
-        delivery_id = str(_attr(rec, "delivery_id") or "")
-        wire_text = str(_attr(rec, "wire_text") or "")
-
-        row = None
-        wrong_slot = None
+        slot_key, since = str(rec.slot_key or ""), str(rec.delivering_at or "")
+        row = wrong_slot = None
         readable = False
         if slot_key and since:
-            row = host.find_delivery_row(
-                slot_key, since_ts=since, delivery_id=delivery_id, wire_text=wire_text
-            )
-            # Each read updates the host capabilities. Capture its result before a healthy read of
-            # another slot can erase this one's failure; missing evidence never proves non-delivery.
+            row = self._delivery_row(rec)
+            # Each read updates the host capabilities: capture this one before a healthy read of another slot
+            # erases its failure. Missing evidence never proves non-delivery.
             readable = host.can_prove_absence()
             if row is None:
-                row, wrong_slot, others_readable = self._search_other_slots(
-                    rec, since, delivery_id, wire_text
-                )
+                row, wrong_slot, others_readable = self._search_other_slots(rec)
                 readable = readable and others_readable
-
-        evidence: dict[str, Any] = {
-            # Findings already on the row are carried forward: a presence anomaly recorded one tick ago
-            # is still true, and dropping it here would unblock the intent on the next status move.
-            "findings": self._merge_findings(
-                dict(_attr(rec, "evidence", {}) or {}).get("findings"), None
-            ),
-            "transcript_row": (
-                {"slot_key": wrong_slot or slot_key, "ts": row.ts, "role": row.role}
-                if row is not None
-                else None
-            ),
+        fresh = await self._fresh_presence(rec, snap)
+        presence = self._presence(rec, snap)
+        return {
+            # Findings already on the row are carried: a presence anomaly recorded a tick ago is still true.
+            "findings": self._merge_findings(rec.evidence.get("findings"), None),
+            "transcript_row": None if row is None else {
+                "slot_key": wrong_slot or slot_key, "ts": row.ts, "role": row.role},
             "transcript_row_absent": (row is None) if readable else False,
             "wrong_slot": wrong_slot,
             "slot_ran_since": self._slot_ran_since(rec, slot),
-            "boot_id_unchanged": str(_attr(rec, "boot_id") or "")
-            == str(getattr(self._s, "boot_id", "") or ""),
+            "boot_id_unchanged": str(rec.boot_id or "") == str(getattr(self._s, "boot_id", "") or ""),
+            "disk_movement": {
+                **{key: presence.get(key) for key in ("human_turn_delta", "marker_advanced")},
+                "resolution_event_seen": self._newest_new(rec, snap, C.RESOLUTION_EVENTS, None) is not None,
+            },
+            "disk_baseline_unchanged": (presence_unchanged(rec.presence_baseline, fresh)
+                                        if rec.presence_baseline is not None else None),
         }
 
-        fresh = await self._fresh_presence(rec, snap)
-        baseline = _attr(rec, "presence_baseline")
-        presence = self._presence(rec, snap)
-        evidence["disk_movement"] = {
-            "human_turn_delta": presence.get("human_turn_delta"),
-            "marker_advanced": presence.get("marker_advanced"),
-            "resolution_event_seen": self._resolution_event_seen(rec, snap),
-        }
-        evidence["disk_baseline_unchanged"] = (
-            presence_unchanged(baseline, fresh) if baseline is not None else None
-        )
-        return evidence
-
-    def _search_other_slots(
-        self, rec: Any, since: str, delivery_id: str, wire_text: str
-    ) -> tuple[Any, str | None, bool]:
-        """Return a matching row, its slot and whether every absence read succeeded (review R08).
-
-        A row in another slot is the ``wrong_slot`` finding, not a delivery: the decision reached the
-        host but not the session Studio captured against, so no automatic answer is safe.
-        """
+    def _search_other_slots(self, rec: Any) -> tuple[Any, str | None, bool]:
+        """A matching row in another slot of the repository, its slot, and whether every read succeeded (R08). A
+        row elsewhere is ``wrong_slot``: it reached the host, not the captured session, so nothing is automatic."""
         try:
             repo = self._s.repos.get(rec.repo_id)
         except StudioError:
@@ -1771,197 +1446,121 @@ class Reconciler:
         views = host.slots_for_project(repo.canonical_path)
         readable = host.can_prove_absence()
         for view in views:
-            if view.key == str(_attr(rec, "slot_key") or ""):
+            if view.key == str(rec.slot_key or ""):
                 continue
-            found = host.find_delivery_row(
-                view.key, since_ts=since, delivery_id=delivery_id, wire_text=wire_text
-            )
+            found = host.find_delivery_row(view.key, since_ts=str(rec.delivering_at or ""),
+                                           delivery_id=str(rec.delivery_id or ""), wire_text=str(rec.wire_text or ""))
             readable = host.can_prove_absence() and readable
             if found is not None:
                 return found, view.key, readable
         return None, None, readable
 
     def _slot_ran_since(self, rec: Any, slot: Any) -> bool | None:
-        """Did the bound slot run a turn after ``delivering_at``? ``None`` when the slot is unreadable.
-
-        ``None`` rather than ``False`` matters: ``False`` is one of the four proofs of ``NotDelivered``,
-        and "we could not look" must never be able to stand in for "it did not happen".
-        """
+        """Did the bound slot run a turn after ``delivering_at``? ``None`` (never ``False``) when the slot cannot
+        be read: ``False`` is one of the four proofs of ``NotDelivered``."""
         if slot is None or not self._slots_readable():
             return None
-        if self._ran.get(str(_attr(rec, "action_id"))):
+        if self._ran.get(rec.action_id) or _busy_reasons(slot):
             return True
-        if _busy_reasons(slot):
-            return True
-        return bool(_iso_ge(_attr(slot, "last_turn_ts"), _attr(rec, "delivering_at")))
+        return bool(_iso_ge(_attr(slot, "last_turn_ts"), rec.delivering_at))
 
-    def _delivery_confirmed(self, evidence: Mapping[str, Any]) -> bool:
+    @staticmethod
+    def _delivery_confirmed(evidence: Mapping[str, Any]) -> bool:
         movement = evidence.get("disk_movement") or {}
         delta = movement.get("human_turn_delta")
-        return bool(
-            (evidence.get("transcript_row") is not None and not evidence.get("wrong_slot"))
-            or (isinstance(delta, int) and delta >= 1)
-            or movement.get("resolution_event_seen")
-        )
+        return bool((evidence.get("transcript_row") is not None and not evidence.get("wrong_slot"))
+                    or (isinstance(delta, int) and delta >= 1) or movement.get("resolution_event_seen"))
 
     async def _fresh_presence(self, rec: Any, snap: Any) -> Any:
         if snap is None:
             return None
         try:
             repo = await self._to_thread(self._s.repos.get, rec.repo_id)
-        except StudioError:
-            return None
-        try:
-            return await self._in_pool(
-                self._s.reader.presence_baseline,
-                Path(repo.canonical_path),
-                rec.space,
-                rec.intent_dir,
-                _attr(snap, "audit"),
-                _attr(snap, "state_sha256"),
-            )
+            return await self._in_pool(self._s.reader.presence_baseline, Path(repo.canonical_path), rec.space,
+                                       rec.intent_dir, _attr(snap, "audit"), _attr(snap, "state_sha256"))
         except (StudioError, OSError):
             return None
 
-    # ---- presence, cursor, turn ------------------------------------------ #
-
     def _presence(self, rec: Any, snap: Any) -> dict[str, Any]:
-        """Compare human turns and the adapter's marker against the original submit-time baseline.
-
-        ``ok`` is ``None`` when there is no baseline — ``host_control`` and studio-only decisions send
-        nothing to the model, so they have no presence requirement — and the callers treat ``None`` and
-        ``False`` differently for exactly that reason.
-
-        In-flight decisions still require exactly one turn. The confirmed-delivery branch of
-        ``_reconcile_required`` may settle after multiple turns when both audit counts are complete:
-        demanding one forever would strand the action against a baseline that must never be rewritten.
-        Partial history keeps its separate dispatch-order check below.
-        """
-        baseline = _attr(rec, "presence_baseline")
+        """Human turns and the adapter's marker against the submit-time baseline; ``ok`` is ``None`` without one
+        (nothing was sent to the model). In flight a decision needs exactly one new turn; in
+        ``ReconciliationRequired`` a complete audit with any new turn may settle, or the action would be stranded
+        against a baseline that must never be rewritten. Partial history counts the turns after dispatch."""
+        baseline = rec.presence_baseline
         if baseline is None or snap is None:
             return {"human_turn_delta": None, "marker_advanced": None, "ok": None}
         events = list(_attr(_attr(snap, "audit"), "events", ()) or ())
-        count = sum(1 for e in events if _attr(e, "event") == C.HUMAN_PRESENCE_EVENT)
-        delta = count - int(_attr(baseline, "human_turn_events", 0) or 0)
-        before = _attr(baseline, "human_turn_mtime_ns")
-        after = _attr(_attr(snap, "markers"), "human_turn_mtime_ns")
+        delta = sum(1 for e in events if _attr(e, "event") == C.HUMAN_PRESENCE_EVENT) - int(
+            _attr(baseline, "human_turn_events", 0) or 0)
+        before, after = _attr(baseline, "human_turn_mtime_ns"), _attr(_attr(snap, "markers"), "human_turn_mtime_ns")
         advanced = after is not None and (before is None or int(after) > int(before))
-        partial = bool(_attr(baseline, "human_turn_events_partial", False))
-        if partial:
+        if _attr(baseline, "human_turn_events_partial", False):
             fresh = len(self._new_events(rec, snap, (C.HUMAN_PRESENCE_EVENT,), None))
-            ok = fresh >= 1 and advanced
-            return {
-                "human_turn_delta": delta,
-                "new_human_turns": fresh,
-                "partial": True,
-                "marker_advanced": advanced,
-                "ok": ok,
-            }
-        reconciling = (
-            _attr(rec, "status") == "ReconciliationRequired"
-            and _attr(_attr(snap, "audit"), "complete", False) is True
-        )
-        return {
-            "human_turn_delta": delta,
-            "partial": False,
-            "marker_advanced": advanced,
-            "ok": bool((delta >= 1 if reconciling else delta == 1) and advanced),
-        }
+            return {"human_turn_delta": delta, "new_human_turns": fresh, "partial": True,
+                    "marker_advanced": advanced, "ok": fresh >= 1 and advanced}
+        reconciling = rec.status == "ReconciliationRequired" and _attr(_attr(snap, "audit"), "complete", False) is True
+        return {"human_turn_delta": delta, "partial": False, "marker_advanced": advanced,
+                "ok": bool((delta >= 1 if reconciling else delta == 1) and advanced)}
 
     def _turn_started(self, rec: Any, slot: Any, snap: Any) -> bool:
-        """Has the queued message become a running turn? (review P22)
-
-        Two signals, because the host gives no "queue drained" event: the slot became busy after
-        ``delivered_at``, or the queued row turned into a user row with an assistant reply behind it.
-        """
-        if self._ran.get(str(_attr(rec, "action_id"))):
+        """Has the queued message become a running turn (P22)? The host has no "queue drained" event, so: the
+        slot went busy, or the queued row became a user row with an assistant reply behind it."""
+        if self._ran.get(rec.action_id) or (slot is not None and _busy_reasons(slot)):
             return True
-        if slot is None:
-            return False
-        if _busy_reasons(slot):
-            return True
-        row = self._delivery_row(rec)
+        row = self._delivery_row(rec) if slot is not None else None
         return row is not None and self._assistant_after(rec, row)
 
     def _turn_ended(self, rec: Any, slot: Any, snap: Any) -> bool:
-        """Did the dispatched turn finish?
-
-        With the host attached: the slot is idle *and* something shows a turn actually happened (we
-        watched it run, or an assistant row follows the delivery row). "Idle" alone is not enough — a
-        slot that never started is idle too, and that case belongs to the deadline path.
-
-        Disk movement proves that a turn did work, not that it finished. During startup the host
-        may attach only on the first request; keep its execution lease until live idleness is known.
-        """
-        if not self._slots_readable():
+        """Did the turn finish? The slot is idle *and* a turn visibly happened (we watched it run, or a reply
+        follows the delivery row): a slot that never started is idle too. Disk movement proves work, not an
+        end, so without a live slot reading the lease is kept."""
+        if not self._slots_readable() or slot is None or _busy_reasons(slot):
             return False
-        if slot is None:
-            return False
-        if _busy_reasons(slot):
-            return False
-        if self._ran.get(str(_attr(rec, "action_id"))):
+        if self._ran.get(rec.action_id):
             return True
         row = self._delivery_row(rec)
-        if row is None:
-            return False
-        return self._assistant_after(rec, row) or _iso_gt(_attr(slot, "last_turn_ts"), row.ts)
+        return row is not None and (self._assistant_after(rec, row) or _iso_gt(_attr(slot, "last_turn_ts"), row.ts))
 
     def _delivery_row(self, rec: Any) -> Any:
-        slot_key = str(_attr(rec, "slot_key") or "")
-        since = str(_attr(rec, "delivering_at") or "")
-        if not slot_key or not since:
+        if not rec.slot_key or not rec.delivering_at:
             return None
-        return self._s.host.find_delivery_row(
-            slot_key,
-            since_ts=since,
-            delivery_id=str(_attr(rec, "delivery_id") or ""),
-            wire_text=str(_attr(rec, "wire_text") or ""),
-        )
+        return self._s.host.find_delivery_row(str(rec.slot_key), since_ts=str(rec.delivering_at),
+                                              delivery_id=str(rec.delivery_id or ""),
+                                              wire_text=str(rec.wire_text or ""))
 
     def _assistant_after(self, rec: Any, row: Any) -> bool:
-        rows = self._s.host.recent_rows(
-            str(_attr(rec, "slot_key") or ""), since_ts=row.ts, roles=("assistant",), limit=10
-        )
+        rows = self._s.host.recent_rows(str(rec.slot_key or ""), since_ts=row.ts, roles=("assistant",), limit=10)
         return any(_iso_ge(r.ts, row.ts) for r in rows)
 
     def _observe_run(self, rec: Any, slot: Any) -> None:
-        """Remember that the bound slot was busy after this dispatch.
-
-        The host keeps no "was it running" history, so an observation missed here is lost for good — and
-        ``slot_ran_since`` is one of the four facts the ``NotDelivered`` proof rests on.
-        """
+        """Remember that the bound slot was busy after this dispatch. The host keeps no "was it running" history,
+        so a missed observation is lost for good, and ``slot_ran_since`` is one of the ``NotDelivered`` proofs."""
         if slot is None or not _busy_reasons(slot):
             return
         last = _attr(slot, "last_ts")
-        if not last or _iso_ge(last, _attr(rec, "delivering_at")):
-            self._ran[str(_attr(rec, "action_id"))] = True
+        if not last or _iso_ge(last, rec.delivering_at):
+            self._ran[rec.action_id] = True
 
     def _forget(self, rec: Any) -> None:
-        self._ran.pop(str(_attr(rec, "action_id")), None)
+        self._ran.pop(rec.action_id, None)
 
     # ---- disk predicates -------------------------------------------------- #
 
     def _captured_plan_prompt(self, rec: Any, snap: Any, stage: Any, receipt: Any) -> Any:
-        """The Plan Approval prompt ``receipt`` answers, when it is the prompt this card showed.
-
-        The engine puts two digests on that prompt (``aidlc-testing-posture.ts``): ``Questions
-        SHA-256`` over the file's bytes, which is what Studio captures, and ``Prompt SHA-256`` over
-        the file with every ``[Answer]:`` blanked, which is what the approval receipt repeats. They
-        differ whenever the file holds another answer, a trailing blank line or CRLF endings, so the
-        capture is matched on the first and the receipt on the second. The prompt is the newest
-        same-target decision before the receipt in its shard, and it must predate the dispatch: a
-        prompt asked again after the reply was sent could have consumed some other reply.
-        """
-        unit = _attr(rec, "unit") or None
-        captured = _attr(_attr(rec, "captured"), "question_digest")
-        relpath = ((_attr(rec, "evidence", {}) or {}).get("questions") or {}).get("relpath")
-        sent = C.epoch_from_iso(_attr(rec, "delivering_at"))
+        """The Plan Approval prompt ``receipt`` answers, when it is the one this card showed. The capture matches
+        ``Questions SHA-256`` (the file's bytes), the receipt ``Prompt SHA-256`` (every answer blanked), which
+        differ whenever the file holds another answer or other line endings. The prompt is the newest same-target
+        decision before the receipt in its shard and must predate the dispatch: one asked again after the reply
+        was sent could have consumed some other reply."""
+        unit = rec.unit or None
+        captured = _attr(rec.captured, "question_digest")
+        relpath = (rec.evidence.get("questions") or {}).get("relpath")
+        sent = C.epoch_from_iso(rec.delivering_at)
         if not captured or not relpath or sent is None:
             return None
         prompts = [
             event for event in list(_attr(_attr(snap, "audit"), "events", ()) or ())
-            if _attr(event, "event") == "DECISION_RECORDED"
-            and _attr(event, "shard") == _attr(receipt, "shard")
+            if _attr(event, "event") == "DECISION_RECORDED" and _attr(event, "shard") == _attr(receipt, "shard")
             and _event_order(event) < _event_order(receipt)
             and (_attr(event, "fields", {}) or {}).get("Stage") == stage
             and ((_attr(event, "fields", {}) or {}).get("Unit") or None) == unit
@@ -1971,117 +1570,85 @@ class Reconciler:
         prompt = max(prompts, key=_event_order)
         fields = _attr(prompt, "fields", {}) or {}
         asked = C.epoch_from_iso(_attr(prompt, "timestamp"))
-        if (
-            asked is None or asked > sent or fields.get("Workflow")
-            or fields.get("Checkpoint") != C.PLAN_APPROVAL_AUDIT_CHECKPOINT
-            or fields.get("Questions File") != relpath
-            or fields.get("Questions SHA-256") != captured
-            or not _SHA256_HEX_RE.fullmatch(str(fields.get("Prompt SHA-256") or ""))
-        ):
+        if (asked is None or asked > sent or fields.get("Workflow")
+                or fields.get("Checkpoint") != C.PLAN_APPROVAL_AUDIT_CHECKPOINT
+                or fields.get("Questions File") != relpath or fields.get("Questions SHA-256") != captured
+                or not _SHA256_HEX_RE.fullmatch(str(fields.get("Prompt SHA-256") or ""))):
             return None
         return prompt
 
     def _receipt_prompt_matches(self, rec: Any, snap: Any, stage: Any, receipt: Any) -> bool:
-        """Does a closed file's approval receipt answer the prompt this card captured?"""
+        """Does a closed file's approval receipt answer the prompt this card captured? Older receipts carry no
+        prompt digest; blanking changes nothing in a file holding only a blank Plan Approval answer, so an
+        equal whole-file digest is the same prompt."""
         prompt_sha = (_attr(receipt, "fields", {}) or {}).get("Prompt SHA-256")
-        # Older receipts carry no prompt digest; blanking changes nothing in a file that holds only
-        # a blank Plan Approval answer, so an equal whole-file digest is the same prompt.
-        if prompt_sha in (None, _attr(_attr(rec, "captured"), "question_digest")):
+        if prompt_sha in (None, _attr(rec.captured, "question_digest")):
             return True
         prompt = self._captured_plan_prompt(rec, snap, stage, receipt)
         return prompt is not None and (_attr(prompt, "fields", {}) or {}).get("Prompt SHA-256") == prompt_sha
 
-    def _historical_plan_approval(
-        self, rec: Any, snap: Any, stage: Any, questions: Any,
-    ) -> Any:
-        """Settle the old reply, never grant authority to a subsequently reset plan.
-
-        The prompt is found from the receipt rather than at the card's captured boundary: that
-        boundary is the newest gate/question row of any kind at capture, which a second unit's plan
-        prompt or a row from another clone's shard can occupy instead.
-        """
+    def _historical_plan_approval(self, rec: Any, snap: Any, stage: Any, questions: Any) -> Any:
+        """Settle the old reply, never grant authority to a plan reset since. The prompt is found from the
+        receipt, not at the card's captured boundary: that boundary is the newest gate/question row of any
+        kind, which a second unit's plan prompt or another clone's shard can occupy instead."""
         if stage != "code-generation" or not _attr(_attr(snap, "audit"), "complete", False):
             return None
-        captured_question = (_attr(rec, "evidence", {}) or {}).get("questions") or {}
-        if _attr(questions, "relpath") != captured_question.get("relpath"):
+        captured_question = rec.evidence.get("questions") or {}
+        if _attr(questions, "relpath") != captured_question.get("relpath") or not rec.intent_uuid:
             return None
-        unit = _attr(rec, "unit") or None
+        unit = rec.unit or None
         identity = {
             "Stage": stage, "Checkpoint": C.PLAN_APPROVAL_AUDIT_CHECKPOINT,
             "Plan Target": f"unit:{unit}" if unit else "stage:code-generation",
-            "Intent": _attr(rec, "intent_uuid"),
-            "Questions File": captured_question.get("relpath"),
+            "Intent": rec.intent_uuid, "Questions File": captured_question.get("relpath"),
         }
-        if not identity["Intent"]:
-            return None
         for receipt in self._new_events(rec, snap, ("PLAN_APPROVAL_RECORDED",), stage):
             prompt = self._captured_plan_prompt(rec, snap, stage, receipt)
             fields = _attr(prompt, "fields", {}) or {}
             if prompt is None or any(fields.get(key) != value for key, value in identity.items()):
                 continue
-            if any(
+            if not fields.get("Run floor") or not fields.get("Session") or any(
                 not re.fullmatch(r"sha256:[0-9a-f]{64}", str(fields.get(key) or ""))
                 for key in ("Directive Epoch", "Approval Fingerprint")
-            ) or not fields.get("Run floor") or not fields.get("Session"):
+            ):
                 continue
             required = {**identity, **{key: fields[key] for key in (
-                "Directive Epoch", "Approval Fingerprint", "Run floor", "Session", "Prompt SHA-256",
-            )}}
+                "Directive Epoch", "Approval Fingerprint", "Run floor", "Session", "Prompt SHA-256")}}
             received = _attr(receipt, "fields", {}) or {}
             approved_sha = str(received.get("Questions SHA-256") or "")
-            if (
-                received.get("Details") != C.WIRE_APPROVE_PLAN
-                or (received.get("Unit") or None) != unit or received.get("Workflow")
-                or any(received.get(key) != value for key, value in required.items())
-                or not _SHA256_HEX_RE.fullmatch(approved_sha)
-                or approved_sha == fields.get("Questions SHA-256")
-            ):
+            if (received.get("Details") != C.WIRE_APPROVE_PLAN or (received.get("Unit") or None) != unit
+                    or received.get("Workflow") or any(received.get(key) != value for key, value in required.items())
+                    or not _SHA256_HEX_RE.fullmatch(approved_sha) or approved_sha == fields.get("Questions SHA-256")):
                 continue
             return receipt
         return None
 
     def _returned_revision_gate(self, rec: Any, snap: Any, stage: Any) -> Any:
-        """Recover a finished revision even if no poll observed its transient R row.
-
-        A question mark alone proves nothing, and by the next poll the returned gate may already be
-        approved, so the row may be ``?`` or completed. Require the original audit boundary, a
-        complete same-shard rejection/revision/returned-gate chain in this action's unit, and the
-        corresponding revision increase. Each link is the newest one in scope, so another unit's later
-        rows cannot hide this unit's chain. Presence and cursor checks still run in
-        evaluate_resolution; this never approves the gate.
-        """
-        audit = _attr(snap, "audit")
+        """Recover a finished revision no poll saw as ``[R]``: by then the returned gate may be ``?`` or even
+        approved, so the mark proves nothing. Require the original boundary, a complete same-shard rejection →
+        revision → returned-gate chain in this unit (each link the newest in scope, so another unit's later rows
+        cannot hide it) and the matching revision increase. This never approves the gate."""
         at_gate = self._current_stage(snap) == stage and self._row_mark(snap, stage) == "?"
-        if (
-            not (at_gate or self._row_completed(snap, stage))
-            or not _attr(audit, "complete", False) or self._boundary_order(rec, snap) is None
-        ):
+        if (not (at_gate or self._row_completed(snap, stage)) or not _attr(_attr(snap, "audit"), "complete", False)
+                or self._boundary_order(rec, snap) is None):
             return None
-        boundary = ((_attr(rec, "evidence", {}) or {}).get("audit") or {}).get("boundary_event") or {}
-        shard = boundary.get("shard")
-        unit = _attr(rec, "unit") or None
-        before = ((_attr(rec, "evidence", {}) or {}).get("state") or {}).get("revision_count")
+        shard = ((rec.evidence.get("audit") or {}).get("boundary_event") or {}).get("shard")
+        unit = rec.unit or None
+        before = (rec.evidence.get("state") or {}).get("revision_count")
         current = _attr(_attr(snap, "state"), "revision_count")
         if not shard or type(before) is not int or type(current) is not int or current <= before:
             return None
 
         def scoped(event_type: str) -> list[Any]:
-            return sorted((
-                event for event in self._new_events(rec, snap, (event_type,), stage)
-                if _attr(event, "shard") == shard and _unit_scoped(event, unit, snap)
-            ), key=_event_order)
+            return sorted((event for event in self._new_events(rec, snap, (event_type,), stage)
+                           if _attr(event, "shard") == shard and _unit_scoped(event, unit, snap)), key=_event_order)
 
-        rejections = scoped("GATE_REJECTED")
-        revisions = scoped("STAGE_REVISING")
+        rejections, revisions = scoped("GATE_REJECTED"), scoped("STAGE_REVISING")
         for gate in reversed(scoped("STAGE_AWAITING_APPROVAL")):
-            revising = next(
-                (e for e in reversed(revisions) if _event_order(e) < _event_order(gate)), None,
-            )
+            revising = next((e for e in reversed(revisions) if _event_order(e) < _event_order(gate)), None)
             if revising is None:
                 continue
-            rejected = next(
-                (e for e in reversed(rejections) if _event_order(e) < _event_order(revising)), None,
-            )
+            rejected = next((e for e in reversed(rejections) if _event_order(e) < _event_order(revising)), None)
             if rejected is None:
                 continue
             times = [C.epoch_from_iso(_attr(event, "timestamp")) for event in (rejected, revising, gate)]
@@ -2097,14 +1664,10 @@ class Reconciler:
         """A new receipt for exactly this audit question whose recorded text is not our reply."""
         for candidate in self._new_events(rec, snap, ("QUESTION_ANSWERED",), stage):
             recorded_text = (_attr(candidate, "fields", {}) or {}).get("Details")
-            if not isinstance(recorded_text, str) or not recorded_text:
-                continue
-            scoped_receipt = audit_question_answer(
-                _attr(snap, "audit"), origin, recorded_text,
-                str(_attr(rec, "delivering_at") or ""),
+            if isinstance(recorded_text, str) and recorded_text and audit_question_answer(
+                _attr(snap, "audit"), origin, recorded_text, str(rec.delivering_at or ""),
                 project_dir=_attr(snap, "canonical_path"),
-            )
-            if scoped_receipt is candidate:
+            ) is candidate:
                 return candidate
         return None
 
@@ -2112,62 +1675,38 @@ class Reconciler:
         """The newest new gate in this stage and unit, while the stage is still waiting at it."""
         if self._current_stage(snap) != stage or self._row_mark(snap, stage) != "?":
             return None
-        gates = [
-            event for event in self._new_events(rec, snap, ("STAGE_AWAITING_APPROVAL",), stage)
-            if _unit_scoped(event, unit, snap)
-        ]
+        gates = [event for event in self._new_events(rec, snap, ("STAGE_AWAITING_APPROVAL",), stage)
+                 if _unit_scoped(event, unit, snap)]
         return max(gates, key=lambda e: _attr(e, "sort_key", ("", 0, 0))) if gates else None
 
     def _new_events(self, rec: Any, snap: Any, types: Sequence[str], stage: Any) -> list[Any]:
-        """Audit rows that belong to *this* dispatch (the "new X" rule, review P23).
-
-        Both halves are required: the timestamp must be at or after ``delivering_at`` (second precision,
-        hence ``>=``) and the row must sort after the boundary event the card captured. Timestamp alone
-        would accept the row that opened the gate; position alone would accept a row from a previous
-        session in a shard that happens to sort late.
-        """
+        """Audit rows of *this* dispatch (P23): at or after ``delivering_at`` (second precision, hence ``>=``)
+        *and* after the captured boundary event. Time alone would accept the row that opened the gate; position
+        alone, a row from a previous session in a shard that happens to sort late."""
         if snap is None:
             return []
-        since = _attr(rec, "delivering_at")
-        wanted = set(types)
-        floor = self._boundary_order(rec, snap)
-        out: list[Any] = []
-        for event in list(_attr(_attr(snap, "audit"), "events", ()) or ()):
-            if _attr(event, "event") not in wanted:
-                continue
-            if stage is not None and (_attr(event, "fields", {}) or {}).get("Stage") != stage:
-                continue
-            if since and not _iso_ge(_attr(event, "timestamp"), since):
-                continue
-            if floor is not None and _event_order(event) <= floor:
-                continue
-            out.append(event)
-        return out
+        since, wanted, floor = rec.delivering_at, set(types), self._boundary_order(rec, snap)
+        return [
+            event for event in list(_attr(_attr(snap, "audit"), "events", ()) or ())
+            if _attr(event, "event") in wanted
+            and (stage is None or (_attr(event, "fields", {}) or {}).get("Stage") == stage)
+            and (not since or _iso_ge(_attr(event, "timestamp"), since))
+            and (floor is None or _event_order(event) > floor)
+        ]
 
     def _newest_new(self, rec: Any, snap: Any, types: Sequence[str], stage: Any) -> Any:
         events = self._new_events(rec, snap, types, stage)
-        if not events:
-            return None
-        return max(events, key=lambda e: _attr(e, "sort_key", ("", 0, 0)))
+        return max(events, key=lambda e: _attr(e, "sort_key", ("", 0, 0))) if events else None
 
     def _boundary_order(self, rec: Any, snap: Any) -> tuple[int, int] | None:
-        """``(shard_index, pos)`` of the captured boundary event, or ``None`` when it cannot be placed.
-
-        The stored evidence names the shard by basename; the index is whatever position that shard holds
-        in the current bundle. When the shard is gone the row cannot be ordered against, so the floor is
-        dropped and the timestamp condition carries the rule alone — the honest reading of "we no longer
-        have that history".
-
-        A tail window numbers its blocks from wherever it starts, so a position read from a truncated
-        shard — at capture or now — names a different row once the file grows. The shard still orders
-        against the others, but inside it the timestamp condition decides alone.
-        """
-        audit = dict(_attr(rec, "evidence", {}) or {}).get("audit") or {}
+        """``(shard_index, pos)`` of the captured boundary event in today's bundle, or ``None``: a vanished shard
+        leaves the timestamp rule alone. A truncated window numbers blocks from wherever it starts, so a position
+        read from one (at capture or now) names another row once the file grows: inside it, time decides alone."""
+        audit = rec.evidence.get("audit") or {}
         boundary = audit.get("boundary_event") if isinstance(audit, Mapping) else None
         if not isinstance(boundary, Mapping):
             return None
-        shard = str(boundary.get("shard") or "")
-        pos = boundary.get("pos")
+        shard, pos = str(boundary.get("shard") or ""), boundary.get("pos")
         if not shard or not isinstance(pos, int):
             return None
         captured_truncated = any(
@@ -2177,39 +1716,22 @@ class Reconciler:
         )
         for index, meta in enumerate(list(_attr(_attr(snap, "audit"), "shards", ()) or ())):
             if str(_attr(meta, "relpath", "")).rsplit("/", 1)[-1] == shard:
-                if captured_truncated or _attr(meta, "truncated", False):
-                    return index, -1
-                return index, pos
+                return (index, -1) if captured_truncated or _attr(meta, "truncated", False) else (index, pos)
         return None
 
-    def _resolution_event_seen(self, rec: Any, snap: Any) -> bool:
-        return self._newest_new(rec, snap, C.RESOLUTION_EVENTS, None) is not None
-
     def _state_moved(self, rec: Any, snap: Any) -> bool:
-        """Did the state file change since the card was captured?
-
-        Read as the durable proxy for the table's "any stage row state changed, or ``Current Stage``
-        changed": those are engine writes to ``aidlc-state.md``, and every engine write to it changes the
-        digest. Studio stores the captured digest, not the captured rows, so the digest is what there is
-        — and it fails in the informative direction (``StateChanged`` rather than ``ResolvedNoTransition``).
-        """
-        captured = _attr(_attr(rec, "captured"), "state_hash")
-        current = _attr(snap, "state_sha256")
+        """Did the state file change since capture? Every engine write to ``aidlc-state.md`` changes the digest,
+        so this stands in for "a stage row or ``Current Stage`` changed" and errs towards ``StateChanged``."""
+        captured, current = _attr(rec.captured, "state_hash"), _attr(snap, "state_sha256")
         return bool(captured) and bool(current) and captured != current
 
     def _digest_changed(self, rec: Any, snap: Any) -> bool:
-        captured = _attr(_attr(rec, "captured"), "question_digest")
-        current = _attr(_attr(snap, "questions"), "sha256")
-        return captured != current
+        return _attr(rec.captured, "question_digest") != _attr(_attr(snap, "questions"), "sha256")
 
     def _answers_filled(self, rec: Any, questions: Any) -> bool:
         """Is every index the submit answered now non-blank in the file?"""
-        payload = dict(_attr(rec, "payload", {}) or {})
-        indices = {
-            int(a.get("index"))
-            for a in (payload.get("answers") or [])
-            if isinstance(a, Mapping) and isinstance(a.get("index"), int)
-        }
+        indices = {int(a.get("index")) for a in ((rec.payload or {}).get("answers") or [])
+                   if isinstance(a, Mapping) and isinstance(a.get("index"), int)}
         if not indices or questions is None:
             return False
         by_index = {int(_attr(q, "index", 0)): q for q in _attr(questions, "questions", ()) or ()}
@@ -2217,24 +1739,18 @@ class Reconciler:
 
     def _row_mark(self, snap: Any, stage: Any) -> str | None:
         state = _attr(snap, "state")
-        if state is None or not stage:
-            return None
-        row = state.row(str(stage))
+        row = state.row(str(stage)) if state is not None and stage else None
         return None if row is None else str(_attr(row, "mark", "") or "")
 
     def _row_completed(self, snap: Any, stage: Any) -> bool:
-        mark = (self._row_mark(snap, stage) or "").lower()
-        return C.CHECKBOX_MAP.get(mark) == "completed"
+        return C.CHECKBOX_MAP.get((self._row_mark(snap, stage) or "").lower()) == "completed"
 
     def _current_stage(self, snap: Any) -> Any:
-        state = _attr(snap, "state")
-        return None if state is None else _attr(state, "current_stage")
+        return _attr(_attr(snap, "state"), "current_stage")
 
     def _scope_of(self, snap: Any) -> str | None:
         state = _attr(snap, "state")
-        if state is None:
-            return None
-        return (dict(_attr(state, "project", {}) or {}).get("Scope") or "").strip() or None
+        return None if state is None else (dict(_attr(state, "project", {}) or {}).get("Scope") or "").strip() or None
 
     # ---- tick step 6: advisor -------------------------------------------- #
 
@@ -2301,121 +1817,48 @@ class Reconciler:
             return 0
         return int(await expire())
 
-    # ---- transitions and evidence writes --------------------------------- #
+    # ---- transitions, evidence writes, small helpers ---------------------- #
 
-    async def _transition(
-        self,
-        rec: Any,
-        to_status: str,
-        *,
-        reason: str,
-        evidence: Mapping[str, Any],
-        values: Mapping[str, Any] | None = None,
-    ) -> Any:
-        """One status move through the broker, tolerating the two races that are not errors.
-
-        ``StaleGeneration`` means a delivery report or a second reconciler pass moved the row first, and
-        ``IllegalTransition`` means the row is no longer where this decision was computed for. Both are
-        answered by returning the current row: retrying would replay a judgement against evidence that
-        has already been superseded.
-
-        The evidence written is the row's own blob with this pass merged on top, not just the delta.
-        `captured.boundary_event` lives in that blob and is what the "new X" ordering rule is measured
-        against, so a broker that replaced rather than merged would quietly weaken every later comparison.
-        """
-        payload = dict(_attr(rec, "evidence", {}) or {})
-        payload.update({k: v for k, v in dict(evidence).items() if k != "audit_error_events"})
+    async def _transition(self, rec: Any, to_status: str, *, reason: str, evidence: Mapping[str, Any]) -> Any:
+        """One status move through the broker, with this pass's evidence on top of the row's so the resolution
+        carries everything it was settled on. A lost race (``StaleGeneration``, ``IllegalTransition``) answers
+        with the current row: retrying would replay a judgement against superseded evidence."""
         try:
-            if values:
-                await self._stamp_values(rec, values)
-                rec = await self._s.actions.get(rec.action_id)
             return await self._s.actions.transition(
-                rec.action_id,
-                to_status,
-                expected_generation=int(_attr(rec, "status_generation", 0) or 0),
-                reason=reason,
-                evidence=payload,
+                rec.action_id, to_status, expected_generation=int(rec.status_generation or 0), reason=reason,
+                evidence={**rec.evidence, **_storable(evidence)},
             )
         except (StaleGeneration, IllegalTransition) as exc:
             _LOG.debug("transition %s → %s skipped: %s", rec.action_id, to_status, exc)
             return await self._s.actions.get(rec.action_id)
 
-    async def _stamp_values(self, rec: Any, values: Mapping[str, Any]) -> None:
-        await self._to_thread(
-            self._s.storage.cas_update,
-            "actions",
-            rec.action_id,
-            int(_attr(rec, "status_generation", 0) or 0),
-            dict(values),
-        )
-
-    async def _stamp_evidence(self, rec: Any, patch: Mapping[str, Any]) -> Any:
-        """Merge evidence onto an action without changing its status.
-
-        Goes through ``cas_update`` and not ``Storage.update``: ``actions`` is a CAS table and the store
-        refuses a non-CAS write to it, precisely so two writers cannot lose each other's evidence.
-        §1.12's "non-status ``Storage.update``" is therefore implemented as a generation-checked update
-        with no status column — see the module report.
-        """
-        row = await self._to_thread(self._s.storage.get, "actions", rec.action_id)
-        if row is None:
-            return rec
-        try:
-            await self._stamp_evidence_row(row, patch)
-        except StaleGeneration:
-            return await self._s.actions.get(rec.action_id)
-        return await self._s.actions.get(rec.action_id)
+    async def _stamp(self, rec: Any, evidence: Mapping[str, Any], **values: Any) -> Any:
+        """Merge evidence (and row values) without a status change; nothing is written when nothing changed."""
+        return await self._s.actions.patch_evidence(rec, _storable(evidence), values=values or None)
 
     async def _stamp_evidence_row(self, row: Mapping[str, Any], patch: Mapping[str, Any]) -> None:
-        previous = dict(row.get("evidence_json") or {})
-        merged = dict(previous)
-        merged.update({k: v for k, v in dict(patch).items() if k != "audit_error_events"})
-        if merged == previous:
-            return
-        await self._to_thread(
-            self._s.storage.cas_update,
-            "actions",
-            str(row.get("action_id")),
-            int(row.get("status_generation") or 0),
-            {"evidence_json": merged},
-        )
+        await self._stamp(await self._s.actions.get(str(row.get("action_id"))), patch)
 
     @staticmethod
     def _with_finding(existing: Any, code: str, params: Mapping[str, Any]) -> list[dict]:
-        """Append a reconciler-discovered finding in the shape ``consistency`` lifts back out.
-
-        Stored on the action because ``ConsistencyEngine`` cannot derive these from disk: only the
-        reconciler compared the presence baseline, the cursor and the slot a row landed in (review
-        P04/R01/R08). Recording them here is what makes them blocking findings and a recovery card
-        instead of one blob nobody reads.
-        """
+        """Add a reconciler-discovered finding (P04/R01/R08) in the shape ``ConsistencyEngine`` lifts back out:
+        stored on the action, it becomes a blocking finding and a recovery card."""
         out = [f for f in (existing or []) if isinstance(f, Mapping) and f.get("code") != code]
         out.append({"code": code, "params": {k: v for k, v in dict(params).items() if k != "ok"}})
         return out
 
-    # ---- small helpers ---------------------------------------------------- #
-
     def _decision_of(self, rec: Any) -> str:
-        payload = _attr(rec, "payload") or {}
-        decision = str(dict(payload).get("decision") or "") if isinstance(payload, Mapping) else ""
-        if decision:
-            return decision
-        # Command actions carry their decision in their type (`run`, `resume`, …), and a card created
-        # before the UI sent a payload has none at all.
-        action_type = str(_attr(rec, "type") or "")
-        return action_type if action_type in C.DECISION_KIND else ""
+        """The submitted decision; a command carries it in its type, and a card that never sent has none."""
+        payload = rec.payload
+        decision = str(payload.get("decision") or "") if isinstance(payload, Mapping) else ""
+        return decision or (rec.type if rec.type in C.DECISION_KIND else "")
 
     def _slot_for(self, rec: Any) -> Any:
-        slot_key = _attr(rec, "slot_key")
-        return self._s.host.slot(str(slot_key)) if slot_key else None
+        return self._s.host.slot(str(rec.slot_key)) if rec.slot_key else None
 
     def _slots_readable(self) -> bool:
-        """Can the host's slot table be read at all right now?
-
-        The difference between "no slot" and "no host" is the difference between a terminated session and
-        a Studio running disk-only (C08); collapsing them would push every in-flight action to
-        ``DeliveryUncertain`` the moment the gateway had not attached its state yet.
-        """
+        """Can the host's slot table be read at all? "No slot" is a terminated session, "no host" a disk-only
+        Studio (C08): collapsing them would send every in-flight action to reconciliation before attach."""
         host = self._s.host
         if not host.attached():
             return False
@@ -2423,26 +1866,23 @@ class Reconciler:
         return cap is None or bool(_attr(cap, "available", True))
 
     def _session_replaced(self, rec: Any, slot: Any) -> bool:
-        """Is the session this decision was dispatched into gone or now a different session?"""
+        """Is the session this decision was dispatched into gone, or now a different session?"""
         if not self._slots_readable():
             return False
         if slot is None:
             return True
-        recorded = str(_attr(rec, "session_key") or "")
-        observed = str(_attr(slot, "session_key") or "")
+        recorded, observed = str(rec.session_key or ""), str(_attr(slot, "session_key") or "")
         return bool(recorded and observed and recorded != observed)
 
     def _past_deadline(self, rec: Any) -> bool:
-        deadline = _attr(rec, "deadline_at")
-        return bool(deadline) and str(self._s.clock.iso()) > str(deadline)
+        return bool(rec.deadline_at) and str(self._s.clock.iso()) > str(rec.deadline_at)
 
     def _turn_timeout(self) -> int:
         return int(min(self._s.host.turn_timeout_secs(), C.PROCESSING_DEADLINE_CAP_SECS))
 
     @staticmethod
     def _deadline_from(iso: str, seconds: int) -> str:
-        base = C.epoch_from_iso(iso) or 0.0
-        return C.iso_from_epoch(base + seconds)
+        return C.iso_from_epoch((C.epoch_from_iso(iso) or 0.0) + seconds)
 
     async def _record(
         self, kind: str, *, severity: str, params: Mapping[str, Any], rec: Any = None

@@ -156,7 +156,7 @@ def test_legacy_placeholder_reply_releases_lease_but_keeps_the_question_open(
     marker.write_text(ANSWERED + "\n")
     os.utime(marker, ns=(2_000_000_000, 2_000_000_000))
     asyncio.run(sv.reconciler.reconcile_now(card["action_id"]))
-    assert _row(sv, card["action_id"])["status"] == "Processing"
+    assert _row(sv, card["action_id"])["status"] == "Delivered"
     assert sv.scheduler.live()
     _finish_the_turn(fake_host, scene.slot_key, wire_text="Free-text note")
     before = _tree_digest(scene.root)
@@ -201,9 +201,9 @@ def test_label_only_recovery_requires_same_text_prompt_and_proven_human_turn(
     before = _tree_digest(scene.root)
     asyncio.run(sv.reconciler.reconcile_now(card["action_id"]))
     row = _row(sv, card["action_id"])
-    assert row["status"] in ("Processing", "DeliveryUncertain", "ReconciliationRequired")
+    assert row["status"] in ("Delivered", "ReconciliationRequired")
     assert (row.get("resolution_json") or {}).get("reason") != "answer_requires_text"
-    assert bool(sv.scheduler.live()) == (row["status"] == "Processing")  # only in flight holds the repo
+    assert bool(sv.scheduler.live()) == (row["status"] == "Delivered")  # only in flight holds the repo
     assert _tree_digest(scene.root) == before
 
 
@@ -1360,7 +1360,7 @@ def test_reconcile_cannot_consume_a_foreign_or_different_answer(sv, routes, fake
         assert row["resolution_json"]["reason"] == "answer_not_verified"
         assert row["resolution_json"]["evidence"]["answer_verified"] is False
     else:
-        assert row["status"] == "Processing"
+        assert row["status"] == "Delivered"
 
 
 def test_host_options_cannot_replace_disk_labels_or_enable_protected_choices(
@@ -1437,7 +1437,7 @@ def test_a_unit_claim_change_alone_invalidates_reconciliation(
     answer_on_disk(scene, Unit="unit-a", Attempt_Generation="2")
     for _ in range(3):
         asyncio.run(sv.reconciler.reconcile_now(card["action_id"]))
-    assert _row(sv, card["action_id"])["status"] == "Processing"
+    assert _row(sv, card["action_id"])["status"] == "Delivered"
 
 
 def test_unreadable_claim_generation_is_not_a_legacy_attempt(sv, scene):
@@ -1493,7 +1493,7 @@ def test_answer_must_follow_the_captured_question_unambiguously(
         monkeypatch.setattr(sv.reader, "read_audit", lambda *a, **kw: read(*a, tail_bytes=1500))
     for _ in range(3):
         asyncio.run(sv.reconciler.reconcile_now(card["action_id"]))
-    assert _row(sv, card["action_id"])["status"] == "Processing"
+    assert _row(sv, card["action_id"])["status"] == "Delivered"
 
 
 def test_an_answer_before_the_next_question_still_settles_the_original(sv, routes, fake_host, scene):

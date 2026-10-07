@@ -5,9 +5,6 @@ becomes something that can reach AI-DLC, and every one of them delegates the dec
 ``HumanActionBroker``: a card is created (or a ``Delivering`` record committed) and the *browser* does
 the sending. Nothing in this file calls a host dispatch function, and nothing here writes an AI-DLC
 file — the plan routes change composition only through the engine's own verbs under an admin lease.
-
-``keep-moving`` is here too, and it always refuses. It exists so the machine lane is a documented,
-tested 409 rather than a feature somebody adds by accident (§3.2).
 """
 
 from __future__ import annotations
@@ -515,22 +512,6 @@ async def force_stop(services: Any, request: web.Request) -> web.Response:
     return json_ok(receipt.to_json(), status=201)
 
 
-async def keep_moving(services: Any, request: web.Request) -> web.Response:
-    """``POST …/{intent}/keep-moving`` — always 409.
-
-    There is no machine lane in v1: every KiroCrew path to kiro-cli mints a ``HUMAN_TURN``, so an
-    unattended continuation would forge human presence in AI-DLC's own audit trail (§3.2, S12). The
-    broker records the refusal, so an attempt is visible rather than merely rejected.
-    """
-    await read_json(request)
-    await services.machine.dispatch(
-        route="keep-moving",
-        repo_id=request.match_info.get("repo_id"),
-        intent=request.match_info.get("intent"),
-    )
-    raise AssertionError("unreachable: MachineActionBroker.dispatch always raises")
-
-
 # --------------------------------------------------------------------------- #
 # session binding
 # --------------------------------------------------------------------------- #
@@ -724,7 +705,6 @@ def ROUTES(services: Any) -> list[Any]:
         route("POST", f"{intent}/pause", pause_intent, owner=True, services=services),
         route("POST", f"{intent}/force-stop", force_stop, owner=True, services=services),
         route("POST", f"{intent}/prepare-commit", prepare_commit, owner=True, services=services),
-        route("POST", f"{intent}/keep-moving", keep_moving, owner=True, services=services),
         route("POST", f"{intent}/session/bind", bind_session, owner=True, services=services),
         route("POST", f"{intent}/session/unbind", unbind_session, owner=True, services=services),
         route(

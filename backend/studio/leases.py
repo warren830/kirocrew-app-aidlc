@@ -1,7 +1,7 @@
 """Who may touch one repository right now (§1.10): one turn at a time, and none during admin work.
 
 An execution lease *is* a dispatched action (stamped with ``lease_generation``) in ``Delivering``/
-``Delivered``/``Processing``: the action leaving those statuses is the release, so nothing is heartbeaten
+``Delivered``: the action leaving those statuses is the release, so nothing is heartbeaten
 or reclaimed. Admin operations, and the submit window before ``Delivering``, hold a per-repository
 ``flock`` that the kernel drops when the process dies. A force stop is in flight but takes no lease, and
 uncertain actions hold nothing. Every grant also requires every host session in the repository to be idle:
@@ -33,7 +33,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only; these modules are never imp
 ADMIN_OPERATION_TYPES = ("install", "upgrade", "recovery", "intent_create", "recompose", "scope_change",
                          "config_change", "cursor_switch", "doctor", "repo_metadata")
 #: A dispatch is or may still be on the wire: an action in one of these holds its repository.
-IN_FLIGHT_ACTION_STATUS = frozenset({"Delivering", "Delivered", "Processing"})
+IN_FLIGHT_ACTION_STATUS = frozenset({"Delivering", "Delivered"})
 #: ``install_transactions.status`` values that prove an admin operation has stopped touching the repo.
 TRANSACTION_SETTLED_STATUS = frozenset({"committed", "rolled_back", "recovery_required", "failed"})
 #: ``retry_after_secs`` on a refusal: a turn or an admin operation rarely ends sooner.

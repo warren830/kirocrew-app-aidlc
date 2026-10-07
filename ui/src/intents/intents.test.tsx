@@ -47,7 +47,7 @@ const INTENT = {
 afterEach(() => window.history.replaceState(null, '', '/apps/aidlc-studio'))
 
 describe('the intents inventory', () => {
-  it('renders a row with its state, stage and unavailable keep-moving column', () => {
+  it('renders a row with its state and stage, and no keep-moving column', () => {
     render(
       <I18nProvider>
         <IntentList intents={[INTENT]} failures={[{ repo: 'payments-api', message: 'not reachable' }]} narrow={false} renderActions={() => null} />
@@ -58,7 +58,8 @@ describe('the intents inventory', () => {
     expect(screen.getByText('2.3 functional-design')).toBeInTheDocument()
     expect(screen.getByText('11 of 33 stages')).toBeInTheDocument()
     expect(screen.getByText('2 decisions waiting')).toBeInTheDocument()
-    expect(screen.getByText('Unavailable')).toBeInTheDocument()
+    expect(screen.queryByText('Keep moving')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader')).toHaveLength(5)
     expect(screen.getByText('payments-api: not reachable')).toBeInTheDocument()
   })
 

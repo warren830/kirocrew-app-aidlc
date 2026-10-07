@@ -6,8 +6,8 @@ is Studio allowed to say?" — and the negative cases carry the weight:
 
 * ``NotDelivered`` is reachable **only** with four independent proofs, and a gateway restart between the
   browser's send and its report makes it unreachable by construction (review R02/C24).
-* ``DeliveryUncertain`` always continues to ``ReconciliationRequired`` — a status with no
-  reconciler-driven exit is a boundary nobody can act on (C04/review R07).
+* every doubt about a delivery is ``ReconciliationRequired`` at once, in one legal edge, with the evidence
+  a human needs — there is no intermediate status to wait through or get stuck in (C04/review R07).
 * a gate that approved itself without a ``HUMAN_TURN``, or with two, is not a resolution: it is
   ``human_presence_anomaly`` for a human to look at (FR-SES-010/C23/review P04).
 * every status Studio writes is an edge of PRD §11.1. The transition table is enforced by the broker
@@ -18,7 +18,7 @@ is Studio allowed to say?" — and the negative cases carry the weight:
   is simply absent — costs the tick nothing else.
 
 ``actions.py`` and ``services.py`` are peer modules being written in parallel, so this file supplies a
-faithful double for the broker's five reconciler-facing methods (over the **real** ``Storage``, the real
+faithful double for the broker's reconciler-facing methods (over the **real** ``Storage``, the real
 CAS and the real dedupe index) and a ``Services``-shaped namespace of otherwise real modules. Nothing
 inside ``reconciler.py`` is patched.
 """
@@ -69,7 +69,7 @@ def C(studio):
 
 
 class FakeBroker:
-    """The five ``HumanActionBroker`` methods the reconciler calls, over the real store.
+    """The ``HumanActionBroker`` methods the reconciler calls, over the real store.
 
     Deliberately *not* permissive: ``transition`` validates against ``ALLOWED_TRANSITIONS`` and CASes on
     ``status_generation``, because the property most of these tests assert is "the reconciler only ever
@@ -87,6 +87,7 @@ class FakeBroker:
         #: passes ``intent_missing``; the per-intent scan passes the default).
         self.retire_reasons: list[str] = []
         self.transitions: list[tuple[str, str, str]] = []
+        self.stamps: list[tuple[str, dict, dict]] = []
 
     # ---- reads ----
 
@@ -221,6 +222,19 @@ class FakeBroker:
         )
         self.transitions.append((action_id, to_status, reason))
         return await self.get(action_id)
+
+    async def patch_evidence(self, rec: Any, patch: dict, *, values: dict | None = None) -> SimpleNamespace:
+        """``HumanActionBroker.patch_evidence``: a CAS on the record's generation that writes nothing when
+        nothing changed, and treats a lost CAS as "the other writer is newer"."""
+        merged = {**rec.evidence, **patch}
+        if merged != rec.evidence or values:
+            try:
+                await asyncio.to_thread(self._st.cas_update, "actions", rec.action_id, int(rec.status_generation),
+                                        {"evidence_json": merged, **(values or {})})
+            except self._m.errors.StaleGeneration:
+                pass
+        self.stamps.append((rec.action_id, dict(patch), dict(values or {})))
+        return await self.get(rec.action_id)
 
     async def record_failure(
         self, rec: Any, *, fingerprint: str, fingerprint_class: str, summary: str, evidence: dict
@@ -411,7 +425,7 @@ def scene(svc, gate_repo, fake_host):
 
     def make(
         *,
-        status: str = "Processing",
+        status: str = "Delivered",
         action_type: str = "gate",
         decision: str = "approve",
         risk_class: str = "human_lane",
@@ -428,6 +442,10 @@ def scene(svc, gate_repo, fake_host):
         snap: Any = None,
     ) -> str:
         snap = snap if snap is not None else snapshot()
+        extra = dict(evidence_extra or {})
+        if status == "Delivered" and "queued_at" not in extra:
+            # Not queued behind another turn, so the turn started with the delivery (`_accept_delivered`).
+            extra.setdefault("turn_started_at", delivered_at)
         captured = svc.projection.captured(snap, stage)
         evidence = svc.projection.evidence(snap).to_json()
         baseline = svc.reader.presence_baseline(
@@ -466,7 +484,7 @@ def scene(svc, gate_repo, fake_host):
                 "delivering_at": delivering_at,
                 "delivered_at": delivered_at,
                 "deadline_at": deadline_at,
-                "evidence_json": dict(evidence, **(evidence_extra or {})),
+                "evidence_json": dict(evidence, **extra),
                 "presence_baseline_json": baseline if presence else None,
                 "boot_id": boot_id,
                 "source": "studio",
@@ -566,26 +584,30 @@ def finding_codes(svc, action_id: str) -> set[str]:
 
 
 def test_unchanged_reconciliation_evidence_keeps_generation_stable(svc, scene):
-    """A quiet recovery card must not become stale on every background scan."""
+    """A quiet recovery card must not become stale on every background scan: a second pass over an unchanged
+    ``ReconciliationRequired`` row computes the same evidence and writes nothing."""
     action_id = scene.make(status="ReconciliationRequired")
-    rec = asyncio.run(svc.actions.get(action_id))
-    first = asyncio.run(svc.reconciler._stamp_evidence(rec, {"delivery_confirmed": True}))
+    touch_human_turn(scene.root)  # the disk moved, so absence is unprovable and the row stays the human's
+    asyncio.run(svc.reconciler.reconcile_now(action_id))
     before = svc.storage.get("actions", action_id)
 
-    asyncio.run(svc.reconciler._stamp_evidence(first, {"delivery_confirmed": True}))
+    asyncio.run(svc.reconciler.reconcile_now(action_id))
 
     after = svc.storage.get("actions", action_id)
+    assert after["status"] == "ReconciliationRequired"
     assert after["status_generation"] == before["status_generation"]
     assert after["updated_at"] == before["updated_at"]
     assert after["evidence_json"] == before["evidence_json"]
 
 
-def test_changed_reconciliation_evidence_still_advances_generation(svc, scene):
+def test_changed_reconciliation_evidence_still_advances_generation(svc, scene, fake_host):
     action_id = scene.make(status="ReconciliationRequired")
-    rec = asyncio.run(svc.actions.get(action_id))
+    touch_human_turn(scene.root)
+    asyncio.run(svc.reconciler.reconcile_now(action_id))
     before = svc.storage.get("actions", action_id)
+    fake_host.append_user_row(scene.slot_key, "Approve", "2026-09-04T09:59:30Z")
 
-    asyncio.run(svc.reconciler._stamp_evidence(rec, {"delivery_confirmed": True}))
+    asyncio.run(svc.reconciler.reconcile_now(action_id))
 
     after = svc.storage.get("actions", action_id)
     assert after["status_generation"] == before["status_generation"] + 1
@@ -620,7 +642,7 @@ def test_startup_reevaluates_every_inflight_action_before_scanning(svc, scene, C
 
     a = scene.make(status="Delivering")
     b = scene.make(status="Delivered", evidence_extra={"queued_at": "2026-09-04T09:59:05Z"})
-    c = scene.make(status="Processing")
+    c = scene.make(status="Delivered")
 
     report = asyncio.run(svc.reconciler.startup())
 
@@ -670,23 +692,20 @@ def test_startup_report_publishes_health_updated(svc, scene):
 def test_ack_deadline_with_user_row_found_lands_on_reconciliation_required(svc, scene, fake_host, clock):
     """The browser sent and never reported: the row is on disk, so the answer is "we cannot tell yet".
 
-    Two ticks and two legal §11.1 edges — ``Delivering → DeliveryUncertain`` then
-    ``DeliveryUncertain → ReconciliationRequired`` — with ``delivery_confirmed`` set from the transcript
-    row. ``Delivering → NotDelivered`` is never asked for on this path (§1.13).
+    One tick and one legal edge — ``Delivering → ReconciliationRequired`` — with ``delivery_confirmed`` set
+    from the transcript row in the same write. ``Delivering → NotDelivered`` is never asked for on this
+    path (§1.13).
     """
     action_id = scene.make(status="Delivering", deadline_at="2026-09-04T09:59:00Z")
     finish_turn(fake_host, scene.slot_key)
 
     asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "DeliveryUncertain"
+    assert status_of(svc, action_id) == "ReconciliationRequired"
     ev = evidence_of(svc, action_id)
     assert ev["transcript_row"]["slot_key"] == scene.slot_key
     assert ev["transcript_row_absent"] is False
-
-    clock.advance(5)
-    asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "ReconciliationRequired"
-    assert evidence_of(svc, action_id)["delivery_confirmed"] is True
+    assert ev["delivery_confirmed"] is True
+    assert svc.actions.transitions == [(action_id, "ReconciliationRequired", "ack_deadline")]
 
     kinds = [t for _, t, _ in svc.actions.transitions]
     assert "NotDelivered" not in kinds
@@ -726,10 +745,6 @@ def test_ack_deadline_with_no_row_and_all_four_proofs_reaches_not_delivered(svc,
     action_id = scene.make(status="Delivering", deadline_at="2026-09-04T09:59:00Z")
 
     asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "DeliveryUncertain"
-
-    clock.advance(5)
-    asyncio.run(svc.reconciler.tick())
     assert status_of(svc, action_id) == "ReconciliationRequired"
     ev = evidence_of(svc, action_id)
     assert ev["transcript_row_absent"] is True
@@ -760,11 +775,13 @@ def test_not_delivered_refused_when_any_proof_is_missing(svc, scene, clock, fake
     assert status_of(svc, action_id) == "ReconciliationRequired"
 
 
-def test_delivery_uncertain_always_escalates(svc, scene):
-    """No dead ends: ``DeliveryUncertain`` continues even with no new evidence at all (review R07)."""
-    action_id = scene.make(status="DeliveryUncertain", deadline_at="2026-09-04T09:59:00Z")
+def test_a_lost_ack_reaches_a_human_in_one_tick_with_no_evidence_at_all(svc, scene):
+    """No dead ends and no waiting room (review R07): an ack deadline with nothing observable is
+    ``ReconciliationRequired`` on the first tick, the status the human's decisions are offered from."""
+    action_id = scene.make(status="Delivering", deadline_at="2026-09-04T09:59:00Z", presence=False)
     asyncio.run(svc.reconciler.tick())
     assert status_of(svc, action_id) == "ReconciliationRequired"
+    assert svc.actions.transitions == [(action_id, "ReconciliationRequired", "ack_deadline")]
 
 
 # --------------------------------------------------------------------------- #
@@ -786,12 +803,16 @@ def test_queued_delivery_waits_in_delivered_until_the_turn_starts(svc, scene, fa
     asyncio.run(svc.reconciler.tick())
     assert status_of(svc, action_id) == "Delivered"
 
+    assert "turn_started_at" not in evidence_of(svc, action_id)
+
     fake_host.set_running(scene.slot_key, True)
     clock.advance(5)
     asyncio.run(svc.reconciler.tick())
     row = svc.storage.get("actions", action_id)
-    assert row["status"] == "Processing"
+    assert row["status"] == "Delivered", "the turn starting is evidence on the row, not a status"
+    assert row["evidence_json"]["turn_started_at"] == clock.iso()
     assert row["deadline_at"] > "2026-09-04T10:00:00Z"
+    assert svc.actions.transitions == []
 
 
 def test_queued_delivery_gives_up_after_the_wait_factor(svc, scene, clock, C):
@@ -802,45 +823,45 @@ def test_queued_delivery_gives_up_after_the_wait_factor(svc, scene, clock, C):
     )
     clock.advance(C.DELIVERED_QUEUED_WAIT_FACTOR * svc.host.turn_timeout_secs() + 60)
     asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "DeliveryUncertain"
+    assert status_of(svc, action_id) == "ReconciliationRequired"
 
 
-def test_session_replaced_makes_the_action_uncertain(svc, scene, fake_host):
+def test_session_replaced_makes_the_action_reconciliation_required(svc, scene, fake_host):
     """A slot whose effective session changed is not the session the decision was dispatched into.
 
     ``linked_session_key`` moving means the host now runs this slot's turns somewhere else, so the audit
     rows Studio would read could belong to another conversation entirely.
     """
-    action_id = scene.make(status="Processing")
+    action_id = scene.make(status="Delivered")
     fake_host.get_slot(scene.slot_key).linked_session_key = "channel:other"
     asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "DeliveryUncertain"
+    assert status_of(svc, action_id) == "ReconciliationRequired"
 
 
-def test_slot_gone_makes_the_action_uncertain(svc, scene, fake_host):
-    action_id = scene.make(status="Processing")
+def test_slot_gone_makes_the_action_reconciliation_required(svc, scene, fake_host):
+    action_id = scene.make(status="Delivered")
     fake_host._slots.pop(scene.slot_key)
     asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "DeliveryUncertain"
+    assert status_of(svc, action_id) == "ReconciliationRequired"
 
 
-def test_turn_past_its_deadline_becomes_uncertain(svc, scene, clock):
-    action_id = scene.make(status="Processing", deadline_at="2026-09-04T10:00:00Z")
+def test_turn_past_its_deadline_becomes_reconciliation_required(svc, scene, clock):
+    action_id = scene.make(status="Delivered", deadline_at="2026-09-04T10:00:00Z")
     clock.advance(120)
     asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "DeliveryUncertain"
+    assert status_of(svc, action_id) == "ReconciliationRequired"
 
 
 def test_detached_host_does_not_mistake_a_missing_slot_for_a_dead_session(svc, scene):
     """Disk-only is a reduced mode, not a terminated session (C08).
 
     Without this distinction a Studio that started before the gateway attached its state would push every
-    in-flight decision to ``DeliveryUncertain`` on its first tick.
+    in-flight decision to ``ReconciliationRequired`` on its first tick.
     """
-    action_id = scene.make(status="Processing")
+    action_id = scene.make(status="Delivered")
     svc.host._state = None
     asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "Processing"
+    assert status_of(svc, action_id) == "Delivered"
 
 
 # --------------------------------------------------------------------------- #
@@ -850,7 +871,7 @@ def test_detached_host_does_not_mistake_a_missing_slot_for_a_dead_session(svc, s
 
 def test_gate_approve_resolves_state_changed_from_same_second_rows(svc, scene, fake_host):
     """``gate_approved_audit`` + a `[x]` row = ``StateChanged`` (review P23 same-second ordering)."""
-    action_id = scene.make(status="Processing")
+    action_id = scene.make(status="Delivered")
     approve_on_disk(scene.root)
     finish_turn(fake_host, scene.slot_key)
 
@@ -862,7 +883,7 @@ def test_gate_approve_resolves_state_changed_from_same_second_rows(svc, scene, f
 
 
 def test_gate_request_changes_needs_rejected_revising_and_the_r_row(svc, scene, fake_host):
-    action_id = scene.make(status="Processing", decision="request_changes",
+    action_id = scene.make(status="Delivered", decision="request_changes",
                            wire_text="Request Changes: Spell out the criteria.")
     reject_on_disk(scene.root)
     finish_turn(fake_host, scene.slot_key, wire_text="Request Changes: Spell out the criteria.")
@@ -873,11 +894,11 @@ def test_gate_request_changes_needs_rejected_revising_and_the_r_row(svc, scene, 
 
 def test_gate_approve_without_the_audit_row_stays_processing(svc, scene, fake_host):
     """A finished turn is not a resolution. Only the engine's own ``GATE_APPROVED`` closes a gate."""
-    action_id = scene.make(status="Processing")
+    action_id = scene.make(status="Delivered")
     finish_turn(fake_host, scene.slot_key)
     touch_human_turn(scene.root)
     asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "Processing"
+    assert status_of(svc, action_id) == "Delivered"
 
 
 def test_question_answers_resolve_no_transition(svc, scene, fake_host):
@@ -885,7 +906,7 @@ def test_question_answers_resolve_no_transition(svc, scene, fake_host):
     snap = scene.snapshot()
     pending = [q.index for q in snap.questions.questions if not q.answered]
     action_id = scene.make(
-        status="Processing",
+        status="Delivered",
         action_type="question",
         decision="answers",
         wire_text="Yes",
@@ -911,7 +932,7 @@ def test_question_answers_resolve_no_transition(svc, scene, fake_host):
 
 def test_confirm_summary_resolves_on_the_audit_row(svc, scene, fake_host):
     action_id = scene.make(
-        status="Processing",
+        status="Delivered",
         action_type="question",
         decision="confirm_summary",
         wire_text="Looks correct",
@@ -949,7 +970,7 @@ def test_approve_plan_needs_the_checkpoint_answer_in_the_file(svc, scene, fake_h
     path = _record(scene.root) / QUESTIONS_REL
     path.write_text(questions)
     action_id = scene.make(
-        status="Processing",
+        status="Delivered",
         action_type="question",
         decision="approve_plan",
         wire_text=C.WIRE_APPROVE_PLAN,
@@ -975,13 +996,13 @@ ASSUMPTION_QUESTIONS = (
 @pytest.mark.parametrize("recorded,status", [
     ("A. Accept assumptions", "ResolvedNoTransition"),
     # The engine recorded the other option: not the decision the human confirmed.
-    ("B. Convert to follow-up questions", "Processing"),
+    ("B. Convert to follow-up questions", "Delivered"),
 ])
 def test_accept_assumptions_resolves_only_on_the_chosen_option(svc, scene, fake_host, C, recorded, status):
     path = _record(scene.root) / QUESTIONS_REL
     path.write_text(ASSUMPTION_QUESTIONS)
     action_id = scene.make(
-        status="Processing",
+        status="Delivered",
         action_type="question",
         decision="accept_assumptions",
         wire_text=C.WIRE_ACCEPT_ASSUMPTIONS,
@@ -1002,7 +1023,7 @@ def test_convert_assumptions_resolves_on_its_question_answered_row(svc, scene, f
     path = _record(scene.root) / QUESTIONS_REL
     path.write_text(ASSUMPTION_QUESTIONS)
     action_id = scene.make(
-        status="Processing",
+        status="Delivered",
         action_type="question",
         decision="convert_assumptions",
         wire_text=C.WIRE_CONVERT_ASSUMPTIONS,
@@ -1037,7 +1058,7 @@ def test_request_plan_changes_resolves_when_the_tag_is_cleared_for_revision(svc,
     path = _record(scene.root) / QUESTIONS_REL
     path.write_text(answered)
     action_id = scene.make(
-        status="Processing",
+        status="Delivered",
         action_type="question",
         decision="request_plan_changes",
         wire_text=C.WIRE_REQUEST_CHANGES_PREFIX + "Split the plan.",
@@ -1076,7 +1097,7 @@ def test_a_plan_approval_row_counts_as_a_gate_resolution(svc, scene, fake_host, 
     the evidence a human reconciling a timed-out turn is handed: ``resolution_event_seen`` is how they are
     told the engine did record an answer, and an unclassified resolution reads as "nothing on disk".
     """
-    action_id = scene.make(status="Processing", deadline_at="2026-09-04T10:00:00Z")
+    action_id = scene.make(status="Delivered", deadline_at="2026-09-04T10:00:00Z")
     shard = _record(scene.root) / "audit" / "fixture-host-0f1e2d3c4b5a.md"
     shard.write_text(
         shard.read_text()
@@ -1094,7 +1115,7 @@ def test_a_plan_approval_row_counts_as_a_gate_resolution(svc, scene, fake_host, 
     clock.advance(120)
 
     asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "DeliveryUncertain"
+    assert status_of(svc, action_id) == "ReconciliationRequired"
     assert evidence_of(svc, action_id)["disk_movement"]["resolution_event_seen"] is True
 
 
@@ -1106,7 +1127,7 @@ def test_a_plan_approval_row_is_movement_for_a_run_action(svc, scene, fake_host,
     Code Generation plan they approved being reported as "nothing happened".
     """
     action_id = scene.make(
-        status="Processing",
+        status="Delivered",
         action_type="run",
         decision="run",
         stage=GATE_STAGE,
@@ -1140,7 +1161,7 @@ def test_provide_input_scope_resolves_only_when_the_state_records_the_scope(svc,
     writing the scope, and calling that ``StateChanged`` would report a scope AI-DLC never recorded.
     """
     action_id = scene.make(
-        status="Processing",
+        status="Delivered",
         action_type="missing_input",
         decision="provide_input",
         stage=None,
@@ -1153,7 +1174,7 @@ def test_provide_input_scope_resolves_only_when_the_state_records_the_scope(svc,
     finish_turn(fake_host, scene.slot_key, wire_text=C.WIRE_SCOPE_PREFIX + "bugfix")
 
     asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "Processing"
+    assert status_of(svc, action_id) == "Delivered"
 
     (_record(scene.root) / "aidlc-state.md").write_text(
         F.state_text(marks={GATE_STAGE: "?"}, fields={"Scope": "bugfix", "Current Stage": GATE_STAGE})
@@ -1164,7 +1185,7 @@ def test_provide_input_scope_resolves_only_when_the_state_records_the_scope(svc,
 
 def test_resume_resolves_like_run(svc, scene, fake_host, C):
     action_id = scene.make(
-        status="Processing",
+        status="Delivered",
         action_type="resume",
         decision="resume",
         stage=GATE_STAGE,
@@ -1179,7 +1200,7 @@ def test_resume_resolves_like_run(svc, scene, fake_host, C):
 
 def test_run_resolves_state_changed_when_the_workflow_moved(svc, scene, fake_host, C):
     action_id = scene.make(
-        status="Processing",
+        status="Delivered",
         action_type="run",
         decision="run",
         stage=GATE_STAGE,
@@ -1195,7 +1216,7 @@ def test_run_resolves_state_changed_when_the_workflow_moved(svc, scene, fake_hos
 def test_run_resolves_no_transition_when_the_turn_ended_without_movement(svc, scene, fake_host, C):
     """The engine asked a question or parked: a completed turn with no movement is still a resolution."""
     action_id = scene.make(
-        status="Processing",
+        status="Delivered",
         action_type="run",
         decision="run",
         stage=GATE_STAGE,
@@ -1212,7 +1233,7 @@ def test_run_resolves_no_transition_when_the_turn_ended_without_movement(svc, sc
 
 def test_prepare_commit_resolves_on_the_turn_alone(svc, scene, fake_host, C):
     action_id = scene.make(
-        status="Processing",
+        status="Delivered",
         action_type="prepare_commit",
         decision="prepare_commit",
         stage=GATE_STAGE,
@@ -1234,7 +1255,7 @@ def test_force_stop_resolves_when_the_slot_goes_idle_and_records_the_interruptio
     requires manual takeover after a mid-stage interruption, so run/resume never clear the flag.
     """
     action_id = scene.make(
-        status="Processing",
+        status="Delivered",
         action_type="force_stop",
         decision="force_stop",
         risk_class="host_control",
@@ -1254,7 +1275,7 @@ def test_force_stop_resolves_when_the_slot_goes_idle_and_records_the_interruptio
 
 def test_force_stop_stays_pending_while_the_stop_is_in_progress(svc, scene, fake_host):
     action_id = scene.make(
-        status="Processing",
+        status="Delivered",
         action_type="force_stop",
         decision="force_stop",
         risk_class="host_control",
@@ -1265,7 +1286,7 @@ def test_force_stop_stays_pending_while_the_stop_is_in_progress(svc, scene, fake
     )
     fake_host.get_slot(scene.slot_key)._stop_state = "killing"
     asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "Processing"
+    assert status_of(svc, action_id) == "Delivered"
 
 
 # --------------------------------------------------------------------------- #
@@ -1278,22 +1299,17 @@ def test_gate_approved_without_exactly_one_human_turn_is_an_anomaly(svc, scene, 
     """Zero or two ``HUMAN_TURN`` rows → ``human_presence_anomaly``, never a resolution (review P04).
 
     Zero means AI-DLC recorded an approval nobody gave — the FR-SES-010 case. Two means the boundary
-    cannot be attributed to *this* decision. The route out is ``DeliveryUncertain`` then
-    ``ReconciliationRequired``, because ``Processing → ReconciliationRequired`` is not an edge of PRD
-    §11.1 and inventing it would put a state outside the graph into the record.
+    cannot be attributed to *this* decision. Either way the decision goes to a human in one legal edge
+    (``Delivered → ReconciliationRequired``) with the finding on the row.
     """
-    action_id = scene.make(status="Processing")
+    action_id = scene.make(status="Delivered")
     approve_on_disk(scene.root, human_turns=human_turns)
     finish_turn(fake_host, scene.slot_key)
 
     asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "DeliveryUncertain"
-    assert "human_presence_anomaly" in finding_codes(svc, action_id)
-
-    clock.advance(5)
-    asyncio.run(svc.reconciler.tick())
     assert status_of(svc, action_id) == "ReconciliationRequired"
     assert "human_presence_anomaly" in finding_codes(svc, action_id)
+    assert svc.actions.transitions == [(action_id, "ReconciliationRequired", "human_presence_anomaly")]
 
 
 def test_presence_requires_the_marker_to_advance_too(svc, scene, fake_host):
@@ -1306,7 +1322,7 @@ def test_presence_requires_the_marker_to_advance_too(svc, scene, fake_host):
     marker = _record(scene.root) / HUMAN_TURN_MARKER
     marker.write_text("2026-09-04T09:00:00Z\n")
     os.utime(marker, ns=(1_000_000_000, 1_000_000_000))
-    action_id = scene.make(status="Processing")
+    action_id = scene.make(status="Delivered")
 
     shard = _record(scene.root) / "audit" / "fixture-host-0f1e2d3c4b5a.md"
     shard.write_text(
@@ -1323,14 +1339,14 @@ def test_presence_requires_the_marker_to_advance_too(svc, scene, fake_host):
     finish_turn(fake_host, scene.slot_key)
 
     asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "DeliveryUncertain"
+    assert status_of(svc, action_id) == "ReconciliationRequired"
     assert "human_presence_anomaly" in finding_codes(svc, action_id)
 
 
 def test_host_control_dispatch_has_no_presence_requirement(svc, scene):
     """``force_stop`` puts nothing in front of the model, so it needs no ``HUMAN_TURN`` (§1.12)."""
     action_id = scene.make(
-        status="Processing",
+        status="Delivered",
         action_type="force_stop",
         decision="force_stop",
         risk_class="host_control",
@@ -1346,13 +1362,13 @@ def test_host_control_dispatch_has_no_presence_requirement(svc, scene):
 def test_cursor_moved_between_dispatch_and_resolution_is_an_anomaly(svc, scene, fake_host, clock):
     """The conductor resolves the record from the repo-shared cursor, so a moved cursor invalidates the
     reading (review R01/C22): the audit rows Studio is about to trust may belong to another intent."""
-    action_id = scene.make(status="Processing")
+    action_id = scene.make(status="Delivered")
     approve_on_disk(scene.root)
     finish_turn(fake_host, scene.slot_key)
     (scene.root / "aidlc" / "spaces" / "default" / "intents" / "active-intent").write_text("someone-else\n")
 
     asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "DeliveryUncertain"
+    assert status_of(svc, action_id) == "ReconciliationRequired"
     assert "cursor_moved" in finding_codes(svc, action_id)
 
 
@@ -1363,7 +1379,7 @@ def test_row_found_in_another_slot_is_wrong_slot_and_waits_for_a_human(svc, scen
     ``NotDelivered`` (it was delivered) nor a disk resolution (it may have run against another cursor) is
     safe. The finding is stored and the card waits.
     """
-    action_id = scene.make(status="DeliveryUncertain", deadline_at="2026-09-04T09:59:00Z")
+    action_id = scene.make(status="Delivering", deadline_at="2026-09-04T09:59:00Z")
     fake_host.add_slot("hand-made", project=str(scene.root), agent="aidlc")
     fake_host.get_slot("hand-made").messages.append(
         {"role": "user", "content": "Approve", "cls": "u", "ts": "2026-09-04T09:59:30Z", "meta": {}}
@@ -1396,7 +1412,7 @@ def test_stable_boundary_is_recorded_and_names_every_unmet_condition(svc, scene,
     assert binding.last_stable_boundary.marker == "[?]"
     assert binding.last_stable_boundary.stable is True
 
-    scene.make(status="Processing")
+    scene.make(status="Delivered")
     asyncio.run(svc.reconciler.tick())
     binding = asyncio.run(svc.sessions.get(scene.repo_id, "default", GATE_DIR))
     assert binding.last_stable_boundary.stable is False
@@ -1599,7 +1615,7 @@ def test_a_truncated_listing_never_sweeps_cards(svc, scene, clock, C, monkeypatc
 
 def test_resolution_releases_the_execution_lease(svc, scene, fake_host):
     """A resolved action gives its repository back: the in-flight row was the lease."""
-    action_id = scene.make(status="Processing", lease_generation=7)
+    action_id = scene.make(status="Delivered", lease_generation=7)
     lease = asyncio.run(svc.scheduler.get(scene.repo.resolved_identity))
     assert (lease.kind, lease.action_id, lease.generation) == ("execution", action_id, 7)
     approve_on_disk(scene.root)
@@ -1657,7 +1673,7 @@ def test_fingerprints_are_stable_across_volatile_detail(svc):
 
 def test_error_burst_fails_the_action_and_a_single_row_does_not(svc, scene, fake_host, clock):
     """Three ``ERROR_LOGGED`` rows are a failure; one is AI-DLC correcting itself (FORMAT-NOTES §6)."""
-    action_id = scene.make(status="Processing")
+    action_id = scene.make(status="Delivered")
     shard = _record(scene.root) / "audit" / "fixture-host-0f1e2d3c4b5a.md"
     shard.write_text(
         shard.read_text()
@@ -1667,7 +1683,7 @@ def test_error_burst_fails_the_action_and_a_single_row_does_not(svc, scene, fake
     )
     finish_turn(fake_host, scene.slot_key)
     asyncio.run(svc.reconciler.tick())
-    assert status_of(svc, action_id) == "Processing"
+    assert status_of(svc, action_id) == "Delivered"
 
     # The error text is given explicitly: `error_burst_audit`'s default ("ACP transport closed") is not
     # one of the strings §1.13.1 pins for the `transport` class, so it classifies as `config` — see the
@@ -1682,7 +1698,7 @@ def test_error_burst_fails_the_action_and_a_single_row_does_not(svc, scene, fake
     assert svc.actions.failures[-1]["class"] == "transport"
 
 
-@pytest.mark.parametrize("initial_status", ["Processing", "ReconciliationRequired"])
+@pytest.mark.parametrize("initial_status", ["Delivered", "ReconciliationRequired"])
 def test_running_question_can_recover_from_tool_errors_before_it_finishes(svc, scene, fake_host, initial_status):
     action_id = scene.make(
         status=initial_status, action_type="question", decision="answers", wire_text="Yes",
@@ -1813,7 +1829,7 @@ def test_tick_never_blocks_the_loop(svc, scene, R, monkeypatch):
 
 def test_human_text_is_purged_past_retention(svc, scene, clock):
     """Both homes of the verbatim decision text are cleared, or the promise is not kept."""
-    action_id = scene.make(status="Processing")
+    action_id = scene.make(status="Delivered")
     asyncio.run(
         svc.activity.record(
             kind="action.submitted",
@@ -1843,7 +1859,7 @@ def test_expired_advisor_drafts_are_marked_not_deleted(svc, scene, clock, adviso
         "advisor_drafts",
         {
             "draft_id": svc.ids.new("d"),
-            "action_id": scene.make(status="Processing"),
+            "action_id": scene.make(status="Delivered"),
             "kind": "gate_analysis",
             "status": "ready",
             "request_json": {},
@@ -1858,7 +1874,7 @@ def test_expired_advisor_drafts_are_marked_not_deleted(svc, scene, clock, adviso
 
 
 def test_reconcile_now_answers_for_one_action(svc, scene, fake_host):
-    action_id = scene.make(status="Processing")
+    action_id = scene.make(status="Delivered")
     approve_on_disk(scene.root)
     finish_turn(fake_host, scene.slot_key)
     rec = asyncio.run(svc.reconciler.reconcile_now(action_id))
@@ -1875,7 +1891,7 @@ def test_reconciler_never_writes_aidlc_state(svc, scene, fake_host):
         scene.root / "aidlc" / "active-space",
     ]
     before = {p: p.stat().st_mtime_ns for p in watched if p.exists()}
-    scene.make(status="Processing")
+    scene.make(status="Delivered")
     scene.make(status="Delivering", deadline_at="2026-09-04T09:59:00Z")
     asyncio.run(svc.reconciler.startup())
     asyncio.run(svc.reconciler.tick())
@@ -2088,7 +2104,7 @@ def test_a_tick_completes_when_the_advisor_raises(svc, scene, clock, explodes, a
         "advisor_drafts",
         {
             "draft_id": svc.ids.new("d"),
-            "action_id": scene.make(status="Processing"),
+            "action_id": scene.make(status="Delivered"),
             "kind": "gate_analysis",
             "status": "ready",
             "request_json": {},
@@ -2154,7 +2170,7 @@ def test_retention_still_runs_behind_the_pass_in_the_same_tick(svc, scene, clock
         "advisor_drafts",
         {
             "draft_id": draft_id,
-            "action_id": scene.make(status="Processing"),
+            "action_id": scene.make(status="Delivered"),
             "kind": "gate_analysis",
             "status": "running",
             "request_json": {"auto": True},

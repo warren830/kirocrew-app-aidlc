@@ -159,23 +159,26 @@ afterEach(() => {
 describe('the action queue', () => {
   it('counts only human work while retaining failures, uncertainty and questions from a running session', async () => {
     const statuses: ActionCard['status'][] = [
-      'Queued', 'NotDelivered', 'DeliveryUncertain', 'ReconciliationRequired', 'Failed',
-      'Delivering', 'Delivered', 'Processing', 'StateChanged', 'ResolvedNoTransition', 'Cancelled',
+      'Queued', 'NotDelivered', 'ReconciliationRequired', 'Failed',
+      'Delivering', 'Delivered', 'Delivered', 'StateChanged', 'ResolvedNoTransition', 'Cancelled',
     ]
     const cards = statuses.map((status, index) => card({ id: `a_status_${index}`, status }))
     cards[0]!.evidence.session!.running = true
+    // One sent message still waiting for its turn, and one whose turn is running.
+    cards[6]!.delivery.turn_started_at = '2026-09-04T10:00:00Z'
     installRoutes(cards)
     mount()
-    await waitFor(() => expect(rows()).toHaveLength(5))
+    await waitFor(() => expect(rows()).toHaveLength(4))
     expect(rows().map((row) => row.getAttribute('data-action-id'))).toEqual(
-      expect.arrayContaining(statuses.slice(0, 5).map((_status, index) => `a_status_${index}`)),
+      expect.arrayContaining(statuses.slice(0, 4).map((_status, index) => `a_status_${index}`)),
     )
-    expect(screen.getByText('5 of 5')).toBeInTheDocument()
-    expect(screen.getByRole('navigation', { name: 'Primary' }).querySelector('.studio-count')).toHaveTextContent('5')
+    expect(screen.getByText('4 of 4')).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Primary' }).querySelector('.studio-count')).toHaveTextContent('4')
   })
 
   it('keeps the selected execution progress readable when no item needs a decision', async () => {
-    const processing = card({ id: 'a_processing', status: 'Processing' })
+    const processing = card({ id: 'a_processing', status: 'Delivered' })
+    processing.delivery.turn_started_at = '2026-09-04T10:00:00Z'
     processing.primary = null
     processing.decisions = []
     installRoutes([processing])
@@ -192,9 +195,10 @@ describe('the action queue', () => {
 
   it('removes a submitted item, keeps polling, and restores uncertainty without sending twice', async () => {
     const cards = [card({ id: 'a_sent' })]
-    const move = (status: ActionCard['status'], generation: number) => {
+    const move = (status: ActionCard['status'], generation: number, turnStartedAt?: string) => {
       cards[0] = {
         ...cards[0]!, status, status_generation: generation, primary: null, decisions: [],
+        delivery: { ...cards[0]!.delivery, ...(turnStartedAt ? { turn_started_at: turnStartedAt } : {}) },
         updated_at: `2026-09-04T10:00:0${generation}Z`,
       }
     }
@@ -211,7 +215,7 @@ describe('the action queue', () => {
       'GET /api/chat/slots': () => [{ key: 'aidlc-r1-guest', project: '/work/checkout-web', agent: 'aidlc', running: false }],
       'POST /api/chat?ws=1': () => ({ ok: true, slot: 'aidlc-r1-guest', mid: 'm_sent' }),
       [`POST ${BASE}/actions/a_sent/delivery`]: () => {
-        move('Processing', 3)
+        move('Delivered', 3, '2026-09-04T10:00:03Z')
         return { ok: true, action: cards[0], idempotent: false }
       },
     })
@@ -228,7 +232,7 @@ describe('the action queue', () => {
     expect(window.location.search).toContain('action=a_sent')
 
     // The underlying resource must retain the in-flight state, so this change is found by its fast poll.
-    move('DeliveryUncertain', 4)
+    move('ReconciliationRequired', 4)
     await waitFor(() => expect(rows()).toHaveLength(1), { timeout: 5_000 })
     expect(rows()[0]).toHaveAttribute('data-action-id', 'a_sent')
     expect(screen.getByText('1 of 1')).toBeInTheDocument()
