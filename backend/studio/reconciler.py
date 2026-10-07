@@ -932,7 +932,7 @@ class Reconciler:
             # A run parked on a host tool approval waits silently in the chat; say so once per approval.
             # Not for an archived intent: the user set it aside, and the queue does not list it either.
             try:
-                await self._s.notifications.notify_tool_approval(
+                await self._s.notifications.notify("tool_approval",
                     repo_id=repo.repo_id, repo_label=repo.label, intent_key=snap.intent_key,
                     intent_label=_attr(snap.row, "slug") or intent_dir, slot_key=binding.slot_key,
                     approval=slot.approval, turn=str(_attr(slot, "last_turn_ts") or ""),

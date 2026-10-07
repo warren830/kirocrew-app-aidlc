@@ -2703,7 +2703,6 @@ repository file or create an intent; put a repository path in the package; list 
 ### 1.19 `notifications.py` — `NotificationAdapter`
 
 ```python
-NOTIFY_KINDS = ("gate", "question", "failure", "circuit_breaker", "delivery_uncertain", "recovery", "install_conflict", "completion")
 @dataclass(frozen=True, slots=True)
 class NotificationResult: dashboard: bool; slack: str; slack_ts: str | None; deep_link: str; dedupe_hit: bool
     # slack ∈ sent | muted | unavailable | ineligible | disabled
@@ -2711,24 +2710,23 @@ class NotificationResult: dashboard: bool; slack: str; slack_ts: str | None; dee
 class NotificationAdapter:
     def __init__(self, host, storage, settings, activity, clock) -> None
     def deep_link(self, action_id: str) -> str                        # f"{DEEP_LINK_BASE}?view=actions&action={action_id}"
-    async def notify_action(self, card: ActionCard) -> NotificationResult
-        # dedupe on (action_id, status_class) where status_class = "open" | "uncertain" ; second call is a no-op (dedupe_hit)
-        # dashboard: host.notify(title_key-rendered-in-en, body, url=deep_link) — the host toast is English-only; body ≤ 500 chars, redacted
-        # slack: settings.slack.enabled and repo not muted and host slack capability → build_slack_blocks(card) — notification + deep link ONLY
-    async def notify_completion(self, summary: IntentSummary) -> NotificationResult
-    def slack_quick_action_eligible(self, card: ActionCard) -> tuple[bool, str]
-        # v1: ALWAYS (False, "host_seam_unavailable") — review P02/R18. The only host mechanism (an `[OPTIONS:]`/`action::` block on a thread
-        # linked to the canonical slot) re-dispatches the click as a bare user turn: no compare-and-submit (FR-ACT-010/FR-SLK-004), no durable
-        # Delivering record before the host call (§11.5/FR-SLK-007), no cursor switch (FR-SES-006), and a second button would itself mint a
-        # HUMAN_TURN (P-03). Re-enable only when a host seam (S7) lets the click call POST /slack/actions/callback → submit → host send with the
-        # same two-phase record, or offers a non-prompt navigation button. The function stays so the eligibility rules below are already pinned:
-        # future True requires card.type == "gate", status == "Queued", captured.stable, no blocking findings, no live critical card for the
-        # intent, rendered brief ≤ 2800 chars.
-    def build_slack_blocks(self, card: ActionCard) -> tuple[list[dict], str]
-        # blocks: header(type/intent/stage) · context(repo · waiting) · section(brief) · section("Open in Studio: <deep link>")
-        # The text NEVER ends with an `[OPTIONS: …]` trailer and Studio never links the canonical slot to a Slack thread
-        # (no `POST /api/chat/slots/{key}/slack-link`, no `state.link_slack`) — a Slack reply must not be able to reach the conductor.
+    async def notify(self, kind: str, subject=None, **fields) -> NotificationResult    # the one entry point
+        # kind "action": subject is an ActionCard. Notifiable types: gate, question, failure, circuit_breaker,
+        #   delivery_uncertain, recovery, install_conflict (anything else → slack "ineligible", nothing sent).
+        #   Dedupe on (action_id, status_class) where status_class = "open" | "uncertain". Called today for the
+        #   breaker card (actions.py); gate/question cards are a later phase.
+        # kind "tool_approval": fields repo_id, repo_label, intent_key, intent_label, slot_key, approval, turn —
+        #   dashboard only, links to the intent, dedupe on the approval id (else tool + input + turn). Called by the reconciler.
+        # kind "completion": subject is an intent summary; links to the intent. Implemented; no caller yet.
+        # dashboard: host.notify(English title, body ≤ 500 chars, url=deep link) unless settings.notifications.dashboard is false
+        # slack: settings.slack.enabled and repo not muted → host.slack_dm(blocks, text) — header · context · section(brief) ·
+        #   section(link) ONLY. Every attempt is one Activity row (kind notification.sent, params.kind = the class).
 ```
+
+There are no Slack quick actions (review P02/R18): the only host mechanism (an `[OPTIONS:]`/`action::` block on a thread
+linked to the canonical slot) re-dispatches the click as a bare user turn — no compare-and-submit (FR-ACT-010/FR-SLK-004),
+no durable Delivering record before the host call (§11.5/FR-SLK-007), no cursor switch (FR-SES-006) — so Settings
+reports `slack_quick_actions` unavailable and no message ever ends in an options trailer.
 
 NotificationAdapter must NOT include artifact bodies, human_text, repo paths (other than the label) or credentials in
 any message, register Slack callbacks, emit an `[OPTIONS:]` trailer, link a canonical slot to Slack, or send more than

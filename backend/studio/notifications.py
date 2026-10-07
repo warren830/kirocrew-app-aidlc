@@ -1,78 +1,49 @@
-"""Telling the user something needs them — without ever becoming a way to decide.
+"""Telling the user something needs them — a dashboard toast and an owner Slack DM, never a way to decide.
 
-Two channels, both courtesy channels: a dashboard notification and an owner Slack DM. Neither can carry
-a decision, and that restriction is the whole design of this module rather than an omission:
+* **No Slack quick actions.** The one host mechanism re-dispatches a click as a bare user turn on the
+  ``aidlc`` slot: no compare-and-submit, no durable ``Delivering`` record, no cursor switch (C13/review
+  P02). So no message ever ends in an ``[OPTIONS: …]`` trailer — the host would turn it into buttons — and
+  Settings reports ``slack_quick_actions`` unavailable. A Slack message is a sentence and a deep link.
+* **No evidence.** No artifact body, no submitted human text, no path beyond the repository label, and any
+  text that came from disk is redacted: this reaches a Slack workspace and the host's notification history.
+* **Failure is swallowed.** Every caller arrives after the thing worth knowing about is durable, so a Slack
+  outage or a missing host attribute must never fail the operation that earned the notification.
 
-* **No Slack quick actions in v1.** The one host mechanism that looked usable — an ``[OPTIONS: …]`` block
-  on a thread linked to the intent's canonical session — re-dispatches whatever the user clicks as a bare
-  user turn on the ``aidlc`` slot. That turn would reach the AI-DLC conductor with no compare-and-submit
-  behind it (so a card the user is no longer looking at could resolve a boundary that has moved), no
-  durable ``Delivering`` record committed first, and no cursor switch — and a second, non-decision button
-  such as "Open in Studio" would be typed into the conversation as if it were an answer. So
-  ``slack_quick_action_eligible`` always refuses, with a reason code the Settings page shows. The
-  eligibility rules a future host seam would need are written down in that method so re-enabling it is a
-  deliberate act with a test to satisfy, not a one-line flip.
-* **A notification never carries evidence.** No artifact body, no submitted human text, no repository
-  path beyond the label, no credentials. A Slack message is a sentence and a deep link; the decision is
-  made in Studio, where the evidence and the staleness check are.
-
-Failure here is always swallowed. Every caller reaches this module *after* the thing worth knowing about
-is already durable, so a Slack outage or a missing host attribute must never fail the operation that
-earned the notification. Each result says what actually happened instead.
+English only: the host's notification bus has no locale, and the UI renders its own localized copy.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from dataclasses import dataclass, field
+from typing import Any, Mapping
 
 from . import constants as C
 from . import security as S
 
 logger = logging.getLogger(f"kirocrew.app.{C.APP_NAME}.notifications")
 
-#: Card types worth interrupting a person for (PRD FR-SLK-003), mapped onto their notification class.
-#: Anything absent is deliberately silent. A stage transition is not one: notifying every transition
-#: trains the user to mute the channel, which costs them the gate as well.
-_TYPE_TO_KIND = {
-    "gate": "gate",
-    "question": "question",
-    "failure": "failure",
-    "circuit_breaker": "circuit_breaker",
-    "delivery_uncertain": "delivery_uncertain",
-    "recovery": "recovery",
-    "install_conflict": "install_conflict",
+#: Card types worth interrupting a person for (PRD FR-SLK-003) and their English titles. Anything absent
+#: stays silent: notifying every stage transition trains the user to mute the channel, gates included.
+_CARD_TITLES = {
+    "gate": "Approval needed",
+    "question": "Question waiting",
+    "failure": "AI-DLC run failed",
+    "circuit_breaker": "Stopped after repeated failures",
+    "delivery_uncertain": "Delivery uncertain",
+    "recovery": "Recovery needed",
+    "install_conflict": "Install conflict",
 }
-
-#: Two dedupe classes per action: the first time it needs attention, and the first time its delivery
-#: becomes uncertain. A card that stays open for a day produces one notification, not one per tick.
+#: A card's second notification class: the first time its delivery becomes uncertain is new information.
 _UNCERTAIN_STATUSES = ("DeliveryUncertain", "ReconciliationRequired")
 
-_SLACK_SENT = "sent"
-_SLACK_MUTED = "muted"
-_SLACK_UNAVAILABLE = "unavailable"
-_SLACK_INELIGIBLE = "ineligible"
-_SLACK_DISABLED = "disabled"
+#: The one registered Activity kind for every notification; which one it was travels in ``params.kind``.
+NOTIFICATION_ACTIVITY_KIND = "notification.sent"
 
-#: Slack's own limits, and Studio's stricter one. A block that exceeds Slack's limit is rejected by the
-#: API, so a long decision brief is trimmed here where the trim can be marked.
-_SLACK_SECTION_LIMIT = 2900
-_STUDIO_EXCERPT_LIMIT = 600
+_SECTION_LIMIT = 2900  # Slack rejects a longer section block, so the trim happens here where it can be marked
+_EXCERPT_LIMIT = 600
 _BODY_LIMIT = 500
-
-#: The eligibility bar a future Slack quick action would have to clear. Kept as data so the rules are
-#: already reviewable and testable while the feature itself is refused.
-QUICK_ACTION_REQUIREMENTS = (
-    "card.type == 'gate'",
-    "card.status == 'Queued'",
-    "captured evidence stable",
-    "no blocking finding for the intent",
-    "no live critical card for the intent",
-    "rendered brief <= 2800 characters",
-    "host seam that routes the click through submit + the host send with the same two-phase record",
-)
-REASON_HOST_SEAM = "host_seam_unavailable"
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,46 +57,55 @@ class NotificationResult:
     dedupe_hit: bool
 
     def to_json(self) -> dict[str, Any]:
-        return {
-            "dashboard": self.dashboard,
-            "slack": self.slack,
-            "slack_ts": self.slack_ts,
-            "deep_link": self.deep_link,
-            "dedupe_hit": self.dedupe_hit,
-        }
+        return {"dashboard": self.dashboard, "slack": self.slack, "slack_ts": self.slack_ts,
+                "deep_link": self.deep_link, "dedupe_hit": self.dedupe_hit}
+
+
+@dataclass(slots=True)
+class _Message:
+    """One notification, built per kind and delivered by the shared pipeline in ``notify``."""
+
+    kind: str  # params.kind on the Activity row and meta.kind on the toast
+    dedupe_key: str
+    link: str
+    title: str
+    body: str
+    severity: str = "info"
+    action_id: str = ""
+    repo_id: str = ""
+    slack: tuple[list[dict], str] | None = None  # (blocks, text); None means dashboard only
+    scope: dict = field(default_factory=dict)  # the Activity row's repo/intent/stage/action columns
+    params: dict = field(default_factory=dict)  # Activity params before ``dashboard``/``slack``…
+    trailer: dict = field(default_factory=dict)  # …and after them
 
 
 def _text(value: Any, limit: int | None = None) -> str:
     out = "" if value is None else str(value)
-    if limit is not None and len(out) > limit:
-        return out[: limit - 1].rstrip() + "…"
-    return out
+    return out[: limit - 1].rstrip() + "…" if limit is not None and len(out) > limit else out
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
-    """Read a field from a card whether it arrives as the JSON mapping or as a record."""
-    if isinstance(obj, Mapping):
-        return obj.get(key, default)
-    return getattr(obj, key, default)
+    """A field of a card whether it arrives as the JSON mapping or as a record."""
+    return obj.get(key, default) if isinstance(obj, Mapping) else getattr(obj, key, default)
 
 
-#: The one registered Activity kind for every notification (``activity.ACTIVITY_KINDS``); which kind of
-#: notification it was travels in ``params.kind``. Per-class names such as ``notification.gate`` are not
-#: registered, and the projector refuses an unknown kind — so those records used to be dropped.
-NOTIFICATION_ACTIVITY_KIND = "notification.sent"
+def _blocks(heading: str, context: str, *sections: str) -> list[dict]:
+    return [
+        {"type": "header", "text": {"type": "plain_text", "text": _text(heading, 150)}},
+        {"type": "context", "elements": [{"type": "mrkdwn", "text": _text(context, 300)}]},
+        *({"type": "section", "text": {"type": "mrkdwn", "text": text}} for text in sections if text),
+    ]
 
 
 class NotificationAdapter:
     """Dashboard and Slack delivery for the events that need a human.
 
-    ``storage`` provides the dedupe ledger (a preference row, so it survives a restart the way the
-    notification history should), ``settings`` the enablement and per-repo mute, ``activity`` the record
-    that a notification was attempted — which is what makes "I never got told" answerable.
+    ``storage`` holds the dedupe ledger (a preference row, so it survives a restart), ``settings`` the
+    enablement and per-repo mute, ``activity`` the record that a notification was attempted — which is what
+    makes "I never got told" answerable.
     """
 
-    #: Preference key holding ``{dedupe_key: iso}``. A preference rather than a table because it is a
-    #: small, bounded, purely advisory cache: losing it costs one duplicate notification, and a schema
-    #: migration for that would be a worse trade.
+    #: ``{dedupe_key: iso}``. A preference rather than a table: losing it costs one duplicate notification.
     _DEDUPE_PREF = "notifications.sent"
     _DEDUPE_MAX = 500
 
@@ -136,302 +116,166 @@ class NotificationAdapter:
         self._activity = activity
         self._clock = clock
 
-    # ---- links ------------------------------------------------------------ #
-
     def deep_link(self, action_id: str) -> str:
-        """The one link every message carries: identifiers only, no authorisation.
-
-        A deep link cannot approve anything. It names an app route and an action id; the destination
-        gateway still authenticates the user and Studio still re-checks the evidence before a submit.
-        """
+        """Identifiers only: a link authorises nothing — the gateway authenticates and Studio re-checks."""
         return f"{C.DEEP_LINK_BASE}?view=actions&action={_text(action_id)}"
 
-    def intent_link(self, repo_id: str, intent_key: str) -> str:
+    def _intent_link(self, repo_id: str, intent_key: str) -> str:
         return f"{C.DEEP_LINK_BASE}?view=intents&repo={_text(repo_id)}&intent={_text(intent_key)}"
 
-    # ---- the public surface ---------------------------------------------- #
+    async def notify(self, kind: str, subject: Any = None, **fields: Any) -> NotificationResult:
+        """The one entry point, at most once per dedupe key:
 
-    async def notify_action(self, card: Any) -> NotificationResult:
-        """Tell the user about one actionable card, at most once per class.
-
-        Returns without sending when the card's type is not one of the notifiable classes: silence is
-        the correct answer for a revision in progress or a plain run command.
+        * ``"action"`` — ``subject`` is a card; silent unless its type is notifiable.
+        * ``"tool_approval"`` — keyword fields ``repo_id, repo_label, intent_key, intent_label, slot_key,
+          approval, turn``: a conversation parked on a host tool approval (dashboard only; answered in chat).
+        * ``"completion"`` — ``subject`` is an intent summary: the intent reached Completed.
         """
+        build = {"action": self._action, "tool_approval": self._tool_approval, "completion": self._completion}[kind]
+        message = build(subject, **fields)
+        if isinstance(message, str):  # a card type that is not worth interrupting anyone for
+            return NotificationResult(False, "ineligible", None, message, False)
+        if message.dedupe_key in await asyncio.to_thread(self._read_ledger):
+            return NotificationResult(False, "ineligible", None, message.link, True)
+        dashboard = self._dashboard(message)
+        slack, ts = await self._slack(message)
+        await asyncio.to_thread(self._mark_seen, message.dedupe_key)
+        await self._record(message, dashboard=dashboard, slack=slack)
+        return NotificationResult(dashboard, slack, ts, message.link, False)
+
+    # ---- the three kinds ----
+
+    def _action(self, card: Any) -> _Message | str:
         action_id = _text(_get(card, "action_id"))
-        status = _text(_get(card, "status"))
-        card_type = _text(_get(card, "queue_type") or _get(card, "type"))
-        kind = _TYPE_TO_KIND.get(card_type)
         link = self.deep_link(action_id)
+        card_type = _text(_get(card, "queue_type") or _get(card, "type"))
+        if card_type not in _CARD_TITLES:
+            return link
+        repo, intent, stage = (_get(card, name) or {} for name in ("repo", "intent", "stage"))
+        repo_id = _text(_get(repo, "repo_id") or _get(card, "repo_id"))
+        slug = _text(_get(intent, "slug") or _get(intent, "intent_dir"))
+        repo_label = _text(_get(repo, "label"))
+        stage_slug = _text(_get(stage, "slug"))
+        headline = self._headline(card)
 
-        if kind is None:
-            return NotificationResult(False, _SLACK_INELIGIBLE, None, link, False)
+        title = f"{_CARD_TITLES[card_type]}: {_text(slug, 60)}" if slug else _CARD_TITLES[card_type]
+        body = " · ".join(p for p in (_text(repo_label, 60), _text(stage_slug, 60)) if p)
+        body = f"{body} — {headline}" if body and headline else body or headline
 
-        status_class = "uncertain" if status in _UNCERTAIN_STATUSES else "open"
-        dedupe_key = f"{action_id}:{status_class}"
-        if await self._seen(dedupe_key):
-            return NotificationResult(False, _SLACK_INELIGIBLE, None, link, True)
+        heading = f"{_CARD_TITLES[card_type]}: {_text(slug, 80)}"
+        context = _text(repo_label, 80) or _text(_get(card, "repo_id"), 80)
+        if stage_slug:
+            context += f" · {_text(stage_slug, 60)}"
+        waiting = _text(_get(card, "waiting_since"))
+        if waiting:
+            context += f" · waiting since {waiting}"
+        blocks = _blocks(heading, context, _text(headline, _SECTION_LIMIT), f"Decide in Studio: {link}")
 
-        title, body = self._render(card, kind)
-        dashboard = self._notify_dashboard(title, body, link, action_id=action_id, kind=kind)
-        slack_state, slack_ts = await self._notify_slack(card, kind=kind, title=title)
-        await self._mark_seen(dedupe_key)
-        await self._record(
-            kind=NOTIFICATION_ACTIVITY_KIND,
-            severity=_text(_get(card, "severity")) or "info",
-            card=card,
-            params={"kind": kind, "dashboard": dashboard, "slack": slack_state, "deep_link": link},
+        status_class = "uncertain" if _text(_get(card, "status")) in _UNCERTAIN_STATUSES else "open"
+        return _Message(
+            kind=card_type, dedupe_key=f"{action_id}:{status_class}", link=link,
+            title=_text(title, 150), body=_text(body, _BODY_LIMIT),
+            severity=_text(_get(card, "severity")) or "info", action_id=action_id, repo_id=repo_id,
+            slack=(blocks, _text(heading, 150)),
+            scope={
+                "repo_id": _text(_get(repo, "repo_id")) or None,
+                "space": _text(_get(card, "space")) or None,
+                "intent_dir": _text(_get(intent, "intent_dir")) or None,
+                "stage": stage_slug or None,
+                "action_id": action_id or None,
+            },
+            trailer={"deep_link": link},
         )
-        return NotificationResult(dashboard, slack_state, slack_ts, link, False)
 
-    async def notify_completion(self, summary: Any) -> NotificationResult:
-        """Tell the user an intent finished. One message, no evidence, no action."""
-        repo_id = _text(_get(summary, "repo_id"))
-        intent_key = _text(_get(summary, "intent_key") or _get(summary, "intent_dir"))
-        link = self.intent_link(repo_id, intent_key)
-        dedupe_key = f"completion:{repo_id}:{intent_key}"
-        if await self._seen(dedupe_key):
-            return NotificationResult(False, _SLACK_INELIGIBLE, None, link, True)
-
-        label = _text(_get(summary, "repo_label") or repo_id)
-        slug = _text(_get(summary, "slug") or intent_key)
-        title = f"AI-DLC finished: {slug}"
-        body = _text(f"{label} · {slug} reached Completed. Nothing is waiting for you.", _BODY_LIMIT)
-        dashboard = self._notify_dashboard(title, body, link, action_id="", kind="completion")
-        slack_state, slack_ts = (_SLACK_DISABLED, None)
-        if self._slack_enabled(repo_id):
-            blocks = self._completion_blocks(label, slug, link)
-            slack_ts = await self._host.slack_dm(blocks, title)
-            slack_state = _SLACK_SENT if slack_ts else _SLACK_UNAVAILABLE
-        await self._mark_seen(dedupe_key)
-        await self._record(
-            kind=NOTIFICATION_ACTIVITY_KIND,
-            severity="info",
-            card=None,
-            params={"kind": "completion", "repo_id": repo_id, "intent_key": intent_key,
-                    "dashboard": dashboard, "slack": slack_state},
-        )
-        return NotificationResult(dashboard, slack_state, slack_ts, link, False)
-
-    async def notify_tool_approval(
-        self, *, repo_id: str, repo_label: str, intent_key: str, intent_label: str,
+    def _tool_approval(
+        self, _subject: Any = None, *, repo_id: str, repo_label: str, intent_key: str, intent_label: str,
         slot_key: str, approval: Mapping[str, str], turn: str = "",
-    ) -> NotificationResult:
-        """Tell the user an intent's conversation is parked on a host tool approval, once per approval.
-
-        The link opens the intent in Studio, whose row says what is being asked and opens the
-        conversation, where the host's own approve/trust/reject controls are: Studio makes the wait
-        visible and does not answer it (architecture A31). Studio links only to its own page
-        (``HostBridge.notify``), so the conversation is one click further.
-        """
-        link = self.intent_link(repo_id, intent_key)
-        # The approval's own id when the host gives one. Otherwise what it asks plus the turn it was
-        # asked in (``turn``, the slot's last turn): an empty description alone would be one key per
-        # slot forever, and every later approval there would be swallowed as a duplicate.
+    ) -> _Message:
+        """The link opens the intent, whose row says what is asked and opens the conversation with the
+        host's own approve/reject controls: Studio makes the wait visible and never answers it (A31)."""
+        # The approval's own id when the host gives one; otherwise what it asks plus the turn it was asked
+        # in — an empty description alone would be one key per slot forever, swallowing every later approval.
         identity = _text(approval.get("request_id")) or S.sha256_text(
             f"{_text(approval.get('tool'))}\0{_text(approval.get('tool_input'))}\0{_text(turn)}"
         )
-        dedupe_key = f"approval:{_text(slot_key)}:{identity}"
-        if await self._seen(dedupe_key):
-            return NotificationResult(False, _SLACK_INELIGIBLE, None, link, True)
         label = _text(intent_label or intent_key, 60)
-        title = _text(f"AI-DLC is waiting for your approval: {label}", 150)
-        what = _text(approval.get("tool")) or "a tool call"
+        body = f"{_text(repo_label or repo_id, 60)} · {label} — {_text(approval.get('tool')) or 'a tool call'}"
         command = _text(approval.get("tool_input"))
-        body = f"{_text(repo_label or repo_id, 60)} · {label} — {what}"
-        if command:
-            body = f"{body}: {command}"
-        dashboard = self._notify_dashboard(title, _text(body, _BODY_LIMIT), link, action_id="", kind="approval")
-        await self._mark_seen(dedupe_key)
-        await self._record(
-            kind=NOTIFICATION_ACTIVITY_KIND,
-            severity="attention",
-            card=None,
-            params={"kind": "approval", "repo_id": repo_id, "intent_key": intent_key,
-                    "slot_key": slot_key, "dashboard": dashboard},
+        return _Message(
+            kind="approval", dedupe_key=f"approval:{_text(slot_key)}:{identity}",
+            link=self._intent_link(repo_id, intent_key),
+            title=_text(f"AI-DLC is waiting for your approval: {label}", 150),
+            body=_text(f"{body}: {command}" if command else body, _BODY_LIMIT), severity="attention",
+            params={"repo_id": repo_id, "intent_key": intent_key, "slot_key": slot_key},
         )
-        return NotificationResult(dashboard, _SLACK_DISABLED, None, link, False)
 
-    async def notify_digest(self, ledger: Mapping[str, Any]) -> NotificationResult:
-        """The morning digest. In v1 it reports honestly that no unattended work ran.
-
-        There is no machine lane, so there is nothing to summarise beyond what is waiting. Saying that
-        plainly is better than an empty digest that looks like a bug, and better than omitting the
-        feature and leaving the PRD's field list unanswerable.
-        """
-        waiting = int(ledger.get("waiting", 0) or 0)
-        link = f"{C.DEEP_LINK_BASE}?view=actions"
-        title = "AI-DLC Studio overnight digest"
-        body = _text(
-            f"No unattended work ran: automation is unavailable until a machine lane is proven "
-            f"({C.MACHINE_LANE_REASON}). {waiting} item(s) are waiting for you.",
-            _BODY_LIMIT,
+    def _completion(self, summary: Any) -> _Message:
+        repo_id = _text(_get(summary, "repo_id"))
+        intent_key = _text(_get(summary, "intent_key") or _get(summary, "intent_dir"))
+        link = self._intent_link(repo_id, intent_key)
+        label = _text(_get(summary, "repo_label") or repo_id)
+        slug = _text(_get(summary, "slug") or intent_key)
+        title = f"AI-DLC finished: {slug}"
+        return _Message(
+            kind="completion", dedupe_key=f"completion:{repo_id}:{intent_key}", link=link, title=title,
+            body=_text(f"{label} · {slug} reached Completed. Nothing is waiting for you.", _BODY_LIMIT),
+            repo_id=repo_id, slack=(_blocks(f"Completed: {slug}", label, f"Open in Studio: {link}"), title),
+            params={"repo_id": repo_id, "intent_key": intent_key},
         )
-        dashboard = self._notify_dashboard(title, body, link, action_id="", kind="completion")
-        await self._record(kind=NOTIFICATION_ACTIVITY_KIND, severity="info", card=None,
-                           params={"kind": "digest", **dict(ledger)})
-        return NotificationResult(dashboard, _SLACK_DISABLED, None, link, False)
 
-    # ---- Slack -------------------------------------------------------------- #
-
-    def slack_quick_action_eligible(self, card: Any) -> tuple[bool, str]:
-        """Always ``(False, "host_seam_unavailable")`` in v1 — see the module docstring.
-
-        The refusal is unconditional and does not depend on the card, because the missing piece is a host
-        capability, not a property of any particular decision. ``QUICK_ACTION_REQUIREMENTS`` records what
-        a future implementation must also satisfy so the bar is already written down.
-        """
-        return False, REASON_HOST_SEAM
-
-    def build_slack_blocks(self, card: Any) -> tuple[list[dict], str]:
-        """Blocks for one card: what and where, then the link. Never an options trailer.
-
-        The absence of a trailing ``[OPTIONS: …]`` is load-bearing, not cosmetic: the host turns such a
-        trailer into buttons whose clicks it re-dispatches as user turns, which would let a Slack tap
-        reach the AI-DLC conductor without a single one of Studio's guards.
-        """
-        action_id = _text(_get(card, "action_id"))
-        card_type = _text(_get(card, "queue_type") or _get(card, "type"))
-        repo = _get(card, "repo") or {}
-        intent = _get(card, "intent") or {}
-        stage = _get(card, "stage") or {}
-        link = self.deep_link(action_id)
-
-        repo_label = _text(_get(repo, "label"), 80) or _text(_get(card, "repo_id"), 80)
-        slug = _text(_get(intent, "slug") or _get(intent, "intent_dir"), 80)
-        stage_slug = _text(_get(stage, "slug"), 60)
-        waiting = _text(_get(card, "waiting_since"))
-        headline = self._headline_text(card)
-
-        heading = f"{_KIND_TITLES.get(_TYPE_TO_KIND.get(card_type, ''), 'AI-DLC Studio')}: {slug}"
-        context = f"{repo_label}"
-        if stage_slug:
-            context += f" · {stage_slug}"
-        if waiting:
-            context += f" · waiting since {waiting}"
-
-        blocks: list[dict] = [
-            {"type": "header", "text": {"type": "plain_text", "text": _text(heading, 150)}},
-            {"type": "context", "elements": [{"type": "mrkdwn", "text": _text(context, 300)}]},
-        ]
-        if headline:
-            blocks.append(
-                {"type": "section", "text": {"type": "mrkdwn", "text": _text(headline, _SLACK_SECTION_LIMIT)}}
-            )
-        blocks.append(
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": f"Decide in Studio: {link}"},
-            }
-        )
-        return blocks, _text(heading, 150)
-
-    def _completion_blocks(self, repo_label: str, slug: str, link: str) -> list[dict]:
-        return [
-            {"type": "header", "text": {"type": "plain_text", "text": _text(f"Completed: {slug}", 150)}},
-            {"type": "context", "elements": [{"type": "mrkdwn", "text": _text(repo_label, 300)}]},
-            {"type": "section", "text": {"type": "mrkdwn", "text": f"Open in Studio: {link}"}},
-        ]
-
-    async def _notify_slack(self, card: Any, *, kind: str, title: str) -> tuple[str, str | None]:
-        repo_id = _text(_get(_get(card, "repo") or {}, "repo_id") or _get(card, "repo_id"))
-        if not self._slack_enabled(repo_id):
-            return (_SLACK_MUTED if self._muted(repo_id) else _SLACK_DISABLED), None
-        blocks, text = self.build_slack_blocks(card)
-        ts = await self._host.slack_dm(blocks, text)
-        return (_SLACK_SENT if ts else _SLACK_UNAVAILABLE), ts
-
-    def _slack_enabled(self, repo_id: str) -> bool:
-        try:
-            slack = self._settings.slack()
-        except Exception:  # settings not loaded yet: treat as off rather than guessing
-            return False
-        return bool(slack.get("enabled")) and not self._muted(repo_id)
-
-    def _muted(self, repo_id: str) -> bool:
-        try:
-            muted: Sequence[str] = self._settings.slack().get("muted_repo_ids") or ()
-        except Exception:
-            return False
-        return bool(repo_id) and repo_id in set(muted)
-
-    # ---- dashboard --------------------------------------------------------- #
-
-    def _notify_dashboard(self, title: str, body: str, link: str, *, action_id: str, kind: str) -> bool:
-        meta = {"app": C.APP_NAME, "kind": kind}
-        if action_id:
-            meta["action_id"] = action_id
-        return bool(self._host.notify(title, body, url=link, meta=meta))
-
-    # ---- rendering --------------------------------------------------------- #
-
-    def _render(self, card: Any, kind: str) -> tuple[str, str]:
-        """Title and body for the dashboard toast.
-
-        English only, and deliberately so: the host's notification bus has no locale, so a translated
-        title would be wrong for anyone whose dashboard language differs from the one that happened to be
-        active when the notification fired. The UI renders the localized version of the same card.
-        """
-        intent = _get(card, "intent") or {}
-        repo = _get(card, "repo") or {}
-        stage = _get(card, "stage") or {}
-        slug = _text(_get(intent, "slug") or _get(intent, "intent_dir"), 60)
-        repo_label = _text(_get(repo, "label"), 60)
-        stage_slug = _text(_get(stage, "slug"), 60)
-
-        title = f"{_KIND_TITLES.get(kind, 'AI-DLC Studio')}: {slug}" if slug else _KIND_TITLES.get(kind, "AI-DLC Studio")
-        pieces = [p for p in (repo_label, stage_slug) if p]
-        headline = self._headline_text(card)
-        body = " · ".join(pieces)
-        if headline:
-            body = f"{body} — {headline}" if body else headline
-        return _text(title, 150), _text(body, _BODY_LIMIT)
-
-    def _headline_text(self, card: Any) -> str:
-        """A short, safe sentence about the card.
-
-        Prefers the type's own summary over anything the model wrote. Where a value does come from disk
-        (a normalized error message, a stage name) it is redacted and trimmed, because this string
-        reaches a Slack workspace and a notification history file.
-        """
+    def _headline(self, card: Any) -> str:
+        """A short, safe sentence: the type's own summary over anything the model wrote, redacted and trimmed
+        wherever it came from disk."""
         failure = _get(card, "failure") or {}
         if isinstance(failure, Mapping) and failure.get("summary"):
-            return S.redact(_text(failure.get("summary"), _STUDIO_EXCERPT_LIMIT))
-        headline = _get(card, "headline") or {}
-        params = _get(headline, "params") or {}
+            return S.redact(_text(failure.get("summary"), _EXCERPT_LIMIT))
+        params = _get(_get(card, "headline") or {}, "params") or {}
         for key in ("summary", "reason", "stage", "detail"):
             value = params.get(key) if isinstance(params, Mapping) else None
             if value:
-                return S.redact(_text(value, _STUDIO_EXCERPT_LIMIT))
-        primary = _get(card, "primary") or {}
-        decision = _text(_get(primary, "decision"))
+                return S.redact(_text(value, _EXCERPT_LIMIT))
+        decision = _text(_get(_get(card, "primary") or {}, "decision"))
         return f"Waiting for your decision ({decision})." if decision else "Waiting for you."
 
-    # ---- dedupe ledger ----------------------------------------------------- #
+    # ---- channels ----
 
-    async def _seen(self, dedupe_key: str) -> bool:
-        import asyncio
+    def _dashboard(self, message: _Message) -> bool:
+        if not self._setting("notifications", "dashboard", True):
+            return False
+        meta = {"app": C.APP_NAME, "kind": message.kind}
+        if message.action_id:
+            meta["action_id"] = message.action_id
+        return bool(self._host.notify(message.title, message.body, url=message.link, meta=meta))
 
-        ledger = await asyncio.to_thread(self._read_ledger)
-        return dedupe_key in ledger
+    async def _slack(self, message: _Message) -> tuple[str, str | None]:
+        if message.slack is None:
+            return "disabled", None
+        muted = bool(message.repo_id) and message.repo_id in set(self._setting("slack", "muted_repo_ids", ()) or ())
+        if muted or not self._setting("slack", "enabled", False):
+            return ("muted" if muted else "disabled"), None
+        ts = await self._host.slack_dm(*message.slack)
+        return ("sent" if ts else "unavailable"), ts
 
-    async def _mark_seen(self, dedupe_key: str) -> None:
-        import asyncio
+    def _setting(self, section: str, key: str, default: Any) -> Any:
+        try:
+            return getattr(self._settings, section)().get(key, default)
+        except Exception:  # settings not loaded, or a stand-in without the section: assume the default
+            return default
 
-        await asyncio.to_thread(self._write_seen, dedupe_key)
+    # ---- dedupe ledger ----
 
     def _read_ledger(self) -> dict[str, str]:
         try:
             value = self._storage.pref_get(self._DEDUPE_PREF)
-        except Exception:  # a notification must not fail because its cache is unreadable
+        except Exception:  # an unreadable cache must not fail a notification; it costs a duplicate at most
             return {}
         return dict(value) if isinstance(value, Mapping) else {}
 
-    def _write_seen(self, dedupe_key: str) -> None:
+    def _mark_seen(self, dedupe_key: str) -> None:
         ledger = self._read_ledger()
         ledger[dedupe_key] = self._clock.iso()
         if len(ledger) > self._DEDUPE_MAX:
-            # Oldest first by timestamp; the ledger is advisory, so trimming it can only ever cost a
-            # duplicate notification for an action nobody has touched in a very long time.
+            # Oldest first: trimming can only cost a duplicate for an action nobody touched in a long time.
             for key, _ in sorted(ledger.items(), key=lambda kv: kv[1])[: len(ledger) - self._DEDUPE_MAX]:
                 ledger.pop(key, None)
         try:
@@ -439,52 +283,18 @@ class NotificationAdapter:
         except Exception:
             logger.debug("could not persist the notification dedupe ledger", exc_info=True)
 
-    def forget(self, action_id: str) -> None:
-        """Drop an action's dedupe entries so a genuinely new occurrence notifies again."""
-        ledger = self._read_ledger()
-        changed = False
-        for status_class in ("open", "uncertain"):
-            if ledger.pop(f"{action_id}:{status_class}", None) is not None:
-                changed = True
-        if changed:
-            try:
-                self._storage.pref_set(self._DEDUPE_PREF, ledger)
-            except Exception:
-                logger.debug("could not update the notification dedupe ledger", exc_info=True)
-
-    # ---- activity ---------------------------------------------------------- #
-
-    async def _record(self, *, kind: str, severity: str, card: Any, params: Mapping[str, Any]) -> None:
-        if self._activity is None:
-            return
-        repo = _get(card, "repo") or {} if card is not None else {}
-        intent = _get(card, "intent") or {} if card is not None else {}
-        stage = _get(card, "stage") or {} if card is not None else {}
+    async def _record(self, message: _Message, *, dashboard: bool, slack: str) -> None:
+        params = {"kind": message.kind, **message.params, "dashboard": dashboard}
+        if message.slack is not None:
+            params["slack"] = slack
+        params.update(message.trailer)
         try:
             await self._activity.record(
-                kind=kind,
-                severity=severity if severity in C.SEVERITY else "info",
+                kind=NOTIFICATION_ACTIVITY_KIND,
+                severity=message.severity if message.severity in C.SEVERITY else "info",
                 source="studio",
-                repo_id=_text(_get(repo, "repo_id")) or None,
-                space=_text(_get(card, "space")) or None if card is not None else None,
-                intent_dir=_text(_get(intent, "intent_dir")) or None,
-                stage=_text(_get(stage, "slug")) or None,
-                action_id=_text(_get(card, "action_id")) or None if card is not None else None,
-                params=dict(params),
+                params=params,
+                **{key: message.scope.get(key) for key in ("repo_id", "space", "intent_dir", "stage", "action_id")},
             )
         except Exception:  # an unrecorded notification is a lesser failure than a failed operation
             logger.debug("could not record a notification in activity", exc_info=True)
-
-
-#: English titles for the dashboard toast and the Slack header. The UI translates its own copy; these
-#: two surfaces have no locale to translate into.
-_KIND_TITLES = {
-    "gate": "Approval needed",
-    "question": "Question waiting",
-    "failure": "AI-DLC run failed",
-    "circuit_breaker": "Stopped after repeated failures",
-    "delivery_uncertain": "Delivery uncertain",
-    "recovery": "Recovery needed",
-    "install_conflict": "Install conflict",
-    "completion": "AI-DLC finished",
-}

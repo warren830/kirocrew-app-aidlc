@@ -44,11 +44,15 @@ class FakeHostBridge:
 
 
 class FakeSettings:
-    def __init__(self, *, enabled: bool = True, muted: tuple[str, ...] = ()) -> None:
+    def __init__(self, *, enabled: bool = True, muted: tuple[str, ...] = (), dashboard: bool = True) -> None:
         self._slack = {"enabled": enabled, "muted_repo_ids": list(muted)}
+        self._notifications = {"dashboard": dashboard}
 
     def slack(self) -> dict[str, Any]:
         return dict(self._slack)
+
+    def notifications(self) -> dict[str, Any]:
+        return dict(self._notifications)
 
 
 class FakeActivity:
@@ -129,22 +133,20 @@ class RegisteredOnlyActivity(FakeActivity):
         return await super().record(**kwargs)
 
 
-@pytest.mark.parametrize("notification", ["gate", "completion", "digest", "approval"])
+@pytest.mark.parametrize("notification", ["gate", "completion", "approval"])
 def test_every_notification_records_a_registered_activity_kind(studio, clock, notification):
     """The fake above used to accept any kind, which hid that the real projector dropped them all."""
     activity = RegisteredOnlyActivity(frozenset(studio.activity.ACTIVITY_KINDS))
     adapter = _adapter(studio, clock, activity=activity)
     if notification == "gate":
-        asyncio.run(adapter.notify_action(_card()))
+        asyncio.run(adapter.notify("action", _card()))
     elif notification == "completion":
-        asyncio.run(adapter.notify_completion(SimpleNamespace(
+        asyncio.run(adapter.notify("completion", SimpleNamespace(
             repo_id="r_1", repo_label="ledger", intent_key="260904-x", intent_dir="260904-x", slug="x",
         )))
-    elif notification == "digest":
-        asyncio.run(adapter.notify_digest({"waiting": 1}))
     else:
-        asyncio.run(adapter.notify_tool_approval(
-            repo_id="r_1", repo_label="ledger", intent_key="260904-x", intent_label="x",
+        asyncio.run(adapter.notify(
+            "tool_approval", repo_id="r_1", repo_label="ledger", intent_key="260904-x", intent_label="x",
             slot_key="slot-1", approval={"tool": "Read", "tool_input": "cat a", "request_id": "q1"},
         ))
     assert [(row["kind"], row["params"]["kind"]) for row in activity.rows] == [
@@ -158,7 +160,7 @@ def test_a_notification_lands_in_the_real_activity_projector(studio, clock, tmp_
     try:
         projector = studio.activity.ActivityProjector(store, clock)
         adapter = _adapter(studio, clock, activity=projector)
-        asyncio.run(adapter.notify_action(_card()))
+        asyncio.run(adapter.notify("action", _card()))
         rows = store.select("activity")
         # Storage decodes the JSON columns on read.
         assert [(row["kind"], row["params_json"]["kind"]) for row in rows] == [
@@ -171,13 +173,13 @@ def test_a_notification_lands_in_the_real_activity_projector(studio, clock, tmp_
 def test_a_gate_notifies_both_channels_once(studio, clock):
     host, activity, prefs = FakeHostBridge(), FakeActivity(), MemoryPrefs()
     adapter = _adapter(studio, clock, host=host, activity=activity, storage=prefs)
-    first = asyncio.run(adapter.notify_action(_card()))
+    first = asyncio.run(adapter.notify("action", _card()))
     assert first.dashboard is True and first.slack == "sent" and first.dedupe_hit is False
     assert len(host.notified) == 1 and len(host.slack_calls) == 1
     assert activity.rows and activity.rows[0]["kind"] == "notification.sent"
     assert activity.rows[0]["params"]["kind"] == "gate"
 
-    second = asyncio.run(adapter.notify_action(_card()))
+    second = asyncio.run(adapter.notify("action", _card()))
     assert second.dedupe_hit is True
     assert len(host.notified) == 1, "a card that stays open must not notify on every tick"
     assert len(host.slack_calls) == 1
@@ -186,10 +188,10 @@ def test_a_gate_notifies_both_channels_once(studio, clock):
 def test_delivery_uncertainty_is_its_own_notification_class(studio, clock):
     host, prefs = FakeHostBridge(), MemoryPrefs()
     adapter = _adapter(studio, clock, host=host, storage=prefs)
-    asyncio.run(adapter.notify_action(_card()))
+    asyncio.run(adapter.notify("action", _card()))
     # The same action becoming uncertain is new information, so it notifies again — but only once.
-    asyncio.run(adapter.notify_action(_card(status="DeliveryUncertain", queue_type="delivery_uncertain")))
-    asyncio.run(adapter.notify_action(_card(status="DeliveryUncertain", queue_type="delivery_uncertain")))
+    asyncio.run(adapter.notify("action", _card(status="DeliveryUncertain", queue_type="delivery_uncertain")))
+    asyncio.run(adapter.notify("action", _card(status="DeliveryUncertain", queue_type="delivery_uncertain")))
     assert len(host.notified) == 2
 
 
@@ -197,7 +199,7 @@ def test_delivery_uncertainty_is_its_own_notification_class(studio, clock):
 def test_non_blocking_card_types_stay_silent(studio, clock, card_type):
     host = FakeHostBridge()
     adapter = _adapter(studio, clock, host=host)
-    result = asyncio.run(adapter.notify_action(_card(type=card_type, queue_type=card_type)))
+    result = asyncio.run(adapter.notify("action", _card(type=card_type, queue_type=card_type)))
     assert result.dashboard is False and result.slack == "ineligible"
     assert host.notified == [] and host.slack_calls == []
 
@@ -205,18 +207,18 @@ def test_non_blocking_card_types_stay_silent(studio, clock, card_type):
 def test_slack_respects_enablement_and_per_repo_mute(studio, clock):
     host = FakeHostBridge()
     off = _adapter(studio, clock, host=host, settings=FakeSettings(enabled=False))
-    assert asyncio.run(off.notify_action(_card())).slack == "disabled"
+    assert asyncio.run(off.notify("action", _card())).slack == "disabled"
     assert host.slack_calls == []
 
     muted = _adapter(studio, clock, host=host, settings=FakeSettings(enabled=True, muted=("r_000000000001",)))
-    assert asyncio.run(muted.notify_action(_card())).slack == "muted"
+    assert asyncio.run(muted.notify("action", _card())).slack == "muted"
     assert host.slack_calls == []
 
 
 def test_a_slack_outage_never_fails_the_notification(studio, clock):
     host = FakeHostBridge(slack_ts=None)
     adapter = _adapter(studio, clock, host=host)
-    result = asyncio.run(adapter.notify_action(_card()))
+    result = asyncio.run(adapter.notify("action", _card()))
     assert result.dashboard is True and result.slack == "unavailable"
 
 
@@ -225,33 +227,31 @@ def test_storage_failure_degrades_to_a_duplicate_not_an_error(studio, clock):
     prefs.fail = True
     adapter = _adapter(studio, clock, storage=prefs)
     # The dedupe ledger is advisory; losing it may cost a duplicate but must never raise.
-    assert asyncio.run(adapter.notify_action(_card())).dashboard is True
-    assert asyncio.run(adapter.notify_action(_card())).dedupe_hit is False
+    assert asyncio.run(adapter.notify("action", _card())).dashboard is True
+    assert asyncio.run(adapter.notify("action", _card())).dedupe_hit is False
 
 
-def test_quick_actions_are_refused_unconditionally(studio, clock):
-    mod = _mod(studio)
-    adapter = _adapter(studio, clock)
-    for status in ("Queued", "Delivering", "ReconciliationRequired"):
-        for kind in ("gate", "question", "failure"):
-            assert adapter.slack_quick_action_eligible(_card(type=kind, status=status)) == (
-                False,
-                mod.REASON_HOST_SEAM,
-            )
-    # The bar a future implementation must clear is written down rather than implied.
-    assert any("compare-and-submit" in r or "submit" in r for r in mod.QUICK_ACTION_REQUIREMENTS)
+def test_the_dashboard_switch_silences_the_toast_and_nothing_else(studio, clock):
+    host = FakeHostBridge()
+    adapter = _adapter(studio, clock, host=host, settings=FakeSettings(dashboard=False))
+    result = asyncio.run(adapter.notify("action", _card()))
+    assert result.dashboard is False and host.notified == []
+    assert result.slack == "sent" and len(host.slack_calls) == 1
 
 
 def test_slack_blocks_carry_a_link_and_never_an_options_trailer(studio, clock):
-    adapter = _adapter(studio, clock)
-    blocks, text = adapter.build_slack_blocks(_card())
+    host = FakeHostBridge()
+    adapter = _adapter(studio, clock, host=host)
+    asyncio.run(adapter.notify("action", _card()))
+    [(blocks, text)] = host.slack_calls
     encoded = json.dumps(blocks)
     # An [OPTIONS:] trailer would be turned into buttons whose clicks the host re-dispatches as user
     # turns on the AI-DLC session — a decision with none of Studio's guards behind it.
     assert "[OPTIONS" not in encoded and "action::" not in encoded
     assert "actions" in encoded and "a_0000000000000001" in encoded
-    assert any(b["type"] == "header" for b in blocks)
-    assert text and "\n" not in text
+    assert [b["type"] for b in blocks] == ["header", "context", "section", "section"]
+    assert blocks[1]["elements"][0]["text"] == "ledger-export · requirements-analysis · waiting since 2026-09-05T04:00:00Z"
+    assert text == "Approval needed: ledger-export" and "\n" not in text
 
 
 def test_no_evidence_no_paths_and_no_secrets_reach_a_message(studio, clock):
@@ -262,7 +262,7 @@ def test_no_evidence_no_paths_and_no_secrets_reach_a_message(studio, clock):
         evidence={"artifacts": [{"relpath": "inception/requirements-analysis/requirements.md"}]},
         human_text="Approve",
     )
-    asyncio.run(adapter.notify_action(card))
+    asyncio.run(adapter.notify("action", card))
     encoded = json.dumps(host.notified) + json.dumps(host.slack_calls)
     assert "abcdef1234567890" not in encoded, "a credential-looking string must be redacted"
     assert "/home/dev/ledger" not in encoded, "the repository path is not a notification's business"
@@ -278,7 +278,7 @@ def test_a_host_that_raises_is_absorbed(studio, clock):
     with pytest.raises(RuntimeError):
         host.notify("t", "b", url="/apps/aidlc-studio")
     host.raise_on_notify = False
-    assert asyncio.run(adapter.notify_action(_card())).dashboard is True
+    assert asyncio.run(adapter.notify("action", _card())).dashboard is True
 
 
 def test_completion_notifies_once_and_links_to_the_intent(studio, clock):
@@ -291,9 +291,9 @@ def test_completion_notifies_once_and_links_to_the_intent(studio, clock):
         intent_dir="260904-ledger-export",
         slug="ledger-export",
     )
-    first = asyncio.run(adapter.notify_completion(summary))
+    first = asyncio.run(adapter.notify("completion", summary))
     assert first.dashboard is True and "view=intents" in first.deep_link
-    assert asyncio.run(adapter.notify_completion(summary)).dedupe_hit is True
+    assert asyncio.run(adapter.notify("completion", summary)).dedupe_hit is True
     assert len(host.notified) == 1
 
 
@@ -304,15 +304,15 @@ def test_a_tool_approval_notifies_once_per_approval_and_links_to_the_conversatio
                 intent_label="servicenow-plugin", slot_key="aidlc-studio-r_1-261001-servicenow-plugin")
     approval = {"tool": "Locate the load-steering instructions", "tool_input": "grep -n steering SKILL.md",
                 "request_id": "req-1"}
-    first = asyncio.run(adapter.notify_tool_approval(**wait, approval=approval))
+    first = asyncio.run(adapter.notify("tool_approval", **wait, approval=approval))
     assert first.dashboard is True
     assert "view=intents" in first.deep_link and "intent=261001-servicenow-plugin" in first.deep_link
     sent = host.notified[0]
     assert sent["title"] == "AI-DLC is waiting for your approval: servicenow-plugin"
     assert "grep -n steering SKILL.md" in sent["body"] and sent["meta"]["kind"] == "approval"
-    assert asyncio.run(adapter.notify_tool_approval(**wait, approval=approval)).dedupe_hit is True
+    assert asyncio.run(adapter.notify("tool_approval", **wait, approval=approval)).dedupe_hit is True
     # The next approval in the same conversation is a new wait.
-    asyncio.run(adapter.notify_tool_approval(**wait, approval={**approval, "request_id": "req-2"}))
+    asyncio.run(adapter.notify("tool_approval", **wait, approval={**approval, "request_id": "req-2"}))
     assert len(host.notified) == 2
 
 
@@ -323,29 +323,9 @@ def test_an_undescribed_approval_notifies_again_in_a_later_turn(studio, clock):
     wait = dict(repo_id="r_1", repo_label="devlake", intent_key="261001-servicenow-plugin",
                 intent_label="servicenow-plugin", slot_key="slot-1",
                 approval={"tool": "", "tool_input": "", "request_id": ""})
-    asyncio.run(adapter.notify_tool_approval(**wait, turn="2026-10-03T10:00:00Z"))
-    assert asyncio.run(adapter.notify_tool_approval(**wait, turn="2026-10-03T10:00:00Z")).dedupe_hit is True
-    asyncio.run(adapter.notify_tool_approval(**wait, turn="2026-10-03T10:05:00Z"))
-    assert len(host.notified) == 2
-
-
-def test_the_digest_says_plainly_that_no_unattended_work_ran(studio, clock):
-    host = FakeHostBridge()
-    adapter = _adapter(studio, clock, host=host)
-    result = asyncio.run(adapter.notify_digest({"waiting": 3}))
-    assert result.dashboard is True
-    body = host.notified[0]["body"]
-    # PRD FR-NIGHT-008 asks for a digest; with no machine lane the honest digest says so rather than
-    # implying work happened.
-    assert "No unattended work ran" in body and "3 item(s)" in body
-
-
-def test_forget_lets_a_genuinely_new_occurrence_notify_again(studio, clock):
-    host, prefs = FakeHostBridge(), MemoryPrefs()
-    adapter = _adapter(studio, clock, host=host, storage=prefs)
-    asyncio.run(adapter.notify_action(_card()))
-    adapter.forget("a_0000000000000001")
-    assert asyncio.run(adapter.notify_action(_card())).dedupe_hit is False
+    asyncio.run(adapter.notify("tool_approval", **wait, turn="2026-10-03T10:00:00Z"))
+    assert asyncio.run(adapter.notify("tool_approval", **wait, turn="2026-10-03T10:00:00Z")).dedupe_hit is True
+    asyncio.run(adapter.notify("tool_approval", **wait, turn="2026-10-03T10:05:00Z"))
     assert len(host.notified) == 2
 
 
@@ -355,6 +335,6 @@ def test_the_dedupe_ledger_is_bounded(studio, clock):
     adapter = _adapter(studio, clock, storage=prefs)
     for index in range(mod.NotificationAdapter._DEDUPE_MAX + 25):
         clock.advance(1)
-        asyncio.run(adapter.notify_action(_card(action_id=f"a_{index:016d}")))
+        asyncio.run(adapter.notify("action", _card(action_id=f"a_{index:016d}")))
     stored = prefs.values[mod.NotificationAdapter._DEDUPE_PREF]
     assert len(stored) <= mod.NotificationAdapter._DEDUPE_MAX
