@@ -91,42 +91,24 @@ NEUTRALITY_EXCLUDED_PATHS: tuple[str, ...] = (
 TABLE = "advisor_drafts"
 
 #: Excerpt budgets (§1.18) in UTF-8 bytes, so a CJK artifact is measured the way the transport measures it.
-EXCERPT_BYTES = 24 * 1024
-EXCERPT_TOTAL_BYTES = 96 * 1024
-AUDIT_EXCERPT_ROWS = 40
-AUDIT_FIELD_CHARS = 200
-AUDIT_MAX_FIELDS = 12
-MAX_ARTIFACTS = 40
-MAX_FINDINGS = 24
-MAX_CRITERIA = 24
-MAX_QUESTIONS = 8
-MAX_OPTIONS = 12
+EXCERPT_BYTES, EXCERPT_TOTAL_BYTES = 24 * 1024, 96 * 1024
+AUDIT_EXCERPT_ROWS, AUDIT_FIELD_CHARS, AUDIT_MAX_FIELDS = 40, 200, 12
+MAX_ARTIFACTS, MAX_FINDINGS, MAX_CRITERIA, MAX_QUESTIONS, MAX_OPTIONS = 40, 24, 24, 8, 12
 #: Letters one suggested answer may carry: NOT ``MAX_OPTIONS`` — a plan phase row may offer up to 26, and
 #: clipping a 13-letter answer to 12 silently turned the 13th stage OFF.
 MAX_OPTION_LETTERS = 26
-PROMPT_CHARS = 800
-OPTION_CHARS = 300
-ANSWER_CHARS = 1200
-TITLE_CHARS = 300
-QUOTE_CHARS = 800
-SUMMARY_CHARS = 4000
-LIST_ITEM_CHARS = 1000
-MAX_LIST_ITEMS = 20
-MAX_SUGGESTED_ANSWERS = 20
-STDERR_CHARS = 4000
+PROMPT_CHARS, OPTION_CHARS, ANSWER_CHARS, TITLE_CHARS, QUOTE_CHARS = 800, 300, 1200, 300, 800
+SUMMARY_CHARS, LIST_ITEM_CHARS, STDERR_CHARS, MAX_LIST_ITEMS, MAX_SUGGESTED_ANSWERS = 4000, 1000, 4000, 20, 20
 #: Every shrink round removes content, so ``_fit`` terminates; the bound only stops a defect from spinning.
 _SHRINK_ROUNDS = 64
 #: ``_shrink_plan`` floors: a shorter README says nothing, a scope description is what the agent picks by, and
 #: the objective is what the draft is *about*.
-_README_FLOOR_CHARS = 200
-_DESCRIPTION_FLOOR_CHARS = 80
-_OBJECTIVE_FLOOR_CHARS = 1000
+_README_FLOOR_CHARS, _DESCRIPTION_FLOOR_CHARS, _OBJECTIVE_FLOOR_CHARS = 200, 80, 1000
 #: Q1 scopes that keep their ``scope_grid`` row at the end (plus the human's current scope).
 _GRID_ROWS_KEPT = 8
 #: A cap ``_clip`` never reaches: redact first, cut second, so a credential straddling the cut is masked whole.
 _NO_CLIP = sys.maxsize
-_PATH_PLACEHOLDER = "<repo>"
-_HOME_PLACEHOLDER = "<home>"
+_PATH_PLACEHOLDER, _HOME_PLACEHOLDER = "<repo>", "<home>"
 #: Visible markers rather than "": "this file exists and was not read" is evidence, and the floor ``_shrink``
 #: stops at.
 _OMITTED = "… excerpt omitted (package cap)"
@@ -449,67 +431,49 @@ def draft_result_contract(*, kind: str, question_indices: Sequence[int] = ()) ->
     return "\n".join(lines)
 
 
+def _expect(ok: Any, detail: str) -> None:
+    if not ok:
+        raise _BadResult(detail)
+
+
 def parse_draft_result(text: str, *, kind: str, question_indices: Sequence[int] = ()) -> DraftResult:
     """The one ``json`` fence in ``text`` as a ``DraftResult``, or ``_BadResult``. Strict on purpose: a missing
     ``needs_your_decision`` would silently become "nothing needs your decision"."""
     blocks = _JSON_FENCE_RE.findall(text or "")
-    if not blocks:
-        raise _BadResult("no_json_fence")
-    if len(blocks) > 1:
-        raise _BadResult("multiple_json_fences")
+    _expect(blocks, "no_json_fence")
+    _expect(len(blocks) == 1, "multiple_json_fences")
     try:
         payload = json.loads(blocks[0])
     except (ValueError, TypeError) as exc:
         raise _BadResult(f"invalid_json: {exc}") from None
-    if not isinstance(payload, dict):
-        raise _BadResult("not_an_object")
-    unknown = sorted(set(payload) - DRAFT_RESULT_KEYS)
-    if unknown:
-        raise _BadResult(f"unknown_keys: {','.join(unknown)}")
-    missing = sorted(DRAFT_RESULT_KEYS - set(payload))
-    if missing:
-        raise _BadResult(f"missing_keys: {','.join(missing)}")
-    verdict = payload["verdict"]
-    if verdict is not None and (not isinstance(verdict, str) or verdict not in ADVISOR_VERDICTS):
-        raise _BadResult("bad_verdict")
-    if kind == "gate_analysis" and verdict is None:
-        raise _BadResult("gate_analysis_without_verdict")
-    summary = payload["summary"]
-    if not isinstance(summary, str) or not summary.strip():
-        raise _BadResult("empty_summary")
-    confidence = payload["confidence"]
-    if confidence not in ADVISOR_CONFIDENCE:
-        raise _BadResult("bad_confidence")
+    _expect(isinstance(payload, dict), "not_an_object")
+    unknown, missing = sorted(set(payload) - DRAFT_RESULT_KEYS), sorted(DRAFT_RESULT_KEYS - set(payload))
+    _expect(not unknown, f"unknown_keys: {','.join(unknown)}")
+    _expect(not missing, f"missing_keys: {','.join(missing)}")
+    verdict, summary, confidence = payload["verdict"], payload["summary"], payload["confidence"]
+    _expect(verdict is None or (isinstance(verdict, str) and verdict in ADVISOR_VERDICTS), "bad_verdict")
+    _expect(kind != "gate_analysis" or verdict is not None, "gate_analysis_without_verdict")
+    _expect(isinstance(summary, str) and summary.strip(), "empty_summary")
+    _expect(confidence in ADVISOR_CONFIDENCE, "bad_confidence")
     lists: dict[str, tuple[str, ...]] = {}
     for name in ("evidence", "assumptions", "alternatives", "needs_your_decision"):
         value = payload[name]
-        if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
-            raise _BadResult(f"bad_string_list: {name}")
+        _expect(isinstance(value, list) and all(isinstance(x, str) for x in value), f"bad_string_list: {name}")
         lists[name] = tuple(_clip(security.redact(item), LIST_ITEM_CHARS) for item in value[:MAX_LIST_ITEMS])
     feedback = payload["drafted_feedback"]
-    if feedback is not None and not isinstance(feedback, str):
-        raise _BadResult("bad_drafted_feedback")
+    _expect(feedback is None or isinstance(feedback, str), "bad_drafted_feedback")
     raw_answers = payload["suggested_answers"]
-    if not isinstance(raw_answers, list):
-        raise _BadResult("bad_suggested_answers")
+    _expect(isinstance(raw_answers, list), "bad_suggested_answers")
     answers: list[dict[str, Any]] = []
     for row in raw_answers[:MAX_SUGGESTED_ANSWERS]:
-        if not isinstance(row, dict) or set(row) != _SUGGESTED_ANSWER_KEYS:
-            raise _BadResult("bad_suggested_answer_keys")
-        index = row["question_index"]
-        if not isinstance(index, int) or isinstance(index, bool):
-            raise _BadResult("bad_question_index")
-        answer = row["answer"]
-        if not isinstance(answer, str):
-            raise _BadResult("bad_answer")
-        letters = row["option_letters"]
-        if not isinstance(letters, list) or any(
-            not isinstance(letter, str) or not _LETTER_RE.match(letter) for letter in letters
-        ):
-            raise _BadResult("bad_option_letters")
+        _expect(isinstance(row, dict) and set(row) == _SUGGESTED_ANSWER_KEYS, "bad_suggested_answer_keys")
+        index, answer, letters = row["question_index"], row["answer"], row["option_letters"]
+        _expect(isinstance(index, int) and not isinstance(index, bool), "bad_question_index")
+        _expect(isinstance(answer, str), "bad_answer")
+        _expect(isinstance(letters, list) and all(isinstance(x, str) and _LETTER_RE.match(x) for x in letters),
+                "bad_option_letters")
         # An answer for a question the package never showed (or when it showed none) is a hallucination.
-        if index not in tuple(question_indices):
-            raise _BadResult(f"question_index_not_in_package: {index}")
+        _expect(index in tuple(question_indices), f"question_index_not_in_package: {index}")
         answers.append({
             "question_index": index,
             "answer": _clip(security.redact(answer), C.MAX_ANSWER_CHARS),
@@ -568,17 +532,12 @@ class AdvisorBroker:
                 details={"kind": req.kind, "type": getattr(rec, "type", None), "allowed": list(allowed)},
             )
         await self._assert_agent_unique(action_id=req.action_id)
-        repo = await asyncio.to_thread(self._repo_of, rec)
-        space = str(getattr(rec, "space", C.DEFAULT_SPACE))
-        intent_dir = str(getattr(rec, "intent_dir", ""))
-        snap = await self._offload(self._projection.snapshot, repo, space, intent_dir)
+        repo, space, intent_dir, snap = await self._locate(rec)
         package = await self._offload(self.build_package, req, rec, snap, repo)
         if req.question_index is not None and req.question_index not in package.question_indices():
             raise StudioError("invalid_decision", "no such question in this stage's questions file",
                               details={"question_index": req.question_index})
-        before = await self._offload(
-            self._probe, Path(repo.canonical_path), space, intent_dir, snap.stage_dir_rel, snap.stage
-        )
+        before = await self._offload(self._probe, repo, space, intent_dir, snap)
         row = self._new_row(req, package, neutrality=self._neutrality(before, None))
         await asyncio.to_thread(self._insert, row)
         return await self._launch(spawn, row, package, user=user, auto=req.auto, repo_id=repo.repo_id,
@@ -1106,10 +1065,17 @@ class AdvisorBroker:
 
     # ---- neutrality ------------------------------------------------------- #
 
-    def _probe(
-        self, root: Path, space: str, intent_dir: str, stage_dir_rel: str | None, stage: str | None
-    ) -> dict[str, Any]:
+    async def _locate(self, rec: Any) -> tuple[RepoRecord, str, str, Any]:
+        """A card's repository, space, intent directory and one fresh snapshot of that intent."""
+        repo = await asyncio.to_thread(self._repo_of, rec)
+        space = str(getattr(rec, "space", C.DEFAULT_SPACE))
+        intent_dir = str(getattr(rec, "intent_dir", ""))
+        return repo, space, intent_dir, await self._offload(self._projection.snapshot, repo, space, intent_dir)
+
+    def _probe(self, repo: RepoRecord, space: str, intent_dir: str, snap: Any) -> dict[str, Any]:
         """The six facts the advisor must not change. Sync; reading nothing else is what excludes the rest."""
+        root = Path(repo.canonical_path)
+        stage_dir_rel, stage = snap.stage_dir_rel, snap.stage
         record = _reader.AidlcReader.record_rel(space, intent_dir)
         state_path = security.resolve_inside(root, f"{record}/{_reader.STATE_FILENAME}")
         directive_path = _reader.record_file(root, record, _reader.DIRECTIVE_FILENAME)
@@ -1167,15 +1133,8 @@ class AdvisorBroker:
     async def _reprobe(self, draft: AdvisorDraft) -> tuple[dict[str, Any], dict[str, Any]]:
         """The ``after`` probe plus the stored ``before`` half, on the same coordinates."""
         before = {field: (draft.neutrality or {}).get(f"{field}_before") for field in NEUTRALITY_FIELDS}
-        rec = await self._actions.get(draft.action_id)
-        repo = await asyncio.to_thread(self._repo_of, rec)
-        space = str(getattr(rec, "space", C.DEFAULT_SPACE))
-        intent_dir = str(getattr(rec, "intent_dir", ""))
-        snap = await self._offload(self._projection.snapshot, repo, space, intent_dir)
-        after = await self._offload(
-            self._probe, Path(repo.canonical_path), space, intent_dir, snap.stage_dir_rel, snap.stage
-        )
-        return after, before
+        repo, space, intent_dir, snap = await self._locate(await self._actions.get(draft.action_id))
+        return await self._offload(self._probe, repo, space, intent_dir, snap), before
 
     # ---- package sections ------------------------------------------------- #
 
