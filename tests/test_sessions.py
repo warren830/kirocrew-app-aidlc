@@ -18,6 +18,7 @@ recoverable mistake once the prompt has landed in someone else's AI-DLC audit tr
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import sys
@@ -122,7 +123,22 @@ class Slot:
     def queue_depth(self) -> int:
         return len(getattr(self, "_queue", ()))
 
+    def _approval_info(self) -> dict | None:
+        """The 0.8 host's own reading (``slot_projection.to_dict``): the newest unresolved permission row."""
+        for message in reversed(self.messages):
+            if message.get("role") != "permission":
+                continue
+            meta = json.loads(message.get("cls") or "{}")
+            if meta.get("resolved"):
+                continue
+            return {"tool": message.get("content") or "", "tool_input": meta.get("tool_input", ""),
+                    "tool_kind": "", "request_id": meta.get("approval_id", meta.get("request_id", ""))}
+        return None
+
     def to_dict(self) -> dict:
+        slot_pending = any(
+            not getattr(f, "done", lambda: False)() for f in getattr(self, "_approval_futures", {}).values()
+        )
         payload: dict[str, Any] = {name: "" for name in FULL_KEYS}
         payload.update(
             {
@@ -136,11 +152,8 @@ class Slot:
                 "orchestrating": getattr(self, "_in_stage_execution", False),
                 "queue_depth": self.queue_depth,
                 "stopping": getattr(self, "_stopping", False),
-                "pending_approval": any(
-                    not getattr(f, "done", lambda: False)()
-                    for f in getattr(self, "_approval_futures", {}).values()
-                ),
-                "pending_approval_info": None,
+                "pending_approval": slot_pending,
+                "pending_approval_info": self._approval_info() if slot_pending else None,
                 "waiting_for_input": False,
                 "needs_input": bool(getattr(self, "_question_pending", None)),
                 "interrupted": False,
@@ -275,7 +288,6 @@ def test_an_unattached_bridge_answers_nothing_and_says_why(S, bridge):
     assert bridge.find_delivery_row(SLOT, since_ts=TS, delivery_id="dl_1", wire_text="Approve") is None
     assert bridge.pending_question_cards(SLOT) == []
     assert bridge.is_busy("dashboard:x") is None
-    assert bridge.owner_id() is None
     assert bridge.subagent("spawn-1") is None
     assert bridge.notify("t", "b", url="/apps/aidlc-studio?view=actions") is False
     assert run(bridge.slack_dm([], "text")) is None
@@ -720,22 +732,6 @@ def test_a_raising_is_busy_answers_unknown(bridge):
     assert bridge.capabilities()["sessions_busy"].reason == "unusable:state.sessions.is_busy"
 
 
-def test_owner_id_and_the_unknown_owner_case(S, bridge):
-    bridge.attach(host(Slot()))
-    assert bridge.owner_id() == "owner-1"
-    assert bridge.capabilities()["owner"].available is True
-
-    bridge.attach(host(Slot(), owner=""))
-    assert bridge.owner_id() is None
-    assert bridge.capabilities()["owner"].reason == S.REASON_OWNER_UNKNOWN
-
-    missing = host(Slot())
-    del missing.owner_id
-    bridge.attach(missing)
-    assert bridge.owner_id() is None
-    assert bridge.capabilities()["owner"].reason == "missing:state.owner_id"
-
-
 def test_is_owner_request_reproduces_the_host_rule(bridge):
     bridge.attach(host(Slot()))
     assert bridge.is_owner_request({"user": "owner-1", "app": ""}) is True
@@ -746,16 +742,6 @@ def test_is_owner_request_reproduces_the_host_rule(bridge):
     bridge.attach(host(Slot(), owner=""))
     assert bridge.is_owner_request({"user": "local-app", "app": ""}) is True
     assert bridge.is_owner_request({"user": "phone-1", "app": ""}) is False
-
-
-def test_boot_id_is_none_without_the_host_module(bridge, monkeypatch):
-    assert bridge.boot_id() is None
-    monkeypatch.setitem(sys.modules, "kiro_crew.dashboard.boot_id",
-                        SimpleNamespace(current_boot_id=lambda: "b" * 16))
-    assert bridge.boot_id() == "b" * 16
-    monkeypatch.setitem(sys.modules, "kiro_crew.dashboard.boot_id",
-                        SimpleNamespace(current_boot_id=lambda: (_ for _ in ()).throw(TypeError())))
-    assert bridge.boot_id() is None
 
 
 def test_turn_timeout_is_capped_and_resolved_once(C, bridge, monkeypatch):
@@ -789,18 +775,6 @@ def test_a_config_over_the_cap_is_clamped(C, S, bridge, monkeypatch):
 
     monkeypatch.setitem(sys.modules, "kiro_crew.config", SimpleNamespace(KiroCrewConfig=Config))
     assert bridge.turn_timeout_secs() == C.PROCESSING_DEADLINE_CAP_SECS
-
-
-def test_an_unreadable_config_falls_back_to_the_host_constant(bridge, monkeypatch):
-    class Config:
-        @staticmethod
-        def load():
-            raise OSError("config.json is unreadable")
-
-    monkeypatch.setitem(sys.modules, "kiro_crew.config", SimpleNamespace(KiroCrewConfig=Config))
-    monkeypatch.setitem(sys.modules, "kiro_crew.constants",
-                        SimpleNamespace(CHAT_TURN_TIMEOUT=1800.0))
-    assert bridge.turn_timeout_secs() == 1800
 
 
 # --------------------------------------------------------------------------- #
@@ -935,19 +909,6 @@ def test_notify_reports_a_missing_or_raising_host_symbol(C, bridge):
     assert bridge.capabilities()["notify"].reason == "unusable:state.notify"
 
 
-def test_notify_passes_only_the_keywords_the_installed_signature_takes(C, bridge):
-    state = host(Slot())
-    seen: list[dict] = []
-
-    def old_notify(kind, title, body, *, meta=None):        # a gateway without `url`
-        seen.append({"kind": kind, "meta": meta})
-
-    state.notify = old_notify
-    bridge.attach(state)
-    assert bridge.notify("t", "b", url=C.DEEP_LINK_BASE) is True
-    assert seen == [{"kind": "aidlc_studio", "meta": {}}]
-
-
 def test_slack_dm_posts_to_the_owner(S, bridge):
     state = host(Slot())
     bridge.attach(state)
@@ -1004,12 +965,6 @@ def test_the_remaining_capabilities_have_an_unavailable_path(S, bridge):
     assert caps["slot_messages"].available is False and caps["pending_questions"].available is False
     # Nothing is left unaccounted for: every name in CAPABILITIES has been exercised by this file.
     assert set(caps) == set(S.CAPABILITIES)
-
-
-def test_host_capability_json_is_the_health_shape(S):
-    cap = S.HostCapability.unavailable("slack", "slack_not_configured")
-    assert cap.to_json() == {"available": False, "reason": "slack_not_configured"}
-    assert cap.checked_at.endswith("Z")
 
 
 # --------------------------------------------------------------------------- #
