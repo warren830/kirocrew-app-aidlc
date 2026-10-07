@@ -13,7 +13,7 @@
  *    settings" on a page with a dozen controls tells the user nothing about which one refused.
  */
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 
 import { useI18n } from '../i18n'
 import { decodeError, useStudioApi, type DeepPartial } from '../lib/api'
@@ -45,8 +45,8 @@ export interface SettingsControl {
 /**
  * One preference: title, the sentence that says what it does and does not do, and the control.
  *
- * `describedBy` wires the description to the control, so a screen reader reads "Night work window,
- * unattended continuation is not available…" rather than a bare switch.
+ * `describedBy` wires the description to the control, so a screen reader reads "Global concurrency, how
+ * many repositories may run a turn at the same time…" rather than a bare input.
  */
 export function SettingRow({
   id,
@@ -89,8 +89,8 @@ export function SettingsSection({ title, children }: { title: string; children: 
  * "Unavailable — <reason>", from the capability the server reported.
  *
  * The reason is always shown. A control that is simply greyed out teaches the user that Studio is broken;
- * naming the reason (no proven machine lane, credits unobservable, host seam missing) is the difference
- * between a bug and a documented limit.
+ * naming the reason (host seam missing, host not attached) is the difference between a bug and a
+ * documented limit.
  */
 export function UnavailableChip({ capability }: { capability: Capability | undefined }) {
   const { t, has } = useI18n()
@@ -104,6 +104,64 @@ export function UnavailableChip({ capability }: { capability: Capability | undef
           ? t('settings.unavailableWhy', { reason: t('settings.reason.other', { raw }) })
           : t('settings.unavailable')}
     </Chip>
+  )
+}
+
+/**
+ * A number that commits on blur or Enter, never per keystroke: saving per keystroke would store "4" on the
+ * way to "40", and "4" is a valid value. A draft outside `lo`..`hi` snaps back instead of being sent.
+ */
+export function NumberField({
+  id,
+  label,
+  value,
+  lo,
+  hi,
+  disabled,
+  describedBy,
+  onCommit,
+}: {
+  id: string
+  label: string
+  value: number
+  lo: number
+  hi: number
+  disabled: boolean
+  describedBy: string
+  onCommit: (next: number) => void
+}) {
+  const [draft, setDraft] = useState(String(value))
+  useEffect(() => setDraft(String(value)), [value])
+
+  const commit = () => {
+    const parsed = Number(draft)
+    if (!Number.isInteger(parsed) || parsed < lo || parsed > hi) {
+      setDraft(String(value))
+      return
+    }
+    if (parsed !== value) onCommit(parsed)
+  }
+
+  return (
+    <label className="studio-sfield" htmlFor={id}>
+      <span className="studio-sr">{label}</span>
+      <input
+        id={id}
+        type="number"
+        className="studio-mono studio-num"
+        min={lo}
+        max={hi}
+        step={1}
+        value={draft}
+        disabled={disabled}
+        aria-describedby={describedBy}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') commit()
+        }}
+      />
+    </label>
   )
 }
 

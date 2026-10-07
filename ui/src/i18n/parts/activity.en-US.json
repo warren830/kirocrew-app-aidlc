@@ -172,7 +172,6 @@
   "activity.machine_lane.refused": "Unattended dispatch refused. Studio never forges human presence.",
   "activity.settings.updated": "Settings updated.",
   "activity.health.startup": "Studio started.",
-  "activity.calibration.cleared": "Estimate calibration history cleared.",
   "audit.unknown_event": "An audit event this version of Studio does not recognise. The raw block is in the Evidence drawer.",
   "audit.ARTIFACT_CREATED": "Artifact created by the stage agent.",
   "audit.ARTIFACT_UPDATED": "Artifact updated by the stage agent.",

@@ -2,10 +2,8 @@
 
 Two properties are worth more than the arithmetic:
 
-* **A band never claims evidence it does not have.** Nine samples in a cohort must still read
-  ``rule_band``/``low``; the tenth is what flips it to ``history_calibrated``/``medium``. The threshold
-  is tested from both sides because "we calibrated this from your history" is a claim a user will act
-  on.
+* **A band never claims evidence it does not have.** Every estimate is a ``rule_band``/``low`` with
+  ``samples == 0``: there is no calibration history behind any number.
 * **Credits are never invented.** ``credits`` is ``None`` and ``credits_status`` is ``unavailable`` in
   every path, including the empty plan — KiroCrew exposes no per-turn cost, so any number would be
   fiction with a currency symbol in front of it.
@@ -93,14 +91,6 @@ def stage(
         mode=mode,
         summary_confirmation=summary_confirmation,
     )
-
-
-def seed(store, clock, *, scope="poc", depth="Minimal", stage_class="code_generation", turns=10, secs=1800):
-    """One calibration row as the table stores it (nothing in production writes them yet)."""
-    store.insert("calibration", {
-        "at": clock.iso(), "scope": scope, "depth": depth, "stage_class": stage_class,
-        "est_json": {"turns": {"low": 8, "high": 16}}, "actual_json": {"turns": turns, "active_secs": secs},
-    })
 
 
 # --------------------------------------------------------------------------- #
@@ -297,95 +287,16 @@ def test_coverage_lost_names_the_artifacts_a_disabled_stage_would_have_written(P
     ]
 
 
-# --------------------------------------------------------------------------- #
-# calibration
-# --------------------------------------------------------------------------- #
-
-
-def test_nine_samples_are_not_history_ten_are(E, P, svc, store, clock):
-    stages = [stage(P, "code-generation", phase="construction", per_unit=True)]
-    for index in range(9):
-        seed(store, clock, turns=40 + index, secs=(40 + index) * 100)
-    nine = svc.estimate(stages, depth="Minimal", units=1, scope="poc")
-    assert nine.source == E.SOURCE_RULE_BAND
-    assert nine.confidence == E.CONFIDENCE_LOW
-    assert nine.samples == 9
-    assert (nine.turns.low, nine.turns.high) == (7, 14)  # still the rule band
-
-    seed(store, clock, turns=49, secs=4900)
-    ten = svc.estimate(stages, depth="Minimal", units=1, scope="poc")
-    assert ten.source == E.SOURCE_HISTORY
-    assert ten.confidence == E.CONFIDENCE_MEDIUM
-    assert ten.samples == 10
-    # p10/p90 of 40..49 by nearest rank → indexes 1 and 8.
-    assert (ten.turns.low, ten.turns.high) == (41, 48)
-    assert ten.turns.source == E.SOURCE_HISTORY
-    # A calibrated band is used verbatim: the depth multiplier is already part of the cohort key.
-    assert ten.turns.low > 7
-
-
-def test_calibrated_band_ignores_other_cohorts(E, P, svc, store, clock):
-    for _ in range(12):
-        seed(store, clock, scope="feature", depth="Standard", turns=99, secs=9900)
-    est = svc.estimate(
-        [stage(P, "code-generation", phase="construction", per_unit=True)],
-        depth="Minimal",
-        units=1,
-        scope="poc",
-    )
-    assert est.source == E.SOURCE_RULE_BAND
-    assert est.samples == 0
-
-
-def test_one_uncalibrated_class_keeps_the_whole_estimate_a_rule_band(E, P, svc, store, clock):
-    for index in range(10):
-        seed(store, clock, scope="feature", depth="Standard", turns=10 + index, secs=(10 + index) * 120)
-    stages = [
-        stage(P, "code-generation", phase="construction", per_unit=True),
-        stage(P, "build-and-test", phase="construction"),
-    ]
-    est = svc.estimate(stages, depth="Standard", units=1, scope="feature")
-    assert est.source == E.SOURCE_RULE_BAND
-    # the calibrated class still uses its measured band for its own row
-    dominant = {d.slug: d.turns for d in est.dominant}
-    assert dominant["code-generation"].source == E.SOURCE_HISTORY
-    assert dominant["build-and-test"].source == E.SOURCE_RULE_BAND
-
-
-def test_calibrated_seconds_per_turn_come_from_history(E, P, svc, store, clock):
-    for index in range(10):
-        seed(store, clock, scope="feature", depth="Standard", turns=10, secs=2000 + index)
-    est = svc.estimate(
-        [stage(P, "code-generation", phase="construction", per_unit=True)],
-        depth="Standard",
-        units=1,
-        scope="feature",
-    )
-    # 2000..2009 seconds over 10 turns → ~200 s per turn, not the 90/300 rule constants.
-    assert est.active_secs.low == est.turns.low * 200
-    assert est.active_secs.high == est.turns.high * 201
-
-
-def test_cohorts_count_samples_per_key(E, svc, store, clock):
-    seed(store, clock, turns=11, secs=1100)
-    seed(store, clock, turns=13, secs=1300, stage_class="build_and_test")
-    seed(store, clock, turns=15, secs=1500)
-    assert svc.cohorts() == [
-        {"scope": "poc", "depth": "Minimal", "stage_class": "build_and_test", "samples": 1},
-        {"scope": "poc", "depth": "Minimal", "stage_class": "code_generation", "samples": 2},
-    ]
-
-
-def test_clear_removes_every_sample(E, svc, store, clock):
-    for index in range(4):
-        seed(store, clock, turns=10 + index)
-    assert svc.clear() == 4
-    assert svc.cohorts() == []
-    assert svc.clear() == 0
+def test_every_estimate_is_a_rule_band_with_no_samples(E, P, svc):
+    est = svc.estimate([stage(P, "code-generation", phase="construction", per_unit=True)],
+                       depth="Minimal", units=1, scope="poc")
+    assert (est.source, est.confidence, est.samples) == (E.SOURCE_RULE_BAND, E.CONFIDENCE_LOW, 0)
+    assert (est.turns.low, est.turns.high) == (7, 14)
+    assert all(d.turns.source == E.SOURCE_RULE_BAND for d in est.dominant)
 
 
 def test_service_stores_no_repository_state(E):
-    """The estimator must be safe to export: it holds a store and a clock, nothing else."""
+    """The estimator must be safe to export: it reads stages, never a repository."""
     source = (APP_ROOT / "backend" / "studio" / "estimates.py").read_text("utf-8")
     for forbidden in ("canonical_path", "intent_dir", "repo_id", "Path("):
         assert forbidden not in source, forbidden

@@ -198,7 +198,7 @@ def test_use_before_open_and_after_close_is_a_storage_error(S, db_path, clock, i
     st.open()
     st.close()
     with pytest.raises(studio.errors.StudioError) as after:
-        st.event_bounds()
+        st.pref_all()
     assert after.value.code == "storage_unavailable"
     st.open()          # open() is idempotent and re-usable after a close
     assert st.integrity_check() == []
@@ -396,40 +396,6 @@ def test_a_second_live_card_for_one_boundary_is_refused(store):
 
 
 # --------------------------------------------------------------------------- #
-# events ring
-# --------------------------------------------------------------------------- #
-
-
-def test_the_event_ring_trims_and_replays_from_a_cursor(store, C, monkeypatch):
-    monkeypatch.setattr(C, "EVENTS_RING_SIZE", 5)
-    seqs = [store.event_append("action.updated", {"i": i}) for i in range(8)]
-    assert seqs == list(range(1, 9))
-
-    oldest, newest = store.event_bounds()
-    assert (oldest, newest) == (4, 8)                       # exactly five rows survive
-
-    replay = store.event_since(0)
-    assert [e.seq for e in replay] == [4, 5, 6, 7, 8]
-    assert replay[0].payload == {"i": 3} and replay[0].type == "action.updated"
-    assert replay[0].to_json()["seq"] == 4 and replay[0].at == store.get("events", "4")["at"]
-    assert [e.seq for e in store.event_since(6)] == [7, 8]
-    assert [e.seq for e in store.event_since(6, limit=1)] == [7]
-    assert store.event_since(8) == []
-
-    # A cursor older than the oldest kept seq has lost frames: the caller must publish `reset`
-    # with these bounds instead of pretending the replay is complete.
-    stale_cursor = 1
-    assert stale_cursor + 1 < oldest
-    assert [e.seq for e in store.event_since(stale_cursor)][0] == oldest
-    assert store.event_since(newest - 1)[0].seq == newest      # a fresh cursor needs no reset
-
-
-def test_event_bounds_on_an_empty_ring(store):
-    assert store.event_bounds() == (0, 0)
-    assert store.event_since(0) == []
-
-
-# --------------------------------------------------------------------------- #
 # activity
 # --------------------------------------------------------------------------- #
 
@@ -530,6 +496,14 @@ def test_activity_purge_clears_only_what_retention_allows(store, S, clock):
     assert store.get("actions", "a_old")["human_text"] is None
     assert store.get("actions", "a_new")["human_text"] == human
     assert store.activity_purge_human_text("2026-09-01T00:00:00Z") == 0     # idempotent
+
+
+def test_activity_delete_before_drops_only_rows_older_than_the_cutoff(store, S):
+    old_id = store.activity_append(activity_row(S, at="2026-08-01T00:00:00Z", kind="repo.added"))
+    edge_id = store.activity_append(activity_row(S, at="2026-09-01T00:00:00Z", kind="repo.added"))
+    assert store.activity_delete_before("2026-09-01T00:00:00Z") == 1
+    assert [r.id for r in store.activity_query(S.ActivityQuery(limit=10))[0]] == [edge_id]
+    assert old_id != edge_id and store.activity_delete_before("2026-09-01T00:00:00Z") == 0
 
 
 # --------------------------------------------------------------------------- #

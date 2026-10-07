@@ -72,12 +72,13 @@ def C(studio):
 
 
 class Notifications:
-    """``NotificationAdapter`` stand-in: records one entry per ``notify_action`` call."""
+    """``NotificationAdapter`` stand-in: records one entry per ``notify("action", card)`` call."""
 
     def __init__(self) -> None:
         self.sent: list[dict] = []
 
-    async def notify_action(self, card: dict) -> dict:
+    async def notify(self, kind: str, card: dict) -> dict:
+        assert kind == "action"
         self.sent.append(card)
         return {"dashboard": True, "slack": "disabled", "dedupe_hit": False}
 

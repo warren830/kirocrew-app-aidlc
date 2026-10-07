@@ -190,13 +190,12 @@ STABLE_READ_RETRY_SECS = 0.05
 HOST_STARTUP_HOOK_BUDGET_SECS = 10.0        # on_startup must return well under the host's 30 s
 
 # ring / retention
-EVENTS_RING_SIZE = 10_000
+EVENTS_RING_SIZE = 2_000                    # in-memory, per process (events.py)
 ACTIVITY_DEFAULT_LIMIT = 100
 ACTIVITY_MAX_LIMIT = 500
 HUMAN_TEXT_RETENTION_DAYS_DEFAULT = 30
 HUMAN_TEXT_RETENTION_DAYS_MAX = 30
 ADVISOR_DRAFT_TTL_SECS = 24 * 3600
-CALIBRATION_MIN_SAMPLES = 10
 
 # advisor (§1.18, §1.18a)
 ADVISOR_AUTO_DRAFT_MAX_INFLIGHT = 2         # automatic drafts in flight across the whole installation (A24)
@@ -330,38 +329,10 @@ class StudioError(Exception):
 class StaleGeneration(StudioError):  code="stale_generation", status=409
 class IllegalTransition(StudioError): code="illegal_transition", status=409
 class LeaseHeld(StudioError):        code="repo_busy", status=409   # details: {"kind","owner":LeaseView,"retry_after_secs"}
-class Unstable(StudioError):         code="unstable_read", status=409
 
-ERROR_CODES: dict[str, int] = {   # code -> HTTP status (the table is data; handlers never pick statuses)
-  # 400
-  "bad_body": 400, "bad_path": 400, "bad_param": 400, "invalid_decision": 400,
-  "feedback_required": 400, "answers_incomplete": 400, "unknown_stage": 400,
-  # 401 / 403
-  "unauthorized": 401, "owner_required": 403, "app_token_forbidden": 403, "sensitive_path": 403,
-  # 404
-  "repo_not_found": 404, "intent_not_found": 404, "action_not_found": 404, "artifact_not_found": 404,
-  "draft_not_found": 404, "transaction_not_found": 404, "receipt_not_found": 404, "route_not_found": 404,
-  # 409
-  "duplicate_identity": 409, "repo_unavailable": 409, "identity_unprovable": 409, "action_stale": 409,
-  "repo_busy": 409, "illegal_transition": 409, "stale_generation": 409, "state_inconsistent": 409,
-  "machine_lane_unavailable": 409, "install_conflict": 409, "install_recovery_required": 409,
-  "not_installed": 409, "already_installed": 409, "newer_installed": 409, "same_version_installed": 409,
-  "payload_degraded": 409, "migration_not_applicable": 409, "migration_already_applied": 409,
-  "session_unbound": 409, "slot_mismatch": 409, "slot_busy": 409, "unstable_read": 409,
-  "breaker_open": 409, "intent_paused": 409, "intent_archived": 409, "cancel_not_safe": 409,
-  "delivery_ack_invalid": 409, "not_delivered_unproven": 409, "cursor_mismatch": 409,
-  "plan_invalid": 409, "recompose_not_allowed": 409, "legacy_layout": 409, "rebind_not_allowed": 409,
-  "action_not_submittable": 409, "retry_not_allowed": 409,
-  "state_version_migration_unconfirmed": 409,   # upgrade/recovery refused: a State Version outside the payload's compatible set (A01; review P03)
-  "grouped_answers_unavailable": 409,           # multi-question grouped submit while capabilities.grouped_answers is off (review P18)
-  "lease_lost": 409,                             # execution lease vanished/regenerated between acquire and the Delivering CAS (review P15)
-  # 413 / 429
-  "too_large": 413, "too_many_repos": 429, "rate_limited": 429,
-  # 5xx
-  "storage_error": 500, "internal_error": 500,
-  "host_unavailable": 503, "bun_missing": 503, "git_missing": 503, "storage_unavailable": 503,
-  "advisor_unavailable": 503, "slack_unavailable": 503,
-}
+ERROR_CODES: dict[str, int]   # code -> HTTP status (the table is data; handlers never pick statuses)
+    # The authoritative list is backend/studio/errors.py: exactly the codes some module raises, plus route_not_found,
+    # which the UI also uses for a bare host 404. A code nothing raises is removed (the UI table is generated from it).
 ```
 
 `StudioError.__init__` looks the status up in `ERROR_CODES`; an unknown code raises `KeyError` at construction
@@ -385,14 +356,15 @@ def tail_read(path: Path, cap: int) -> bytes               # last `cap` bytes, t
 def sha256_bytes(b: bytes) -> str
 def is_sensitive(path: Path) -> bool                       # kiro_crew.security.is_sensitive_path(str(path)); import failure => True (fail closed)
 def redact(text: str) -> str                               # kiro_crew.security.redact_credentials(text)[0]; import failure => aggressive fallback regex
-def redact_json(obj: Any) -> Any                           # recursive redact on every str leaf
+def redact_json(obj: Any, roots: Sequence[str] | None = None) -> Any
+    # recursive redact on every str leaf; with roots, also scrub_repo_paths (the diagnostics/activity export walk)
 def scrub_repo_paths(text: str, allowed_roots: Sequence[str]) -> str
     # replaces any absolute path not under an allowed root with "<path>"; used by diagnostics export
 def build_subprocess_env() -> dict[str, str]
     # {k: os.environ[k] for k in ENV_KEEP if present} + {"NO_COLOR": "1"}; asserts every ENV_MUST_BE_ABSENT
     # key is absent and no key starts with ENV_FORBIDDEN_PREFIXES; raises AssertionError otherwise (test pins)
 def assert_git_argv_readonly(argv: Sequence[str]) -> None
-    # argv EXCLUDES "git" (GitObserver.run_sync prepends it), so the verb is argv[0]. Raises StudioError("internal_error") when:
+    # argv EXCLUDES "git" (GitObserver prepends the binary when it spawns), so the verb is argv[0]. Raises StudioError("internal_error") when:
     #   argv is empty; argv[0] starts with "-" (no global options before the verb: -c/-C/--git-dir/--work-tree/--exec-path/
     #   --namespace/--config-env all live there); argv[0] in GIT_WRITE_VERBS; argv[0] not in GIT_READ_VERBS; or ANY token in argv
     #   is in GIT_FORBIDDEN_TOKENS or starts with a GIT_FORBIDDEN_PREFIXES entry (`--output=`, `--exec-path=`, `--git-dir=`, `--work-tree=`).
@@ -438,15 +410,11 @@ class Storage:
         #                 "execution_leases": ("generation", "heartbeat_at"), "admin_leases": ("generation", "heartbeat_at")}
         # anything else → ValueError. The two lease tables are unused since P2a (§1.10) and are dropped by a later storage step.
 
-    # ---- events ring ----
-    def event_append(self, type: str, payload: Mapping[str, Any]) -> int        # returns seq; trims to EVENTS_RING_SIZE
-    def event_since(self, cursor: int, limit: int = 500) -> list[EventRecord]
-    def event_bounds(self) -> tuple[int, int]                                    # (oldest_seq, newest_seq); (0,0) when empty
-
     # ---- activity ----
     def activity_append(self, row: ActivityRow) -> int
     def activity_query(self, q: ActivityQuery) -> tuple[list[ActivityRow], str | None]   # (rows, next_cursor)
     def activity_purge_human_text(self, older_than_iso: str) -> int
+    def activity_delete_before(self, older_than_iso: str) -> int      # diagnostics.retention_days (reconciler retention pass)
 
     # ---- preferences ----
     def pref_get(self, key: str) -> Any | None
@@ -457,8 +425,6 @@ class Storage:
     def vacuum_if_needed(self) -> None
     def integrity_check(self) -> list[str]          # PRAGMA quick_check lines; [] when ok
 
-@dataclass(frozen=True, slots=True)
-class EventRecord:  seq: int; at: str; type: str; payload: dict
 ```
 
 #### DDL (verbatim; `storage.py::SCHEMA_V1`)
@@ -2138,11 +2104,11 @@ class ExactCounts: stages: int; gates: int; artifacts: int; review_intensity: di
 @dataclass(frozen=True, slots=True)
 class Range:
     low: int; high: int; unit: str                   # "turns" | "secs"
-    source: str; confidence: str                      # per-metric (FR-EST-002; review P26.4): source rule_band|history_calibrated|assumption ; confidence low|medium
+    source: str; confidence: str                      # per-metric (FR-EST-002; review P26.4): source rule_band|assumption ; confidence low
 @dataclass(frozen=True, slots=True)
 class Estimate:
     turns: Range; active_secs: Range; elapsed_secs: Range | None; credits: None; credits_status: str   # "unavailable"
-    source: str; confidence: str; samples: int          # the OVERALL source/confidence = those of `turns`; elapsed_secs carries its own ("assumption", "low")
+    source: str; confidence: str; samples: int          # the OVERALL source/confidence = those of `turns` (always rule_band/low); samples is always 0; elapsed_secs carries its own ("assumption", "low")
     dominant: tuple[DominantStage, ...]                 # DominantStage{slug, share_pct, turns: Range}
     coverage_lost: tuple[CoverageLoss, ...]             # CoverageLoss{slug, artifacts} for stages disabled by overrides
 @dataclass(frozen=True, slots=True)
@@ -2191,7 +2157,7 @@ class PlanService:
 class EstimateService:
     def __init__(self, storage: Storage, clock: Clock) -> None
     def estimate(self, stages: Sequence[PlanStage], *, depth: str, units: int | None, scope: str) -> Estimate
-    def clear(self) -> int
+        # storage, clock and scope are unused (calibration history was removed; the calibration table stays in SCHEMA)
 ```
 
 Plan rules: a stage is `locked` when `execution == "ALWAYS"` (`always`), when an enabled stage lists it in
@@ -2220,8 +2186,7 @@ Rule bands (turns per stage, Standard depth; `estimates.py::RULE_BANDS`):
 
 Multipliers: depth Minimal ×0.7, Standard ×1.0, Comprehensive ×1.4; review class advisory +30 %, adversarial +60 % of
 the stage band; `summary_confirmation == required` +1 turn. Active seconds per turn 90–300. `elapsed_secs` = active ×3
-to ×8 (`source: "assumption"`, `confidence: low`). `source = "history_calibrated"` (confidence `medium`) only when the
-cohort `(scope, depth, stage_class)` has ≥ `CALIBRATION_MIN_SAMPLES`; otherwise `rule_band` / `low`. `credits` is
+to ×8 (`source: "assumption"`, `confidence: low`). Every turn and active-time band is `rule_band` / `low`. `credits` is
 always `null` with `credits_status: "unavailable"` (FR-EST-005). `dominant` lists stages sorted by `turns.high`
 descending with `share_pct` of the total high estimate.
 
@@ -2230,7 +2195,7 @@ admin lease. EstimateService must NOT store intent names, repo paths or any cont
 
 ### 1.16 `git_observer.py` — `GitObserver`
 
-Sync (`run_sync`, `observe`, …); callers use `to_thread`. Every argv (which excludes `git`; the verb is `argv[0]`) is
+Sync (`observe`, `diff`, …); callers use `to_thread`. Every argv (which excludes `git`; the verb is `argv[0]`) is
 checked by `security.assert_git_argv_readonly` before spawn; env = `security.build_subprocess_env()` +
 `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null` (no user
 `core.fsmonitor`/aliases can turn a read into a write; review P21).
@@ -2244,19 +2209,19 @@ class GitObservation:
     observed_at: str; took_ms: int
 @dataclass(frozen=True, slots=True)
 class GitCommit: sha: str; at: str; subject: str
-@dataclass(frozen=True, slots=True)
-class GitResult: argv: tuple[str, ...]; exit_code: int | None; stdout: str; stderr: str; timed_out: bool
 
 class GitObserver:
     def __init__(self, git_path: str | None, clock: Clock) -> None
-    def run_sync(self, repo: Path, argv: Sequence[str]) -> GitResult      # argv excludes "git" (verb = argv[0]); spawn is [git_path, *argv]; timeout GIT_TIMEOUT_SECS
+    def version(self) -> str | None                                       # git --version (no cwd, no repository); /health tools.git.version
     def common_dir(self, repo: Path) -> str | None                        # rev-parse --git-common-dir → realpath
     def observe(self, repo: Path) -> GitObservation
         # rev-parse --abbrev-ref HEAD ; status --porcelain=v2 --branch ; rev-list --left-right --count @{upstream}...HEAD (skip when no upstream)
     def prior_version(self, repo: Path, relpath: str) -> bytes | None     # show HEAD:<relpath> ; cap MAX_ARTIFACT_RENDER_BYTES ; None when untracked
     def diff(self, repo: Path, relpath: str) -> str | None                # diff --no-color --no-ext-diff -- <relpath> ; cap 256 KiB
     def recent_commits(self, repo: Path, paths: Sequence[str], limit: int = 10) -> list[GitCommit]   # log --no-decorate --format=%H%x1f%cI%x1f%s -n <limit> -- <paths>
-    def dirty_split(self, repo: Path, owned_paths: Sequence[str]) -> dict   # {"owned_dirty": [...], "unrelated_dirty": int}
+    def dirty_split(self, repo: Path, owned_paths: Sequence[str]) -> dict
+        # {"owned_dirty": [...], "unrelated_dirty": int, "owned_changes": [{relpath, status}], "available", "reason", "truncated"}
+    # every spawn is [git_path, *argv] (argv excludes "git"; verb = argv[0]); timeout GIT_TIMEOUT_SECS
 ```
 
 GitObserver must NOT run any verb outside `GIT_READ_VERBS`, pass any `GIT_FORBIDDEN_TOKENS`/`GIT_FORBIDDEN_PREFIXES`
@@ -2290,8 +2255,10 @@ class TimelineEntry:
     severity: str                    # SEVERITY (critical|blocking|attention|info) — the same enum Activity rows use (review P26.5)
     refs: dict                       # {"action_id"?, "session_key"?, "audit"?: {shard, pos, event}, "git"?: {sha}}
     raw: str | None                  # verbatim audit block (source aidlc) for the Evidence drawer
+    id: int | None                   # the activity row id; None for a projected AI-DLC row
+    @classmethod
+    def of_row(cls, row: ActivityRow) -> TimelineEntry   # the one Studio-row serializer (timeline and GET /activity)
 
-def severity_of_finding(f: Finding) -> str      # blocking → "blocking", warn → "attention", info → "info"
 def severity_of_audit_event(e: AuditEvent) -> str   # ERROR_LOGGED/SENSOR_FAILED → "attention"; GATE_*/QUESTION_*/STAGE_* → "info"; everything else "info"
 
 class ActivityProjector:
@@ -2320,7 +2287,7 @@ breaker.opened breaker.reset lease.acquired lease.released lease.reclaimed engin
 migration.previewed migration.applied advisor.requested advisor.auto_requested advisor.completed advisor.failed
 notification.sent slack.sent session.bound session.unbound session.takeover intent.created intent.paused
 intent.resumed intent.archived intent.restored intent.force_stop machine_lane.refused settings.updated
-health.startup calibration.cleared`.
+health.startup`.
 
 `advisor.auto_requested` is a separate kind from `advisor.requested` rather than a param on it (FR-ADV-010): the one
 question a user asks of a draft they did not ask for is "who started this?", and a kind is what Activity filters and
@@ -2690,7 +2657,6 @@ repository file or create an intent; put a repository path in the package; list 
 ### 1.19 `notifications.py` — `NotificationAdapter`
 
 ```python
-NOTIFY_KINDS = ("gate", "question", "failure", "circuit_breaker", "delivery_uncertain", "recovery", "install_conflict", "completion")
 @dataclass(frozen=True, slots=True)
 class NotificationResult: dashboard: bool; slack: str; slack_ts: str | None; deep_link: str; dedupe_hit: bool
     # slack ∈ sent | muted | unavailable | ineligible | disabled
@@ -2698,24 +2664,23 @@ class NotificationResult: dashboard: bool; slack: str; slack_ts: str | None; dee
 class NotificationAdapter:
     def __init__(self, host, storage, settings, activity, clock) -> None
     def deep_link(self, action_id: str) -> str                        # f"{DEEP_LINK_BASE}?view=actions&action={action_id}"
-    async def notify_action(self, card: ActionCard) -> NotificationResult
-        # dedupe on (action_id, status_class) where status_class = "open" | "uncertain" ; second call is a no-op (dedupe_hit)
-        # dashboard: host.notify(title_key-rendered-in-en, body, url=deep_link) — the host toast is English-only; body ≤ 500 chars, redacted
-        # slack: settings.slack.enabled and repo not muted and host slack capability → build_slack_blocks(card) — notification + deep link ONLY
-    async def notify_completion(self, summary: IntentSummary) -> NotificationResult
-    def slack_quick_action_eligible(self, card: ActionCard) -> tuple[bool, str]
-        # v1: ALWAYS (False, "host_seam_unavailable") — review P02/R18. The only host mechanism (an `[OPTIONS:]`/`action::` block on a thread
-        # linked to the canonical slot) re-dispatches the click as a bare user turn: no compare-and-submit (FR-ACT-010/FR-SLK-004), no durable
-        # Delivering record before the host call (§11.5/FR-SLK-007), no cursor switch (FR-SES-006), and a second button would itself mint a
-        # HUMAN_TURN (P-03). Re-enable only when a host seam (S7) lets the click call POST /slack/actions/callback → submit → host send with the
-        # same two-phase record, or offers a non-prompt navigation button. The function stays so the eligibility rules below are already pinned:
-        # future True requires card.type == "gate", status == "Queued", captured.stable, no blocking findings, no live critical card for the
-        # intent, rendered brief ≤ 2800 chars.
-    def build_slack_blocks(self, card: ActionCard) -> tuple[list[dict], str]
-        # blocks: header(type/intent/stage) · context(repo · waiting) · section(brief) · section("Open in Studio: <deep link>")
-        # The text NEVER ends with an `[OPTIONS: …]` trailer and Studio never links the canonical slot to a Slack thread
-        # (no `POST /api/chat/slots/{key}/slack-link`, no `state.link_slack`) — a Slack reply must not be able to reach the conductor.
+    async def notify(self, kind: str, subject=None, **fields) -> NotificationResult    # the one entry point
+        # kind "action": subject is an ActionCard. Notifiable types: gate, question, failure, circuit_breaker,
+        #   delivery_uncertain, recovery, install_conflict (anything else → slack "ineligible", nothing sent).
+        #   Dedupe on (action_id, status_class) where status_class = "open" | "uncertain". Called today for the
+        #   breaker card (actions.py); gate/question cards are a later phase.
+        # kind "tool_approval": fields repo_id, repo_label, intent_key, intent_label, slot_key, approval, turn —
+        #   dashboard only, links to the intent, dedupe on the approval id (else tool + input + turn). Called by the reconciler.
+        # kind "completion": subject is an intent summary; links to the intent. Implemented; no caller yet.
+        # dashboard: host.notify(English title, body ≤ 500 chars, url=deep link) unless settings.notifications.dashboard is false
+        # slack: settings.slack.enabled and repo not muted → host.slack_dm(blocks, text) — header · context · section(brief) ·
+        #   section(link) ONLY. Every attempt is one Activity row (kind notification.sent, params.kind = the class).
 ```
+
+There are no Slack quick actions (review P02/R18): the only host mechanism (an `[OPTIONS:]`/`action::` block on a thread
+linked to the canonical slot) re-dispatches the click as a bare user turn — no compare-and-submit (FR-ACT-010/FR-SLK-004),
+no durable Delivering record before the host call (§11.5/FR-SLK-007), no cursor switch (FR-SES-006) — so Settings
+reports `slack_quick_actions` unavailable and no message ever ends in an options trailer.
 
 NotificationAdapter must NOT include artifact bodies, human_text, repo paths (other than the label) or credentials in
 any message, register Slack callbacks, emit an `[OPTIONS:]` trailer, link a canonical slot to Slack, or send more than
@@ -2726,18 +2691,29 @@ one notification per breaker opening.
 ```python
 EVENT_TYPES = ("action.created", "action.updated", "repo.updated", "repo.removed", "intent.updated",
                "transaction.updated", "lease.updated", "activity.appended", "advisor.updated",
-               "settings.updated", "health.updated", "migration.updated", "reset")
+               "settings.updated", "health.updated", "reset")
+
+@dataclass(frozen=True, slots=True)
+class EventRecord:  seq: int; at: str; type: str; payload: dict
 
 class EventLog:
-    def __init__(self, storage, ctx_events: EventBus | None, clock) -> None
+    def __init__(self, storage, ctx_events: EventBus | None, clock, *, ring_size: int | None = None) -> None
+        # storage is unused (kept so existing constructors stay valid). The ring is in memory, EVENTS_RING_SIZE
+        # deep, and per process: seq starts at int(clock.monotonic() * 1e6) and counts up by one, so every cursor
+        # an earlier process issued lies below the ring and resets. Replay does not survive a restart.
     async def publish(self, type: str, payload: dict) -> int
-        # to_thread(storage.event_append); fan out to subscriber queues (bounded 1000; on overflow the queue is marked
-        # `lagged` and the SSE handler emits `reset`); mirror to ctx.events.publish(HOST_EVENT_*) when ctx_events is not None
-        # (action.* → HOST_EVENT_ACTION ; repo.*/intent.* → HOST_EVENT_REPO ; transaction.* → HOST_EVENT_TRANSACTION); PermissionError swallowed+logged once
+        # append to the ring; wake every SSE reader; mirror to ctx.events.publish(HOST_EVENT_*) when ctx_events is not None
+        # (action.* → HOST_EVENT_ACTION ; repo.*/intent.* → HOST_EVENT_REPO ; transaction.* → HOST_EVENT_TRANSACTION);
+        # any host failure swallowed and logged once per mode (denied | failed)
+    def bounds(self) -> tuple[int, int]                  # (oldest_seq, newest_seq); an empty ring is (newest + 1, newest)
     async def since(self, cursor: int, limit: int = 500) -> list[EventRecord]
-    def subscribe(self) -> "Subscription"                # Subscription{queue: asyncio.Queue[EventRecord], lagged: bool, close()}
+    async def poll(self, cursor: int | None = None, limit: int = 500) -> dict   # §2.5
     async def stream(self, request: web.Request, *, cursor: int | None) -> web.StreamResponse      # §2.12
 ```
+
+A cursor is resumable when `oldest_seq - 1 <= cursor <= newest_seq`; `0` means "from this process's first event"
+(resumable until the ring trims it). Anything else resets: trimmed, ahead of the ring, or from an earlier process.
+A reader that falls off the ring while it drains is reset too; a slow reader never blocks `publish`.
 
 Payloads (small; clients refetch the resource):
 
@@ -2752,7 +2728,6 @@ Payloads (small; clients refetch the resource):
 | `advisor.updated` | `{draft_id, action_id, status}` — `action_id` is the sentinel `plan:<repo_id>` for a plan draft (§1.18a): never null on the event; null only on its Activity row |
 | `settings.updated` | `{keys: [str]}` |
 | `health.updated` | `{status, issues: [str]}` |
-| `migration.updated` | `{status}` |
 | `reset` | `{oldest_seq, newest_seq}` (client must refetch everything) |
 
 ### 1.21 `settings.py` — `SettingsService`
@@ -2764,7 +2739,6 @@ DEFAULTS: dict = {
   "queue_organize": "priority",                      # priority | repo | type | oldest (UI also mirrors it in localStorage)
   "global_concurrency_cap": 2,                       # int 1..8 ; per-repo is always 1
   "slack": {"enabled": False, "muted_repo_ids": []},          # no quick_actions key: quick actions are absent in v1 (review P02)
-  "night_window": {"enabled": False, "start_local": "22:00", "end_local": "06:00", "turn_cap": 40, "credit_cap": None},
   "diagnostics": {"retention_days": 30, "export_include_human_text": False},
   "human_text_retention_days": 30,                   # 1..30
   "advisor": {"enabled": True, "auto_draft_repo_ids": []},    # auto_draft_repo_ids is the standing per-repository grant
@@ -2779,9 +2753,7 @@ DEFAULTS: dict = {
 @dataclass(frozen=True, slots=True)
 class Settings:
     values: dict                                       # DEFAULTS deep-merged with stored preferences
-    capabilities: dict                                 # {"night_window": {"available": False, "reason": "machine_lane_unavailable"},
-                                                       #  "credit_cap": {"available": False, "reason": "credits_unobservable"},
-                                                       #  "slack": {"available": bool, "reason": str|null}, "advisor": {"available": bool, "reason"},
+    capabilities: dict                                 # {"slack": {"available": bool, "reason": str|null}, "advisor": {"available": bool, "reason"},
                                                        #  "slack_quick_actions": {"available": False, "reason": "host_seam_unavailable"},        (review P02)
                                                        #  "grouped_answers": {"available": False, "reason": "s1_s2_unverified"}}              (review P18;
                                                        #  flipped only by constants.GROUPED_ANSWERS_VERIFIED = True after the S1/S2 spike — never a user setting)
@@ -2792,9 +2764,11 @@ class SettingsService:
     async def get(self) -> Settings
     async def put(self, patch: dict) -> Settings
         # deep-merge patch; unknown key → bad_body (details.key); type/range violation → bad_body;
-        # night_window.enabled == True → 409 machine_lane_unavailable (stored value stays False)
-    def validate(self, values: dict) -> list[str]
-    # sync accessors for other modules (read the cached dict; refreshed on put): human_text_retention_days(), global_concurrency_cap(), slack(), installer()
+        # nothing is stored unless every leaf validates. Stored as ONE preferences row (key "settings": {"values", "updated_at"});
+        # a stored leaf that no longer validates (e.g. the retired v1 night_window keys) is ignored on read and dropped on the next write
+    # sync accessors for other modules (read the cached dict; refreshed on put): human_text_retention_days(), global_concurrency_cap(),
+    # locale(), slack(), installer(), advisor(), diagnostics(), notifications(), values()
+    # diagnostics.retention_days: the reconciler's retention pass deletes Activity rows older than that (Storage.activity_delete_before)
 ```
 
 ### 1.22 `migration.py` — retired
@@ -3109,6 +3083,7 @@ authoritative 4xx; `meta` is persisted on the host's user row and is the reconci
 
 `GET /events?cursor=<seq>` (or header `Last-Event-ID`) → `text/event-stream`; see §2.12.
 `GET /events/poll?cursor=<seq>&limit=` → 200 `{"events": [EventRecord], "cursor": int, "oldest_seq": int, "reset": bool}` (fallback for clients without SSE).
+No cursor is a cold start (no backlog, `reset: false`); a cursor that is not resumable (§1.20) answers `reset: true`.
 
 ### 2.6 Activity (`handlers/events.py`)
 
@@ -3137,14 +3112,12 @@ A `plan_draft` is never requested through this route (it has no card; see §2.3 
 draft carries `action_id: "plan:<repo_id>"`, `neutrality: null` and an extra `plan_proposal` key (§1.18a); a card draft's
 wire shape is unchanged and never carries that key.
 
-### 2.8 Settings and calibration (`handlers/settings.py`)
+### 2.8 Settings (`handlers/settings.py`)
 
 | Route | Body | Response | Errors |
 |---|---|---|---|
 | `GET /settings` | — | `{"settings": Settings.values, "capabilities": {...}, "versions": {...}, "updated_at"}` | |
-| `PUT /settings` [owner] | partial `Settings.values` | same as GET | `bad_body` (details.key/reason), `machine_lane_unavailable` |
-| `POST /calibration/clear` [owner] | `{"confirm": true}` | `{"ok": true, "removed": int}` | `invalid_decision` |
-| `GET /calibration` | — | `{"cohorts": [{"scope","depth","stage_class","samples"}], "total": int, "min_samples": 10}` | |
+| `PUT /settings` [owner] | partial `Settings.values` | same as GET | `bad_body` (details.key/reason) |
 
 ### 2.9 Slack correlation (`handlers/slack.py`)
 
@@ -3161,7 +3134,6 @@ opens a Slack deep link (review R09; Appendix A C24). ✗ `action_not_found`.
 ```
 GET  /health                                   GET  /payload                        GET  /leases
 GET  /diagnostics                              GET  /settings                       PUT  /settings
-GET  /calibration                              POST /calibration/clear
 GET  /events                                   GET  /events/poll                    GET  /activity
 GET  /actions                                  GET  /actions/{action_id}
 POST /actions/{action_id}/submit               POST /actions/{action_id}/delivery   POST /actions/{action_id}/retry
@@ -3267,12 +3239,14 @@ event: <type>\n
 data: <json payload, single line>\n
 \n
 ```
-On connect: if `cursor` (query or `Last-Event-ID`) is given and `>= oldest_seq - 1` → replay `since(cursor)` then live;
-if `cursor < oldest_seq - 1` or the subscription lagged → first frame is `event: reset` with `{"oldest_seq","newest_seq"}`
-then live (client refetches). Without cursor → `event: hello` `{"newest_seq": int, "server_time": iso, "app_version": str}`
-then live. Heartbeat comment `: ping\n\n` every `SSE_HEARTBEAT_SECS`. The handler catches
-`(ConnectionResetError, ConnectionAbortedError, asyncio.CancelledError)` and closes the subscription. Cursor semantics:
-`seq` is monotonic per storage file; the client persists the last seen `id` and resumes with it.
+On connect: if `cursor` (query or `Last-Event-ID`) is resumable (§1.20) → replay `since(cursor)` then live;
+otherwise (trimmed, ahead of the ring, from an earlier process, or a reader that fell off the ring while draining) →
+`event: reset` with `{"oldest_seq","newest_seq"}` then live (client refetches). Without cursor → `event: hello`
+`{"newest_seq": int, "server_time": iso, "app_version": str}` then live. `hello` and `reset` carry `id: <newest_seq>`.
+Heartbeat comment `: ping\n\n` every `SSE_HEARTBEAT_SECS`. A closed connection ends the stream quietly,
+`asyncio.CancelledError` is re-raised, and the reader is always unregistered. Cursor semantics: `seq` is monotonic per
+process (the ring is in memory); the client keeps the last seen `id` and resumes with it, and after a gateway
+restart that cursor resets.
 
 ### 2.13 Host endpoints the UI calls directly (declared in `permissions.api`; owner cookie)
 
@@ -3450,9 +3424,9 @@ export interface DeliveryResponse { ok: true; action: ActionCard; idempotent: bo
 // ---- plan / estimates ----
 export interface PlanRequest { space: string; scope: string; depth: 'Minimal' | 'Standard' | 'Comprehensive'; test_strategy: 'Minimal' | 'Standard' | 'Comprehensive' | null; review_cap: 'none' | 'advisory' | 'adversarial' | null; project_type: 'Greenfield' | 'Brownfield' | null; overrides: Record<string, boolean>; objective: string | null; label: string | null; context: string | null }
 export interface PlanStage { slug: string; number: string; name: string; phase: string; execution: 'ALWAYS' | 'CONDITIONAL'; in_grid: boolean; enabled: boolean; locked: boolean; lock_reason: string | null; gate: boolean; review_class: string | null; reviewer: string | null; per_unit: boolean; produces: string[]; consumes: string[]; depends_on: string[]; conditional_on: string | null; state: StageState | null }
-export interface Range { low: number; high: number; unit: 'turns' | 'secs'; source: 'rule_band' | 'history_calibrated' | 'assumption'; confidence: 'low' | 'medium' }
+export interface Range { low: number; high: number; unit: 'turns' | 'secs'; source: 'rule_band' | 'assumption'; confidence: 'low' }
 export interface ExactCounts { stages: number; gates: number; artifacts: number; review_intensity: Record<'none' | 'advisory' | 'adversarial', number>; assumes_units: number | null }
-export interface Estimate { turns: Range; active_secs: Range; elapsed_secs: Range | null; credits: null; credits_status: 'unavailable'; source: 'rule_band' | 'history_calibrated'; confidence: 'low' | 'medium'; samples: number; dominant: { slug: string; share_pct: number; turns: Range }[]; coverage_lost: { slug: string; artifacts: string[] }[] }
+export interface Estimate { turns: Range; active_secs: Range; elapsed_secs: Range | null; credits: null; credits_status: 'unavailable'; source: 'rule_band'; confidence: 'low'; samples: number; dominant: { slug: string; share_pct: number; turns: Range }[]; coverage_lost: { slug: string; artifacts: string[] }[] }
 export interface PlanIssue { code: string; slugs: string[]; message_key: string; params: Record<string, unknown> }
 export interface EffectivePlan { request: PlanRequest; scope_meta: Record<string, unknown> | null; stages: PlanStage[]; exact: ExactCounts; estimate: Estimate; diff: { slug: string; from_enabled: boolean; to_enabled: boolean; reason: string }[]; issues: PlanIssue[]; valid: boolean; products: string[]; graph_stage_count: number; engine_version: string | null }
 export interface RecomposeProposal { intent_key: string; current_stage: string | null; skip: string[]; add: string[]; plan: EffectivePlan; argv_preview: string[]; allowed: boolean; refusals: PlanIssue[] }
@@ -3464,9 +3438,9 @@ export interface DraftResult { verdict: string | null; summary: string; suggeste
 export interface AdvisorDraft { draft_id: string; action_id: string; kind: 'gate_analysis' | 'question_draft' | 'question_explain' | 'request_changes_draft' | 'diagnose' | 'plan_draft'; status: 'queued' | 'running' | 'ready' | 'failed' | 'expired'; request: { action_id: string; kind: string; question_index: number | null; locale: string; auto: boolean }; result: DraftResult | null; error: string | null; created_at: string; updated_at: string; expires_at: string; neutrality: Record<string, unknown> | null; plan_proposal?: PlanProposal | null }
 export interface PlanProposal { scope: string | null; depth: 'Minimal' | 'Standard' | 'Comprehensive' | null; test_strategy: 'Minimal' | 'Standard' | 'Comprehensive' | null; review_cap: 'none' | 'advisory' | 'adversarial' | null; overrides: Record<string, boolean>; unresolved: number[]; base_scope: string | null }   // §1.18a — a PlanRequest patch; `overrides` is the COMPLETE map for `scope` (replaced, never merged); null = not proposed, keep the human's value
 export interface PlanAdviseRequest { space: string; objective: string; context: string | null; project_type: 'Greenfield' | 'Brownfield' | null; locale: string; current: Pick<PlanRequest, 'scope' | 'depth' | 'test_strategy' | 'review_cap' | 'overrides'> }
-export interface SettingsValues { locale: 'auto' | 'en-US' | 'zh-CN'; density: 'compact' | 'comfortable'; queue_organize: Organize; global_concurrency_cap: number; slack: { enabled: boolean; muted_repo_ids: string[] }; night_window: { enabled: false; start_local: string; end_local: string; turn_cap: number; credit_cap: null }; diagnostics: { retention_days: number; export_include_human_text: boolean }; human_text_retention_days: number; advisor: { enabled: boolean; auto_draft_repo_ids: string[] }; installer: { run_doctor_after_install: boolean }; notifications: { dashboard: boolean } }
+export interface SettingsValues { locale: 'auto' | 'en-US' | 'zh-CN'; density: 'compact' | 'comfortable'; queue_organize: Organize; global_concurrency_cap: number; slack: { enabled: boolean; muted_repo_ids: string[] }; diagnostics: { retention_days: number; export_include_human_text: boolean }; human_text_retention_days: number; advisor: { enabled: boolean; auto_draft_repo_ids: string[] }; installer: { run_doctor_after_install: boolean }; notifications: { dashboard: boolean } }
 export interface Capability { available: boolean; reason: string | null }
-export interface SettingsResponse { settings: SettingsValues; capabilities: Record<'night_window' | 'credit_cap' | 'slack' | 'advisor' | 'slack_quick_actions' | 'grouped_answers', Capability>; versions: { studio: string; bundled_engine: string; min_kirocrew: string; host: string | null }; updated_at: string | null }
+export interface SettingsResponse { settings: SettingsValues; capabilities: Record<'slack' | 'advisor' | 'slack_quick_actions' | 'grouped_answers', Capability>; versions: { studio: string; bundled_engine: string; min_kirocrew: string; host: string | null }; updated_at: string | null }
 export interface HealthResponse { app: 'aidlc-studio'; version: string; bundled_engine_version: string; min_kirocrew_version: string; boot_id: string; host_version: string | null; started_at: string | null; status: 'healthy' | 'degraded' | 'error'; issues: string[]; storage: { path_hash: string; schema_version: number; integrity: 'ok' | 'error'; wal: boolean }; payload: { ok: boolean; engine_version: string; file_count: number; mismatches: number }; host: { attached: boolean; capabilities: Record<string, Capability> }; tools: { bun: { found: boolean; path: string | null; version: string | null; source: string | null; searched: string[] }; git: { found: boolean; path: string | null; version: string | null } }; reconciler: { running: boolean; last_tick_at: string | null; last_tick_ms: number | null; repos_scanned: number }; counts: { repos: number; intents: number; live_actions: number; execution_leases: number; admin_leases: number }; machine_lane: { available: false; reason: 'machine_lane_unavailable' } }
 export interface MigrationPreview { applicable: boolean; reason: string | null; source_path: string; source_sha256: string | null; rows_in: number; rows: { legacy_id: string; path: string; label: string; added_at: string | null; resolution: string; identity: string | null; error: string | null }[]; rows_out: number; console_installed: boolean; console_enabled: boolean; already_applied: boolean }
 ```
@@ -3853,7 +3827,7 @@ Synthetic variants are built in `conftest.py` from the real files with the `fixt
 | `tests/test_loader.py` | `load_backend("0.3.0")` (no parent packages) and `load_backend("0.5.0")` both link; every studio module imports relatively; `on_shutdown` removes every `_aidlc_studio_backend*` key; the host's `unload` prefix `_kirocrew_app_aidlc-studio.` leaves nothing dangling |
 | `tests/test_constants.py` | enums verbatim vs PRD strings; `ERROR_CODES` covers every code used (`grep StudioError\(`); every `WIRE_*` equals `docs/design/wire-text.json` `constants.*` and the UI's `wire.json` export; `BUNDLED_ENGINE_VERSION/BUNDLED_STATE_VERSION/BUNDLED_STAGE_COUNT` equal the manifest; `HUMAN_LANE_DECISIONS ∪ HOST_CONTROL_DECISIONS ∪ STUDIO_ONLY_DECISIONS` == every decision in `DECISIONS` and the three sets are disjoint |
 | `tests/test_security.py` | `resolve_inside` traversal/symlink escape/NUL/`must_exist`; `bounded_read` refuses oversize; `build_subprocess_env` strips and asserts; `assert_git_argv_readonly` denies every `GIT_WRITE_VERBS` member as `argv[0]`, denies `["--no-decorate","log"]`, `["-c","core.fsmonitor=x","status"]`, `["log","--output=/tmp/x"]`, `["-C","/","status"]`, accepts `["log","--no-decorate","-n","3"]`; `is_secret_file`; `redact`/`scrub_repo_paths` |
-| `tests/test_storage.py` | DDL applies on empty file; PRAGMAs; `cas_update` success/StaleGeneration/unknown table on `actions` and `intent_bindings`; a committed `Delivering` CAS is visible to a second connection; partial unique index: a second live row with the same `dedupe_key` raises, a live row beside a Failed/Cancelled twin does not; events ring trim; activity paging; pref roundtrip; concurrency (two threads CAS on one row → exactly one wins) |
+| `tests/test_storage.py` | DDL applies on empty file; PRAGMAs; `cas_update` success/StaleGeneration/unknown table on `actions` and `intent_bindings`; a committed `Delivering` CAS is visible to a second connection; partial unique index: a second live row with the same `dedupe_key` raises, a live row beside a Failed/Cancelled twin does not; activity paging and `activity_delete_before`; pref roundtrip; concurrency (two threads CAS on one row → exactly one wins) |
 | `tests/test_repo_registry.py` | identity dev:ino vs fallback; case-aliased path dedupe (`duplicate_identity`); sensitive path refusal; relative path; rebind rules; availability states; `detect_install` per fixture (`payload`, `devdelta`, `v230`, `older`); preflight report shape; **fake_bun is never invoked with `--project-dir` during preflight/add/detect_install** (review P13); `own_engine_version` (A26): a repository whose only harness is `.claude` reports `status == "installed"`, `engine_dir == ".claude"` and `own_engine_version is None`; a `.kiro` repository reports its own harness version there; a repository holding both reports `.kiro` in both places; the unreadable-root branch reports the record's `installed_engine_version` only when `engine_dir == STUDIO_HARNESS_DIR`, else None |
 | `tests/test_aidlc_reader.py` | `parse_state_file` on every fixture state (32/33, v7/v8, real 2.1.1, synthetic v9/header-only/contradictory, Skeleton Stance without blank line); checkbox marks incl. `X/s/r`, en dash, `--`; intents.json legacy match; cursors (missing `active-space` → `default`); directive validation; audit split/merge/tie order/unknown events (`LOOP_RUN_STARTED`)/CRLF; questions: `- A.` and `A.` options, blank tags, `[Answer]: A, B`, multi-line `- ` continuation, `## Consolidated Summary Confirmation`, `## Plan Approval` (blank and `Approve Plan`), `## Post-approval Amendment` followed by a pending `## Q4.` (review P09); scope frontmatter (incl. project-composed); stage graph 32 & 33; review section; `stable_read` unstable path; token formulas incl. `evidence_digest` and `presence_baseline` (golden values); `read_workspace_signals` (dot-entries and symlinks skipped, the first cap in sorted order and `truncated` only past the cap, no recursion, README handed over whole — the broker cuts; a symlinked README or manifest skipped even when its target is inside the repository) |
 | `tests/test_consistency.py` | one test per finding code (positive + negative) incl. `interrupted_session`, `state_unreadable` grace via `first_unreadable_at`; blocking set; severity table |
@@ -3864,14 +3838,14 @@ Synthetic variants are built in `conftest.py` from the real files with the `fixt
 | `tests/test_actions.py` | every legal transition + every illegal pair raises IllegalTransition (exhaustive 12×12 matrix, incl. `Failed→Cancelled`); `wire_text_for` golden per decision incl. checkpoints and single vs grouped answers; submit: stale (each captured field incl. `evidence_digest`, `is_active`, null-vs-non-null), state_inconsistent, unstable, unbound, slot mismatch, `slot_busy` per reason, repo_busy, `intent_paused`/`intent_archived` on a gate approve, breaker_open only for run, `accept_as_is` refused below attempt 4, grouped answers refused while the capability is off; **two intents, cursor on B, approve on A → cursor switched to A and read back before Delivering** (review P01); cursor_mismatch releases the lease; exception after acquire releases the lease; success receipt durable before return (crash-after-CAS simulation); `record_delivery`: delivered/queued/uncertain, `not_delivered` accepted only when all four checks hold, otherwise `not_delivered_unproven` + DeliveryUncertain, client preflight codes, idempotent repeats never `illegal_transition`, late `delivered` sets `delivery_confirmed`; `resubmit` refused after confirmed delivery and on evidence-hash mismatch; retry of a Failed run inserts without collision; `cancel` legality per type; `pick_intent` runs the cursor switch under an admin lease and never a prompt; breaker thresholds (3 transient, 1 deterministic) and single notification |
 | `tests/test_reconciler.py` | startup re-evaluation of Delivering/Delivered/Processing (boot_id mismatch → never NotDelivered); ack deadline → DeliveryUncertain with evidence, then ReconciliationRequired next tick (never a dead end — review R07); `services.restart()` between send and ack → ReconciliationRequired, not NotDelivered (review R02); automatic ReconciliationRequired → NotDelivered only with all four proofs; processing deadline; `{queued:true}` waits in Delivered until the turn starts, capped (review P22); session replaced → uncertain; each resolution contract row (gate approve/reject, answers, confirm_summary, approve_plan, run/resume, prepare_commit, force_stop) using audit variants with same-second `GATE_APPROVED` (review P23); presence: `gate_approved_no_human_turn` and `gate_approved_two_human_turns` → `human_presence_anomaly` (review P04); cursor moved → `cursor_moved`; row found in another slot → `wrong_slot`; stable boundary conditions; failure classification table; retire stale cards (Failed untouched, `evidence.superseded`); `scan_fanout_bounded`; human_text purge; the advisor pass runs settle before autodraft, retention runs behind both in the same tick and retires drafts through `advisor.expire_stale`, and a raising `AdvisorBroker` does not abort the tick; the vanished-intent sweep (§1.13 step 1b): cards of an intent whose directory left the disk are retired with reason `intent_missing` only after the grace, an intent that returns inside the grace keeps every card, an unavailable repository and a truncated listing never sweep, `intents_on_disk()` follows the listing |
 | `tests/test_installer.py` | payload verify (tamper → degraded; unknown merge strategy → degraded); preview matrix per ownership × live state (table §1.14) incl. `mcp.json` (user server + token preserved, managed subtree conflict blocks) and `scope-grid.json` (the DevDelta fixture's composed `review-major-remediation` key preserved and a stale stock row refreshed → `merge_update`; a stock scope key carrying another grid blocks) and `harness.json` (a `plugins` array and `documentExtractors` config preserved; a changed `name` blocks) — A27; fragment digests golden; `state_version_migration_unconfirmed` for a v7 intent on upgrade/recovery (review P03); fault injection `before:`/`after:` every step → old install complete & receipt current, or `recovery_required` with blocking finding + card; retire/retire_blocked; newer_installed/same_version; recovery transaction clears flag; never writes outside managed paths (walk repo before/after); the foreign-harness-only repository (A26): `preview("install")` has `engine_from is None` and is offerable although `status == "installed"`, no `.claude/**` path appears in `entries`, `aidlc/**` entries of a repository with a live intent are `shell_exists`, `upgrade` and `recovery` are refused `not_installed`, and `same_version`/`newer_installed` follow `own_engine_version` rather than the foreign harness's version |
-| `tests/test_plan.py` / `tests/test_estimates.py` | lock reasons; dependency validation; exact counts golden for poc/feature/bugfix (32 & 33 graphs); recompose allowed set; create_intent via fake_bun (lease, verify, never sends); rule bands golden; calibration threshold (9 → rule_band, 10 → history_calibrated); credits always unavailable; clear; `catalog` reads scopes, grid and graph once and refuses an uninstalled repo (`not_installed`) |
+| `tests/test_plan.py` / `tests/test_estimates.py` | lock reasons; dependency validation; exact counts golden for poc/feature/bugfix (32 & 33 graphs); recompose allowed set; create_intent via fake_bun (lease, verify, never sends); rule bands golden; every band rule_band/low with samples 0; credits always unavailable; `catalog` reads scopes, grid and graph once and refuses an uninstalled repo (`not_installed`) |
 | `tests/test_plan_advice.py` | pure functions (§1.18a): `build_plan_questions` — Q1–Q4 fields and values, one `stages:<phase>` row per phase that has a choice, a phase whose stages are all ALWAYS is skipped, values in graph order, more than 26 options → `internal_error`; `resolve_plan_proposal` — letters → tokens, a verbatim option label with no letters resolves, an out-of-range letter leaves the whole row unresolved, an empty phase answer changes nothing, the ALWAYS guard, `scope`/`base_scope` always set, no-op overrides dropped, the returned map is complete |
 | `tests/test_git_observer.py` | observation parsing; write verb refusal (fake_git exit 97 never observed); prior version/diff caps; failures → `available=False` |
 | `tests/test_activity.py` | record/query/cursor; timeline merge keeps `source=aidlc` live and never stored; export redaction (paths, credentials, human_text policy) |
 | `tests/test_advisor.py` | package bounds (excerpt caps, redaction, no repo path as cwd); spawn args (`agent="aidlc-studio-advisor"`, silent); agent check (missing / duplicate name → `advisor_unavailable`); result parsing (single fence, bad → failed); neutrality failure for each field (state, questions, directive, marker mtime, per-shard sha) and no failure for `.aidlc-hooks-health` changes; `advisor_unavailable` when `ctx.spawn is None`; `autodraft` (§1.18): empty grant / `advisor.enabled` False / no spawn seam → 0 spawns, `ADVISOR_AUTO_DRAFT_MAX_INFLIGHT` and `ADVISOR_AUTO_DRAFT_PER_TICK` respected, oldest Queued card first, only `Queued` cards are candidates, degraded question card skipped **but a gate card carrying a real `derive_cards` evidence blob (questions mode `degraded`) is still drafted**, a card whose automatic draft already failed is never drafted again, a card already holding a ready whole-card draft of the same kind is left alone while `failed`/`expired`/single-index drafts do not block it, clicked drafts never consume the automatic ceiling, an install-wide refusal (`agent_missing`) unmarks the card and stops the pass with one Activity row, the drafted locale follows `settings.locale` and falls back to `ADVISOR_LOCALES[0]` for `"auto"`, kind from `ADVISOR_AUTO_KIND_BY_TYPE` (no `request_changes_draft`), Activity `advisor.auto_requested` with user `""`; `settle_open` polls open drafts and leaves terminal ones alone; plan drafts (§1.18a): a draft needs no card, no intent dir and no stage (row `action_id` `plan:<repo_id>`, Activity `advisor.requested` with `action_id` null and `repo_id` set, package `intent` all-null, `questions.source == "wizard"`); the questionnaire is the wizard's own fields (Q1 scopes, Q2/Q3 depths, Q4 review caps, then `stages:<phase>` rows in graph order with no all-ALWAYS phase); letters resolve into a `PlanRequest` patch (`plan_proposal`; `neutrality is None`; 12 wire keys, `result` still 9); an ALWAYS stage is never turned off, an empty phase answer keeps the scope's own selection, one bad letter leaves the whole phase unresolved, a proposal for the current scope starts from the human's overrides and one for another scope from that scope's selection (unit-level in `test_plan_advice.py`, at least one through `poll()`); settled without a neutrality probe (no `evidence_mutated`, no critical row); repository tree byte-for-byte unchanged; a second click with the same objective returns the same draft with one spawn (sequential and concurrent), a different objective or an expired row starts a new one; whitespace objective → `bad_body` `missing == ["objective"]`; a corrupt `plan_questions` fails the draft (`plan_resolution_failed`) instead of the poll; never drawn ahead by `autodraft`; a card request for `plan_draft` → `invalid_decision`; refused while disabled or without a spawn seam (no row); package bounded and path-free even with a 200 KB README; every `ADVISOR_KINDS` member has per-kind guidance in `draft_result_contract`; same TTL and `expire_stale`; the card wire shape is still 11 keys with no `plan_proposal`; a second click in another locale, space or with other picks starts a new draft (subject carries `picks_sha256`); the stored `plan_current` carries the six picks and no objective/label/context; through `poll()` a proposal for the human's own scope starts from their overrides; a credential straddling the README cut is masked, not split, and the excerpt stays ≤ `MAX_README_CHARS`; a secret-shaped project-owned scope name never reaches the task raw and is spelled the same in Q1 `values`, `plan.scopes`, `scope_grid` and the stored `plan_grid`; forty 300-character scopes plus a 4000-character objective fit the cap with Q1's 26 scopes; `_shrink_plan` reaches a fixed point shedding the core last and never touching `questions` |
-| `tests/test_notifications.py` | dedupe; mute; `slack_quick_action_eligible` always `(False, "host_seam_unavailable")`; blocks contain deep link and no artifact body and **no** `[OPTIONS:` trailer; no `slack-link`/`link_slack` call ever made (fake host records them); single breaker notification |
-| `tests/test_events.py` | publish → ring + subscriber + ctx.events name mapping (+PermissionError swallowed); SSE frames golden (`id/event/data`), cursor replay, reset, heartbeat; `/events/poll` |
-| `tests/test_settings.py` | defaults; deep-merge; validation errors; night_window.enabled → 409; capabilities; `advisor.auto_draft_repo_ids` accepts a repo id list and rejects the same shapes `slack.muted_repo_ids` rejects |
+| `tests/test_notifications.py` | `notify(kind, …)` for action/tool_approval/completion; dedupe; mute; the dashboard switch; blocks contain deep link and no artifact body and **no** `[OPTIONS:` trailer; no `slack-link`/`link_slack` call ever made (fake host records them); single breaker notification |
+| `tests/test_events.py` | publish → in-memory ring + ctx.events name mapping (+PermissionError swallowed); seq from the process clock (an earlier process's cursor resets); SSE frames golden (`id/event/data`), cursor replay, reset (trimmed, ahead, earlier process, slow reader), heartbeat; `/events/poll` |
+| `tests/test_settings.py` | defaults; deep-merge; validation errors; a stored v1 night_window is ignored; capabilities; `advisor.auto_draft_repo_ids` accepts a repo id list and rejects the same shapes `slack.muted_repo_ids` rejects |
 | `tests/test_handlers_auth.py` | every route in §2.10 registered exactly once with the expected method; every handler has `__kirocrew_authenticated__`; every POST/PUT/DELETE has `__kirocrew_owner_only__` (incl. `/slack/actions/callback`; an `X-Internal-Secret` header alone → 401); anon → 401, non-owner → 403 owner_required, app token → 403 app_token_forbidden on each mutation; reads accept app token; unknown code never leaks (500 body has `code: internal_error`); `ROUTE_ORDER` literal with `plan/advise` before `{intent}` |
 | `tests/test_handlers_repos.py`, `test_handlers_intents.py`, `test_handlers_actions.py`, `test_handlers_misc.py` | per-route request/response shape checks against §2 (golden JSON keys), error codes per table; `test_handlers_repos.py` also: the `install` block carries `own_engine_version`, and for a repository whose only harness is foreign it is null with `upgrade_available` False and `newer_installed` False while `POST …/install/preview` is **not** refused `already_installed` and `POST …/upgrade/preview` is refused `not_installed` (A26); `test_handlers_intents.py` for `plan/advise`: needs an objective (400 `bad_body`, `details.missing == ["objective"]`), answers 202 with a plan draft and creates nothing (no intent dir, empty denied log) while the stored `plan_current.scope`, and the package's `plan.current.scope`, `plan.context` and `plan.project_type`, are the body's, and stores `auto` False with an `advisor.requested` row even when the body sends `"auto": true` |
 | `tests/test_e2e_gate.py` | full vertical slice with fakes: add repo → intent with `state-gate-open` → card derived → submit approve (stale/fresh) → UI-side delivery report → audit variant appended → reconciler resolves `StateChanged` → card leaves the queue → activity + events recorded |

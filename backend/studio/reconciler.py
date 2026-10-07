@@ -856,7 +856,7 @@ class Reconciler:
             # A run parked on a host tool approval waits silently in the chat; say so once per approval.
             # Not for an archived intent: the user set it aside, and the queue does not list it either.
             try:
-                await self._s.notifications.notify_tool_approval(
+                await self._s.notifications.notify("tool_approval",
                     repo_id=repo.repo_id, repo_label=repo.label, intent_key=snap.intent_key,
                     intent_label=_attr(snap.row, "slug") or intent_dir, slot_key=binding.slot_key,
                     approval=slot.approval, turn=str(_attr(slot, "last_turn_ts") or ""),
@@ -2275,10 +2275,15 @@ class Reconciler:
     # ---- tick step 7: retention ------------------------------------------ #
 
     async def _retention_pass(self) -> tuple[int, int]:
-        """Purge verbatim human text past its retention and expire advisor drafts."""
+        """Purge verbatim human text past its retention, delete Activity rows older than
+        ``diagnostics.retention_days``, and expire advisor drafts."""
         days = int(self._s.settings.human_text_retention_days())
         cutoff = C.iso_from_epoch(self._s.clock.now() - days * 86400)
         purged = await self._to_thread(self._s.storage.activity_purge_human_text, cutoff)
+        keep = int(self._s.settings.diagnostics()["retention_days"])
+        await self._to_thread(
+            self._s.storage.activity_delete_before, C.iso_from_epoch(self._s.clock.now() - keep * 86400)
+        )
         expired = await self._expire_drafts()
         return int(purged), expired
 

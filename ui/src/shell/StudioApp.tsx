@@ -147,14 +147,6 @@ function Shell({ api }: { api: StudioApi }) {
     () => actions.data?.actions.filter((card) => card.failure?.breaker_open).length ?? null,
     [actions.data],
   )
-  const night = settings.data
-    ? {
-        enabled: settings.data.settings.night_window.enabled,
-        start: settings.data.settings.night_window.start_local,
-        end: settings.data.settings.night_window.end_local,
-      }
-    : null
-
   const shellData = useMemo<ShellData>(
     () => ({ api, route, go, actions, repos, leases, settings, health, setQueueCount }),
     [api, route, go, actions, repos, leases, settings, health],
@@ -193,7 +185,6 @@ function Shell({ api }: { api: StudioApi }) {
           leases={leases.data?.leases.length ?? null}
           circuits={circuits}
           critical={queue?.counts.critical ?? null}
-          nightWindow={night}
           streamMode={stream.mode}
         />
       </ScopeBar>

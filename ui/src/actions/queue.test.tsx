@@ -131,7 +131,7 @@ function installRoutes(cards: ActionCard[], over: Record<string, RouteHandler> =
     }),
     [`GET ${BASE}/leases`]: () => ({ leases: [], global_concurrency_cap: 2, live_execution: 0 }),
     [`GET ${BASE}/settings`]: () => ({
-      settings: { night_window: { enabled: false, start_local: '22:00', end_local: '06:00' } },
+      settings: {},
       capabilities: { grouped_answers: { available: false, reason: 's1_s2_unverified' } },
       versions: {}, updated_at: null,
     }),

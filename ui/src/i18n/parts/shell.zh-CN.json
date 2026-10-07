@@ -37,8 +37,6 @@
   "shell.strip.expand": "显示执行状态",
   "shell.strip.leases_one": "持有 {n} 个仓库租约",
   "shell.strip.leases_other": "持有 {n} 个仓库租约",
-  "shell.strip.nightOff": "夜间窗口已关闭",
-  "shell.strip.nightOn": "夜间窗口 {start} – {end}",
   "shell.strip.polling": "正在轮询更新",
   "shell.strip.pollingWhy": "实时事件流未连接，Studio 正在按定时重新读取。不会遗漏任何内容，只是更新更慢。",
   "shell.strip.running_one": "{n} 个回合正在运行",

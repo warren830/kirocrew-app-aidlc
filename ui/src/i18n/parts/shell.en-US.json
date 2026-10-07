@@ -37,8 +37,6 @@
   "shell.strip.expand": "Show execution status",
   "shell.strip.leases_one": "{n} repo lease held",
   "shell.strip.leases_other": "{n} repo leases held",
-  "shell.strip.nightOff": "Night window off",
-  "shell.strip.nightOn": "Night window {start} – {end}",
   "shell.strip.polling": "Polling for updates",
   "shell.strip.pollingWhy": "The live event stream is not connected, so Studio is re-reading on a timer. Nothing is missed; updates are slower.",
   "shell.strip.running_one": "{n} turn running",

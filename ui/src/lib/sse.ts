@@ -11,7 +11,8 @@
  *    dispatches a `<type>` event and `onmessage` NEVER fires. Subscribing to `message` only — the
  *    obvious implementation — produces a connection that receives nothing and looks healthy.
  * 2. **`hello` and `reset` mean "refetch everything".** `hello` is a cold start with no replay;
- *    `reset` means the cursor fell off the ring (or the storage file was rebuilt and `seq` restarted).
+ *    `reset` means the cursor fell off the ring or came from before a gateway restart (the ring is in
+ *    memory, so replay never crosses a restart).
  *    Both are surfaced to subscribers as a synthetic `reset` so a view reloads instead of guessing.
  * 3. **Reconnect is ours, not the browser's.** `EventSource`'s own retry is uncontrollable and would
  *    hammer a restarting gateway, so the stream is closed on error and reopened on a capped backoff

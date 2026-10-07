@@ -262,7 +262,7 @@ def test_every_write_verb_is_refused_and_never_spawned(G, K, E, scripted, clock,
             G.GitObserver.check_argv([verb])
         assert excinfo.value.code == "internal_error"
         with pytest.raises(E.StudioError):
-            obs.run_sync(work, [verb, "--dry-run"])
+            obs._run(work, [verb, "--dry-run"], stdout_cap=1024)
     assert scripted.calls == [], "a refused argv must never reach a child process"
 
 
@@ -281,7 +281,7 @@ def test_global_options_before_the_verb_are_refused(G, E, scripted, clock, work)
     )
     for shape in shapes:
         with pytest.raises(E.StudioError) as excinfo:
-            obs.run_sync(work, shape)
+            obs._run(work, shape, stdout_cap=1024)
         assert excinfo.value.code == "internal_error", shape
     assert scripted.calls == []
 
@@ -290,7 +290,7 @@ def test_an_unlisted_verb_is_refused_even_when_it_looks_harmless(G, E, work, scr
     obs = G.GitObserver(scripted.path, clock)
     for verb in ("fsck", "archive", "bugreport", "help"):
         with pytest.raises(E.StudioError):
-            obs.run_sync(work, [verb])
+            obs._run(work, [verb], stdout_cap=1024)
     assert scripted.calls == []
 
 
@@ -464,7 +464,7 @@ def test_a_bypass_variable_in_the_gateway_never_reaches_git(G, E, scripted, cloc
     assert observation.available is False
     assert observation.reason == G.REASON_ERROR
     with pytest.raises(E.StudioError) as excinfo:
-        obs.run_sync(work, ["status"])
+        obs._run(work, ["status"], stdout_cap=1024)
     assert excinfo.value.code == "internal_error"
     assert scripted.calls == []
 
@@ -618,20 +618,20 @@ def test_observe_gives_up_on_a_wedged_git_instead_of_blocking(G, K, scripted, cl
     assert observation.reason == G.REASON_TIMEOUT
 
 
-def test_run_sync_reports_a_timeout_without_raising(G, K, scripted, clock, work, monkeypatch):
+def test_a_spawn_reports_a_timeout_without_raising(G, K, scripted, clock, work, monkeypatch):
     monkeypatch.setattr(K, "GIT_TIMEOUT_SECS", 0.25)
     obs = G.GitObserver(scripted.path, clock)
     scripted.plan({"log": {"sleep": 5}})
-    result = obs.run_sync(work, ["log", "-n", "1"])
+    result = obs._run(work, ["log", "-n", "1"], stdout_cap=1024)
     assert result.timed_out is True
     assert result.exit_code is None
     assert result.ok is False
 
 
-def test_run_sync_redacts_credentials_out_of_stderr(G, scripted, clock, work):
+def test_a_spawn_redacts_credentials_out_of_stderr(G, scripted, clock, work):
     obs = G.GitObserver(scripted.path, clock)
     scripted.plan({"log": {"exit": 128, "stderr": "fatal: token=0123456789abcdef failed\n"}})
-    result = obs.run_sync(work, ["log"])
+    result = obs._run(work, ["log"], stdout_cap=1024)
     assert "0123456789abcdef" not in result.stderr
     assert result.exit_code == 128
 
@@ -862,10 +862,8 @@ def test_version_reports_the_binary_or_nothing(G, scripted, clock):
     obs = G.GitObserver(scripted.path, clock)
     scripted.plan({"--version": {"stdout": "git version 2.50.1 (Apple Git-155)\n"}})
     assert obs.version() == "git version 2.50.1 (Apple Git-155)"
-    assert obs.git_path == scripted.path
-    blind = G.GitObserver(None, clock)
-    assert blind.version() is None and blind.git_path is None
-    assert G.GitObserver("", clock).git_path is None, "an empty path is 'no git', not a binary named ''"
+    assert G.GitObserver(None, clock).version() is None
+    assert G.GitObserver("", clock).version() is None, "an empty path is 'no git', not a binary named ''"
 
 
 # --------------------------------------------------------------------------- #
@@ -897,7 +895,6 @@ def test_the_value_objects_are_frozen_and_slotted(G):
     cases = (
         (G.GitObservation.unavailable(G.REASON_ERROR, observed_at="2026-09-04T10:00:00Z", took_ms=0), "reason"),
         (G.GitCommit("a" * 40, "2026-09-04T10:00:00Z", "s"), "sha"),
-        (G.GitResult(("log",), 0, "", "", False), "stdout"),
     )
     for value, field in cases:
         assert type(value).__slots__ is not None, type(value)
@@ -907,21 +904,12 @@ def test_the_value_objects_are_frozen_and_slotted(G):
 
 
 def test_unavailable_observations_use_only_the_documented_reasons(G):
-    assert G.OBSERVATION_REASONS == ("git_missing", "not_a_repo", "timeout", "error")
+    assert (G.REASON_GIT_MISSING, G.REASON_NOT_A_REPO, G.REASON_TIMEOUT, G.REASON_ERROR) == (
+        "git_missing", "not_a_repo", "timeout", "error")
     blank = G.GitObservation.unavailable(G.REASON_TIMEOUT, observed_at="2026-09-04T10:00:00Z", took_ms=7)
     assert blank.to_json()["reason"] == "timeout"
     assert blank.to_json()["took_ms"] == 7
     assert blank.available is False
-
-
-def test_run_sync_result_carries_the_argv_it_ran(G, scripted, clock, work):
-    obs = G.GitObserver(scripted.path, clock)
-    scripted.plan({"status": {"stdout": status_text()}})
-    result = obs.run_sync(work, ["status", "--porcelain=v2", "--branch"])
-    assert result.argv == ("status", "--porcelain=v2", "--branch")
-    assert result.ok is True
-    assert "# branch.head main" in result.stdout
-    assert result.to_json()["argv"] == ["status", "--porcelain=v2", "--branch"]
 
 
 def test_observing_a_repository_never_changes_a_byte_of_it(observer, gate_repo):

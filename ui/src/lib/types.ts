@@ -259,9 +259,9 @@ export interface ResolveResponse { ok: true; action: ActionCard; created_action_
 export type PlanDepth = 'Minimal' | 'Standard' | 'Comprehensive'
 export interface PlanRequest { space: string; scope: string; depth: PlanDepth; test_strategy: PlanDepth | null; review_cap: 'none' | 'advisory' | 'adversarial' | null; project_type: 'Greenfield' | 'Brownfield' | null; overrides: Record<string, boolean>; objective: string | null; label: string | null; context: string | null }
 export interface PlanStage { slug: string; number: string; name: string; phase: string; execution: 'ALWAYS' | 'CONDITIONAL'; in_grid: boolean; enabled: boolean; locked: boolean; lock_reason: string | null; gate: boolean; review_class: string | null; reviewer: string | null; per_unit: boolean; produces: string[]; consumes: string[]; depends_on: string[]; conditional_on: string | null; state: StageState | null }
-export interface Range { low: number; high: number; unit: 'turns' | 'secs'; source: 'rule_band' | 'history_calibrated' | 'assumption'; confidence: 'low' | 'medium' }
+export interface Range { low: number; high: number; unit: 'turns' | 'secs'; source: 'rule_band' | 'assumption'; confidence: 'low' }
 export interface ExactCounts { stages: number; gates: number; artifacts: number; review_intensity: Record<'none' | 'advisory' | 'adversarial', number>; assumes_units: number | null }
-export interface Estimate { turns: Range; active_secs: Range; elapsed_secs: Range | null; credits: null; credits_status: 'unavailable'; source: 'rule_band' | 'history_calibrated'; confidence: 'low' | 'medium'; samples: number; dominant: { slug: string; share_pct: number; turns: Range }[]; coverage_lost: { slug: string; artifacts: string[] }[] }
+export interface Estimate { turns: Range; active_secs: Range; elapsed_secs: Range | null; credits: null; credits_status: 'unavailable'; source: 'rule_band'; confidence: 'low'; samples: number; dominant: { slug: string; share_pct: number; turns: Range }[]; coverage_lost: { slug: string; artifacts: string[] }[] }
 export interface PlanIssue { code: string; slugs: string[]; message_key: string; params: Record<string, unknown> }
 export interface PlanDiffEntry { slug: string; from_enabled: boolean; to_enabled: boolean; reason: string }
 export interface EffectivePlan { request: PlanRequest; scope_meta: Record<string, unknown> | null; stages: PlanStage[]; exact: ExactCounts; estimate: Estimate; diff: PlanDiffEntry[]; issues: PlanIssue[]; valid: boolean; products: string[]; graph_stage_count: number; engine_version: string | null }
@@ -295,10 +295,10 @@ export interface PlanProposal { scope: string | null; depth: PlanDepth | null; t
 export interface PlanAdviseRequest { space: string; objective: string; context: string | null; project_type: 'Greenfield' | 'Brownfield' | null; locale: string; current: Pick<PlanRequest, 'scope' | 'depth' | 'test_strategy' | 'review_cap' | 'overrides'> }
 /** `plan_proposal` is on the wire only for card-less kinds (`ADVISOR_CARDLESS_KINDS`), null until the draft is ready. */
 export interface AdvisorDraft { draft_id: string; action_id: string; kind: AdvisorKind; status: 'queued' | 'running' | 'ready' | 'failed' | 'expired'; request: { action_id: string; kind: string; question_index: number | null; locale: string; auto: boolean }; result: DraftResult | null; error: string | null; created_at: string; updated_at: string; expires_at: string; neutrality: Record<string, unknown> | null; plan_proposal?: PlanProposal | null }
-export interface SettingsValues { locale: 'auto' | 'en-US' | 'zh-CN'; density: 'compact' | 'comfortable'; queue_organize: Organize; global_concurrency_cap: number; slack: { enabled: boolean; muted_repo_ids: string[] }; night_window: { enabled: false; start_local: string; end_local: string; turn_cap: number; credit_cap: null }; diagnostics: { retention_days: number; export_include_human_text: boolean }; human_text_retention_days: number; advisor: { enabled: boolean; auto_draft_repo_ids: string[] }; installer: { run_doctor_after_install: boolean }; notifications: { dashboard: boolean } }
+export interface SettingsValues { locale: 'auto' | 'en-US' | 'zh-CN'; density: 'compact' | 'comfortable'; queue_organize: Organize; global_concurrency_cap: number; slack: { enabled: boolean; muted_repo_ids: string[] }; diagnostics: { retention_days: number; export_include_human_text: boolean }; human_text_retention_days: number; advisor: { enabled: boolean; auto_draft_repo_ids: string[] }; installer: { run_doctor_after_install: boolean }; notifications: { dashboard: boolean } }
 export interface Capability { available: boolean; reason: string | null }
 export interface BunToolResponse { tool: { found: boolean; path: string | null; configured_path?: string | null; version: string | null; source: string | null; searched: string[] } }
-export type CapabilityName = 'night_window' | 'credit_cap' | 'slack' | 'advisor' | 'slack_quick_actions' | 'grouped_answers'
+export type CapabilityName = 'slack' | 'advisor' | 'slack_quick_actions' | 'grouped_answers'
 export interface SettingsResponse { settings: SettingsValues; capabilities: Record<CapabilityName, Capability>; versions: { studio: string; bundled_engine: string; min_kirocrew: string; host: string | null }; updated_at: string | null }
 export interface HealthResponse { app: string; version: string; bundled_engine_version: string; min_kirocrew_version: string; boot_id: string; host_version: string | null; started_at: string | null; status: 'healthy' | 'degraded' | 'error'; issues: string[]; storage: { path_hash: string; schema_version: number; integrity: 'ok' | 'error'; wal: boolean }; payload: { ok: boolean; engine_version: string; file_count: number; mismatches: number }; host: { attached: boolean; capabilities: Record<string, Capability> }; tools: { bun: { found: boolean; path: string | null; version: string | null; source: string | null; searched: string[] }; git: { found: boolean; path: string | null; version: string | null } }; reconciler: { running: boolean; last_tick_at: string | null; last_tick_ms: number | null; repos_scanned: number }; counts: { repos: number; intents: number; live_actions: number; execution_leases: number; admin_leases: number }; machine_lane: { available: false; reason: 'machine_lane_unavailable' } }
 
@@ -313,7 +313,6 @@ export interface DiagnosticsBundle { generated_at: string; health: HealthRespons
 export interface ReposResponse { repos: RepoRecord[]; totals: { repos: number; unavailable: number; open_actions: number } }
 export interface RepoDetailResponse { repo: RepoRecord; intents: IntentSummary[]; transactions: TransactionResult[] }
 export interface LeasesResponse { leases: LeaseView[]; global_concurrency_cap: number; live_execution: number }
-export interface CalibrationResponse { cohorts: { scope: string; depth: string; stage_class: string; samples: number }[]; total: number; min_samples: number }
 export interface IntentsResponse { intents: IntentSummary[]; spaces: string[]; active_space: string }
 export interface ArtifactsResponse { artifacts: ArtifactMeta[]; truncated: boolean; count: number }
 export interface ArtifactResponse { artifact: ArtifactMeta; content: string | null; encoding: 'utf-8' | 'binary'; truncated: boolean; review: { verdict: string | null; findings: ReviewFinding[] } | null; toc: { level: number; text: string; anchor: string }[]; prior: { available: boolean; source: 'git' | null; diff: string | null } }
@@ -344,7 +343,6 @@ export interface RescanResponse { ok: true; scan: RepoScan }
 export interface ReceiptsResponse { receipts: Receipt[] }
 export interface TransactionResponse { transaction: TransactionResult }
 export interface PlanPreviewResponse { plan: EffectivePlan }
-export interface CalibrationClearResponse { ok: true; removed: number }
 export interface SlackCallbackResponse { ok: true; recorded: true }
 export interface MapResponse { map: MapModel }
 export interface IntentResponse { intent: IntentDetail }

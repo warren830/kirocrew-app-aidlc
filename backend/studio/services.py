@@ -44,6 +44,7 @@ from .events import EventLog
 from .git_observer import GitObserver
 from .installer import Installer, PayloadManifest, PayloadStatus
 from .leases import RepoScheduler
+from .notifications import NotificationAdapter
 from .plan import PlanService
 from .projection import Projection
 from .reconciler import Reconciler
@@ -133,7 +134,7 @@ class Services:
     git: GitObserver
     activity: ActivityProjector
     advisor: AdvisorBroker
-    notifications: Any
+    notifications: NotificationAdapter
     events: EventLog
     payload: PayloadManifest
     boot_id: str
@@ -226,7 +227,7 @@ class Services:
         engine = EngineRunner(bun_path=bun, clock=clock, activity=activity)
         scheduler = RepoScheduler(storage, host, settings, clock, activity, busy_reasons=busy_reasons)
         sessions = SessionBinder(storage, host, projection, clock, activity)
-        notifications = _build_notifications(host, storage, settings, activity, clock)
+        notifications = NotificationAdapter(host, storage, settings, activity, clock)
         actions = HumanActionBroker(
             storage,
             projection,
@@ -619,59 +620,6 @@ def _load_manifest(app_root: Path) -> tuple[PayloadManifest, str | None]:
             files=(),
         )
         return sentinel, exc.code
-
-
-def _build_notifications(host: Any, storage: Any, settings: Any, activity: Any, clock: Any) -> Any:
-    """The notification adapter, or an inert stand-in while ``notifications.py`` does not exist.
-
-    Notifications are the one collaborator whose absence costs nothing but a toast: the durable record,
-    the queue and the deep link all exist without it. Importing it optionally keeps the rest of the
-    graph constructible, and the stand-in records the same shape so no caller needs a null check.
-    """
-    try:
-        from . import notifications as module  # type: ignore[attr-defined]
-    except ImportError:
-        return _InertNotifications()
-    return module.NotificationAdapter(host, storage, settings, activity, clock)
-
-
-class _InertNotifications:
-    """Answers the ``NotificationAdapter`` calls the broker makes, and sends nothing."""
-
-    __slots__ = ()
-
-    def deep_link(self, action_id: str) -> str:
-        return f"{C.DEEP_LINK_BASE}?view=actions&action={action_id}"
-
-    async def notify_action(self, card: Any) -> dict:
-        return {
-            "dashboard": False,
-            "slack": "unavailable",
-            "slack_ts": None,
-            "deep_link": self.deep_link(str(C.attr(card, "action_id", ""))),
-            "dedupe_hit": False,
-        }
-
-    async def notify_completion(self, summary: Any) -> dict:
-        return {
-            "dashboard": False,
-            "slack": "unavailable",
-            "slack_ts": None,
-            "deep_link": C.DEEP_LINK_BASE,
-            "dedupe_hit": False,
-        }
-
-    async def notify_tool_approval(self, **_: Any) -> dict:
-        return {
-            "dashboard": False,
-            "slack": "unavailable",
-            "slack_ts": None,
-            "deep_link": "",
-            "dedupe_hit": False,
-        }
-
-    def slack_quick_action_eligible(self, card: Any) -> tuple[bool, str]:
-        return (False, "host_seam_unavailable")
 
 
 def _module_dashboard_state() -> object | None:

@@ -198,15 +198,12 @@ MAX_README_CHARS = 3000
 # retention and ring buffers
 # --------------------------------------------------------------------------- #
 
-EVENTS_RING_SIZE = 10_000
+EVENTS_RING_SIZE = 2_000
 ACTIVITY_DEFAULT_LIMIT = 100
 ACTIVITY_MAX_LIMIT = 500
 HUMAN_TEXT_RETENTION_DAYS_DEFAULT = 30
 HUMAN_TEXT_RETENTION_DAYS_MAX = 30
 ADVISOR_DRAFT_TTL_SECS = 24 * 3600
-#: Below this many comparable local samples, an estimate is presented as a rule-based band and
-#: labelled as such — never as calibrated history (FR-EST/§17).
-CALIBRATION_MIN_SAMPLES = 10
 
 # --------------------------------------------------------------------------- #
 # circuit breaker

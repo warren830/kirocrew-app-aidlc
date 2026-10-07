@@ -3182,11 +3182,11 @@ class HumanActionBroker:
                 "count": failure.get("count"),
             },
         )
-        notify = getattr(self._notifications, "notify_action", None)
+        notify = getattr(self._notifications, "notify", None)
         if notify is None:
             return
         try:
-            await notify(await self.card(card_rec, None))
+            await notify("action", await self.card(card_rec, None))
         except StudioError as exc:
             logger.info("aidlc-studio: breaker notification unavailable (%s)", exc.code)
 

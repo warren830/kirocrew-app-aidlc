@@ -1,8 +1,8 @@
 /**
  * The Settings assertions that matter are all about refusals and separations.
  *
- *   - Night work window and the credit cap render as UNAVAILABLE *with the reason* and expose no control at
- *     all. A switch that the backend answers 409 to would advertise unattended runs Studio cannot perform.
+ *   - There is no night work window or credit cap at all: no trusted machine lane exists, and a schedule or a
+ *     budget for one would advertise unattended runs Studio cannot perform.
  *   - The app version and the bundled AI-DLC version are two rows, never one string: a reader must not be
  *     able to conclude that upgrading the App upgraded their repositories.
  *   - A locale override writes both the server preference and the browser-local override, because the page
@@ -31,7 +31,6 @@ const SETTINGS: SettingsResponse = {
     queue_organize: 'priority',
     global_concurrency_cap: 2,
     slack: { enabled: true, muted_repo_ids: [] },
-    night_window: { enabled: false, start_local: '22:00', end_local: '06:00', turn_cap: 40, credit_cap: null },
     diagnostics: { retention_days: 30, export_include_human_text: false },
     human_text_retention_days: 30,
     advisor: { enabled: true, auto_draft_repo_ids: [] },
@@ -39,8 +38,6 @@ const SETTINGS: SettingsResponse = {
     notifications: { dashboard: true },
   },
   capabilities: {
-    night_window: { available: false, reason: 'machine_lane_unavailable' },
-    credit_cap: { available: false, reason: 'credits_unobservable' },
     slack: { available: true, reason: null },
     advisor: { available: true, reason: null },
     slack_quick_actions: { available: false, reason: 'host_seam_unavailable' },
@@ -120,26 +117,13 @@ beforeEach(() => {
 })
 
 describe('Automation and budgets', () => {
-  it('shows the night window as unavailable with its reason and offers no enable control', async () => {
+  it('offers no unattended-work window, turn cap or credit cap', async () => {
     routes()
     await renderSettings()
 
-    const night = row('Night work window')
-    expect(within(night).getByText(/Unavailable — no trusted machine lane is proven/)).toBeInTheDocument()
-    // The whole point: no switch, no checkbox. Only the stored window bounds.
-    expect(within(night).queryByRole('switch')).toBeNull()
-    expect(within(night).queryByRole('checkbox')).toBeNull()
-    expect(within(night).getByText('22:00 – 06:00 local')).toBeInTheDocument()
-  })
-
-  it('shows the credit cap as unavailable with its reason and offers no input', async () => {
-    routes()
-    await renderSettings()
-
-    const credit = row('Credit cap')
-    expect(within(credit).getByText(/Unavailable — credit use is not observable/)).toBeInTheDocument()
-    expect(within(credit).queryByRole('spinbutton')).toBeNull()
-    expect(within(credit).queryByRole('checkbox')).toBeNull()
+    expect(screen.queryByText('Night work window')).toBeNull()
+    expect(screen.queryByText('Turn cap per window')).toBeNull()
+    expect(screen.queryByText('Credit cap')).toBeNull()
   })
 
   it('commits a concurrency change on blur rather than per keystroke', async () => {
@@ -304,19 +288,19 @@ describe('A rejected patch', () => {
     routes({
       'PUT /api/apps/aidlc-studio/settings': () => {
         throw new Error(
-          'API 400: {"error":"turn cap out of range","code":"bad_body","details":{"key":"night_window.turn_cap","reason":"range"}}',
+          'API 400: {"error":"cap out of range","code":"bad_body","details":{"key":"global_concurrency_cap","reason":"range"}}',
         )
       },
     })
     await renderSettings()
 
-    const input = within(row('Turn cap per window')).getByRole('spinbutton')
+    const input = within(row('Global concurrency')).getByRole('spinbutton')
     await userEvent.clear(input)
-    await userEvent.type(input, '99')
+    await userEvent.type(input, '5')
     await userEvent.tab()
 
     await waitFor(() =>
-      expect(screen.getByText(/rejected night_window\.turn_cap/)).toBeInTheDocument(),
+      expect(screen.getByText(/rejected global_concurrency_cap/)).toBeInTheDocument(),
     )
   })
 })

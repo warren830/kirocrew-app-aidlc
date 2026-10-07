@@ -26,7 +26,7 @@ import { ERROR_CODES, type ErrorCode } from './errorCodes.generated'
 import type {
   ActionDetailResponse, ActionResponse, ActionsResponse, ActivityResponse, AddRepoResponse,
   AdvisorDraftGetResponse, AdvisorDraftResponse, AdvisorKind, ArtifactResponse, ArtifactsResponse,
-  BindResponse, BindingResponse, BunToolResponse, CalibrationClearResponse, CalibrationResponse, ChatFolder, CommandResponse,
+  BindResponse, BindingResponse, BunToolResponse, ChatFolder, CommandResponse,
   DeliveryReport, DeliveryResponse, DiagnosticsBundle, DirectoryResponse, DoctorResponse, EventPollResponse,
   HealthResponse, HostChatReceipt, IntentCreateResponse, IntentGitResponse, IntentResponse,
   IntentsResponse, LeasesResponse, MapResponse, MaintenancePreview, MaintenanceResult, Organize, PauseResponse, PayloadResponse, PlanAdviseRequest, PlanPreviewResponse,
@@ -190,8 +190,6 @@ export interface StudioApi extends WorkspaceApi {
   diagnostics(opts?: { export?: boolean; includeHumanText?: boolean } & ReadOptions): Promise<DiagnosticsBundle>
   settings(o?: ReadOptions): Promise<SettingsResponse>
   putSettings(patch: DeepPartial<SettingsValues>): Promise<SettingsResponse>
-  calibration(o?: ReadOptions): Promise<CalibrationResponse>
-  clearCalibration(): Promise<CalibrationClearResponse>
 
   // -- events and activity ------------------------------------------------ //
   pollEvents(cursor: number | null, limit?: number, o?: ReadOptions): Promise<EventPollResponse>
@@ -258,7 +256,7 @@ export interface StudioApi extends WorkspaceApi {
    * Always rejects with `machine_lane_unavailable` (§2.3). Present so the client surface matches the
    * route table and so the one place that could ever call it is the one place that documents why it
    * cannot: every KiroCrew path to kiro-cli mints a `HUMAN_TURN`, so unattended continuation would
-   * forge human presence in AI-DLC's audit trail. Settings renders `unavailable.machineLane` instead.
+   * forge human presence in AI-DLC's audit trail.
    */
   keepMoving(repoId: string, intentKey: string, enabled: boolean): Promise<never>
   bindSession(repoId: string, intentKey: string, slotKey: string): Promise<BindResponse>
@@ -339,8 +337,6 @@ export function useStudioApi(): StudioApi {
         ),
       settings: (o) => get('/settings', o),
       putSettings: (patch) => send('put', '/settings', patch),
-      calibration: (o) => get('/calibration', o),
-      clearCalibration: () => post('/calibration/clear', { confirm: true }),
 
       pollEvents: (cursor, limit, o) =>
         get(`/events/poll${query({ cursor, limit })}`, o),

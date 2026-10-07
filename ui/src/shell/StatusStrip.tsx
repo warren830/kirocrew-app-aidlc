@@ -32,7 +32,6 @@ export interface StatusStripProps {
   circuits: number | null
   /** Cards in the `critical` band — recovery and delivery uncertainty. */
   critical: number | null
-  nightWindow: { enabled: boolean; start: string; end: string } | null
   streamMode: StreamMode
 }
 
@@ -44,7 +43,7 @@ function readOpen(): boolean {
   }
 }
 
-export function StatusStrip({ running, leases, circuits, critical, nightWindow, streamMode }: StatusStripProps) {
+export function StatusStrip({ running, leases, circuits, critical, streamMode }: StatusStripProps) {
   const i18n = useI18n()
   const { t } = i18n
   const [open, setOpen] = useState(readOpen)
@@ -100,11 +99,6 @@ export function StatusStrip({ running, leases, circuits, critical, nightWindow, 
               {plural(i18n, 'shell.strip.critical', critical ?? 0)}
             </Chip>
           ) : null}
-          <Chip icon="moon" title={nightWindow?.enabled ? undefined : t('unavailable.machineLane')}>
-            {nightWindow?.enabled
-              ? t('shell.strip.nightOn', { start: nightWindow.start, end: nightWindow.end })
-              : t('shell.strip.nightOff')}
-          </Chip>
           {streamMode !== 'live' ? (
             <Chip tone="warn" icon="refresh" title={t('shell.strip.pollingWhy')}>
               {t('shell.strip.polling')}

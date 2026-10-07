@@ -21,14 +21,11 @@ export function settingsResponse(): SettingsResponse {
     settings: {
       locale: 'auto', density: 'compact', queue_organize: 'priority', global_concurrency_cap: 2,
       slack: { enabled: false, muted_repo_ids: [] },
-      night_window: { enabled: false, start_local: '22:00', end_local: '06:00', turn_cap: 40, credit_cap: null },
       diagnostics: { retention_days: 30, export_include_human_text: false },
       human_text_retention_days: 30, advisor: { enabled: true, auto_draft_repo_ids: [] },
       installer: { run_doctor_after_install: false }, notifications: { dashboard: true },
     },
     capabilities: {
-      night_window: { available: false, reason: 'machine_lane_unavailable' },
-      credit_cap: { available: false, reason: 'credits_unobservable' },
       slack: { available: false, reason: 'host_seam_unavailable' },
       advisor: { available: true, reason: null },
       slack_quick_actions: { available: false, reason: 'host_seam_unavailable' },
