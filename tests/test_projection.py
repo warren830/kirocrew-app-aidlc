@@ -25,7 +25,7 @@ test is replaced.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -102,6 +102,9 @@ class BindingStub:
     interrupted_at: str | None = None
     last_stable_boundary: Any | None = None
 
+    def to_json(self) -> dict:
+        return asdict(self)
+
 
 @dataclass(frozen=True)
 class SlotStub:
@@ -122,6 +125,9 @@ class SessionStub:
     session_key: str = "dashboard:aidlc-studio-r_000000000001-260904-gate-demo"
     running: bool = False
     bound_at: str = "2026-09-04T09:00:00Z"
+
+    def to_json(self) -> dict:
+        return asdict(self)
 
 
 @dataclass(frozen=True)
@@ -833,8 +839,7 @@ def test_gate_and_question_cards_coexist_for_one_stage(projection, gate_snap):
     assert gate.severity == "blocking" and gate.risk_class == "human_lane"
     assert gate.stage == GATE_STAGE
     assert gate.decisions == ("approve", "request_changes")
-    assert gate.headline_key == "action.gate.headline"
-    assert gate.consequence_key == "action.gate.consequence.approve_unlocks"
+    assert gate.consequence_variant == "approve_unlocks"
     assert gate.waiting_since == "2026-09-04T09:00:03Z"       # the STAGE_AWAITING_APPROVAL row, not now
     assert question.decisions == ("answers", "confirm_summary")
 
@@ -973,8 +978,9 @@ def test_question_card_decisions_follow_the_pending_checkpoint(projection, repo_
         question = _by_type(_seeds(projection, snap))["question"]
         assert question.decisions == expected, checkpoint
         assert question.reason == checkpoint
-        assert question.headline_key == f"action.question.{checkpoint}.headline"
-        assert question.consequence_key == f"action.question.consequence.{checkpoint}"
+        # what the card renders `action.question.<checkpoint>.headline` and `.consequence.<checkpoint>` from
+        assert question.headline_params == {"stage": GATE_STAGE, "pending": 0, "checkpoint": checkpoint}
+        assert question.consequence_variant == checkpoint
         assert question.dedupe_key.endswith(snap.questions.sha256)
 
 
@@ -1205,7 +1211,7 @@ def test_every_seed_type_severity_and_risk_class_is_a_canonical_enum(projection,
         for decision in seed.decisions:
             assert decision in C.DECISION_KIND
         assert seed.intent_uuid == "01a00000-0000-7000-8000-000000000001"
-        json.dumps(seed.to_json())            # every seed must survive the SQLite json column
+        json.dumps(asdict(seed))              # every seed must survive the SQLite json column
 
 
 def test_seeds_come_back_in_queue_order(projection, gate_snap, proj_mod):

@@ -1029,6 +1029,9 @@ ConsistencyEngine must NOT read files, write anything, or pick a "true" source �
 ### 1.8 `projection.py`
 
 Sync, pure over reader/consistency output plus Studio rows passed in. Produces the read model the API serialises.
+Its wire records (`DiskState`, `StableBoundary`, `MarkersView`, `AuditEventView`, `QuestionsView`, `EvidenceSnapshot`,
+`IntentSummary`/`IntentDetail`) serialise through `aidlc_reader.WireRecord`: fields in declaration order, or `_wire_keys`
+where the wire order differs (`name?` drops a `None`).
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -1157,7 +1160,14 @@ Card derivation (one seed per live boundary; `dedupe_key` per §0.1):
 | `install_conflict` | `install_status == recovery_required`, or last transaction status `failed` with blocking preview entries | none | attention | |
 | `budget_stop` | reserved; never produced in v1 (machine lane absent) | | info | |
 
+Severity, risk class and the default consequence variant are one row per type (`_SEED_TABLE`; `SEED_SEVERITY`,
+`SEED_RISK_CLASS` and `SEED_CONSEQUENCE` are its columns), and every seed is built by one `_seed`: the dedupe key,
+`captured` and the card meta are assembled the same way for every type.
+
 `revision` cards are not queue items by default (`GET /actions` excludes `type=revision` unless `include=revision`).
+They are still derived and stored: the intent detail's `actions`, `?include=revision`, their Activity rows,
+`GET /health` `counts.live_actions`, the scan priority of a repository with open actions and archive's
+`live_not_paused` refusal all read them.
 
 Projection must NOT touch Storage, the host, or subprocesses; everything it needs is passed in.
 
@@ -1795,7 +1805,7 @@ class Reconciler:
         # Must complete within HOST_STARTUP_HOOK_BUDGET_SECS or move remaining work into the loops (hooks.on_startup awaits only
         # the storage open + task creation; StartupReport is published as event "health.updated")
     async def run_forever(self) -> None
-        # one task, tick_loop — every RECONCILE_INTERVAL_SECS: tick(). Exceptions logged, never propagate.
+        # one loop — every RECONCILE_INTERVAL_SECS: tick(). Exceptions logged, never propagate.
     async def tick(self) -> None
         # 1 scan scheduling: repos with open actions first, then the rest round-robin (cursor kept across ticks); scans run on
         #   services.scan_pool under asyncio.Semaphore(SCAN_CONCURRENCY); no new scan is started once SCAN_TICK_BUDGET_SECS of the tick has
@@ -1838,6 +1848,13 @@ class Reconciler:
     async def scan_repo(self, repo: RepoRecord) -> RepoScan
         # RepoScan{repo_id, availability, install: InstallHealth, intents: list[IntentSummary], findings: list[Finding], took_ms, truncated}
         # per intent: snapshot → findings → derive_cards → upsert_derived/retire_stale → summary; publishes "intent.updated" only when the summary changed
+        # notifications (§1.19), never for an archived intent and never raised into the scan:
+        #   a host tool approval on the bound slot → notify("tool_approval", …), once per approval;
+        #   every Queued gate/question card this scan derived → notify("action", actions.card(rec, snap)) unless
+        #     NotificationAdapter.announced(action_id) — the ledger is read first, so a steady scan renders no card;
+        #   operational_state Completed for an intent whose state file this process read as not completed →
+        #     notify("completion", summary), once. A restart, an un-archive or a briefly unreadable state file therefore
+        #     announces nothing: only a completion this process watched happen is news.
         # step 1b (after the intent loop, only when availability == "available" and the listing was NOT truncated): every live card whose
         # (space, intent_dir) the listing did not return belongs to an intent that left the disk (hand deletion, branch switch, renamed
         # space). Its absence is remembered per (repo, space, intent_dir) and believed only after INTENT_MISSING_GRACE_SECS of consecutive
@@ -2692,11 +2709,14 @@ class NotificationAdapter:
     async def notify(self, kind: str, subject=None, **fields) -> NotificationResult    # the one entry point
         # kind "action": subject is an ActionCard. Notifiable types: gate, question, failure, circuit_breaker,
         #   delivery_uncertain, recovery, install_conflict (anything else → slack "ineligible", nothing sent).
-        #   Dedupe on (action_id, status_class) where status_class = "open" | "uncertain". Called today for the
-        #   breaker card (actions.py); gate/question cards are a later phase.
+        #   Dedupe on (action_id, status_class) where status_class = "open" | "uncertain". Called for the breaker card
+        #   when it opens (actions.py) and for each new gate/question card by the reconciler's scan (§1.13).
         # kind "tool_approval": fields repo_id, repo_label, intent_key, intent_label, slot_key, approval, turn —
         #   dashboard only, links to the intent, dedupe on the approval id (else tool + input + turn). Called by the reconciler.
-        # kind "completion": subject is an intent summary; links to the intent. Implemented; no caller yet.
+        # kind "completion": subject is an intent summary; links to the intent, dedupe per intent. Called by the
+        #   reconciler when an intent it saw unfinished reaches Completed (§1.13).
+    async def announced(self, action_id: str) -> bool
+        # the card's "open" notification is in the ledger: lets a scan skip rendering a card it already announced
         # dashboard: host.notify(English title, body ≤ 500 chars, url=deep link) unless settings.notifications.dashboard is false
         # slack: settings.slack.enabled and repo not muted → host.slack_dm(blocks, text) — header · context · section(brief) ·
         #   section(link) ONLY. Every attempt is one Activity row (kind notification.sent, params.kind = the class).
