@@ -11,6 +11,7 @@
     "WIRE_ANSWER_LINE": "Q{index}: {answer}",
     "WIRE_ANSWER_JOINER": "\n",
     "WIRE_MULTI_SELECT_JOINER": ", ",
+    "WIRE_AUDIT_GROUPED_ANSWER_SUFFIX": "\n\nStudio grouped-answer delivery: this is one human reply to the questions you asked together, in the order you asked them. Record all Q<n> answers together in ONE aidlc-log.ts answer --details call, preserving their text. Then continue the stage.",
     "WIRE_RUN": "/aidlc",
     "WIRE_RESUME": "/aidlc --resume",
     "WIRE_SCOPE_PREFIX": "/aidlc --scope ",

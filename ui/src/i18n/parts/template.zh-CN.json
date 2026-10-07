@@ -37,7 +37,7 @@
   "template.questions.pending": "{total} 题中有 {n} 题未作答",
   "template.questions.unsupportedPending": "另有 {n} 处回答待填写",
   "template.questions.unsupportedBody": "此题单包含尚未作答的内容，Studio 无法将其安全对应到表单问题。请在原会话中阅读并回答。",
-  "template.questions.sameTurnBody": "AI-DLC 在同一轮里一起问了这些问题，要用一条回复全部回答，Studio 无法当作单个选项发送和确认。可以在这里先看问题，然后到原会话里回答。",
+  "template.questions.sameTurnBody": "AI-DLC 在同一轮里一起问了这些问题。在这里全部作答后，Studio 会合成一条回复发送，并请 AI-DLC 记成一条回答。",
   "template.questions.none": "该事项没有携带问题。这组问题可能已经作答过了。",
   "template.questions.selectOne": "单选",
   "template.questions.selectAny": "可多选",

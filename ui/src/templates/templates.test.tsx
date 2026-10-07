@@ -557,31 +557,34 @@ describe('questions template', () => {
     expect(draft().answers['1']).toEqual({ option_letters: ['A'], free_text: null })
   })
 
-  it('shows questions asked in one turn read-only and points at the conversation', async () => {
+  it('lets questions asked in one turn be answered together', async () => {
     setApiRoutes({})
     const auditView = questionsView({
       relpath: 'aidlc/spaces/default/intents/demo/audit/000.md', mode: 'structured', host_card: null,
       origin: { kind: 'audit', event: 'DECISION_RECORDED', shard: '000.md', pos: 43,
         timestamp: '2026-09-10T08:00:00Z', stage: 'requirements-analysis', unit: null,
-        workflow: null, attempt_generation: null, decision_sha256: 'decision-hash' },
-      pending_count: 2, unsupported_pending_count: 2,
+        workflow: null, attempt_generation: null, decision_sha256: 'decision-hash', batch_size: 2 },
+      pending_count: 2,
       questions: [
-        question({ index: 1, prompt: 'Learnings: which judgments become rules?', options: [
+        question({ index: 1, prompt: 'Learnings: which judgments become rules?', multi_select: true, options: [
           { letter: 'A', text: 'c1', is_other: false }, { letter: 'B', text: 'c2', is_other: false },
+          { letter: 'C', text: 'None of these', is_other: false }, { letter: 'D', text: 'Other', is_other: true },
         ] }),
         question({ index: 2, prompt: 'Learnings: anything to add?', options: [
           { letter: 'A', text: 'Nothing to add', is_other: false },
           { letter: 'B', text: 'Add a note', is_other: false },
+          { letter: 'C', text: 'Other', is_other: true },
         ] }),
       ],
     })
-    const { patches } = mount(QuestionsTemplate, questionCard(auditView))
+    const { draft } = mount(QuestionsTemplate, questionCard(auditView))
     expect(screen.getByText(en.t('template.questions.sameTurnBody'))).toBeInTheDocument()
-    expect(screen.queryByText(en.t('template.questions.unsupportedPending', { n: 2 }))).not.toBeInTheDocument()
-    expect(screen.getAllByText(/Learnings: which judgments become rules\?/).length).toBeGreaterThan(0)
-    for (const radio of screen.getAllByRole('radio')) expect(radio).toBeDisabled()
-    await userEvent.click(screen.getByRole('button', { name: en.t('template.questions.openConversation') }))
-    expect(patches).toContainEqual({ tab: 'conversation' })
+    expect(screen.queryByText(en.t('template.questions.degradedTitle'))).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('checkbox', { name: /c1/ }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /c2/ }))
+    await userEvent.click(screen.getByRole('radio', { name: /Nothing to add/ }))
+    expect(draft().answers['1']).toEqual({ option_letters: ['A', 'B'], free_text: null })
+    expect(draft().answers['2']).toEqual({ option_letters: ['A'], free_text: null })
   })
 
   it('uses radios for single select and checkboxes for multi select', () => {

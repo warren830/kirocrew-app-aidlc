@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import re
+from pathlib import Path
 from types import SimpleNamespace
 
 import fixtures as F
@@ -652,19 +653,81 @@ def test_assumption_section_keeps_file_ownership_without_proof(closed_sheet_scen
     assert questions is None or questions.origin is None
 
 
-def test_questions_asked_in_one_turn_stay_on_the_card_for_the_conversation(sv, routes, fake_host, scene):
-    """Two decision rows written back to back are one reply; no single label can prove it (A37)."""
+@pytest.fixture
+def C(studio):
+    return studio.constants
+
+
+RULES_PROMPT = "Learnings: which judgments become rules?"
+
+
+def install_same_turn_questions(scene):
     install_closed_sheet(scene)
-    first = decision(Decision="Learnings: which judgments become rules?", Options="c1,c2")
+    first = decision(Decision=RULES_PROMPT, Options="c1,c2")
     _shard(scene.root).write_text(start_audit() + closed_sheet_receipt(scene) + first + decision())
+
+
+def batch_payload(rules, add, **other):
+    return {"decision": "answers", "answers": [
+        {"index": 1, "option_letters": rules, **other}, {"index": 2, "option_letters": add},
+    ]}
+
+
+def grouped(*lines, C):
+    return "\n".join(lines) + C.WIRE_AUDIT_GROUPED_ANSWER_SUFFIX
+
+
+def test_questions_asked_in_one_turn_are_answered_together_and_resolve(sv, routes, fake_host, scene, C):
+    """Two decision rows written back to back take one reply and one receipt (A37)."""
+    install_same_turn_questions(scene)
     card = question_card(sv, routes, fake_host, scene)
     view = card["evidence"]["questions"]
-    assert view["origin"]["kind"] == "audit"
-    assert [q["prompt"] for q in view["questions"]] == ["Learnings: which judgments become rules?", PROMPT]
-    assert view["pending_count"] == view["unsupported_pending_count"] == 2
-    assert card["decisions"] == []
-    status, body = _submit(sv, routes, fake_host, card, payload=answer_payload(), wire_text=LABELS[0])
-    assert status == 400 and body["details"]["reason"] == "unsupported_question_format", body
+    assert view["origin"]["kind"] == "audit" and view["origin"]["batch_size"] == 2
+    assert view["pending_count"] == 2 and view["unsupported_pending_count"] == 0
+    rules, add = view["questions"]
+    assert (rules["prompt"], rules["multi_select"]) == (RULES_PROMPT, True)
+    assert [o["text"] for o in rules["options"]] == ["c1", "c2", C.AUDIT_NONE_LABEL, "Other"]
+    assert rules["options"][-1]["is_other"] is True
+    assert (add["prompt"], add["multi_select"]) == (PROMPT, False)
+    assert [o["text"] for o in add["options"]] == ["Nothing to add", "Add a note", "Other"]
+    assert [d["decision"] for d in card["decisions"]] == ["answers"]
+
+    # "None of these" stands alone; one engine label per single-choice question.
+    for bad in (batch_payload(["A", "C"], ["A"]), batch_payload(["A"], ["A", "B"])):
+        status, body = _submit(sv, routes, fake_host, card, payload=bad, wire_text="x")
+        assert status == 400, body
+
+    wire = grouped("Q1: c1, c2", "Q2: Nothing to add", C=C)
+    status, receipt = _submit(sv, routes, fake_host, card, payload=batch_payload(["A", "B"], ["A"]), wire_text=wire)
+    assert status == 200, receipt
+    assert receipt["wire_text"] == wire
+    _finish_the_turn(fake_host, scene.slot_key, wire_text=wire)
+    assert _report(sv, routes, fake_host, card["action_id"], receipt)[0] == 200
+    answer_on_disk(scene, Details="Q1: c1, c2\\nQ2: Nothing to add")
+    for _ in range(3):
+        asyncio.run(sv.reconciler.reconcile_now(card["action_id"]))
+    row = _row(sv, card["action_id"])
+    assert row["status"] == "ResolvedNoTransition"
+    assert row["resolution_json"]["reason"] == "question_answered", row["resolution_json"]["reason"]
+    _rescan(sv, routes, fake_host, scene)
+    assert not [c for c in _queue(sv, routes, fake_host) if c["type"] == "question"]
+
+
+def test_a_same_turn_other_answer_carries_the_human_words(sv, routes, fake_host, scene, C):
+    install_same_turn_questions(scene)
+    card = question_card(sv, routes, fake_host, scene)
+    wire = grouped(f"Q1: {C.AUDIT_NONE_LABEL}", "Q2: Keep it short", C=C)
+    payload = {"decision": "answers", "answers": [
+        {"index": 1, "option_letters": ["C"]},
+        {"index": 2, "option_letters": ["C"], "free_text": "Keep it short"},
+    ]}
+    status, receipt = _submit(sv, routes, fake_host, card, payload=payload, wire_text=wire)
+    assert status == 200 and receipt["wire_text"] == wire, receipt
+
+
+def test_ui_mirrors_the_audit_none_label(C):
+    source = (Path(__file__).resolve().parents[1] / "ui/src/actions/useSubmit.ts").read_text()
+    assert f"export const AUDIT_NONE_LABEL = '{C.AUDIT_NONE_LABEL}'" in source
 
 
 def test_a_row_between_two_decisions_leaves_only_the_newest_asked(closed_sheet_scene):

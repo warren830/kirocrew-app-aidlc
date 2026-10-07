@@ -149,7 +149,7 @@ updating this document.
 
 ```python
 APP_NAME = "aidlc-studio"
-APP_VERSION = "1.1.5"                       # must equal app.json "version" (test pins)
+APP_VERSION = "1.1.6"                       # must equal app.json "version" (test pins)
 MIN_KIROCREW_VERSION = "0.3.0"              # == app.json minKiroCrewVersion (architecture §2/A10; review P19/R05)
 BUNDLED_ENGINE_VERSION = "2.7.1"            # == payload/manifest.json engineVersion. Tests assert equality with
 BUNDLED_STATE_VERSION = 8                   #    PayloadManifest.load(); they never compare against a literal
@@ -1811,7 +1811,7 @@ from this table). Rules that apply to every row:
 | question / answers | — | (`question_digest` changed AND no blank tag for the answered indices) OR new `QUESTION_ANSWERED` for stage; AND turn ended |
 | question / confirm_summary | — | new `SUMMARY_CONFIRMATION_RECORDED` for stage, OR (`question_digest` changed AND `summary_confirmation.answered`); AND turn ended |
 | question / accept_assumptions, convert_assumptions | — | (`question_digest` changed AND `assumption_confirmation.answered` AND its answer starts with the chosen option) OR new `QUESTION_ANSWERED` for stage whose `Details` starts with it; AND turn ended (A36) |
-| question (audit origin, several rows asked in one turn) | — | none: `unsupported_pending_count` = row count, no decisions; the derived card retires when the rows are answered (A37) |
+| question / answers (audit origin, `batch_size` > 1) | — | new `QUESTION_ANSWERED` after the batch whose `Details` equals the `Q<n>:` lines (newlines escaped, suffix removed), else any scoped receipt as `answer_not_verified`; AND turn ended (A37) |
 | question / approve_plan | — | `question_digest` changed AND `plan_approval.answered` AND `plan_approval.answer` starts with `WIRE_APPROVE_PLAN`; AND turn ended |
 | question / request_plan_changes | — | `question_digest` changed AND (`plan_approval` tag now holds a `Request Changes…` answer OR was cleared for revision); AND turn ended |
 | missing_input / provide_input | scope: `Scope` field == scope | free_text: turn ended |
@@ -2958,7 +2958,7 @@ Notation below: `→ 200 {…}` success body; `✗ code` = error codes the route
 
 `GET /health` → 200
 ```json
-{"app": "aidlc-studio", "version": "1.1.5", "bundled_engine_version": "2.10.0", "min_kirocrew_version": "0.3.0",
+{"app": "aidlc-studio", "version": "1.1.6", "bundled_engine_version": "2.10.0", "min_kirocrew_version": "0.3.0",
  "boot_id": "…16 hex…",                                       // Services.boot_id; values above are examples — they come from constants/manifest
  "host_version": "0.5.0-insider.9" | null, "started_at": iso|null, "status": "healthy"|"degraded"|"error",
  "issues": [str],

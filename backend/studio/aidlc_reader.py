@@ -1556,29 +1556,49 @@ def audit_questions(
         sort_keys=True, ensure_ascii=False,
     ))
     if len(batch) > 1:
-        # Several questions asked in one turn are answered in one reply, which no single label can
-        # prove (A37). Keep them visible on the card and send the human to the conversation.
+        # Several questions asked in one turn take one reply (A37).
+        origin["batch_size"] = len(batch)
         digest = _sha256(json.dumps(
             {"batch": [_audit_event_identity(e) for e in batch], "digest": digest},
             sort_keys=True, ensure_ascii=False,
         ))
-    questions = tuple(
-        Question(
-            index=n, prompt=p,
-            options=tuple(QuestionOption(
-                chr(65 + i), label, len(ls) == 1 and is_audit_text_label(label),
-            ) for i, label in enumerate(ls)),
-            multi_select=False, answer=None, answered=False, raw=e.raw,
+        questions = tuple(
+            _batch_question(n, p, ls, e.raw)
+            for n, (e, (p, ls)) in enumerate(zip(batch, parsed), start=1)
         )
-        for n, (e, (p, ls)) in enumerate(zip(batch, parsed), start=1)
-    )
+    else:
+        questions = (Question(
+            index=1, prompt=prompt,
+            options=tuple(QuestionOption(
+                chr(65 + i), label, len(labels) == 1 and is_audit_text_label(label),
+            ) for i, label in enumerate(labels)),
+            multi_select=False, answer=None, answered=False, raw=decision.raw,
+        ),)
     return QuestionsFile(
         relpath=f"{record_rel}/{AUDIT_DIRNAME}/{decision.shard}",
         sha256=digest,
         questions=questions,
         summary_confirmation=None, plan_approval=None, pending_count=len(questions), pending_checkpoint=None,
         source_language_hint=None, origin=origin,
-        unsupported_pending_count=len(questions) if len(questions) > 1 else 0,
+    )
+
+
+def _batch_question(index: int, prompt: str, labels: list[str], raw: str) -> Question:
+    """One question of a same-turn batch, with the choices the engine's own chat rendering offers.
+
+    The audit row has no multi-select flag. The engine's mandated "anything to add?" prompt is single
+    choice; every other row asked alongside it (the learnings candidates) takes any subset, so Studio
+    adds an explicit "None of these". Each question keeps an "Other" free-text escape, as in the chat.
+    """
+    single = prompt == C.LEARNINGS_ADD_PROMPT
+    texts = [label for label in labels if label.lower() != C.AUDIT_OTHER_LABEL.lower()]
+    if not single and C.AUDIT_NONE_LABEL not in texts:
+        texts.append(C.AUDIT_NONE_LABEL)
+    options = [QuestionOption(chr(65 + i), label, False) for i, label in enumerate(texts)]
+    options.append(QuestionOption(chr(65 + len(options)), C.AUDIT_OTHER_LABEL, True))
+    return Question(
+        index=index, prompt=prompt, options=tuple(options), multi_select=not single,
+        answer=None, answered=False, raw=raw,
     )
 
 
@@ -1641,7 +1661,11 @@ def audit_question_answer(
     if captured is None:
         return None
     expected = wire_text
-    if is_audit_text_label(captured.fields.get("Options", "")):
+    batch = int(origin.get("batch_size") or 1) > 1
+    if batch:
+        # The engine records the grouped reply without Studio's delivery instruction (A37).
+        expected = expected.removesuffix(C.WIRE_AUDIT_GROUPED_ANSWER_SUFFIX)
+    if batch or is_audit_text_label(captured.fields.get("Options", "")):
         # Mirror redactProjectDirPrefix + renderAuditBlock on our known message.
         # Never unescape untrusted audit rows or weaken the question/presence binding.
         if project_dir:

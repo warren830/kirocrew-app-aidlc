@@ -95,8 +95,8 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
   const unsupportedPending = view?.unsupported_pending_count ?? 0
   const hasPending = pending.length > 0 || unsupportedPending > 0
   const degraded = view?.mode === 'degraded' || unsupportedPending > 0
-  // Several questions logged in one turn (A37): readable here, answered together in the conversation.
-  const sameTurn = unsupportedPending > 0 && view?.origin?.kind === 'audit'
+  // Several questions AI-DLC asked in one turn (A37): answered here together, sent as one reply.
+  const sameTurn = view?.origin?.kind === 'audit' && (view.origin.batch_size ?? 1) > 1
   const answerable = ['Draft', 'Queued', 'NotDelivered'].includes(card.status)
   const editable = answerable && !degraded && !refreshing
   // Nothing is preselected: `summaryChoice` has a stored default because the payload builder needs one,
@@ -252,13 +252,12 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
       ) : view && !degraded ? (
         <Consequence icon="doc">{t('template.questions.fileSource')}</Consequence>
       ) : null}
+      {sameTurn ? <Consequence icon="question">{t('template.questions.sameTurnBody')}</Consequence> : null}
 
       {degraded ? (
         <Block title={t('template.questions.degradedTitle')} icon="warn">
           <Consequence icon="warn" tone="warn" label={t('template.questions.degradedLabel')}>
-            {t(sameTurn
-              ? 'template.questions.sameTurnBody'
-              : unsupportedPending > 0 ? 'template.questions.unsupportedBody' : 'template.questions.degradedBody')}
+            {t(unsupportedPending > 0 ? 'template.questions.unsupportedBody' : 'template.questions.degradedBody')}
           </Consequence>
           <button type="button" className="studio-btn" onClick={() => go({ tab: 'conversation' })}>
             <Icon name="activity" size={15} />
@@ -270,7 +269,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
       <Block title={t('template.questions.group')} icon="question">
         <div className="studio-qmetas">
           <Chip tone={hasPending ? 'accent' : 'ok'} icon={hasPending ? 'question' : 'check'}>
-            {unsupportedPending > 0 && !sameTurn
+            {unsupportedPending > 0
               ? t('template.questions.unsupportedPending', { n: unsupportedPending })
               : t('template.questions.pending', { n: pending.length, total: questions.length })}
           </Chip>

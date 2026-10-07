@@ -2045,7 +2045,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"template.questions.pending": "{n} of {total} unanswered",
 	"template.questions.recorded": "Recorded answer",
 	"template.questions.required": "required",
-	"template.questions.sameTurnBody": "AI-DLC asked these questions together and expects one reply for all of them, which Studio cannot send or confirm as a single choice. Read them here and answer them in the canonical conversation.",
+	"template.questions.sameTurnBody": "AI-DLC asked these questions together. Answer all of them here; Studio sends them as one reply and asks AI-DLC to record them as one answer.",
 	"template.questions.selectAny": "select any",
 	"template.questions.selectOne": "select one",
 	"template.questions.summaryChanges": "The summary needs changes",
@@ -4337,7 +4337,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"template.questions.pending": "{total} 题中有 {n} 题未作答",
 	"template.questions.recorded": "已记录的答案",
 	"template.questions.required": "必答",
-	"template.questions.sameTurnBody": "AI-DLC 在同一轮里一起问了这些问题，要用一条回复全部回答，Studio 无法当作单个选项发送和确认。可以在这里先看问题，然后到原会话里回答。",
+	"template.questions.sameTurnBody": "AI-DLC 在同一轮里一起问了这些问题。在这里全部作答后，Studio 会合成一条回复发送，并请 AI-DLC 记成一条回答。",
 	"template.questions.selectAny": "可多选",
 	"template.questions.selectOne": "单选",
 	"template.questions.summaryChanges": "摘要需要修改",
@@ -7077,6 +7077,7 @@ var Cn = {
 	ANSWER_LINE: "Q{index}: {answer}",
 	ANSWER_JOINER: "\n",
 	MULTI_SELECT_JOINER: ", ",
+	AUDIT_GROUPED_ANSWER_SUFFIX: "\n\nStudio grouped-answer delivery: this is one human reply to the questions you asked together, in the order you asked them. Record all Q<n> answers together in ONE aidlc-log.ts answer --details call, preserving their text. Then continue the stage.",
 	RUN: "/aidlc",
 	RESUME: "/aidlc --resume",
 	SCOPE_PREFIX: "/aidlc --scope ",
@@ -7137,7 +7138,12 @@ function kn(e, t, n) {
 				if (i === null) return null;
 				a.push(i);
 			}
-			return a.length === 1 ? a[0] ?? null : n ? r.map((e, t) => Cn.ANSWER_LINE.replace("{index}", String(e.index)).replace("{answer}", a[t] ?? "")).join(Cn.ANSWER_JOINER) + Cn.GROUPED_ANSWER_SUFFIX : null;
+			if (a.length === 1) return a[0] ?? null;
+			let o = r.map((e, t) => Cn.ANSWER_LINE.replace("{index}", String(e.index)).replace("{answer}", a[t] ?? "")).join(Cn.ANSWER_JOINER);
+			return t?.origin?.kind === "audit" && (t.origin.batch_size ?? 1) > 1 ? e.answers.some((e) => {
+				let t = r.find((t) => t.index === e.index);
+				return e.option_letters.length > 1 && e.option_letters.some((e) => t?.options.find((t) => t.letter === e)?.text === "None of these");
+			}) ? null : o + Cn.AUDIT_GROUPED_ANSWER_SUFFIX : n ? r.map((e, t) => Cn.ANSWER_LINE.replace("{index}", String(e.index)).replace("{answer}", a[t] ?? "")).join(Cn.ANSWER_JOINER) + Cn.GROUPED_ANSWER_SUFFIX : null;
 		}
 		case "provide_input":
 			if (e.kind === "scope") {
@@ -10343,7 +10349,7 @@ function Ri(e, t) {
 	return !e || e.free_text !== t.free_text || e.option_letters.length !== t.option_letters.length ? !1 : e.option_letters.every((e, n) => e === t.option_letters[n]);
 }
 function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, go: c }) {
-	let u = H(), { t: f } = u, g = Ci(e, s, t?.drafts), _ = e.evidence.questions, v = _?.questions ?? [], y = Dn(_), b = _?.unsupported_pending_count ?? 0, x = y.length > 0 || b > 0, S = _?.mode === "degraded" || b > 0, w = b > 0 && _?.origin?.kind === "audit", T = [
+	let u = H(), { t: f } = u, g = Ci(e, s, t?.drafts), _ = e.evidence.questions, v = _?.questions ?? [], y = Dn(_), b = _?.unsupported_pending_count ?? 0, x = y.length > 0 || b > 0, S = _?.mode === "degraded" || b > 0, w = _?.origin?.kind === "audit" && (_.origin.batch_size ?? 1) > 1, T = [
 		"Draft",
 		"Queued",
 		"NotDelivered"
@@ -10420,6 +10426,10 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 				icon: "doc",
 				children: f("template.questions.fileSource")
 			}) : null,
+			w ? /* @__PURE__ */ m(ri, {
+				icon: "question",
+				children: f("template.questions.sameTurnBody")
+			}) : null,
 			S ? /* @__PURE__ */ h(Z, {
 				title: f("template.questions.degradedTitle"),
 				icon: "warn",
@@ -10427,7 +10437,7 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 					icon: "warn",
 					tone: "warn",
 					label: f("template.questions.degradedLabel"),
-					children: f(w ? "template.questions.sameTurnBody" : b > 0 ? "template.questions.unsupportedBody" : "template.questions.degradedBody")
+					children: f(b > 0 ? "template.questions.unsupportedBody" : "template.questions.degradedBody")
 				}), /* @__PURE__ */ h("button", {
 					type: "button",
 					className: "studio-btn",
@@ -10448,7 +10458,7 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 							/* @__PURE__ */ m(X, {
 								tone: x ? "accent" : "ok",
 								icon: x ? "question" : "check",
-								children: b > 0 && !w ? f("template.questions.unsupportedPending", { n: b }) : f("template.questions.pending", {
+								children: b > 0 ? f("template.questions.unsupportedPending", { n: b }) : f("template.questions.pending", {
 									n: y.length,
 									total: v.length
 								})
