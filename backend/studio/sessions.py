@@ -4,7 +4,7 @@
 host entry point that starts, queues or stops a turn is named here and no host attribute is assigned
 (``test_sessions.py`` checks both on this file's AST). A read that cannot be performed answers
 ``None``/``[]`` and degrades one named capability on ``GET /health`` rather than raising, and it never
-answers "idle" for "cannot tell": the reclaim and delivery proofs count an unknown against themselves.
+answers "idle" for "cannot tell": the lease grants and delivery proofs count an unknown as busy.
 
 ``SessionBinder`` owns the ``intent_bindings`` row: which slot an intent's decisions go to, and whether
 the intent is paused, archived or interrupted. It never creates a slot, sends a prompt or stops a turn.
@@ -201,7 +201,7 @@ class SlotView:
 
 def busy_reasons(view: Any) -> tuple[str, ...]:
     """Every reason this slot cannot take a dispatch right now; ``()`` == dispatchable. A view missing a
-    field raises rather than defaulting: ``submit`` and the lease reclaim read an unanswerable one as busy."""
+    field raises rather than defaulting: ``submit`` and the lease grants read an unanswerable one as busy."""
     busy = (
         view.running,
         view.in_stage_execution,
@@ -376,7 +376,7 @@ class HostBridge:
 
     def is_busy(self, session_key: str) -> bool | None:
         """Session-level busy state; ``None``, never ``False``, when the host cannot answer, because the
-        lease reclaim proof refuses on an unobservable turn."""
+        delivery proofs refuse on an unobservable turn."""
         state = self._host("sessions_busy")
         if state is None:
             return None
@@ -866,8 +866,8 @@ class TakeoverCandidate:
 
 
 def _decode_boundary(raw: object) -> StableBoundary | None:
-    """The stored boundary as the projection's real dataclass: the scheduler reads ``boundary.stable`` with
-    ``getattr``, and a dict would quietly refuse every reclaim."""
+    """The stored boundary as the projection's real dataclass: readers use ``getattr`` (``boundary.stable``),
+    and a dict would quietly read as unstable everywhere."""
     if isinstance(raw, StableBoundary):
         return raw
     if not isinstance(raw, Mapping):

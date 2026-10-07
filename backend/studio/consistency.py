@@ -26,7 +26,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from .projection import IntentSnapshot
     from .repo_registry import InstallHealth, RepoRecord
     from .sessions import BindingView, SlotView
-    from .storage import LeaseRecord
+    from .leases import LeaseRecord
 
 
 # ---- the finding table (§1.7): one source for the engine, the UI catalog and the tests ---- #

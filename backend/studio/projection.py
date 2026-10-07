@@ -493,7 +493,7 @@ class StableBoundary:
 
     All five conditions are evaluated every time and the unmet ones are named in `reasons`, because
     "not stable" alone gives the user nothing to fix. `stable == True` with an empty `reasons` is the
-    only shape that authorises a lease reclaim or a boundary-based dispatch.
+    only shape that authorises a boundary-based dispatch.
     """
 
     stable: bool

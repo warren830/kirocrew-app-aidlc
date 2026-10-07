@@ -116,7 +116,7 @@ SCAN_CONCURRENCY = 2
 #: thread could only wait on the semaphore.
 SCAN_POOL_WORKERS = 2
 #: Wall budget one tick may spend scanning. Repositories with no open action are round-robined across
-#: ticks so a 64-repo install cannot make the heartbeat loop late (review R11).
+#: ticks so a 64-repo install cannot make one tick take minutes (review R11).
 SCAN_TICK_BUDGET_SECS = 4.0
 #: How long the UI has to report the outcome of its host submission before the action is treated as
 #: uncertain and the reconciler starts looking for evidence instead.
@@ -865,7 +865,7 @@ DEDUPE_LIVE_ACTION_STATUS = (
 class Clock(Protocol):
     """Time as a dependency.
 
-    Every deadline, retention cut-off and lease heartbeat in Studio is compared against this, so a
+    Every deadline and retention cut-off in Studio is compared against this, so a
     test can move time by hand instead of sleeping — and so no module reaches for ``time.time()``
     directly and becomes untestable.
     """

@@ -402,8 +402,7 @@ class RepoRegistry:
         return record
 
     def remove(self, repo_id: str) -> None:
-        """Unregister; never touches disk (FR-REP-007). Bindings and actions cascade with the row; lease rows
-        are keyed by identity and are ``leases.py``'s to reclaim, with proof."""
+        """Unregister; never touches disk (FR-REP-007). Bindings and actions cascade with the row."""
         self.get(repo_id)
         self._storage.delete("repos", repo_id)
 
