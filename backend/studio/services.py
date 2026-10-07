@@ -224,9 +224,7 @@ class Services:
         activity = ActivityProjector(storage, clock)
         events = EventLog(storage, getattr(ctx, "events", None), clock)
         engine = EngineRunner(bun_path=bun, clock=clock, activity=activity)
-        scheduler = RepoScheduler(
-            storage, host, settings, clock, activity, boot_id=boot_id, busy_reasons=busy_reasons
-        )
+        scheduler = RepoScheduler(storage, host, settings, clock, activity, busy_reasons=busy_reasons)
         sessions = SessionBinder(storage, host, projection, clock, activity)
         notifications = _build_notifications(host, storage, settings, activity, clock)
         actions = HumanActionBroker(
@@ -500,6 +498,7 @@ class Services:
             )
             if problems:
                 issues.append("storage_integrity")
+            leases = self.scheduler.live()
             counts = {
                 "repos": len(self.storage.select("repos")),
                 # Intent directories the last scan found — not binding rows, which outlive a deleted
@@ -508,8 +507,8 @@ class Services:
                 "live_actions": len(
                     self.storage.select("actions", {"status": list(C.LIVE_ACTION_STATUS)})
                 ),
-                "execution_leases": len(self.storage.select("execution_leases")),
-                "admin_leases": len(self.storage.select("admin_leases")),
+                "execution_leases": sum(1 for rec in leases if rec.kind == "execution"),
+                "admin_leases": sum(1 for rec in leases if rec.kind == "admin"),
             }
         except StudioError as exc:
             integrity = "error"

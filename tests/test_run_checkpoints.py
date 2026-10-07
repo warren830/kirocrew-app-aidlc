@@ -80,7 +80,7 @@ def test_queued_run_is_retired_when_its_purpose_has_expired(sv, routes, fake_hos
     assert card["action_id"] not in [a["action_id"] for a in cards]
     if path == "scan" and kind in ("gate", "questions", "summary", "plan"):
         assert any(a["type"] == ("gate" if kind == "gate" else "question") for a in cards)
-    assert not sv.storage.lease_list()
+    assert not sv.scheduler.live()
     assert fake_host.get_slot(scene.slot_key).messages == []
     assert _tree_digest(scene.root) == before
 
@@ -124,7 +124,7 @@ def test_dispatched_run_is_never_cancelled_by_checkpoint_cleanup(sv, routes, fak
     _rescan(sv, routes, fake_host, scene)
     record = asyncio.run(sv.actions.get(created["action_id"]))
     assert record.status != "Cancelled" and record.delivery_id == receipt["delivery_id"]
-    assert sv.storage.lease_list()
+    assert sv.scheduler.live()
 
 
 def test_checkpoint_appearing_under_lease_refuses_the_send(sv, routes, fake_host, scene, monkeypatch):
@@ -143,7 +143,7 @@ def test_checkpoint_appearing_under_lease_refuses_the_send(sv, routes, fake_host
     assert status == 409 and body["code"] == "run_not_applicable", body
     record = asyncio.run(sv.actions.get(created["action_id"]))
     assert record.status == "Cancelled" and record.delivery_id is None
-    assert not sv.storage.lease_list()
+    assert not sv.scheduler.live()
     assert fake_host.get_slot(scene.slot_key).messages == []
 
 
@@ -184,7 +184,7 @@ def test_studio_reload_preserves_an_active_conversation_and_its_lease(
     slot = fake_host.get_slot(scene.slot_key)
     slot.running = True
     assert _report(sv, routes, fake_host, created["action_id"], receipt)[0] == 200
-    lease = sv.storage.lease_list()[0]
+    lease = sv.scheduler.live()[0]
     before = _tree_digest(scene.root)
 
     async def reload():
@@ -200,7 +200,7 @@ def test_studio_reload_preserves_an_active_conversation_and_its_lease(
             await restored.reconciler.startup()
             record = await restored.actions.get(created["action_id"])
             assert record.status in ("Delivered", "Processing")
-            after = restored.storage.lease_list()[0]
+            after = restored.scheduler.live()[0]
             assert (after.action_id, after.generation) == (lease.action_id, lease.generation)
             assert slot.running is True and slot.messages == []
             assert _tree_digest(scene.root) == before
@@ -235,7 +235,7 @@ def test_cold_start_cannot_treat_plan_approval_as_an_ended_turn(
     marker = record / ".aidlc-human-turn"
     marker.write_text("2026-09-04T10:00:20Z\n")
     os.utime(marker, ns=(2_000_000_000, 2_000_000_000))
-    lease = sv.storage.lease_list()[0]
+    lease = sv.scheduler.live()[0]
 
     async def cold_start():
         await sv.stop()
@@ -249,15 +249,15 @@ def test_cold_start_cannot_treat_plan_approval_as_an_ended_turn(
             await restored.reconciler.startup()
             current = await restored.actions.get(card["action_id"])
             assert current.status in ("Delivered", "Processing")
-            assert restored.storage.lease_list()[0].generation == lease.generation
+            assert restored.scheduler.live()[0].generation == lease.generation
             restored.host.attach(fake_host)
             await restored.reconciler.reconcile_now(card["action_id"])
             assert (await restored.actions.get(card["action_id"])).status in ("Delivered", "Processing")
-            assert restored.storage.lease_list()
+            assert restored.scheduler.live()
             _finish_the_turn(fake_host, scene.slot_key, wire_text="Approve Plan")
             await restored.reconciler.reconcile_now(card["action_id"])
             assert (await restored.actions.get(card["action_id"])).status == "ResolvedNoTransition"
-            assert not restored.storage.lease_list()
+            assert not restored.scheduler.live()
         finally:
             await restored.stop()
 

@@ -1,10 +1,9 @@
 """Crash-safety tests for ``backend/studio/storage.py``.
 
 The properties under test are the ones the rest of the product trusts blindly: a compare-and-set that
-exactly one racing writer can win, a ``Delivering`` record that is either durable *with* its lease or
-not written at all, leases that cannot be held twice and whose generations never repeat, a bounded
-event ring a client can replay from, stable activity paging, and a retention purge that clears the
-verbatim human text without touching anything else.
+exactly one racing writer can win, a committed ``Delivering`` record another connection can already
+see, a bounded event ring a client can replay from, stable activity paging, and a retention purge that
+clears the verbatim human text without touching anything else.
 
 Where a test needs a limit lowered (the event ring, the vacuum threshold) it patches the constant
 rather than the code, so the production value stays the only one in the source.
@@ -225,7 +224,7 @@ def test_every_public_method_is_one_transaction(S):
         else:
             assert "self._txn()" in body, f"{node.name} does not open a transaction"
     assert outside - {"path"} <= seen
-    assert {"cas_update", "deliver_under_lease", "lease_acquire", "activity_query"} <= seen
+    assert {"cas_update", "activity_query"} <= seen
 
 
 # --------------------------------------------------------------------------- #
@@ -277,18 +276,12 @@ def _cas_case(store, table):
         repo(store)
         action(store)
         return "a_1", {"status": "Delivering"}
-    if table == "intent_bindings":
-        repo(store)
-        binding(store)
-        return "r_1:default:260904-gate-demo", {"paused": 1}
-    if table == "execution_leases":
-        store.lease_acquire("execution", "1:10", {"repo_id": "r_1", "session_key": "dashboard:s"})
-        return "1:10", {"observed_busy_state": "running"}
-    store.lease_acquire("admin", "1:11", {"repo_id": "r_1", "operation_type": "install"})
-    return "1:11", {"transaction_id": "tx_1"}
+    repo(store)
+    binding(store)
+    return "r_1:default:260904-gate-demo", {"paused": 1}
 
 
-@pytest.mark.parametrize("table", ["actions", "intent_bindings", "execution_leases", "admin_leases"])
+@pytest.mark.parametrize("table", ["actions", "intent_bindings"])
 def test_cas_update_bumps_the_generation_and_the_tables_own_timestamp(store, S, clock, table):
     gen_col, ts_col = S.CAS_TABLES[table]
     key, values = _cas_case(store, table)
@@ -301,13 +294,9 @@ def test_cas_update_bumps_the_generation_and_the_tables_own_timestamp(store, S, 
     assert after[ts_col] == clock.iso() != before[ts_col]
     for name, value in values.items():
         assert after[name] == value
-    # review R06: the lease tables have no updated_at at all, so a single hard-coded timestamp
-    # column would have failed every lease CAS.
-    if table.endswith("_leases"):
-        assert ts_col == "heartbeat_at" and "updated_at" not in after
 
 
-@pytest.mark.parametrize("table", ["actions", "intent_bindings", "execution_leases", "admin_leases"])
+@pytest.mark.parametrize("table", ["actions", "intent_bindings"])
 def test_cas_update_raises_stale_generation_with_expected_and_actual(store, S, studio, table):
     gen_col, _ = S.CAS_TABLES[table]
     key, values = _cas_case(store, table)
@@ -367,192 +356,17 @@ def test_two_threads_racing_one_row_produce_exactly_one_winner(store, studio):
     assert store.integrity_check() == []
 
 
-# --------------------------------------------------------------------------- #
-# deliver_under_lease
-# --------------------------------------------------------------------------- #
-
-
-def _delivering(clock, **over):
-    values = {"status": "Delivering", "delivery_id": "dl_1", "delivering_at": clock.iso(),
-              "boot_id": "boot-test-0001", "session_key": "dashboard:slot", "lease_generation": 1}
-    values.update(over)
-    return values
-
-
-def test_deliver_under_lease_commits_the_record_and_the_lease_together(store, clock):
+def test_a_committed_cas_is_visible_to_a_second_connection(store):
+    """The submit path promises the ``Delivering`` record is durable before the browser is told to send. A
+    second connection can only see it if the transaction really committed (synchronous=FULL, not deferred)."""
     repo(store)
     action(store)
-    grant = store.lease_acquire("execution", "1:r_1", {"repo_id": "r_1", "session_key": "dashboard:slot"})
-    assert grant.action_id is None
-
-    generation = store.deliver_under_lease(
-        "a_1", 0, identity="1:r_1", lease_generation=grant.generation, new_values=_delivering(clock)
-    )
-    assert generation == 1
-    row = store.get("actions", "a_1")
-    assert row["status"] == "Delivering" and row["status_generation"] == 1
-    assert row["delivery_id"] == "dl_1" and row["boot_id"] == "boot-test-0001"
-    assert store.lease_get("execution", "1:r_1").action_id == "a_1"
-
-    # The submit path promises the record is durable before the browser is told to send. A second
-    # connection can only see it if the transaction really committed (synchronous=FULL, not deferred).
+    assert store.cas_update("actions", "a_1", 0, {"status": "Delivering", "delivery_id": "dl_1"}) == 1
     other = sqlite3.connect(str(store.path))
     try:
-        assert other.execute("SELECT status, action_id FROM actions").fetchall() == [("Delivering", "a_1")]
-        assert other.execute("SELECT action_id FROM execution_leases").fetchall() == [("a_1",)]
+        assert other.execute("SELECT status, delivery_id FROM actions").fetchall() == [("Delivering", "dl_1")]
     finally:
         other.close()
-
-
-def test_deliver_under_lease_writes_nothing_when_the_lease_moved(store, studio, clock):
-    repo(store)
-    action(store)
-    grant = store.lease_acquire("execution", "1:r_1", {"repo_id": "r_1"})
-    store.lease_release("execution", "1:r_1", grant.generation)
-    regained = store.lease_acquire("execution", "1:r_1", {"repo_id": "r_1"})
-    assert regained.generation == grant.generation + 1
-
-    with pytest.raises(studio.errors.StudioError) as exc:
-        store.deliver_under_lease("a_1", 0, identity="1:r_1",
-                                  lease_generation=grant.generation, new_values=_delivering(clock))
-    assert exc.value.code == "lease_lost"
-    assert exc.value.details["actual_generation"] == regained.generation
-    row = store.get("actions", "a_1")
-    assert row["status"] == "Queued" and row["status_generation"] == 0 and row["delivery_id"] is None
-    assert store.lease_get("execution", "1:r_1").action_id is None
-
-
-def test_deliver_under_lease_writes_nothing_when_there_is_no_lease(store, studio, clock):
-    repo(store)
-    action(store)
-    with pytest.raises(studio.errors.StudioError) as exc:
-        store.deliver_under_lease("a_1", 0, identity="1:r_1", lease_generation=1,
-                                  new_values=_delivering(clock))
-    assert exc.value.code == "lease_lost" and exc.value.details["actual_generation"] is None
-    assert store.get("actions", "a_1")["status"] == "Queued"
-
-
-def test_deliver_under_lease_leaves_the_lease_alone_when_the_action_cas_loses(store, studio, clock):
-    repo(store)
-    action(store)
-    grant = store.lease_acquire("execution", "1:r_1", {"repo_id": "r_1"})
-    store.cas_update("actions", "a_1", 0, {"status": "Cancelled"})     # somebody else moved it first
-
-    with pytest.raises(studio.errors.StaleGeneration):
-        store.deliver_under_lease("a_1", 0, identity="1:r_1",
-                                  lease_generation=grant.generation, new_values=_delivering(clock))
-    assert store.get("actions", "a_1")["status"] == "Cancelled"
-    assert store.lease_get("execution", "1:r_1").action_id is None     # step 3 rolled back with it
-
-
-def test_deliver_under_lease_only_writes_the_delivering_status(store, clock):
-    repo(store)
-    action(store)
-    store.lease_acquire("execution", "1:r_1", {"repo_id": "r_1"})
-    with pytest.raises(ValueError):
-        store.deliver_under_lease("a_1", 0, identity="1:r_1", lease_generation=1,
-                                  new_values=_delivering(clock, status="Delivered"))
-
-
-# --------------------------------------------------------------------------- #
-# leases
-# --------------------------------------------------------------------------- #
-
-
-def test_execution_and_admin_leases_are_mutually_exclusive_per_identity(store, studio, C):
-    repo(store)
-    store.lease_acquire("execution", "1:r_1", {"repo_id": "r_1", "session_key": "dashboard:slot"})
-
-    with pytest.raises(studio.errors.LeaseHeld) as exc:
-        store.lease_acquire("admin", "1:r_1", {"repo_id": "r_1", "operation_type": "install"})
-    assert exc.value.code == "repo_busy"
-    assert exc.value.details["kind"] == "execution"
-    assert exc.value.details["owner"]["session_key"] == "dashboard:slot"
-    assert exc.value.details["retry_after_secs"] == int(C.LEASE_HEARTBEAT_SECS)
-    with pytest.raises(studio.errors.LeaseHeld):
-        store.lease_acquire("execution", "1:r_1", {"repo_id": "r_1"})
-
-    # a different repository is unaffected, and both kinds may be live on different identities
-    store.lease_acquire("admin", "1:r_2", {"repo_id": "r_1", "operation_type": "install"})
-    assert {(r.kind, r.resolved_repo_identity) for r in store.lease_list()} == {
-        ("execution", "1:r_1"), ("admin", "1:r_2")}
-
-
-def test_lease_generations_are_monotonic_across_release_and_reacquire(store, studio):
-    first = store.lease_acquire("execution", "1:r_1", {"repo_id": "r_1"})
-    assert first.generation == 1
-    store.lease_release("execution", "1:r_1", 1)
-    second = store.lease_acquire("admin", "1:r_1", {"repo_id": "r_1", "operation_type": "doctor"})
-    assert second.generation == 2                     # the counter outlives both the row and the kind
-    store.lease_release("admin", "1:r_1", 2)
-    assert store.lease_acquire("execution", "1:r_1", {"repo_id": "r_1"}).generation == 3
-
-    with pytest.raises(studio.errors.StaleGeneration):
-        store.lease_release("execution", "1:r_1", 1)
-    assert store.lease_get("execution", "1:r_1") is not None
-
-
-def test_lease_heartbeat_refreshes_without_moving_the_generation(store, studio, clock):
-    grant = store.lease_acquire("execution", "1:r_1", {"repo_id": "r_1"})
-    clock.advance(15)
-    beat = store.lease_heartbeat("execution", "1:r_1", grant.generation, "running")
-    assert beat.generation == grant.generation           # the holder's next CAS must still match
-    assert beat.heartbeat_at == clock.iso() != grant.acquired_at
-    assert beat.observed_busy_state == "running"
-    assert store.lease_get("execution", "1:r_1").heartbeat_at == clock.iso()
-
-    with pytest.raises(studio.errors.StaleGeneration) as exc:
-        store.lease_heartbeat("execution", "1:r_1", grant.generation + 1)
-    assert exc.value.details == {"expected": 2, "actual": 1, "kind": "execution"}
-
-    store.lease_release("execution", "1:r_1", grant.generation)
-    with pytest.raises(studio.errors.StaleGeneration) as gone:
-        store.lease_heartbeat("execution", "1:r_1", grant.generation)
-    assert gone.value.details["actual"] is None
-
-
-def test_lease_reclaim_records_the_proof_and_never_checks_the_clock(store, S, clock):
-    repo(store)
-    action(store)
-    grant = store.lease_acquire("execution", "1:r_1",
-                               {"repo_id": "r_1", "session_key": "dashboard:slot", "action_id": "a_1"})
-    evidence = {"slot_present": False, "action_status": "Queued", "boundary_stable": True}
-
-    # No clock movement at all: eligibility is the caller's proof, never elapsed time (FR-SES-007).
-    store.lease_reclaim("execution", "1:r_1", grant.generation,
-                        reason="never_dispatched", evidence=evidence)
-
-    assert store.lease_get("execution", "1:r_1") is None
-    rows, cursor = store.activity_query(S.ActivityQuery(kind="lease.reclaimed"))
-    assert cursor is None and len(rows) == 1
-    row = rows[0]
-    assert (row.source, row.severity, row.message_key) == ("studio", "attention", "activity.lease.reclaimed")
-    assert row.repo_id == "r_1" and row.action_id == "a_1" and row.session_key == "dashboard:slot"
-    assert row.params == {"lease_kind": "execution", "reason": "never_dispatched",
-                          "generation": 1, "evidence": evidence}
-    assert row.at == clock.iso()
-    assert store.lease_acquire("execution", "1:r_1", {"repo_id": "r_1"}).generation == 2
-
-
-def test_lease_reclaim_of_a_moved_lease_changes_nothing(store, S, studio):
-    store.lease_acquire("execution", "1:r_1", {"repo_id": "r_1"})
-    with pytest.raises(studio.errors.StaleGeneration):
-        store.lease_reclaim("execution", "1:r_1", 7, reason="stale", evidence={})
-    assert store.lease_get("execution", "1:r_1").generation == 1
-    assert store.activity_query(S.ActivityQuery())[0] == []
-
-
-def test_lease_fields_are_validated_per_kind(store):
-    for bad in (lambda: store.lease_acquire("execution", "1:x", {}),
-                lambda: store.lease_acquire("admin", "1:x", {"repo_id": "r_1"}),
-                lambda: store.lease_acquire("admin", "1:x", {"repo_id": "r_1", "operation_type": "install",
-                                                             "session_key": "dashboard:s"}),
-                lambda: store.lease_acquire("execution", "1:x", {"repo_id": "r_1", "operation_type": "install"}),
-                lambda: store.lease_acquire("other", "1:x", {"repo_id": "r_1"}),
-                lambda: store.lease_get("other", "1:x")):
-        with pytest.raises(ValueError):
-            bad()
-    assert store.lease_list() == []
 
 
 # --------------------------------------------------------------------------- #

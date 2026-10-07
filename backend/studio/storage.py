@@ -3,8 +3,8 @@
 Why a database at all: the host's ``ctx.storage`` is a JSON key-value directory with an atomic
 *replace* but no fsync, no locking and no compare-and-set (``01 §2.3``), so two interleaved
 read-modify-write sequences silently lose one of them. Every durability promise in the PRD — a
-decision recorded on disk *before* it is sent, a lease that cannot be held twice for one repository,
-an action status only one writer may advance — needs a real CAS and a real fsync.
+decision recorded on disk *before* it is sent, an action status only one writer may advance — needs a
+real CAS and a real fsync.
 
 The shape of this module and the failure each choice prevents:
 
@@ -22,10 +22,7 @@ The shape of this module and the failure each choice prevents:
   duplicate the whole design exists to prevent.
 * **``foreign_keys=ON``.** Removing a repository must not leave orphaned actions and bindings behind
   that a later scan would resurrect as live cards for a repo the user deleted.
-* **Nothing here parses AI-DLC files, touches a repository, or judges lease eligibility.** Reclaim
-  proof lives in ``leases.py``: a store that could declare a lease dead by looking at a clock would
-  eventually reclaim a live one (FR-SES-007). ``lease_reclaim`` therefore takes the caller's proof as
-  data and records it, and performs no time check of its own.
+* **Nothing here parses AI-DLC files, touches a repository, or judges lease eligibility.**
 
 Threading: this module is **sync and blocking**. Callers reach it through
 ``await asyncio.to_thread(...)`` (§0.6); it never awaits, never spawns a thread and never holds the
@@ -44,7 +41,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterator, Mapping
 
 from . import constants as C
-from .errors import LeaseHeld, StaleGeneration, StudioError
+from .errors import StaleGeneration, StudioError
 
 if TYPE_CHECKING:  # the injectable protocols live in constants.py (§0.2); annotations only
     from .constants import Clock, IdFactory
@@ -252,88 +249,12 @@ TABLE_KEYS: dict[str, str] = {
     "migrations": "id",
 }
 
-#: Columns each lease kind owns, beyond the shared ``repo_id``/timestamps/generation. Validated on
-#: acquire so a caller cannot smuggle an execution field into an admin lease (or vice versa) and end
-#: up with a row the API cannot render.
-LEASE_FIELDS: dict[str, tuple[str, ...]] = {
-    "execution": ("intent_uuid", "session_key", "action_id", "observed_busy_state"),
-    "admin": ("operation_type", "transaction_id", "boot_id"),
-}
-_LEASE_TABLE = {"execution": "execution_leases", "admin": "admin_leases"}
-
-#: Activity kind and severity for a reclaim. Written by ``lease_reclaim`` itself so the audit trail
-#: cannot be forgotten by a caller that took a lease away from a presumed-dead owner.
-_RECLAIM_KIND = "lease.reclaimed"
-_RECLAIM_SEVERITY = "attention"
-
 _ORDER_BY_TOKEN = "ASC", "DESC"
 
 
 # --------------------------------------------------------------------------- #
 # records
 # --------------------------------------------------------------------------- #
-
-
-@dataclass(frozen=True, slots=True)
-class LeaseRecord:
-    """One row of ``execution_leases`` or ``admin_leases``, both kinds in one shape.
-
-    ``repo_id`` is denormalised into the lease row at acquire time: ``GET /leases`` must render an
-    orphaned lease whose repository row may already be gone, and a join that can return no row would
-    hide exactly the lease the operator needs to see.
-    """
-
-    kind: str
-    resolved_repo_identity: str
-    generation: int
-    acquired_at: str
-    heartbeat_at: str
-    intent_uuid: str | None = None
-    session_key: str | None = None
-    action_id: str | None = None
-    observed_busy_state: str | None = None
-    operation_type: str | None = None
-    transaction_id: str | None = None
-    #: The ``Services.boot_id`` of the process that took an admin lease. ``None`` on an execution lease
-    #: (its liveness is proven from the action row and the host's own session state) and on an admin
-    #: lease written before schema 2.
-    boot_id: str | None = None
-    repo_id: str = ""
-
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "kind": self.kind,
-            "resolved_repo_identity": self.resolved_repo_identity,
-            "generation": self.generation,
-            "acquired_at": self.acquired_at,
-            "heartbeat_at": self.heartbeat_at,
-            "intent_uuid": self.intent_uuid,
-            "session_key": self.session_key,
-            "action_id": self.action_id,
-            "observed_busy_state": self.observed_busy_state,
-            "operation_type": self.operation_type,
-            "transaction_id": self.transaction_id,
-            "boot_id": self.boot_id,
-            "repo_id": self.repo_id,
-        }
-
-    @classmethod
-    def from_row(cls, kind: str, row: Mapping[str, Any]) -> "LeaseRecord":
-        return cls(
-            kind=kind,
-            resolved_repo_identity=str(row["resolved_repo_identity"]),
-            generation=int(row["generation"]),
-            acquired_at=str(row["acquired_at"]),
-            heartbeat_at=str(row["heartbeat_at"]),
-            intent_uuid=row.get("intent_uuid"),
-            session_key=row.get("session_key"),
-            action_id=row.get("action_id"),
-            observed_busy_state=row.get("observed_busy_state"),
-            operation_type=row.get("operation_type"),
-            transaction_id=row.get("transaction_id"),
-            boot_id=row.get("boot_id"),
-            repo_id=str(row.get("repo_id") or ""),
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -691,233 +612,6 @@ class Storage:
         with self._txn() as conn:
             return self._cas(conn, table, key, expected_generation, new_values)
 
-    def deliver_under_lease(
-        self,
-        action_id: str,
-        expected_generation: int,
-        *,
-        identity: str,
-        lease_generation: int,
-        new_values: Mapping[str, Any],
-    ) -> int:
-        """Move an action to ``Delivering`` only while the caller still owns the execution lease.
-
-        The cursor switch is a subprocess, so acquiring the lease and committing ``Delivering``
-        cannot be one transaction (C31). This method closes the remaining window: the lease check,
-        the action CAS and the lease's ``action_id`` update are one ``BEGIN IMMEDIATE``, so after
-        commit either the lease still names this caller *and* the durable ``Delivering`` record
-        exists, or nothing changed at all (review P15).
-        """
-        status = new_values.get("status", "Delivering")
-        if status != "Delivering":
-            raise ValueError("deliver_under_lease only writes status 'Delivering'")
-        values = {k: v for k, v in new_values.items() if k != "status"}
-        values["status"] = "Delivering"
-        with self._txn() as conn:
-            row = conn.execute(
-                "SELECT * FROM execution_leases WHERE resolved_repo_identity = ?", (identity,)
-            ).fetchone()
-            if row is None or int(row["generation"]) != int(lease_generation):
-                raise StudioError(
-                    "lease_lost",
-                    "the execution lease is no longer held by this caller",
-                    details={
-                        "resolved_repo_identity": identity,
-                        "expected_generation": int(lease_generation),
-                        "actual_generation": None if row is None else int(row["generation"]),
-                    },
-                )
-            generation = self._cas(conn, "actions", action_id, expected_generation, values)
-            conn.execute(
-                "UPDATE execution_leases SET action_id = ? WHERE resolved_repo_identity = ?",
-                (action_id, identity),
-            )
-            return generation
-
-    # ---- leases ----
-
-    def lease_get(self, kind: str, identity: str) -> LeaseRecord | None:
-        table = self._lease_table(kind)
-        with self._txn() as conn:
-            row = conn.execute(
-                f"SELECT * FROM {table} WHERE resolved_repo_identity = ?", (identity,)
-            ).fetchone()
-        return None if row is None else LeaseRecord.from_row(kind, dict(row))
-
-    def lease_list(self) -> list[LeaseRecord]:
-        """Every live lease of both kinds, oldest first (the order ``GET /leases`` renders)."""
-        out: list[LeaseRecord] = []
-        with self._txn() as conn:
-            for kind, table in _LEASE_TABLE.items():
-                for row in conn.execute(
-                    f"SELECT * FROM {table} ORDER BY acquired_at, resolved_repo_identity"
-                ).fetchall():
-                    out.append(LeaseRecord.from_row(kind, dict(row)))
-        out.sort(key=lambda r: (r.acquired_at, r.resolved_repo_identity, r.kind))
-        return out
-
-    def lease_acquire(self, kind: str, identity: str, fields: Mapping[str, Any]) -> LeaseRecord:
-        """Take the lease for one resolved identity, or raise ``LeaseHeld``.
-
-        Exclusivity is across **both** kinds: an install must not run while a turn is in flight, and
-        a turn must not start while the framework files are being replaced underneath it.
-
-        The generation comes from ``lease_generations``, which outlives the lease row. A released and
-        re-acquired lease therefore never reuses a number, so a stale holder that wakes up after a
-        reclaim fails its next heartbeat instead of writing to a lease it no longer owns.
-        """
-        table = self._lease_table(kind)
-        allowed = set(LEASE_FIELDS[kind]) | {"repo_id"}
-        unknown = sorted(set(fields) - allowed)
-        if unknown:
-            raise ValueError(f"{unknown} are not fields of a {kind} lease")
-        repo_id = str(fields.get("repo_id") or "")
-        if not repo_id:
-            raise ValueError("a lease needs repo_id (denormalised for the API)")
-        if kind == "admin" and not fields.get("operation_type"):
-            raise ValueError("an admin lease needs operation_type")
-        now = self._clock.iso()
-        with self._txn() as conn:
-            for other_kind, other_table in _LEASE_TABLE.items():
-                row = conn.execute(
-                    f"SELECT * FROM {other_table} WHERE resolved_repo_identity = ?", (identity,)
-                ).fetchone()
-                if row is not None:
-                    owner = LeaseRecord.from_row(other_kind, dict(row))
-                    raise LeaseHeld(
-                        f"{other_kind} lease held for this repository",
-                        details={
-                            "kind": other_kind,
-                            "owner": owner.to_json(),
-                            "retry_after_secs": int(C.LEASE_HEARTBEAT_SECS),
-                        },
-                    )
-            seen = conn.execute(
-                "SELECT last_generation FROM lease_generations WHERE resolved_repo_identity = ?",
-                (identity,),
-            ).fetchone()
-            generation = (int(seen["last_generation"]) if seen else 0) + 1
-            conn.execute(
-                "INSERT INTO lease_generations(resolved_repo_identity, last_generation) VALUES(?, ?) "
-                "ON CONFLICT(resolved_repo_identity) DO UPDATE SET last_generation = excluded.last_generation",
-                (identity, generation),
-            )
-            row_values: dict[str, Any] = {
-                "resolved_repo_identity": identity,
-                "repo_id": repo_id,
-                "acquired_at": now,
-                "heartbeat_at": now,
-                "generation": generation,
-            }
-            for name in LEASE_FIELDS[kind]:
-                row_values[name] = fields.get(name)
-            names = ", ".join(row_values)
-            placeholders = ", ".join(f":{n}" for n in row_values)
-            conn.execute(f"INSERT INTO {table}({names}) VALUES({placeholders})", row_values)
-            return LeaseRecord.from_row(kind, row_values)
-
-    def lease_heartbeat(
-        self, kind: str, identity: str, generation: int, observed_busy_state: str | None = None
-    ) -> LeaseRecord:
-        """Refresh ``heartbeat_at`` **without** moving the generation.
-
-        The holder keeps using the generation it was granted for its next CAS, so a heartbeat that
-        bumped it would make the owner stale against itself.
-        """
-        table = self._lease_table(kind)
-        now = self._clock.iso()
-        with self._txn() as conn:
-            row = conn.execute(
-                f"SELECT * FROM {table} WHERE resolved_repo_identity = ?", (identity,)
-            ).fetchone()
-            actual = None if row is None else int(row["generation"])
-            if actual != int(generation):
-                raise StaleGeneration(
-                    "the lease moved under this holder",
-                    details={"expected": int(generation), "actual": actual, "kind": kind},
-                )
-            values = dict(row)
-            values["heartbeat_at"] = now
-            if kind == "execution":
-                values["observed_busy_state"] = observed_busy_state
-                conn.execute(
-                    f"UPDATE {table} SET heartbeat_at = ?, observed_busy_state = ? "
-                    "WHERE resolved_repo_identity = ? AND generation = ?",
-                    (now, observed_busy_state, identity, int(generation)),
-                )
-            else:
-                conn.execute(
-                    f"UPDATE {table} SET heartbeat_at = ? "
-                    "WHERE resolved_repo_identity = ? AND generation = ?",
-                    (now, identity, int(generation)),
-                )
-            return LeaseRecord.from_row(kind, values)
-
-    def lease_release(self, kind: str, identity: str, generation: int) -> None:
-        """Give the lease back. ``StaleGeneration`` when the caller no longer owns it.
-
-        Refusing a release whose generation moved matters: otherwise a holder that was already
-        reclaimed would delete the *new* owner's lease on its way out.
-        """
-        table = self._lease_table(kind)
-        with self._txn() as conn:
-            self._lease_expect(conn, table, kind, identity, generation)
-            conn.execute(f"DELETE FROM {table} WHERE resolved_repo_identity = ?", (identity,))
-
-    def lease_reclaim(
-        self,
-        kind: str,
-        identity: str,
-        generation: int,
-        *,
-        reason: str,
-        evidence: Mapping[str, Any],
-        expect_action: tuple[str | None, frozenset[str]] | None = None,
-    ) -> None:
-        """Take a lease away from an owner the **caller** has proven is not executing.
-
-        Storage performs no time check: elapsed heartbeat age never authorises a reclaim (FR-SES-007),
-        and a store that decided otherwise would eventually cut a live turn loose. The proof the
-        caller assembled is recorded with the activity row in the same transaction as the delete, so
-        a reclaim can never be invisible after the fact.
-
-        ``expect_action`` re-asserts the caller's proof here, inside the delete's own transaction:
-        ``(action_id, statuses)`` demands that action still hold one of ``statuses`` (an empty set
-        demands the row still be absent), and ``StaleGeneration`` otherwise. The lease generation alone
-        is not enough of a guard, because ``deliver_under_lease`` moves an action ``Queued →
-        Delivering`` **without** touching it — so between a caller's proof and this delete a submit can
-        put a decision on the wire, and a generation-only check would cut that lease loose and let a
-        second submit dispatch a second turn into the same workflow.
-        """
-        table = self._lease_table(kind)
-        with self._txn() as conn:
-            row = self._lease_expect(conn, table, kind, identity, generation)
-            if expect_action is not None:
-                self._action_expect(conn, kind, *expect_action)
-            lease = LeaseRecord.from_row(kind, dict(row))
-            conn.execute(f"DELETE FROM {table} WHERE resolved_repo_identity = ?", (identity,))
-            self._activity_insert(
-                conn,
-                ActivityRow(
-                    at=self._clock.iso(),
-                    source="studio",
-                    kind=_RECLAIM_KIND,
-                    severity=_RECLAIM_SEVERITY,
-                    repo_id=lease.repo_id or None,
-                    action_id=lease.action_id,
-                    session_key=lease.session_key,
-                    message_key=f"activity.{_RECLAIM_KIND}",
-                    params={
-                        "lease_kind": kind,
-                        "reason": reason,
-                        "generation": int(generation),
-                        # The proof lives in params, not evidence_json: it is a dict of codes and
-                        # booleans, while evidence_json carries EvidenceRef pointers only.
-                        "evidence": dict(evidence),
-                    },
-                ),
-            )
-
     # ---- events ring ----
 
     def event_append(self, type: str, payload: Mapping[str, Any]) -> int:
@@ -1127,9 +821,8 @@ class Storage:
     def _txn(self) -> Iterator[sqlite3.Connection]:
         """One ``BEGIN IMMEDIATE`` per public method; a nested call joins the outer transaction.
 
-        The nesting rule is what lets ``deliver_under_lease`` and ``lease_reclaim`` compose smaller
-        steps (a CAS, an activity insert) without either opening a second transaction — which SQLite
-        rejects — or duplicating their SQL.
+        The nesting rule is what lets a caller compose several writes (the installer's receipt commit)
+        into one transaction without opening a second one, which SQLite rejects.
         """
         with self._lock:
             conn = self._require_conn()
@@ -1209,45 +902,6 @@ class Storage:
         if name not in self._table_columns(table):
             raise ValueError(f"{table} has no column {name!r}")
         return name
-
-    def _lease_table(self, kind: str) -> str:
-        if kind not in _LEASE_TABLE:
-            raise ValueError(f"unknown lease kind {kind!r}")
-        return _LEASE_TABLE[kind]
-
-    def _lease_expect(
-        self, conn: sqlite3.Connection, table: str, kind: str, identity: str, generation: int
-    ) -> sqlite3.Row:
-        row = conn.execute(
-            f"SELECT * FROM {table} WHERE resolved_repo_identity = ?", (identity,)
-        ).fetchone()
-        actual = None if row is None else int(row["generation"])
-        if actual != int(generation):
-            raise StaleGeneration(
-                "the lease moved under this holder",
-                details={"expected": int(generation), "actual": actual, "kind": kind},
-            )
-        return row
-
-    def _action_expect(
-        self, conn: sqlite3.Connection, kind: str, action_id: str | None, statuses: frozenset[str]
-    ) -> None:
-        """The other half of a reclaim's guard: the proven action must not have moved (see lease_reclaim)."""
-        if action_id is None:
-            return
-        row = conn.execute("SELECT status FROM actions WHERE action_id = ?", (action_id,)).fetchone()
-        actual = None if row is None else str(row["status"] or "")
-        ok = (actual is None) if not statuses else (actual in statuses)
-        if not ok:
-            raise StaleGeneration(
-                "the action moved between the reclaim proof and the delete",
-                details={
-                    "kind": kind,
-                    "action_id": action_id,
-                    "actual": actual,
-                    "expected": sorted(statuses),
-                },
-            )
 
     def _encode_row(self, table: str, row: Mapping[str, Any]) -> dict[str, Any]:
         out: dict[str, Any] = {}

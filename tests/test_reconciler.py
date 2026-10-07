@@ -597,32 +597,25 @@ def test_changed_reconciliation_evidence_still_advances_generation(svc, scene):
 # --------------------------------------------------------------------------- #
 
 
-def test_startup_reevaluates_every_inflight_action_before_leases_or_scans(svc, scene, C):
-    """Every mid-flight row is re-read before the lease sweep and the first scan run.
+def test_startup_reevaluates_every_inflight_action_before_scanning(svc, scene, C):
+    """Every mid-flight row is re-read before the first scan runs.
 
-    The order is the point (§1.13): a reclaim decided against a stale status can hand a repository to a
-    second dispatch, and a card derived before a delivered decision is re-read duplicates a boundary
-    that is already closed.
+    The order is the point (§1.13): a card derived before a delivered decision is re-read duplicates a
+    boundary that is already closed.
     """
     order: list[str] = []
     original_reconcile = svc.reconciler.reconcile_action
-    original_sweep = svc.scheduler.startup_sweep
     original_scan = svc.reconciler.scan_repo
 
     async def note_reconcile(rec, snap=None):
         order.append(f"reconcile:{rec.action_id}")
         return await original_reconcile(rec, snap)
 
-    async def note_sweep():
-        order.append("sweep")
-        return await original_sweep()
-
     async def note_scan(repo):
         order.append("scan")
         return await original_scan(repo)
 
     svc.reconciler.reconcile_action = note_reconcile
-    svc.scheduler.startup_sweep = note_sweep
     svc.reconciler.scan_repo = note_scan
 
     a = scene.make(status="Delivering")
@@ -631,7 +624,7 @@ def test_startup_reevaluates_every_inflight_action_before_leases_or_scans(svc, s
 
     report = asyncio.run(svc.reconciler.startup())
 
-    assert order.index(f"reconcile:{a}") < order.index("sweep") < order.index("scan")
+    assert order.index(f"reconcile:{a}") < order.index("scan")
     assert {f"reconcile:{a}", f"reconcile:{b}", f"reconcile:{c}"} <= set(order)
     assert report.actions_reevaluated == 3
     assert report.integrity == ()
@@ -1387,7 +1380,7 @@ def test_row_found_in_another_slot_is_wrong_slot_and_waits_for_a_human(svc, scen
 
 
 # --------------------------------------------------------------------------- #
-# 6. stable boundary, retirement, reclaim
+# 6. stable boundary, retirement, release
 # --------------------------------------------------------------------------- #
 
 
@@ -1605,58 +1598,15 @@ def test_a_truncated_listing_never_sweeps_cards(svc, scene, clock, C, monkeypatc
 
 
 def test_resolution_releases_the_execution_lease(svc, scene, fake_host):
-    """A resolved action gives its repository back; nothing else may."""
-    action_id = scene.make(status="Processing")
-    grant = asyncio.run(
-        svc.scheduler.acquire_execution(
-            scene.repo, intent_uuid=None, session_key=f"dashboard:{scene.slot_key}", action_id=action_id
-        )
-    )
-    svc.storage.cas_update("actions", action_id, 0, {"lease_generation": grant.generation})
+    """A resolved action gives its repository back: the in-flight row was the lease."""
+    action_id = scene.make(status="Processing", lease_generation=7)
+    lease = asyncio.run(svc.scheduler.get(scene.repo.resolved_identity))
+    assert (lease.kind, lease.action_id, lease.generation) == ("execution", action_id, 7)
     approve_on_disk(scene.root)
     finish_turn(fake_host, scene.slot_key)
 
     asyncio.run(svc.reconciler.tick())
     assert status_of(svc, action_id) == "StateChanged"
-    assert asyncio.run(svc.scheduler.get(scene.repo.resolved_identity)) is None
-
-
-def test_lease_for_a_never_dispatched_action_is_reclaimed(svc, scene, clock):
-    """The crash window between ``acquire_execution`` and the ``Delivering`` CAS (review P15/C31).
-
-    Nothing was handed to the host, so the reclaim needs no boundary — but it still needs the *proof*
-    that nothing was dispatched, never the lease's age.
-    """
-    action_id = svc.ids.new("a")
-    svc.storage.insert(
-        "actions",
-        {
-            "action_id": action_id,
-            "type": "run",
-            "risk_class": "human_lane",
-            "repo_id": scene.repo_id,
-            "intent_dir": GATE_DIR,
-            "space": "default",
-            "status": "Queued",
-            "created_at": "2026-09-04T09:00:00Z",
-            "updated_at": "2026-09-04T09:00:00Z",
-            "waiting_since": "2026-09-04T09:00:00Z",
-            "source": "studio",
-            "evidence_json": {},
-        },
-    )
-    asyncio.run(
-        svc.scheduler.acquire_execution(
-            scene.repo, intent_uuid=None, session_key=f"dashboard:{scene.slot_key}", action_id=action_id
-        )
-    )
-    asyncio.run(svc.reconciler.tick())
-    assert asyncio.run(svc.scheduler.get(scene.repo.resolved_identity)) is not None, (
-        "a fresh lease must never be reclaimed on age alone"
-    )
-
-    clock.advance(300)
-    asyncio.run(svc.reconciler.tick())
     assert asyncio.run(svc.scheduler.get(scene.repo.resolved_identity)) is None
 
 
@@ -1913,22 +1863,6 @@ def test_reconcile_now_answers_for_one_action(svc, scene, fake_host):
     finish_turn(fake_host, scene.slot_key)
     rec = asyncio.run(svc.reconciler.reconcile_now(action_id))
     assert rec.status == "StateChanged"
-
-
-def test_heartbeat_only_refreshes_leases_whose_action_is_in_flight(svc, scene, fake_host):
-    """A lease whose action already settled must not be kept warm: that hides it from the reclaim rules."""
-    action_id = scene.make(status="Processing")
-    grant = asyncio.run(
-        svc.scheduler.acquire_execution(
-            scene.repo, intent_uuid=None, session_key=f"dashboard:{scene.slot_key}", action_id=action_id
-        )
-    )
-    assert asyncio.run(svc.reconciler.heartbeat_once()) == 1
-
-    svc.storage.cas_update("actions", action_id, 0, {"status": "StateChanged"})
-    assert asyncio.run(svc.reconciler.heartbeat_once()) == 0
-    lease = asyncio.run(svc.scheduler.get(scene.repo.resolved_identity))
-    assert lease is not None and lease.generation == grant.generation
 
 
 def test_reconciler_never_writes_aidlc_state(svc, scene, fake_host):

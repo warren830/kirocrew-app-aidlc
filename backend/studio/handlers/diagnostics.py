@@ -92,14 +92,7 @@ async def get_diagnostics(services: Any, request: web.Request) -> web.Response:
         "settings": services.settings.values(),
         "repos": [repo.to_json() for repo in repos],
         "live_actions": cards,
-        "leases": [
-            lease_view(
-                rec,
-                intent_key=await intent_key_for_lease(services, rec),
-                orphaned=services.scheduler.is_stale(rec),
-            )
-            for rec in leases
-        ],
+        "leases": [lease_view(rec, intent_key=await intent_key_for_lease(services, rec)) for rec in leases],
         "recent_transactions": transactions[:DIAGNOSTICS_TRANSACTIONS],
         "recent_activity": activity["rows"],
         "breakers": [

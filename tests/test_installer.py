@@ -295,8 +295,7 @@ def payload_v2(tmp_path_factory) -> tuple[Path, Path]:
 # --------------------------------------------------------------------------- #
 
 
-#: The boot id the harness runs under. A transaction or lease stamped with this belongs to "this
-#: process"; anything else was left behind by a process that is gone.
+#: The boot id the harness runs under, stamped by the installer the way ``Services`` does.
 BOOT = "boot-harness"
 
 
@@ -313,6 +312,14 @@ class Harness:
         self.settings = settings
         self.data_dir = Path(data_dir)
 
+    @property
+    def scheduler(self) -> Any:
+        return self.installer._scheduler
+
+    def lease(self, kind: str = "admin") -> Any:
+        """The live lease of this kind on any repository, or ``None``."""
+        return next((rec for rec in self.scheduler.live() if rec.kind == kind), None)
+
 
 @pytest.fixture
 def make_harness(studio, store, clock, ids, fake_bun, fake_ctx):
@@ -328,9 +335,8 @@ def make_harness(studio, store, clock, ids, fake_bun, fake_ctx):
         reader = studio.aidlc_reader.AidlcReader(clock)
         engine = studio.engine.EngineRunner(bun_path=fake_bun, clock=clock, activity=activity)
         settings = SettingsStub(run_doctor=run_doctor)
-        scheduler = studio.leases.RepoScheduler(
-            store, Bridge(), settings, clock, activity, boot_id=BOOT, busy_reasons=lambda view: ()
-        )
+        scheduler = studio.leases.RepoScheduler(store, Bridge(), settings, clock, activity,
+                                                busy_reasons=lambda view: ())
         fault = FaultInjector(I.InjectedFault)
         installer = I.Installer(
             store,
@@ -1358,10 +1364,8 @@ def test_begin_creates_the_row_before_the_run(studio, h, repo_builder):
 def test_repo_busy_fails_without_touching_the_repository(studio, h, repo_builder):
     root = repo_builder.with_git().build()
     repo = insert_repo(studio, h.store, root)
-    h.store.lease_acquire(
-        "execution", IDENTITY, {"repo_id": "r_1", "intent_uuid": None, "session_key": "dashboard:x",
-                                "action_id": "a_1"}
-    )
+    grant = run(h.scheduler.acquire_execution(repo, intent_uuid=None, session_key="dashboard:x",
+                                              action_id="a_1"))
     plan = h.installer.preview(repo, "install")
 
     # `begin` refuses synchronously, so the route answers 409 instead of a 202 that fails later.
@@ -1377,6 +1381,7 @@ def test_repo_busy_fails_without_touching_the_repository(studio, h, repo_builder
     assert tree(root) == {}
     assert h.installer.current_receipt("r_1") is None
     assert h.store.get("repos", "r_1")["install_status"] == "not_installed"
+    run(h.scheduler.release(grant))
 
 
 # --------------------------------------------------------------------------- #
@@ -1436,15 +1441,13 @@ def test_fault_at_every_step_leaves_one_complete_installation(studio, upgrade_sc
 
     assert marker in h.fault.seen, "the fault point was never reached"
 
-    # The lease invariant, at every fault point: either it was handed back, or the transaction reached a
-    # settled status so the startup sweep can prove the holder gone and reclaim it. What must never
-    # happen is a held lease attached to a transaction that will never settle — that is a repository
-    # permanently `repo_busy` with no route able to clear it.
+    # The lease invariant, at every fault point: it was handed back, or the fault fired at the release
+    # itself after the transaction had settled. What must never happen is a held lease attached to a
+    # transaction that will never settle — a repository `repo_busy` until the gateway restarts.
     #
     # `after:acquire_admin_lease` is the marker that used to fail this: the lease was taken, but `run`'s
-    # `grant` was still unassigned, so its `finally` had nothing to release. `before:release_lease` is
-    # the legitimate held case — the receipt is already committed, so the row is settled.
-    held = h.store.lease_get("admin", IDENTITY)
+    # `grant` was still unassigned, so its `finally` had nothing to release.
+    held = h.lease()
     if held is not None:
         status = h.store.get("install_transactions", held.transaction_id)["status"]
         assert status in studio.leases.TRANSACTION_SETTLED_STATUS, (
@@ -1577,7 +1580,7 @@ def test_lease_is_always_released(studio, h, repo_builder):
     h.fault.at("after:merge_fragments")
     result = do(h, repo, "install")
     assert result.status == "rolled_back"
-    assert h.store.lease_get("admin", IDENTITY) is None
+    assert h.lease() is None
     assert [s.name for s in result.steps][-1] == "release_lease"
 
 
@@ -1594,12 +1597,9 @@ def test_committed_transaction_cleans_up_staging_but_keeps_backups(studio, h, re
 # --------------------------------------------------------------------------- #
 
 
-def _abandoned(store, status: str, *, txid: str = "tx_dead", boot: str | None = None) -> None:
-    """The durable remains of an install whose process was killed mid-flight.
-
-    A row in a non-terminal status plus the admin lease it took. Both survive the process, which is the
-    whole problem: nothing else settles the row, and the lease cannot be reclaimed until something does.
-    """
+def _abandoned(store, status: str, *, txid: str = "tx_dead") -> None:
+    """The durable remains of an install whose process was killed mid-flight: a row in a non-terminal
+    status. Its lock died with the process; nothing but the settle ever moves the row."""
     store.insert(
         "install_transactions",
         {
@@ -1614,12 +1614,6 @@ def _abandoned(store, status: str, *, txid: str = "tx_dead", boot: str | None = 
             "started_at": "2026-09-04T09:00:00Z",
             "steps_json": "[]",
         },
-    )
-    store.lease_acquire(
-        "admin",
-        IDENTITY,
-        {"repo_id": "r_1", "operation_type": "install", "transaction_id": txid,
-         "boot_id": "boot-of-a-dead-process" if boot is None else boot},
     )
 
 
@@ -1636,18 +1630,16 @@ def _abandoned(store, status: str, *, txid: str = "tx_dead", boot: str | None = 
     ],
 )
 def test_a_transaction_abandoned_by_process_death_is_settled_by_how_far_it_got(
-    studio, h, repo_builder, clock, C, status, outcome, install_status
+    studio, h, repo_builder, status, outcome, install_status
 ):
-    """Force-quit mid-install must not leave a repository that can never run and can never be repaired.
+    """Force-quit mid-install must not leave a repository that can never be repaired.
 
-    Before this, the row stayed non-terminal forever, `leases._prove_admin` refused to reclaim the lease
-    it held, and the repository was permanently `repo_busy` — no dispatch, no install, not even
-    `DELETE /repos/{id}`. Which terminal status it gets is decided by whether bytes can have moved:
-    nothing was written before `backup`, so those settle to `failed`; anything later is
-    `recovery_required`, which is what puts an `install_conflict` card in front of a person.
+    Which terminal status it gets is decided by whether bytes can have moved: nothing was written before
+    `backup`, so those settle to `failed`; anything later is `recovery_required`, which is what puts an
+    `install_conflict` card in front of a person.
     """
     root = repo_builder.with_git().build()
-    insert_repo(studio, h.store, root, install_status="not_installed")
+    repo = insert_repo(studio, h.store, root, install_status="not_installed")
     _abandoned(h.store, status)
 
     settled = asyncio.run(h.installer.settle_abandoned())
@@ -1659,28 +1651,27 @@ def test_a_transaction_abandoned_by_process_death_is_settled_by_how_far_it_got(
     assert row["finished_at"]
     assert h.store.get("repos", "r_1")["install_status"] == install_status
 
-    # And the lease is now reclaimable, which is the reason the settle exists. Staleness is still
-    # required on top of the proof: a reclaim never races a holder that is heartbeating.
-    clock.advance(C.LEASE_STALE_SECS + 1)
-    rec = h.store.lease_get("admin", IDENTITY)
-    proof = asyncio.run(h.installer._scheduler.prove_reclaim(rec, boundary=None))
-    assert proof.ok is True, proof.refusals
-    assert proof.reason == "admin_transaction_settled"
+    # Nothing is held: the dead process took its lock with it, so the recovery can start at once.
+    assert h.lease() is None
+    run(h.scheduler.release(run(h.scheduler.acquire_admin(repo, operation_type="recovery",
+                                                          transaction_id=None))))
 
 
 def test_a_live_transaction_of_this_process_is_never_settled(studio, h, repo_builder):
     """The host makes routes live around the time it calls on_startup, so "startup" is not proof of idle.
 
-    A transaction whose admin lease carries THIS process's boot id is genuinely running. Settling it
-    would mark a healthy repository `recovery_required` and pull the lease out from under a live install.
+    A transaction whose admin lease THIS process holds is genuinely running. Settling it would mark a
+    healthy repository `recovery_required` under a live install.
     """
     root = repo_builder.with_git().build()
-    insert_repo(studio, h.store, root)
-    _abandoned(h.store, "written", boot=BOOT)
+    repo = insert_repo(studio, h.store, root)
+    _abandoned(h.store, "written")
+    grant = run(h.scheduler.acquire_admin(repo, operation_type="install", transaction_id="tx_dead"))
 
     assert asyncio.run(h.installer.settle_abandoned()) == []
     assert h.store.get("install_transactions", "tx_dead")["status"] == "written"
     assert h.store.get("repos", "r_1")["install_status"] != "recovery_required"
+    run(h.scheduler.release(grant))
 
 
 def test_a_settled_transaction_is_left_alone(studio, h, repo_builder):
@@ -1707,10 +1698,9 @@ def test_a_failure_between_the_acquire_and_its_bookkeeping_hands_the_lease_back_
     """`run` cannot release a lease it has not been given yet, so `_lease_step` has to do it itself.
 
     The window is narrow and real: `acquire_admin` has returned, but the caller's `grant` is assigned
-    only when `_lease_step` returns, so its `finally` sees `None`. Without the handback the transaction
-    still settles to `failed` — which means the lease is reclaimable — but only by the NEXT startup
-    sweep. Until the user restarts the gateway their repository answers `repo_busy` for an install that
-    never wrote a byte, and nothing in the UI can explain why.
+    only when `_lease_step` returns, so its `finally` sees `None`. Without the handback the lock stays
+    held until the gateway restarts, and the repository answers `repo_busy` for an install that never
+    wrote a byte.
     """
     root = repo_builder.with_git().build()
     repo = insert_repo(studio, h.store, root)
@@ -1719,7 +1709,7 @@ def test_a_failure_between_the_acquire_and_its_bookkeeping_hands_the_lease_back_
     result = do(h, repo, "install")
 
     assert result.status == "failed"
-    assert h.store.lease_get("admin", IDENTITY) is None, "the lease needed a restart to come back"
+    assert h.lease() is None, "the lease needed a restart to come back"
     assert tree(root) == {}, "nothing was written, so nothing should have to be recovered"
 
 

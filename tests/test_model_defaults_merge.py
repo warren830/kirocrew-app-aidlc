@@ -215,7 +215,7 @@ def test_failed_upgrade_restores_whole_file_and_receipt(case):
     assert (case.root / CLI).read_bytes() == before
     assert tree(case.root) == snapshot
     assert up.installer.current_receipt(case.repo.repo_id) == receipt
-    assert case.store.lease_list() == []
+    assert up.scheduler.live() == []
 
 
 def test_drift_uses_receipted_entry_keys_when_bundle_changes(case):
@@ -369,7 +369,7 @@ def test_version_rollback_preserves_edits_to_model_no_longer_owned(
     assert tree(scene.case.root) == before
     assert scene.up.installer.current_receipt(scene.repo.repo_id) == scene.current
     assert scene.up.installer.transactions(scene.repo.repo_id) == transactions
-    assert scene.case.store.lease_list() == []
+    assert scene.up.scheduler.live() == []
 
 
 @pytest.mark.parametrize("old_entry", ["absent", "unchanged"])
@@ -390,7 +390,7 @@ def test_version_rollback_restores_unowned_model_only_when_absent_or_unchanged(
     restored = scene.up.installer.current_receipt(scene.repo.repo_id)
     assert restored.engine_version == scene.target.engine_version
     assert restored.by_path()[CLI].uninstall["spec"]["managedMapEntries"] == {MAP: [MODEL]}
-    assert scene.case.store.lease_list() == []
+    assert scene.up.scheduler.live() == []
 
 
 def test_version_rollback_rejects_model_edit_after_preview(model_ownership_shift, studio):
@@ -408,7 +408,7 @@ def test_version_rollback_rejects_model_edit_after_preview(model_ownership_shift
     assert (scene.case.root / CLI).read_bytes() == cli_bytes
     assert tree(scene.case.root) == before
     assert scene.up.installer.current_receipt(scene.repo.repo_id) == scene.current
-    assert scene.case.store.lease_list() == []
+    assert scene.up.scheduler.live() == []
 
 
 @pytest.mark.parametrize("bad_map", [None, [], "user", {MODEL: None}, {MODEL: ["user"]}])

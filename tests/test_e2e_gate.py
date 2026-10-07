@@ -442,13 +442,13 @@ def test_the_execution_lease_is_held_while_the_decision_is_in_flight(sv, routes,
     _rescan(sv, routes, fake_host, scene)
     card = _gate_card(sv, routes, fake_host)
     _status, receipt = _submit(sv, routes, fake_host, card)
-    assert receipt["lease_generation"] == 1
 
     status, body = _get(sv, routes, fake_host, "/leases")
     assert status == 200
     execution = [row for row in body["leases"] if row["kind"] == "execution"]
     assert [row["repo_id"] for row in execution] == [scene.repo_id]
     assert execution[0]["action_id"] == card["action_id"]
+    assert execution[0]["generation"] == receipt["lease_generation"]
 
 
 def test_the_queue_shows_the_decision_as_in_flight_rather_than_waiting(sv, routes, fake_host, scene):

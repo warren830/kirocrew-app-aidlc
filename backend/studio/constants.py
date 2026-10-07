@@ -118,10 +118,6 @@ SCAN_POOL_WORKERS = 2
 #: Wall budget one tick may spend scanning. Repositories with no open action are round-robined across
 #: ticks so a 64-repo install cannot make the heartbeat loop late (review R11).
 SCAN_TICK_BUDGET_SECS = 4.0
-LEASE_HEARTBEAT_SECS = 15.0
-#: A lease whose heartbeat is older than this is *stale*, which permits a reclaim ATTEMPT. Elapsed
-#: time alone never authorises reclaim: the owner must also be provably not executing (FR-SES-007).
-LEASE_STALE_SECS = 120.0
 #: How long the UI has to report the outcome of its host submission before the action is treated as
 #: uncertain and the reconciler starts looking for evidence instead.
 DELIVERY_ACK_DEADLINE_SECS = 90

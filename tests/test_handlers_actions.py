@@ -237,7 +237,9 @@ def test_submit_commits_the_record_and_returns_the_call_the_browser_must_make(sv
     assert body["wire_text"] == "Approve"
     assert body["slot_key"] == slot
     assert body["delivery_id"].startswith("dl_")
-    assert body["lease_generation"] == 1
+    # The receipt's generation is the one stamped on the in-flight row, which is now the lease itself.
+    assert body["lease_generation"] == sv.storage.get("actions", gate.action_id)["lease_generation"]
+    assert [rec.generation for rec in sv.scheduler.live()] == [body["lease_generation"]]
     assert body["host"] == {
         "method": "POST",
         "path": "/api/chat?ws=1",

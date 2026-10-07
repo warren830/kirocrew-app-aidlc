@@ -40,17 +40,8 @@ def test_confirmed_presence_anomaly_can_finish_without_rebasing_or_replay(
 ):
     """The frozen count must not strand a completed gate after its anomaly was escalated."""
     touch_human_turn(scene.root, mtime_ns=1_000_000_000)
-    action_id = scene.make(status="Processing")
+    action_id = scene.make(status="Processing", lease_generation=7)
     original = svc.storage.get("actions", action_id)
-    grant = asyncio.run(
-        svc.scheduler.acquire_execution(
-            scene.repo,
-            intent_uuid=None,
-            session_key=f"dashboard:{scene.slot_key}",
-            action_id=action_id,
-        )
-    )
-    svc.storage.cas_update("actions", action_id, 0, {"lease_generation": grant.generation})
     approve_on_disk(scene.root, human_turns=human_turns)
     touch_human_turn(scene.root, mtime_ns=2_000_000_000)
     finish_turn(fake_host, scene.slot_key)

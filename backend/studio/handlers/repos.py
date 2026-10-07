@@ -253,7 +253,7 @@ async def remove_repo(services: Any, request: web.Request) -> web.Response:
             raise StudioError(
                 "repo_busy",
                 "this repository has a live lease; wait for it to finish",
-                details=lease_view(held, orphaned=services.scheduler.is_stale(held)),
+                details=lease_view(held),
             )
     await asyncio.to_thread(services.repos.remove, repo.repo_id)
     await services.activity.record(kind="repo.removed", severity="attention", repo_id=repo.repo_id,
@@ -582,7 +582,7 @@ async def _repo_json(
     body["leases"] = {
         kind: next(
             (
-                lease_view(rec, orphaned=services.scheduler.is_stale(rec))
+                lease_view(rec)
                 for rec in leases
                 if rec.kind == kind and rec.resolved_repo_identity == repo.resolved_identity
             ),

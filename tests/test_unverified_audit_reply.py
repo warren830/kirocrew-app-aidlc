@@ -85,7 +85,7 @@ def test_unverified_reply_releases_only_after_a_scoped_receipt(
             else "answer_not_verified_at_gate" if case in AT_GATE else "answer_not_verified"
         )
         assert row["resolution_json"]["reason"] == expected
-        assert not sv.storage.lease_list()
+        assert not sv.scheduler.live()
         if case != "exact_at_gate":
             evidence = row["resolution_json"]["evidence"]
             assert evidence["answer_verified"] is False
@@ -93,7 +93,7 @@ def test_unverified_reply_releases_only_after_a_scoped_receipt(
             assert (evidence["next_gate"] is not None) is (case in AT_GATE)
     else:
         assert row["status"] in ("Processing", "DeliveryUncertain", "ReconciliationRequired")
-        assert sv.storage.lease_list()
+        assert bool(sv.scheduler.live()) == (row["status"] == "Processing")  # only in flight holds the repo
     assert row["wire_text"] == wire
     assert len(fake_host.get_slot(scene.slot_key).messages) == 2
     assert _tree_digest(scene.root) == before

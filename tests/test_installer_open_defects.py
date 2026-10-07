@@ -15,8 +15,6 @@ import pytest
 
 from conftest import RepoBuilder, fork_process
 from test_installer import (
-    BOOT,
-    IDENTITY,
     TS,
     I,
     do,
@@ -198,7 +196,7 @@ def test_verify_staging_failure_preserves_exact_abnormal_bytes(studio, h, repo_b
     assert result.steps[-1].name == "verify_staging" and result.steps[-1].ok is not True
     failed, log = failure_log(h, result.transaction_id)
     assert (failed / "staging" / FILE).read_bytes() == ODD_BYTES
-    assert tree(root) == before and h.store.lease_get("admin", IDENTITY) is None
+    assert tree(root) == before and h.lease() is None
 
 
 def test_verify_staging_failure_is_retained_even_if_bytes_now_match(studio, h, repo_builder):
@@ -332,19 +330,15 @@ def test_archive_refuses_symlink_boundaries_without_touching_target(
 def test_live_transaction_keeps_its_staging(studio, h, repo_builder, status):
     repo = insert_repo(studio, h.store, repo_builder.with_git().build())
     staging, _ = abandoned(h, repo, status=status)
-    h.store.lease_acquire("admin", IDENTITY, {
-        "repo_id": repo.repo_id, "operation_type": "install",
-        "transaction_id": "tx_dead", "boot_id": BOOT,
-    })
+    grant = run(h.scheduler.acquire_admin(repo, operation_type="install", transaction_id="tx_dead"))
     assert run(h.installer.settle_abandoned()) == []
     assert (staging / FILE).read_bytes() == ODD_BYTES
     assert not (h.data_dir / "failed" / "tx_dead").exists()
+    run(h.scheduler.release(grant))
 
 
 @pytest.mark.parametrize("marker", ["before:release_lease", "after:release_lease", "before:finish"])
-def test_restart_finishes_committed_install_without_orphaning_staging(
-    studio, h, repo_builder, clock, marker,
-):
+def test_restart_finishes_committed_install_without_orphaning_staging(studio, h, repo_builder, marker):
     root = repo_builder.with_git().build()
     repo = insert_repo(studio, h.store, root)
     plan = h.installer.preview(repo, "install")
@@ -380,7 +374,6 @@ def test_restart_finishes_committed_install_without_orphaning_staging(
     repo_row = h.store.get("repos", repo.repo_id)
     assert repo_row["install_status"] == "installed"
 
-    h.installer._boot_id = h.installer._scheduler._boot_id = "boot-restarted"
     assert run(h.installer.settle_abandoned()) == [txid]
     finished = h.installer.transaction(txid)
     assert finished.status == "committed" and finished.finished_at
@@ -390,9 +383,8 @@ def test_restart_finishes_committed_install_without_orphaning_staging(
     assert h.store.select("install_receipts") == receipts
     assert h.store.get("repos", repo.repo_id) == repo_row
     assert run(h.installer.settle_abandoned()) == []
-    clock.advance(studio.constants.LEASE_STALE_SECS + 1)
-    assert run(h.installer._scheduler.startup_sweep()) == []
-    assert h.store.lease_get("admin", IDENTITY) is None
+    # Whatever the child held died with it.
+    run(h.scheduler.release(run(h.scheduler.acquire_admin(repo, operation_type="recovery", transaction_id=None))))
 
 
 def test_restart_retries_ignored_cleanup_errors_from_a_finished_commit(
@@ -417,7 +409,6 @@ def test_restart_retries_ignored_cleanup_errors_from_a_finished_commit(
     backups = tree(h.data_dir / "backups")
     row = h.store.get("install_transactions", result.transaction_id)
     clock.advance(1)
-    h.installer._boot_id = h.installer._scheduler._boot_id = "boot-restarted"
     assert run(h.installer.settle_abandoned()) == [result.transaction_id]
     assert not staging.exists()
     assert h.store.get("install_transactions", result.transaction_id) == row
@@ -471,7 +462,7 @@ def test_committed_cleanup_error_does_not_strand_another_repos_interrupted_insta
     assert process.exitcode == 77
     interrupted = h.installer.transaction(pending.transaction_id)
     assert interrupted.status == "written" and not interrupted.finished_at
-    assert h.store.lease_get("admin", other.resolved_identity) is not None
+    assert h.lease() is None, "the child's lock died with it"
     assert (other_root / FILE).is_file()
     repositories = (tree(root), tree(other_root))
     backups = tree(h.data_dir / "backups")
@@ -483,8 +474,6 @@ def test_committed_cleanup_error_does_not_strand_another_repos_interrupted_insta
             raise PermissionError("committed staging is still locked")
         return rmtree(path, *args, **kwargs)
 
-    h.installer._boot_id = h.installer._scheduler._boot_id = "boot-restarted"
-    clock.advance(studio.constants.LEASE_STALE_SECS + 1)
     with monkeypatch.context() as patch:
         patch.setattr(shutil, "rmtree", deny_committed_cleanup)
         with pytest.raises(studio.errors.StudioError) as exc:
@@ -501,8 +490,7 @@ def test_committed_cleanup_error_does_not_strand_another_repos_interrupted_insta
     assert exc.value.details["committed_cleanup_failures"] == [
         {"transaction_id": committed.transaction_id, "code": "storage_error"},
     ]
-    assert run(h.installer._scheduler.startup_sweep()) == []
-    assert h.store.lease_get("admin", other.resolved_identity) is None
+    run(h.scheduler.release(run(h.scheduler.acquire_admin(other, operation_type="recovery", transaction_id=None))))
     assert staging.exists()
     assert h.store.get("install_transactions", committed.transaction_id) == committed_row
     assert h.store.get("repos", repo.repo_id) == committed_repo
