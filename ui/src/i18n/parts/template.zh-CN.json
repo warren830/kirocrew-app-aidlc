@@ -53,6 +53,8 @@
   "template.questions.degradedBody": "此题组暂时无法通过表单安全提交：题单格式可能不受支持，或会话正在等待原生问题的回答。请在原会话中回答。",
   "template.questions.checkpoint.summary_confirmation": "摘要确认",
   "template.questions.checkpoint.summary_confirmation.body": "引擎在继续之前，要确认它对该阶段的摘要是否正确。",
+  "template.questions.checkpoint.assumption_confirmation": "假设确认",
+  "template.questions.checkpoint.assumption_confirmation.body": "引擎在这一步的产物里把下面这些保留为假设。你可以先接受，也可以让它现在追问确认。",
   "template.questions.checkpoint.plan_approval": "计划批准",
   "template.questions.checkpoint.plan_approval.body": "引擎在执行之前，要你批准它编排出的计划。",
   "template.questions.checkpointAnswered": "已记录的答案：{answer}",

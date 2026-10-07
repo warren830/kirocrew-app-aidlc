@@ -1127,6 +1127,43 @@ def test_answered_followups_leave_only_the_canonical_checkpoint_pending(R, check
     assert getattr(parsed, kind).options == tuple(line[2:] for line in labels.splitlines())
 
 
+ASSUMPTION_SHEET = (
+    "## Q1. Done?\nA. Yes\n[Answer]: A. Yes\n\n"
+    "## Consolidated Summary Confirmation\n- Looks correct\n- Request changes\n\n[Answer]: Looks correct\n\n"
+    "## Assumption Confirmation\n\nThe statement keeps one item open.\n\n"
+    "- The demo also covers the extra features [assumption]\n\n"
+    "A. Accept assumptions\nB. Convert to follow-up questions\n\n[Answer]:\n"
+)
+
+
+def test_assumption_confirmation_is_a_checkpoint_carrying_its_assumptions(R):
+    """2.10 intent-capture Step 5: a blank tag here is a checkpoint, not unsupported follow-up content."""
+    parsed = R.parse_questions_file(ASSUMPTION_SHEET, "questions.md", "0" * 64)
+    assert parsed.pending_count == parsed.unsupported_pending_count == 0
+    assert parsed.pending_checkpoint == "assumption_confirmation"
+    assert R.file_questions_support_forms(parsed)
+    checkpoint = parsed.assumption_confirmation
+    assert checkpoint.options == ("A. Accept assumptions", "B. Convert to follow-up questions")
+    assert checkpoint.context == (
+        "The statement keeps one item open.\n\n- The demo also covers the extra features [assumption]"
+    )
+    assert parsed.to_json()["assumption_confirmation"]["context"] == checkpoint.context
+    # Existing checkpoints keep their exact JSON shape.
+    assert "context" not in parsed.summary_confirmation.to_json()
+
+    answered = R.parse_questions_file(
+        ASSUMPTION_SHEET.replace("[Answer]:\n", "[Answer]: A. Accept assumptions\n"), "questions.md", "0" * 64,
+    )
+    assert answered.pending_checkpoint is None
+    assert answered.assumption_confirmation.answer == "A. Accept assumptions"
+
+
+def test_a_reopened_summary_is_confirmed_before_the_assumptions_are_asked(R):
+    reopened = ASSUMPTION_SHEET.replace("[Answer]: Looks correct", "[Answer]:")
+    parsed = R.parse_questions_file(reopened, "questions.md", "0" * 64)
+    assert parsed.pending_checkpoint == "summary_confirmation"
+
+
 def test_legacy_questions_file_constructors_default_to_no_unsupported_pending_content(R):
     parsed = R.QuestionsFile("questions.md", "0" * 64, (), None, None, 0, None, None)
     assert parsed.unsupported_pending_count == 0

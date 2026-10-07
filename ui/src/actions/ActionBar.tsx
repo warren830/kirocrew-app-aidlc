@@ -32,6 +32,8 @@ const DANGEROUS: readonly Decision[] = ['request_changes', 'request_plan_changes
 const DECISION_ICON: Partial<Record<Decision, IconName>> = {
   approve: 'check',
   approve_plan: 'check',
+  accept_assumptions: 'check',
+  convert_assumptions: 'doc',
   accept_as_is: 'check',
   confirm_summary: 'check',
   answers: 'send',

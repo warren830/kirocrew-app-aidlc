@@ -630,6 +630,7 @@ class QuestionsView:
     host_card: dict | None
     origin: dict[str, Any] | None = None
     unsupported_pending_count: int = 0
+    assumption_confirmation: Any | None = None
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -652,6 +653,8 @@ class QuestionsView:
             ],
             "summary_confirmation": _json_of(self.summary_confirmation),
             "plan_approval": _json_of(self.plan_approval),
+            **({"assumption_confirmation": _json_of(self.assumption_confirmation)}
+               if self.assumption_confirmation is not None else {}),
             "pending_count": self.pending_count,
             "unsupported_pending_count": self.unsupported_pending_count,
             "pending_checkpoint": self.pending_checkpoint,
@@ -738,7 +741,7 @@ class CardSeed:
     def headline_key(self) -> str:
         checkpoint = self.headline_params.get("checkpoint")
         if self.type == "question" and self.headline_params.get("pending") == 0 and checkpoint in (
-            "summary_confirmation", "plan_approval",
+            C.QUESTION_CHECKPOINT_KINDS
         ):
             return f"action.question.{checkpoint}.headline"
         return f"action.{self.type}.headline"
@@ -1498,6 +1501,7 @@ class Projection:
             questions=questions.questions,
             summary_confirmation=questions.summary_confirmation,
             plan_approval=questions.plan_approval,
+            assumption_confirmation=getattr(questions, "assumption_confirmation", None),
             pending_count=questions.pending_count,
             pending_checkpoint=questions.pending_checkpoint,
             mode="structured" if not native_wait and (questions.origin or file_form) else "degraded",
@@ -1898,7 +1902,8 @@ class Projection:
         """One card for the current stage's pending questions or checkpoint.
 
         The decisions follow *what is pending*, not the card type: blank `Q` tags mean `answers`, a
-        blank `## Consolidated Summary Confirmation` means `confirm_summary`, a blank `## Plan Approval`
+        blank `## Consolidated Summary Confirmation` means `confirm_summary`, a blank `## Assumption
+        Confirmation` means `accept_assumptions` / `convert_assumptions`, a blank `## Plan Approval`
         means `approve_plan` / `request_plan_changes` (C34, review P09). A file can hold both a pending
         question and an answered checkpoint, and the summary checkpoint wins over the plan one because
         the engine writes them in that order.
@@ -1916,6 +1921,8 @@ class Projection:
             decisions.append("answers")
         if checkpoint == "summary_confirmation":
             decisions.append("confirm_summary")
+        elif checkpoint == "assumption_confirmation":
+            decisions.extend(("accept_assumptions", "convert_assumptions"))
         elif checkpoint == "plan_approval":
             decisions.extend(("approve_plan", "request_plan_changes"))
         if not decisions:
@@ -1942,7 +1949,7 @@ class Projection:
                     "checkpoint": checkpoint,
                 },
                 consequence=checkpoint if pending_count == 0 and checkpoint in (
-                    "summary_confirmation", "plan_approval",
+                    C.QUESTION_CHECKPOINT_KINDS
                 ) else "__default__",
                 intent_uuid=uuid,
                 reason=checkpoint or ("needs_input" if needs_input and pending_count == 0 else "questions"),

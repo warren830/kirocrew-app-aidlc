@@ -16,6 +16,8 @@ export const WIRE = {
   SCOPE_PREFIX: "/aidlc --scope ",
   PREPARE_COMMIT: "Please prepare a commit for the current AI-DLC changes. Do not push.",
   GROUPED_ANSWER_SUFFIX: "\n\nStudio grouped-answer delivery: this is one human reply. Apply each Q<n> answer to its matching [Answer] tag. Record all Q<n> answers together in ONE aidlc-log.ts answer --details call, preserving their text; do not record separate answer receipts for each question. Then present the next human checkpoint and wait.",
+  ACCEPT_ASSUMPTIONS: "A. Accept assumptions",
+  CONVERT_ASSUMPTIONS: "B. Convert to follow-up questions",
 } as const
 
 export type WireKey = keyof typeof WIRE

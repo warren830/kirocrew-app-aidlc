@@ -170,10 +170,11 @@ export type DirectiveEvidence = Pick<Directive, 'stage' | 'unit' | 'matches_stat
 export interface MarkersView { human_turn_at: string | null; engine_touch_at: string | null; turn_counter: number | null; goal_stop_present: boolean; recovery: Record<string, string> | null; hooks_health: Record<string, string>; compose_pending: boolean }
 export interface QuestionOption { letter: string; text: string; is_other: boolean }
 export interface Question { index: number; prompt: string; context?: string; options: QuestionOption[]; multi_select: boolean; answer: string | null; answered: boolean; required: true }
-export interface Checkpoint { kind: 'summary_confirmation' | 'plan_approval'; present: boolean; answered: boolean; answer: string | null; options: string[] }
+/** `context` is the section's own text before its options; sent for an Assumption Confirmation, whose assumptions are what the human accepts. */
+export interface Checkpoint { kind: 'summary_confirmation' | 'assumption_confirmation' | 'plan_approval'; present: boolean; answered: boolean; answer: string | null; options: string[]; context?: string | null }
 export interface HostQuestionCard { ask_id?: string; card_id?: string; slot: string; questions: { question: string; header?: string; options: { label: string; description?: string }[]; multiSelect?: boolean }[]; ts: number }
 export interface AuditQuestionOrigin { kind: 'audit'; event: string; shard: string; pos: number; timestamp: string; stage: string; unit: string | null; workflow: null; attempt_generation: string | null; decision_sha256: string }
-export interface QuestionsView { relpath: string; sha256: string; stage: string; unit: string | null; questions: Question[]; summary_confirmation: Checkpoint | null; plan_approval: Checkpoint | null; pending_count: number; unsupported_pending_count?: number; pending_checkpoint: 'summary_confirmation' | 'plan_approval' | null; mode: 'degraded' | 'structured'; host_card: HostQuestionCard | null; origin?: AuditQuestionOrigin }
+export interface QuestionsView { relpath: string; sha256: string; stage: string; unit: string | null; questions: Question[]; summary_confirmation: Checkpoint | null; plan_approval: Checkpoint | null; assumption_confirmation?: Checkpoint | null; pending_count: number; unsupported_pending_count?: number; pending_checkpoint: 'summary_confirmation' | 'assumption_confirmation' | 'plan_approval' | null; mode: 'degraded' | 'structured'; host_card: HostQuestionCard | null; origin?: AuditQuestionOrigin }
 export interface IntentDetail extends IntentSummary { state_sections: Record<string, Record<string, string>>; phases: [string, string][]; stages: StageRow[]; findings: Finding[]; actions: ActionCard[]; directive: Directive | null; recovery: Record<string, string> | null; markers: MarkersView; audit_tail: AuditEventView[]; questions: QuestionsView | null; artifacts_count: number; artifacts_truncated: boolean; git: GitObservation | null; binding: BindingView | null; engine: HarnessDir | null; active_directive_stage: string | null }
 
 // ---- map ----
@@ -233,6 +234,7 @@ export type SubmitPayload =
   | { decision: 'answers'; answers: AnswerInput[] }
   | { decision: 'confirm_summary'; choice: 'looks_correct' } | { decision: 'confirm_summary'; choice: 'request_changes'; feedback: string }
   | { decision: 'approve_plan' } | { decision: 'request_plan_changes'; feedback: string }
+  | { decision: 'accept_assumptions' } | { decision: 'convert_assumptions' }
   | { decision: 'provide_input'; kind: 'scope'; scope: string } | { decision: 'provide_input'; kind: 'free_text'; text: string }
   | { decision: 'run' } | { decision: 'resume' } | { decision: 'prepare_commit' }
 export type ResolvePayload =

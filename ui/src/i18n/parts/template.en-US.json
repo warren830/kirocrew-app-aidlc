@@ -59,6 +59,8 @@
   "template.questions.degradedBody": "Studio cannot safely submit this question group as a form. The question format may be unsupported, or the conversation may be waiting on a native question. Answer in the canonical conversation.",
   "template.questions.checkpoint.summary_confirmation": "Summary confirmation",
   "template.questions.checkpoint.summary_confirmation.body": "The engine is asking whether its summary of this stage is correct before it moves on.",
+  "template.questions.checkpoint.assumption_confirmation": "Assumption confirmation",
+  "template.questions.checkpoint.assumption_confirmation.body": "The engine kept these as assumptions in the stage's artifacts. Accept them for now, or have it ask follow-up questions first.",
   "template.questions.checkpoint.plan_approval": "Plan approval",
   "template.questions.checkpoint.plan_approval.body": "The engine is asking you to approve the plan it composed before it executes it.",
   "template.questions.checkpointAnswered": "Recorded answer: {answer}",

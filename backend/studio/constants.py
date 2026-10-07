@@ -31,7 +31,7 @@ from typing import Any, Mapping, Protocol
 
 APP_NAME = "aidlc-studio"
 #: Must equal ``app.json`` ``version`` (pinned by tests/test_manifest.py).
-APP_VERSION = "1.1.3"
+APP_VERSION = "1.1.4"
 #: Must equal ``app.json`` ``minKiroCrewVersion``. 0.3.0 is enough because Studio registers its own
 #: module namespace (see ``backend/routes.py``) instead of relying on the 0.5.0 loader, and every
 #: other host primitive it uses exists in 0.3.0.
@@ -325,6 +325,8 @@ DECISION_KIND = (
     "approve_plan",
     "request_plan_changes",
     "confirm_summary",
+    "accept_assumptions",
+    "convert_assumptions",
     "answers",
     "provide_input",
     "run",
@@ -348,6 +350,8 @@ HUMAN_LANE_DECISIONS = frozenset(
         "accept_as_is",
         "answers",
         "confirm_summary",
+        "accept_assumptions",
+        "convert_assumptions",
         "approve_plan",
         "request_plan_changes",
         "provide_input",
@@ -379,7 +383,10 @@ STUDIO_ONLY_DECISIONS = frozenset(
 #: only from ``ACCEPT_AS_IS_MIN_ATTEMPT`` on (review P24), question decisions per pending checkpoint.
 DECISIONS: dict[str, tuple[str, ...]] = {
     "gate": ("approve", "request_changes", "accept_as_is"),
-    "question": ("answers", "confirm_summary", "approve_plan", "request_plan_changes"),
+    "question": (
+        "answers", "confirm_summary", "accept_assumptions", "convert_assumptions", "approve_plan",
+        "request_plan_changes",
+    ),
     "missing_input": ("provide_input", "pick_intent"),
     "recovery": ("rebind_session", "mark_not_delivered", "acknowledge"),
     "delivery_uncertain": ("reconcile", "mark_not_delivered", "resubmit"),
@@ -445,25 +452,38 @@ OPTION_LINE_RE = re.compile(r"^(?:- )?([A-Z])\.[ \t]+(.*)$", re.MULTILINE)
 OTHER_OPTION_LETTER = "X"
 #: Bullet lines immediately after an ``[Answer]:`` tag continue that answer (real files do this).
 ANSWER_CONTINUATION_RE = re.compile(r"^- (.*)$")
-#: The three checkpoint headings (§1.1). Named because the reader maps a heading to a checkpoint kind and
+#: The checkpoint headings (§1.1). Named because the reader maps a heading to a checkpoint kind and
 #: the pattern below matches it: one literal, two readers.
 SUMMARY_CONFIRMATION_HEADING = "Consolidated Summary Confirmation"
 PLAN_APPROVAL_HEADING = "Plan Approval"
 # The Markdown heading and the engine audit checkpoint have distinct names.
 PLAN_APPROVAL_AUDIT_CHECKPOINT = "Code Generation Plan Approval"
 POST_APPROVAL_AMENDMENT_HEADING = "Post-approval Amendment"
+#: 2.10's intent-capture Step 5: assumptions the artifacts keep are accepted as assumptions or turned
+#: into follow-up questions. The engine asks it as a structured question and fills the tag with the
+#: chosen option verbatim (`A. Accept assumptions`), so the option texts are its wire text.
+ASSUMPTION_CONFIRMATION_HEADING = "Assumption Confirmation"
+#: ``Checkpoint.kind`` values a question card can be waiting on, in the order the engine asks them.
+QUESTION_CHECKPOINT_KINDS = ("summary_confirmation", "assumption_confirmation", "plan_approval")
 #: Blocks inside a questions file that are checkpoints rather than questions; each has its own wire text.
 CHECKPOINT_HEADING_RE = re.compile(
     "^## ("
     + "|".join(
         re.escape(h)
-        for h in (PLAN_APPROVAL_HEADING, SUMMARY_CONFIRMATION_HEADING, POST_APPROVAL_AMENDMENT_HEADING)
+        for h in (
+            PLAN_APPROVAL_HEADING, SUMMARY_CONFIRMATION_HEADING, ASSUMPTION_CONFIRMATION_HEADING,
+            POST_APPROVAL_AMENDMENT_HEADING,
+        )
     )
     + r")\s*$",
     re.MULTILINE,
 )
 CHECKPOINT_OPTION_RE = re.compile(
     r"^- (Approve Plan|Request Changes|Looks correct|Request changes)\s*$", re.MULTILINE
+)
+#: The Assumption Confirmation's two options, written as lettered lines (``A. Accept assumptions``).
+ASSUMPTION_OPTION_RE = re.compile(
+    r"^(?:- )?(A\. Accept assumptions|B\. Convert to follow-up questions)\s*$", re.MULTILINE
 )
 
 INTENT_DIR_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -742,6 +762,8 @@ WIRE_RUN = "/aidlc"
 WIRE_RESUME = "/aidlc --resume"
 WIRE_SCOPE_PREFIX = "/aidlc --scope "
 WIRE_PREPARE_COMMIT = "Please prepare a commit for the current AI-DLC changes. Do not push."
+WIRE_ACCEPT_ASSUMPTIONS = "A. Accept assumptions"
+WIRE_CONVERT_ASSUMPTIONS = "B. Convert to follow-up questions"
 
 #: There is deliberately NO wire text for picking the active intent. Sending `/aidlc intent <name>` as a
 #: prompt would mint a human turn for a navigation step; the cursor switch is an admin-lane engine verb.
@@ -764,6 +786,8 @@ WIRE_TEXT = {
     "WIRE_RESUME": WIRE_RESUME,
     "WIRE_SCOPE_PREFIX": WIRE_SCOPE_PREFIX,
     "WIRE_PREPARE_COMMIT": WIRE_PREPARE_COMMIT,
+    "WIRE_ACCEPT_ASSUMPTIONS": WIRE_ACCEPT_ASSUMPTIONS,
+    "WIRE_CONVERT_ASSUMPTIONS": WIRE_CONVERT_ASSUMPTIONS,
 }
 
 #: ``accept_as_is`` is only one of the conductor's options once three rejections have happened, so Studio

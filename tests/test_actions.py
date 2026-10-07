@@ -2697,6 +2697,34 @@ def test_checkpoint_card_does_not_claim_zero_unanswered_questions(world, checkpo
     run(scenario())
 
 
+def test_assumption_confirmation_offers_its_two_options_as_their_exact_text(world, A):
+    async def scenario():
+        path = world.builder.record(INTENT) / QUESTIONS_REL
+        path.write_text(
+            "## Assumption Confirmation\n\n- Keeps one item open [assumption]\n\n"
+            "A. Accept assumptions\nB. Convert to follow-up questions\n\n[Answer]:\n"
+        )
+        await bind(world)
+        question = pick(await seed(world), "question")
+        card = await world.broker.card(question, snapshot(world))
+        offered = {spec["decision"]: spec for spec in card["decisions"]}
+        assert set(offered) == {"accept_assumptions", "convert_assumptions"}
+        assert offered["accept_assumptions"]["wire_text_template"] == "A. Accept assumptions"
+        assert offered["convert_assumptions"]["wire_text_template"] == "B. Convert to follow-up questions"
+        assert card["headline"]["key"] == "action.question.assumption_confirmation.headline"
+        assert card["evidence"]["questions"]["assumption_confirmation"]["context"] == (
+            "- Keeps one item open [assumption]"
+        )
+        receipt = await world.broker.submit(
+            question.action_id, captured=captured_of(question, A),
+            payload={"decision": "convert_assumptions"},
+            client_wire_text="B. Convert to follow-up questions", user="owner",
+        )
+        assert receipt.wire_text == "B. Convert to follow-up questions"
+        assert receipt.host.body["message"] == "B. Convert to follow-up questions"
+    run(scenario())
+
+
 @pytest.mark.parametrize("payload,wire", [
     ({"decision": "answers", "answers": [{"index": 1, "option_letters": ["A"]}]}, "Store"),
     ({"decision": "confirm_summary", "choice": "looks_correct"}, "Looks correct"),

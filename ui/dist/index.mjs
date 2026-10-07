@@ -29,7 +29,9 @@ var D = Object.defineProperty, O = (e, t) => {
 	"action.install_conflict.headline": "A file that Studio manages in {engine_dir} does not match what it installed.",
 	"action.missing_input.headline": "AI-DLC needs something from you before it can start: {reason}.",
 	"action.prepare_commit.headline": "Ask the conversation to prepare a commit for the current changes.",
+	"action.question.assumption_confirmation.headline": "{stage} is waiting for you to confirm the assumptions it kept.",
 	"action.question.consequence.advances_turn": "Your answers are sent as one message, and the conversation continues from them.",
+	"action.question.consequence.assumption_confirmation": "Your reply accepts the listed assumptions or turns them into follow-up questions before the stage continues.",
 	"action.question.consequence.plan_approval": "Your reply approves the recorded plan or requests changes before implementation continues.",
 	"action.question.consequence.summary_confirmation": "Your reply confirms the recorded summary or requests changes before the stage continues.",
 	"action.question.headline": "{stage} cannot continue until you answer its open questions. {pending} still pending.",
@@ -433,11 +435,13 @@ var D = Object.defineProperty, O = (e, t) => {
 	"confirm.studioOnly": "{label} changes only what Studio records. Nothing is sent to the conversation.",
 	"confirm.studioOnlyHint": "This sends no message. Studio records your choice and keeps reading the files on disk.",
 	"confirm.title.accept_as_is": "Confirm accepting this stage as it stands",
+	"confirm.title.accept_assumptions": "Confirm accepting the assumptions",
 	"confirm.title.acknowledge": "Confirm you have read this incident",
 	"confirm.title.answers": "Confirm the answer group sent as one action",
 	"confirm.title.approve": "Confirm the exact text sent to the canonical session",
 	"confirm.title.approve_plan": "Confirm the plan approval sent to the canonical session",
 	"confirm.title.confirm_summary": "Confirm your reply to the summary checkpoint",
+	"confirm.title.convert_assumptions": "Confirm turning the assumptions into follow-up questions",
 	"confirm.title.force_stop": "Confirm stopping the running turn",
 	"confirm.title.keep_paused": "Confirm keeping this intent paused",
 	"confirm.title.mark_not_delivered": "Confirm recording this decision as never sent",
@@ -456,6 +460,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"decision.a11y.bar": "Decisions",
 	"decision.accept_as_is.hint": "Accepts the artifact with its findings unresolved. Offered only after the engine has offered it.",
 	"decision.accept_as_is.label": "Accept as-is",
+	"decision.accept_assumptions.hint": "Keeps them in the artifacts as labelled assumptions, to be settled in a later stage. Accepting does not make them facts.",
+	"decision.accept_assumptions.label": "Accept the assumptions",
 	"decision.acknowledge.hint": "Records that you have read the contradiction and are parking it for manual review.",
 	"decision.acknowledge.label": "Acknowledge",
 	"decision.answers.hint": "Sends every pending answer as one action.",
@@ -482,6 +488,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"decision.confirm_summary.changesLabel": "Request changes to the summary",
 	"decision.confirm_summary.hint": "Confirms the engine's summary of this stage.",
 	"decision.confirm_summary.label": "Confirm the summary",
+	"decision.convert_assumptions.hint": "The engine asks follow-up questions now and revises the artifacts with your answers.",
+	"decision.convert_assumptions.label": "Turn them into follow-up questions",
 	"decision.force_stop.hint": "Asks KiroCrew to stop the session. The turn already in flight may still finish.",
 	"decision.force_stop.label": "Force stop",
 	"decision.keep_paused.hint": "Leaves this intent stopped. Nothing is dispatched until you come back.",
@@ -2010,6 +2018,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"template.missingInput.what": "What is missing",
 	"template.questions.answered": "answered",
 	"template.questions.auditSource": "This checkpoint is recorded in the AI-DLC audit trail. Your reply will be sent verbatim to the bound conversation.",
+	"template.questions.checkpoint.assumption_confirmation": "Assumption confirmation",
+	"template.questions.checkpoint.assumption_confirmation.body": "The engine kept these as assumptions in the stage's artifacts. Accept them for now, or have it ask follow-up questions first.",
 	"template.questions.checkpoint.plan_approval": "Plan approval",
 	"template.questions.checkpoint.plan_approval.body": "The engine is asking you to approve the plan it composed before it executes it.",
 	"template.questions.checkpoint.summary_confirmation": "Summary confirmation",
@@ -2310,7 +2320,9 @@ var D = Object.defineProperty, O = (e, t) => {
 	"action.install_conflict.headline": "{engine_dir} 中由 Studio 管理的文件与其安装的内容不一致。",
 	"action.missing_input.headline": "AI-DLC 需要你提供信息才能开始：{reason}。",
 	"action.prepare_commit.headline": "请会话为当前改动准备一次提交。",
+	"action.question.assumption_confirmation.headline": "{stage} 正在等你确认它保留的假设。",
 	"action.question.consequence.advances_turn": "你的回答会作为一条消息发送，会话将据此继续。",
+	"action.question.consequence.assumption_confirmation": "你的回复会接受列出的假设，或者把它们转成追问，然后再继续此阶段。",
 	"action.question.consequence.plan_approval": "你的回复会批准已记录的计划或要求修改，然后再继续实施。",
 	"action.question.consequence.summary_confirmation": "你的回复会确认已记录的汇总或要求修改，然后再继续此阶段。",
 	"action.question.headline": "{stage} 需要你回答其待解问题后才能继续。仍有 {pending} 个待回答。",
@@ -2714,11 +2726,13 @@ var D = Object.defineProperty, O = (e, t) => {
 	"confirm.studioOnly": "{label} 只会改变 Studio 自己的记录，不会向会话发送任何内容。",
 	"confirm.studioOnlyHint": "这不会发送消息。Studio 会记录你的选择，并继续读取磁盘上的文件。",
 	"confirm.title.accept_as_is": "确认按现状接受该阶段",
+	"confirm.title.accept_assumptions": "确认接受这些假设",
 	"confirm.title.acknowledge": "确认你已阅读该事件",
 	"confirm.title.answers": "确认作为一次操作发送的答案组",
 	"confirm.title.approve": "确认发送到规范会话的原文",
 	"confirm.title.approve_plan": "确认发送到规范会话的计划批准",
 	"confirm.title.confirm_summary": "确认你对摘要检查点的回复",
+	"confirm.title.convert_assumptions": "确认把这些假设转成追问",
 	"confirm.title.force_stop": "确认停止正在运行的回合",
 	"confirm.title.keep_paused": "确认让该意图保持暂停",
 	"confirm.title.mark_not_delivered": "确认把这个决定记录为从未发送",
@@ -2737,6 +2751,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"decision.a11y.bar": "决策操作",
 	"decision.accept_as_is.hint": "在发现尚未解决的情况下接受产出物。只有引擎主动给出该选项时才会出现。",
 	"decision.accept_as_is.label": "按现状接受",
+	"decision.accept_assumptions.hint": "在产物里保留为带标记的假设，留到后面的阶段再确认。接受不等于把它们当成事实。",
+	"decision.accept_assumptions.label": "接受这些假设",
 	"decision.acknowledge.hint": "记录你已阅读该矛盾，并将其搁置以便人工处理。",
 	"decision.acknowledge.label": "确认已知悉",
 	"decision.answers.hint": "把所有待答问题作为一次操作发送。",
@@ -2763,6 +2779,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"decision.confirm_summary.changesLabel": "要求修改摘要",
 	"decision.confirm_summary.hint": "确认引擎对该阶段的摘要。",
 	"decision.confirm_summary.label": "确认摘要",
+	"decision.convert_assumptions.hint": "引擎现在就追加问题，并根据你的回答修订产物。",
+	"decision.convert_assumptions.label": "转成追问",
 	"decision.force_stop.hint": "请求 KiroCrew 停止该会话。已经在执行的一轮可能仍会跑完。",
 	"decision.force_stop.label": "强制停止",
 	"decision.keep_paused.hint": "让该 intent 保持停止。在你回来处理之前不会派发任何内容。",
@@ -4291,6 +4309,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"template.missingInput.what": "缺少什么",
 	"template.questions.answered": "已作答",
 	"template.questions.auditSource": "此检查点来自 AI-DLC 审计记录。你的回复将按原文发送到已绑定的会话。",
+	"template.questions.checkpoint.assumption_confirmation": "假设确认",
+	"template.questions.checkpoint.assumption_confirmation.body": "引擎在这一步的产物里把下面这些保留为假设。你可以先接受，也可以让它现在追问确认。",
 	"template.questions.checkpoint.plan_approval": "计划批准",
 	"template.questions.checkpoint.plan_approval.body": "引擎在执行之前，要你批准它编排出的计划。",
 	"template.questions.checkpoint.summary_confirmation": "摘要确认",
@@ -7059,7 +7079,9 @@ var Cn = {
 	RESUME: "/aidlc --resume",
 	SCOPE_PREFIX: "/aidlc --scope ",
 	PREPARE_COMMIT: "Please prepare a commit for the current AI-DLC changes. Do not push.",
-	GROUPED_ANSWER_SUFFIX: "\n\nStudio grouped-answer delivery: this is one human reply. Apply each Q<n> answer to its matching [Answer] tag. Record all Q<n> answers together in ONE aidlc-log.ts answer --details call, preserving their text; do not record separate answer receipts for each question. Then present the next human checkpoint and wait."
+	GROUPED_ANSWER_SUFFIX: "\n\nStudio grouped-answer delivery: this is one human reply. Apply each Q<n> answer to its matching [Answer] tag. Record all Q<n> answers together in ONE aidlc-log.ts answer --details call, preserving their text; do not record separate answer receipts for each question. Then present the next human checkpoint and wait.",
+	ACCEPT_ASSUMPTIONS: "A. Accept assumptions",
+	CONVERT_ASSUMPTIONS: "B. Convert to follow-up questions"
 }, wn = 8e3, Tn = 8e3;
 function En(e, t, n = !1) {
 	let r = new Map(t.options.map((e) => [e.letter, e])), i = e.option_letters;
@@ -7080,6 +7102,8 @@ function kn(e, t, n) {
 	if ((t?.unsupported_pending_count ?? 0) > 0 && [
 		"answers",
 		"confirm_summary",
+		"accept_assumptions",
+		"convert_assumptions",
 		"approve_plan",
 		"request_plan_changes"
 	].includes(e.decision)) return null;
@@ -7092,6 +7116,8 @@ function kn(e, t, n) {
 			return t === null ? null : Cn.REQUEST_CHANGES_PREFIX + t;
 		}
 		case "approve_plan": return Cn.APPROVE_PLAN;
+		case "accept_assumptions": return Cn.ACCEPT_ASSUMPTIONS;
+		case "convert_assumptions": return Cn.CONVERT_ASSUMPTIONS;
 		case "confirm_summary": {
 			if (e.choice === "looks_correct") return Cn.LOOKS_CORRECT;
 			let t = On(e.feedback);
@@ -7527,6 +7553,8 @@ var Kn = [
 ], qn = {
 	approve: "check",
 	approve_plan: "check",
+	accept_assumptions: "check",
+	convert_assumptions: "doc",
 	accept_as_is: "check",
 	confirm_summary: "check",
 	answers: "send",
@@ -8218,6 +8246,8 @@ function Mr(e, t, n) {
 		case "approve": return { decision: "approve" };
 		case "accept_as_is": return { decision: "accept_as_is" };
 		case "approve_plan": return { decision: "approve_plan" };
+		case "accept_assumptions": return { decision: "accept_assumptions" };
+		case "convert_assumptions": return { decision: "convert_assumptions" };
 		case "request_changes": return {
 			decision: "request_changes",
 			feedback: n.feedback
@@ -10315,7 +10345,7 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 		"Draft",
 		"Queued",
 		"NotDelivered"
-	].includes(e.status), T = w && !S && !a, [E, D] = d(!1), O = _?.pending_checkpoint === "summary_confirmation" ? _.summary_confirmation : _?.pending_checkpoint === "plan_approval" ? _.plan_approval : null, k = e.decisions.some((e) => e.decision === "request_plan_changes" || e.decision === "confirm_summary"), A = e.decisions.some((e) => e.decision === "confirm_summary"), j = (e, t, i) => r({ answers: {
+	].includes(e.status), T = w && !S && !a, [E, D] = d(!1), O = _?.pending_checkpoint === "summary_confirmation" ? _.summary_confirmation : _?.pending_checkpoint === "assumption_confirmation" ? _.assumption_confirmation ?? null : _?.pending_checkpoint === "plan_approval" ? _.plan_approval : null, k = e.decisions.some((e) => e.decision === "request_plan_changes" || e.decision === "confirm_summary"), A = e.decisions.some((e) => e.decision === "confirm_summary"), j = (e, t, i) => r({ answers: {
 		...n.answers,
 		[String(e)]: {
 			option_letters: t,
@@ -10597,6 +10627,10 @@ function zi({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 						className: "studio-q-prompt",
 						children: f(`template.questions.checkpoint.${O.kind}.body`)
 					}),
+					O.context?.trim() ? /* @__PURE__ */ m("div", {
+						className: "msg-content studio-md",
+						children: /* @__PURE__ */ m(C, { content: O.context })
+					}) : null,
 					O.options.length > 0 ? /* @__PURE__ */ m("ul", {
 						className: "studio-optionlist studio-mono",
 						children: O.options.map((e, t) => /* @__PURE__ */ m("li", {
