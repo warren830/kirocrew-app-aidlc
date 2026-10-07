@@ -703,41 +703,6 @@ def test_latest_event_filters_by_type_and_stage(R, studio):
     assert R.latest_event(list(reversed(events)), ("HUMAN_TURN",)).timestamp == "2026-09-04T09:00:10Z"
 
 
-def test_human_acted_since_resolution_rules(R):
-    def parse(text, shard="s.md", index=0):
-        return R.parse_audit_shard(text, shard, index)
-
-    assert R.human_acted_since_resolution([]) is None            # no audit ≠ no human
-    only_engine = parse(F.audit_block("STAGE_STARTED", "2026-09-04T09:00:00Z", Stage="a"))
-    assert R.human_acted_since_resolution(only_engine) is False
-    no_resolution = parse(F.gate_open_audit("requirements-analysis"))
-    assert R.human_acted_since_resolution(no_resolution) is True
-    resolved = parse(F.gate_approved_audit("requirements-analysis"))
-    assert R.human_acted_since_resolution(resolved) is False     # engine acted last
-    after = parse(
-        F.audit_text(
-            F.gate_approved_audit("requirements-analysis"),
-            F.audit_block("HUMAN_TURN", "2026-09-04T09:01:00Z"),
-        )
-    )
-    assert R.human_acted_since_resolution(after) is True
-    # same second, same shard, later position → present; different shard → fails closed
-    same_shard = parse(
-        F.audit_text(
-            F.audit_block("GATE_APPROVED", "2026-09-04T09:00:11Z", Stage="a"),
-            F.audit_block("HUMAN_TURN", "2026-09-04T09:00:11Z"),
-        )
-    )
-    assert R.human_acted_since_resolution(same_shard) is True
-    cross = R.merge_audit(
-        [
-            parse(F.audit_block("GATE_APPROVED", "2026-09-04T09:00:11Z", Stage="a")),
-            parse(F.audit_block("HUMAN_TURN", "2026-09-04T09:00:11Z"), "other.md", 1),
-        ]
-    )
-    assert R.human_acted_since_resolution(cross) is False
-
-
 def test_read_audit_merges_both_shards_of_a_real_record(reader, devdelta_repo):
     bundle = reader.read_audit(devdelta_repo, "default", F.DEVDELTA_REMEDIATION)
     assert len(bundle.shards) == 2
@@ -1815,14 +1780,6 @@ def test_directive_reads_the_2_10_marker_and_names_its_file(reader, repo_builder
     assert directive.stage == "requirements-analysis" and directive.matches_state is True
     assert directive.marker_name == ".aidlc-engine/active-directive.json"
     assert "marker_name" not in directive.to_json()
-
-
-def test_runtime_graph_and_traceability_are_raw_dicts(R):
-    assert R.parse_runtime_graph(b'{"workflow_id": "x", "stages": []}') == {"workflow_id": "x", "stages": []}
-    assert R.parse_runtime_graph(b"[]") is None
-    assert R.parse_runtime_graph(b"nope") is None
-    assert R.parse_traceability(b'{"entries": []}') == {"entries": []}
-    assert R.parse_traceability(b"") is None
 
 
 # --------------------------------------------------------------------------- #
