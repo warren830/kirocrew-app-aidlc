@@ -37,8 +37,8 @@ def test_real_bundled_engine_creation_also_compiles_runtime(
     bun = Path("/Users/ychchen/.bun/bin/bun")
     if not bun.is_file():
         pytest.skip("real bun is not installed")
-    deps.svc._engine = studio.engine.EngineRunner(bun_path=str(bun), clock=deps.svc._clock, activity=deps.activity)
-    engine_run = deps.svc._engine.run
+    deps.svc.engine = studio.engine.EngineRunner(bun_path=str(bun), clock=deps.svc._clock, activity=deps.activity)
+    engine_run = deps.svc.engine.run
     before_compile = {}
 
     async def observe(verb, *args, **kwargs):
@@ -49,7 +49,7 @@ def test_real_bundled_engine_creation_also_compiles_runtime(
             before_compile["state"] = state.read_bytes()
         return await engine_run(verb, *args, **kwargs)
 
-    monkeypatch.setattr(deps.svc._engine, "run", observe)
+    monkeypatch.setattr(deps.svc.engine, "run", observe)
     result = run(deps.svc.create_intent(fresh_repo, request(
         P, label="runtime-proof", depth="Minimal", test_strategy=test_strategy,
     )))

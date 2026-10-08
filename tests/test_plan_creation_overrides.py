@@ -17,7 +17,7 @@ def real_plan_repo(studio, deps, repo_builder):
     root = repo_builder.with_engine("payload").with_workspace().build()
     (root / "main.py").write_text("def clamp(value):\n    return min(1, max(0, value))\n")
     repo = repo_row(studio, deps.store, root, engine_version="2.7.1")
-    deps.svc._engine = studio.engine.EngineRunner(
+    deps.svc.engine = studio.engine.EngineRunner(
         bun_path=str(bun), clock=deps.svc._clock, activity=deps.activity,
     )
     return repo
@@ -38,7 +38,7 @@ def test_real_creation_applies_confirmed_overrides_before_compile(
     assert preview.valid
     assert preview.exact.stages == (9 if add_user_stories else 8)
     assert preview.exact.gates == (6 if add_user_stories else 5)
-    engine_run = deps.svc._engine.run
+    engine_run = deps.svc.engine.run
     calls = []
     state_at_compile = {}
 
@@ -54,7 +54,7 @@ def test_real_creation_applies_confirmed_overrides_before_compile(
         calls.append(result)
         return result
 
-    monkeypatch.setattr(deps.svc._engine, "run", observe)
+    monkeypatch.setattr(deps.svc.engine, "run", observe)
     result = run(deps.svc.create_intent(
         real_plan_repo, req, confirm_plan_digest=preview.digest(),
     ))
@@ -98,7 +98,7 @@ def test_create_never_reports_success_when_override_application_fails(
     studio, P, deps, real_plan_repo, monkeypatch, failure,
 ):
     req = request(P, "express", project_type="Brownfield", overrides={"deployment-execution": False})
-    engine_run = deps.svc._engine.run
+    engine_run = deps.svc.engine.run
     created = []
     calls = []
 
@@ -114,7 +114,7 @@ def test_create_never_reports_success_when_override_application_fails(
             created.append(result)
         return result
 
-    monkeypatch.setattr(deps.svc._engine, "run", fail_recompose)
+    monkeypatch.setattr(deps.svc.engine, "run", fail_recompose)
     with pytest.raises(studio.errors.StudioError) as exc:
         run(deps.svc.create_intent(real_plan_repo, req))
     assert exc.value.details["intent_created"] is True
@@ -134,7 +134,7 @@ def test_compile_failure_is_distinct_from_unapplied_composition(
         {"deployment-execution": False, "observability-setup": False} if with_overrides else {}
     )
     req = request(P, "express", project_type="Brownfield", overrides=overrides)
-    engine_run = deps.svc._engine.run
+    engine_run = deps.svc.engine.run
     root = Path(real_plan_repo.canonical_path)
 
     async def fail_compile(verb, *args, **kwargs):
@@ -150,7 +150,7 @@ def test_compile_failure_is_distinct_from_unapplied_composition(
                 runtime.write_text("not json")
         return result
 
-    monkeypatch.setattr(deps.svc._engine, "run", fail_compile)
+    monkeypatch.setattr(deps.svc.engine, "run", fail_compile)
     with pytest.raises(studio.errors.StudioError) as exc:
         run(deps.svc.create_intent(real_plan_repo, req))
     details = exc.value.details
