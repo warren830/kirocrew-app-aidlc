@@ -19,6 +19,7 @@ from test_handlers_auth import call, common, routes, sv  # noqa: F401 - shared r
 VERSION = "2.7.1"
 OWNED = ".kiro/tools/aidlc-progress.ts"
 STATE = "aidlc/spaces/default/intents/260910-refresh/aidlc-state.md"
+CLI = ".kiro/settings/cli.json"
 
 
 def _payload(root: Path, revision: str, version: str = VERSION) -> Path:
@@ -29,7 +30,7 @@ def _payload(root: Path, revision: str, version: str = VERSION) -> Path:
         ".kiro/tools/aidlc-state.ts": "// state entry point\n",
         ".kiro/tools/aidlc-lib.ts": "export const CURRENT_STATE_VERSION = 8;\n",
         OWNED: f"// plan-progress fingerprint {revision}\n",
-        ".kiro/settings/cli.json": '{"chat.defaultAgent": "aidlc"}\n',
+        CLI: '{"chat.defaultAgent": "aidlc"}\n',
         "aidlc/active-space": "default\n",
         "aidlc/spaces/default/memory/project.md": "# Initial project rules\n",
     }
@@ -41,25 +42,14 @@ def _payload(root: Path, revision: str, version: str = VERSION) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
         sha = hashlib.sha256(data).hexdigest()
-        ownership = "shell" if rel.startswith("aidlc/") else "framework"
-        if rel == ".kiro/settings/cli.json":
-            ownership = "merge"
+        ownership = "merge" if rel == CLI else "shell" if rel.startswith("aidlc/") else "framework"
         rows.append({"path": rel, "sha256": sha, "size": len(data), "ownership": ownership})
         digest.update(f"{rel}\0{sha}\n".encode())
     manifest = {
-        "schema": "aidlc-studio-payload/1",
-        "harness": "kiro",
-        "engineVersion": version,
-        "source": {"upstreamEngineVersion": version},
-        "compatibleStateVersions": [8],
-        "stageCount": 0,
-        "payloadDigest": digest.hexdigest(),
-        "fileCount": len(rows),
-        "mergeTargets": {
-            ".kiro/settings/cli.json": {
-                "strategy": "json-managed-keys", "managedKeys": ["chat.defaultAgent"],
-            },
-        },
+        "schema": "aidlc-studio-payload/1", "harness": "kiro", "engineVersion": version,
+        "source": {"upstreamEngineVersion": version}, "compatibleStateVersions": [8], "stageCount": 0,
+        "payloadDigest": digest.hexdigest(), "fileCount": len(rows),
+        "mergeTargets": {CLI: {"strategy": "json-managed-keys", "managedKeys": ["chat.defaultAgent"]}},
         "files": rows,
     }
     path = root / "manifest.json"
@@ -77,24 +67,21 @@ def refresh_env(sv, studio, tmp_path, routes, fake_host):
         manifest_path = _payload(tmp_path / f"bundle-{revision}-{version}", revision, version)
         sv.payload = studio.installer.PayloadManifest.load(manifest_path)
         sv.installer = studio.installer.Installer(
-            sv.storage, sv.repos, sv.reader, sv.engine, sv.scheduler, sv.activity,
-            sv.events, sv.clock, sv.ids, payload_dir=manifest_path.parent,
-            manifest=sv.payload, data_dir=Path(sv.ctx.data_dir), settings=sv.settings,
-        )
+            sv.storage, sv.repos, sv.reader, sv.engine, sv.scheduler, sv.activity, sv.events, sv.clock, sv.ids,
+            payload_dir=manifest_path.parent, manifest=sv.payload, data_dir=Path(sv.ctx.data_dir),
+            settings=sv.settings)
         sv.payload_status = sv.installer.verify_payload()
         assert sv.payload_status.ok
         return sv.installer
 
     def request(method, path, body=None):
-        return call(sv, routes, method, path, CT.owner_request(
-            method, path, host=fake_host, body=body or {},
-        ))
+        return call(sv, routes, method, path, CT.owner_request(method, path, host=fake_host, body=body or {}))
 
     def setup(version=VERSION):
         root = tmp_path / "repository"
         root.mkdir()
         (root / "README.md").write_text("# User project\n")
-        cli = root / ".kiro/settings/cli.json"
+        cli = root / CLI
         cli.parent.mkdir(parents=True)
         cli.write_text('{\n  "user.setting": "keep exactly"\n}\n')
         repo = sv.repos.add(str(root), "refresh")
@@ -109,10 +96,11 @@ def refresh_env(sv, studio, tmp_path, routes, fake_host):
         state.write_text("# AI-DLC State\n\n- **State Version**: 8\n- **Current Stage**: code-generation\n")
         (root / "aidlc/spaces/default/memory/project.md").write_text("# User-edited rules\n")
         (root / ".kiro/tools/user-tool.ts").write_text("// User's unowned helper\n")
+        preview_route = f"/repos/{repo.repo_id}/transactions/preview"
         return SimpleNamespace(
-            services=sv, root=root, repo=repo, old_receipt=old_receipt,
-            bundle=bundle, request=request, before=_tree(root), routes=routes, host=fake_host,
-        )
+            services=sv, root=root, repo=repo, old_receipt=old_receipt, bundle=bundle, request=request,
+            before=_tree(root), routes=routes, host=fake_host,
+            upgrade_preview=lambda: request("POST", preview_route, {"kind": "upgrade"}))
 
     return setup
 
@@ -123,15 +111,24 @@ def _install_json(env):
     return next(r["install"] for r in body["repos"] if r["repo_id"] == env.repo.repo_id)
 
 
+def refused(studio, env, installer, plan, entrypoint="begin"):
+    """The code ``installer.<entrypoint>`` refuses this upgrade plan with."""
+    with pytest.raises(studio.errors.StudioError) as exc:
+        asyncio.run(getattr(installer, entrypoint)(env.repo, "upgrade", plan_digest=plan.digest()))
+    return exc.value.code
+
+
+def revoke_receipt_digest(env):
+    env.services.storage.update("install_receipts", env.old_receipt.receipt_id, {"payload_digest": ""})
+
+
 def test_same_version_refresh_is_offered_and_commits_through_api(refresh_env):
     env = refresh_env()
     installer = env.bundle("fixed")
     assert env.old_receipt.engine_version == installer.manifest.engine_version == VERSION
     assert env.old_receipt.payload_digest != installer.manifest.payload_digest
     assert _install_json(env)["upgrade_available"] is True
-
-    prefix = f"/repos/{env.repo.repo_id}/transactions"
-    status, preview = env.request("POST", prefix + "/preview", {"kind": "upgrade"})
+    status, preview = env.upgrade_preview()
     assert status == 200, preview
     assert preview["plan"]["same_version"] is False
     assert preview["plan"]["blocking"] is False
@@ -139,10 +136,10 @@ def test_same_version_refresh_is_offered_and_commits_through_api(refresh_env):
     assert preview["plan"]["requires_admin_lease"] is True
 
     async def apply_and_wait():
+        prefix = f"/repos/{env.repo.repo_id}/transactions"
         entry = next(r for r in env.routes if r.method == "POST" and r.path == "/repos/{repo_id}/transactions")
-        request = CT.owner_request("POST", prefix, host=env.host, body={
-            "kind": "upgrade", "plan_digest": preview["plan_digest"],
-        })
+        request = CT.owner_request("POST", prefix, host=env.host,
+                                   body={"kind": "upgrade", "plan_digest": preview["plan_digest"]})
         request.match_info["repo_id"] = env.repo.repo_id
         request.app["ctx"] = env.services.ctx
         response = await entry.handler(request, env.services.ctx)
@@ -155,9 +152,7 @@ def test_same_version_refresh_is_offered_and_commits_through_api(refresh_env):
     assert result.status == "committed", result.error
     after = _tree(env.root)
     assert after[OWNED] == b"// plan-progress fingerprint fixed\n"
-    assert {p: b for p, b in after.items() if p != OWNED} == {
-        p: b for p, b in env.before.items() if p != OWNED
-    }
+    assert {p: b for p, b in after.items() if p != OWNED} == {p: b for p, b in env.before.items() if p != OWNED}
     current = installer.current_receipt(env.repo.repo_id)
     assert current.receipt_id != env.old_receipt.receipt_id
     assert current.prior_receipt_id == env.old_receipt.receipt_id
@@ -169,7 +164,7 @@ def test_same_version_refresh_is_offered_and_commits_through_api(refresh_env):
     assert env.services.storage.get("repos", env.repo.repo_id)["receipt_version"] == current.receipt_id
     assert env.services.scheduler.live() == []
     assert _install_json(env)["upgrade_available"] is False
-    assert env.request("POST", prefix + "/preview", {"kind": "upgrade"})[1]["code"] == "same_version_installed"
+    assert env.upgrade_preview()[1]["code"] == "same_version_installed"
 
 
 @pytest.mark.parametrize("entrypoint", ["begin", "run"])
@@ -179,44 +174,40 @@ def test_unchanged_bundle_is_a_refused_noop_at_every_entrypoint(refresh_env, stu
     plan = installer.preview(env.repo, "upgrade")
     assert plan.same_version is True
     assert _install_json(env)["upgrade_available"] is False
-    status, body = env.request("POST", f"/repos/{env.repo.repo_id}/transactions/preview", {"kind": "upgrade"})
+    status, body = env.upgrade_preview()
     assert status == 409 and body["code"] == "same_version_installed"
     transactions = installer.transactions(env.repo.repo_id)
-    with pytest.raises(studio.errors.StudioError) as exc:
-        asyncio.run(getattr(installer, entrypoint)(env.repo, "upgrade", plan_digest=plan.digest()))
-    assert exc.value.code == "same_version_installed"
+    assert refused(studio, env, installer, plan, entrypoint) == "same_version_installed"
     assert installer.transactions(env.repo.repo_id) == transactions
     assert installer.current_receipt(env.repo.repo_id) == env.old_receipt
     assert _tree(env.root) == env.before
 
 
-@pytest.mark.parametrize("change", [
-    "missing_receipt", "empty_digest", "invalid_digest", "wrong_identity",
-    "missing_identity", "wrong_version", "superseded",
-])
+#: How each untrusted receipt is made (``None``: the row is deleted).
+RECEIPT_DAMAGE = {
+    "missing_receipt": None, "empty_digest": {"payload_digest": ""},
+    "invalid_digest": {"payload_digest": "not-a-payload-digest"},
+    "wrong_identity": {"resolved_repo_identity": "some-other-repository"},
+    "missing_identity": {"resolved_repo_identity": None}, "wrong_version": {"engine_version": "2.6.2"},
+    "superseded": {"status": "superseded"},
+}
+
+
+@pytest.mark.parametrize("change", list(RECEIPT_DAMAGE))
 def test_refresh_requires_a_trusted_current_receipt(refresh_env, studio, change):
     env = refresh_env()
     installer = env.bundle("fixed")
     receipt_id = env.old_receipt.receipt_id
-    if change == "missing_receipt":
+    if RECEIPT_DAMAGE[change] is None:
         env.services.storage.delete("install_receipts", receipt_id)
     else:
-        mutation = {
-            "empty_digest": {"payload_digest": ""},
-            "invalid_digest": {"payload_digest": "not-a-payload-digest"},
-            "wrong_identity": {"resolved_repo_identity": "some-other-repository"},
-            "missing_identity": {"resolved_repo_identity": None},
-            "wrong_version": {"engine_version": "2.6.2"},
-            "superseded": {"status": "superseded"},
-        }[change]
-        env.services.storage.update("install_receipts", receipt_id, mutation)
+        env.services.storage.update("install_receipts", receipt_id, RECEIPT_DAMAGE[change])
     assert _install_json(env)["upgrade_available"] is False
-    status, body = env.request("POST", f"/repos/{env.repo.repo_id}/transactions/preview", {"kind": "upgrade"})
+    status, body = env.upgrade_preview()
     assert status == 409 and body["code"] == "same_version_installed"
     plan = installer.preview(env.repo, "upgrade")
     assert plan.same_version is True
-    with pytest.raises(studio.errors.StudioError):
-        asyncio.run(installer.begin(env.repo, "upgrade", plan_digest=plan.digest()))
+    refused(studio, env, installer, plan)
     assert _tree(env.root) == env.before
 
 
@@ -225,12 +216,9 @@ def test_newer_installed_version_still_blocks_refresh(refresh_env, studio):
     installer = env.bundle("fixed")
     install = _install_json(env)
     assert install["upgrade_available"] is False and install["newer_installed"] is True
-    status, body = env.request("POST", f"/repos/{env.repo.repo_id}/transactions/preview", {"kind": "upgrade"})
+    status, body = env.upgrade_preview()
     assert status == 409 and body["code"] == "newer_installed"
-    plan = installer.preview(env.repo, "upgrade")
-    with pytest.raises(studio.errors.StudioError) as exc:
-        asyncio.run(installer.run(env.repo, "upgrade", plan_digest=plan.digest()))
-    assert exc.value.code == "newer_installed"
+    assert refused(studio, env, installer, installer.preview(env.repo, "upgrade"), "run") == "newer_installed"
     assert _tree(env.root) == env.before
 
 
@@ -243,7 +231,7 @@ def test_foreign_harness_does_not_gain_refresh_authority(refresh_env, studio):
     assert install["engine_version"] == VERSION
     assert install["own_engine_version"] is None
     assert install["upgrade_available"] is False
-    status, body = env.request("POST", f"/repos/{env.repo.repo_id}/transactions/preview", {"kind": "upgrade"})
+    status, body = env.upgrade_preview()
     assert status == 409 and body["code"] == "not_installed"
     assert _tree(env.root) == before
 
@@ -255,9 +243,7 @@ def test_owned_tampering_still_blocks_refresh(refresh_env, studio):
     before = _tree(env.root)
     plan = installer.preview(env.repo, "upgrade")
     assert plan.blocking and any(e.path == OWNED for e in plan.blockers)
-    with pytest.raises(studio.errors.StudioError) as exc:
-        asyncio.run(installer.begin(env.repo, "upgrade", plan_digest=plan.digest()))
-    assert exc.value.code == "install_conflict"
+    assert refused(studio, env, installer, plan) == "install_conflict"
     assert installer.current_receipt(env.repo.repo_id) == env.old_receipt
     assert _tree(env.root) == before
 
@@ -269,11 +255,9 @@ def test_incompatible_state_still_blocks_refresh(refresh_env, studio):
     before = _tree(env.root)
     plan = installer.preview(env.repo, "upgrade")
     assert plan.state_version_blocked
-    status, body = env.request("POST", f"/repos/{env.repo.repo_id}/transactions/preview", {"kind": "upgrade"})
+    status, body = env.upgrade_preview()
     assert status == 409 and body["code"] == "state_version_migration_unconfirmed"
-    with pytest.raises(studio.errors.StudioError) as exc:
-        asyncio.run(installer.begin(env.repo, "upgrade", plan_digest=plan.digest()))
-    assert exc.value.code == "state_version_migration_unconfirmed"
+    assert refused(studio, env, installer, plan) == "state_version_migration_unconfirmed"
     assert _tree(env.root) == before
 
 
@@ -283,9 +267,7 @@ def test_admin_lease_still_blocks_refresh(refresh_env, studio):
     plan = installer.preview(env.repo, "upgrade")
 
     async def attempt():
-        grant = await env.services.scheduler.acquire_admin(
-            env.repo, operation_type="doctor", transaction_id=None,
-        )
+        grant = await env.services.scheduler.acquire_admin(env.repo, operation_type="doctor", transaction_id=None)
         try:
             with pytest.raises(studio.errors.StudioError) as exc:
                 await installer.begin(env.repo, "upgrade", plan_digest=plan.digest())
@@ -305,12 +287,9 @@ def test_reserved_refresh_rechecks_receipt_before_staging(refresh_env):
 
     async def attempt():
         pending = await installer.begin(env.repo, "upgrade", plan_digest=plan.digest())
-        env.services.storage.update("install_receipts", env.old_receipt.receipt_id, {
-            "payload_digest": "",
-        })
-        return await installer.run(
-            env.repo, "upgrade", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
-        )
+        revoke_receipt_digest(env)
+        return await installer.run(env.repo, "upgrade", plan_digest=plan.digest(),
+                                   transaction_id=pending.transaction_id)
 
     result = asyncio.run(attempt())
     assert result.status == "failed" and "install_conflict" in result.error
@@ -324,14 +303,7 @@ def test_refresh_rechecks_receipt_under_lease_before_writing(refresh_env, bounda
     env = refresh_env()
     installer = env.bundle("fixed")
     plan = installer.preview(env.repo, "upgrade")
-
-    def revoke_receipt(marker):
-        if marker == boundary:
-            env.services.storage.update("install_receipts", env.old_receipt.receipt_id, {
-                "payload_digest": "",
-            })
-
-    installer.fault_injector = revoke_receipt
+    installer.fault_injector = lambda marker: revoke_receipt_digest(env) if marker == boundary else None
     result = asyncio.run(installer.run(env.repo, "upgrade", plan_digest=plan.digest()))
     assert result.status == "failed" and "install_conflict" in result.error
     assert not any(s.name == "backup" for s in result.steps)
