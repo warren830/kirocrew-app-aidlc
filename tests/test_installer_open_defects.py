@@ -1,8 +1,4 @@
-"""Regression evidence for open-defects 2.3, 2.4 and 2.6.
-
-All repositories, staging trees and SQLite databases belong to pytest's temporary
-directory. The shipped payload is only read by the existing miniature fixtures.
-"""
+"""Regression evidence for open defects 2.3, 2.4 and 2.6: failed-transaction evidence and abandoned staging."""
 
 from __future__ import annotations
 
@@ -13,23 +9,26 @@ from pathlib import Path
 
 import pytest
 
-from conftest import RepoBuilder, fork_process
-from test_installer import (
-    TS,
-    I,
-    do,
-    h,
-    insert_repo,
-    make_harness,
-    payload_v1,
-    run,
-    store,
-    tree,
-)
-
+from _helpers_c import die_in_child
+from conftest import RepoBuilder
+from test_installer import TS, I, do, fresh, h, insert_repo, make_harness, payload_v1, run, store, tree
 
 ODD_BYTES = b"\x00\xffpartial candidate\r\n"
 FILE = ".kiro/tools/aidlc-utility.ts"
+
+
+@pytest.fixture
+def repo(fresh):
+    return fresh[1]
+
+
+@pytest.fixture
+def outside(tmp_path):
+    """A directory outside the app data holding a ``sentinel`` that nothing may touch."""
+    path = tmp_path / "outside"
+    path.mkdir()
+    (path / "sentinel").write_bytes(ODD_BYTES)
+    return path
 
 
 def abandoned(h, repo, *, txid="tx_dead", status="written", candidate="changed"):
@@ -58,26 +57,31 @@ def failure_log(h, txid):
     return failed, log
 
 
-@pytest.mark.parametrize(
-    "status,outcome",
-    [("staged", "failed"), ("leased", "failed"), ("backed_up", "recovery_required"),
-     ("written", "recovery_required"), ("merged", "recovery_required"),
-     ("validated", "recovery_required"), ("rolling_back", "recovery_required")],
-)
+def deny_candidate_unlink(monkeypatch_context) -> None:
+    """Make the best-effort cleanup of a committed install's staging fail on one file."""
+    unlink = os.unlink
+
+    def deny(path, *args, **kwargs):
+        if path == "aidlc-utility.ts" and kwargs.get("dir_fd") is not None:
+            raise PermissionError("temporary staging cleanup failure")
+        return unlink(path, *args, **kwargs)
+
+    monkeypatch_context.setattr(os, "unlink", deny)
+
+
+@pytest.mark.parametrize("status,outcome", [
+    ("staged", "failed"), ("leased", "failed"), ("backed_up", "recovery_required"), ("written", "recovery_required"),
+    ("merged", "recovery_required"), ("validated", "recovery_required"), ("rolling_back", "recovery_required"),
+])
 @pytest.mark.parametrize("candidate", ["absent", "changed", "identical"])
-def test_abandoned_has_own_evidence_and_no_orphan(
-    studio, h, repo_builder, status, outcome, candidate,
-):
-    root = repo_builder.with_git().build()
-    repo = insert_repo(studio, h.store, root)
+def test_abandoned_has_own_evidence_and_no_orphan(h, fresh, status, outcome, candidate):
+    root, repo = fresh
     before = tree(root)
     staging, steps = abandoned(h, repo, status=status, candidate=candidate)
     backup = h.data_dir / "backups" / "tx_dead" / "original"
     backup.parent.mkdir(parents=True)
     backup.write_bytes(b"pre-install bytes")
-
-    # An unrelated old failure must never become this transaction's evidence.
-    other = h.data_dir / "failed" / "tx_other"
+    other = h.data_dir / "failed" / "tx_other"  # an unrelated old failure must never become this one's evidence
     other.mkdir(parents=True)
     (other / "transaction.json").write_text('{"transaction_id":"tx_other"}\n')
     other_before = tree(other)
@@ -86,9 +90,7 @@ def test_abandoned_has_own_evidence_and_no_orphan(
     result = h.installer.transaction("tx_dead")
     assert result.status == outcome and result.error == "process_exited"
     assert result.finished_at
-    assert result.repo_install_status == (
-        "recovery_required" if outcome == "recovery_required" else "not_installed"
-    )
+    assert result.repo_install_status == ("recovery_required" if outcome == "recovery_required" else "not_installed")
     failed, log = failure_log(h, "tx_dead")
     assert log["error"] == "process_exited" and log["steps"] == steps
     assert not staging.exists(), "settling must remove this transaction's orphan"
@@ -97,9 +99,7 @@ def test_abandoned_has_own_evidence_and_no_orphan(
         assert log["candidate"]["status"] == "retained"
     else:
         assert not (failed / "staging").exists()
-        assert log["candidate"]["status"] == (
-            "absent" if candidate == "absent" else "identical_to_payload"
-        )
+        assert log["candidate"]["status"] == ("absent" if candidate == "absent" else "identical_to_payload")
     assert tree(root) == before and tree(other) == other_before
     assert backup.read_bytes() == b"pre-install bytes"
     evidence_before = tree(failed)
@@ -107,10 +107,8 @@ def test_abandoned_has_own_evidence_and_no_orphan(
     assert tree(failed) == evidence_before
 
 
-@pytest.mark.parametrize("marker", ["after:stage_payload", "before:acquire_admin_lease",
-                                    "before:write_files"])
-def test_identical_failures_keep_only_a_log(studio, h, repo_builder, marker):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+@pytest.mark.parametrize("marker", ["after:stage_payload", "before:acquire_admin_lease", "before:write_files"])
+def test_identical_failures_keep_only_a_log(h, repo, marker):
     h.fault.at(marker)
     for _ in range(3):
         result = do(h, repo, "install")
@@ -124,73 +122,50 @@ def test_identical_failures_keep_only_a_log(studio, h, repo_builder, marker):
     assert len(tree(h.data_dir / "failed")) == 3
 
 
-@pytest.mark.parametrize("damage", ["changed", "same_size", "missing", "extra", "empty_directory",
-                                   "symlink", "directory_symlink", "fifo"])
-def test_informative_candidates_survive_even_after_successful_verification(
-    studio, h, repo_builder, tmp_path, damage,
-):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    (outside / "sentinel").write_bytes(ODD_BYTES)
+def _replace_with_link(staging: Path, outside: Path) -> None:
+    (staging / FILE).unlink()
+    (staging / FILE).symlink_to(outside / "sentinel")
+
+
+#: damage -> (change the verified staging tree, what the retained candidate must still show).
+CANDIDATE_DAMAGE = {
+    "changed": (lambda s, o, same: (s / FILE).write_bytes(ODD_BYTES),
+                lambda c, same: (c / FILE).read_bytes() == ODD_BYTES),
+    "same_size": (lambda s, o, same: (s / FILE).write_bytes(same), lambda c, same: (c / FILE).read_bytes() == same),
+    "missing": (lambda s, o, same: (s / FILE).unlink(), lambda c, same: not (c / FILE).exists()),
+    "extra": (lambda s, o, same: (s / "unlisted.bin").write_bytes(ODD_BYTES),
+              lambda c, same: (c / "unlisted.bin").read_bytes() == ODD_BYTES),
+    "empty_directory": (lambda s, o, same: (s / "unlisted-empty").mkdir(),
+                        lambda c, same: (c / "unlisted-empty").is_dir()),
+    "symlink": (lambda s, o, same: _replace_with_link(s, o), lambda c, same: (c / FILE).is_symlink()),
+    "directory_symlink": (lambda s, o, same: (s / "unlisted-link").symlink_to(o, target_is_directory=True),
+                          lambda c, same: (c / "unlisted-link").is_symlink()),
+    "fifo": (lambda s, o, same: os.mkfifo(s / "unlisted-pipe"), lambda c, same: (c / "unlisted-pipe").is_fifo()),
+}
+
+
+@pytest.mark.parametrize("damage", list(CANDIDATE_DAMAGE))
+def test_informative_candidates_survive_even_after_successful_verification(h, repo, outside, damage):
+    change, check = CANDIDATE_DAMAGE[damage]
     original = (h.installer.payload_root / FILE).read_bytes()
     same_size = bytes([original[0] ^ 1]) + original[1:]
-
-    def change_staging():
-        staging = next((h.data_dir / "staging").iterdir())
-        if damage == "changed":
-            (staging / FILE).write_bytes(ODD_BYTES)
-        elif damage == "same_size":
-            (staging / FILE).write_bytes(same_size)
-        elif damage == "missing":
-            (staging / FILE).unlink()
-        elif damage == "extra":
-            (staging / "unlisted.bin").write_bytes(ODD_BYTES)
-        elif damage == "empty_directory":
-            (staging / "unlisted-empty").mkdir()
-        elif damage == "symlink":
-            (staging / FILE).unlink()
-            (staging / FILE).symlink_to(outside / "sentinel")
-        elif damage == "directory_symlink":
-            (staging / "unlisted-link").symlink_to(outside, target_is_directory=True)
-        else:
-            os.mkfifo(staging / "unlisted-pipe")
-
-    h.fault.on("before:acquire_admin_lease", change_staging).at("before:acquire_admin_lease")
+    h.fault.on("before:acquire_admin_lease",
+               lambda: change(next((h.data_dir / "staging").iterdir()), outside, same_size))
+    h.fault.at("before:acquire_admin_lease")
     result = do(h, repo, "install")
     failed, log = failure_log(h, result.transaction_id)
     candidate = failed / "staging"
     assert candidate.is_dir()
-    if damage == "changed":
-        assert (candidate / FILE).read_bytes() == ODD_BYTES
-    elif damage == "same_size":
-        assert (candidate / FILE).read_bytes() == same_size
-    elif damage == "missing":
-        assert not (candidate / FILE).exists()
-    elif damage == "extra":
-        assert (candidate / "unlisted.bin").read_bytes() == ODD_BYTES
-    elif damage == "empty_directory":
-        assert (candidate / "unlisted-empty").is_dir()
-    elif damage == "symlink":
-        assert (candidate / FILE).is_symlink()
-    elif damage == "directory_symlink":
-        assert (candidate / "unlisted-link").is_symlink()
-    else:
-        assert (candidate / "unlisted-pipe").is_fifo()
+    assert check(candidate, same_size), damage
     assert (outside / "sentinel").read_bytes() == ODD_BYTES
     assert not (h.data_dir / "staging" / result.transaction_id).exists()
 
 
-def test_verify_staging_failure_preserves_exact_abnormal_bytes(studio, h, repo_builder):
-    root = repo_builder.with_git().build()
-    repo = insert_repo(studio, h.store, root)
+def test_verify_staging_failure_preserves_exact_abnormal_bytes(h, fresh):
+    root, repo = fresh
     before = tree(root)
-
-    def corrupt():
-        staging = next((h.data_dir / "staging").iterdir())
-        (staging / FILE).write_bytes(ODD_BYTES)
-
-    h.fault.on("before:verify_staging", corrupt)
+    h.fault.on("before:verify_staging",
+               lambda: (next((h.data_dir / "staging").iterdir()) / FILE).write_bytes(ODD_BYTES))
     result = do(h, repo, "install")
     assert result.status == "failed" and result.error == "payload_degraded"
     assert result.steps[-1].name == "verify_staging" and result.steps[-1].ok is not True
@@ -199,29 +174,38 @@ def test_verify_staging_failure_preserves_exact_abnormal_bytes(studio, h, repo_b
     assert tree(root) == before and h.lease() is None
 
 
-def test_verify_staging_failure_is_retained_even_if_bytes_now_match(studio, h, repo_builder):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+def test_verify_staging_failure_is_retained_even_if_bytes_now_match(h, repo):
     h.fault.at("after:verify_staging")
-    result = do(h, repo, "install")
-    failed, log = failure_log(h, result.transaction_id)
+    failed, _log = failure_log(h, do(h, repo, "install").transaction_id)
     assert tree(failed / "staging") == tree(h.installer.payload_root)
 
 
-def test_abandoned_other_payload_is_not_deduplicated(studio, h, repo_builder):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
-    abandoned(h, repo, candidate="identical")
-    h.store.update("install_transactions", "tx_dead", {"payload_digest": "different-old-payload"})
-    run(h.installer.settle_abandoned())
+@pytest.mark.parametrize("cause", ["other_payload", "unreadable", "incomplete_walk"])
+def test_an_unproven_identical_candidate_is_retained(h, I, repo, monkeypatch, cause):
+    """Deduplication needs proof: another payload's digest, an unreadable file or a capped walk keep the copy."""
+    staging, _ = abandoned(h, repo, candidate="identical")
+    if cause == "other_payload":
+        h.store.update("install_transactions", "tx_dead", {"payload_digest": "different-old-payload"})
+    elif cause == "incomplete_walk":
+        monkeypatch.setattr(I, "_MAX_PAYLOAD_WALK", 1)
+    with monkeypatch.context() as patch:
+        if cause == "unreadable":
+            original_open = Path.open
+
+            def unreadable(path, *args, **kwargs):
+                if path == staging / FILE:
+                    raise PermissionError("candidate unreadable")
+                return original_open(path, *args, **kwargs)
+
+            patch.setattr(Path, "open", unreadable)
+        run(h.installer.settle_abandoned())
     failed, log = failure_log(h, "tx_dead")
     assert tree(failed / "staging") == tree(h.installer.payload_root)
     assert log["candidate"]["status"] == "retained"
 
 
 @pytest.mark.parametrize("candidate", ["changed", "identical", "absent"])
-def test_settlement_reentry_after_archive_before_database_update(
-    studio, h, repo_builder, monkeypatch, candidate,
-):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+def test_settlement_reentry_after_archive_before_database_update(h, repo, monkeypatch, candidate):
     staging, _ = abandoned(h, repo, candidate=candidate)
     update = h.store.update
 
@@ -244,20 +228,23 @@ def test_settlement_reentry_after_archive_before_database_update(
     failure_log(h, "tx_dead")
 
 
-def test_reentry_after_move_preserves_already_archived_candidate(studio, h, repo_builder):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+@pytest.mark.parametrize("prior_log", [None, {"transaction_id": "tx_dead",
+                                              "candidate": {"status": "identical_to_payload"}}])
+def test_reentry_after_move_keeps_the_archived_candidate(h, repo, prior_log):
+    """The process died after moving staging into the archive, before (or without) explaining it truthfully."""
     staging, _ = abandoned(h, repo)
     failed = h.data_dir / "failed" / "tx_dead"
     failed.mkdir(parents=True)
-    staging.rename(failed / "staging")  # process died before transaction.json was written
+    if prior_log is not None:
+        (failed / "transaction.json").write_text(json.dumps(prior_log))
+    staging.rename(failed / "staging")
     run(h.installer.settle_abandoned())
     failed, log = failure_log(h, "tx_dead")
     assert (failed / "staging" / FILE).read_bytes() == ODD_BYTES
     assert log["candidate"]["status"] == "retained"
 
 
-def test_reentry_never_overwrites_existing_evidence(studio, h, repo_builder):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+def test_reentry_never_overwrites_existing_evidence(h, repo):
     staging, _ = abandoned(h, repo)
     failed = h.data_dir / "failed" / "tx_dead"
     prior = failed / "staging"
@@ -276,12 +263,8 @@ def test_reentry_never_overwrites_existing_evidence(studio, h, repo_builder):
     assert log["created"] == ["new-file"] and log["retired"] == ["old-file"]
 
 
-def test_abandoned_ignores_paths_recorded_in_database(studio, h, repo_builder, tmp_path):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+def test_abandoned_ignores_paths_recorded_in_database(h, repo, outside):
     staging, _ = abandoned(h, repo)
-    outside = tmp_path / "other-transaction"
-    outside.mkdir()
-    (outside / "sentinel").write_bytes(ODD_BYTES)
     outside_before = tree(outside)
     h.store.update("install_transactions", "tx_dead", {
         "staging_dir": str(outside), "backup_dir": str(outside), "failed_dir": str(outside),
@@ -293,10 +276,9 @@ def test_abandoned_ignores_paths_recorded_in_database(studio, h, repo_builder, t
     assert (outside / "sentinel").read_bytes() == ODD_BYTES
 
 
-@pytest.mark.parametrize("txid", ["../escaped", "../../escaped", "/absolute-escape", ".", "..",
-                                 "nested/escape", "nested\\escape"])
-def test_unsafe_transaction_ids_cannot_be_settled(studio, h, repo_builder, txid):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+@pytest.mark.parametrize("txid", ["../escaped", "../../escaped", "/absolute-escape", ".", "..", "nested/escape",
+                                  "nested\\escape"])
+def test_unsafe_transaction_ids_cannot_be_settled(studio, h, repo, txid):
     abandoned(h, repo, txid=txid, candidate="absent")
     with pytest.raises(studio.errors.StudioError) as exc:
         run(h.installer.settle_abandoned())
@@ -305,16 +287,10 @@ def test_unsafe_transaction_ids_cannot_be_settled(studio, h, repo_builder, txid)
 
 
 @pytest.mark.parametrize("link_at", ["staging", "staging/tx_dead", "failed", "failed/tx_dead",
-                                    "failed/tx_dead/staging", "failed/tx_dead/transaction.json"])
-def test_archive_refuses_symlink_boundaries_without_touching_target(
-    studio, h, repo_builder, tmp_path, link_at,
-):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+                                     "failed/tx_dead/staging", "failed/tx_dead/transaction.json"])
+def test_archive_refuses_symlink_boundaries_without_touching_target(studio, h, repo, outside, link_at):
     abandoned(h, repo, candidate="absent")
-    outside = tmp_path / "outside"
-    outside.mkdir()
     sentinel = outside / "sentinel"
-    sentinel.write_bytes(ODD_BYTES)
     link = h.data_dir / link_at
     link.parent.mkdir(parents=True, exist_ok=True)
     link.symlink_to(sentinel if link.name == "transaction.json" else outside)
@@ -327,8 +303,7 @@ def test_archive_refuses_symlink_boundaries_without_touching_target(
 
 
 @pytest.mark.parametrize("status", ["written", "committed"])
-def test_live_transaction_keeps_its_staging(studio, h, repo_builder, status):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+def test_live_transaction_keeps_its_staging(h, repo, status):
     staging, _ = abandoned(h, repo, status=status)
     grant = run(h.scheduler.acquire_admin(repo, operation_type="install", transaction_id="tx_dead"))
     assert run(h.installer.settle_abandoned()) == []
@@ -338,12 +313,10 @@ def test_live_transaction_keeps_its_staging(studio, h, repo_builder, status):
 
 
 @pytest.mark.parametrize("marker", ["before:release_lease", "after:release_lease", "before:finish"])
-def test_restart_finishes_committed_install_without_orphaning_staging(studio, h, repo_builder, marker):
-    root = repo_builder.with_git().build()
-    repo = insert_repo(studio, h.store, root)
+def test_restart_finishes_committed_install_without_orphaning_staging(h, fresh, marker):
+    root, repo = fresh
     plan = h.installer.preview(repo, "install")
-    pending = run(h.installer.begin(repo, "install", plan_digest=plan.digest()))
-    txid = pending.transaction_id
+    txid = run(h.installer.begin(repo, "install", plan_digest=plan.digest())).transaction_id
 
     def child():
         h.store.close()
@@ -356,14 +329,7 @@ def test_restart_finishes_committed_install_without_orphaning_staging(studio, h,
             h.fault.on(marker, lambda: os._exit(77))
         run(h.installer.run(repo, "install", plan_digest=plan.digest(), transaction_id=txid))
 
-    process = fork_process(child)
-    process.start()
-    process.join(15)
-    if process.is_alive():
-        process.terminate()
-        process.join()
-        pytest.fail("isolated installer process did not exit")
-    assert process.exitcode == 77
+    die_in_child(child)
     committed = h.installer.transaction(txid)
     assert committed.status == "committed" and not committed.finished_at
     staging = h.data_dir / "staging" / txid
@@ -387,20 +353,10 @@ def test_restart_finishes_committed_install_without_orphaning_staging(studio, h,
     run(h.scheduler.release(run(h.scheduler.acquire_admin(repo, operation_type="recovery", transaction_id=None))))
 
 
-def test_restart_retries_ignored_cleanup_errors_from_a_finished_commit(
-    studio, h, repo_builder, monkeypatch, clock,
-):
-    root = repo_builder.with_git().build()
-    repo = insert_repo(studio, h.store, root)
-    unlink = os.unlink
-
-    def deny_candidate_unlink(path, *args, **kwargs):
-        if path == "aidlc-utility.ts" and kwargs.get("dir_fd") is not None:
-            raise PermissionError("temporary staging cleanup failure")
-        return unlink(path, *args, **kwargs)
-
+def test_restart_retries_ignored_cleanup_errors_from_a_finished_commit(h, fresh, monkeypatch, clock):
+    root, repo = fresh
     with monkeypatch.context() as patch:
-        patch.setattr(os, "unlink", deny_candidate_unlink)
+        deny_candidate_unlink(patch)
         result = do(h, repo, "install")
     assert result.status == "committed" and result.finished_at
     staging = h.data_dir / "staging" / result.transaction_id
@@ -416,21 +372,11 @@ def test_restart_retries_ignored_cleanup_errors_from_a_finished_commit(
     assert run(h.installer.settle_abandoned()) == []
 
 
-def test_committed_cleanup_error_does_not_strand_another_repos_interrupted_install(
-    studio, h, repo_builder, tmp_path, monkeypatch, clock,
-):
-    root = repo_builder.with_git().build()
-    repo = insert_repo(studio, h.store, root)
-    unlink = os.unlink
-
-    def deny_candidate_unlink(path, *args, **kwargs):
-        if path == "aidlc-utility.ts" and kwargs.get("dir_fd") is not None:
-            raise PermissionError("temporary staging cleanup failure")
-        return unlink(path, *args, **kwargs)
-
-    # A successful, older install whose best-effort cleanup left staging behind.
-    with monkeypatch.context() as patch:
-        patch.setattr(os, "unlink", deny_candidate_unlink)
+def test_committed_cleanup_error_does_not_strand_another_repos_interrupted_install(studio, h, fresh, tmp_path,
+                                                                                    monkeypatch, clock):
+    root, repo = fresh
+    with monkeypatch.context() as patch:  # a successful older install whose best-effort cleanup left staging
+        deny_candidate_unlink(patch)
         committed = do(h, repo, "install")
     assert committed.status == "committed" and committed.finished_at
     staging = h.data_dir / "staging" / committed.transaction_id
@@ -448,18 +394,9 @@ def test_committed_cleanup_error_does_not_strand_another_repos_interrupted_insta
         h.store.close()
         h.store.open()
         h.fault.on("before:merge_fragments", lambda: os._exit(77))
-        run(h.installer.run(
-            other, "install", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
-        ))
+        run(h.installer.run(other, "install", plan_digest=plan.digest(), transaction_id=pending.transaction_id))
 
-    process = fork_process(child)
-    process.start()
-    process.join(15)
-    if process.is_alive():
-        process.terminate()
-        process.join()
-        pytest.fail("isolated installer process did not exit")
-    assert process.exitcode == 77
+    die_in_child(child)
     interrupted = h.installer.transaction(pending.transaction_id)
     assert interrupted.status == "written" and not interrupted.finished_at
     assert h.lease() is None, "the child's lock died with it"
@@ -478,7 +415,6 @@ def test_committed_cleanup_error_does_not_strand_another_repos_interrupted_insta
         patch.setattr(shutil, "rmtree", deny_committed_cleanup)
         with pytest.raises(studio.errors.StudioError) as exc:
             run(h.installer.settle_abandoned())
-
     assert exc.value.code == "storage_error"
     recovered = h.installer.transaction(pending.transaction_id)
     assert recovered.status == "recovery_required" and recovered.finished_at
@@ -488,8 +424,7 @@ def test_committed_cleanup_error_does_not_strand_another_repos_interrupted_insta
     assert exc.value.details["transaction_id"] == committed.transaction_id
     assert exc.value.details["settled_transaction_ids"] == [pending.transaction_id]
     assert exc.value.details["committed_cleanup_failures"] == [
-        {"transaction_id": committed.transaction_id, "code": "storage_error"},
-    ]
+        {"transaction_id": committed.transaction_id, "code": "storage_error"}]
     run(h.scheduler.release(run(h.scheduler.acquire_admin(other, operation_type="recovery", transaction_id=None))))
     assert staging.exists()
     assert h.store.get("install_transactions", committed.transaction_id) == committed_row
@@ -503,10 +438,7 @@ def test_committed_cleanup_error_does_not_strand_another_repos_interrupted_insta
 
 
 @pytest.mark.parametrize("operation", ["cleanup", "bookkeeping"])
-def test_committed_settlement_retries_interrupted_cleanup(
-    studio, h, repo_builder, monkeypatch, operation,
-):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+def test_committed_settlement_retries_interrupted_cleanup(studio, h, repo, monkeypatch, operation):
     staging, _ = abandoned(h, repo, status="committed", candidate="identical")
     update = h.store.update
 
@@ -523,8 +455,7 @@ def test_committed_settlement_retries_interrupted_cleanup(
             patch.setattr(shutil, "rmtree", fail_cleanup)
         else:
             patch.setattr(h.store, "update", fail_bookkeeping)
-        expected = studio.errors.StudioError if operation == "cleanup" else OSError
-        with pytest.raises(expected) as exc:
+        with pytest.raises(studio.errors.StudioError if operation == "cleanup" else OSError) as exc:
             run(h.installer.settle_abandoned())
         if operation == "cleanup":
             assert exc.value.code == "storage_error"
@@ -540,16 +471,10 @@ def test_committed_settlement_retries_interrupted_cleanup(
 
 @pytest.mark.parametrize("link_at", ["staging", "staging/tx_dead"])
 @pytest.mark.parametrize("finished", [False, True])
-def test_committed_settlement_refuses_staging_symlinks(
-    studio, h, repo_builder, tmp_path, link_at, finished,
-):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+def test_committed_settlement_refuses_staging_symlinks(studio, h, repo, outside, link_at, finished):
     abandoned(h, repo, status="committed", candidate="absent")
     if finished:
         h.store.update("install_transactions", "tx_dead", {"finished_at": TS})
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    (outside / "sentinel").write_bytes(ODD_BYTES)
     link = h.data_dir / link_at
     link.parent.mkdir(parents=True, exist_ok=True)
     link.symlink_to(outside, target_is_directory=True)
@@ -562,10 +487,7 @@ def test_committed_settlement_refuses_staging_symlinks(
 
 @pytest.mark.parametrize("candidate", ["identical", "changed"])
 @pytest.mark.parametrize("operation", ["fsync", "replace"])
-def test_archive_write_failure_is_retryable_without_losing_candidate(
-    studio, h, I, repo_builder, monkeypatch, candidate, operation,
-):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+def test_archive_write_failure_is_retryable_without_losing_candidate(h, I, repo, monkeypatch, candidate, operation):
     staging, _ = abandoned(h, repo, candidate=candidate)
     expected = tree(staging)
 
@@ -590,30 +512,7 @@ def test_archive_write_failure_is_retryable_without_losing_candidate(
     assert not list(failed.glob("*.tmp"))
 
 
-def test_candidate_read_failure_prevents_deduplication(
-    studio, h, repo_builder, monkeypatch,
-):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
-    staging, _ = abandoned(h, repo, candidate="identical")
-    original_open = Path.open
-
-    def unreadable(path, *args, **kwargs):
-        if path == staging / FILE:
-            raise PermissionError("candidate unreadable")
-        return original_open(path, *args, **kwargs)
-
-    with monkeypatch.context() as patch:
-        patch.setattr(Path, "open", unreadable)
-        run(h.installer.settle_abandoned())
-    failed, log = failure_log(h, "tx_dead")
-    assert tree(failed / "staging") == tree(h.installer.payload_root)
-    assert log["candidate"]["status"] == "retained"
-
-
-def test_archive_does_not_follow_predictable_temporary_symlink(
-    studio, h, repo_builder, tmp_path,
-):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+def test_archive_does_not_follow_predictable_temporary_symlink(h, repo, tmp_path):
     abandoned(h, repo)
     outside = tmp_path / "outside.bin"
     outside.write_bytes(ODD_BYTES)
@@ -626,34 +525,8 @@ def test_archive_does_not_follow_predictable_temporary_symlink(
     assert outside.read_bytes() == ODD_BYTES and trap.is_symlink()
 
 
-def test_restart_after_move_does_not_reuse_an_old_identical_label(studio, h, repo_builder):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
-    staging, _ = abandoned(h, repo)
-    failed = h.data_dir / "failed" / "tx_dead"
-    failed.mkdir(parents=True)
-    (failed / "transaction.json").write_text(json.dumps({
-        "transaction_id": "tx_dead", "candidate": {"status": "identical_to_payload"},
-    }))
-    staging.rename(failed / "staging")
-    run(h.installer.settle_abandoned())
-    failed, log = failure_log(h, "tx_dead")
-    assert (failed / "staging" / FILE).read_bytes() == ODD_BYTES
-    assert log["candidate"]["status"] == "retained"
-
-
-def test_incomplete_comparison_keeps_candidate(studio, h, I, repo_builder, monkeypatch):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
-    abandoned(h, repo, candidate="identical")
-    monkeypatch.setattr(I, "_MAX_PAYLOAD_WALK", 1)
-    run(h.installer.settle_abandoned())
-    failed, log = failure_log(h, "tx_dead")
-    assert tree(failed / "staging") == tree(h.installer.payload_root)
-    assert log["candidate"]["status"] == "retained"
-
-
 @pytest.mark.parametrize("prior_log", ['{"transaction_id":"tx_other"}', "{broken"])
-def test_unrelated_or_corrupt_log_cannot_be_overwritten(studio, h, repo_builder, prior_log):
-    repo = insert_repo(studio, h.store, repo_builder.with_git().build())
+def test_unrelated_or_corrupt_log_cannot_be_overwritten(studio, h, repo, prior_log):
     staging, _ = abandoned(h, repo)
     failed = h.data_dir / "failed" / "tx_dead"
     failed.mkdir(parents=True)
