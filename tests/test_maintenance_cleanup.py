@@ -7,10 +7,12 @@ import os
 import shutil
 from pathlib import Path
 from threading import Event
+from types import SimpleNamespace
 
 import pytest
 
 import conftest as CT
+from _helpers_c import after
 from test_handlers_auth import call, common, routes, sv  # noqa: F401
 
 
@@ -26,16 +28,40 @@ def repo(sv, repo_builder):
     return sv.repos.add(str(root), "cleanup proof")
 
 
+@pytest.fixture
+def outside(tmp_path):
+    """A directory no cleanup may ever reach."""
+    path = tmp_path / "outside"
+    path.mkdir()
+    return path
+
+
+@pytest.fixture
+def api(sv, routes, fake_host, repo):
+    """The two maintenance routes for ``repo``, called as the owner."""
+    def request(suffix, body):
+        path = f"/repos/{repo.repo_id}/maintenance/{suffix}"
+        return call(sv, routes, "POST", path, CT.owner_request("POST", path, host=fake_host, body=body))
+
+    def preview(ids):
+        status, answer = request("preview", {"entry_ids": ids})
+        assert status == 200, answer
+        return answer
+
+    def apply(ids, answer):
+        return request("cleanup", {"entry_ids": ids, "plan_digest": answer["plan_digest"]})
+
+    return SimpleNamespace(request=request, preview=preview, apply=apply)
+
+
 def transaction(sv, repo, n, *, status="failed", category="failed", prior=None, finished=True):
     txid = f"tx_{n:016x}"
     root = Path(sv.ctx.data_dir)
     sv.storage.insert("install_transactions", {
-        "transaction_id": txid, "repo_id": repo.repo_id,
-        "resolved_repo_identity": repo.resolved_identity, "kind": "upgrade", "status": status,
-        "studio_version": "1.0.0", "engine_version": "2.7.1", "payload_digest": "a" * 64,
-        "started_at": "2026-09-10T00:00:00Z",
-        "finished_at": "2026-09-10T00:01:00Z" if finished else None,
-        "backup_dir": str(root / "backups" / txid),
+        "transaction_id": txid, "repo_id": repo.repo_id, "resolved_repo_identity": repo.resolved_identity,
+        "kind": "upgrade", "status": status, "studio_version": "1.0.0", "engine_version": "2.7.1",
+        "payload_digest": "a" * 64, "started_at": "2026-09-10T00:00:00Z",
+        "finished_at": "2026-09-10T00:01:00Z" if finished else None, "backup_dir": str(root / "backups" / txid),
         "failed_dir": str(root / "failed" / txid), "prior_receipt_id": prior,
         "steps_json": [{"name": "write_files", "ok": False}], "error": "original failure",
     })
@@ -43,8 +69,7 @@ def transaction(sv, repo, n, *, status="failed", category="failed", prior=None, 
     directory.mkdir(parents=True)
     (directory / "payload.bin").write_bytes(b"reviewed bytes")
     (directory / "transaction.json").write_text(json.dumps({
-        "transaction_id": txid, "backups": {"old": "hash"}, "created": ["new"], "error": "proof",
-    }))
+        "transaction_id": txid, "backups": {"old": "hash"}, "created": ["new"], "error": "proof"}))
     return txid, directory, f"{txid}:{category}"
 
 
@@ -61,27 +86,14 @@ def receipt(sv, repo, n, txid, *, status="current", prior=None):
     return rid
 
 
-def request(sv, routes, fake_host, repo, suffix, body):
-    path = f"/repos/{repo.repo_id}/maintenance/{suffix}"
-    return call(sv, routes, "POST", path, CT.owner_request("POST", path, host=fake_host, body=body))
-
-
-def preview(sv, routes, fake_host, repo, ids):
-    status, answer = request(sv, routes, fake_host, repo, "preview", {"entry_ids": ids})
-    assert status == 200, answer
-    return answer
-
-
-def test_reviewed_cleanup_removes_only_selected_data_and_retains_metadata(sv, routes, fake_host, repo):
+def test_reviewed_cleanup_removes_only_selected_data_and_retains_metadata(sv, api, repo):
     txid, directory, eid = transaction(sv, repo, 1)
     _, untouched, _ = transaction(sv, repo, 2)
     before = sv.storage.get("install_transactions", txid)
-    answer = preview(sv, routes, fake_host, repo, [eid])
+    answer = api.preview([eid])
     assert directory.is_dir()
     assert answer["totals"]["selected_entries"] == 1
-    status, result = request(sv, routes, fake_host, repo, "cleanup", {
-        "entry_ids": [eid], "plan_digest": answer["plan_digest"],
-    })
+    status, result = api.apply([eid], answer)
     assert status == 200 and result["ok"], result
     assert result["deleted"] == [eid]
     assert not directory.exists() and untouched.exists()
@@ -92,43 +104,38 @@ def test_reviewed_cleanup_removes_only_selected_data_and_retains_metadata(sv, ro
     assert asyncio.run(sv.scheduler.list()) == []
 
 
-def test_default_preview_is_read_only_and_never_selects_orphans_or_staging(sv, routes, fake_host, repo):
+def test_default_preview_is_read_only_and_never_selects_orphans_or_staging(sv, api, repo):
     _, directory, eid = transaction(sv, repo, 1)
     orphan = Path(sv.ctx.data_dir) / "backups" / "tx_ffffffffffffffff"
-    orphan.mkdir(parents=True)
-    (orphan / "keep").write_text("untracked backup")
     staging = Path(sv.ctx.data_dir) / "staging" / eid.split(":")[0]
-    staging.mkdir(parents=True)
-    (staging / "keep").write_text("staging")
-    status, answer = request(sv, routes, fake_host, repo, "preview", {})
+    for path, text in ((orphan, "untracked backup"), (staging, "staging")):
+        path.mkdir(parents=True)
+        (path / "keep").write_text(text)
+    status, answer = api.request("preview", {})
     assert status == 200 and answer["entry_ids"] == [] and not answer["can_cleanup"]
     assert [entry["id"] for entry in answer["entries"]] == [eid]
-    status, _ = apply(sv, routes, fake_host, repo, [], answer)
+    status, _ = api.apply([], answer)
     assert status == 400
-    chosen = preview(sv, routes, fake_host, repo, [eid])
-    status, result = apply(sv, routes, fake_host, repo, [eid], chosen)
+    status, result = api.apply([eid], api.preview([eid]))
     assert status == 200 and result["ok"] and not directory.exists()
     assert (orphan / "keep").exists() and (staging / "keep").exists()
 
 
-def test_nested_reviewed_tree_deletes_and_reports_logical_totals(sv, routes, fake_host, repo):
+def test_nested_reviewed_tree_deletes_and_reports_logical_totals(sv, api, repo):
     _, directory, eid = transaction(sv, repo, 1)
     nested = directory / "staging/.kiro/tools"
     nested.mkdir(parents=True)
     (nested / "engine.js").write_bytes(b"bundled engine")
     (directory / "empty").mkdir()
-    before = list(directory.rglob("*"))
-    expected_size = sum(p.stat().st_size for p in before if p.is_file())
-    answer = preview(sv, routes, fake_host, repo, [eid])
+    expected_size = sum(p.stat().st_size for p in directory.rglob("*") if p.is_file())
+    answer = api.preview([eid])
     assert answer["totals"]["selected_bytes"] == expected_size
     assert answer["totals"]["selected_files"] == 3
-    status, result = apply(sv, routes, fake_host, repo, [eid], answer)
+    status, result = api.apply([eid], answer)
     assert status == 200 and result["ok"] and not directory.exists()
 
 
-def test_current_rollback_backup_is_protected_but_reviewed_ancestors_can_be_discarded(
-    sv, routes, fake_host, repo
-):
+def test_current_rollback_backup_is_protected_but_reviewed_ancestors_can_be_discarded(sv, api, repo):
     a, old, old_id = transaction(sv, repo, 1, status="committed", category="backups")
     b, older, older_id = transaction(sv, repo, 2, status="committed", category="backups")
     c, current, current_id = transaction(sv, repo, 3, status="committed", category="backups")
@@ -136,7 +143,7 @@ def test_current_rollback_backup_is_protected_but_reviewed_ancestors_can_be_disc
     middle = receipt(sv, repo, 2, b, status="superseded", prior=prior)
     receipt(sv, repo, 3, c, prior=middle)
     before = sv.storage.select("install_receipts", {"repo_id": repo.repo_id})
-    answer = preview(sv, routes, fake_host, repo, [old_id, older_id])
+    answer = api.preview([old_id, older_id])
     entries = {item["id"]: item for item in answer["entries"]}
     assert entries[current_id]["reason"] == "current_receipt"
     assert entries[current_id]["protected"]
@@ -144,26 +151,19 @@ def test_current_rollback_backup_is_protected_but_reviewed_ancestors_can_be_disc
         assert not entries[eid]["protected"] and entries[eid]["reason"] == "older_restore_point"
         assert "discards an older restore point" in entries[eid]["consequence"]
     assert answer["can_cleanup"] and answer["totals"]["selected_entries"] == 2
-    status, result = apply(sv, routes, fake_host, repo, [old_id, older_id], answer)
+    status, result = api.apply([old_id, older_id], answer)
     assert status == 200 and result["ok"]
     assert not old.exists() and not older.exists() and current.exists()
     assert sv.storage.select("install_receipts", {"repo_id": repo.repo_id}) == before
 
 
-def test_new_current_receipt_invalidates_old_backup_confirmation(sv, routes, fake_host, repo):
+def test_new_current_receipt_invalidates_old_backup_confirmation(sv, api, repo):
     txid, directory, eid = transaction(sv, repo, 1, status="committed", category="backups")
-    answer = preview(sv, routes, fake_host, repo, [eid])
+    answer = api.preview([eid])
     receipt(sv, repo, 1, txid)
-    status, result = apply(sv, routes, fake_host, repo, [eid], answer)
+    status, result = api.apply([eid], answer)
     assert status == 409 and result["details"]["reason"] == "plan_digest_mismatch"
-    fresh = preview(sv, routes, fake_host, repo, [eid])
-    assert not fresh["can_cleanup"] and directory.exists()
-
-
-def apply(sv, routes, fake_host, repo, ids, answer):
-    return request(sv, routes, fake_host, repo, "cleanup", {
-        "entry_ids": ids, "plan_digest": answer["plan_digest"],
-    })
+    assert not api.preview([eid])["can_cleanup"] and directory.exists()
 
 
 @pytest.mark.parametrize("state,reason", [
@@ -171,44 +171,42 @@ def apply(sv, routes, fake_host, repo, ids, answer):
     ("rolling_back", "active_transaction"), ("recovery_required", "recovery_required"),
     ("future_status", "active_transaction"),
 ])
-def test_only_terminal_finished_transactions_are_eligible(sv, routes, fake_host, repo, state, reason):
+def test_only_terminal_finished_transactions_are_eligible(sv, api, repo, state, reason):
     _, directory, eid = transaction(sv, repo, 1, status=state)
-    answer = preview(sv, routes, fake_host, repo, [eid])
+    answer = api.preview([eid])
     assert answer["entries"][0]["reason"] == reason
     assert not answer["can_cleanup"]
-    status, result = apply(sv, routes, fake_host, repo, [eid], answer)
+    status, result = api.apply([eid], answer)
     assert status == 409 and result["details"]["reason"] == "protected_entries", result
     assert directory.is_dir() and (directory / "payload.bin").exists()
     assert asyncio.run(sv.scheduler.list()) == []
 
 
-def test_unfinished_terminal_row_and_repo_recovery_are_protected(sv, routes, fake_host, repo):
+def test_unfinished_terminal_row_and_repo_recovery_are_protected(sv, api, repo):
     _, _, unfinished = transaction(sv, repo, 1, finished=False)
     _, path, eligible = transaction(sv, repo, 2)
-    answer = preview(sv, routes, fake_host, repo, [])
+    answer = api.preview([])
     assert next(e for e in answer["entries"] if e["id"] == unfinished)["reason"] == "unfinished_transaction"
     sv.storage.update("repos", repo.repo_id, {"install_status": "recovery_required"})
-    answer = preview(sv, routes, fake_host, repo, [eligible])
+    answer = api.preview([eligible])
     assert not answer["can_cleanup"]
-    status, result = apply(sv, routes, fake_host, repo, [eligible], answer)
+    status, result = api.apply([eligible], answer)
     assert status == 409 and result["code"] == "install_recovery_required"
     assert path.exists()
 
 
-def test_startup_finishes_committed_cleanup_before_maintenance_review(sv, routes, fake_host, repo):
-    txid, directory, eid = transaction(
-        sv, repo, 1, status="committed", category="backups", finished=False,
-    )
-    before = preview(sv, routes, fake_host, repo, [eid])
+def test_startup_finishes_committed_cleanup_before_maintenance_review(sv, api, repo):
+    txid, directory, eid = transaction(sv, repo, 1, status="committed", category="backups", finished=False)
+    before = api.preview([eid])
     assert not before["can_cleanup"]
     assert before["entries"][0]["reason"] == "unfinished_transaction"
     assert asyncio.run(sv.installer.settle_abandoned()) == [txid]
     row = sv.storage.get("install_transactions", txid)
     assert row["status"] == "committed" and row["finished_at"]
     assert directory.is_dir()
-    after = preview(sv, routes, fake_host, repo, [eid])
-    assert after["can_cleanup"]
-    status, result = apply(sv, routes, fake_host, repo, [eid], after)
+    after_settle = api.preview([eid])
+    assert after_settle["can_cleanup"]
+    status, result = api.apply([eid], after_settle)
     assert status == 200 and result["ok"]
     assert not directory.exists()
     assert (Path(repo.canonical_path) / "keep.txt").read_text() == "repository bytes"
@@ -234,13 +232,13 @@ def test_staging_cleanup_error_is_reported_without_aborting_startup(sv, repo, mo
     assert (Path(repo.canonical_path) / "keep.txt").read_text() == "repository bytes"
 
 
-def test_unsettled_transaction_protects_its_prior_receipt_even_without_current(sv, routes, fake_host, repo):
+def test_unsettled_transaction_protects_its_prior_receipt_even_without_current(sv, api, repo):
     ancestor, old_dir, old_id = transaction(sv, repo, 3, status="committed", category="backups")
     ancestor_rid = receipt(sv, repo, 3, ancestor, status="superseded")
     txid, directory, eid = transaction(sv, repo, 1, status="committed", category="backups")
     rid = receipt(sv, repo, 1, txid, status="superseded", prior=ancestor_rid)
     transaction(sv, repo, 2, status="recovery_required", prior=rid)
-    answer = preview(sv, routes, fake_host, repo, [eid])
+    answer = api.preview([eid])
     assert next(e for e in answer["entries"] if e["id"] == eid)["reason"] == "receipt_restoration"
     assert not answer["can_cleanup"] and directory.exists()
     old_entry = next(e for e in answer["entries"] if e["id"] == old_id)
@@ -248,30 +246,30 @@ def test_unsettled_transaction_protects_its_prior_receipt_even_without_current(s
     assert old_dir.exists()
 
 
-def test_missing_receipt_reference_blocks_cleanup_conservatively(sv, routes, fake_host, repo):
+def test_missing_receipt_reference_blocks_cleanup_conservatively(sv, api, repo):
     _, directory, eid = transaction(sv, repo, 1)
     sv.storage.update("repos", repo.repo_id, {"receipt_version": "rc_missing"})
-    answer = preview(sv, routes, fake_host, repo, [eid])
+    answer = api.preview([eid])
     assert answer["entries"][0]["reason"] == "receipt_reference_missing"
     assert not answer["can_cleanup"] and directory.exists()
 
 
-def test_old_unreferenced_receipt_history_is_retained_when_its_backup_is_cleaned(sv, routes, fake_host, repo):
+def test_old_unreferenced_receipt_history_is_retained_when_its_backup_is_cleaned(sv, api, repo):
     txid, directory, eid = transaction(sv, repo, 1, status="committed", category="backups")
     rid = receipt(sv, repo, 1, txid, status="superseded")
     before = sv.storage.get("install_receipts", rid)
-    answer = preview(sv, routes, fake_host, repo, [eid])
-    status, result = apply(sv, routes, fake_host, repo, [eid], answer)
+    status, result = api.apply([eid], api.preview([eid]))
     assert status == 200 and result["ok"] and not directory.exists()
     assert sv.storage.get("install_receipts", rid) == before
 
 
 @pytest.mark.parametrize("kind", ["digest", "selection", "added_file", "replaced_inode", "same_size"])
-def test_tampering_or_filesystem_drift_refuses_before_any_deletion(sv, routes, fake_host, repo, kind):
+def test_tampering_or_filesystem_drift_refuses_before_any_deletion(sv, api, repo, kind):
     _, directory, eid = transaction(sv, repo, 1)
     _, other, other_id = transaction(sv, repo, 2)
-    answer = preview(sv, routes, fake_host, repo, [eid])
+    answer = api.preview([eid])
     ids = [eid]
+    payload = directory / "payload.bin"
     if kind == "digest":
         answer["plan_digest"] = "0" * 64
     elif kind == "selection":
@@ -279,15 +277,14 @@ def test_tampering_or_filesystem_drift_refuses_before_any_deletion(sv, routes, f
     elif kind == "added_file":
         (directory / "new-evidence").write_text("not reviewed")
     elif kind == "replaced_inode":
-        content = (directory / "payload.bin").read_bytes()
-        (directory / "payload.bin").unlink()
-        (directory / "payload.bin").write_bytes(content)
+        content = payload.read_bytes()
+        payload.unlink()
+        payload.write_bytes(content)
     else:
-        target = directory / "payload.bin"
-        st = target.stat()
-        target.write_bytes(b"x" * st.st_size)
-        os.utime(target, ns=(st.st_atime_ns, st.st_mtime_ns))
-    status, result = apply(sv, routes, fake_host, repo, ids, answer)
+        st = payload.stat()
+        payload.write_bytes(b"x" * st.st_size)
+        os.utime(payload, ns=(st.st_atime_ns, st.st_mtime_ns))
+    status, result = api.apply(ids, answer)
     assert status == 409 and result["details"]["reason"] == "plan_digest_mismatch", result
     assert directory.exists() and other.exists()
     assert (directory / "transaction.json").exists()
@@ -295,9 +292,9 @@ def test_tampering_or_filesystem_drift_refuses_before_any_deletion(sv, routes, f
 
 
 @pytest.mark.parametrize("when", ["before_request", "after_lease", "after_metadata_commit"])
-def test_new_recovery_row_invalidates_confirmation(sv, routes, fake_host, repo, monkeypatch, when):
+def test_new_recovery_row_invalidates_confirmation(sv, api, repo, monkeypatch, when):
     _, directory, eid = transaction(sv, repo, 1)
-    answer = preview(sv, routes, fake_host, repo, [eid])
+    answer = api.preview([eid])
 
     def recovery():
         transaction(sv, repo, 2, status="recovery_required")
@@ -305,14 +302,7 @@ def test_new_recovery_row_invalidates_confirmation(sv, routes, fake_host, repo, 
     if when == "before_request":
         recovery()
     elif when == "after_lease":
-        original = sv.scheduler.acquire_admin
-
-        async def acquire(*args, **kwargs):
-            grant = await original(*args, **kwargs)
-            recovery()
-            return grant
-
-        monkeypatch.setattr(sv.scheduler, "acquire_admin", acquire)
+        after(monkeypatch, sv.scheduler, "acquire_admin", recovery)
     else:
         original = sv.storage.pref_set
         fired = False
@@ -325,22 +315,19 @@ def test_new_recovery_row_invalidates_confirmation(sv, routes, fake_host, repo, 
                 recovery()
 
         monkeypatch.setattr(sv.storage, "pref_set", prepared)
-    status, result = apply(sv, routes, fake_host, repo, [eid], answer)
+    status, result = api.apply([eid], answer)
     assert status == 409 and result["details"]["reason"] == "plan_digest_mismatch", result
     assert directory.is_dir() and (directory / "payload.bin").exists()
     assert asyncio.run(sv.scheduler.list()) == []
 
 
 @pytest.mark.parametrize("kind", ["entry", "nested", "category", "hardlink", "fifo"])
-def test_indirect_or_special_files_are_never_followed(sv, routes, fake_host, repo, tmp_path, kind):
+def test_indirect_or_special_files_are_never_followed(sv, api, repo, outside, kind):
     _, directory, eid = transaction(sv, repo, 1)
-    outside = tmp_path / "outside"
-    outside.mkdir()
     secret = outside / "valuable"
     secret.write_bytes(b"never remove")
     if kind == "entry":
-        moved = directory.with_name("saved")
-        directory.rename(moved)
+        directory.rename(directory.with_name("saved"))
         directory.symlink_to(outside, target_is_directory=True)
     elif kind == "nested":
         (directory / "linked").symlink_to(outside, target_is_directory=True)
@@ -353,39 +340,33 @@ def test_indirect_or_special_files_are_never_followed(sv, routes, fake_host, rep
     else:
         os.mkfifo(directory / "pipe")
     if kind == "category":
-        status, result = request(sv, routes, fake_host, repo, "preview", {"entry_ids": [eid]})
+        status, result = api.request("preview", {"entry_ids": [eid]})
         assert status == 400 and result["code"] == "bad_path", result
     else:
-        answer = preview(sv, routes, fake_host, repo, [eid])
+        answer = api.preview([eid])
         assert not answer["can_cleanup"] and answer["entries"][0]["protected"]
-        status, _ = apply(sv, routes, fake_host, repo, [eid], answer)
+        status, _ = api.apply([eid], answer)
         assert status == 409
     assert secret.read_bytes() == b"never remove"
 
 
-def test_path_swap_after_preview_is_rejected_without_following_replacement(sv, routes, fake_host, repo, tmp_path):
+def test_path_swap_after_preview_is_rejected_without_following_replacement(sv, api, repo, outside):
     _, directory, eid = transaction(sv, repo, 1)
-    answer = preview(sv, routes, fake_host, repo, [eid])
+    answer = api.preview([eid])
     old = directory.with_name("saved")
     directory.rename(old)
-    outside = tmp_path / "outside"
-    outside.mkdir()
     (outside / "payload.bin").write_bytes(b"outside")
     directory.symlink_to(outside, target_is_directory=True)
-    status, result = apply(sv, routes, fake_host, repo, [eid], answer)
+    status, result = api.apply([eid], answer)
     assert status == 409 and result["details"]["reason"] == "plan_digest_mismatch"
     assert (outside / "payload.bin").read_bytes() == b"outside"
     assert (old / "payload.bin").read_bytes() == b"reviewed bytes"
 
 
 @pytest.mark.parametrize("kind", ["category", "entry", "file"])
-def test_swap_after_final_scan_is_refused_before_unlink(
-    sv, routes, fake_host, repo, maintenance, monkeypatch, tmp_path, kind
-):
+def test_swap_after_final_scan_is_refused_before_unlink(sv, api, repo, maintenance, monkeypatch, outside, kind):
     _, directory, eid = transaction(sv, repo, 1)
-    answer = preview(sv, routes, fake_host, repo, [eid])
-    outside = tmp_path / "outside"
-    outside.mkdir()
+    answer = api.preview([eid])
     secret = outside / "secret"
     secret.write_text("external bytes")
     original = maintenance.MaintenanceService._delete
@@ -404,7 +385,7 @@ def test_swap_after_final_scan_is_refused_before_unlink(
         return original(service, *args)
 
     monkeypatch.setattr(maintenance.MaintenanceService, "_delete", swap)
-    status, result = apply(sv, routes, fake_host, repo, [eid], answer)
+    status, result = api.apply([eid], answer)
     assert status == 200 and not result["ok"] and result["deleted"] == []
     assert result["failures"][0]["reason"] == "path_changed"
     assert secret.read_text() == "external bytes"
@@ -415,16 +396,14 @@ def test_swap_after_final_scan_is_refused_before_unlink(
         assert (directory / "transaction.json").exists()
 
 
-def test_stored_absolute_path_cannot_authorize_deletion_elsewhere(sv, routes, fake_host, repo, tmp_path):
+def test_stored_absolute_path_cannot_authorize_deletion_elsewhere(sv, api, repo, outside):
     txid, directory, eid = transaction(sv, repo, 1)
-    outside = tmp_path / "outside"
-    outside.mkdir()
     (outside / "keep").write_text("safe")
     sv.storage.update("install_transactions", txid, {"failed_dir": str(outside)})
-    answer = preview(sv, routes, fake_host, repo, [eid])
+    answer = api.preview([eid])
     assert answer["entries"][0]["reason"] == "path_mismatch"
     assert not answer["can_cleanup"]
-    status, _ = apply(sv, routes, fake_host, repo, [eid], answer)
+    status, _ = api.apply([eid], answer)
     assert status == 409 and directory.exists() and (outside / "keep").exists()
 
 
@@ -433,35 +412,30 @@ def test_stored_absolute_path_cannot_authorize_deletion_elsewhere(sv, routes, fa
     {"entry_ids": ["tx_0000000000000001:failed", "tx_0000000000000001:failed"]},
     {"entry_ids": "all"}, {"entry_ids": [4]}, {"path": "/tmp"},
 ])
-def test_client_can_supply_only_bounded_generated_selection(sv, routes, fake_host, repo, body):
-    status, result = request(sv, routes, fake_host, repo, "preview", body)
+def test_client_can_supply_only_bounded_generated_selection(api, body):
+    status, result = api.request("preview", body)
     assert status == 400 and result["code"] == "bad_body", result
 
 
-def test_foreign_repo_selection_is_refused(sv, routes, fake_host, repo, tmp_path):
-    other_root = CT.RepoBuilder(tmp_path / "other").with_git().build()
-    other = sv.repos.add(str(other_root), "other repository")
+def test_foreign_repo_selection_is_refused(sv, api, tmp_path):
+    other = sv.repos.add(str(CT.RepoBuilder(tmp_path / "other").with_git().build()), "other repository")
     _, directory, eid = transaction(sv, other, 1)
-    status, answer = request(sv, routes, fake_host, repo, "preview", {"entry_ids": [eid]})
+    status, answer = api.request("preview", {"entry_ids": [eid]})
     assert status == 409 and answer["details"]["reason"] == "selection_changed"
     assert (directory / "payload.bin").exists()
 
 
 @pytest.mark.parametrize("kind", ["nodes", "depth", "evidence", "history"])
-def test_scan_limits_refuse_deletion(sv, routes, fake_host, repo, maintenance, monkeypatch, kind):
+def test_scan_limits_refuse_deletion(sv, api, repo, maintenance, monkeypatch, kind):
     _, directory, eid = transaction(sv, repo, 1)
-    if kind == "nodes":
-        monkeypatch.setattr(maintenance, "MAX_NODES", 1)
-    elif kind == "depth":
+    if kind == "depth":
         nested = directory / "a/b"
         nested.mkdir(parents=True)
         (nested / "x").write_text("keep")
-        monkeypatch.setattr(maintenance, "MAX_DEPTH", 1)
-    elif kind == "evidence":
-        monkeypatch.setattr(maintenance, "MAX_METADATA_BYTES", 5)
-    else:
-        monkeypatch.setattr(maintenance, "MAX_HISTORY", 0)
-    status, answer = request(sv, routes, fake_host, repo, "preview", {"entry_ids": [eid]})
+    limit, value = {"nodes": ("MAX_NODES", 1), "depth": ("MAX_DEPTH", 1), "evidence": ("MAX_METADATA_BYTES", 5),
+                    "history": ("MAX_HISTORY", 0)}[kind]
+    monkeypatch.setattr(maintenance, limit, value)
+    status, answer = api.request("preview", {"entry_ids": [eid]})
     if kind == "history":
         assert status == 413 and answer["code"] == "too_large"
     else:
@@ -471,29 +445,27 @@ def test_scan_limits_refuse_deletion(sv, routes, fake_host, repo, maintenance, m
 
 
 @pytest.mark.parametrize("kind", ["execution", "admin"])
-def test_cleanup_serializes_with_installer_and_execution(sv, routes, fake_host, repo, kind):
+def test_cleanup_serializes_with_installer_and_execution(sv, api, repo, kind):
     _, directory, eid = transaction(sv, repo, 1)
-    answer = preview(sv, routes, fake_host, repo, [eid])
+    answer = api.preview([eid])
     if kind == "execution":
-        grant = asyncio.run(sv.scheduler.acquire_execution(
-            repo, intent_uuid=None, session_key=None, action_id="a_other",
-        ))
+        lease = sv.scheduler.acquire_execution(repo, intent_uuid=None, session_key=None, action_id="a_other")
     else:
-        grant = asyncio.run(sv.scheduler.acquire_admin(repo, operation_type="upgrade", transaction_id=None))
+        lease = sv.scheduler.acquire_admin(repo, operation_type="upgrade", transaction_id=None)
+    grant = asyncio.run(lease)
     try:
-        status, result = apply(sv, routes, fake_host, repo, [eid], answer)
+        status, result = api.apply([eid], answer)
         assert status == 409 and result["code"] == "repo_busy"
         assert directory.is_dir()
     finally:
         asyncio.run(sv.scheduler.release(grant))
 
 
-def test_partial_delete_retains_committed_evidence_and_requires_fresh_preview(
-    sv, routes, fake_host, repo, maintenance, monkeypatch
-):
+def test_partial_delete_retains_committed_evidence_and_requires_fresh_preview(sv, api, repo, maintenance,
+                                                                             monkeypatch):
     _, directory, eid = transaction(sv, repo, 1)
     metadata = (directory / "transaction.json").read_bytes()
-    answer = preview(sv, routes, fake_host, repo, [eid])
+    answer = api.preview([eid])
     original = os.unlink
     calls = 0
 
@@ -506,27 +478,25 @@ def test_partial_delete_retains_committed_evidence_and_requires_fresh_preview(
         return original(path, *args, **kwargs)
 
     monkeypatch.setattr(maintenance.os, "unlink", fail_second)
-    status, result = apply(sv, routes, fake_host, repo, [eid], answer)
+    status, result = api.apply([eid], answer)
     assert status == 200 and not result["ok"] and result["requires_preview"], result
     assert result["remaining"] == [eid] and result["failures"][0]["reason"] == "delete_failed"
     record = sv.storage.pref_get(result["record_key"])
     assert record["status"] == "partial"
     assert base64.b64decode(record["evidence"][eid]["transaction.json"]) == metadata
     monkeypatch.setattr(maintenance.os, "unlink", original)
-    status, stale = apply(sv, routes, fake_host, repo, [eid], answer)
+    status, stale = api.apply([eid], answer)
     assert status == 409 and stale["details"]["reason"] == "plan_digest_mismatch"
-    fresh = preview(sv, routes, fake_host, repo, [eid])
-    status, result = apply(sv, routes, fake_host, repo, [eid], fresh)
+    status, result = api.apply([eid], api.preview([eid]))
     assert status == 200 and result["ok"] and not directory.exists()
     assert asyncio.run(sv.scheduler.list()) == []
 
 
-def test_crash_after_an_unlink_leaves_prepared_evidence_and_retryable_remainder(
-    sv, routes, fake_host, repo, maintenance, monkeypatch
-):
+def test_crash_after_an_unlink_leaves_prepared_evidence_and_retryable_remainder(sv, api, repo, maintenance,
+                                                                               monkeypatch):
     _, directory, eid = transaction(sv, repo, 1)
     metadata = (directory / "transaction.json").read_bytes()
-    answer = preview(sv, routes, fake_host, repo, [eid])
+    answer = api.preview([eid])
     original = os.unlink
 
     def crash(path, *args, **kwargs):
@@ -536,36 +506,32 @@ def test_crash_after_an_unlink_leaves_prepared_evidence_and_retryable_remainder(
         return result
 
     monkeypatch.setattr(maintenance.os, "unlink", crash)
-    status, _ = apply(sv, routes, fake_host, repo, [eid], answer)
+    status, _ = api.apply([eid], answer)
     assert status == 500
-    key = f"maintenance:{repo.repo_id}:{answer['plan_digest']}"
-    record = sv.storage.pref_get(key)
+    record = sv.storage.pref_get(f"maintenance:{repo.repo_id}:{answer['plan_digest']}")
     assert record["status"] == "prepared"
     assert base64.b64decode(record["evidence"][eid]["transaction.json"]) == metadata
     monkeypatch.setattr(maintenance.os, "unlink", original)
-    fresh = preview(sv, routes, fake_host, repo, [eid])
-    status, result = apply(sv, routes, fake_host, repo, [eid], fresh)
+    status, result = api.apply([eid], api.preview([eid]))
     assert status == 200 and result["ok"] and not directory.exists()
 
 
-def test_metadata_commit_failure_prevents_all_deletion(sv, routes, fake_host, repo, monkeypatch):
+def test_metadata_commit_failure_prevents_all_deletion(sv, api, repo, monkeypatch):
     _, directory, eid = transaction(sv, repo, 1)
-    answer = preview(sv, routes, fake_host, repo, [eid])
+    answer = api.preview([eid])
 
     def fail(*args):
         raise OSError("database cannot persist evidence")
 
     monkeypatch.setattr(sv.storage, "pref_set", fail)
-    status, _ = apply(sv, routes, fake_host, repo, [eid], answer)
+    status, _ = api.apply([eid], answer)
     assert status == 500
     assert (directory / "payload.bin").exists() and (directory / "transaction.json").exists()
     assert asyncio.run(sv.scheduler.list()) == []
 
 
 @pytest.mark.parametrize("cancel_count", [1, 2])
-def test_cancellation_does_not_release_lease_while_worker_deletes(
-    sv, repo, maintenance, monkeypatch, cancel_count
-):
+def test_cancellation_does_not_release_lease_while_worker_deletes(sv, repo, maintenance, monkeypatch, cancel_count):
     _, directory, eid = transaction(sv, repo, 1)
 
     async def scenario():
@@ -586,8 +552,7 @@ def test_cancellation_does_not_release_lease_while_worker_deletes(
         for _ in range(cancel_count):
             task.cancel()
             await asyncio.sleep(0)
-        # Don't query the shared SQLite connection while its deletion transaction is deliberately
-        # paused. The cleanup task cannot finish or run lease release until this worker completes.
+        # The paused worker holds the SQLite deletion transaction: do not query it; release cannot run yet.
         assert not task.done()
         finish.set()
         with pytest.raises(asyncio.CancelledError):
