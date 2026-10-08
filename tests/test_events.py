@@ -1,19 +1,7 @@
-"""Tests for ``backend/studio/events.py`` — the in-memory ring, the SSE wire and the host mirror.
-
-What is actually being defended here:
-
-* **A client can always resume, or is told it cannot.** Every published event gets a ``seq``, the SSE
-  frame carries it as ``id``, and a replay from that id returns exactly the events after it. A cursor the
-  ring cannot honour — trimmed, ahead of the ring, or handed out by an earlier process — resets. The frame
-  bytes are asserted verbatim, because they are a wire contract shared with ``ui/src/lib/sse.ts``.
-* **A slow reader is reset, not waited for.** The publisher never blocks on a socket; a reader that falls
-  off the ring while it drains is told to refetch everything.
-* **The host mirror can never break a request.** A manifest/permission mismatch (or any other host-bus
-  failure) is swallowed and logged once, while Studio's own stream carries on.
-
-There is no pytest-asyncio in the pinned interpreter, so async bodies run through ``asyncio.run`` via the
-``@aio`` decorator, and the SSE tests capture the socket by replacing the mocked request's payload writer
-with a recorder — no Studio code is mocked anywhere.
+"""``backend/studio/events.py``: every event gets a ``seq`` a client can resume from (or is told to reset), a slow
+reader is reset rather than waited for, and the host mirror never breaks a request. SSE frame bytes are asserted
+verbatim (a wire contract with ``ui/src/lib/sse.ts``); the socket is captured by replacing the mocked request's
+payload writer, so no Studio code is mocked.
 """
 
 from __future__ import annotations
@@ -30,33 +18,18 @@ import fixtures as F
 from conftest import FakeEventBus
 
 TS = "2026-09-04T10:00:00Z"
+REPO = "r_000000000001"
 
 #: The §1.20 list, spelled out here so a silent reordering or rename in the module fails a test.
 CONTRACT_EVENT_TYPES = (
-    "action.created",
-    "action.updated",
-    "repo.updated",
-    "repo.removed",
-    "intent.updated",
-    "transaction.updated",
-    "lease.updated",
-    "activity.appended",
-    "advisor.updated",
-    "settings.updated",
-    "health.updated",
-    "reset",
+    "action.created", "action.updated", "repo.updated", "repo.removed", "intent.updated", "transaction.updated",
+    "lease.updated", "activity.appended", "advisor.updated", "settings.updated", "health.updated", "reset",
 )
 
 #: A real ``action.*`` payload (§1.20), on a real fixture intent, in the order the golden frame expects.
 ACTION_PAYLOAD: dict[str, Any] = {
-    "action_id": "a_0000000000000001",
-    "repo_id": "r_000000000001",
-    "intent_key": F.PAYLOAD_GATE_OPEN,
-    "type": "gate",
-    "status": "Queued",
-    "status_generation": 1,
-    "from_status": None,
-    "reason": "derived",
+    "action_id": "a_0000000000000001", "repo_id": REPO, "intent_key": F.PAYLOAD_GATE_OPEN, "type": "gate",
+    "status": "Queued", "status_generation": 1, "from_status": None, "reason": "derived",
 }
 ACTION_DATA = (
     '{"action_id":"a_0000000000000001","repo_id":"r_000000000001",'
@@ -93,18 +66,34 @@ def log(E, fake_ctx, clock):
     return E.EventLog(fake_ctx.events, clock)
 
 
+@pytest.fixture
+def small(E, fake_ctx, clock):
+    """An EventLog whose ring holds three events."""
+    return E.EventLog(fake_ctx.events, clock, ring_size=3)
+
+
 async def publish(log: Any, count: int, type: str = "action.updated") -> list[int]:
     return [await log.publish(type, dict(ACTION_PAYLOAD)) for _ in range(count)]
 
 
-# --------------------------------------------------------------------------- #
-# SSE harness
-# --------------------------------------------------------------------------- #
+async def restarted(E, fake_ctx, clock) -> tuple[Any, int]:
+    """A cursor from an earlier process (three ids), and the new process after it published ten events."""
+    cursor = (await publish(E.EventLog(fake_ctx.events, clock), 3))[-1]
+    clock.advance(5)  # the gateway restarts
+    after = E.EventLog(fake_ctx.events, clock)
+    await publish(after, 10)
+    return after, cursor
+
+
+def reset_frame(newest: int, oldest: int) -> bytes:
+    return f'id: {newest}\nevent: reset\ndata: {{"oldest_seq":{oldest},"newest_seq":{newest}}}\n\n'.encode()
+
+
+# ---- SSE harness ---- #
 
 
 class Wire:
-    """The socket the stream writes to: records every frame, can die like a closed tab or stall like a
-    slow one. Installed on the mocked request's payload writer, so ``prepare``/``write`` run for real."""
+    """The socket the stream writes to: records every frame, and can die like a closed tab or stall like a slow one."""
 
     def __init__(self, request: Any, *, fail_after: int | None = None, error: type = ConnectionResetError) -> None:
         self.frames: list[bytes] = []
@@ -169,9 +158,7 @@ async def settle(times: int = 3) -> None:
         await asyncio.sleep(0.01)
 
 
-# --------------------------------------------------------------------------- #
-# vocabulary
-# --------------------------------------------------------------------------- #
+# ---- vocabulary ---- #
 
 
 def test_event_types_are_exactly_the_contract_list(E):
@@ -184,34 +171,24 @@ def test_event_types_are_exactly_the_contract_list(E):
 def test_host_event_mapping_uses_only_declared_names(E, C, manifest):
     mapped = {t: E.host_event_for(t) for t in E.EVENT_TYPES}
     assert mapped == {
-        "action.created": C.HOST_EVENT_ACTION,
-        "action.updated": C.HOST_EVENT_ACTION,
-        "repo.updated": C.HOST_EVENT_REPO,
-        "repo.removed": C.HOST_EVENT_REPO,
-        "intent.updated": C.HOST_EVENT_REPO,
-        "transaction.updated": C.HOST_EVENT_TRANSACTION,
-        "lease.updated": None,
-        "activity.appended": None,
-        "advisor.updated": None,
-        "settings.updated": None,
-        "health.updated": None,
-        "reset": None,
+        "action.created": C.HOST_EVENT_ACTION, "action.updated": C.HOST_EVENT_ACTION,
+        "repo.updated": C.HOST_EVENT_REPO, "repo.removed": C.HOST_EVENT_REPO, "intent.updated": C.HOST_EVENT_REPO,
+        "transaction.updated": C.HOST_EVENT_TRANSACTION, "lease.updated": None, "activity.appended": None,
+        "advisor.updated": None, "settings.updated": None, "health.updated": None, "reset": None,
     }
     declared = set(manifest["permissions"]["events"])
     assert {name for name in mapped.values() if name} <= declared
 
 
-# --------------------------------------------------------------------------- #
-# publish
-# --------------------------------------------------------------------------- #
+# ---- publish ---- #
 
 
 @aio
 async def test_seq_starts_at_the_process_clock_and_counts_by_one(E, log, clock):
     base = int(clock.monotonic() * 1_000_000)
-    assert log.bounds() == (base + 1, base)                # empty: "oldest - 1" is the newest cursor
+    assert log.bounds() == (base + 1, base)  # empty: "oldest - 1" is the newest cursor
     first = await log.publish("action.created", dict(ACTION_PAYLOAD))
-    second = await log.publish("intent.updated", {"repo_id": "r_000000000001", "intent_key": F.PAYLOAD_GATE_OPEN,
+    second = await log.publish("intent.updated", {"repo_id": REPO, "intent_key": F.PAYLOAD_GATE_OPEN,
                                                   "operational_state": "WaitingForYou"})
     assert (first, second) == (base + 1, base + 2)
     records = await log.since(0)
@@ -238,22 +215,20 @@ async def test_publish_copies_the_payload_so_a_caller_can_reuse_its_dict(log):
 
 
 @aio
-async def test_the_ring_keeps_only_the_newest_events(E, fake_ctx, clock):
-    log = E.EventLog(fake_ctx.events, clock, ring_size=3)
-    seqs = await publish(log, 5)
-    assert [r.seq for r in await log.since(0)] == seqs[2:]
-    assert log.bounds() == (seqs[2], seqs[4])
+async def test_the_ring_keeps_only_the_newest_events(small):
+    seqs = await publish(small, 5)
+    assert [r.seq for r in await small.since(0)] == seqs[2:]
+    assert small.bounds() == (seqs[2], seqs[4])
 
 
 @aio
 async def test_publish_mirrors_action_repo_and_transaction_events_to_the_host(log, fake_ctx, C):
     seq = await log.publish("action.created", dict(ACTION_PAYLOAD))
-    await log.publish("repo.removed", {"repo_id": "r_000000000001"})
-    await log.publish("intent.updated", {"repo_id": "r_000000000001", "intent_key": F.PAYLOAD_GATE_OPEN,
+    await log.publish("repo.removed", {"repo_id": REPO})
+    await log.publish("intent.updated", {"repo_id": REPO, "intent_key": F.PAYLOAD_GATE_OPEN,
                                          "operational_state": "Queued"})
-    await log.publish("transaction.updated", {"transaction_id": "tx_0000000000000001",
-                                              "repo_id": "r_000000000001", "status": "committed"})
-
+    await log.publish("transaction.updated", {"transaction_id": "tx_0000000000000001", "repo_id": REPO,
+                                              "status": "committed"})
     names = [name for name, _ in fake_ctx.events.published]
     assert names == [C.HOST_EVENT_ACTION, C.HOST_EVENT_REPO, C.HOST_EVENT_REPO, C.HOST_EVENT_TRANSACTION]
     # The Studio type rides inside `data`: `payload["type"]` is already the action type.
@@ -262,15 +237,15 @@ async def test_publish_mirrors_action_repo_and_transaction_events_to_the_host(lo
 
 @aio
 async def test_studio_internal_events_are_not_mirrored(log, fake_ctx):
-    await log.publish("lease.updated", {"resolved_repo_identity": "1:2", "repo_id": "r_000000000001",
-                                        "kind": "execution", "held": True})
-    await log.publish("activity.appended", {"id": 1, "kind": "gate_approved", "repo_id": "r_000000000001",
-                                            "intent_key": F.PAYLOAD_GATE_OPEN})
-    await log.publish("settings.updated", {"keys": ["density"]})
-    await log.publish("health.updated", {"status": "degraded", "issues": ["payload_degraded"]})
-    await log.publish("advisor.updated", {"draft_id": "d_0000000000000001", "action_id": "a_0000000000000001",
-                                          "status": "ready"})
-    await log.publish("reset", {"oldest_seq": 1, "newest_seq": 6})
+    for type, payload in (
+        ("lease.updated", {"resolved_repo_identity": "1:2", "repo_id": REPO, "kind": "execution", "held": True}),
+        ("activity.appended", {"id": 1, "kind": "gate_approved", "repo_id": REPO, "intent_key": F.PAYLOAD_GATE_OPEN}),
+        ("settings.updated", {"keys": ["density"]}),
+        ("health.updated", {"status": "degraded", "issues": ["payload_degraded"]}),
+        ("advisor.updated", {"draft_id": "d_0000000000000001", "action_id": "a_0000000000000001", "status": "ready"}),
+        ("reset", {"oldest_seq": 1, "newest_seq": 6}),
+    ):
+        await log.publish(type, payload)
     assert fake_ctx.events.published == []
 
 
@@ -280,7 +255,7 @@ async def test_a_denied_host_event_name_is_swallowed_and_logged_once(E, clock, c
     caplog.set_level(logging.WARNING, logger="kirocrew.app.aidlc-studio")
     log = E.EventLog(FakeEventBus([]), clock)
     seqs = await publish(log, 3)
-    assert [r.seq for r in await log.since(0)] == seqs          # Studio's own ring unaffected
+    assert [r.seq for r in await log.since(0)] == seqs  # Studio's own ring unaffected
     assert len([r for r in caplog.records if "host event bus refused" in r.getMessage()]) == 1
 
 
@@ -299,14 +274,12 @@ async def test_a_broken_host_bus_is_swallowed_and_logged_once(E, clock, caplog):
 
 @aio
 async def test_no_host_bus_at_all_is_normal(E, clock):
-    """``ctx.events`` is ``None`` when the events permission is absent — publishing still works."""
+    """``ctx.events`` is ``None`` when the events permission is absent: publishing still works."""
     log = E.EventLog(None, clock)
     assert await log.publish("action.created", dict(ACTION_PAYLOAD)) == log.bounds()[1]
 
 
-# --------------------------------------------------------------------------- #
-# since / poll
-# --------------------------------------------------------------------------- #
+# ---- since / poll ---- #
 
 
 @aio
@@ -318,65 +291,44 @@ async def test_since_returns_only_events_after_the_cursor(log):
 
 
 @aio
-async def test_poll_cold_start_hands_back_only_the_cursor(log):
+async def test_poll_cold_start_hands_back_only_the_cursor_and_resets_one_ahead_of_the_ring(log):
     seq = await log.publish("action.created", dict(ACTION_PAYLOAD))
     assert await log.poll() == {"events": [], "cursor": seq, "oldest_seq": seq, "reset": False}
+    assert await log.poll(seq + 99) == {"events": [], "cursor": seq, "oldest_seq": seq, "reset": True}
 
 
 @aio
 async def test_poll_returns_the_events_after_the_cursor(log):
     first = await log.publish("action.created", dict(ACTION_PAYLOAD))
-    second = await log.publish("repo.updated", {"repo_id": "r_000000000001"})
-
-    body = await log.poll(first)
-    assert body == {
-        "events": [{"seq": second, "at": TS, "type": "repo.updated", "payload": {"repo_id": "r_000000000001"}}],
-        "cursor": second,
-        "oldest_seq": first,
-        "reset": False,
-    }
+    second = await log.publish("repo.updated", {"repo_id": REPO})
+    assert await log.poll(first) == {
+        "events": [{"seq": second, "at": TS, "type": "repo.updated", "payload": {"repo_id": REPO}}],
+        "cursor": second, "oldest_seq": first, "reset": False}
     # Caught up: same cursor, no events, still not a reset.
     assert await log.poll(second) == {"events": [], "cursor": second, "oldest_seq": first, "reset": False}
 
 
 @aio
-async def test_cursor_zero_means_from_the_start_of_this_process(E, fake_ctx, clock):
-    log = E.EventLog(fake_ctx.events, clock, ring_size=3)
-    assert await log.poll(0) == {"events": [], "cursor": 0, "oldest_seq": log.bounds()[0], "reset": False}
-    seqs = await publish(log, 3)
-    assert [e["seq"] for e in (await log.poll(0))["events"]] == seqs
-    # Once the ring has trimmed this process's first event, "everything" can no longer be replayed.
-    await publish(log, 1)
-    assert (await log.poll(0))["reset"] is True
+async def test_cursor_zero_means_from_the_start_of_this_process(small):
+    assert await small.poll(0) == {"events": [], "cursor": 0, "oldest_seq": small.bounds()[0], "reset": False}
+    seqs = await publish(small, 3)
+    assert [e["seq"] for e in (await small.poll(0))["events"]] == seqs
+    await publish(small, 1)  # the ring trimmed this process's first event: "everything" is no longer replayable
+    assert (await small.poll(0))["reset"] is True
 
 
 @aio
-async def test_poll_resets_a_cursor_that_fell_out_of_the_ring(E, fake_ctx, clock):
-    log = E.EventLog(fake_ctx.events, clock, ring_size=3)
-    seqs = await publish(log, 5)
-    assert await log.poll(seqs[0]) == {"events": [], "cursor": seqs[4], "oldest_seq": seqs[2], "reset": True}
+async def test_poll_resets_a_cursor_that_fell_out_of_the_ring(small):
+    seqs = await publish(small, 5)
+    assert await small.poll(seqs[0]) == {"events": [], "cursor": seqs[4], "oldest_seq": seqs[2], "reset": True}
     # The oldest surviving event is still replayable from the frame before it.
-    assert [e["seq"] for e in (await log.poll(seqs[1]))["events"]] == seqs[2:]
-
-
-@aio
-async def test_poll_resets_a_cursor_ahead_of_the_ring(log):
-    seq = await log.publish("action.created", dict(ACTION_PAYLOAD))
-    assert await log.poll(seq + 99) == {"events": [], "cursor": seq, "oldest_seq": seq, "reset": True}
+    assert [e["seq"] for e in (await small.poll(seqs[1]))["events"]] == seqs[2:]
 
 
 @aio
 async def test_a_cursor_from_an_earlier_process_resets_even_after_this_one_caught_up(E, fake_ctx, clock):
-    """The restart case a per-process counter starting at 1 would get silently wrong.
-
-    The old process handed out three ids; the new one publishes more than three before the browser
-    reconnects. Resuming would replay the new process's events after "3" and drop its first three.
-    """
-    before = E.EventLog(fake_ctx.events, clock)
-    cursor = (await publish(before, 3))[-1]
-    clock.advance(5)                                        # the gateway restarts
-    after = E.EventLog(fake_ctx.events, clock)
-    await publish(after, 10)
+    """Resuming the old process's "3" would replay the new process's events after its third and drop the rest."""
+    after, cursor = await restarted(E, fake_ctx, clock)
     assert (await after.poll(cursor))["reset"] is True
 
 
@@ -384,29 +336,25 @@ async def test_a_cursor_from_an_earlier_process_resets_even_after_this_one_caugh
 async def test_poll_limit_is_clamped_to_the_ring(C, log):
     seqs = await publish(log, 3)
     assert [e["seq"] for e in (await log.poll(0, 2))["events"]] == seqs[:2]
-    assert [e["seq"] for e in (await log.poll(0, 0))["events"]] == seqs[:1]              # floor of 1
-    assert len((await log.poll(0, C.EVENTS_RING_SIZE * 10))["events"]) == 3              # ceiling
+    assert [e["seq"] for e in (await log.poll(0, 0))["events"]] == seqs[:1]  # floor of 1
+    assert len((await log.poll(0, C.EVENTS_RING_SIZE * 10))["events"]) == 3  # ceiling
 
 
-# --------------------------------------------------------------------------- #
-# the SSE stream (§2.12)
-# --------------------------------------------------------------------------- #
+# ---- the SSE stream (§2.12) ---- #
 
 
 @aio
 async def test_stream_sets_the_sse_headers_before_the_first_frame(C, E, log, request_factory):
-    request = request_factory.owner("GET", "/events")
     base = log.bounds()[1]
-    wire, task = start(log, request, fail_after=1)          # die on the greeting
+    wire, task = start(log, request_factory.owner("GET", "/events"), fail_after=1)  # die on the greeting
     response = await task
-
     assert wire.frames == [
         f'id: {base}\nevent: hello\ndata: {{"newest_seq":{base},"server_time":"2026-09-04T10:00:00Z",'
         f'"app_version":"{C.APP_VERSION}"}}\n\n'.encode("utf-8")
     ]
     for key, value in E.SSE_HEADERS.items():
         assert response.headers[key] == value
-    assert log._readers == set()                            # the dead reader is not left registered
+    assert log._readers == set()  # the dead reader is not left registered
 
 
 @aio
@@ -423,8 +371,8 @@ async def test_stream_greets_then_writes_live_frames_verbatim(log, request_facto
 async def test_stream_replays_from_the_cursor_then_goes_live(log, request_factory):
     seqs = await publish(log, 3)
     wire, task = start(log, request_factory.owner("GET", "/events"), cursor=seqs[0])
-    await wire.wait(2)                                      # the two after the cursor, no greeting
-    live = await log.publish("repo.updated", {"repo_id": "r_000000000001"})
+    await wire.wait(2)  # the two after the cursor, no greeting
+    live = await log.publish("repo.updated", {"repo_id": REPO})
     await wire.wait(3)
     await stop(task)
     assert wire.events() == ["action.updated", "action.updated", "repo.updated"]
@@ -436,8 +384,8 @@ async def test_stream_with_a_current_cursor_replays_nothing_and_waits(log, reque
     seq = await log.publish("action.created", dict(ACTION_PAYLOAD))
     wire, task = start(log, request_factory.owner("GET", "/events"), cursor=seq)
     await settle()
-    assert wire.frames == []                               # no greeting, no reset, no replay
-    live = await log.publish("repo.updated", {"repo_id": "r_000000000001"})
+    assert wire.frames == []  # no greeting, no reset, no replay
+    live = await log.publish("repo.updated", {"repo_id": REPO})
     frames = await wire.wait(1)
     await stop(task)
     assert frames[0].startswith(f"id: {live}\nevent: repo.updated".encode())
@@ -465,28 +413,21 @@ async def test_stream_ignores_a_malformed_last_event_id(log, request_factory):
 
 
 @aio
-async def test_stream_resets_a_cursor_that_fell_out_of_the_ring(E, fake_ctx, clock, request_factory):
-    log = E.EventLog(fake_ctx.events, clock, ring_size=3)
-    seqs = await publish(log, 5)
-    wire, task = start(log, request_factory.owner("GET", "/events"), cursor=seqs[0])
+async def test_stream_resets_a_cursor_that_fell_out_of_the_ring(small, request_factory):
+    seqs = await publish(small, 5)
+    wire, task = start(small, request_factory.owner("GET", "/events"), cursor=seqs[0])
     await wire.wait(1)
-    live = await log.publish("repo.updated", {"repo_id": "r_000000000001"})
+    live = await small.publish("repo.updated", {"repo_id": REPO})
     frames = await wire.wait(2)
     await stop(task)
-
-    assert frames[0] == f'id: {seqs[4]}\nevent: reset\ndata: {{"oldest_seq":{seqs[2]},"newest_seq":{seqs[4]}}}\n\n'.encode()
-    # The reset carries the newest id so the browser's own Last-Event-ID moves on, and the next live event
-    # follows normally.
+    assert frames[0] == reset_frame(seqs[4], seqs[2])
+    # The reset carries the newest id so the browser's Last-Event-ID moves on; the next live event follows.
     assert frames[1].startswith(f"id: {live}\nevent: repo.updated".encode())
 
 
 @aio
 async def test_stream_resets_a_cursor_from_an_earlier_process(E, fake_ctx, clock, request_factory):
-    before = E.EventLog(fake_ctx.events, clock)
-    cursor = (await publish(before, 3))[-1]
-    clock.advance(5)
-    after = E.EventLog(fake_ctx.events, clock)
-    await publish(after, 10)
+    after, cursor = await restarted(E, fake_ctx, clock)
     wire, task = start(after, request_factory.owner("GET", "/events"), cursor=cursor)
     await wire.wait(1)
     await stop(task)
@@ -494,24 +435,20 @@ async def test_stream_resets_a_cursor_from_an_earlier_process(E, fake_ctx, clock
 
 
 @aio
-async def test_a_reader_that_falls_off_the_ring_is_reset_and_never_blocks_the_publisher(
-    E, fake_ctx, clock, request_factory
-):
-    log = E.EventLog(fake_ctx.events, clock, ring_size=3)
-    wire, task = start(log, request_factory.owner("GET", "/events"))
-    await wire.wait(1)                                      # hello
-    wire.open.clear()                                       # the socket stops draining
-    first = await log.publish("action.created", dict(ACTION_PAYLOAD))
-    await settle()                                          # the reader is now stuck writing `first`
-    seqs = await publish(log, 5)                            # the publisher does not wait for it
+async def test_a_reader_that_falls_off_the_ring_is_reset_and_never_blocks_the_publisher(small, request_factory):
+    wire, task = start(small, request_factory.owner("GET", "/events"))
+    await wire.wait(1)  # hello
+    wire.open.clear()  # the socket stops draining
+    first = await small.publish("action.created", dict(ACTION_PAYLOAD))
+    await settle()  # the reader is now stuck writing `first`
+    seqs = await publish(small, 5)  # the publisher does not wait for it
     wire.open.set()
     frames = await wire.wait(3)
     await settle()
     await stop(task)
-
     assert wire.events() == ["hello", "action.created", "reset"]
     assert wire.ids()[1] == first
-    assert frames[2] == f'id: {seqs[-1]}\nevent: reset\ndata: {{"oldest_seq":{seqs[2]},"newest_seq":{seqs[-1]}}}\n\n'.encode()
+    assert frames[2] == reset_frame(seqs[-1], seqs[2])
 
 
 @aio
@@ -526,19 +463,18 @@ async def test_stream_heartbeats_while_idle(log, request_factory):
 @aio
 async def test_stream_keeps_streaming_after_a_heartbeat(log, request_factory):
     wire, task = start(log, request_factory.owner("GET", "/events"), heartbeat=0.01)
-    await wire.wait(2)                                      # hello + at least one ping
+    await wire.wait(2)  # hello + at least one ping
     await log.publish("action.created", dict(ACTION_PAYLOAD))
     await wire.wait(event="action.created")
     await stop(task)
-    created = wire.events().index("action.created")
-    assert wire.payload(created) == ACTION_PAYLOAD
+    assert wire.payload(wire.events().index("action.created")) == ACTION_PAYLOAD
 
 
 @aio
 async def test_stream_drops_its_reader_when_the_client_disappears(log, request_factory):
     wire, task = start(log, request_factory.owner("GET", "/events"), fail_after=2)
     await wire.wait(1)
-    await log.publish("action.created", dict(ACTION_PAYLOAD))   # write #2 → ConnectionResetError
+    await log.publish("action.created", dict(ACTION_PAYLOAD))  # write #2 → ConnectionResetError
     response = await task
     assert response.prepared
     assert log._readers == set()
@@ -546,8 +482,7 @@ async def test_stream_drops_its_reader_when_the_client_disappears(log, request_f
 
 @aio
 async def test_an_unexpected_error_after_the_headers_ends_the_stream_quietly(log, request_factory, caplog):
-    """No status is left to send once the headers are out, so the stream stops and the failure is logged;
-    an exception escaping into aiohttp would truncate the body with nothing the client could act on."""
+    """With the headers out there is no status left to send: the stream stops and logs, never raises into aiohttp."""
     caplog.set_level(logging.ERROR, logger="kirocrew.app.aidlc-studio")
     wire, task = start(log, request_factory.owner("GET", "/events"), fail_after=1, error=RuntimeError)
     response = await task
