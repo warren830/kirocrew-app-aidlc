@@ -58,3 +58,15 @@ class ThreadRecordingStore:
             return target(*args, **kwargs)
 
         return recorded
+
+
+def capture_run(monkeypatch: pytest.MonkeyPatch, installer: Any) -> tuple[Callable[..., Any], list[tuple]]:
+    """Replace ``installer.run`` with a recorder; returns the real ``run`` and the recorded calls to replay."""
+    original = installer.run
+    calls: list[tuple] = []
+
+    async def record_run(repo: Any, kind: str, *, plan_digest: str, transaction_id: str | None = None) -> None:
+        calls.append((repo, kind, plan_digest, transaction_id))
+
+    monkeypatch.setattr(installer, "run", record_run)
+    return original, calls
