@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import threading
 from typing import Any, Callable
 
 import pytest
@@ -36,3 +37,22 @@ def after(monkeypatch: pytest.MonkeyPatch, owner: Any, name: str, effect: Callab
             effect()
             return result
     monkeypatch.setattr(owner, name, wrapped)
+
+
+class ThreadRecordingStore:
+    """Delegates to the real ``Storage`` and records the thread every method call arrives on."""
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+        self.threads: list[str] = []
+
+    def __getattr__(self, name: str) -> Any:
+        target = getattr(self._inner, name)
+        if not callable(target):
+            return target
+
+        def recorded(*args: Any, **kwargs: Any) -> Any:
+            self.threads.append(threading.current_thread().name)
+            return target(*args, **kwargs)
+
+        return recorded
