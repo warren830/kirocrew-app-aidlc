@@ -345,7 +345,7 @@ def svc(studio, fake_ctx, fake_host, clock, ids, fake_git, R):
     consistency = studio.consistency.ConsistencyEngine()
     projection = studio.projection.Projection(reader, consistency, clock)
     activity = studio.activity.ActivityProjector(storage, clock)
-    events = studio.events.EventLog(storage, fake_ctx.events, clock)
+    events = studio.events.EventLog(fake_ctx.events, clock)
     settings = studio.settings.SettingsService(storage, host, clock)
     settings.load()
     git = studio.git_observer.GitObserver(fake_git, clock)

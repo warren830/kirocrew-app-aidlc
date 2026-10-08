@@ -196,7 +196,7 @@ def world(studio, fake_ctx, fake_host, clock, ids, fake_bun, repo_builder, repo_
     consistency = S.consistency.ConsistencyEngine()
     projection = S.projection.Projection(reader, consistency, clock)
     activity = S.activity.ActivityProjector(store, clock)
-    events = S.events.EventLog(store, fake_ctx.events, clock)
+    events = S.events.EventLog(fake_ctx.events, clock)
     host = S.sessions.HostBridge(clock, logging.getLogger("test.actions"))
     settings = S.settings.SettingsService(store, host, clock)
     settings.load()

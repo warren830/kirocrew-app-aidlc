@@ -22,6 +22,7 @@ from typing import Any, Mapping, Protocol
 from aiohttp import web
 
 from . import constants as C
+from .wire import WireRecord
 
 logger = logging.getLogger("kirocrew.app.aidlc-studio")
 
@@ -62,16 +63,13 @@ class EventBus(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
-class EventRecord:
+class EventRecord(WireRecord):
     """One published event; ``seq`` is the SSE ``id`` a client resumes from."""
 
     seq: int
     at: str
     type: str
     payload: dict = field(default_factory=dict)
-
-    def to_json(self) -> dict[str, Any]:
-        return {"seq": self.seq, "at": self.at, "type": self.type, "payload": self.payload}
 
 
 def host_event_for(event_type: str) -> str | None:
@@ -97,8 +95,7 @@ def _parse_cursor(raw: str | None) -> int | None:
 class EventLog:
     """Publishes Studio events and serves ``GET /events`` (§2.12) and ``GET /events/poll`` (§2.5)."""
 
-    def __init__(self, storage: Any, ctx_events: EventBus | None, clock: Any, *, ring_size: int | None = None) -> None:
-        # ``storage`` is unused since the ring moved into memory; the parameter keeps every constructor valid.
+    def __init__(self, ctx_events: EventBus | None, clock: Any, *, ring_size: int | None = None) -> None:
         self._ctx_events = ctx_events
         self._clock = clock
         self._base = self._seq = int(clock.monotonic() * 1_000_000)

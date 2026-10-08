@@ -57,7 +57,7 @@ def deps(studio, fake_ctx, fake_host, clock, ids, fake_bun, denied_log):
     )
     store.open()
     activity = studio.activity.ActivityProjector(store, clock)
-    events = studio.events.EventLog(store, fake_ctx.events, clock)
+    events = studio.events.EventLog(fake_ctx.events, clock)
     settings = studio.settings.SettingsService(store, fake_host, clock)
     host = studio.sessions.HostBridge(clock, logging.getLogger("test.plan"))
     host.attach(fake_host)

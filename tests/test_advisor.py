@@ -166,7 +166,7 @@ def wiring(studio, A, K, store, fake_ctx, fake_host, clock, ids, gate_repo, fake
     consistency = studio.consistency.ConsistencyEngine()
     projection = studio.projection.Projection(reader, consistency, clock)
     activity = studio.activity.ActivityProjector(store, clock)
-    events = studio.events.EventLog(store, fake_ctx.events, clock)
+    events = studio.events.EventLog(fake_ctx.events, clock)
     host = studio.sessions.HostBridge(clock, logging.getLogger("test.advisor"))
     fake_host.subagents = FakeSubagents(fake_ctx.spawn)
     host.attach(fake_host)

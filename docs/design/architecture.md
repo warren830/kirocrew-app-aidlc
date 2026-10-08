@@ -198,11 +198,11 @@ Wire text is a Studio protocol constant, case-sensitive, shown verbatim in the c
 | Ask AI to prepare commit | `Please prepare a commit for the current AI-DLC changes. Do not push.` |
 
 `docs/design/wire-text.json` is the pinned source these strings are checked against, in both the backend
-(`constants.WIRE_TEXT`) and the UI (`ui/src/lib/wire.ts`). Picking the active intent is **not** a wire text: it is
+(the `constants.WIRE_*` strings) and the UI (`ui/src/lib/wire.ts`). Picking the active intent is **not** a wire text: it is
 the admin-lane cursor switch (§3.3), because sending `/aidlc intent <name>` as a prompt would mint a human turn.
 
 Casing is load-bearing: the gate label is `Request Changes` while the summary-confirmation label is
-`Request changes` (`05-…` addendum A7/A8, `06-…` addendum). Both live in `constants.WIRE_TEXT` with a test that
+`Request changes` (`05-…` addendum A7/A8, `06-…` addendum). Both are `constants.WIRE_*` strings with a test that
 pins every string.
 
 Slack in v1 is **notification plus deep link only**. KiroCrew owns Slack callbacks and an app cannot register its

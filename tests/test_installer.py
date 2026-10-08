@@ -326,7 +326,7 @@ def make_harness(studio, store, clock, ids, fake_bun, fake_ctx):
         payload_dir, manifest_path = payload
         manifest = I.PayloadManifest.load(manifest_path)
         activity = studio.activity.ActivityProjector(store, clock)
-        events = studio.events.EventLog(store, None, clock)
+        events = studio.events.EventLog(None, clock)
         registry = studio.repo_registry.RepoRegistry(store, None, clock, ids)
         reader = studio.aidlc_reader.AidlcReader(clock)
         engine = studio.engine.EngineRunner(bun_path=fake_bun, clock=clock, activity=activity)

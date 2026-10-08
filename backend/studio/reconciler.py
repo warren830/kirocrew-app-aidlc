@@ -63,7 +63,6 @@ __all__ = [
     "PRESENCE_COMPARED_FIELDS",
     "REPO_SCAN_MIN_INTERVAL_SECS",
     "RECONCILABLE_STATUS",
-    "SCAN_TICK_BUDGET_SECS",
     "STARTUP_STATUS",
     "Reconciler",
     "Resolution",
@@ -78,10 +77,6 @@ _attr = C.attr
 # --------------------------------------------------------------------------- #
 # tuning constants
 # --------------------------------------------------------------------------- #
-
-#: Aliased from ``constants.py``, which owns it (§1.1): this module must not become a second source of
-#: truth for a number that decides how long a tick may spend walking disks.
-SCAN_TICK_BUDGET_SECS: float = C.SCAN_TICK_BUDGET_SECS
 
 #: A repository with no open action is not re-walked more often than this (§1.13 tick step 1). One with
 #: an open action is always re-walked: its evidence is what a human is waiting on.
@@ -556,7 +551,7 @@ class Reconciler:
         scanned = 0
         stopped_at: int | None = None
         for index, repo in enumerate(priority + rest):
-            if clock.monotonic() - tick_started >= SCAN_TICK_BUDGET_SECS:
+            if clock.monotonic() - tick_started >= C.SCAN_TICK_BUDGET_SECS:
                 stopped_at = index - len(priority)
                 break
             last = self._scanned_at.get(repo.repo_id, float("-inf"))

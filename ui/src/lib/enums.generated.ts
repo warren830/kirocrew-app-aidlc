@@ -53,7 +53,6 @@ export const ADVISOR_CARDLESS_KINDS: readonly AdvisorCardlessKind[] = ["plan_dra
 export const LIVE_ACTION_STATUS: readonly ActionStatus[] = ["Queued", "Delivering", "Delivered", "ReconciliationRequired", "NotDelivered", "Failed"]
 export const TERMINAL_ACTION_STATUS: readonly ActionStatus[] = ["StateChanged", "ResolvedNoTransition", "Cancelled"]
 
-/** Machine-lane features are unavailable in v1; the UI shows this reason code. */
 export const ACCEPT_AS_IS_MIN_ATTEMPT = 4
 export const DEEP_LINK_BASE = "/apps/aidlc-studio"
 

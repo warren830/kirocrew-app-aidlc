@@ -187,7 +187,7 @@ class Services:
         consistency = ConsistencyEngine()
         projection = Projection(reader, consistency, clock)
         activity = ActivityProjector(storage, clock)
-        events = EventLog(storage, getattr(ctx, "events", None), clock)
+        events = EventLog(getattr(ctx, "events", None), clock)
         engine = EngineRunner(bun_path=bun, clock=clock, activity=activity)
         scheduler = RepoScheduler(storage, host, settings, clock, activity, busy_reasons=busy_reasons)
         sessions = SessionBinder(storage, host, projection, clock, activity)

@@ -90,7 +90,7 @@ def C(studio):
 @pytest.fixture
 def log(E, fake_ctx, clock):
     """The real EventLog wired to the recording ``ctx.events`` bus."""
-    return E.EventLog(None, fake_ctx.events, clock)
+    return E.EventLog(fake_ctx.events, clock)
 
 
 async def publish(log: Any, count: int, type: str = "action.updated") -> list[int]:
@@ -239,7 +239,7 @@ async def test_publish_copies_the_payload_so_a_caller_can_reuse_its_dict(log):
 
 @aio
 async def test_the_ring_keeps_only_the_newest_events(E, fake_ctx, clock):
-    log = E.EventLog(None, fake_ctx.events, clock, ring_size=3)
+    log = E.EventLog(fake_ctx.events, clock, ring_size=3)
     seqs = await publish(log, 5)
     assert [r.seq for r in await log.since(0)] == seqs[2:]
     assert log.bounds() == (seqs[2], seqs[4])
@@ -278,7 +278,7 @@ async def test_studio_internal_events_are_not_mirrored(log, fake_ctx):
 async def test_a_denied_host_event_name_is_swallowed_and_logged_once(E, clock, caplog):
     """An `app.json` that does not declare the event must not fail the user's state change."""
     caplog.set_level(logging.WARNING, logger="kirocrew.app.aidlc-studio")
-    log = E.EventLog(None, FakeEventBus([]), clock)
+    log = E.EventLog(FakeEventBus([]), clock)
     seqs = await publish(log, 3)
     assert [r.seq for r in await log.since(0)] == seqs          # Studio's own ring unaffected
     assert len([r for r in caplog.records if "host event bus refused" in r.getMessage()]) == 1
@@ -292,7 +292,7 @@ async def test_a_broken_host_bus_is_swallowed_and_logged_once(E, clock, caplog):
         def publish(self, event_type: str, data: dict | None = None) -> None:
             raise RuntimeError("broadcast socket is gone")
 
-    log = E.EventLog(None, Exploding(), clock)
+    log = E.EventLog(Exploding(), clock)
     assert len(await publish(log, 2, "repo.updated")) == 2
     assert len([r for r in caplog.records if "host event bus failed" in r.getMessage()]) == 1
 
@@ -300,7 +300,7 @@ async def test_a_broken_host_bus_is_swallowed_and_logged_once(E, clock, caplog):
 @aio
 async def test_no_host_bus_at_all_is_normal(E, clock):
     """``ctx.events`` is ``None`` when the events permission is absent — publishing still works."""
-    log = E.EventLog(None, None, clock)
+    log = E.EventLog(None, clock)
     assert await log.publish("action.created", dict(ACTION_PAYLOAD)) == log.bounds()[1]
 
 
@@ -341,7 +341,7 @@ async def test_poll_returns_the_events_after_the_cursor(log):
 
 @aio
 async def test_cursor_zero_means_from_the_start_of_this_process(E, fake_ctx, clock):
-    log = E.EventLog(None, fake_ctx.events, clock, ring_size=3)
+    log = E.EventLog(fake_ctx.events, clock, ring_size=3)
     assert await log.poll(0) == {"events": [], "cursor": 0, "oldest_seq": log.bounds()[0], "reset": False}
     seqs = await publish(log, 3)
     assert [e["seq"] for e in (await log.poll(0))["events"]] == seqs
@@ -352,7 +352,7 @@ async def test_cursor_zero_means_from_the_start_of_this_process(E, fake_ctx, clo
 
 @aio
 async def test_poll_resets_a_cursor_that_fell_out_of_the_ring(E, fake_ctx, clock):
-    log = E.EventLog(None, fake_ctx.events, clock, ring_size=3)
+    log = E.EventLog(fake_ctx.events, clock, ring_size=3)
     seqs = await publish(log, 5)
     assert await log.poll(seqs[0]) == {"events": [], "cursor": seqs[4], "oldest_seq": seqs[2], "reset": True}
     # The oldest surviving event is still replayable from the frame before it.
@@ -372,10 +372,10 @@ async def test_a_cursor_from_an_earlier_process_resets_even_after_this_one_caugh
     The old process handed out three ids; the new one publishes more than three before the browser
     reconnects. Resuming would replay the new process's events after "3" and drop its first three.
     """
-    before = E.EventLog(None, fake_ctx.events, clock)
+    before = E.EventLog(fake_ctx.events, clock)
     cursor = (await publish(before, 3))[-1]
     clock.advance(5)                                        # the gateway restarts
-    after = E.EventLog(None, fake_ctx.events, clock)
+    after = E.EventLog(fake_ctx.events, clock)
     await publish(after, 10)
     assert (await after.poll(cursor))["reset"] is True
 
@@ -466,7 +466,7 @@ async def test_stream_ignores_a_malformed_last_event_id(log, request_factory):
 
 @aio
 async def test_stream_resets_a_cursor_that_fell_out_of_the_ring(E, fake_ctx, clock, request_factory):
-    log = E.EventLog(None, fake_ctx.events, clock, ring_size=3)
+    log = E.EventLog(fake_ctx.events, clock, ring_size=3)
     seqs = await publish(log, 5)
     wire, task = start(log, request_factory.owner("GET", "/events"), cursor=seqs[0])
     await wire.wait(1)
@@ -482,10 +482,10 @@ async def test_stream_resets_a_cursor_that_fell_out_of_the_ring(E, fake_ctx, clo
 
 @aio
 async def test_stream_resets_a_cursor_from_an_earlier_process(E, fake_ctx, clock, request_factory):
-    before = E.EventLog(None, fake_ctx.events, clock)
+    before = E.EventLog(fake_ctx.events, clock)
     cursor = (await publish(before, 3))[-1]
     clock.advance(5)
-    after = E.EventLog(None, fake_ctx.events, clock)
+    after = E.EventLog(fake_ctx.events, clock)
     await publish(after, 10)
     wire, task = start(after, request_factory.owner("GET", "/events"), cursor=cursor)
     await wire.wait(1)
@@ -497,7 +497,7 @@ async def test_stream_resets_a_cursor_from_an_earlier_process(E, fake_ctx, clock
 async def test_a_reader_that_falls_off_the_ring_is_reset_and_never_blocks_the_publisher(
     E, fake_ctx, clock, request_factory
 ):
-    log = E.EventLog(None, fake_ctx.events, clock, ring_size=3)
+    log = E.EventLog(fake_ctx.events, clock, ring_size=3)
     wire, task = start(log, request_factory.owner("GET", "/events"))
     await wire.wait(1)                                      # hello
     wire.open.clear()                                       # the socket stops draining
