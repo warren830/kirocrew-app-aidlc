@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -468,6 +469,13 @@ def test_binding_records_the_slot_and_returns_it(api, repo, slot):
     assert status == 200 and body["ok"] is True
     assert (body["binding"]["slot_key"], body["slot"]["key"], body["slot"]["agent"]) == (slot, slot, "aidlc")
 
+
+def test_a_linked_session_key_wins_when_the_hosts_own_helper_is_not_loaded(api, fake_host, repo, slot, monkeypatch):
+    """Without ``chat_utils`` in ``sys.modules`` Studio applies the host's rule itself: a linked channel key wins."""
+    monkeypatch.delitem(sys.modules, "kiro_crew.dashboard.chat_utils", raising=False)
+    fake_host.get_slot(slot).linked_session_key = "slack:1725444000.1234"
+    status, body = bind(api, repo, slot)
+    assert status == 200 and body["slot"]["session_key"] == "slack:1725444000.1234"
 
 def test_binding_refuses_a_slot_pointed_at_another_project(sv, api, fake_host, repo, tmp_path):
     (tmp_path / "elsewhere").mkdir()
