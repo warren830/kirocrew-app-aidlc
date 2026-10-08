@@ -19,11 +19,7 @@ MODEL = "claude-opus-4.8"
 USER_MODEL = "claude-opus-5"
 OWNED_MODELS = {MODEL: {"output_config": {"effort": "xhigh"}}}
 USER_MODELS = {USER_MODEL: {"output_config": {"effort": "high"}}}
-SPEC = {
-    "strategy": "json-managed-keys",
-    "managedKeys": ["chat.defaultAgent", MAP],
-    "managedMapEntries": {MAP: [MODEL]},
-}
+SPEC = {"strategy": "json-managed-keys", "managedKeys": ["chat.defaultAgent", MAP], "managedMapEntries": {MAP: [MODEL]}}
 
 
 def bundle(root, *, revision="old", legacy=False, version="2.7.1", defaults=None, agent="aidlc"):
@@ -93,22 +89,41 @@ def case(studio, store, make_harness, tmp_path):
         assert result.status == "committed", result.error
         return h, h.installer.current_receipt(repo.repo_id)
 
-    return SimpleNamespace(
-        root=root, repo=repo, store=store, payload=payload, write_cli=write_cli, install=install,
-    )
+    return SimpleNamespace(root=root, repo=repo, store=store, payload=payload, write_cli=write_cli, install=install)
 
 
 def cli_entry(plan):
     return next(entry for entry in plan.entries if entry.path == CLI)
 
 
+def mixed(**extra):
+    """A live CLI file holding the owned model, a user model and the owned agent (a fresh dict each time)."""
+    return {"chat.defaultAgent": "aidlc", MAP: {**OWNED_MODELS, **USER_MODELS}, **extra}
+
+
+def conflict_refused(studio, case, kind, **payload):
+    """A fresh payload previews the CLI entry as ``merge_conflict`` and ``begin`` refuses, the repository untouched."""
+    before = tree(case.root)
+    h = case.payload(**payload)
+    plan = h.installer.preview(case.repo, kind)
+    assert cli_entry(plan).action == "merge_conflict"
+    with pytest.raises(studio.errors.StudioError) as exc:
+        run(h.installer.begin(case.repo, kind, plan_digest=plan.digest()))
+    assert tree(case.root) == before
+    return h, exc.value
+
+
+def uninstalled(h, repo):
+    plan = h.installer.preview(repo, "uninstall")
+    assert not plan.blocking
+    result = run(h.installer.uninstall(repo, confirm_digest=plan.digest()))
+    assert result.status == "committed", result.error
+
+
 @pytest.mark.parametrize("legacy", [True, False])
 def test_refresh_preserves_extra_model_bytes_and_records_only_owned_entries(case, legacy):
     _, old = case.install(legacy=legacy)
-    before = case.write_cli({
-        "chat.defaultAgent": "aidlc", MAP: {**OWNED_MODELS, **USER_MODELS},
-        "user.setting": "preserve \u4e2d\u6587 and escapes",
-    })
+    before = case.write_cli(mixed(**{"user.setting": "preserve \u4e2d\u6587 and escapes"}))
     snapshot = tree(case.root)
     up = case.payload(revision="fixed")
     plan = up.installer.preview(case.repo, "upgrade")
@@ -118,10 +133,9 @@ def test_refresh_preserves_extra_model_bytes_and_records_only_owned_entries(case
     result = run(up.installer.run(case.repo, "upgrade", plan_digest=plan.digest()))
     assert result.status == "committed", result.error
     assert (case.root / CLI).read_bytes() == before
-    after = tree(case.root)
-    assert {p: h for p, h in after.items() if p != ".kiro/tools/aidlc-progress.ts"} == {
-        p: h for p, h in snapshot.items() if p != ".kiro/tools/aidlc-progress.ts"
-    }
+    progress = ".kiro/tools/aidlc-progress.ts"
+    assert {p: h for p, h in tree(case.root).items() if p != progress} == {
+        p: h for p, h in snapshot.items() if p != progress}
     receipt = up.installer.current_receipt(case.repo.repo_id)
     meta = receipt.by_path()[CLI].uninstall
     assert meta["spec"]["managedMapEntries"] == {MAP: [MODEL]}
@@ -140,10 +154,8 @@ def test_fresh_install_preserves_unrelated_literal_model_entries(case):
     assert cli_entry(plan).action == "merge_update"
     result = do(h, case.repo, "install")
     assert result.status == "committed", result.error
-    current = json.loads((case.root / CLI).read_bytes())
-    assert current == {
-        MAP: {**unknown, **OWNED_MODELS}, "user.setting": "untouched", "chat.defaultAgent": "aidlc",
-    }
+    assert json.loads((case.root / CLI).read_bytes()) == {
+        MAP: {**unknown, **OWNED_MODELS}, "user.setting": "untouched", "chat.defaultAgent": "aidlc"}
     meta = h.installer.current_receipt(case.repo.repo_id).by_path()[CLI].uninstall
     assert meta["spec"]["managedMapEntries"] == {MAP: [MODEL]}
     assert meta["map_entries"] == {MAP: [MODEL]}
@@ -157,14 +169,8 @@ def test_changed_owned_preferences_still_conflict(case, studio, legacy, changed)
     if changed == "model":
         models[MODEL] = {"output_config": {"effort": "low"}}
     case.write_cli({"chat.defaultAgent": "other" if changed == "agent" else "aidlc", MAP: models})
-    before = tree(case.root)
-    up = case.payload(revision="fixed")
-    plan = up.installer.preview(case.repo, "upgrade")
-    assert cli_entry(plan).action == "merge_conflict"
-    with pytest.raises(studio.errors.StudioError) as exc:
-        run(up.installer.begin(case.repo, "upgrade", plan_digest=plan.digest()))
-    assert exc.value.code == "install_conflict"
-    assert tree(case.root) == before
+    up, error = conflict_refused(studio, case, "upgrade", revision="fixed")
+    assert error.code == "install_conflict"
     assert up.installer.current_receipt(case.repo.repo_id) == receipt
 
 
@@ -173,29 +179,18 @@ def test_legacy_entry_derivation_requires_exact_old_fragment_digest(case, studio
     case.install(legacy=True)
     desired = {MODEL: {"output_config": {"effort": "medium"}}}
     case.write_cli({"chat.defaultAgent": "aidlc", MAP: desired if live_matches_new else OWNED_MODELS})
-    before = tree(case.root)
-    up = case.payload(revision="fixed", defaults=desired)
-    plan = up.installer.preview(case.repo, "upgrade")
-    assert cli_entry(plan).action == "merge_conflict"
-    with pytest.raises(studio.errors.StudioError):
-        run(up.installer.begin(case.repo, "upgrade", plan_digest=plan.digest()))
-    assert tree(case.root) == before
+    conflict_refused(studio, case, "upgrade", revision="fixed", defaults=desired)
 
 
 @pytest.mark.parametrize("legacy", [True, False])
 @pytest.mark.parametrize("preexisting", [False, True])
 def test_uninstall_preserves_extras_and_only_removes_introduced_models(case, legacy, preexisting):
     case.install(legacy=legacy, preexisting=preexisting)
-    case.write_cli({"chat.defaultAgent": "aidlc", MAP: {**OWNED_MODELS, **USER_MODELS}, "user": 42})
-    up = case.payload(revision="fixed")
-    result = do(up, case.repo, "upgrade")
+    case.write_cli(mixed(user=42))
+    result = do(case.payload(revision="fixed"), case.repo, "upgrade")
     assert result.status == "committed", result.error
     # Uninstall must use the committed entry keys even if a later bundle ships different models.
-    later = case.payload(revision="future", version="2.8.0", defaults=USER_MODELS)
-    plan = later.installer.preview(case.repo, "uninstall")
-    assert not plan.blocking
-    result = run(later.installer.uninstall(case.repo, confirm_digest=plan.digest()))
-    assert result.status == "committed", result.error
+    uninstalled(case.payload(revision="future", version="2.8.0", defaults=USER_MODELS), case.repo)
     expected = {MAP: {**OWNED_MODELS, **USER_MODELS}, "chat.defaultAgent": "aidlc", "user": 42}
     if not preexisting:
         expected = {MAP: USER_MODELS, "user": 42}
@@ -204,11 +199,9 @@ def test_uninstall_preserves_extras_and_only_removes_introduced_models(case, leg
 
 def test_failed_upgrade_restores_whole_file_and_receipt(case):
     _, receipt = case.install()
-    before = case.write_cli({"chat.defaultAgent": "aidlc", MAP: {**OWNED_MODELS, **USER_MODELS}})
+    before = case.write_cli(mixed())
     snapshot = tree(case.root)
-    up = case.payload(
-        revision="fixed", version="2.8.0", defaults={MODEL: {"output_config": {"effort": "medium"}}},
-    )
+    up = case.payload(revision="fixed", version="2.8.0", defaults={MODEL: {"output_config": {"effort": "medium"}}})
     up.fault.at("after:merge_fragments")
     result = do(up, case.repo, "upgrade")
     assert result.status == "rolled_back", result.error
@@ -220,7 +213,7 @@ def test_failed_upgrade_restores_whole_file_and_receipt(case):
 
 def test_drift_uses_receipted_entry_keys_when_bundle_changes(case):
     h, receipt = case.install()
-    case.write_cli({"chat.defaultAgent": "aidlc", MAP: {**OWNED_MODELS, **USER_MODELS}})
+    case.write_cli(mixed())
     later = case.payload(revision="future", defaults=USER_MODELS)
     assert not h.installer.drift(case.repo, receipt)
     assert not later.installer.drift(case.repo, receipt)
@@ -228,23 +221,15 @@ def test_drift_uses_receipted_entry_keys_when_bundle_changes(case):
 
 def test_new_payload_model_keys_cannot_hide_drift_in_previous_owned_model(case, studio):
     case.install()
-    case.write_cli({
-        "chat.defaultAgent": "aidlc",
-        MAP: {MODEL: {"output_config": {"effort": "user-modified"}}, **USER_MODELS},
-    })
-    before = tree(case.root)
-    up = case.payload(revision="future", defaults=USER_MODELS)
-    plan = up.installer.preview(case.repo, "upgrade")
-    assert cli_entry(plan).action == "merge_conflict"
-    with pytest.raises(studio.errors.StudioError):
-        run(up.installer.begin(case.repo, "upgrade", plan_digest=plan.digest()))
-    assert tree(case.root) == before
+    case.write_cli({"chat.defaultAgent": "aidlc", MAP: {MODEL: {"output_config": {"effort": "user-modified"}},
+                                                         **USER_MODELS}})
+    conflict_refused(studio, case, "upgrade", revision="future", defaults=USER_MODELS)
 
 
 @pytest.mark.parametrize("changed", ["model", "agent", "other_model"])
 def test_receipt_commit_rechecks_owned_preferences_and_preserves_user_edits(case, changed):
     _, receipt = case.install(legacy=True)
-    case.write_cli({"chat.defaultAgent": "aidlc", MAP: {**OWNED_MODELS, **USER_MODELS}})
+    case.write_cli(mixed())
     up = case.payload(revision="fixed")
     final_cli = []
 
@@ -270,12 +255,8 @@ def test_receipt_commit_rechecks_owned_preferences_and_preserves_user_edits(case
 
 def test_proven_legacy_uninstall_preserves_other_models_without_refresh(case):
     case.install(legacy=True)
-    case.write_cli({"chat.defaultAgent": "aidlc", MAP: {**OWNED_MODELS, **USER_MODELS}})
-    up = case.payload(revision="fixed")
-    plan = up.installer.preview(case.repo, "uninstall")
-    assert not plan.blocking
-    result = run(up.installer.uninstall(case.repo, confirm_digest=plan.digest()))
-    assert result.status == "committed", result.error
+    case.write_cli(mixed())
+    uninstalled(case.payload(revision="fixed"), case.repo)
     assert json.loads((case.root / CLI).read_bytes()) == {MAP: USER_MODELS}
 
 
@@ -284,15 +265,11 @@ def test_legacy_receipt_without_introduction_evidence_cannot_delete_preferences(
     rows = [rf.to_json() for rf in receipt.files]
     next(rf for rf in rows if rf["path"] == CLI).pop("uninstall")
     case.store.update("install_receipts", receipt.receipt_id, {"files_json": rows})
-    before = case.write_cli({"chat.defaultAgent": "aidlc", MAP: {**OWNED_MODELS, **USER_MODELS}})
+    before = case.write_cli(mixed())
     up = case.payload(revision="fixed")
     assert do(up, case.repo, "upgrade").status == "committed"
-    meta = up.installer.current_receipt(case.repo.repo_id).by_path()[CLI].uninstall
-    assert meta["map_entries"] == {MAP: []}
-    plan = up.installer.preview(case.repo, "uninstall")
-    assert not plan.blocking
-    result = run(up.installer.uninstall(case.repo, confirm_digest=plan.digest()))
-    assert result.status == "committed", result.error
+    assert up.installer.current_receipt(case.repo.repo_id).by_path()[CLI].uninstall["map_entries"] == {MAP: []}
+    uninstalled(up, case.repo)
     assert (case.root / CLI).read_bytes() == before
 
 
@@ -304,36 +281,28 @@ def test_nested_map_spelling_keeps_model_ids_literal(case):
     current = json.loads((case.root / CLI).read_bytes())
     assert MAP not in current
     assert current["chat"]["modelDefaults"] == {**USER_MODELS, **OWNED_MODELS}
-    plan = h.installer.preview(case.repo, "uninstall")
-    assert not plan.blocking
-    assert run(h.installer.uninstall(case.repo, confirm_digest=plan.digest())).status == "committed"
-    assert json.loads((case.root / CLI).read_bytes()) == {
-        "chat": {"modelDefaults": USER_MODELS}, "user": "keep",
-    }
+    uninstalled(h, case.repo)
+    assert json.loads((case.root / CLI).read_bytes()) == {"chat": {"modelDefaults": USER_MODELS}, "user": "keep"}
 
 
 def test_version_rollback_uses_receipt_model_keys_and_preserves_user_models(case, studio):
     _, target = case.install()
-    case.write_cli({"chat.defaultAgent": "aidlc", MAP: {**OWNED_MODELS, **USER_MODELS}})
-    up = case.payload(
-        revision="fixed", version="2.8.0", defaults={MODEL: {"output_config": {"effort": "medium"}}},
-    )
+    case.write_cli(mixed())
+    up = case.payload(revision="fixed", version="2.8.0", defaults={MODEL: {"output_config": {"effort": "medium"}}})
     assert do(up, case.repo, "upgrade").status == "committed"
     repo = reload_repo(studio, case.store)
     plan = up.installer.preview(repo, "rollback")
     assert not plan.blocking, [(e.path, e.reason) for e in plan.blockers]
     result = run(up.installer.rollback(repo, confirm_digest=plan.digest()))
     assert result.status == "committed", result.error
-    assert json.loads((case.root / CLI).read_bytes()) == {
-        "chat.defaultAgent": "aidlc", MAP: {**OWNED_MODELS, **USER_MODELS},
-    }
+    assert json.loads((case.root / CLI).read_bytes()) == mixed()
     assert up.installer.current_receipt(repo.repo_id).engine_version == target.engine_version
 
 
 @pytest.fixture
 def model_ownership_shift(case, studio):
     _, target = case.install()
-    case.write_cli({"chat.defaultAgent": "aidlc", MAP: {**OWNED_MODELS, **USER_MODELS}})
+    case.write_cli(mixed())
     up = case.payload(revision="model-scope-changed", version="2.8.0", defaults=USER_MODELS)
     assert cli_entry(up.installer.preview(case.repo, "upgrade")).action == "merge_identical"
     assert do(up, case.repo, "upgrade").status == "committed"
@@ -343,13 +312,20 @@ def model_ownership_shift(case, studio):
     return SimpleNamespace(case=case, up=up, repo=repo, target=target, current=current)
 
 
+def rollback_refused(studio, scene, plan, cli_bytes, before):
+    """``rollback`` refuses with ``install_conflict``, leaving the bytes, tree, receipt and leases as they were."""
+    with pytest.raises(studio.errors.StudioError) as exc:
+        run(scene.up.installer.rollback(scene.repo, confirm_digest=plan.digest()))
+    assert exc.value.code == "install_conflict"
+    assert (scene.case.root / CLI).read_bytes() == cli_bytes
+    assert tree(scene.case.root) == before
+    assert scene.up.installer.current_receipt(scene.repo.repo_id) == scene.current
+    assert scene.up.scheduler.live() == []
+
+
 @pytest.mark.parametrize("spelling", ["flat", "nested"])
-@pytest.mark.parametrize("edited", [
-    {"output_config": {"effort": "user-edited"}}, None, ["user preference"],
-])
-def test_version_rollback_preserves_edits_to_model_no_longer_owned(
-    model_ownership_shift, studio, spelling, edited,
-):
+@pytest.mark.parametrize("edited", [{"output_config": {"effort": "user-edited"}}, None, ["user preference"]])
+def test_version_rollback_preserves_edits_to_model_no_longer_owned(model_ownership_shift, studio, spelling, edited):
     scene = model_ownership_shift
     models = {MODEL: edited, **USER_MODELS}
     content = {"chat.defaultAgent": "aidlc", "user.setting": "latest"}
@@ -362,20 +338,12 @@ def test_version_rollback_preserves_edits_to_model_no_longer_owned(
     plan = scene.up.installer.preview(scene.repo, "rollback")
     assert cli_entry(plan).action == "rollback_conflict"
     assert cli_entry(plan).blocking and plan.blocking
-    with pytest.raises(studio.errors.StudioError) as exc:
-        run(scene.up.installer.rollback(scene.repo, confirm_digest=plan.digest()))
-    assert exc.value.code == "install_conflict"
-    assert (scene.case.root / CLI).read_bytes() == cli_bytes
-    assert tree(scene.case.root) == before
-    assert scene.up.installer.current_receipt(scene.repo.repo_id) == scene.current
+    rollback_refused(studio, scene, plan, cli_bytes, before)
     assert scene.up.installer.transactions(scene.repo.repo_id) == transactions
-    assert scene.up.scheduler.live() == []
 
 
 @pytest.mark.parametrize("old_entry", ["absent", "unchanged"])
-def test_version_rollback_restores_unowned_model_only_when_absent_or_unchanged(
-    model_ownership_shift, old_entry,
-):
+def test_version_rollback_restores_unowned_model_only_when_absent_or_unchanged(model_ownership_shift, old_entry):
     scene = model_ownership_shift
     extras = {**USER_MODELS, "custom.local-1.2": {"effort": "latest-user-setting"}}
     models = {**extras, **OWNED_MODELS} if old_entry == "unchanged" else extras
@@ -384,9 +352,8 @@ def test_version_rollback_restores_unowned_model_only_when_absent_or_unchanged(
     assert not plan.blocking, [(entry.path, entry.reason) for entry in plan.blockers]
     result = run(scene.up.installer.rollback(scene.repo, confirm_digest=plan.digest()))
     assert result.status == "committed", result.error
-    assert json.loads((scene.case.root / CLI).read_bytes()) == {
-        "chat.defaultAgent": "aidlc", MAP: {**OWNED_MODELS, **extras},
-    }
+    assert json.loads((scene.case.root / CLI).read_bytes()) == {"chat.defaultAgent": "aidlc",
+                                                                MAP: {**OWNED_MODELS, **extras}}
     restored = scene.up.installer.current_receipt(scene.repo.repo_id)
     assert restored.engine_version == scene.target.engine_version
     assert restored.by_path()[CLI].uninstall["spec"]["managedMapEntries"] == {MAP: [MODEL]}
@@ -397,47 +364,26 @@ def test_version_rollback_rejects_model_edit_after_preview(model_ownership_shift
     scene = model_ownership_shift
     plan = scene.up.installer.preview(scene.repo, "rollback")
     assert not plan.blocking
-    cli_bytes = scene.case.write_cli({
-        "chat.defaultAgent": "aidlc",
-        MAP: {MODEL: {"output_config": {"effort": "edited-after-preview"}}, **USER_MODELS},
-    })
-    before = tree(scene.case.root)
-    with pytest.raises(studio.errors.StudioError) as exc:
-        run(scene.up.installer.rollback(scene.repo, confirm_digest=plan.digest()))
-    assert exc.value.code == "install_conflict"
-    assert (scene.case.root / CLI).read_bytes() == cli_bytes
-    assert tree(scene.case.root) == before
-    assert scene.up.installer.current_receipt(scene.repo.repo_id) == scene.current
-    assert scene.up.scheduler.live() == []
+    cli_bytes = scene.case.write_cli({"chat.defaultAgent": "aidlc", MAP: {
+        MODEL: {"output_config": {"effort": "edited-after-preview"}}, **USER_MODELS}})
+    rollback_refused(studio, scene, plan, cli_bytes, tree(scene.case.root))
 
 
 @pytest.mark.parametrize("bad_map", [None, [], "user", {MODEL: None}, {MODEL: ["user"]}])
 def test_non_map_values_fail_closed(case, studio, bad_map):
     case.write_cli({"chat.defaultAgent": "aidlc", MAP: bad_map})
-    before = tree(case.root)
-    h = case.payload()
-    plan = h.installer.preview(case.repo, "install")
-    assert cli_entry(plan).action == "merge_conflict"
-    with pytest.raises(studio.errors.StudioError):
-        run(h.installer.begin(case.repo, "install", plan_digest=plan.digest()))
-    assert tree(case.root) == before
+    conflict_refused(studio, case, "install")
 
 
 @pytest.mark.parametrize("ambiguous", ["duplicate", "flat_and_nested"])
 def test_ambiguous_model_map_fails_closed(case, ambiguous):
     case.write_cli({"chat.defaultAgent": "aidlc", MAP: OWNED_MODELS})
-    path = case.root / CLI
     if ambiguous == "duplicate":
-        path.write_text(
-            '{"chat.defaultAgent":"aidlc","chat.modelDefaults":'
-            + json.dumps(USER_MODELS) + ',"chat.modelDefaults":' + json.dumps(OWNED_MODELS) + "}\n"
-        )
+        (case.root / CLI).write_text('{"chat.defaultAgent":"aidlc","chat.modelDefaults":' + json.dumps(USER_MODELS)
+                                     + ',"chat.modelDefaults":' + json.dumps(OWNED_MODELS) + "}\n")
     else:
-        case.write_cli({
-            "chat.defaultAgent": "aidlc", MAP: OWNED_MODELS, "chat": {"modelDefaults": USER_MODELS},
-        })
-    h = case.payload()
-    assert cli_entry(h.installer.preview(case.repo, "install")).action == "merge_conflict"
+        case.write_cli({"chat.defaultAgent": "aidlc", MAP: OWNED_MODELS, "chat": {"modelDefaults": USER_MODELS}})
+    assert cli_entry(case.payload().installer.preview(case.repo, "install")).action == "merge_conflict"
 
 
 def test_mcp_server_env_is_not_deep_merged(studio):
@@ -481,8 +427,7 @@ def test_generator_refuses_non_map_payload(generator, monkeypatch, tmp_path, bad
 
 def test_map_entry_metadata_is_restricted_to_cli_model_defaults(studio, case):
     h = case.payload()
-    manifest = h.installer.manifest
-    manifest.merge_targets[CLI]["managedMapEntries"] = {"chat.defaultAgent": ["aidlc"]}
+    h.installer.manifest.merge_targets[CLI]["managedMapEntries"] = {"chat.defaultAgent": ["aidlc"]}
     assert h.installer.verify_payload().ok is False
 
 
@@ -497,8 +442,7 @@ def test_model_entry_metadata_fails_closed_when_incomplete(case, damage):
         assert h.installer.verify_payload().ok is False
     else:
         rows = [rf.to_json() for rf in receipt.files]
-        meta = next(rf for rf in rows if rf["path"] == CLI)["uninstall"]
-        meta["map_entries"] = {MAP: [USER_MODEL]}
+        next(rf for rf in rows if rf["path"] == CLI)["uninstall"]["map_entries"] = {MAP: [USER_MODEL]}
         case.store.update("install_receipts", receipt.receipt_id, {"files_json": rows})
-        case.write_cli({"chat.defaultAgent": "aidlc", MAP: {**OWNED_MODELS, **USER_MODELS}})
+        case.write_cli(mixed())
         assert cli_entry(h.installer.preview(case.repo, "uninstall")).blocking

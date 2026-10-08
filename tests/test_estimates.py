@@ -1,15 +1,6 @@
-"""Estimation tests for ``backend/studio/estimates.py``.
-
-Two properties are worth more than the arithmetic:
-
-* **A band never claims evidence it does not have.** Every estimate is a ``rule_band``/``low`` with
-  ``samples == 0``: there is no calibration history behind any number.
-* **Credits are never invented.** ``credits`` is ``None`` and ``credits_status`` is ``unavailable`` in
-  every path, including the empty plan — KiroCrew exposes no per-turn cost, so any number would be
-  fiction with a currency symbol in front of it.
-
-The rule bands themselves are golden-tested against §1.15's table so a "harmless" tweak to a multiplier
-shows up as a diff in an expected number rather than as a quietly different promise.
+"""``backend/studio/estimates.py``: a band never claims evidence it does not have (``rule_band``/``low``,
+``samples == 0``), credits are never invented (``None``/``unavailable`` on every path), and the rule bands are
+golden-tested against §1.15's table so a multiplier tweak shows up as a diff in an expected number.
 """
 
 from __future__ import annotations
@@ -19,11 +10,6 @@ from pathlib import Path
 import pytest
 
 APP_ROOT = Path(__file__).resolve().parent.parent
-
-
-# --------------------------------------------------------------------------- #
-# fixtures
-# --------------------------------------------------------------------------- #
 
 
 @pytest.fixture
@@ -45,69 +31,44 @@ def svc(E):
     return E.EstimateService()
 
 
-def stage(
-    P,
-    slug: str,
-    *,
-    phase: str = "inception",
-    mode: str = "inline",
-    enabled: bool = True,
-    in_grid: bool = True,
-    per_unit: bool = False,
-    review_class: str = "none",
-    summary_confirmation: str | None = None,
-    produces: tuple[str, ...] = (),
-):
+def stage(P, slug: str, *, phase: str = "inception", mode: str = "inline", enabled: bool = True,
+          in_grid: bool = True, per_unit: bool = False, review_class: str = "none",
+          summary_confirmation: str | None = None, produces: tuple[str, ...] = ()):
     """A ``PlanStage`` with only the fields the estimator reads spelled out."""
     return P.PlanStage(
-        slug=slug,
-        number="2.1",
-        name=slug,
-        phase=phase,
-        execution="CONDITIONAL",
-        in_grid=in_grid,
-        enabled=enabled,
-        locked=False,
-        lock_reason=None,
-        gate=phase != "initialization",
-        review_class=review_class,
-        reviewer=None,
-        per_unit=per_unit,
-        produces=produces,
-        consumes=(),
-        depends_on=(),
-        conditional_on=None,
-        state=None,
-        mode=mode,
-        summary_confirmation=summary_confirmation,
-    )
+        slug=slug, number="2.1", name=slug, phase=phase, execution="CONDITIONAL", in_grid=in_grid, enabled=enabled,
+        locked=False, lock_reason=None, gate=phase != "initialization", review_class=review_class, reviewer=None,
+        per_unit=per_unit, produces=produces, consumes=(), depends_on=(), conditional_on=None, state=None, mode=mode,
+        summary_confirmation=summary_confirmation)
 
 
-# --------------------------------------------------------------------------- #
-# classification
-# --------------------------------------------------------------------------- #
+def estimate(svc, *stages, depth="Standard", units=1, scope="feature"):
+    return svc.estimate(list(stages), depth=depth, units=units, scope=scope)
 
 
-@pytest.mark.parametrize(
-    "slug, phase, mode, per_unit, expected",
-    [
-        ("workspace-scaffold", "initialization", "inline", False, "initialization"),
-        ("intent-capture", "ideation", "inline", False, "ideation_inline"),
-        ("requirements-analysis", "inception", "inline", False, "inception_inline"),
-        ("reverse-engineering", "inception", "pipeline", False, "inception_pipeline"),
-        ("user-stories", "inception", "mob", False, "inception_mob"),
-        ("practices-discovery", "inception", "subagent", False, "inception_mob"),
-        ("functional-design", "construction", "inline", True, "construction_per_unit"),
-        # `code-generation` is also mode=subagent: the slug rule must win, or it would be priced as a
-        # mob stage at half its band.
-        ("code-generation", "construction", "subagent", True, "code_generation"),
-        ("build-and-test", "construction", "inline", False, "build_and_test"),
-        # 2.6.2 puts ci-pipeline in the CONSTRUCTION phase; its band is keyed by slug regardless.
-        ("ci-pipeline", "construction", "inline", False, "ci_pipeline"),
-        ("deployment-pipeline", "operation", "inline", False, "operation"),
-        ("something-new", "", "inline", False, "inception_inline"),
-    ],
-)
+def band(est):
+    return est.turns.low, est.turns.high
+
+
+# ---- classification ---- #
+
+
+@pytest.mark.parametrize("slug, phase, mode, per_unit, expected", [
+    ("workspace-scaffold", "initialization", "inline", False, "initialization"),
+    ("intent-capture", "ideation", "inline", False, "ideation_inline"),
+    ("requirements-analysis", "inception", "inline", False, "inception_inline"),
+    ("reverse-engineering", "inception", "pipeline", False, "inception_pipeline"),
+    ("user-stories", "inception", "mob", False, "inception_mob"),
+    ("practices-discovery", "inception", "subagent", False, "inception_mob"),
+    ("functional-design", "construction", "inline", True, "construction_per_unit"),
+    # Also mode=subagent: the slug rule must win, or it would be priced as a mob stage at half its band.
+    ("code-generation", "construction", "subagent", True, "code_generation"),
+    ("build-and-test", "construction", "inline", False, "build_and_test"),
+    # 2.6.2 puts ci-pipeline in the CONSTRUCTION phase; its band is keyed by slug regardless.
+    ("ci-pipeline", "construction", "inline", False, "ci_pipeline"),
+    ("deployment-pipeline", "operation", "inline", False, "operation"),
+    ("something-new", "", "inline", False, "inception_inline"),
+])
 def test_classify_stage_table(E, P, slug, phase, mode, per_unit, expected):
     assert E.classify_stage(stage(P, slug, phase=phase, mode=mode, per_unit=per_unit)) == expected
 
@@ -118,107 +79,68 @@ def test_every_class_has_a_band(E):
     assert E.RULE_BANDS["initialization"] == (1, 2)
 
 
-# --------------------------------------------------------------------------- #
-# rule bands
-# --------------------------------------------------------------------------- #
+# ---- rule bands ---- #
 
 
-@pytest.mark.parametrize(
-    "stage_class, slug, phase, mode, per_unit, band",
-    [
-        ("initialization", "state-init", "initialization", "inline", False, (1, 2)),
-        ("ideation_inline", "intent-capture", "ideation", "inline", False, (3, 6)),
-        ("inception_inline", "requirements-analysis", "inception", "inline", False, (4, 8)),
-        ("inception_pipeline", "reverse-engineering", "inception", "pipeline", False, (6, 12)),
-        ("inception_mob", "user-stories", "inception", "mob", False, (5, 9)),
-        ("construction_per_unit", "functional-design", "construction", "inline", True, (6, 12)),
-        ("code_generation", "code-generation", "construction", "subagent", True, (10, 20)),
-        ("build_and_test", "build-and-test", "construction", "inline", False, (6, 14)),
-        ("ci_pipeline", "ci-pipeline", "construction", "inline", False, (4, 8)),
-        ("operation", "observability-setup", "operation", "inline", False, (4, 8)),
-    ],
-)
-def test_rule_band_golden_at_standard_depth(E, P, stage_class, slug, phase, mode, per_unit, band, svc):
+@pytest.mark.parametrize("stage_class, slug, phase, mode, per_unit, golden", [
+    ("initialization", "state-init", "initialization", "inline", False, (1, 2)),
+    ("ideation_inline", "intent-capture", "ideation", "inline", False, (3, 6)),
+    ("inception_inline", "requirements-analysis", "inception", "inline", False, (4, 8)),
+    ("inception_pipeline", "reverse-engineering", "inception", "pipeline", False, (6, 12)),
+    ("inception_mob", "user-stories", "inception", "mob", False, (5, 9)),
+    ("construction_per_unit", "functional-design", "construction", "inline", True, (6, 12)),
+    ("code_generation", "code-generation", "construction", "subagent", True, (10, 20)),
+    ("build_and_test", "build-and-test", "construction", "inline", False, (6, 14)),
+    ("ci_pipeline", "ci-pipeline", "construction", "inline", False, (4, 8)),
+    ("operation", "observability-setup", "operation", "inline", False, (4, 8)),
+])
+def test_rule_band_golden_at_standard_depth(E, P, stage_class, slug, phase, mode, per_unit, golden, svc):
     """Standard depth, no review, one unit: the band must be §1.15's table verbatim."""
-    est = svc.estimate(
-        [stage(P, slug, phase=phase, mode=mode, per_unit=per_unit)],
-        depth="Standard",
-        units=1,
-        scope="feature",
-    )
-    assert E.RULE_BANDS[stage_class] == band
-    assert (est.turns.low, est.turns.high) == band
+    est = estimate(svc, stage(P, slug, phase=phase, mode=mode, per_unit=per_unit))
+    assert E.RULE_BANDS[stage_class] == golden
+    assert band(est) == golden
     assert est.turns.source == E.SOURCE_RULE_BAND
     assert est.turns.confidence == E.CONFIDENCE_LOW
 
 
-@pytest.mark.parametrize(
-    "depth, expected",
-    [("Minimal", (7, 14)), ("Standard", (10, 20)), ("Comprehensive", (14, 28))],
-)
+@pytest.mark.parametrize("depth, expected", [("Minimal", (7, 14)), ("Standard", (10, 20)), ("Comprehensive", (14, 28))])
 def test_depth_multiplier(P, svc, depth, expected):
-    est = svc.estimate(
-        [stage(P, "code-generation", phase="construction", mode="subagent", per_unit=True)],
-        depth=depth,
-        units=1,
-        scope="poc",
-    )
-    assert (est.turns.low, est.turns.high) == expected
+    code = stage(P, "code-generation", phase="construction", mode="subagent", per_unit=True)
+    assert band(estimate(svc, code, depth=depth, scope="poc")) == expected
 
 
-@pytest.mark.parametrize(
-    "review_class, expected",
-    [("none", (10, 20)), ("advisory", (13, 26)), ("adversarial", (16, 32))],
-)
+@pytest.mark.parametrize("review_class, expected", [
+    ("none", (10, 20)), ("advisory", (13, 26)), ("adversarial", (16, 32))])
 def test_review_uplift_is_a_share_of_the_band(P, svc, review_class, expected):
-    est = svc.estimate(
-        [stage(P, "code-generation", phase="construction", per_unit=True, review_class=review_class)],
-        depth="Standard",
-        units=1,
-        scope="feature",
-    )
-    assert (est.turns.low, est.turns.high) == expected
+    code = stage(P, "code-generation", phase="construction", per_unit=True, review_class=review_class)
+    assert band(estimate(svc, code)) == expected
 
 
 def test_summary_confirmation_costs_one_turn(P, svc):
-    plain = svc.estimate([stage(P, "requirements-analysis")], depth="Standard", units=1, scope="feature")
-    with_checkpoint = svc.estimate(
-        [stage(P, "requirements-analysis", summary_confirmation="required")],
-        depth="Standard",
-        units=1,
-        scope="feature",
-    )
-    assert (with_checkpoint.turns.low, with_checkpoint.turns.high) == (plain.turns.low + 1, plain.turns.high + 1)
+    plain = estimate(svc, stage(P, "requirements-analysis"))
+    with_checkpoint = estimate(svc, stage(P, "requirements-analysis", summary_confirmation="required"))
+    assert band(with_checkpoint) == (plain.turns.low + 1, plain.turns.high + 1)
 
 
 def test_per_unit_classes_scale_with_units(P, svc):
-    stages = [
-        stage(P, "code-generation", phase="construction", per_unit=True),
-        stage(P, "build-and-test", phase="construction"),
-    ]
-    one = svc.estimate(stages, depth="Standard", units=1, scope="feature")
-    three = svc.estimate(stages, depth="Standard", units=3, scope="feature")
+    stages = (stage(P, "code-generation", phase="construction", per_unit=True),
+              stage(P, "build-and-test", phase="construction"))
     # code-generation triples (10-20 → 30-60); build-and-test does not (6-14).
-    assert (one.turns.low, one.turns.high) == (16, 34)
-    assert (three.turns.low, three.turns.high) == (36, 74)
+    assert band(estimate(svc, *stages, units=1)) == (16, 34)
+    assert band(estimate(svc, *stages, units=3)) == (36, 74)
 
 
 def test_units_none_prices_one_unit(P, svc):
-    stages = [stage(P, "code-generation", phase="construction", per_unit=True)]
-    assert svc.estimate(stages, depth="Standard", units=None, scope="feature").turns == svc.estimate(
-        stages, depth="Standard", units=1, scope="feature"
-    ).turns
+    code = stage(P, "code-generation", phase="construction", per_unit=True)
+    assert estimate(svc, code, units=None).turns == estimate(svc, code, units=1).turns
 
 
-# --------------------------------------------------------------------------- #
-# derived metrics
-# --------------------------------------------------------------------------- #
+# ---- derived metrics ---- #
 
 
 def test_active_and_elapsed_are_derived_from_turns(E, P, svc):
-    est = svc.estimate([stage(P, "ci-pipeline", phase="construction")], depth="Standard", units=1,
-                       scope="feature")
-    assert (est.turns.low, est.turns.high) == (4, 8)
+    est = estimate(svc, stage(P, "ci-pipeline", phase="construction"))
+    assert band(est) == (4, 8)
     assert (est.active_secs.low, est.active_secs.high) == (4 * 90, 8 * 300)
     assert est.active_secs.unit == E.UNIT_SECS
     assert est.elapsed_secs is not None
@@ -237,22 +159,15 @@ def test_credits_are_always_unavailable(E, P, svc):
 
 
 def test_empty_plan_has_no_elapsed_band(P, svc):
-    est = svc.estimate([stage(P, "ci-pipeline", enabled=False)], depth="Standard", units=1, scope="feature")
-    assert (est.turns.low, est.turns.high) == (0, 0)
+    est = estimate(svc, stage(P, "ci-pipeline", enabled=False))
+    assert band(est) == (0, 0)
     assert est.elapsed_secs is None
 
 
 def test_dominant_is_sorted_by_high_with_shares(P, svc):
-    est = svc.estimate(
-        [
-            stage(P, "state-init", phase="initialization"),
-            stage(P, "code-generation", phase="construction", per_unit=True),
-            stage(P, "build-and-test", phase="construction"),
-        ],
-        depth="Standard",
-        units=1,
-        scope="feature",
-    )
+    est = estimate(svc, stage(P, "state-init", phase="initialization"),
+                   stage(P, "code-generation", phase="construction", per_unit=True),
+                   stage(P, "build-and-test", phase="construction"))
     assert [d.slug for d in est.dominant] == ["code-generation", "build-and-test", "state-init"]
     assert est.turns.high == 20 + 14 + 2
     assert est.dominant[0].share_pct == round(20 * 100 / 36)
@@ -260,28 +175,18 @@ def test_dominant_is_sorted_by_high_with_shares(P, svc):
 
 
 def test_coverage_lost_names_the_artifacts_a_disabled_stage_would_have_written(P, svc):
-    est = svc.estimate(
-        [
-            stage(P, "ci-pipeline", phase="construction", enabled=False, in_grid=True,
-                  produces=("ci-pipeline-plan", "ci-config")),
-            # never in the composition → nothing was lost by leaving it off
-            stage(P, "incident-response", phase="operation", enabled=False, in_grid=False,
-                  produces=("runbook",)),
-        ],
-        depth="Standard",
-        units=1,
-        scope="feature",
-    )
-    assert [(c.slug, c.artifacts) for c in est.coverage_lost] == [
-        ("ci-pipeline", ("ci-pipeline-plan", "ci-config"))
-    ]
+    est = estimate(svc, stage(P, "ci-pipeline", phase="construction", enabled=False, in_grid=True,
+                              produces=("ci-pipeline-plan", "ci-config")),
+                   # never in the composition → nothing was lost by leaving it off
+                   stage(P, "incident-response", phase="operation", enabled=False, in_grid=False,
+                         produces=("runbook",)))
+    assert [(c.slug, c.artifacts) for c in est.coverage_lost] == [("ci-pipeline", ("ci-pipeline-plan", "ci-config"))]
 
 
 def test_every_estimate_is_a_rule_band_with_no_samples(E, P, svc):
-    est = svc.estimate([stage(P, "code-generation", phase="construction", per_unit=True)],
-                       depth="Minimal", units=1, scope="poc")
+    est = estimate(svc, stage(P, "code-generation", phase="construction", per_unit=True), depth="Minimal", scope="poc")
     assert (est.source, est.confidence, est.samples) == (E.SOURCE_RULE_BAND, E.CONFIDENCE_LOW, 0)
-    assert (est.turns.low, est.turns.high) == (7, 14)
+    assert band(est) == (7, 14)
     assert all(d.turns.source == E.SOURCE_RULE_BAND for d in est.dominant)
 
 

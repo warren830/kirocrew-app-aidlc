@@ -10,15 +10,13 @@ from pathlib import Path
 
 import pytest
 
-from conftest import fork_process
-
-from test_installer import (
-    I, do, h, insert_repo, make_harness, payload_v1, payload_v2, reload_repo, run, store, tree,
-)
-from test_installer_uninstall import OWNED, installed
+from _helpers_c import die_in_child
+from test_installer import h, make_harness, payload_v1, payload_v2, run, store, tree  # noqa: F401 - fixtures
+from test_installer_uninstall import OWNED, installed, register
 
 
 async def cancel_during(harness, repo, kind, method, monkeypatch, *, edit=None):
+    """Run ``kind`` and request cancellation while the worker is paused just after ``method`` returned."""
     reached, resume = threading.Event(), threading.Event()
     original = getattr(harness.installer, method)
 
@@ -31,9 +29,8 @@ async def cancel_during(harness, repo, kind, method, monkeypatch, *, edit=None):
     monkeypatch.setattr(harness.installer, method, paused)
     plan = harness.installer.preview(repo, kind)
     pending = await harness.installer.begin(repo, kind, plan_digest=plan.digest())
-    worker = asyncio.create_task(harness.installer.run(
-        repo, kind, plan_digest=plan.digest(), transaction_id=pending.transaction_id,
-    ))
+    worker = asyncio.create_task(harness.installer.run(repo, kind, plan_digest=plan.digest(),
+                                                       transaction_id=pending.transaction_id))
     try:
         assert await asyncio.to_thread(reached.wait, 15)
         ack = await harness.installer.cancel(repo, transaction_id=pending.transaction_id)
@@ -47,44 +44,41 @@ async def cancel_during(harness, repo, kind, method, monkeypatch, *, edit=None):
     return await asyncio.wait_for(worker, 15)
 
 
+@pytest.fixture
+def upgrade(make_harness, payload_v2):
+    return make_harness(payload_v2)
+
+
 @pytest.mark.parametrize("method", [
-    "_stage_payload", "_backup", "_write_files", "_merge_fragments", "_post_write_validate",
-    "_commit_receipt",
+    "_stage_payload", "_backup", "_write_files", "_merge_fragments", "_post_write_validate", "_commit_receipt",
 ])
-def test_running_upgrade_cancel_restores_bytes_receipt_and_releases_lease(
-    studio, h, installed, make_harness, payload_v2, monkeypatch, method,
-):
+def test_running_upgrade_cancel_restores_bytes_receipt_and_releases_lease(h, installed, upgrade, monkeypatch,
+                                                                         method):
     root, repo = installed
     before = tree(root)
     receipt = h.installer.current_receipt(repo.repo_id)
-    upgrade = make_harness(payload_v2)
     result = run(cancel_during(upgrade, repo, "upgrade", method, monkeypatch))
     assert result.error == "cancelled"
     assert result.status == ("failed" if method == "_stage_payload" else "rolled_back")
     assert tree(root) == before
     assert upgrade.installer.current_receipt(repo.repo_id).receipt_id == receipt.receipt_id
     assert upgrade.lease() is None
-    again = run(upgrade.installer.cancel(repo, transaction_id=result.transaction_id))
-    assert again == result
+    assert run(upgrade.installer.cancel(repo, transaction_id=result.transaction_id)) == result
 
 
 def test_cancel_before_worker_starts_writes_no_repository_bytes(studio, h, repo_builder):
     root = repo_builder.with_git().build()
-    st = root.stat()
-    repo = insert_repo(studio, h.store, root, resolved_identity=f"{st.st_dev}:{st.st_ino}")
+    repo = register(studio, h, root)
     before = tree(root)
     plan = h.installer.preview(repo, "install")
     pending = run(h.installer.begin(repo, "install", plan_digest=plan.digest()))
     ack = run(h.installer.cancel(repo, transaction_id=pending.transaction_id))
     assert ack.status == "staged" and ack.error == "cancel_requested"
-    result = run(h.installer.run(
-        repo, "install", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
-    ))
+    result = run(h.installer.run(repo, "install", plan_digest=plan.digest(), transaction_id=pending.transaction_id))
     assert result.status == "failed" and result.error == "cancelled"
     assert tree(root) == before and h.installer.current_receipt(repo.repo_id) is None
-    assert run(h.installer.run(
-        repo, "install", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
-    )) == result
+    assert run(h.installer.run(repo, "install", plan_digest=plan.digest(),
+                               transaction_id=pending.transaction_id)) == result
     assert tree(root) == before
 
 
@@ -98,25 +92,17 @@ def test_cancel_checks_transaction_scope_and_does_not_cancel_committed_install(s
     assert tree(root) == before
 
 
-def test_cancellation_cannot_overwrite_a_user_edit_after_installer_write(
-    h, installed, make_harness, payload_v2, monkeypatch,
-):
+def test_cancellation_cannot_overwrite_a_user_edit_after_installer_write(installed, upgrade, monkeypatch):
     root, repo = installed
-    upgrade = make_harness(payload_v2)
-    result = run(cancel_during(
-        upgrade, repo, "upgrade", "_write_files", monkeypatch,
-        edit=lambda: (root / OWNED).write_bytes(b"user edited during install"),
-    ))
+    result = run(cancel_during(upgrade, repo, "upgrade", "_write_files", monkeypatch,
+                               edit=lambda: (root / OWNED).write_bytes(b"user edited during install")))
     assert result.status == "recovery_required" and result.error == "cancelled"
     assert (root / OWNED).read_bytes() == b"user edited during install"
     assert upgrade.store.get("repos", repo.repo_id)["install_status"] == "recovery_required"
 
 
-def test_cancel_rollback_failure_keeps_evidence_and_requires_recovery(
-    h, installed, make_harness, payload_v2, monkeypatch,
-):
-    _, repo = installed
-    upgrade = make_harness(payload_v2)
+def test_cancel_rollback_failure_keeps_evidence_and_requires_recovery(installed, upgrade, monkeypatch):
+    repo = installed[1]
     upgrade.fault.at("before:restore_backups")
     result = run(cancel_during(upgrade, repo, "upgrade", "_write_files", monkeypatch))
     assert result.status == "recovery_required" and result.error == "cancelled"
@@ -126,18 +112,15 @@ def test_cancel_rollback_failure_keeps_evidence_and_requires_recovery(
     assert upgrade.lease() is None
 
 
-def test_cancel_restores_original_file_permissions(h, installed, make_harness, payload_v2, monkeypatch):
+def test_cancel_restores_original_file_permissions(installed, upgrade, monkeypatch):
     root, repo = installed
     (root / OWNED).chmod(0o751)
-    upgrade = make_harness(payload_v2)
-    result = run(cancel_during(upgrade, repo, "upgrade", "_write_files", monkeypatch))
-    assert result.status == "rolled_back"
+    assert run(cancel_during(upgrade, repo, "upgrade", "_write_files", monkeypatch)).status == "rolled_back"
     assert (root / OWNED).stat().st_mode & 0o777 == 0o751
 
 
-def test_process_death_during_cancel_keeps_recovery_evidence(studio, h, installed, make_harness, payload_v2):
-    _, repo = installed
-    upgrade = make_harness(payload_v2)
+def test_process_death_during_cancel_keeps_recovery_evidence(installed, upgrade):
+    repo = installed[1]
     plan = upgrade.installer.preview(repo, "upgrade")
     pending = run(upgrade.installer.begin(repo, "upgrade", plan_digest=plan.digest()))
 
@@ -150,18 +133,9 @@ def test_process_death_during_cancel_keeps_recovery_evidence(studio, h, installe
             os._exit(77)
 
         upgrade.fault.on("after:write_files", stop)
-        run(upgrade.installer.run(
-            repo, "upgrade", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
-        ))
+        run(upgrade.installer.run(repo, "upgrade", plan_digest=plan.digest(), transaction_id=pending.transaction_id))
 
-    process = fork_process(child)
-    process.start()
-    process.join(15)
-    if process.is_alive():
-        process.terminate()
-        process.join()
-        pytest.fail("isolated cancellation process did not exit")
-    assert process.exitcode == 77
+    die_in_child(child)
     assert upgrade.store.get("install_transactions", pending.transaction_id)["error"] == "cancel_requested"
     assert run(upgrade.installer.settle_abandoned()) == [pending.transaction_id]
     outcome = upgrade.installer.transaction(pending.transaction_id)

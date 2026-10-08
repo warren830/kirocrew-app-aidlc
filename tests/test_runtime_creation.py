@@ -9,9 +9,7 @@ import pytest
 from test_plan import P, deps, fresh_repo, repo_row, request, run  # noqa: F401
 
 
-def test_create_materializes_runtime_graph_before_releasing_admin_lease(
-    studio, P, deps, fresh_repo, monkeypatch
-):
+def test_create_materializes_runtime_graph_before_releasing_admin_lease(studio, P, deps, fresh_repo, monkeypatch):
     engine_run = deps.engine.run
     observed = []
 
@@ -31,9 +29,7 @@ def test_create_materializes_runtime_graph_before_releasing_admin_lease(
 
 
 @pytest.mark.parametrize("test_strategy", ["Minimal", "Standard", "Comprehensive"])
-def test_real_bundled_engine_creation_also_compiles_runtime(
-    studio, P, deps, fresh_repo, monkeypatch, test_strategy
-):
+def test_real_bundled_engine_creation_also_compiles_runtime(studio, P, deps, fresh_repo, monkeypatch, test_strategy):
     bun = Path("/Users/ychchen/.bun/bin/bun")
     if not bun.is_file():
         pytest.skip("real bun is not installed")
@@ -50,9 +46,8 @@ def test_real_bundled_engine_creation_also_compiles_runtime(
         return await engine_run(verb, *args, **kwargs)
 
     monkeypatch.setattr(deps.svc.engine, "run", observe)
-    result = run(deps.svc.create_intent(fresh_repo, request(
-        P, label="runtime-proof", depth="Minimal", test_strategy=test_strategy,
-    )))
+    result = run(deps.svc.create_intent(fresh_repo, request(P, label="runtime-proof", depth="Minimal",
+                                                            test_strategy=test_strategy)))
     record = Path(fresh_repo.canonical_path) / "aidlc/spaces/default/intents" / result.intent_dir
     graph = json.loads((record / "runtime-graph.json").read_text())
     assert graph["scope"] == "poc"
@@ -64,9 +59,7 @@ def test_real_bundled_engine_creation_also_compiles_runtime(
 
 
 @pytest.mark.parametrize("failure", ["exit", "missing", "malformed"])
-def test_compile_failure_names_the_created_intent_and_releases_lease(
-    studio, P, deps, fresh_repo, monkeypatch, failure
-):
+def test_compile_failure_names_the_created_intent_and_releases_lease(studio, P, deps, fresh_repo, monkeypatch, failure):
     engine_run = deps.engine.run
 
     async def broken_runtime(verb, *args, **kwargs):

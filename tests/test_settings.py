@@ -1,17 +1,6 @@
-"""Tests for ``backend/studio/settings.py``.
-
-Three properties matter more than the rest, and most of the file is about them:
-
-* **The defaults are the contract.** ``DEFAULTS`` is compared against the literal from contracts §1.21,
-  not against itself, so a "harmless" default change has to be made in the contract too.
-* **A stored row can never serve a value the validator would refuse** — a hand edit, a value a newer
-  build accepted, or the retired v1 ``night_window`` keys all degrade to the default on read.
-* **Validation names the key.** Every rejection is asserted on ``details.key`` and ``details.reason``,
-  because "invalid settings" with no key is what the UI cannot act on.
-
-Async methods run through ``asyncio.run`` (the convention the rest of this suite uses; no async plugin
-is configured). The store is the real ``Storage`` — the module under test is ``settings``, and mocking
-the row it writes would test the mock's idea of a preferences row.
+"""``backend/studio/settings.py``: the defaults are the contract, a stored row never serves a value the validator
+would refuse, and every rejection names its key (``details.key`` / ``details.reason``). The store is the real
+``Storage``; async methods run through ``asyncio.run``.
 """
 
 from __future__ import annotations
@@ -21,13 +10,11 @@ import copy
 import json
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-
-# --------------------------------------------------------------------------- #
-# fixtures
-# --------------------------------------------------------------------------- #
+from _helpers_c import ThreadRecordingStore
 
 
 @pytest.fixture
@@ -50,19 +37,16 @@ def store(studio, fake_ctx, K, clock, ids):
     st.close()
 
 
-class Cap:
+def cap(available: bool, reason: str | None = None) -> SimpleNamespace:
     """A ``HostCapability``-shaped value (attributes), which is what ``HostBridge`` returns."""
-
-    def __init__(self, available: bool, reason: str | None = None) -> None:
-        self.available = available
-        self.reason = reason
+    return SimpleNamespace(available=available, reason=reason)
 
 
 class Bridge:
     """The slice of ``HostBridge`` (§1.11) ``SettingsService`` is allowed to touch."""
 
     def __init__(self, caps: dict | None = None, *, attached: bool = True, dict_form: bool = False) -> None:
-        self._caps = {"slack": Cap(True), "subagents": Cap(True)} if caps is None else caps
+        self._caps = {"slack": cap(True), "subagents": cap(True)} if caps is None else caps
         self._attached = attached
         self._dict_form = dict_form
 
@@ -82,22 +66,6 @@ class BrokenBridge:
         raise AttributeError("state has no attribute 'subagents'")
 
 
-class ThreadRecordingStore:
-    """Delegates to the real ``Storage`` and records which thread each call arrived on."""
-
-    def __init__(self, inner) -> None:
-        self._inner = inner
-        self.threads: list[str] = []
-
-    def pref_get(self, key):
-        self.threads.append(threading.current_thread().name)
-        return self._inner.pref_get(key)
-
-    def pref_set(self, key, value):
-        self.threads.append(threading.current_thread().name)
-        return self._inner.pref_set(key, value)
-
-
 @pytest.fixture
 def svc(M, store, clock):
     return M.SettingsService(store, Bridge(), clock)
@@ -112,22 +80,19 @@ def stored(store, M):
     return store.pref_get(M.PREF_KEY)
 
 
-# --------------------------------------------------------------------------- #
-# defaults
-# --------------------------------------------------------------------------- #
+def err(excinfo):
+    return excinfo.value.code, excinfo.value.details
+
+
+# ---- defaults ---- #
 
 
 #: Pasted from contracts §1.21. Kept as a literal so a default change fails here rather than passing.
 CONTRACT_DEFAULTS = {
-    "locale": "auto",
-    "density": "compact",
-    "queue_organize": "priority",
-    "global_concurrency_cap": 2,
+    "locale": "auto", "density": "compact", "queue_organize": "priority", "global_concurrency_cap": 2,
     "slack": {"enabled": False, "muted_repo_ids": []},
-    "diagnostics": {"retention_days": 30, "export_include_human_text": False},
-    "human_text_retention_days": 30,
-    "advisor": {"enabled": True, "auto_draft_repo_ids": []},
-    "installer": {"run_doctor_after_install": False},
+    "diagnostics": {"retention_days": 30, "export_include_human_text": False}, "human_text_retention_days": 30,
+    "advisor": {"enabled": True, "auto_draft_repo_ids": []}, "installer": {"run_doctor_after_install": False},
     "notifications": {"dashboard": True},
 }
 
@@ -137,12 +102,7 @@ def test_defaults_match_the_contract(M):
 
 
 def test_schema_covers_every_default_leaf_and_nothing_else(M):
-    """Every leaf is storable and every storable key exists in the defaults.
-
-    A key in one table but not the other is either an unreachable validator or a value the user can see
-    and never change.
-    """
-
+    """A key in one table but not the other is an unreachable validator or a value the user can never change."""
     def leaves(node, prefix=""):
         for key, value in node.items():
             dotted = f"{prefix}.{key}" if prefix else key
@@ -181,17 +141,11 @@ def test_to_json_is_the_wire_body(svc):
 def test_versions_block(svc, K):
     import kiro_crew
 
-    assert run(svc.get()).versions == {
-        "studio": K.APP_VERSION,
-        "bundled_engine": K.BUNDLED_ENGINE_VERSION,
-        "min_kirocrew": K.MIN_KIROCREW_VERSION,
-        "host": kiro_crew.__version__,
-    }
+    assert run(svc.get()).versions == {"studio": K.APP_VERSION, "bundled_engine": K.BUNDLED_ENGINE_VERSION,
+                                       "min_kirocrew": K.MIN_KIROCREW_VERSION, "host": kiro_crew.__version__}
 
 
-# --------------------------------------------------------------------------- #
-# deep merge and persistence
-# --------------------------------------------------------------------------- #
+# ---- deep merge and persistence ---- #
 
 
 def test_put_deep_merges_and_keeps_siblings(svc, M):
@@ -199,8 +153,7 @@ def test_put_deep_merges_and_keeps_siblings(svc, M):
     assert settings.values["slack"] == {"enabled": True, "muted_repo_ids": []}
     settings = run(svc.put({"slack": {"muted_repo_ids": ["r_000000000001"]}}))
     assert settings.values["slack"] == {"enabled": True, "muted_repo_ids": ["r_000000000001"]}
-    # untouched groups still hold their defaults
-    assert settings.values["diagnostics"] == M.DEFAULTS["diagnostics"]
+    assert settings.values["diagnostics"] == M.DEFAULTS["diagnostics"]  # untouched groups keep their defaults
 
 
 def test_put_persists_only_the_overrides(svc, store, M, clock):
@@ -217,29 +170,17 @@ def test_list_values_replace_rather_than_merge(svc):
 
 
 def test_the_auto_draft_grant_round_trips_and_is_empty_on_a_fresh_install(svc):
-    """``[]`` is a value, not a missing one: with no ids the Advisor runs only on a click (FR-ADV-001).
-
-    So unchecking the last repository has to be storable and readable as an empty list. If ``[]`` fell
-    back to the previous list — or to "no override, keep drafting" — a revoked grant would keep spawning
-    subagents the owner has just said no to.
-    """
+    """``[]`` is a value (FR-ADV-001): a revoked grant must not fall back to the previous list and keep drafting."""
     assert run(svc.get()).values["advisor"]["auto_draft_repo_ids"] == []
     ids = ["r_000000000001", "r_000000000002"]
-    granted = run(svc.put({"advisor": {"auto_draft_repo_ids": ids}}))
-    assert granted.values["advisor"]["auto_draft_repo_ids"] == ids
+    assert run(svc.put({"advisor": {"auto_draft_repo_ids": ids}})).values["advisor"]["auto_draft_repo_ids"] == ids
     assert run(svc.get()).values["advisor"]["auto_draft_repo_ids"] == ids
-    revoked = run(svc.put({"advisor": {"auto_draft_repo_ids": []}}))
-    assert revoked.values["advisor"]["auto_draft_repo_ids"] == []
+    assert run(svc.put({"advisor": {"auto_draft_repo_ids": []}})).values["advisor"]["auto_draft_repo_ids"] == []
     assert run(svc.get()).values["advisor"]["auto_draft_repo_ids"] == []
 
 
 def test_the_auto_draft_grant_and_the_advisor_switch_are_written_independently(svc):
-    """Two different decisions, so the per-leaf merge has to hold for both directions.
-
-    The grant is toggled from a checkbox beside one repository and the switch from the Advisor section;
-    either control re-sending the other's value from stale UI state would silently re-arm — or disarm —
-    a feature its user never touched in that request.
-    """
+    """Two decisions from two controls: the per-leaf merge must hold in both directions."""
     run(svc.put({"advisor": {"enabled": False}}))
     settings = run(svc.put({"advisor": {"auto_draft_repo_ids": ["r_000000000001"]}}))
     assert settings.values["advisor"] == {"enabled": False, "auto_draft_repo_ids": ["r_000000000001"]}
@@ -278,20 +219,15 @@ def test_a_second_service_on_the_same_store_sees_the_write(M, store, clock):
     assert run(reader.get()).values["global_concurrency_cap"] == 5
 
 
-@pytest.mark.parametrize(
-    "row,expect",
-    [
-        ("not-an-object", {}),
-        (17, {}),
-        ({"values": "not-an-object"}, {}),
-        # the invalid neighbour is dropped, the valid one is kept
-        ({"values": {"locale": "klingon", "density": "comfortable"}}, {"density": "comfortable"}),
-        ({"values": {"global_concurrency_cap": 99}}, {}),
-        ({"values": {"unknown_key": 1, "human_text_retention_days": 5}}, {"human_text_retention_days": 5}),
-        # a bare override map (no "values" wrapper) is still read
-        ({"locale": "en-US"}, {"locale": "en-US"}),
-    ],
-)
+@pytest.mark.parametrize("row,expect", [
+    ("not-an-object", {}),
+    (17, {}),
+    ({"values": "not-an-object"}, {}),
+    ({"values": {"locale": "klingon", "density": "comfortable"}}, {"density": "comfortable"}),  # neighbour kept
+    ({"values": {"global_concurrency_cap": 99}}, {}),
+    ({"values": {"unknown_key": 1, "human_text_retention_days": 5}}, {"human_text_retention_days": 5}),
+    ({"locale": "en-US"}, {"locale": "en-US"}),  # a bare override map (no "values" wrapper) is still read
+])
 def test_unreadable_stored_shapes_degrade_to_defaults(svc, store, M, row, expect):
     """A row of the wrong shape, or with a value no longer valid, must not break the read path."""
     store.pref_set(M.PREF_KEY, row)
@@ -306,47 +242,47 @@ def test_a_put_rewrites_a_dirty_row_clean(svc, store, M):
     assert stored(store, M)["values"] == {"locale": "en-US", "density": "comfortable"}
 
 
-# --------------------------------------------------------------------------- #
-# validation
-# --------------------------------------------------------------------------- #
+def test_a_stored_v1_night_window_is_ignored_on_read_and_dropped_on_write(svc, store, M):
+    """A v1 row carries the machine-lane window Studio no longer has; it must neither be served nor kept."""
+    store.pref_set(M.PREF_KEY, {"values": {"night_window": {"enabled": True, "turn_cap": 9}, "locale": "en-US"},
+                                "updated_at": "x"})
+    values = run(svc.get()).values
+    assert "night_window" not in values and values["locale"] == "en-US"
+    run(svc.put({"density": "comfortable"}))
+    assert stored(store, M)["values"] == {"locale": "en-US", "density": "comfortable"}
 
 
-def err(excinfo):
-    return excinfo.value.code, excinfo.value.details
+# ---- validation ---- #
 
 
-@pytest.mark.parametrize(
-    "patch,key,reason",
-    [
-        ({"nope": 1}, "nope", "unknown_key"),
-        ({"slack": {"nope": 1}}, "slack.nope", "unknown_key"),
-        ({"slack": True}, "slack", "type"),
-        ({"locale": "klingon"}, "locale", "not_allowed"),
-        ({"locale": 5}, "locale", "type"),
-        ({"density": "cosy"}, "density", "not_allowed"),
-        ({"queue_organize": "newest"}, "queue_organize", "not_allowed"),
-        ({"global_concurrency_cap": 0}, "global_concurrency_cap", "range"),
-        ({"global_concurrency_cap": 9}, "global_concurrency_cap", "range"),
-        ({"global_concurrency_cap": True}, "global_concurrency_cap", "type"),
-        ({"global_concurrency_cap": "2"}, "global_concurrency_cap", "type"),
-        ({"global_concurrency_cap": 2.5}, "global_concurrency_cap", "type"),
-        ({"human_text_retention_days": 0}, "human_text_retention_days", "range"),
-        ({"human_text_retention_days": 31}, "human_text_retention_days", "range"),
-        ({"diagnostics": {"retention_days": 90}}, "diagnostics.retention_days", "range"),
-        ({"diagnostics": {"export_include_human_text": "yes"}}, "diagnostics.export_include_human_text", "type"),
-        ({"advisor": {"enabled": 1}}, "advisor.enabled", "type"),
-        ({"installer": {"run_doctor_after_install": None}}, "installer.run_doctor_after_install", "type"),
-        ({"notifications": {"dashboard": "on"}}, "notifications.dashboard", "type"),
-        # The machine-lane window is gone; a client that still sends it is told the key does not exist.
-        ({"night_window": {"enabled": False}}, "night_window", "unknown_key"),
-        ({"slack": {"muted_repo_ids": "r_1"}}, "slack.muted_repo_ids", "type"),
-        ({"slack": {"muted_repo_ids": [1]}}, "slack.muted_repo_ids", "type"),
-        ({"slack": {"muted_repo_ids": [""]}}, "slack.muted_repo_ids", "type"),
-        ({"advisor": {"auto_draft_repo_ids": "r_000000000001"}}, "advisor.auto_draft_repo_ids", "type"),
-        ({"advisor": {"auto_draft_repo_ids": [1]}}, "advisor.auto_draft_repo_ids", "type"),
-        ({"advisor": {"auto_draft_repo_ids": [""]}}, "advisor.auto_draft_repo_ids", "type"),
-    ],
-)
+@pytest.mark.parametrize("patch,key,reason", [
+    ({"nope": 1}, "nope", "unknown_key"),
+    ({"slack": {"nope": 1}}, "slack.nope", "unknown_key"),
+    ({"slack": True}, "slack", "type"),
+    ({"locale": "klingon"}, "locale", "not_allowed"),
+    ({"locale": 5}, "locale", "type"),
+    ({"density": "cosy"}, "density", "not_allowed"),
+    ({"queue_organize": "newest"}, "queue_organize", "not_allowed"),
+    ({"global_concurrency_cap": 0}, "global_concurrency_cap", "range"),
+    ({"global_concurrency_cap": 9}, "global_concurrency_cap", "range"),
+    ({"global_concurrency_cap": True}, "global_concurrency_cap", "type"),
+    ({"global_concurrency_cap": "2"}, "global_concurrency_cap", "type"),
+    ({"global_concurrency_cap": 2.5}, "global_concurrency_cap", "type"),
+    ({"human_text_retention_days": 0}, "human_text_retention_days", "range"),
+    ({"human_text_retention_days": 31}, "human_text_retention_days", "range"),
+    ({"diagnostics": {"retention_days": 90}}, "diagnostics.retention_days", "range"),
+    ({"diagnostics": {"export_include_human_text": "yes"}}, "diagnostics.export_include_human_text", "type"),
+    ({"advisor": {"enabled": 1}}, "advisor.enabled", "type"),
+    ({"installer": {"run_doctor_after_install": None}}, "installer.run_doctor_after_install", "type"),
+    ({"notifications": {"dashboard": "on"}}, "notifications.dashboard", "type"),
+    ({"night_window": {"enabled": False}}, "night_window", "unknown_key"),  # the retired machine-lane window
+    ({"slack": {"muted_repo_ids": "r_1"}}, "slack.muted_repo_ids", "type"),
+    ({"slack": {"muted_repo_ids": [1]}}, "slack.muted_repo_ids", "type"),
+    ({"slack": {"muted_repo_ids": [""]}}, "slack.muted_repo_ids", "type"),
+    ({"advisor": {"auto_draft_repo_ids": "r_000000000001"}}, "advisor.auto_draft_repo_ids", "type"),
+    ({"advisor": {"auto_draft_repo_ids": [1]}}, "advisor.auto_draft_repo_ids", "type"),
+    ({"advisor": {"auto_draft_repo_ids": [""]}}, "advisor.auto_draft_repo_ids", "type"),
+])
 def test_put_rejects_bad_values_by_key(svc, patch, key, reason):
     with pytest.raises(Exception) as excinfo:
         run(svc.put(patch))
@@ -357,55 +293,29 @@ def test_put_rejects_bad_values_by_key(svc, patch, key, reason):
     assert details["reason"] == reason
 
 
-def test_muted_repo_ids_is_bounded_by_max_repos(svc, K):
+@pytest.mark.parametrize("group,key", [("slack", "muted_repo_ids"), ("advisor", "auto_draft_repo_ids")])
+def test_a_repo_id_list_is_bounded_by_max_repos(svc, K, group, key):
+    """One id per registered repository is the ceiling; for the grant every extra id could spawn subagents."""
     ok = [f"r_{i:012x}" for i in range(K.MAX_REPOS)]
-    assert run(svc.put({"slack": {"muted_repo_ids": ok}})).values["slack"]["muted_repo_ids"] == ok
+    assert run(svc.put({group: {key: ok}})).values[group][key] == ok
     with pytest.raises(Exception) as excinfo:
-        run(svc.put({"slack": {"muted_repo_ids": ok + ["r_ffffffffffff"]}}))
-    assert err(excinfo)[1] == {
-        "key": "slack.muted_repo_ids",
-        "reason": "too_many",
-        "problems": ["slack.muted_repo_ids: too_many"],
-        "expected": f"list of at most {K.MAX_REPOS} repo ids",
-    }
+        run(svc.put({group: {key: ok + ["r_ffffffffffff"]}}))
+    assert err(excinfo)[1] == {"key": f"{group}.{key}", "reason": "too_many", "problems": [f"{group}.{key}: too_many"],
+                               "expected": f"list of at most {K.MAX_REPOS} repo ids"}
 
 
-def test_the_auto_draft_grant_is_bounded_by_max_repos(svc, K):
-    """A grant per registered repository is the ceiling. A longer list is a client bug, and one that
-    matters here more than for a mute list: every extra id is a repository whose cards may spawn
-    subagents nobody asked for."""
-    ok = [f"r_{i:012x}" for i in range(K.MAX_REPOS)]
-    granted = run(svc.put({"advisor": {"auto_draft_repo_ids": ok}}))
-    assert granted.values["advisor"]["auto_draft_repo_ids"] == ok
+@pytest.mark.parametrize("patch,key,group", [
+    ({"density": "comfortable", "locale": "klingon"}, "locale", "density"),
+    # The pane sends ``advisor`` whole: a bad grant must not turn the Advisor off beside a 400.
+    ({"advisor": {"enabled": False, "auto_draft_repo_ids": ["r_000000000001", ""]}}, "advisor.auto_draft_repo_ids",
+     "advisor"),
+])
+def test_a_rejected_put_stores_nothing_not_even_its_valid_half(svc, store, M, patch, key, group):
     with pytest.raises(Exception) as excinfo:
-        run(svc.put({"advisor": {"auto_draft_repo_ids": ok + ["r_ffffffffffff"]}}))
-    assert err(excinfo)[1] == {
-        "key": "advisor.auto_draft_repo_ids",
-        "reason": "too_many",
-        "problems": ["advisor.auto_draft_repo_ids: too_many"],
-        "expected": f"list of at most {K.MAX_REPOS} repo ids",
-    }
-
-
-def test_a_rejected_grant_leaves_the_advisor_switch_beside_it_unchanged(svc, store, M):
-    """All-or-nothing, on the request a Settings pane is most likely to send as one group.
-
-    The pane sends ``advisor`` as a whole, so a bad id in the list arrives next to a perfectly valid
-    ``enabled``. Storing the good half would turn the Advisor off *and* answer 400, leaving the owner with
-    no way to tell which half Studio kept.
-    """
-    with pytest.raises(Exception) as excinfo:
-        run(svc.put({"advisor": {"enabled": False, "auto_draft_repo_ids": ["r_000000000001", ""]}}))
-    assert err(excinfo)[1]["key"] == "advisor.auto_draft_repo_ids"
+        run(svc.put(patch))
+    assert err(excinfo)[1]["key"] == key
     assert stored(store, M) is None
-    assert run(svc.get()).values["advisor"] == {"enabled": True, "auto_draft_repo_ids": []}
-
-
-def test_rejected_put_stores_nothing(svc, store, M):
-    with pytest.raises(Exception):
-        run(svc.put({"density": "comfortable", "locale": "klingon"}))
-    assert stored(store, M) is None
-    assert run(svc.get()).values["density"] == "compact"
+    assert run(svc.get()).values[group] == CONTRACT_DEFAULTS[group]
 
 
 def test_details_report_every_problem_in_request_order(svc):
@@ -413,11 +323,7 @@ def test_details_report_every_problem_in_request_order(svc):
         run(svc.put({"locale": "klingon", "global_concurrency_cap": 99, "nope": True}))
     details = err(excinfo)[1]
     assert details["key"] == "locale"
-    assert details["problems"] == [
-        "locale: not_allowed",
-        "global_concurrency_cap: range",
-        "nope: unknown_key",
-    ]
+    assert details["problems"] == ["locale: not_allowed", "global_concurrency_cap: range", "nope: unknown_key"]
     assert details["expected"] == "one of: auto, en-US, zh-CN"
 
 
@@ -431,52 +337,24 @@ def test_non_object_patch(svc):
 
 def test_valid_values_round_trip(svc, M):
     patch = {
-        "locale": "zh-CN",
-        "density": "comfortable",
-        "queue_organize": "repo",
-        "global_concurrency_cap": 8,
+        "locale": "zh-CN", "density": "comfortable", "queue_organize": "repo", "global_concurrency_cap": 8,
         "slack": {"enabled": True, "muted_repo_ids": ["r_000000000001"]},
-        "diagnostics": {"retention_days": 1, "export_include_human_text": True},
-        "human_text_retention_days": 30,
+        "diagnostics": {"retention_days": 1, "export_include_human_text": True}, "human_text_retention_days": 30,
         "advisor": {"enabled": False, "auto_draft_repo_ids": ["r_000000000001"]},
-        "installer": {"run_doctor_after_install": True},
-        "notifications": {"dashboard": False},
+        "installer": {"run_doctor_after_install": True}, "notifications": {"dashboard": False},
     }
     assert run(svc.put(patch)).values == patch
     assert run(svc.get()).values == patch
 
 
-# --------------------------------------------------------------------------- #
-# the retired night window
-# --------------------------------------------------------------------------- #
+# ---- capabilities ---- #
 
 
-def test_a_stored_v1_night_window_is_ignored_on_read_and_dropped_on_write(svc, store, M):
-    """A v1 row carries the machine-lane window Studio no longer has; it must neither be served nor kept."""
-    store.pref_set(
-        M.PREF_KEY,
-        {"values": {"night_window": {"enabled": True, "turn_cap": 9}, "locale": "en-US"}, "updated_at": "x"},
-    )
-    values = run(svc.get()).values
-    assert "night_window" not in values and values["locale"] == "en-US"
-    run(svc.put({"density": "comfortable"}))
-    assert stored(store, M)["values"] == {"locale": "en-US", "density": "comfortable"}
-
-
-# --------------------------------------------------------------------------- #
-# capabilities
-# --------------------------------------------------------------------------- #
-
-
-def test_capability_block_shape_and_order(svc, M):
+def test_capability_block_shape_order_and_the_studio_owned_entries(svc, M):
     caps = run(svc.get()).capabilities
     assert list(caps) == ["slack", "advisor", "slack_quick_actions", "grouped_answers"]
     for entry in caps.values():
         assert sorted(entry) == ["available", "reason"]
-
-
-def test_studio_owned_capabilities(svc, M):
-    caps = run(svc.get()).capabilities
     assert caps["slack_quick_actions"] == {"available": False, "reason": "host_seam_unavailable"}
     assert caps["grouped_answers"] == {"available": True, "reason": None}
     assert "night_window" not in caps and "credit_cap" not in caps
@@ -488,18 +366,15 @@ def test_grouped_answers_is_verified_and_only_a_constant_can_disable_it(M, K, st
     assert svc.capabilities()["grouped_answers"] == {"available": True, "reason": None}
     monkeypatch.setattr(K, "GROUPED_ANSWERS_VERIFIED", False)
     assert svc.capabilities()["grouped_answers"] == {"available": False, "reason": "s1_s2_unverified"}
-    # it is not a preference: no key in the schema can reach it
-    assert not [k for k in M.SCHEMA if "grouped" in k]
+    assert not [k for k in M.SCHEMA if "grouped" in k]  # not a preference: no schema key reaches it
 
 
 def test_host_backed_capabilities_follow_the_bridge(M, store, clock):
-    svc = M.SettingsService(store, Bridge(), clock)
-    caps = svc.capabilities()
+    caps = M.SettingsService(store, Bridge(), clock).capabilities()
     assert caps["slack"] == {"available": True, "reason": None}
     assert caps["advisor"] == {"available": True, "reason": None}
-
-    svc = M.SettingsService(store, Bridge({"slack": Cap(False, "slack_not_configured"), "subagents": Cap(False)}), clock)
-    caps = svc.capabilities()
+    down = Bridge({"slack": cap(False, "slack_not_configured"), "subagents": cap(False)})
+    caps = M.SettingsService(store, down, clock).capabilities()
     assert caps["slack"] == {"available": False, "reason": "slack_not_configured"}
     assert caps["advisor"] == {"available": False, "reason": M.REASON_HOST_UNAVAILABLE}
 
@@ -517,59 +392,43 @@ def test_no_host_and_detached_host(M, store, clock):
 
 
 def test_an_unrecognised_host_shape_never_raises(M, store, clock):
+    """A raising bridge, a missing entry and an entry that is neither mapping nor capability all read unknown."""
     caps = M.SettingsService(store, BrokenBridge(), clock).capabilities()
     assert caps["slack"] == {"available": False, "reason": M.REASON_HOST_UNKNOWN}
-    # a bridge that simply has no entry for the capability is the same answer
-    caps = M.SettingsService(store, Bridge({"slack": Cap(True)}), clock).capabilities()
+    caps = M.SettingsService(store, Bridge({"slack": cap(True)}), clock).capabilities()
     assert caps["slack"]["available"] is True
     assert caps["advisor"] == {"available": False, "reason": M.REASON_HOST_UNKNOWN}
-    # and so is a bridge whose entry is neither a mapping nor a HostCapability
     caps = M.SettingsService(store, Bridge({"slack": "yes", "subagents": None}), clock).capabilities()
     assert caps["slack"] == {"available": False, "reason": M.REASON_HOST_UNKNOWN}
 
 
 def test_advisor_capability_is_not_the_advisor_preference(M, store, clock):
     """Turning the Advisor off is a choice; the capability describes whether the seam exists at all."""
-    svc = M.SettingsService(store, Bridge(), clock)
-    settings = run(svc.put({"advisor": {"enabled": False}}))
+    settings = run(M.SettingsService(store, Bridge(), clock).put({"advisor": {"enabled": False}}))
     assert settings.values["advisor"]["enabled"] is False
     assert settings.capabilities["advisor"]["available"] is True
 
 
 def test_the_real_dashboard_state_is_not_consulted_directly(M, store, clock, fake_host):
-    """A ``DashboardState`` is not a ``HostBridge``: it has no ``capabilities()``, so every host-backed
-    capability must read as unknown rather than crash a settings read."""
+    """A ``DashboardState`` has no ``capabilities()``: host-backed entries read unknown instead of crashing."""
     caps = M.SettingsService(store, fake_host, clock).capabilities()
     assert caps["slack"] == {"available": False, "reason": M.REASON_HOST_UNKNOWN}
 
 
-# --------------------------------------------------------------------------- #
-# sync accessors and threading
-# --------------------------------------------------------------------------- #
+# ---- sync accessors and threading ---- #
 
 
 def test_sync_accessors_serve_defaults_before_load_then_the_stored_values(M, store, clock):
-    store.pref_set(
-        M.PREF_KEY,
-        {
-            "values": {
-                "global_concurrency_cap": 4,
-                "human_text_retention_days": 3,
-                "slack": {"enabled": True, "muted_repo_ids": ["r_000000000001"]},
-                "advisor": {"auto_draft_repo_ids": ["r_000000000001"]},
-                "installer": {"run_doctor_after_install": True},
-            },
-            "updated_at": "2026-09-04T10:00:00Z",
-        },
-    )
+    """Before ``load()`` the reconciler's ``advisor()`` read must mean "no grant yet", never a stored grant."""
+    store.pref_set(M.PREF_KEY, {"values": {
+        "global_concurrency_cap": 4, "human_text_retention_days": 3,
+        "slack": {"enabled": True, "muted_repo_ids": ["r_000000000001"]},
+        "advisor": {"auto_draft_repo_ids": ["r_000000000001"]}, "installer": {"run_doctor_after_install": True},
+    }, "updated_at": "2026-09-04T10:00:00Z"})
     svc = M.SettingsService(store, Bridge(), clock)
     assert svc.global_concurrency_cap() == 2
     assert svc.human_text_retention_days() == 30
-    # The reconciler reads the auto-draft grant through this accessor on the loop, and a tick can land
-    # before `load()` has run. Serving the default there means "no grant yet" — a pre-draft delayed by
-    # one tick, never one spawned for a repository whose owner may not have granted anything.
     assert svc.advisor() == {"enabled": True, "auto_draft_repo_ids": []}
-
     run(svc.get())
     assert svc.global_concurrency_cap() == 4
     assert svc.human_text_retention_days() == 3
@@ -601,6 +460,7 @@ def test_storage_is_only_touched_from_a_worker_thread(M, store, clock):
     run(svc.put({"locale": "en-US"}))
     assert recorder.threads, "settings never read the preferences row"
     assert threading.current_thread().name not in recorder.threads
+    assert set(recorder.calls) <= {"pref_get", "pref_set"}
 
 
 def test_concurrent_puts_do_not_lose_a_key(M, store, clock):
@@ -608,11 +468,8 @@ def test_concurrent_puts_do_not_lose_a_key(M, store, clock):
     svc = M.SettingsService(store, Bridge(), clock)
 
     async def both():
-        await asyncio.gather(
-            svc.put({"locale": "zh-CN"}),
-            svc.put({"density": "comfortable"}),
-            svc.put({"global_concurrency_cap": 7}),
-        )
+        await asyncio.gather(svc.put({"locale": "zh-CN"}), svc.put({"density": "comfortable"}),
+                             svc.put({"global_concurrency_cap": 7}))
         return await svc.get()
 
     values = run(both()).values

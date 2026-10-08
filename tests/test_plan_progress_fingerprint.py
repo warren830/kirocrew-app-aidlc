@@ -1,13 +1,7 @@
-"""Real Bun contracts for the bundled engine's Code Generation plan-approval fingerprint.
+"""Real Bun contracts for the bundled engine's Code Generation plan-approval fingerprint (AI-DLC 2.10.0).
 
-Studio used to patch ``aidlc-testing-posture.ts`` so that ticking a plan's task boxes did not void the
-human's approval. AI-DLC 2.10.0 does this itself: ``approvalFingerprint`` hashes
-``projectPlanApprovalContent(plan)``, which drops a terminal ``## Review`` appendix, resets task
-markers and normalises editor whitespace, and binds everything else. The patch was retired with the
-2.10.0 payload; these tests pin the upstream behaviour Studio's gate cards rely on, so an engine
-refresh that changes it fails here instead of in a live approval.
-
-Only exported, pure functions are called. Nothing touches a repository, a hook or an approval file.
+``approvalFingerprint`` drops a terminal ``## Review`` appendix, resets task markers and normalises editor
+whitespace, and binds everything else; Studio's gate cards rely on it. Only exported, pure functions are called.
 """
 
 from __future__ import annotations
@@ -22,11 +16,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "payload/aidlc-kiro/.kiro/tools"
-AUTHORITY = {
-    "targetId": "stage:code-generation",
-    "intentId": "fixture-intent",
-    "runFloor": "fixture-run-1",
-}
+AUTHORITY = {"targetId": "stage:code-generation", "intentId": "fixture-intent", "runFloor": "fixture-run-1"}
 CONTRACT = "sha256:" + "c" * 64
 INSTRUCTIONS = "# Unit tests\n\nRun the precision and rounding assertions.\n"
 PLAN = "# Code Generation Plan\n\n- [ ] Add precision support.\n- [ ] Test rounding.\n"
@@ -49,15 +39,10 @@ def fingerprint():
     """
 
     def run(*plans, instructions=INSTRUCTIONS, contract=CONTRACT, authority=None):
-        cases = [
-            {"plan": plan, "instructions": instructions, "contract": contract,
-             "authority": AUTHORITY if authority is None else authority}
-            for plan in plans
-        ]
-        done = subprocess.run(
-            [bun, "-e", source], input=json.dumps(cases), text=True, capture_output=True,
-            timeout=30, check=False,
-        )
+        cases = [{"plan": plan, "instructions": instructions, "contract": contract,
+                  "authority": AUTHORITY if authority is None else authority} for plan in plans]
+        done = subprocess.run([bun, "-e", source], input=json.dumps(cases), text=True, capture_output=True,
+                              timeout=30, check=False)
         assert done.returncode == 0, done.stderr
         results = json.loads(done.stdout)
         assert all(item["current"] for item in results), results
@@ -79,9 +64,7 @@ TASK_SHAPES = [
 
 @pytest.mark.parametrize("template", TASK_SHAPES)
 def test_task_progress_does_not_void_the_approval(fingerprint, template):
-    blank, lower, upper, skipped = fingerprint(
-        *(template.format(mark=mark) for mark in (" ", "x", "X", "-"))
-    )
+    blank, lower, upper, skipped = fingerprint(*(template.format(mark=mark) for mark in (" ", "x", "X", "-")))
     assert blank == lower == upper == skipped
 
 
@@ -118,15 +101,10 @@ def test_a_terminal_review_appendix_is_not_part_of_the_approval(fingerprint):
     assert len(set(fingerprint(PLAN, appended))) == 1
 
 
-_MID_PLAN_REVIEW = "# Plan\n\n## Review\n\nVerdict: approve.\n\n## Steps\n\n- [ ] Ship.\n"
-_LOWER_CASE_REVIEW = PLAN + "\n## review\n\nVerdict: approve.\n"
-_FENCED_REVIEW = PLAN + "\n```\n## Review\nVerdict: approve.\n```\n"
-
-
 @pytest.mark.parametrize("plan", [
-    pytest.param(_MID_PLAN_REVIEW, id="mid-plan"),
-    pytest.param(_LOWER_CASE_REVIEW, id="lower-case"),
-    pytest.param(_FENCED_REVIEW, id="inside-fence"),
+    pytest.param("# Plan\n\n## Review\n\nVerdict: approve.\n\n## Steps\n\n- [ ] Ship.\n", id="mid-plan"),
+    pytest.param(PLAN + "\n## review\n\nVerdict: approve.\n", id="lower-case"),
+    pytest.param(PLAN + "\n```\n## Review\nVerdict: approve.\n```\n", id="inside-fence"),
 ])
 def test_a_review_heading_that_is_not_a_terminal_appendix_stays_bound(fingerprint, plan):
     edited = plan.replace("Verdict: approve.", "Verdict: reject.")
@@ -140,25 +118,16 @@ def test_editor_whitespace_is_not_content(fingerprint):
     assert len(set(fingerprint(PLAN, crlf, trailing, extra_blank))) == 1
 
 
-@pytest.mark.parametrize("changed", [
-    pytest.param(INSTRUCTIONS + "Also check negative zero.\n", id="added-line"),
-    pytest.param(INSTRUCTIONS.replace("precision", "Precision"), id="case"),
-    pytest.param(INSTRUCTIONS + "- [x] already run\n", id="ticked-checkbox"),
+@pytest.mark.parametrize("over", [
+    pytest.param({"instructions": INSTRUCTIONS + "Also check negative zero.\n"}, id="instructions-added-line"),
+    pytest.param({"instructions": INSTRUCTIONS.replace("precision", "Precision")}, id="instructions-case"),
+    pytest.param({"instructions": INSTRUCTIONS + "- [x] already run\n"}, id="instructions-ticked-checkbox"),
+    *[pytest.param({"authority": {**AUTHORITY, field: AUTHORITY[field] + "-other"}}, id=f"authority-{field}")
+      for field in AUTHORITY],
+    pytest.param({"contract": "sha256:" + "e" * 64}, id="testing-contract"),
 ])
-def test_unit_test_instructions_are_byte_bound(fingerprint, changed):
+def test_instructions_every_authority_component_and_the_testing_contract_are_bound(fingerprint, over):
+    """Unit-test instructions are byte-bound, as is each authority component and the contract hash."""
     (original,) = fingerprint(PLAN)
-    (edited,) = fingerprint(PLAN, instructions=changed)
+    (edited,) = fingerprint(PLAN, **over)
     assert original != edited
-
-
-@pytest.mark.parametrize("field", list(AUTHORITY))
-def test_every_authority_component_is_bound(fingerprint, field):
-    (original,) = fingerprint(PLAN)
-    (other,) = fingerprint(PLAN, authority={**AUTHORITY, field: AUTHORITY[field] + "-other"})
-    assert original != other
-
-
-def test_the_testing_contract_hash_is_bound(fingerprint):
-    (original,) = fingerprint(PLAN)
-    (other,) = fingerprint(PLAN, contract="sha256:" + "e" * 64)
-    assert original != other
