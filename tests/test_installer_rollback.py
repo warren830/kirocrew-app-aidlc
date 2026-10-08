@@ -9,11 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from conftest import fork_process
-
-from test_installer import (
-    I, do, h, make_harness, payload_v1, payload_v2, reload_repo, run, store, tree,
-)
+import fixtures as F
+from _helpers_c import die_in_child
+from test_installer import I, do, h, make_harness, payload_v1, payload_v2, reload_repo, run, store, tree
 from test_installer_uninstall import OWNED, installed
 
 
@@ -29,6 +27,11 @@ def upgraded(studio, h, installed, make_harness, payload_v2):
 def rollback(harness, repo, **kwargs):
     plan = harness.installer.preview(repo, "rollback")
     return run(harness.installer.rollback(repo, confirm_digest=plan.digest(), **kwargs))
+
+
+def restored_path(up, repo) -> str:
+    """A path the rollback rewrites to the older engine's bytes."""
+    return next(e.path for e in up.installer.preview(repo, "rollback").entries if e.action == "restore_version")
 
 
 def test_one_hop_preview_is_read_only_and_binds_both_receipts(upgraded):
@@ -73,25 +76,18 @@ def test_rollback_restores_old_engine_keeps_user_data_and_can_upgrade_again(stud
 def test_rollback_begin_run_and_terminal_reentry(upgraded):
     root, repo, up, target = upgraded
     plan = up.installer.preview(repo, "rollback")
-    pending = run(up.installer.begin(
-        repo, "rollback", plan_digest=plan.digest(), target_receipt_id=target.receipt_id,
-    ))
-    result = run(up.installer.run(
-        repo, "rollback", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
-    ))
+    pending = run(up.installer.begin(repo, "rollback", plan_digest=plan.digest(), target_receipt_id=target.receipt_id))
+    result = run(up.installer.run(repo, "rollback", plan_digest=plan.digest(), transaction_id=pending.transaction_id))
     assert result.status == "committed"
     before = tree(root)
-    assert run(up.installer.rollback(
-        repo, confirm_digest=plan.digest(), transaction_id=pending.transaction_id,
-    )) == result
+    assert run(up.installer.rollback(repo, confirm_digest=plan.digest(), transaction_id=pending.transaction_id)) == result
     assert tree(root) == before
 
 
 @pytest.mark.parametrize("damage", ["missing", "corrupt", "symlink"])
 def test_rollback_missing_or_corrupt_backup_blocks_without_repo_writes(studio, upgraded, tmp_path, damage):
     root, repo, up, _ = upgraded
-    current = up.installer.current_receipt(repo.repo_id)
-    source = up.data_dir / "backups" / current.transaction_id / OWNED
+    source = up.data_dir / "backups" / up.installer.current_receipt(repo.repo_id).transaction_id / OWNED
     if damage == "corrupt":
         source.write_bytes(b"not the old engine")
     else:
@@ -128,11 +124,16 @@ def test_rollback_only_accepts_the_immediate_prior_receipt(studio, upgraded):
     assert tree(root) == before
 
 
-def test_rollback_requires_known_state_compatibility(upgraded):
+@pytest.mark.parametrize("invalid", ["absent", "8", ["8"], [True], {"8": True}])
+def test_rollback_requires_proven_state_compatibility(upgraded, invalid):
+    """No ``engine_state_versions``, or a malformed one, is not a proof the old engine reads today's state."""
     _, repo, up, target = upgraded
     files = [f.to_json() for f in target.files]
-    for f in files:
-        f.pop("engine_state_versions", None)
+    if invalid == "absent":
+        for f in files:
+            f.pop("engine_state_versions", None)
+    else:
+        files[0]["engine_state_versions"] = invalid
     up.store.update("install_receipts", target.receipt_id, {"files_json": files})
     plan = up.installer.preview(repo, "rollback")
     assert plan.blocking
@@ -141,8 +142,7 @@ def test_rollback_requires_known_state_compatibility(upgraded):
 
 @pytest.mark.parametrize("marker", [
     "before:backup", "after:backup", "before:restore_version", "after:restore_version",
-    "before:post_rollback_validate", "after:post_rollback_validate", "before:commit_rollback",
-    "after:commit_rollback",
+    "before:post_rollback_validate", "after:post_rollback_validate", "before:commit_rollback", "after:commit_rollback",
 ])
 def test_rollback_faults_restore_the_current_engine_or_commit_atomically(upgraded, marker):
     root, repo, up, _ = upgraded
@@ -165,35 +165,23 @@ def test_rollback_rechecks_unchanged_owned_files_before_commit(upgraded):
     files = {f.path for f in target.files if f.kind == "file"}
     unchanged = next(e.path for e in plan.entries if e.action == "identical" and e.path in files)
     up.fault.on("before:commit_rollback", lambda: (root / unchanged).write_bytes(b"concurrent user edit"))
-    result = rollback(up, repo)
-    assert result.status == "recovery_required"
+    assert rollback(up, repo).status == "recovery_required"
     assert (root / unchanged).read_bytes() == b"concurrent user edit"
     assert up.installer.current_receipt(repo.repo_id).engine_version == "2.7.0"
 
 
-def test_rollback_keeps_a_post_backup_user_edit(upgraded):
+@pytest.mark.parametrize("when", ["before", "after"])
+def test_rollback_never_overwrites_a_user_edit_at_a_file_boundary(upgraded, when):
+    """Before the first write and after a path was restored, a user edit is the user's and the result is recovery."""
     root, repo, up, _ = upgraded
-    plan = up.installer.preview(repo, "rollback")
-    changed = next(e.path for e in plan.entries if e.action == "restore_version")
-    up.fault.on(f"after:rollback_path:{changed}",
-                lambda: (root / changed).write_bytes(b"new user content"))
-    result = rollback(up, repo)
-    assert result.status == "recovery_required"
-    assert (root / changed).read_bytes() == b"new user content"
-
-
-def test_rollback_does_not_overwrite_an_edit_before_the_first_write(upgraded):
-    root, repo, up, _ = upgraded
-    plan = up.installer.preview(repo, "rollback")
-    changed = next(e.path for e in plan.entries if e.action == "restore_version")
+    changed = restored_path(up, repo)
 
     def edit():
         (root / changed).parent.mkdir(parents=True, exist_ok=True)
         (root / changed).write_bytes(b"new user content")
 
-    up.fault.on(f"before:rollback_path:{changed}", edit)
-    result = rollback(up, repo)
-    assert result.status == "recovery_required"
+    up.fault.on(f"{when}:rollback_path:{changed}", edit)
+    assert rollback(up, repo).status == "recovery_required"
     assert (root / changed).read_bytes() == b"new user content"
 
 
@@ -241,22 +229,27 @@ def test_rollback_record_commit_is_atomic(upgraded, monkeypatch):
     assert {r.receipt_id for r in up.installer.receipts(repo.repo_id)} == ids
 
 
-def test_failed_version_rollback_can_be_recovered_and_retried(upgraded):
-    root, repo, up, _ = upgraded
-    before = tree(root)
+def interrupted_rollback(up, repo):
+    """``(plan, failed)``: a version rollback whose restore and then its own undo failed."""
     plan = up.installer.preview(repo, "rollback")
     up.fault.at("after:restore_version", "before:restore_backups")
     failed = rollback(up, repo)
     assert failed.status == "recovery_required"
     up.fault.markers.clear()
-    result = run(up.installer.recover_rollback(
-        repo, transaction_id=failed.transaction_id, confirm_digest=plan.digest(),
-    ))
+    return plan, failed
+
+
+def test_failed_version_rollback_can_be_recovered_and_retried(upgraded):
+    root, repo, up, _ = upgraded
+    before = tree(root)
+    plan, failed = interrupted_rollback(up, repo)
+    result = run(up.installer.recover_rollback(repo, transaction_id=failed.transaction_id,
+                                               confirm_digest=plan.digest()))
     assert result.status == "rolled_back" and tree(root) == before
     assert rollback(up, repo).status == "committed"
 
 
-def test_real_process_death_during_version_rollback_recovers(studio, upgraded):
+def test_real_process_death_during_version_rollback_recovers(upgraded):
     root, repo, up, _ = upgraded
     before = tree(root)
     plan = up.installer.preview(repo, "rollback")
@@ -266,37 +259,24 @@ def test_real_process_death_during_version_rollback_recovers(studio, upgraded):
         up.store.close()
         up.store.open()
         up.fault.on("after:restore_version", lambda: os._exit(77))
-        run(up.installer.run(
-            repo, "rollback", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
-        ))
+        run(up.installer.run(repo, "rollback", plan_digest=plan.digest(), transaction_id=pending.transaction_id))
 
-    process = fork_process(child)
-    process.start()
-    process.join(15)
-    if process.is_alive():
-        process.terminate()
-        process.join()
-        pytest.fail("isolated rollback process did not exit")
-    assert process.exitcode == 77
+    die_in_child(child)
     assert run(up.installer.settle_abandoned()) == [pending.transaction_id]
     dead = up.installer.transaction(pending.transaction_id)
     assert dead.status == "recovery_required" and (Path(dead.failed_dir) / "transaction.json").is_file()
     # The child died holding the lock; the recovery can take it only because the kernel let go.
-    result = run(up.installer.recover_rollback(
-        repo, transaction_id=dead.transaction_id, confirm_digest=plan.digest(),
-    ))
+    result = run(up.installer.recover_rollback(repo, transaction_id=dead.transaction_id,
+                                               confirm_digest=plan.digest()))
     assert result.status == "rolled_back" and tree(root) == before
     assert run(up.installer.settle_abandoned()) == []
 
 
 @pytest.mark.parametrize("damage", ["journal_omission", "journal_path", "backup"])
 def test_version_rollback_recovery_rejects_damaged_evidence(studio, upgraded, damage):
-    root, repo, up, _ = upgraded
-    plan = up.installer.preview(repo, "rollback")
-    up.fault.at("after:restore_version", "before:restore_backups")
-    result = rollback(up, repo)
-    assert result.status == "recovery_required"
-    directory = up.data_dir / "backups" / result.transaction_id
+    _, repo, up, _ = upgraded
+    plan, failed = interrupted_rollback(up, repo)
+    directory = up.data_dir / "backups" / failed.transaction_id
     journal_path = directory / "rollback-journal.json"
     journal = json.loads(journal_path.read_bytes())
     if damage == "journal_omission":
@@ -308,11 +288,9 @@ def test_version_rollback_recovery_rejects_damaged_evidence(studio, upgraded, da
         (directory / file["path"]).write_bytes(b"corrupt backup")
     if damage != "backup":
         journal_path.write_text(json.dumps(journal))
-    up.fault.markers.clear()
     try:
-        recovered = run(up.installer.recover_rollback(
-            repo, transaction_id=result.transaction_id, confirm_digest=plan.digest(),
-        ))
+        recovered = run(up.installer.recover_rollback(repo, transaction_id=failed.transaction_id,
+                                                      confirm_digest=plan.digest()))
     except studio.errors.StudioError:
         pass
     else:
@@ -333,24 +311,20 @@ def test_rollback_confirmation_changes_when_only_user_prose_changes(studio, upgr
 
 
 def test_rollback_rejects_a_mismatched_reserved_confirmation(studio, upgraded):
-    root, repo, up, target = upgraded
+    root, repo, up, _ = upgraded
     plan = up.installer.preview(repo, "rollback")
     pending = run(up.installer.begin(repo, "rollback", plan_digest=plan.digest()))
     before = tree(root)
     with pytest.raises(studio.errors.StudioError):
         run(up.installer.rollback(repo, confirm_digest="wrong", transaction_id=pending.transaction_id))
     with pytest.raises(studio.errors.StudioError):
-        run(up.installer.rollback(
-            repo, confirm_digest=plan.digest(), target_receipt_id="other",
-            transaction_id=pending.transaction_id,
-        ))
+        run(up.installer.rollback(repo, confirm_digest=plan.digest(), target_receipt_id="other",
+                                  transaction_id=pending.transaction_id))
     assert tree(root) == before
 
 
 def test_rollback_rejects_root_replacement_at_a_file_boundary(upgraded, tmp_path):
     root, repo, up, _ = upgraded
-    plan = up.installer.preview(repo, "rollback")
-    path = next(e.path for e in plan.entries if e.action == "restore_version")
     replacement = {}
 
     def replace_root():
@@ -359,31 +333,18 @@ def test_rollback_rejects_root_replacement_at_a_file_boundary(upgraded, tmp_path
         shutil.copytree(original, root)
         replacement.update(tree(root))
 
-    up.fault.on(f"before:rollback_path:{path}", replace_root)
+    up.fault.on(f"before:rollback_path:{restored_path(up, repo)}", replace_root)
     result = rollback(up, repo)
     assert result.status == "recovery_required" and tree(root) == replacement
 
 
 def test_rollback_refuses_incompatible_workflow_state(upgraded, repo_builder):
-    import fixtures as F
-
     root, repo, up, _ = upgraded
     repo_builder.with_intent("260901-ledger-export", state=F.state_path(F.PAYLOAD_230, "260901-ledger-export"))
     before = tree(root / "aidlc")
     plan = up.installer.preview(repo, "rollback")
     assert plan.blocking and plan.state_version_blocked and plan.state_versions_found == (7,)
     assert tree(root / "aidlc") == before
-
-
-@pytest.mark.parametrize("invalid", ["8", ["8"], [True], {"8": True}])
-def test_malformed_compatibility_metadata_is_not_a_proof(upgraded, invalid):
-    _, repo, up, target = upgraded
-    files = [f.to_json() for f in target.files]
-    files[0]["engine_state_versions"] = invalid
-    up.store.update("install_receipts", target.receipt_id, {"files_json": files})
-    plan = up.installer.preview(repo, "rollback")
-    assert plan.blocking
-    assert any(e.reason == "target_compatibility_unknown" for e in plan.blockers)
 
 
 def test_rollback_receipt_can_be_uninstalled(studio, upgraded):
