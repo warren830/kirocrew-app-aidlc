@@ -326,7 +326,7 @@ def test_snapshot_reads_one_coherent_moment(gate_snap, gate_repo, C):
                                           / GATE_DIR / "aidlc-state.md").read_text("utf-8"))
     # Read off the live payload, so the version literal belongs to `constants`, not to this assertion.
     assert snap.engine is not None and snap.engine.engine_version == C.BUNDLED_ENGINE_VERSION
-    assert len(snap.graph) == C.BUNDLED_STAGE_COUNT == 33
+    assert len(snap.graph) == 33
     assert snap.layout == "spaces"
     assert snap.stage_dir_rel and snap.stage_dir_rel.endswith(f"inception/{GATE_STAGE}")
 

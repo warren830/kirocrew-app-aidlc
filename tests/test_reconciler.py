@@ -254,7 +254,7 @@ class FakeBroker:
             reason=fingerprint,
             evidence=dict(evidence, fingerprint=fingerprint, fingerprint_class=fingerprint_class),
         )
-        opened = fingerprint_class in self._m.constants.DETERMINISTIC_FINGERPRINT_CLASSES
+        opened = fingerprint_class not in self._m.constants.TRANSIENT_FINGERPRINT_CLASSES
         return moved, opened
 
     async def upsert_derived(self, seeds: Sequence[Any]) -> list[SimpleNamespace]:
@@ -336,7 +336,7 @@ class FakeBroker:
 def svc(studio, fake_ctx, fake_host, clock, ids, fake_git, R):
     """Real modules, one double (`actions`), no ``scan_pool`` (so scans use the default executor)."""
     storage = studio.storage.Storage(
-        Path(fake_ctx.data_dir) / studio.constants.DB_FILENAME, clock=clock, ids=ids
+        Path(fake_ctx.data_dir) / studio.constants.DB_FILENAME, clock=clock
     )
     storage.open()
     host = studio.sessions.HostBridge(clock, logging.getLogger("test.host"))

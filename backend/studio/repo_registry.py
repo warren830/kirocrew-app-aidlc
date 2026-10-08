@@ -28,6 +28,7 @@ from . import security
 from .engine import find_bun
 from .errors import StudioError
 from .storage import EvidenceRef, Storage
+from .wire import WireRecord
 
 if TYPE_CHECKING:  # annotations only — importing these at runtime would invert the module layering
     from .constants import Clock, IdFactory
@@ -70,27 +71,8 @@ _REBIND_COLUMNS = ("canonical_path", "resolved_identity", "git_common_dir_identi
 # ---- records ----
 
 
-def _json(value: Any) -> Any:
-    """One field on the wire: a record through its ``to_json``, a sequence as a list (records inside it
-    through theirs), a mapping as a shallow copy."""
-    if callable(getattr(value, "to_json", None)):
-        return value.to_json()
-    if isinstance(value, (list, tuple)):
-        return [v.to_json() if callable(getattr(v, "to_json", None)) else v for v in value]
-    return dict(value) if isinstance(value, Mapping) else value
-
-
-class _Record:
-    """``to_json`` for the records below: fields in declaration order, which is the wire order."""
-
-    __slots__ = ()
-
-    def to_json(self) -> dict[str, Any]:
-        return {f.name: _json(getattr(self, f.name)) for f in fields(self)}
-
-
 @dataclass(frozen=True, slots=True)
-class ResolvedIdentity(_Record):
+class ResolvedIdentity(WireRecord):
     """What the filesystem says about one directory, and whether that is provable."""
 
     canonical_path: str
@@ -102,7 +84,7 @@ class ResolvedIdentity(_Record):
 
 
 @dataclass(frozen=True, slots=True)
-class HarnessDir(_Record):
+class HarnessDir(WireRecord):
     """One ``<dir>/tools`` engine tree found in a repository, read from its own files."""
 
     dir: str
@@ -115,7 +97,7 @@ class HarnessDir(_Record):
 
 
 @dataclass(frozen=True, slots=True)
-class ReceiptSummary(_Record):
+class ReceiptSummary(WireRecord):
     """A receipt without its file list. Defined here because the registry sits below the installer."""
 
     receipt_id: str
@@ -134,7 +116,7 @@ class ReceiptSummary(_Record):
 
 
 @dataclass(frozen=True, slots=True)
-class InstallHealth(_Record):
+class InstallHealth(WireRecord):
     """Whether AI-DLC is installed here, from disk bytes plus Studio's own receipt."""
 
     status: str
@@ -153,7 +135,7 @@ class InstallHealth(_Record):
 
 
 @dataclass(frozen=True, slots=True)
-class GitPreflight(_Record):
+class GitPreflight(WireRecord):
     """The git facts a preflight shows. Filled from ``GitObserver.observe``; never a write verb."""
 
     is_repo: bool
@@ -163,7 +145,7 @@ class GitPreflight(_Record):
 
 
 @dataclass(frozen=True, slots=True)
-class ToolProbe(_Record):
+class ToolProbe(WireRecord):
     """Where a tool is; ``version`` only from an injected prober. ``source``/``searched`` are
     ``engine.find_bun``'s answer: "missing" is only actionable next to the locations that were tried."""
 
@@ -175,7 +157,7 @@ class ToolProbe(_Record):
 
 
 @dataclass(frozen=True, slots=True)
-class AidlcLayoutProbe(_Record):
+class AidlcLayoutProbe(WireRecord):
     """Which AI-DLC workspace layout the repository has, and how much is in it."""
 
     layout: str | None
@@ -185,7 +167,7 @@ class AidlcLayoutProbe(_Record):
 
 
 @dataclass(frozen=True, slots=True)
-class PreflightFinding(_Record):
+class PreflightFinding(WireRecord):
     """A preflight warning in ``consistency.Finding``'s exact JSON shape (importing it would be a cycle)."""
 
     code: str
@@ -196,7 +178,7 @@ class PreflightFinding(_Record):
 
 
 @dataclass(frozen=True, slots=True)
-class PreflightReport(_Record):
+class PreflightReport(WireRecord):
     """Everything a read-only look at a candidate directory can establish (FR-INST-001)."""
 
     path_input: str
@@ -220,7 +202,7 @@ class PreflightReport(_Record):
 
 
 @dataclass(frozen=True, slots=True)
-class RepoRecord(_Record):
+class RepoRecord(WireRecord):
     """One ``repos`` row; ``repo_id`` outlives every other field, including the identity (C01). The handler
     adds §2.2's ``install``/``counts``/``leases``/``git``/``findings`` around ``to_json()``."""
 
@@ -254,7 +236,7 @@ class RepoRecord(_Record):
 
 
 @dataclass(frozen=True, slots=True)
-class RepoScan(_Record):
+class RepoScan(WireRecord):
     """One look at one repository. ``RepoRegistry.rescan`` fills the repo-level half; the reconciler adds
     ``intents``/``findings`` (``IntentSummary``/``Finding``, typed loosely: those modules sit above)."""
 

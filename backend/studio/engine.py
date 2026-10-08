@@ -15,7 +15,7 @@ import os
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass, fields, replace
+from dataclasses import dataclass, replace
 from itertools import takewhile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 from . import constants as C
 from . import security
 from .errors import StudioError
+from .wire import WireRecord
 
 if TYPE_CHECKING:  # annotations only: importing these at runtime would invert the module layering
     from .activity import ActivityProjector
@@ -200,18 +201,8 @@ def _validate_kwarg(name: str, value: str) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def _wire(obj: Any, *omit: str) -> dict[str, Any]:
-    """A dataclass's fields in declaration order with tuples as lists: the shape the wire types pin."""
-    out: dict[str, Any] = {}
-    for field in fields(obj):
-        if field.name not in omit:
-            value = getattr(obj, field.name)
-            out[field.name] = list(value) if isinstance(value, tuple) else value
-    return out
-
-
 @dataclass(frozen=True, slots=True)
-class EngineResult:
+class EngineResult(WireRecord):
     """One invocation, safe to store and render: argv/stdout/stderr are capped and redacted at capture, and
     absolute paths outside the repository (the interpreter's) become ``<path>``. ``side_effects`` lets a caller
     holding only the result label a ``doctor`` run as audit-appending.
@@ -228,16 +219,14 @@ class EngineResult:
     ok: bool
     side_effects: tuple[str, ...] = ()
 
-    def to_json(self) -> dict[str, Any]:
-        return _wire(self)
-
 
 @dataclass(frozen=True, slots=True)
-class CursorReadback:
+class CursorReadback(WireRecord):
     """Where the cursor really points after a switch: observed values, not requested ones. ``mismatch`` is empty
     exactly when ``ok``; ``to_json`` leaves out ``results`` (transcripts live in the activity table, §3.1).
     """
 
+    _wire_keys = ("ok", "space", "dir_name", "uuid", "state_sha256", "mismatch")
     ok: bool
     space: str
     dir_name: str
@@ -245,9 +234,6 @@ class CursorReadback:
     state_sha256: str | None
     mismatch: tuple[str, ...]
     results: tuple[EngineResult, ...] = ()
-
-    def to_json(self) -> dict[str, Any]:
-        return _wire(self, "results")
 
 
 #: Mismatch codes ``switch_cursor_sync`` may report; the UI renders one sentence per code.
@@ -491,17 +477,6 @@ class EngineRunner:
             mismatch=tuple(mismatch),
         )
         return readback, listing
-
-    # ---- activity ----
-
-    async def drain_activity(self) -> int:
-        """Kept for its callers: ``_record_run`` writes through ``record_sync`` at once, so no row ever waits."""
-        return 0
-
-    @property
-    def pending_activity(self) -> int:
-        """Always 0, for the same reason."""
-        return 0
 
     # ---- internals ----
 

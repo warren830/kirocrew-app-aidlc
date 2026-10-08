@@ -15,11 +15,12 @@ import asyncio
 import fcntl
 import hashlib
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from .errors import LeaseHeld, StudioError
+from .wire import WireRecord
 
 if TYPE_CHECKING:  # pragma: no cover - typing only; these modules are never imported at runtime here
     from .activity import ActivityProjector
@@ -41,7 +42,7 @@ RETRY_AFTER_SECS = 15
 
 
 @dataclass(frozen=True, slots=True)
-class LeaseRecord:
+class LeaseRecord(WireRecord):
     """One live lease as ``/leases`` shows it: a grant this process holds, or an in-flight action."""
 
     kind: str
@@ -74,13 +75,10 @@ class LeaseGrant:
     def from_record(cls, rec: LeaseRecord) -> "LeaseGrant":
         return cls(rec.kind, rec.resolved_repo_identity, int(rec.generation), rec.acquired_at, rec.repo_id)
 
-    def to_json(self) -> dict[str, Any]:
-        return asdict(self)
-
 
 def lease_view(rec: LeaseRecord, *, intent_key: str | None = None) -> dict[str, Any]:
     """The ``LeaseView`` JSON (§1.10/§2); ``intent_key`` needs the binding table, so the handler passes it."""
-    return {**asdict(rec), "intent_key": intent_key}
+    return {**rec.to_json(), "intent_key": intent_key}
 
 
 class RepoScheduler:

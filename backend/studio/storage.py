@@ -1,32 +1,17 @@
-"""Studio's own crash-safe store: one SQLite file, one connection, one transaction per call.
+"""Studio's own crash-safe store: one SQLite file, one connection, one transaction per public method.
 
-Why a database at all: the host's ``ctx.storage`` is a JSON key-value directory with an atomic
-*replace* but no fsync, no locking and no compare-and-set (``01 §2.3``), so two interleaved
-read-modify-write sequences silently lose one of them. Every durability promise in the PRD — a
-decision recorded on disk *before* it is sent, an action status only one writer may advance — needs a
-real CAS and a real fsync.
+The host's ``ctx.storage`` has no fsync, no locking and no compare-and-set (``01 §2.3``), and the PRD's durability
+promises (a decision on disk *before* it is sent, an action status only one writer may advance) need all three:
 
-The shape of this module and the failure each choice prevents:
+* **One connection behind an ``RLock``**, so "one transaction per public method" is literal: no second connection
+  can interleave a half-finished write.
+* **``BEGIN IMMEDIATE``, never the driver's implicit transaction.** A deferred one takes its write lock halfway
+  through and can fail with ``SQLITE_BUSY`` after the generation it compares against was read.
+* **WAL + ``synchronous=FULL``.** With ``NORMAL`` a power loss can drop a committed ``Delivering`` row, and Studio
+  would replay a decision the model has already seen.
+* **``foreign_keys=ON``**, so removing a repository cannot leave actions and bindings a later scan resurrects.
 
-* **One connection guarded by an ``RLock``.** ``check_same_thread=False`` plus a re-entrant lock is
-  simpler to reason about than a pool and makes "one transaction per public method" literally true:
-  no second connection can interleave a half-finished write, so a reader inside a method sees exactly
-  the rows that method is about to commit.
-* **Explicit ``BEGIN IMMEDIATE``, never the driver's implicit transaction.** ``isolation_level=None``
-  turns off sqlite3's guessing. A *deferred* transaction takes its write lock halfway through, so it
-  can fail with ``SQLITE_BUSY`` *after* the method has already read the generation it is about to
-  compare against; ``IMMEDIATE`` takes the write lock up front and that race disappears.
-* **WAL + ``synchronous=FULL``.** The submit path must be able to promise "the ``Delivering`` record
-  is on disk" before the browser is told to send the prompt. With ``synchronous=NORMAL`` a power loss
-  can drop that record, and Studio would then replay a decision the model has already seen — the one
-  duplicate the whole design exists to prevent.
-* **``foreign_keys=ON``.** Removing a repository must not leave orphaned actions and bindings behind
-  that a later scan would resurrect as live cards for a repo the user deleted.
-* **Nothing here parses AI-DLC files, touches a repository, or judges lease eligibility.**
-
-Threading: this module is **sync and blocking**. Callers reach it through
-``await asyncio.to_thread(...)`` (§0.6); it never awaits, never spawns a thread and never holds the
-lock across anything but its own SQLite calls.
+Sync and blocking: callers use ``asyncio.to_thread`` (§0.6); the lock is held only across this module's own calls.
 """
 
 from __future__ import annotations
@@ -42,14 +27,16 @@ from typing import TYPE_CHECKING, Any, Iterator, Mapping
 
 from . import constants as C
 from .errors import StaleGeneration, StudioError
+from .wire import WireRecord
 
-if TYPE_CHECKING:  # the injectable protocols live in constants.py (§0.2); annotations only
-    from .constants import Clock, IdFactory
+if TYPE_CHECKING:  # annotations only
+    from .constants import Clock
 
-#: Bumped only together with a new entry in ``MIGRATIONS``. ``open()`` is a no-op when the file
-#: already carries this version, so a restart costs nothing.
-SCHEMA_VERSION = 3
+#: Bumped only together with a new entry in ``MIGRATIONS``; ``open()`` on a file already there is a no-op.
+SCHEMA_VERSION = 4
 
+#: Each script is the historical record of its version: ``SCHEMA_V1`` stays exactly as it shipped, so a fresh file
+#: (which runs the whole ladder) and a migrated one agree on what every version was.
 SCHEMA_V1 = """\
 CREATE TABLE IF NOT EXISTS schema_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
@@ -199,29 +186,15 @@ CREATE TABLE IF NOT EXISTS migrations(
 );
 """
 
-#: ``target_version -> DDL script``. The ladder is data so that ``open()`` is a plain loop and a
-#: future version cannot be applied by accident: a file stamped with a version this build does not
-#: know about is refused instead of being written to with the wrong shape.
-#: ``boot_id`` on an admin lease, so a lease left behind by a dead process can be proven dead.
-#:
-#: Before this column the only proof ``leases._prove_admin`` could offer was "the install transaction
-#: that took this lease has settled" — which no non-transactional admin operation ever satisfies, and
-#: which nothing settles for a transaction whose process was killed. The result was a repository that
-#: could never run another turn and could never be repaired. A boot id is a *positive* proof of owner
-#: death (the process that took the lease is gone), never an age proof, so FR-SES-007 still holds.
-#:
-#: ``SCHEMA_V1`` is left exactly as it shipped: it is the historical record of version 1, and editing it
-#: would make a fresh database disagree with a migrated one about what version 1 ever was.
+#: Version 2 gave admin leases the ``boot_id`` that proved their owner dead.
 SCHEMA_V2 = """\
 ALTER TABLE admin_leases ADD COLUMN boot_id TEXT;
 """
 
-#: Version 3 folds the two transient action statuses into their neighbours: ``Processing`` becomes
-#: ``Delivered`` with ``evidence.turn_started_at`` (a row that never recorded it was not queued, so its turn
-#: started with the delivery), ``DeliveryUncertain`` becomes ``ReconciliationRequired``, and ``Draft`` — never
-#: created — becomes ``Queued``. History is renamed only where the UI lost the label (``Processing`` keeps
-#: its: it still names a ``Delivered`` row whose turn started). The live-dedupe index is rebuilt over the
-#: statuses that remain.
+#: Version 3 folds the transient action statuses into their neighbours: ``Processing`` becomes ``Delivered`` with
+#: ``evidence.turn_started_at`` (the delivery's stamp when it recorded none: it was not queued), ``DeliveryUncertain``
+#: ``ReconciliationRequired`` and the never-created ``Draft`` ``Queued``. History keeps ``Processing``, a label the UI
+#: still has, and the live-dedupe index is rebuilt over the statuses that remain.
 SCHEMA_V3 = """\
 UPDATE actions SET status = 'Delivered', evidence_json = json_set(COALESCE(evidence_json, '{}'),
   '$.turn_started_at', COALESCE(json_extract(evidence_json, '$.turn_started_at'), delivered_at, updated_at))
@@ -237,75 +210,50 @@ CREATE UNIQUE INDEX actions_live_dedupe ON actions(dedupe_key)
   WHERE dedupe_key IS NOT NULL AND status IN ('Queued','Delivering','Delivered','ReconciliationRequired','NotDelivered');
 """
 
-MIGRATIONS: dict[int, str] = {1: SCHEMA_V1, 2: SCHEMA_V2, 3: SCHEMA_V3}
+#: Version 4 drops the tables nothing reads any more: a lease is an in-flight action or a ``flock`` (§1.10), events
+#: live in an in-memory ring, calibration is gone, and the console migration that wrote ``migrations`` never ran.
+SCHEMA_V4 = """\
+DROP TABLE IF EXISTS execution_leases;
+DROP TABLE IF EXISTS admin_leases;
+DROP TABLE IF EXISTS lease_generations;
+DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS calibration;
+DROP TABLE IF EXISTS migrations;
+"""
 
-#: ``table -> (generation column, timestamp column)``. Per table because the lease tables have no
-#: ``updated_at`` — writing one would fail the whole CAS (review R06).
-CAS_TABLES: dict[str, tuple[str, str]] = {
-    "actions": ("status_generation", "updated_at"),
-    "intent_bindings": ("binding_generation", "updated_at"),
-    "execution_leases": ("generation", "heartbeat_at"),
-    "admin_leases": ("generation", "heartbeat_at"),
-}
+#: ``target_version -> script``. Data, so ``open()`` is a plain loop and a file stamped with a version this build
+#: does not know is refused instead of written to with the wrong shape.
+MIGRATIONS: dict[int, str] = {1: SCHEMA_V1, 2: SCHEMA_V2, 3: SCHEMA_V3, 4: SCHEMA_V4}
 
-#: ``table -> primary key column``. The generic helpers refuse a table that is not listed, which is
-#: also the guard that keeps a caller-supplied name out of the SQL string.
+#: ``table -> generation column``; ``cas_update`` advances it and stamps ``updated_at``.
+CAS_TABLES: dict[str, str] = {"actions": "status_generation", "intent_bindings": "binding_generation"}
+
+#: ``table -> primary key``. The generic helpers refuse any other table, which also keeps a caller-supplied name
+#: out of the SQL.
 TABLE_KEYS: dict[str, str] = {
-    "schema_meta": "key",
-    "repos": "id",
-    "intent_bindings": "binding_key",
-    "actions": "action_id",
-    "action_transitions": "id",
-    "execution_leases": "resolved_repo_identity",
-    "admin_leases": "resolved_repo_identity",
-    "lease_generations": "resolved_repo_identity",
-    "install_transactions": "transaction_id",
-    "install_receipts": "receipt_id",
-    "preferences": "key",
-    "activity": "id",
-    "events": "seq",
-    "calibration": "id",
-    "breakers": "key",
-    "advisor_drafts": "draft_id",
-    "migrations": "id",
+    "schema_meta": "key", "repos": "id", "intent_bindings": "binding_key", "actions": "action_id",
+    "action_transitions": "id", "install_transactions": "transaction_id", "install_receipts": "receipt_id",
+    "preferences": "key", "activity": "id", "breakers": "key", "advisor_drafts": "draft_id",
 }
 
-_ORDER_BY_TOKEN = "ASC", "DESC"
 
-
-# --------------------------------------------------------------------------- #
-# records
-# --------------------------------------------------------------------------- #
+# ---- records -------------------------------------------------------------- #
 
 
 @dataclass(frozen=True, slots=True)
-class EvidenceRef:
-    """A pointer to the thing that justifies an activity row — never the thing itself.
-
-    Defined here rather than in ``activity.py`` because ``Storage`` must construct these when it
-    reads a row back, and the store may not import the layer above it. ``activity.py`` re-exports the
-    three activity dataclasses so §1.17's names resolve.
-    """
+class EvidenceRef(WireRecord):
+    """A pointer to what justifies an activity row, never the thing itself. Defined here, not in ``activity.py``
+    (which re-exports it), because the store builds these when it reads a row back."""
 
     kind: str
     ref: str
     detail: str | None = None
 
-    def to_json(self) -> dict[str, Any]:
-        return {"kind": self.kind, "ref": self.ref, "detail": self.detail}
-
 
 @dataclass(frozen=True, slots=True)
-class ActivityRow:
-    """One Studio-originated activity row.
-
-    Every field has a default so a caller can name only what it knows; the NOT NULL columns are
-    validated in ``activity_append`` instead, which keeps the failure at the write (with the row in
-    the message) rather than as a bare sqlite constraint error.
-
-    ``message_key`` + ``params`` and never English prose: the UI renders activity in the user's
-    locale, so a stored sentence would be untranslatable forever.
-    """
+class ActivityRow(WireRecord):
+    """One Studio activity row: ``message_key`` + ``params``, never prose, so the UI can render it in the user's
+    locale. Every field defaults; ``activity_append`` checks the required ones and names what is missing."""
 
     id: int = 0
     at: str = ""
@@ -325,27 +273,6 @@ class ActivityRow:
     redacted: bool = False
     human_text: str | None = None
 
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "id": self.id,
-            "at": self.at,
-            "source": self.source,
-            "kind": self.kind,
-            "severity": self.severity,
-            "repo_id": self.repo_id,
-            "space": self.space,
-            "intent_dir": self.intent_dir,
-            "intent_key": self.intent_key,
-            "stage": self.stage,
-            "action_id": self.action_id,
-            "session_key": self.session_key,
-            "message_key": self.message_key,
-            "params": self.params,
-            "evidence": [e.to_json() for e in self.evidence],
-            "redacted": self.redacted,
-            "human_text": self.human_text,
-        }
-
 
 @dataclass(frozen=True, slots=True)
 class ActivityQuery:
@@ -364,35 +291,17 @@ class ActivityQuery:
     cursor: str | None = None
     limit: int = C.ACTIVITY_DEFAULT_LIMIT
 
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "repo_id": self.repo_id,
-            "space": self.space,
-            "intent_dir": self.intent_dir,
-            "source": self.source,
-            "stage": self.stage,
-            "kind": self.kind,
-            "action_type": self.action_type,
-            "severity": self.severity,
-            "since": self.since,
-            "until": self.until,
-            "cursor": self.cursor,
-            "limit": self.limit,
-        }
+
+#: The equality filters of ``ActivityQuery``, each a column of the same name.
+_ACTIVITY_FILTERS = ("repo_id", "space", "intent_dir", "source", "stage", "kind", "severity")
 
 
-# --------------------------------------------------------------------------- #
-# helpers
-# --------------------------------------------------------------------------- #
+# ---- helpers -------------------------------------------------------------- #
 
 
 def _statements(script: str) -> Iterator[str]:
-    """Split a DDL script into statements.
-
-    ``executescript`` commits the pending transaction before it runs, which would silently break the
-    one-transaction rule for migrations, and a naive ``split(";")`` mangles this schema because two
-    column comments contain a semicolon. ``sqlite3.complete_statement`` is the tokenizer's own answer.
-    """
+    """Split a DDL script into statements. Not ``executescript``: it commits the pending transaction first, which
+    would break the one-transaction rule for migrations. Not ``split(";")``: two column comments contain one."""
     buf = ""
     for line in script.splitlines(keepends=True):
         buf += line
@@ -417,64 +326,29 @@ def _decode_cursor(cursor: str) -> int:
         raise StudioError("bad_param", "malformed cursor", details={"param": "cursor"}) from None
 
 
-def _field(row: Any, name: str, default: Any = None) -> Any:
-    """Read one field from an ActivityRow-shaped object or a plain mapping.
-
-    Duck-typed on purpose: ``activity.py`` may hand over its own equivalent dataclass, and Storage
-    should persist it rather than insist on an identity comparison of two structurally equal types.
-    """
-    if isinstance(row, Mapping):
-        return row.get(name, default)
-    value = getattr(row, name, default)
-    return default if value is None and default is not None else value
-
-
-def _intent_key(space: str | None, intent_dir: str | None) -> str | None:
-    """``constants.intent_key_for`` with the null guard rows need: an activity row may name a repository
-    and no intent at all, and a missing space means the default one."""
-    if not intent_dir:
-        return None
-    return C.intent_key_for(space or C.DEFAULT_SPACE, intent_dir)
-
-
-def _decode_evidence(raw: Any) -> tuple[EvidenceRef, ...]:
-    if not raw:
-        return ()
-    data = json.loads(raw) if isinstance(raw, str) else raw
+def _decode_evidence(raw: str | None) -> tuple[EvidenceRef, ...]:
+    data = json.loads(raw) if raw else []
     if isinstance(data, Mapping):
         data = [data]
-    out: list[EvidenceRef] = []
-    for item in data or ():
-        if isinstance(item, Mapping):
-            out.append(
-                EvidenceRef(
-                    kind=str(item.get("kind", "studio")),
-                    ref=str(item.get("ref", "")),
-                    detail=item.get("detail"),
-                )
-            )
-    return tuple(out)
+    return tuple(
+        EvidenceRef(kind=str(item.get("kind", "studio")), ref=str(item.get("ref", "")), detail=item.get("detail"))
+        for item in data if isinstance(item, Mapping)
+    )
 
 
 def _dumps(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-# --------------------------------------------------------------------------- #
-# Storage
-# --------------------------------------------------------------------------- #
+# ---- Storage -------------------------------------------------------------- #
 
 
 class Storage:
     """The single writer for everything Studio owns. Sync; call through ``asyncio.to_thread``."""
 
-    def __init__(self, path: Path, *, clock: "Clock", ids: "IdFactory") -> None:
+    def __init__(self, path: Path, *, clock: "Clock") -> None:
         self._path = Path(path)
         self._clock = clock
-        #: Held for symmetry with every other service (and so a future migration can mint ids
-        #: without a signature change); Storage itself never invents an id — every key it stores was
-        #: chosen by the module that owns that record.
-        self._ids = ids
         self._lock = threading.RLock()
         self._conn: sqlite3.Connection | None = None
         self._depth = 0
@@ -487,20 +361,13 @@ class Storage:
         return self._path
 
     def open(self) -> None:
-        """Create the file, apply the PRAGMAs, run migrations up to ``SCHEMA_VERSION``.
-
-        Idempotent: ``Services.start`` and a reconciler restart may both call it.
-        """
+        """Create the file, apply the PRAGMAs, migrate up to ``SCHEMA_VERSION``. Idempotent."""
         with self._lock:
             if self._conn is not None:
                 return
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            conn = sqlite3.connect(
-                str(self._path),
-                check_same_thread=False,
-                isolation_level=None,
-                timeout=C.SQLITE_BUSY_TIMEOUT_MS / 1000.0,
-            )
+            conn = sqlite3.connect(str(self._path), check_same_thread=False, isolation_level=None,
+                                   timeout=C.SQLITE_BUSY_TIMEOUT_MS / 1000.0)
             conn.row_factory = sqlite3.Row
             try:
                 conn.execute("PRAGMA journal_mode=WAL")
@@ -516,7 +383,7 @@ class Storage:
                 raise
 
     def close(self) -> None:
-        """Close the connection. Idempotent, and safe to call from ``Services.stop``."""
+        """Close the connection. Idempotent."""
         with self._lock:
             conn, self._conn = self._conn, None
             self._depth = 0
@@ -531,11 +398,10 @@ class Storage:
     # ---- generic ----
 
     def insert(self, table: str, row: Mapping[str, Any]) -> None:
-        """Insert one row. ``*_json`` values are JSON-encoded; a ``str`` is taken as already encoded.
+        """Insert one row; ``*_json`` values are encoded (a ``str`` is taken as already encoded).
 
-        A unique-index violation is deliberately **not** translated into a ``StudioError``: the
-        ``actions_live_dedupe`` collision is information the caller acts on (a live card for that
-        boundary already exists), not a 500.
+        A unique-index violation stays an ``sqlite3.IntegrityError``: an ``actions_live_dedupe`` collision tells
+        the caller a live card for that boundary already exists, which is not a 500.
         """
         self._table_columns(table)
         values = self._encode_row(table, row)
@@ -547,11 +413,7 @@ class Storage:
             conn.execute(f"INSERT INTO {table}({names}) VALUES({placeholders})", values)
 
     def get(self, table: str, key: str) -> dict | None:
-        """One row by primary key, ``*_json`` decoded back into Python objects.
-
-        The comparison takes the key column's affinity, so the integer-keyed tables (``events``,
-        ``activity``) accept the id as either ``int`` or ``str``.
-        """
+        """One row by primary key, ``*_json`` decoded. An integer key may be passed as ``int`` or ``str``."""
         pk = self._pk(table)
         with self._txn() as conn:
             row = conn.execute(f"SELECT * FROM {table} WHERE {pk} = ?", (key,)).fetchone()
@@ -565,13 +427,8 @@ class Storage:
         order_by: str = "",
         limit: int | None = None,
     ) -> list[dict]:
-        """Rows matching an equality filter.
-
-        A list/tuple/set value becomes an ``IN`` clause (so callers can ask for the live action
-        statuses without writing SQL of their own) and ``None`` becomes ``IS NULL``. Table, column
-        and ``order_by`` names are validated against the real schema, so nothing a caller supplies is
-        ever interpolated unchecked.
-        """
+        """Rows matching an equality filter: a list/tuple/set value is an ``IN``, ``None`` is ``IS NULL``. Every
+        name is checked against the real schema, so nothing a caller supplies reaches the SQL unchecked."""
         clause, params = self._where(table, where)
         sql = f"SELECT * FROM {table}{clause}"
         if order_by:
@@ -584,11 +441,8 @@ class Storage:
         return [self._decode_row(r) for r in rows if r is not None]
 
     def update(self, table: str, key: str, values: Mapping[str, Any]) -> None:
-        """Non-CAS update. Refused on a table that has a generation column.
-
-        Those rows are contended by definition (two browser tabs, the reconciler, a lease holder);
-        letting one caller write them without comparing a generation is how a lost update happens.
-        """
+        """Non-CAS update, refused on a CAS table: those rows are contended, and a write that skips the
+        generation check is how a lost update happens."""
         if table in CAS_TABLES:
             raise ValueError(f"{table} has a generation column; use cas_update()")
         pk = self._pk(table)
@@ -596,10 +450,8 @@ class Storage:
         if not payload:
             return
         assignments = ", ".join(f"{name} = :{name}" for name in payload)
-        params = dict(payload)
-        params["__key"] = key
         with self._txn() as conn:
-            conn.execute(f"UPDATE {table} SET {assignments} WHERE {pk} = :__key", params)
+            conn.execute(f"UPDATE {table} SET {assignments} WHERE {pk} = :__key", {**payload, "__key": key})
 
     def delete(self, table: str, key: str) -> None:
         pk = self._pk(table)
@@ -609,81 +461,99 @@ class Storage:
     def cas_update(
         self, table: str, key: str, expected_generation: int, new_values: Mapping[str, Any]
     ) -> int:
-        """Compare-and-set one row; returns the new generation.
+        """Compare-and-set one row in one ``BEGIN IMMEDIATE``; returns the new generation.
 
-        One ``BEGIN IMMEDIATE`` for the read of the generation and the write, so no other writer can
-        slip between them. ``StaleGeneration`` (``details.expected``/``details.actual``, ``actual``
-        null when the row is gone) is the caller's signal that somebody else already moved this
-        record — it is never retried automatically, because replaying a human decision is the exact
-        duplicate this store exists to prevent.
+        ``StaleGeneration`` (``details.expected``/``actual``; ``actual`` is null when the row is gone) means someone
+        else moved the record. It is never retried here: replaying a human decision is the duplicate this store
+        exists to prevent.
         """
+        try:
+            gen_col = CAS_TABLES[table]
+        except KeyError:
+            raise ValueError(f"{table} is not a CAS table; add it to CAS_TABLES") from None
+        for reserved in (gen_col, "updated_at"):
+            if reserved in new_values:
+                raise ValueError(f"{reserved} is maintained by cas_update, not by the caller")
+        pk = self._pk(table)
+        payload = self._encode_row(table, new_values)
         with self._txn() as conn:
-            return self._cas(conn, table, key, expected_generation, new_values)
-
+            row = conn.execute(f"SELECT {gen_col} FROM {table} WHERE {pk} = ?", (key,)).fetchone()
+            actual = None if row is None else int(row[gen_col])
+            if actual != int(expected_generation):
+                raise StaleGeneration(
+                    "the record changed under this operation",
+                    details={"expected": int(expected_generation), "actual": actual, "table": table, "key": key},
+                )
+            payload[gen_col] = actual + 1
+            payload["updated_at"] = self._clock.iso()
+            assignments = ", ".join(f"{name} = :{name}" for name in payload)
+            conn.execute(
+                f"UPDATE {table} SET {assignments} WHERE {pk} = :__key AND {gen_col} = :{gen_col} - 1",
+                {**payload, "__key": key},
+            )
+        return actual + 1
 
     # ---- activity ----
 
     def activity_append(self, row: ActivityRow) -> int:
+        """Insert one row, returning its id; ``kind`` and ``message_key`` (default ``activity.<kind>``) are required."""
+        message_key = row.message_key or (f"activity.{row.kind}" if row.kind else "")
+        if not row.kind or not message_key:
+            raise ValueError("an activity row needs kind and message_key")
+        evidence = [ref.to_json() for ref in row.evidence]
         with self._txn() as conn:
-            return self._activity_insert(conn, row)
+            cur = conn.execute(
+                "INSERT INTO activity(at, source, kind, severity, repo_id, intent_dir, space, stage, action_id, "
+                "session_key, message_key, params_json, evidence_json, redacted, human_text) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (row.at or self._clock.iso(), row.source or "studio", row.kind, row.severity or "info", row.repo_id,
+                 row.intent_dir, row.space, row.stage, row.action_id, row.session_key, message_key,
+                 _dumps(dict(row.params or {})), _dumps(evidence) if evidence else None, 1 if row.redacted else 0,
+                 row.human_text),
+            )
+        return int(cur.lastrowid or 0)
 
     def activity_query(self, q: ActivityQuery) -> tuple[list[ActivityRow], str | None]:
         """One page of activity, newest first, plus the cursor for the next page.
 
-        Paging is by the autoincrement ``id``, not by ``at``: timestamps are second-precision, so
-        several rows routinely share one, and an ``at``-keyed cursor would either skip or repeat them.
+        Paged by the autoincrement ``id``, not by ``at``: timestamps are second-precision, so rows routinely share
+        one, and an ``at`` cursor would skip or repeat them.
         """
-        limit = max(1, min(int(_field(q, "limit", C.ACTIVITY_DEFAULT_LIMIT) or C.ACTIVITY_DEFAULT_LIMIT),
-                           int(C.ACTIVITY_MAX_LIMIT)))
+        limit = max(1, min(int(q.limit or C.ACTIVITY_DEFAULT_LIMIT), int(C.ACTIVITY_MAX_LIMIT)))
         conds: list[str] = []
         params: list[Any] = []
-        cursor = _field(q, "cursor")
-        if cursor:
+        if q.cursor:
             conds.append("id < ?")
-            params.append(_decode_cursor(str(cursor)))
-        for column, value in (
-            ("repo_id", _field(q, "repo_id")),
-            ("space", _field(q, "space")),
-            ("intent_dir", _field(q, "intent_dir")),
-            ("source", _field(q, "source")),
-            ("stage", _field(q, "stage")),
-            ("kind", _field(q, "kind")),
-            ("severity", _field(q, "severity")),
-        ):
+            params.append(_decode_cursor(str(q.cursor)))
+        for column in _ACTIVITY_FILTERS:
+            value = getattr(q, column)
             if value is not None:
                 conds.append(f"{column} = ?")
                 params.append(value)
-        since, until = _field(q, "since"), _field(q, "until")
-        if since:
+        if q.since:
             conds.append("at >= ?")
-            params.append(since)
-        if until:
+            params.append(q.since)
+        if q.until:
             conds.append("at <= ?")
-            params.append(until)
-        action_type = _field(q, "action_type")
-        if action_type:
-            # The activity table stores no action type; the join keeps the filter honest instead of
-            # asking every caller to resolve ids first.
+            params.append(q.until)
+        if q.action_type:
+            # The activity table stores no action type; the join keeps the filter honest instead of asking every
+            # caller to resolve ids first.
             conds.append("action_id IN (SELECT action_id FROM actions WHERE type = ?)")
-            params.append(action_type)
+            params.append(q.action_type)
         where = f" WHERE {' AND '.join(conds)}" if conds else ""
         params.append(limit + 1)  # one extra row answers "is there a next page?"
         with self._txn() as conn:
-            rows = conn.execute(
-                f"SELECT * FROM activity{where} ORDER BY id DESC LIMIT ?", params
-            ).fetchall()
+            rows = conn.execute(f"SELECT * FROM activity{where} ORDER BY id DESC LIMIT ?", params).fetchall()
         page = [self._activity_row(r) for r in rows[:limit]]
-        next_cursor = _encode_cursor(page[-1].id) if len(rows) > limit and page else None
-        return page, next_cursor
+        return page, (_encode_cursor(page[-1].id) if len(rows) > limit and page else None)
 
     def activity_purge_human_text(self, older_than_iso: str) -> int:
-        """Drop the verbatim human text everywhere it is retained, older than the cutoff.
+        """Clear the verbatim human text older than the cutoff, everywhere it is kept, in one transaction.
 
-        Both tables that hold it (``activity.human_text`` for the submitted decision and
-        ``actions.human_text`` for the record that was sent) are cleared in one transaction: a
-        retention promise that only covered one of them would keep the same sentence on disk forever.
-        Actions are cut off by when the text was actually sent, not by ``updated_at``, so a card that
-        keeps being reconciled cannot extend its own retention.
+        A retention promise that covered only ``activity.human_text`` would keep the same sentence in
+        ``actions.human_text`` forever. Actions are cut off by when the text was sent, not ``updated_at``, so a
+        card that keeps being reconciled cannot extend its own retention.
         """
         with self._txn() as conn:
             cleared = conn.execute(
@@ -718,60 +588,21 @@ class Storage:
                 (key, _dumps(value), self._clock.iso()),
             )
 
-    def pref_all(self) -> dict[str, Any]:
-        with self._txn() as conn:
-            rows = conn.execute("SELECT key, value_json FROM preferences ORDER BY key").fetchall()
-        return {str(r["key"]): json.loads(r["value_json"]) for r in rows}
-
-    # ---- housekeeping ----
-
-    def vacuum_if_needed(self) -> None:
-        """``VACUUM`` only when the free list is worth reclaiming.
-
-        Deliberately outside ``_txn``: SQLite refuses ``VACUUM`` inside a transaction. It rewrites the
-        whole file, so it runs on a threshold rather than on a schedule — an unconditional vacuum on
-        every start would make the gateway's startup budget depend on the size of the history.
-        """
-        with self._lock:
-            conn = self._require_conn()
-            if self._depth:  # pragma: no cover - defensive; no public method nests this
-                raise StudioError("storage_error", "vacuum cannot run inside a transaction")
-            free = int(conn.execute("PRAGMA freelist_count").fetchone()[0])
-            pages = int(conn.execute("PRAGMA page_count").fetchone()[0]) or 1
-            if free < int(C.VACUUM_MIN_FREELIST_PAGES):
-                return
-            if free < pages * float(C.VACUUM_FREELIST_RATIO):
-                return
-            conn.execute("VACUUM")
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    # ---- health ----
 
     def integrity_check(self) -> list[str]:
-        """``PRAGMA quick_check`` lines; ``[]`` when the file is sound.
-
-        ``quick_check`` rather than ``integrity_check``: it skips the index-content pass, which keeps
-        it inside the startup budget on a large history while still catching a torn page.
-        """
+        """``PRAGMA quick_check`` lines, ``[]`` when sound. ``quick_check`` skips the index-content pass, which
+        keeps it inside the startup budget on a large history while still catching a torn page."""
         with self._lock:
             conn = self._require_conn()
             lines = [str(r[0]) for r in conn.execute("PRAGMA quick_check").fetchall()]
         return [] if lines == ["ok"] else lines
 
     def pragmas(self) -> dict[str, Any]:
-        """The durability settings and page accounting of the live connection.
-
-        Exposed because ``GET /health`` reports ``storage.wal`` and ``schema_version``, and because a
-        test must be able to prove the PRAGMAs are actually in force on the connection Studio uses
-        (``synchronous`` and ``busy_timeout`` are per-connection and invisible in the file).
-        """
-        names = (
-            "journal_mode",
-            "synchronous",
-            "busy_timeout",
-            "foreign_keys",
-            "page_size",
-            "page_count",
-            "freelist_count",
-        )
+        """The live connection's durability settings, page accounting and ``schema_version``: ``synchronous`` and
+        ``busy_timeout`` are per connection and invisible in the file, so ``/health`` and the tests ask here."""
+        names = ("journal_mode", "synchronous", "busy_timeout", "foreign_keys", "page_size", "page_count",
+                 "freelist_count")
         with self._lock:
             conn = self._require_conn()
             out: dict[str, Any] = {}
@@ -792,11 +623,8 @@ class Storage:
 
     @contextmanager
     def _txn(self) -> Iterator[sqlite3.Connection]:
-        """One ``BEGIN IMMEDIATE`` per public method; a nested call joins the outer transaction.
-
-        The nesting rule is what lets a caller compose several writes (the installer's receipt commit)
-        into one transaction without opening a second one, which SQLite rejects.
-        """
+        """One ``BEGIN IMMEDIATE`` per public method; a nested call joins the outer transaction, so a caller can
+        compose several writes into one (SQLite rejects a second ``BEGIN``)."""
         with self._lock:
             conn = self._require_conn()
             if self._depth:
@@ -819,7 +647,7 @@ class Storage:
                 conn.execute("COMMIT")
 
     def _migrate(self) -> None:
-        """Apply the ladder up to ``SCHEMA_VERSION``; a no-op when the file is already there."""
+        """Apply the ladder up to ``SCHEMA_VERSION`` in one transaction; a no-op when the file is already there."""
         with self._txn() as conn:
             conn.execute("CREATE TABLE IF NOT EXISTS schema_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
             row = conn.execute("SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()
@@ -827,30 +655,16 @@ class Storage:
             if current == SCHEMA_VERSION:
                 return
             if current > SCHEMA_VERSION:
-                raise StudioError(
-                    "storage_error",
-                    "the Studio database was written by a newer version",
-                    details={"found": current, "supported": SCHEMA_VERSION},
-                )
+                raise StudioError("storage_error", "the Studio database was written by a newer version",
+                                  details={"found": current, "supported": SCHEMA_VERSION})
             for target in range(current + 1, SCHEMA_VERSION + 1):
                 for statement in _statements(MIGRATIONS[target]):
                     conn.execute(statement)
             now = self._clock.iso()
-            conn.execute(
-                "INSERT INTO schema_meta(key, value) VALUES('schema_version', ?) "
-                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                (str(SCHEMA_VERSION),),
-            )
-            conn.execute(
-                "INSERT INTO schema_meta(key, value) VALUES('created_at', ?) "
-                "ON CONFLICT(key) DO NOTHING",
-                (now,),
-            )
-            conn.execute(
-                "INSERT INTO schema_meta(key, value) VALUES('migrated_at', ?) "
-                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                (now,),
-            )
+            conn.executemany("INSERT INTO schema_meta(key, value) VALUES(?, ?) "
+                             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                             (("schema_version", str(SCHEMA_VERSION)), ("migrated_at", now)))
+            conn.execute("INSERT OR IGNORE INTO schema_meta(key, value) VALUES('created_at', ?)", (now,))
 
     @staticmethod
     def _load_columns(conn: sqlite3.Connection) -> dict[str, tuple[str, ...]]:
@@ -895,9 +709,7 @@ class Storage:
                 try:
                     value = json.loads(value)
                 except ValueError:
-                    # A blob only this module writes cannot normally be corrupt; surfacing the raw
-                    # text beats failing every read of the row it lives in.
-                    pass
+                    pass  # only this module writes these; the raw text beats failing every read of the row
             out[name] = value
         return out
 
@@ -932,91 +744,16 @@ class Storage:
             column = self._column(table, tokens[0])
             if len(tokens) == 2:
                 direction = tokens[1].upper()
-                if direction not in _ORDER_BY_TOKEN:
+                if direction not in ("ASC", "DESC"):
                     raise ValueError(f"unsupported order_by {order_by!r}")
                 parts.append(f"{column} {direction}")
             else:
                 parts.append(column)
         return ", ".join(parts)
 
-    def _cas(
-        self,
-        conn: sqlite3.Connection,
-        table: str,
-        key: str,
-        expected_generation: int,
-        new_values: Mapping[str, Any],
-    ) -> int:
-        try:
-            gen_col, ts_col = CAS_TABLES[table]
-        except KeyError:
-            raise ValueError(f"{table} is not a CAS table; add it to CAS_TABLES") from None
-        for reserved in (gen_col, ts_col):
-            if reserved in new_values:
-                raise ValueError(f"{reserved} is maintained by cas_update, not by the caller")
-        pk = self._pk(table)
-        row = conn.execute(f"SELECT {gen_col} FROM {table} WHERE {pk} = ?", (key,)).fetchone()
-        actual = None if row is None else int(row[gen_col])
-        if actual != int(expected_generation):
-            raise StaleGeneration(
-                "the record changed under this operation",
-                details={"expected": int(expected_generation), "actual": actual,
-                         "table": table, "key": key},
-            )
-        generation = actual + 1
-        payload = self._encode_row(table, new_values)
-        payload[gen_col] = generation
-        payload[ts_col] = self._clock.iso()
-        assignments = ", ".join(f"{name} = :{name}" for name in payload)
-        params = dict(payload)
-        params["__key"] = key
-        conn.execute(
-            f"UPDATE {table} SET {assignments} WHERE {pk} = :__key AND {gen_col} = :{gen_col} - 1",
-            params,
-        )
-        return generation
-
-    def _activity_insert(self, conn: sqlite3.Connection, row: Any) -> int:
-        at = _field(row, "at") or self._clock.iso()
-        kind = str(_field(row, "kind") or "")
-        source = str(_field(row, "source") or "studio")
-        severity = str(_field(row, "severity") or "info")
-        message_key = str(_field(row, "message_key") or (f"activity.{kind}" if kind else ""))
-        if not kind or not message_key:
-            raise ValueError("an activity row needs kind and message_key")
-        evidence = _field(row, "evidence") or ()
-        if not isinstance(evidence, (list, tuple)):
-            evidence = (evidence,)
-        refs = [e.to_json() if hasattr(e, "to_json") else dict(e) for e in evidence]
-        params = _field(row, "params") or {}
-        cur = conn.execute(
-            "INSERT INTO activity(at, source, kind, severity, repo_id, intent_dir, space, stage, "
-            "action_id, session_key, message_key, params_json, evidence_json, redacted, human_text) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (
-                str(at),
-                source,
-                kind,
-                severity,
-                _field(row, "repo_id"),
-                _field(row, "intent_dir"),
-                _field(row, "space"),
-                _field(row, "stage"),
-                _field(row, "action_id"),
-                _field(row, "session_key"),
-                message_key,
-                _dumps(dict(params)),
-                _dumps(refs) if refs else None,
-                1 if _field(row, "redacted") else 0,
-                _field(row, "human_text"),
-            ),
-        )
-        return int(cur.lastrowid or 0)
-
     @staticmethod
     def _activity_row(row: sqlite3.Row) -> ActivityRow:
-        space = row["space"]
-        intent_dir = row["intent_dir"]
+        space, intent_dir = row["space"], row["intent_dir"]
         return ActivityRow(
             id=int(row["id"]),
             at=str(row["at"]),
@@ -1026,7 +763,8 @@ class Storage:
             repo_id=row["repo_id"],
             space=space,
             intent_dir=intent_dir,
-            intent_key=_intent_key(space, intent_dir),
+            # A row may name a repository and no intent; a missing space is the default one.
+            intent_key=C.intent_key_for(space or C.DEFAULT_SPACE, intent_dir) if intent_dir else None,
             stage=row["stage"],
             action_id=row["action_id"],
             session_key=row["session_key"],

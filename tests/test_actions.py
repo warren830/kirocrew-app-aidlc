@@ -175,7 +175,7 @@ def world(studio, fake_ctx, fake_host, clock, ids, fake_bun, repo_builder, repo_
     S = studio
     root = _build_repo(repo_builder, **dict(repo_options))
 
-    store = S.storage.Storage(Path(fake_ctx.data_dir) / S.constants.DB_FILENAME, clock=clock, ids=ids)
+    store = S.storage.Storage(Path(fake_ctx.data_dir) / S.constants.DB_FILENAME, clock=clock)
     store.open()
     store.insert(
         "repos",
@@ -457,8 +457,8 @@ def test_wire_text_templates_match_the_pinned_file_byte_for_byte(A):
 
 def test_every_wire_constant_matches_the_pinned_file_byte_for_byte(C):
     """Casing is load-bearing (`Request Changes` vs `Request changes`), so no constant may drift alone."""
-    pinned = json.loads((APP_ROOT / C.WIRE_TEXT_SOURCE).read_text("utf-8"))
-    assert C.WIRE_TEXT == pinned["constants"]
+    pinned = json.loads((APP_ROOT / "docs" / "design" / "wire-text.json").read_text("utf-8"))
+    assert {name: value for name, value in vars(C).items() if name.startswith("WIRE_")} == pinned["constants"]
 
 
 def test_wire_text_for_every_decision_is_the_pinned_string(A, C):
@@ -846,7 +846,7 @@ def test_the_delivering_record_is_on_disk_before_the_receipt_is_returned(world, 
     action_id = run(scenario())
     # Re-open the database file: nothing of the record may live in the process that crashed.
     world.store.close()
-    reopened = world.S.storage.Storage(world.store.path, clock=world.clock, ids=world.ids)
+    reopened = world.S.storage.Storage(world.store.path, clock=world.clock)
     reopened.open()
     try:
         row = reopened.get("actions", action_id)

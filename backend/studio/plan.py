@@ -18,7 +18,8 @@ from typing import TYPE_CHECKING, Any, Mapping, Sequence
 from . import constants as C
 from .aidlc_reader import match_intent_row
 from .errors import StudioError
-from .estimates import Estimate, EstimateService, Jsonable
+from .estimates import Estimate, EstimateService
+from .wire import WireRecord
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .activity import ActivityProjector
@@ -105,9 +106,11 @@ def _sha256_json(payload: Any, **dumps: Any) -> str:
 
 
 @dataclass(frozen=True, slots=True)
-class PlanRequest(Jsonable):
+class PlanRequest(WireRecord):
     """What the user asked for. ``repo_id`` is the path parameter, not part of the JSON body (§2.3)."""
 
+    _wire_keys = ("space", "scope", "depth", "test_strategy", "review_cap", "project_type", "overrides", "objective",
+                  "label", "context")
     repo_id: str
     space: str
     scope: str
@@ -119,10 +122,6 @@ class PlanRequest(Jsonable):
     objective: str | None
     label: str | None
     context: str | None
-    _hidden = ("repo_id",)
-
-    def to_json(self) -> dict[str, Any]:
-        return {**Jsonable.to_json(self), "overrides": {k: bool(v) for k, v in self.overrides.items()}}
 
     @classmethod
     def from_json(cls, body: Mapping[str, Any] | None, *, repo_id: str) -> "PlanRequest":
@@ -153,10 +152,13 @@ class PlanRequest(Jsonable):
 
 
 @dataclass(frozen=True, slots=True)
-class PlanStage(Jsonable):
+class PlanStage(WireRecord):
     """One row of the plan matrix (§3.1). ``in_grid`` is the composition as it stands (grid, or state file), so
     ``in_grid != enabled`` means "this request moved it"; ``mode``/``summary_confirmation`` feed the estimator."""
 
+    _wire_keys = ("slug", "number", "name", "phase", "execution", "in_grid", "enabled", "locked", "lock_reason",
+                  "gate", "review_class", "reviewer", "per_unit", "produces", "consumes", "depends_on",
+                  "conditional_on", "state")
     slug: str
     number: str
     name: str
@@ -177,11 +179,10 @@ class PlanStage(Jsonable):
     state: str | None
     mode: str = ""
     summary_confirmation: str | None = None
-    _hidden = ("mode", "summary_confirmation")
 
 
 @dataclass(frozen=True, slots=True)
-class ExactCounts(Jsonable):
+class ExactCounts(WireRecord):
     """Counts, not predictions: kept apart from ``Estimate`` so the UI can never label one as the other."""
 
     stages: int
@@ -192,7 +193,7 @@ class ExactCounts(Jsonable):
 
 
 @dataclass(frozen=True, slots=True)
-class PlanIssue(Jsonable):
+class PlanIssue(WireRecord):
     """Why a plan cannot be committed as asked: a code and params, never English prose (C11)."""
 
     code: str
@@ -208,7 +209,7 @@ class PlanIssue(Jsonable):
 
 
 @dataclass(frozen=True, slots=True)
-class PlanDiffEntry(Jsonable):
+class PlanDiffEntry(WireRecord):
     slug: str
     from_enabled: bool
     to_enabled: bool
@@ -216,7 +217,7 @@ class PlanDiffEntry(Jsonable):
 
 
 @dataclass(frozen=True, slots=True)
-class EffectivePlan(Jsonable):
+class EffectivePlan(WireRecord):
     """Everything the plan screen shows, computed from one read of the installed engine."""
 
     request: PlanRequest
@@ -243,9 +244,10 @@ class EffectivePlan(Jsonable):
 
 
 @dataclass(frozen=True, slots=True)
-class RecomposeProposal(Jsonable):
+class RecomposeProposal(WireRecord):
     """A recompose the user can confirm, with the argv it will produce and every reason it may not run."""
 
+    _wire_keys = ("intent_key", "current_stage", "skip", "add", "plan", "argv_preview", "allowed", "refusals")
     intent_key: str
     current_stage: str | None
     skip: tuple[str, ...]
@@ -255,7 +257,6 @@ class RecomposeProposal(Jsonable):
     allowed: bool
     refusals: tuple[PlanIssue, ...]
     state_sha256: str | None = None
-    _hidden = ("state_sha256",)
 
     def digest(self) -> str:
         """Binds the confirmation to the cursor, both lists and the state bytes the preview was computed from."""
@@ -281,7 +282,7 @@ class RecomposeResult:
 
 
 @dataclass(frozen=True, slots=True)
-class IntentCreateResult(Jsonable):
+class IntentCreateResult(WireRecord):
     """A created — and deliberately unstarted — intent, with the disk evidence that it exists."""
 
     repo_id: str
@@ -700,7 +701,6 @@ class PlanService:
                 fresh.space, fresh.intent_dir, C.attr(fresh.row, "uuid"),
                 lease_generation=grant.generation, repo_id=repo.repo_id,
             )
-            await self._engine.drain_activity()
             await self._events.publish("repo.updated", {"repo_id": repo.repo_id})
             if not cursor.ok or any(not item.ok for item in cursor.results):
                 raise StudioError("state_inconsistent", "the selected intent could not be activated",

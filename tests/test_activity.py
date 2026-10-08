@@ -71,7 +71,7 @@ def R(studio):
 
 @pytest.fixture
 def store(studio, fake_ctx, K, clock, ids):
-    st = studio.storage.Storage(Path(fake_ctx.data_dir) / K.DB_FILENAME, clock=clock, ids=ids)
+    st = studio.storage.Storage(Path(fake_ctx.data_dir) / K.DB_FILENAME, clock=clock)
     st.open()
     yield st
     st.close()
@@ -292,7 +292,6 @@ def test_record_sync_is_the_seam_the_engine_runner_uses(A, studio, proj, clock):
         side_effects=("audit_append",),
     )
     runner._record_run(result, repo_id=REPO)
-    assert runner.pending_activity == 0                    # written immediately, not buffered
     rows, _ = run(proj.query(A.ActivityQuery()))
     assert rows[0].kind == "engine.run" and rows[0].severity == "attention"
     assert rows[0].params["verb_key"] == "utility.version"

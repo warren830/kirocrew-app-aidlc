@@ -53,7 +53,7 @@ def errors(studio):
 def deps(studio, fake_ctx, fake_host, clock, ids, fake_bun, denied_log):
     """One real object graph: only ``RepoRegistry`` is absent (``PlanService`` never calls it)."""
     store = studio.storage.Storage(
-        Path(fake_ctx.data_dir) / studio.constants.DB_FILENAME, clock=clock, ids=ids
+        Path(fake_ctx.data_dir) / studio.constants.DB_FILENAME, clock=clock
     )
     store.open()
     activity = studio.activity.ActivityProjector(store, clock)
@@ -65,7 +65,7 @@ def deps(studio, fake_ctx, fake_host, clock, ids, fake_bun, denied_log):
     engine = studio.engine.EngineRunner(bun_path=fake_bun, clock=clock, activity=activity)
     reader = studio.aidlc_reader.AidlcReader(clock)
     projection = studio.projection.Projection(reader, studio.consistency.ConsistencyEngine(), clock)
-    estimates = studio.estimates.EstimateService(store, clock)
+    estimates = studio.estimates.EstimateService()
     service = studio.plan.PlanService(
         reader, engine, scheduler, None, projection, store, estimates, activity, events, clock, ids
     )

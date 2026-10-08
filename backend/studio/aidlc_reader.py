@@ -14,13 +14,14 @@ import json
 import os
 import re
 import time
-from dataclasses import dataclass, fields, replace
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Iterable, Sequence
 
 from . import constants as C
 from . import security
 from .errors import StudioError
+from .wire import WireRecord
 
 if TYPE_CHECKING:  # annotations only — the reader must stay importable on its own
     from .constants import Clock
@@ -224,33 +225,6 @@ def _sha256(text: str) -> str:
 
 def _str_or_none(value: Any) -> str | None:
     return value if isinstance(value, str) else None
-
-
-def _wire_value(value: Any) -> Any:
-    """JSON-native data: records serialise themselves, tuples become lists, dicts are copied."""
-    if hasattr(value, "to_json"):
-        return value.to_json()
-    if isinstance(value, (list, tuple)):
-        return [_wire_value(item) for item in value]
-    if isinstance(value, dict):
-        return {key: _wire_value(item) for key, item in value.items()}
-    return value
-
-
-class WireRecord:
-    """``to_json`` over the dataclass fields, or ``_wire_keys`` (properties allowed; ``name?`` drops ``None``)."""
-
-    __slots__ = ()
-    _wire_keys: ClassVar[tuple[str, ...]] = ()
-
-    def to_json(self) -> dict[str, Any]:
-        out: dict[str, Any] = {}
-        for key in self._wire_keys or [f.name for f in fields(self)]:
-            name = key.rstrip("?")
-            value = getattr(self, name)
-            if value is not None or name == key:
-                out[name] = _wire_value(value)
-        return out
 
 
 # ---- 1.6.1 snapshot and stable reads ---------------------------------------- #

@@ -17,7 +17,6 @@ the workflow did, and the boundary between them is never blurred.
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import heapq
 import re
 from dataclasses import dataclass, field
@@ -29,6 +28,7 @@ from .errors import StudioError
 
 # Re-exported so §1.17's names resolve here; ``Storage`` constructs them and may not import this layer.
 from .storage import ActivityQuery, ActivityRow, EvidenceRef
+from .wire import WireRecord
 
 if TYPE_CHECKING:  # pragma: no cover - typing only; snapshots and events are duck-typed below
     from .aidlc_reader import AuditEvent
@@ -135,7 +135,7 @@ def studio_refs(row: ActivityRow) -> dict[str, Any]:
 
 
 @dataclass(frozen=True, slots=True)
-class TimelineEntry:
+class TimelineEntry(WireRecord):
     """One row of the merged timeline. ``id`` is the activity row id, and ``None`` for a projected AI-DLC row:
     an audit row has no Studio identity a client could page by or reference (§2.6)."""
 
@@ -158,9 +158,6 @@ class TimelineEntry:
             params["stage"] = row.stage
         return cls(at=row.at, source=row.source, kind=row.kind, message_key=row.message_key, params=params,
                    severity=row.severity, refs=studio_refs(row), raw=None, id=row.id)
-
-    def to_json(self) -> dict[str, Any]:
-        return dataclasses.asdict(self)
 
 
 def _normalise_params(value: Any) -> Any:

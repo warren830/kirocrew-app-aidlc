@@ -133,7 +133,8 @@ def test_no_api_prefix_uses_a_wildcard(raw):
 def test_the_declared_events_are_the_ones_the_backend_publishes(raw, studio):
     """An undeclared name makes ``ctx.events.publish`` raise, so the dashboard silently stops updating."""
     assert raw["permissions"]["events"] == EXPECTED_EVENTS
-    assert list(studio.constants.HOST_EVENTS) == EXPECTED_EVENTS
+    C = studio.constants
+    assert [C.HOST_EVENT_ACTION, C.HOST_EVENT_REPO, C.HOST_EVENT_TRANSACTION] == EXPECTED_EVENTS
 
 
 def test_storage_and_spawn_are_on_and_network_and_cron_are_off(raw):
@@ -157,10 +158,10 @@ def test_the_declared_engine_version_is_the_payloads_own(raw, payload_manifest, 
     assert studio.constants.BUNDLED_ENGINE_VERSION == payload_manifest.engine_version
 
 
-def test_the_state_version_and_stage_count_constants_are_the_payloads_own(payload_manifest, studio):
-    assert studio.constants.BUNDLED_STAGE_COUNT == payload_manifest.stage_count
-    assert studio.constants.BUNDLED_STATE_VERSION in payload_manifest.compatible_state_versions
-    assert max(payload_manifest.compatible_state_versions) == studio.constants.BUNDLED_STATE_VERSION
+def test_the_bundled_engine_writes_state_version_8_over_33_stages(payload_manifest, studio):
+    """The parsers' newest state version and the stage count every fixture assumes."""
+    assert payload_manifest.stage_count == 33
+    assert max(payload_manifest.compatible_state_versions) == 8 == max(studio.constants.SUPPORTED_STATE_VERSIONS)
 
 
 def test_the_parsers_accept_more_state_versions_than_the_payload_writes(payload_manifest, studio):

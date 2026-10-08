@@ -726,7 +726,6 @@ def test_run_records_the_engine_run_row(engine_mod, fake_bun, clock, repo):
     async def scenario():
         result = await runner.run("utility.version", repo, ".kiro", repo_id="r_000000000001")
         assert result.ok
-        assert runner.pending_activity == 0
         return result
 
     asyncio.run(scenario())
@@ -768,7 +767,6 @@ def test_sync_seam_records_immediately(engine_mod, fake_bun, clock, repo):
     runner = engine_mod.EngineRunner(bun_path=fake_bun, clock=clock, activity=sink)
     runner.run_sync("utility.version", repo, ".kiro", repo_id="r_000000000001")
     assert len(sink.rows) == 1
-    assert runner.pending_activity == 0
 
 
 def test_failed_runs_are_recorded_as_attention(engine_mod, fake_bun, clock, repo):

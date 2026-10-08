@@ -24,6 +24,7 @@ from .aidlc_reader import WORKSPACE_DIRNAME
 from .consistency import Finding
 from .errors import LeaseHeld, StudioError
 from .storage import EvidenceRef
+from .wire import WireRecord
 
 if TYPE_CHECKING:  # pragma: no cover - annotations only; no runtime import edge is created
     from .activity import ActivityProjector
@@ -116,21 +117,6 @@ class _InstallCancelled(Exception):
 # ---- records ----------------------------------------------------------------- #
 
 
-def _jsonable(value: Any) -> Any:
-    if hasattr(value, "to_json"):
-        return value.to_json()
-    if isinstance(value, (list, tuple)):
-        return [_jsonable(v) for v in value]
-    if isinstance(value, dict):
-        return {k: _jsonable(v) for k, v in value.items()}
-    return value
-
-
-def _record_json(obj: Any, omit: Callable[[str, Any], bool] = lambda name, value: False) -> dict[str, Any]:
-    """A record dataclass as JSON-ready data: tuples become lists, nested records use their ``to_json``."""
-    return {f.name: _jsonable(getattr(obj, f.name)) for f in fields(obj) if not omit(f.name, getattr(obj, f.name))}
-
-
 def _from_row(cls: type, row: Mapping[str, Any], text: Sequence[str], **values: Any) -> Any:
     """A record from a stored row: ``text`` fields coerced to ``str`` (missing → ""), the rest as stored."""
     data = {f.name: row.get(f.name) for f in fields(cls)}
@@ -150,7 +136,7 @@ def _json_column(value: Any) -> Any:
 
 
 @dataclass(frozen=True, slots=True)
-class PayloadFile:
+class PayloadFile(WireRecord):
     """One vendored file: repo-relative path, digest, size and ownership kind."""
 
     path: str
@@ -158,18 +144,17 @@ class PayloadFile:
     size: int
     ownership: str
 
-    def to_json(self) -> dict[str, Any]:
-        return _record_json(self)
-
 
 def _degraded(message: str, **details: Any) -> StudioError:
     return StudioError("payload_degraded", message, details=details)
 
 
 @dataclass(frozen=True, slots=True)
-class PayloadManifest:
+class PayloadManifest(WireRecord):
     """``payload/manifest.json`` as data: every version-derived number in the product comes from here (C21)."""
 
+    _wire_keys = ("schema", "harness", "engine_version", "source", "compatible_state_versions", "stage_count",
+                  "payload_digest", "file_count", "merge_targets")
     schema: str
     harness: str
     engine_version: str
@@ -238,11 +223,11 @@ class PayloadManifest:
         return counts
 
     def to_json(self) -> dict[str, Any]:
-        return {**_record_json(self, lambda name, value: name == "files"), "ownership_counts": self.ownership_counts()}
+        return {**WireRecord.to_json(self), "ownership_counts": self.ownership_counts()}
 
 
 @dataclass(frozen=True, slots=True)
-class PayloadStatus:
+class PayloadStatus(WireRecord):
     """Whether the bytes we ship are still the bytes the manifest promises."""
 
     ok: bool
@@ -253,14 +238,13 @@ class PayloadStatus:
     extra: tuple[str, ...]
     checked_at: str
 
-    def to_json(self) -> dict[str, Any]:
-        return _record_json(self)
-
 
 @dataclass(frozen=True, slots=True)
-class PreviewEntry:
+class PreviewEntry(WireRecord):
     """What will happen to one path, and the evidence for that verdict."""
 
+    _wire_keys = ("path", "ownership", "action", "live_sha256", "payload_sha256", "receipt_sha256", "size",
+                  "fragment_key", "diff", "blocking", "reason?")
     path: str
     ownership: str
     action: str
@@ -272,9 +256,6 @@ class PreviewEntry:
     diff: str | None
     blocking: bool
     reason: str | None = None
-
-    def to_json(self) -> dict[str, Any]:
-        return _record_json(self, lambda name, value: name == "reason" and value is None)
 
     def digest_json(self) -> dict[str, Any]:
         """The decision without its diff body or size, for ``PreviewPlan.digest``."""
@@ -288,7 +269,7 @@ def _entry(path: str, ownership: str, action: str, *, live: str | None = None, p
 
 
 @dataclass(frozen=True, slots=True)
-class PreviewPlan:
+class PreviewPlan(WireRecord):
     """Everything a user confirms before Studio writes anything. ``engine_from`` is Studio's own harness version;
     ``state_version_blocked`` is the P-06 guard against workflow state the engine cannot write (C21, B9)."""
 
@@ -321,7 +302,7 @@ class PreviewPlan:
     recovery_kind: str | None = None
     recovery_evidence_digest: str | None = None
 
-    def _absent(self, name: str, value: Any) -> bool:
+    def _absent(self, name: str) -> bool:
         """The optional bindings appear only for the plan kinds they belong to."""
         if name in ("receipt_id", "repo_identity"):
             return self.kind not in {"uninstall", "rollback"}
@@ -330,7 +311,7 @@ class PreviewPlan:
         return name.startswith("recovery_") and not self.recovery_transaction_id
 
     def to_json(self) -> dict[str, Any]:
-        return _record_json(self, self._absent)
+        return {name: value for name, value in WireRecord.to_json(self).items() if not self._absent(name)}
 
     def digest(self) -> str:
         """The §2.2 ``plan_digest``. Preflight is excluded: free space and a write probe move between preview
@@ -346,7 +327,7 @@ class PreviewPlan:
 
 
 @dataclass(frozen=True, slots=True)
-class StepRecord:
+class StepRecord(WireRecord):
     """One step of one transaction; ``ok is None`` means it started and never finished."""
 
     name: str
@@ -355,16 +336,13 @@ class StepRecord:
     ok: bool | None
     detail: dict
 
-    def to_json(self) -> dict[str, Any]:
-        return _record_json(self)
-
     @classmethod
     def from_json(cls, d: Mapping[str, Any]) -> "StepRecord":
         return _from_row(cls, d, ("name", "started_at"), detail=dict(d.get("detail") or {}))
 
 
 @dataclass(frozen=True, slots=True)
-class TransactionResult:
+class TransactionResult(WireRecord):
     """The durable story of one transaction."""
 
     transaction_id: str
@@ -380,9 +358,6 @@ class TransactionResult:
     started_at: str
     finished_at: str | None
     engine_version: str
-
-    def to_json(self) -> dict[str, Any]:
-        return _record_json(self)
 
     @classmethod
     def from_row(cls, row: Mapping[str, Any], *, repo_install_status: str = "") -> "TransactionResult":
@@ -401,10 +376,12 @@ def _step_details(row: Mapping[str, Any], name: str) -> list[dict]:
 
 
 @dataclass(frozen=True, slots=True)
-class ReceiptFile:
+class ReceiptFile(WireRecord):
     """One path Studio owns. A ``fragment`` records the managed fragment's digest, never the whole file's
     (the rest belongs to the project, FR-INST-006); ``uninstall`` records what Studio itself introduced."""
 
+    _wire_keys = ("path", "ownership", "kind", "sha256", "canonical_digest", "fragment_key", "adopted", "uninstall?",
+                  "engine_state_versions")
     path: str
     ownership: str
     kind: str
@@ -417,8 +394,7 @@ class ReceiptFile:
     engine_state_versions: tuple[int, ...] = ()
 
     def to_json(self) -> dict[str, Any]:
-        return _record_json(self, lambda name, value: (name == "uninstall" and value is None)
-                            or (name == "engine_state_versions" and not value))
+        return {k: v for k, v in WireRecord.to_json(self).items() if v or k != "engine_state_versions"}
 
     @classmethod
     def from_json(cls, d: Mapping[str, Any]) -> "ReceiptFile":
@@ -431,7 +407,7 @@ class ReceiptFile:
 
 
 @dataclass(frozen=True, slots=True)
-class Receipt:
+class Receipt(WireRecord):
     """Studio's claim of ownership over a set of paths at one engine version."""
 
     receipt_id: str
@@ -447,7 +423,7 @@ class Receipt:
     status: str
 
     def to_json(self, *, include_files: bool = True) -> dict[str, Any]:
-        return {**_record_json(self), **({} if include_files else {"files": None})}
+        return {**WireRecord.to_json(self), **({} if include_files else {"files": None})}
 
     @classmethod
     def from_row(cls, row: Mapping[str, Any]) -> "Receipt":
@@ -1072,11 +1048,10 @@ class Installer:
         scheduler: "RepoScheduler", activity: "ActivityProjector", events: "EventLog", clock: "C.Clock",
         ids: "C.IdFactory", *, payload_dir: Path, manifest: PayloadManifest, data_dir: Path,
         fault_injector: Callable[[str], None] | None = None, settings: "SettingsService | None" = None,
-        boot_id: str = "",
     ) -> None:
         self._storage, self._registry, self._reader, self._engine = storage, registry, reader, engine
         self._scheduler, self._activity, self._events = scheduler, activity, events
-        self._clock, self._ids, self._boot_id = clock, ids, str(boot_id or "")
+        self._clock, self._ids = clock, ids
         self._manifest, self._data_dir = manifest, Path(data_dir)
         # `payload_dir` may name `payload/` or its file root `payload/aidlc-kiro/`; manifest paths use the root.
         nested = Path(payload_dir) / PAYLOAD_FILES_DIRNAME

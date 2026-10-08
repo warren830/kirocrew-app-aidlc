@@ -18,7 +18,6 @@ Sync module: callers go through ``asyncio.to_thread``.
 
 from __future__ import annotations
 
-import dataclasses
 import os
 import re
 import subprocess
@@ -30,6 +29,7 @@ from typing import Any, Sequence
 from . import constants as C
 from . import security
 from .errors import StudioError
+from .wire import WireRecord
 
 #: Why an observation is unavailable: a closed set of codes the UI translates, never free text (C11).
 REASON_GIT_MISSING = "git_missing"
@@ -82,7 +82,7 @@ _NOT_A_REPO_RE = re.compile(
 
 
 @dataclass(frozen=True, slots=True)
-class GitObservation:
+class GitObservation(WireRecord):
     """A repository's git state at one moment. ``available=False`` carries a ``reason`` and nothing else;
     ``ahead``/``behind``/``upstream`` are ``None`` without an upstream, so "in sync" and "nothing to compare
     against" stay distinguishable."""
@@ -105,20 +105,14 @@ class GitObservation:
     def unavailable(cls, reason: str, *, observed_at: str, took_ms: int) -> "GitObservation":
         return cls(False, reason, None, False, None, None, False, 0, None, None, None, observed_at, took_ms)
 
-    def to_json(self) -> dict[str, Any]:
-        return dataclasses.asdict(self)
-
 
 @dataclass(frozen=True, slots=True)
-class GitCommit:
+class GitCommit(WireRecord):
     """One commit line; ``at`` is the §0.2 UTC form so it sorts against audit rows."""
 
     sha: str
     at: str
     subject: str
-
-    def to_json(self) -> dict[str, Any]:
-        return dataclasses.asdict(self)
 
 
 @dataclass(frozen=True, slots=True)

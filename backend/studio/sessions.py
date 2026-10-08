@@ -17,7 +17,7 @@ import logging
 import os
 import sqlite3
 import sys
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from itertools import islice
 from pathlib import Path
@@ -27,6 +27,7 @@ from . import constants as C
 from . import security
 from .errors import StaleGeneration, StudioError
 from .projection import StableBoundary
+from .wire import WireRecord
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .activity import ActivityProjector
@@ -133,10 +134,16 @@ _COUNT_KEYS = ("queue_depth", "messages")
 
 
 @dataclass(frozen=True, slots=True)
-class SlotView:
+class SlotView(WireRecord):
     """An immutable snapshot of one host chat slot: a copy, because the live slot mutates while a decision
     is validated, and a precondition checked on it could be true when read and false when acted on."""
 
+    #: Exactly the §3.1 ``SlotView`` interface (the UI type is pinned): every field but ``approval``.
+    _wire_keys = ("key", "running", "project", "agent", "app", "queue_depth", "pending_approval", "needs_input",
+                  "waiting_for_input", "stop_state", "interrupted", "last_ts", "last_turn_ts", "linked_session_key",
+                  "session_key", "messages", "has_options", "options", "slack_linked", "title", "stopping",
+                  "wait_state", "in_stage_execution", "approvals_pending", "subagents_running", "subagents_queued",
+                  "deliveries_inflight")
     key: str
     running: bool
     project: str
@@ -190,13 +197,6 @@ class SlotView:
     def busy_reasons(self) -> tuple[str, ...]:
         """The module predicate, reachable off the view: the projection reads it without importing this."""
         return busy_reasons(self)
-
-    def to_json(self) -> dict[str, Any]:
-        """Exactly the §3.1 ``SlotView`` interface (the UI type is pinned): every field but ``approval``."""
-        out = {f.name: getattr(self, f.name) for f in fields(self) if f.name != "approval"}
-        out["options"] = list(self.options)
-        out["wait_state"] = dict(self.wait_state) if self.wait_state is not None else None
-        return out
 
 
 def busy_reasons(view: Any) -> tuple[str, ...]:
@@ -803,7 +803,7 @@ class SessionRef:
 
 
 @dataclass(frozen=True, slots=True)
-class BindingView:
+class BindingView(WireRecord):
     """One ``intent_bindings`` row: Studio's own facts about an intent that AI-DLC does not record."""
 
     repo_id: str
@@ -847,22 +847,13 @@ class BindingView:
     def interrupted(self) -> bool:
         return bool(self.interrupted_at)
 
-    def to_json(self) -> dict[str, Any]:
-        out = {f.name: getattr(self, f.name) for f in fields(self)}
-        boundary = self.last_stable_boundary
-        out["last_stable_boundary"] = boundary.to_json() if boundary is not None else None
-        return out
-
 
 @dataclass(frozen=True, slots=True)
-class TakeoverCandidate:
+class TakeoverCandidate(WireRecord):
     """A slot the user could move this intent's decisions to, and why it is a candidate."""
 
     slot: SlotView
     reason: str
-
-    def to_json(self) -> dict[str, Any]:
-        return {"slot": self.slot.to_json(), "reason": self.reason}
 
 
 def _decode_boundary(raw: object) -> StableBoundary | None:

@@ -147,7 +147,7 @@ def action_record(**over: Any) -> SimpleNamespace:
 
 @pytest.fixture
 def store(studio, fake_ctx, K, clock, ids):
-    st = studio.storage.Storage(Path(fake_ctx.data_dir) / K.DB_FILENAME, clock=clock, ids=ids)
+    st = studio.storage.Storage(Path(fake_ctx.data_dir) / K.DB_FILENAME, clock=clock)
     st.open()
     yield st
     st.close()
@@ -174,7 +174,7 @@ def wiring(studio, A, K, store, fake_ctx, fake_host, clock, ids, gate_repo, fake
     settings.load()
     scheduler = studio.leases.RepoScheduler(store, host, settings, clock, activity)
     engine = studio.engine.EngineRunner(bun_path=fake_bun, clock=clock, activity=activity)
-    estimates = studio.estimates.EstimateService(store, clock)
+    estimates = studio.estimates.EstimateService()
     plan = studio.plan.PlanService(
         reader, engine, scheduler, None, projection, store, estimates, activity, events, clock, ids
     )

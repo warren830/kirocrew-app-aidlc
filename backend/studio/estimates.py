@@ -5,14 +5,13 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, fields
-from typing import TYPE_CHECKING, Any, ClassVar, Mapping, Sequence
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Sequence
 
-from . import constants as C
+from .wire import WireRecord
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .plan import PlanStage
-    from .storage import Storage
 
 UNIT_TURNS, UNIT_SECS = "turns", "secs"
 SOURCE_RULE_BAND, SOURCE_ASSUMPTION = "rule_band", "assumption"
@@ -37,27 +36,8 @@ SECS_PER_TURN_LOW, SECS_PER_TURN_HIGH = 90, 300
 ELAPSED_FACTOR_LOW, ELAPSED_FACTOR_HIGH = 3, 8
 
 
-class Jsonable:
-    """``to_json`` over a dataclass's fields in declaration order, minus ``_hidden``: nested objects serialise
-    themselves, sequences become lists and mappings are copied."""
-
-    __slots__ = ()
-    _hidden: ClassVar[tuple[str, ...]] = ()
-
-    def to_json(self) -> dict[str, Any]:
-        return {f.name: _plain(getattr(self, f.name)) for f in fields(self) if f.name not in self._hidden}
-
-
-def _plain(value: Any) -> Any:
-    if isinstance(value, (list, tuple)):
-        return [_plain(item) for item in value]
-    if isinstance(value, Mapping):
-        return dict(value)
-    return value.to_json() if hasattr(value, "to_json") else value
-
-
 @dataclass(frozen=True, slots=True)
-class Range(Jsonable):
+class Range(WireRecord):
     """A bounded prediction that knows where it came from (``source``/``confidence`` per metric, P26.4)."""
 
     low: int
@@ -68,14 +48,14 @@ class Range(Jsonable):
 
 
 @dataclass(frozen=True, slots=True)
-class DominantStage(Jsonable):
+class DominantStage(WireRecord):
     slug: str
     share_pct: int
     turns: Range
 
 
 @dataclass(frozen=True, slots=True)
-class CoverageLoss(Jsonable):
+class CoverageLoss(WireRecord):
     """What a disabled stage would have produced: the honest counterweight to a cheaper estimate."""
 
     slug: str
@@ -83,7 +63,7 @@ class CoverageLoss(Jsonable):
 
 
 @dataclass(frozen=True, slots=True)
-class Estimate(Jsonable):
+class Estimate(WireRecord):
     """The whole prediction; the top-level ``source``/``confidence``/``samples`` mirror ``turns`` (§1.15).
     ``samples`` stays on the wire and is always 0: there is no calibration history any more."""
 
@@ -129,9 +109,6 @@ def classify_stage(stage: "PlanStage") -> str:
 
 class EstimateService:
     """Rule bands and the refusal to invent a credit number. Sync and pure."""
-
-    def __init__(self, storage: "Storage", clock: "C.Clock") -> None:
-        """Both unused since calibration history was removed; kept so every constructor stays valid."""
 
     def estimate(
         self, stages: Sequence["PlanStage"], *, depth: str, units: int | None, scope: str

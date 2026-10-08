@@ -44,7 +44,7 @@ def K(studio):
 
 @pytest.fixture
 def store(studio, fake_ctx, K, clock, ids):
-    st = studio.storage.Storage(Path(fake_ctx.data_dir) / K.DB_FILENAME, clock=clock, ids=ids)
+    st = studio.storage.Storage(Path(fake_ctx.data_dir) / K.DB_FILENAME, clock=clock)
     st.open()
     yield st
     st.close()
