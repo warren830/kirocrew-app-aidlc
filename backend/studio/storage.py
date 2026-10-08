@@ -572,6 +572,25 @@ class Storage:
         with self._txn() as conn:
             return int(conn.execute("DELETE FROM activity WHERE at < ?", (older_than_iso,)).rowcount)
 
+    def restamp_repo_identity(self, repo_id: str, identity: str, inode: int) -> int:
+        """Re-stamp one repository's rows that name it by an older device number of the same inode.
+
+        macOS renumbers volumes across reboots, so ``st_dev`` moves while path and inode stay; left alone, every
+        receipt and transaction would stop matching the repository it describes. Refused (0) when another
+        registration already holds ``identity``. Returns the number of rows re-stamped."""
+        same_inode = f"%:{int(inode)}"
+        with self._txn() as conn:
+            if conn.execute("SELECT 1 FROM repos WHERE resolved_identity = ? AND id <> ?", (identity, repo_id)).fetchone():
+                return 0
+            changed = conn.execute(
+                "UPDATE repos SET resolved_identity = ? WHERE id = ? AND resolved_identity <> ? AND resolved_identity LIKE ?",
+                (identity, repo_id, identity, same_inode)).rowcount
+            for table in ("install_receipts", "install_transactions", "actions"):
+                changed += conn.execute(
+                    f"UPDATE {table} SET resolved_repo_identity = ? WHERE repo_id = ? AND resolved_repo_identity <> ?"
+                    " AND resolved_repo_identity LIKE ?", (identity, repo_id, identity, same_inode)).rowcount
+            return int(changed)
+
     # ---- preferences ----
 
     def pref_get(self, key: str) -> Any | None:

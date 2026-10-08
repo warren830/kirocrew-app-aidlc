@@ -428,6 +428,10 @@ class Storage:
     def activity_query(self, q: ActivityQuery) -> tuple[list[ActivityRow], str | None]   # (rows, next_cursor)
     def activity_purge_human_text(self, older_than_iso: str) -> int
     def activity_delete_before(self, older_than_iso: str) -> int      # diagnostics.retention_days (reconciler retention pass)
+    def restamp_repo_identity(self, repo_id: str, identity: str, inode: int) -> int
+        # rows (repos, install_receipts, install_transactions, actions) naming this repository by an older st_dev of the
+        # same inode take `identity`; 0 when another registration holds it. RepoRegistry.rescan calls it: macOS renumbers
+        # volumes across reboots, and a receipt left on the old number made uninstall/rollback refuse (identity_changed).
 
     # ---- preferences ----
     def pref_get(self, key: str) -> Any | None

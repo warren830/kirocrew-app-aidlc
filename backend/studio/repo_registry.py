@@ -250,6 +250,13 @@ class RepoScan(WireRecord):
     scanned_at: str
 
 
+def _renumbered(stored: str, identity: ResolvedIdentity) -> bool:
+    """``stored`` names this directory under an older device number: same inode, different ``st_dev``. macOS
+    renumbers volumes across reboots, and a path that still resolves to the same inode is the same directory."""
+    dev, sep, ino = stored.partition(":")
+    return bool(sep) and identity.st_ino is not None and ino == str(identity.st_ino) and dev != str(identity.st_dev)
+
+
 def _warning(code: str, params: dict[str, Any], *evidence: EvidenceRef) -> PreflightFinding:
     return PreflightFinding(code, PREFLIGHT_WARNING_SEVERITY[code], f"finding.{code}", params, evidence)
 
@@ -443,27 +450,32 @@ class RepoRegistry:
     def check_availability(self, rec: RepoRecord) -> tuple[str, str | None]:
         """``(availability, reason_code)`` from a fresh stat plus an identity recompute; never raises. A
         renamed directory keeps its inode (or its git common dir), which makes it a rebindable ``moved``."""
+        availability, detail, _identity = self._availability(rec)
+        return availability, detail
+
+    def _availability(self, rec: RepoRecord) -> tuple[str, str | None, ResolvedIdentity | None]:
         root = Path(rec.canonical_path)
         try:
             st = os.stat(root)
         except PermissionError:
-            return "permission_denied", "permission_denied"
+            return "permission_denied", "permission_denied", None
         except (FileNotFoundError, NotADirectoryError):
             if self._identity_elsewhere(rec):
-                return "moved", "identity_at_other_repo"
+                return "moved", "identity_at_other_repo", None
             if rec.git_common_dir_identity and Path(rec.git_common_dir_identity).exists():
-                return "moved", "git_common_dir_present"
-            return "unavailable", "path_missing"
+                return "moved", "git_common_dir_present", None
+            return "unavailable", "path_missing", None
         except OSError:
-            return "unavailable", "stat_failed"
+            return "unavailable", "stat_failed", None
         if not stat.S_ISDIR(st.st_mode):
-            return "unavailable", "not_a_directory"
+            return "unavailable", "not_a_directory", None
         identity = self._identity_for(root)
         if not identity.provable:
-            return "identity_unprovable", "identity_unprovable"
-        if rec.resolved_identity and identity.identity_str != rec.resolved_identity:
-            return "moved", "identity_changed"
-        return "available", None
+            return "identity_unprovable", "identity_unprovable", identity
+        if (rec.resolved_identity and identity.identity_str != rec.resolved_identity
+                and not _renumbered(rec.resolved_identity, identity)):
+            return "moved", "identity_changed", identity
+        return "available", None, identity
 
     def detect_install(self, rec: RepoRecord,
                        receipt: "Receipt | Mapping[str, Any] | None" = None) -> InstallHealth:
@@ -507,7 +519,11 @@ class RepoRegistry:
         ``last_seen`` moves only when the repository was actually readable."""
         record = self.get(repo_id)
         started = self._clock.monotonic()
-        availability, detail = self.check_availability(record)
+        availability, detail, identity = self._availability(record)
+        if availability == "available" and identity is not None and identity.st_ino:
+            # Same path, same inode, a new device number (a macOS reboot): re-stamp this repository's rows.
+            if self._storage.restamp_repo_identity(repo_id, identity.identity_str, identity.st_ino):
+                record = self.get(repo_id)
         health = self.detect_install(record, self.current_receipt_row(repo_id))
         scanned_at = self._clock.iso()
         took_ms = max(0, int((self._clock.monotonic() - started) * 1000))

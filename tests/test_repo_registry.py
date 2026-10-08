@@ -451,6 +451,58 @@ def test_availability_is_moved_when_a_fresh_directory_took_the_path(registry, tm
     assert registry.check_availability(record) == ("moved", "identity_changed")
 
 
+def _renumber(store, repo_id: str, *, rows: bool = True, repo: bool = True) -> tuple[str, str]:
+    """Rewrite one repository's stored identity as if its volume had another device number (a macOS reboot)."""
+    fresh = store.get("repos", repo_id)["resolved_identity"]
+    old = f"{int(fresh.split(':')[0]) + 1}:{fresh.split(':')[1]}"
+    with store._txn() as conn:
+        if repo:
+            conn.execute("UPDATE repos SET resolved_identity = ? WHERE id = ?", (old, repo_id))
+        if rows:
+            conn.execute("INSERT INTO install_receipts(receipt_id, repo_id, resolved_repo_identity, studio_version,"
+                         " engine_version, payload_digest, committed_at, transaction_id, files_json, status)"
+                         " VALUES('rc_1', ?, ?, '1.1.6', '2.7.1', ?, ?, 'tx_1', '[]', 'current')",
+                         (repo_id, old, "0" * 64, TS))
+    return fresh, old
+
+
+@pytest.mark.parametrize("repo_row_renumbered", [True, False])
+def test_a_renumbered_volume_is_the_same_repository_and_its_rows_are_re_stamped(
+    registry, store, tmp_path, repo_row_renumbered
+):
+    """Same path, same inode, new ``st_dev``: available, and every row naming the old number follows it — also
+    when a rebind already fixed the registration but left the receipt behind (what v1 installs carry)."""
+    record = registry.add(str(plain_repo(tmp_path)), None)
+    fresh, old = _renumber(store, record.repo_id, repo=repo_row_renumbered)
+
+    assert registry.check_availability(registry.get(record.repo_id)) == ("available", None)
+    assert registry.rescan(record.repo_id).availability == "available"
+    assert store.get("repos", record.repo_id)["resolved_identity"] == fresh
+    assert store.get("install_receipts", "rc_1")["resolved_repo_identity"] == fresh
+
+
+def test_a_new_inode_at_the_same_path_is_not_re_stamped(registry, store, tmp_path):
+    root = plain_repo(tmp_path)
+    record = registry.add(str(root), None)
+    _fresh, old = _renumber(store, record.repo_id)
+    root.rename(root.parent / "elsewhere")
+    root.mkdir()  # same path, different inode: a different directory, not a renumbering
+
+    assert registry.rescan(record.repo_id).availability == "moved"
+    assert store.get("repos", record.repo_id)["resolved_identity"] == old
+    assert store.get("install_receipts", "rc_1")["resolved_repo_identity"] == old
+
+
+def test_re_stamping_never_takes_an_identity_another_registration_holds(registry, store, tmp_path):
+    record = registry.add(str(plain_repo(tmp_path)), None)
+    fresh, old = _renumber(store, record.repo_id)
+    store.insert("repos", {"id": "r_other", "resolved_identity": fresh, "canonical_path": str(tmp_path / "x"),
+                           "label": "other", "added_at": TS, "platform": "darwin", "availability": "moved"})
+
+    assert store.restamp_repo_identity(record.repo_id, fresh, int(fresh.split(":")[1])) == 0
+    assert store.get("install_receipts", "rc_1")["resolved_repo_identity"] == old
+
+
 def test_availability_is_unavailable_when_a_file_took_the_path(registry, tmp_path):
     root = plain_repo(tmp_path)
     record = registry.add(str(root), None)
