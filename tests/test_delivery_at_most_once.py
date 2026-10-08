@@ -1,5 +1,4 @@
-"""Crash-injection and at-most-once proofs for the human lane (PRD §11.5 D27, C24): a decision Studio itself
-recorded as reaching the conversation is never declared "never sent", whatever the client echoes back."""
+"""At-most-once for the human lane (§11.5 D27, C24): a decision recorded as sent is never declared "never sent"."""
 
 from __future__ import annotations
 
@@ -49,8 +48,7 @@ def test_a_confirmed_delivery_can_never_be_recorded_as_never_sent(sv, routes, fa
 
 
 def test_a_late_delivered_report_closes_submit_and_not_only_retry(sv, routes, fake_host, submitted):
-    """A proven non-delivery contradicted by a later delivered report: ``submit``, the other edge into
-    ``Delivering``, must refuse like ``retry`` does."""
+    """A proven non-delivery contradicted by a later delivered report: ``submit`` must refuse like ``retry``."""
     action_id, receipt = submitted.action_id, submitted.receipt
     # The host's own 4xx, with all four proofs of absence holding.
     status, proven = _report(sv, routes, fake_host, action_id, receipt, outcome="not_delivered", http_status=409,

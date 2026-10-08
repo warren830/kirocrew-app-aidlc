@@ -1,5 +1,4 @@
-"""``leases.py``: one turn per repository, no turn while an admin operation rewrites its files, nothing outliving its
-owner. An in-flight action is the execution lease; everything else is a per-repository ``flock`` held by a grant."""
+"""``leases.py``: one turn per repository, none during admin work, nothing outliving its owner."""
 
 from __future__ import annotations
 
@@ -151,9 +150,7 @@ def release(sched, grant) -> None:
     run(sched.release(grant))
 
 
-# --------------------------------------------------------------------------- #
-# an in-flight action is the execution lease
-# --------------------------------------------------------------------------- #
+# --- an in-flight action is the execution lease ---
 
 
 @pytest.mark.parametrize("status", ["Delivering", "Delivered"])
@@ -202,8 +199,7 @@ def test_an_action_out_of_flight_holds_nothing(studio, store, sched, status, gen
 @pytest.mark.parametrize("kind", ["execution", "admin"])
 def test_a_turn_running_in_any_session_of_the_repository_refuses_every_grant(studio, store, sched, bridge, errors,
                                                                             kind):
-    """An uncertain delivery holds no lease, but its turn may still run in another session; the cursor is
-    repository-wide, so no grant may switch it or rewrite engine files under that turn."""
+    """An uncertain delivery holds no lease, but its turn may still run in another session of the repository."""
     record = repo(studio, store)
     action(store, status="ReconciliationRequired", slot_key="slot-other")
     bridge.views.append(View("slot-other", record.canonical_path, reasons=("running",)))
@@ -226,9 +222,7 @@ def test_a_repository_shows_its_newest_in_flight_action(studio, store, sched):
     assert [(r.kind, r.action_id) for r in run(sched.list())] == [("execution", "a_new")]
 
 
-# --------------------------------------------------------------------------- #
-# grants: exclusivity, the submit window, the file lock
-# --------------------------------------------------------------------------- #
+# --- grants: exclusivity, the submit window, the file lock ---
 
 
 def test_an_execution_grant_refuses_while_an_admin_operation_runs(studio, store, sched, errors):
@@ -317,9 +311,7 @@ def test_generations_increase_and_a_restart_does_not_reuse_one(studio, store, sc
     assert admin(restarted, record).generation > seen[-1]
 
 
-# --------------------------------------------------------------------------- #
-# global concurrency cap
-# --------------------------------------------------------------------------- #
+# --- global concurrency cap ---
 
 
 def test_the_global_cap_counts_repositories_with_a_turn_in_flight(studio, store, sched, settings, errors):
@@ -367,9 +359,7 @@ def test_a_corrupt_cap_still_lets_one_turn_run(studio, store, sched, settings):
     assert turn(sched, repo(studio, store)).generation > 0
 
 
-# --------------------------------------------------------------------------- #
-# preconditions and bookkeeping
-# --------------------------------------------------------------------------- #
+# --- preconditions and bookkeeping ---
 
 
 def test_an_unprovable_identity_or_unavailable_repo_gets_no_execution_lease(studio, store, sched, errors):
@@ -445,9 +435,7 @@ def test_require_host_idle_refuses_a_busy_or_unreadable_slot(studio, store, sche
         sched.require_host_idle(record)
 
 
-# --------------------------------------------------------------------------- #
-# structural guarantees
-# --------------------------------------------------------------------------- #
+# --- structural guarantees ---
 
 
 def test_no_storage_call_runs_on_the_event_loop():

@@ -1,5 +1,4 @@
-"""Action broker (``backend/studio/actions.py``): the whole transition matrix, per-field compare-and-submit,
-``NotDelivered`` proven and never reported, and the two-phase lane (the backend commits, the browser sends)."""
+"""Action broker: the transition matrix, per-field compare-and-submit, proven ``NotDelivered``, the two-phase lane."""
 
 from __future__ import annotations
 
@@ -152,9 +151,7 @@ def world(studio, fake_ctx, fake_host, clock, ids, fake_bun, repo_builder, repo_
     store.close()
 
 
-# --------------------------------------------------------------------------- #
-# helpers over the graph
-# --------------------------------------------------------------------------- #
+# --- helpers over the graph ---
 
 
 def snapshot(w, intent_dir: str = INTENT):
@@ -271,17 +268,14 @@ def before_the_delivering_cas(w, monkeypatch, step) -> None:
     monkeypatch.setattr(w.store, "cas_update", interleaved)
 
 
-# --------------------------------------------------------------------------- #
-# 1. the transition matrix
-# --------------------------------------------------------------------------- #
+# --- 1. the transition matrix ---
 
 
 def test_the_transition_table_is_the_prd_graph_and_nothing_more(A, C):
     table = A.ALLOWED_TRANSITIONS
     assert table == {k: frozenset(v) for k, v in C.ALLOWED_TRANSITIONS.items()}
     assert set(table) == set(C.ACTION_STATUS)
-    # PRD §11.1's cancel, its four dead ends, and the merged states: a running turn is still `Delivered`, and
-    # every doubt about a delivery is `ReconciliationRequired` from its first moment.
+    # PRD §11.1: a running turn is still `Delivered`; every doubt about a delivery is `ReconciliationRequired`.
     assert "Cancelled" in table["Queued"]
     assert {"Draft", "Processing", "DeliveryUncertain"}.isdisjoint(C.ACTION_STATUS)
     assert "ReconciliationRequired" in table["Delivering"]
@@ -322,9 +316,7 @@ async def test_a_lost_cas_is_a_stale_generation_not_a_silent_write(world, E):
         await move(world, rec, "Delivering", reason="second")
 
 
-# --------------------------------------------------------------------------- #
-# 2. wire text
-# --------------------------------------------------------------------------- #
+# --- 2. wire text ---
 
 
 def test_wire_text_templates_and_constants_match_the_pinned_file_byte_for_byte(A, C):
@@ -501,9 +493,7 @@ async def test_file_answer_rechecks_after_cursor_switch(world, E, monkeypatch, c
     assert (await world.broker.get(question.action_id)).delivery_id is None
 
 
-# --------------------------------------------------------------------------- #
-# 3. submit: the happy path and what it never does
-# --------------------------------------------------------------------------- #
+# --- 3. submit: the happy path and what it never does ---
 
 
 @aio
@@ -778,9 +768,7 @@ async def test_a_decision_the_card_does_not_offer_and_a_wrong_lane_are_both_refu
             await submit(world, gate, payload=payload)
 
 
-# --------------------------------------------------------------------------- #
-# 4. submit: session preconditions and the lease
-# --------------------------------------------------------------------------- #
+# --- 4. submit: session preconditions and the lease ---
 
 
 @aio
@@ -936,9 +924,7 @@ async def test_a_row_that_is_not_submittable_is_refused_first(world, E):
     assert exc.value.details["status"] == "Delivering"
 
 
-# --------------------------------------------------------------------------- #
-# 5. delivery reporting
-# --------------------------------------------------------------------------- #
+# --- 5. delivery reporting ---
 
 
 @aio
@@ -1082,8 +1068,7 @@ async def test_a_late_delivered_report_marks_the_decision_confirmed_and_blocks_r
 
 @aio
 async def test_a_late_not_delivered_report_needs_a_4xx_and_all_four_checks(world, E):
-    """From ``ReconciliationRequired`` only the host's own 4xx proves absence (a client preflight code is believed
-    only while ``Delivering``), and only with all four checks holding."""
+    """From ``ReconciliationRequired`` only the host's own 4xx proves absence, and only with all four checks."""
     rec, receipt = await delivering(world)
     assert (await report(world, rec, receipt, "uncertain", None, None))[0].status == "ReconciliationRequired"
     world.fake_host._slots.pop(SLOT)
@@ -1123,9 +1108,7 @@ async def test_an_evidence_patch_writes_only_what_changed(world):
     assert stale.status_generation == first.status_generation and "other" not in stale.evidence
 
 
-# --------------------------------------------------------------------------- #
-# 6. resubmit, mark_not_delivered, retry, cancel
-# --------------------------------------------------------------------------- #
+# --- 6. resubmit, mark_not_delivered, retry, cancel ---
 
 
 @aio
@@ -1156,8 +1139,7 @@ async def test_resubmit_supersedes_the_old_row_and_keeps_one_live_card_per_bound
 
 @aio
 async def test_resubmit_and_mark_not_delivered_only_exist_in_reconciliation_required(world, E):
-    """R07: only once the reconciler looked and could not tell; a recovery card naming ``mark_not_delivered``
-    (always Queued) is refused by its status."""
+    """R07: only once the reconciler looked and could not tell; a Queued recovery card is refused by its status."""
     rec, receipt = await delivering(world)
     delivered, _ = await report(world, rec, receipt, "delivered", 200, {"ok": True})
     for decision in ("resubmit", "mark_not_delivered"):
@@ -1236,9 +1218,7 @@ async def test_cancel_is_allowed_for_commands_and_refused_for_a_live_derived_car
     assert (await world.broker.cancel(proven.action_id, user="owner-1")).status == "Cancelled"
 
 
-# --------------------------------------------------------------------------- #
-# 7. force stop, studio-only decisions
-# --------------------------------------------------------------------------- #
+# --- 7. force stop, studio-only decisions ---
 
 
 @aio
@@ -1308,9 +1288,7 @@ async def test_a_studio_only_decision_is_refused_on_the_wrong_card(world, E):
             await world.broker.resolve(gate.action_id, decision=decision, payload={}, user="owner-1")
 
 
-# --------------------------------------------------------------------------- #
-# 8. the breaker
-# --------------------------------------------------------------------------- #
+# --- 8. the breaker ---
 
 
 async def _running_command(w, kind: str = "run"):
@@ -1403,9 +1381,7 @@ async def test_a_failure_whose_status_cas_is_lost_leaves_no_strike_on_the_breake
     assert failed.evidence["failure"]["count"] == 1
 
 
-# --------------------------------------------------------------------------- #
-# 9. derivation, dedupe and the card
-# --------------------------------------------------------------------------- #
+# --- 9. derivation, dedupe and the card ---
 
 
 @aio
@@ -1525,8 +1501,7 @@ async def test_a_refresh_touches_a_queued_card_and_never_an_inflight_one(world):
 @pytest.mark.parametrize("repo_options", [{"second_gate": True}])
 @aio
 async def test_a_second_open_gate_card_shows_its_own_stage_and_not_the_current_one(world):
-    """``card()`` re-derives live evidence for the card's OWN boundary (A20), or the other gate's approver sees
-    the current stage's files and verdict while its correctly scoped ``captured`` lets the submit through."""
+    """``card()`` re-derives evidence for the card's OWN boundary (A20), not the current stage's files and verdict."""
     await bind(world)
     gates = {rec.stage: rec for rec in await seed(world) if rec.type == "gate"}
     assert {STAGE, SECOND_STAGE} <= set(gates), sorted(gates)
@@ -1726,8 +1701,7 @@ async def test_the_card_is_the_shape_the_ui_type_pins(world, A, C):
 
 @aio
 async def test_a_recovery_card_offers_nothing_that_cannot_succeed(world, E):
-    """A button that always fails is worse than none: ``rebind_session`` needs a slot no client sends, and
-    ``mark_not_delivered`` is legal only from ``ReconciliationRequired``, which a studio-only card never reaches."""
+    """A button that always fails is worse than none: no ``rebind_session``, no ``mark_not_delivered`` here."""
     await bind(world)
     recovery = await _retyped(world, type="recovery", evidence_json={"findings": [], "card": {
         "decisions": ["rebind_session", "mark_not_delivered", "acknowledge"], "reason": "state_unreadable"}})
@@ -1766,8 +1740,7 @@ async def test_human_text_keeps_only_what_the_person_typed(world):
     card = await world.broker.card(rec, None)
     assert "human_text" not in card, "the card carries a flag, never the retained text"
     assert card["human_text_present"] is True
-    # `delivery.wire_text` must keep the feedback (it records what was sent, §2.11); retention removes the
-    # `human_text` copy, here and on the activity row.
+    # `delivery.wire_text` keeps what was sent (§2.11); retention removes only the `human_text` copies.
     assert card["delivery"]["wire_text"] == "Request Changes: Cover C3 in the criteria."
     submitted = [row for row in world.store.select("activity") if row["kind"] == "action.submitted"]
     assert submitted and submitted[-1]["human_text"] == "Cover C3 in the criteria."

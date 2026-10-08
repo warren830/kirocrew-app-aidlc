@@ -1,5 +1,4 @@
-"""Sessions (``backend/studio/sessions.py``): the bridge degrades rather than raises and names the symbol that
-moved; "unknown" is never "idle"; which slot a decision goes to is refused, never guessed."""
+"""Sessions: the bridge degrades rather than raises; "unknown" is never "idle"; a slot is refused, never guessed."""
 
 from __future__ import annotations
 
@@ -60,9 +59,7 @@ def run(coro):
     return asyncio.run(coro)
 
 
-# --------------------------------------------------------------------------- #
-# host stand-ins
-# --------------------------------------------------------------------------- #
+# --- host stand-ins ---
 
 #: Every key `_ChatSlot.to_dict()` emits on 0.5.0-insider.9, so a dropped key `SlotView` maps fails here.
 FULL_KEYS = (
@@ -220,9 +217,7 @@ class Activity:
         return [r for r in self.rows if r["kind"] == kind]
 
 
-# --------------------------------------------------------------------------- #
-# HostBridge: attachment and capabilities
-# --------------------------------------------------------------------------- #
+# --- HostBridge: attachment and capabilities ---
 
 
 def test_an_unattached_bridge_answers_nothing_and_says_why(S, bridge):
@@ -268,9 +263,7 @@ def test_a_new_host_object_is_re_probed(bridge):
     assert bridge.capabilities()["slack"].available is True
 
 
-# --------------------------------------------------------------------------- #
-# HostBridge: SlotView mapping and busy predicates
-# --------------------------------------------------------------------------- #
+# --- HostBridge: SlotView mapping and busy predicates ---
 
 
 def test_slot_view_maps_every_key_the_contract_lists(bridge):
@@ -431,9 +424,7 @@ def test_the_public_queue_depth_twin_is_used_when_the_private_one_is_gone(bridge
     assert bridge.slot(SLOT).subagents_queued == 3
 
 
-# --------------------------------------------------------------------------- #
-# HostBridge: transcript evidence
-# --------------------------------------------------------------------------- #
+# --- HostBridge: transcript evidence ---
 
 
 def test_recent_rows_filters_roles_newest_first_and_redacts(bridge):
@@ -519,9 +510,7 @@ def test_find_delivery_row_ignores_a_row_from_before_the_dispatch(bridge):
     assert find_row(bridge) is None
 
 
-# --------------------------------------------------------------------------- #
-# HostBridge: repo matching
-# --------------------------------------------------------------------------- #
+# --- HostBridge: repo matching ---
 
 
 def test_slot_matches_repo_requires_project_agent_and_app(bridge, tmp_path):
@@ -582,9 +571,7 @@ def test_a_host_without_a_slot_table_degrades_the_slots_capability(bridge):
         assert cap.reason.startswith("missing:state."), "the reason must name the symbol that moved"
 
 
-# --------------------------------------------------------------------------- #
-# HostBridge: session, owner, process facts
-# --------------------------------------------------------------------------- #
+# --- HostBridge: session, owner, process facts ---
 
 
 def test_is_busy_reports_the_host_answer_and_none_when_it_cannot(bridge):
@@ -649,9 +636,7 @@ def test_a_config_over_the_cap_is_clamped(C, bridge, monkeypatch):
     assert bridge.turn_timeout_secs() == C.PROCESSING_DEADLINE_CAP_SECS
 
 
-# --------------------------------------------------------------------------- #
-# HostBridge: question cards, subagents, the two writes
-# --------------------------------------------------------------------------- #
+# --- HostBridge: question cards, subagents, the two writes ---
 
 
 def test_pending_question_cards_lists_the_registry_then_the_slot(bridge):
@@ -811,9 +796,7 @@ def test_the_remaining_capabilities_have_an_unavailable_path(S, bridge):
     assert set(caps) == set(S.CAPABILITIES), "every name in CAPABILITIES has been exercised by this file"
 
 
-# --------------------------------------------------------------------------- #
-# SessionBinder: fixtures and helpers
-# --------------------------------------------------------------------------- #
+# --- SessionBinder: fixtures and helpers ---
 
 
 @pytest.fixture
@@ -863,9 +846,7 @@ def bind(binder, record, intent: str = INTENT, *, slot: str = SLOT, uuid: str | 
     return run(binder.bind(record, "default", intent, slot_key=slot, intent_uuid=uuid))
 
 
-# --------------------------------------------------------------------------- #
-# SessionBinder: reads and creation
-# --------------------------------------------------------------------------- #
+# --- SessionBinder: reads and creation ---
 
 
 def test_get_creates_an_unbound_row(registered, S, binder, store):
@@ -939,9 +920,7 @@ def test_session_ref_and_the_queue_see_a_conversation_parked_on_a_tool_approval(
     assert run(binder.waiting_approvals()) == []
 
 
-# --------------------------------------------------------------------------- #
-# SessionBinder: bind
-# --------------------------------------------------------------------------- #
+# --- SessionBinder: bind ---
 
 
 def test_bind_records_the_slot_and_the_effective_session_key(binder, bridge, store, registered, repo_dir, activity):
@@ -1020,9 +999,7 @@ def test_bind_requires_a_slot_key(errors, binder, bridge, registered):
         bind(binder, registered, slot="")
 
 
-# --------------------------------------------------------------------------- #
-# SessionBinder: unbind, takeover
-# --------------------------------------------------------------------------- #
+# --- SessionBinder: unbind, takeover ---
 
 
 def test_unbind_clears_the_slot_and_records_the_reason(binder, bridge, registered, repo_dir, activity):
@@ -1090,9 +1067,7 @@ def test_takeover_still_verifies_the_slot(errors, binder, bridge, registered, re
         run(binder.takeover(registered, "default", INTENT, slot_key="chat-9"))
 
 
-# --------------------------------------------------------------------------- #
-# SessionBinder: intent flags
-# --------------------------------------------------------------------------- #
+# --- SessionBinder: intent flags ---
 
 
 def test_set_paused_stamps_the_pause_and_clears_it(registered, binder, clock, activity):
@@ -1156,9 +1131,7 @@ def test_a_live_card_for_another_intent_does_not_block_this_one(registered, bind
     assert run(binder.set_archived("r_1", "default", INTENT, True)).archived is True
 
 
-# --------------------------------------------------------------------------- #
-# SessionBinder: stable boundary and JSON
-# --------------------------------------------------------------------------- #
+# --- SessionBinder: stable boundary and JSON ---
 
 
 def boundary(studio, **over):
@@ -1212,12 +1185,9 @@ def test_a_competing_bind_is_not_silently_overwritten(errors, binder, store, bri
     assert run(binder._cas(row, {"paused": 1}, retry=True))["paused"] == 1
 
 
-# --------------------------------------------------------------------------- #
-# the invariant, checked structurally
-# --------------------------------------------------------------------------- #
+# --- the invariant, checked structurally ---
 
-#: Private host entry points that would make Studio the sender (§7.0); both gateway generations have them with
-#: different signatures, which is why the human lane goes out over the public HTTP API from the browser (A03).
+#: Private host entry points that would make Studio the sender (§7.0): the browser sends over public HTTP (A03).
 FORBIDDEN_HOST_SYMBOLS = ("_run_chat", "spawn_guarded_turn", "enqueue_or_run_prompt", "queue_for_next_turn",
                           "queue_append", "get_or_create_slot", "stop_turn", "steer_into_running_turn", "link_slack",
                           "set_slack_link", "register_sse", "broadcast_ws")
@@ -1228,8 +1198,7 @@ def _sessions_ast() -> ast.AST:
 
 
 def test_the_bridge_never_names_a_host_dispatch_symbol():
-    """No dispatch name as an attribute, a name or a string: a bridge that can start a turn lets a decision
-    reach AI-DLC without a durable ``Delivering`` record, and at-most-once stops being provable."""
+    """No dispatch name anywhere: a bridge that can start a turn breaks the at-most-once proof."""
     seen: set[str] = set()
     for node in ast.walk(_sessions_ast()):
         if isinstance(node, ast.Attribute):

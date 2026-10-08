@@ -1,5 +1,4 @@
-"""Notifications: the two courtesy channels, and the door that stays shut. The interesting assertions are the
-negative ones: no evidence, no way to decide, and no way to fail the operation that produced it."""
+"""Notifications: two courtesy channels; no evidence, no way to decide, no way to fail the producing operation."""
 
 from __future__ import annotations
 
@@ -304,9 +303,7 @@ def test_announced_answers_whether_an_open_card_was_notified(studio, clock):
     assert asyncio.run(adapter.announced("a_0000000000000002")) is False
 
 
-# --------------------------------------------------------------------------- #
-# what a scan announces: the reconciler through the real services
-# --------------------------------------------------------------------------- #
+# --- what a scan announces: the reconciler through the real services ---
 
 
 def _scan(sv: Any, repo: Any) -> None:

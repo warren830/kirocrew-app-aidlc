@@ -1,7 +1,4 @@
-"""The vertical slice over HTTP: an open gate on disk becomes an approved stage, exactly once (§4.3).
-
-The engine's side (audit rows, the state file moving on) is applied by hand from the harvested formats.
-"""
+"""HTTP vertical slice: an open gate on disk becomes an approved stage exactly once (§4.3); engine rows by hand."""
 
 from __future__ import annotations
 
@@ -182,9 +179,7 @@ def approved(sv, fake_host, scene, delivered) -> dict[str, str]:
     return written
 
 
-# --------------------------------------------------------------------------- #
-# 1. the repository, the boundary, the stale submit
-# --------------------------------------------------------------------------- #
+# --- 1. the repository, the boundary, the stale submit ---
 
 
 def test_registering_the_repository_finds_the_engine_without_running_anything(scene, sv):
@@ -241,9 +236,7 @@ def test_every_compared_field_on_its_own_makes_the_submit_stale(sv, routes, fake
     assert status == 409 and body["code"] == "action_stale", field
 
 
-# --------------------------------------------------------------------------- #
-# 2. the fresh submit, and the browser's report
-# --------------------------------------------------------------------------- #
+# --- 2. the fresh submit, and the browser's report ---
 
 
 def test_the_receipt_is_the_call_the_browser_must_make_and_the_record_is_already_durable(
@@ -315,9 +308,7 @@ def test_a_client_claiming_never_sent_is_refused_when_the_transcript_disagrees(
     assert _row(sv, submitted.action_id)["status"] == "ReconciliationRequired"
 
 
-# --------------------------------------------------------------------------- #
-# 3. the engine acts, the reconciler resolves, the card leaves
-# --------------------------------------------------------------------------- #
+# --- 3. the engine acts, the reconciler resolves, the card leaves ---
 
 
 def test_the_reconciler_resolves_state_changed_once_the_engine_has_moved_the_disk(sv, delivered, approved):
@@ -364,9 +355,7 @@ def test_the_transition_history_is_the_whole_path_and_every_edge_is_legal(
         assert target in studio.constants.ALLOWED_TRANSITIONS.get(source, ()), (source, target)
 
 
-# --------------------------------------------------------------------------- #
-# 4. what the flow recorded, and what it must not have touched
-# --------------------------------------------------------------------------- #
+# --- 4. what the flow recorded, and what it must not have touched ---
 
 
 def test_the_flow_is_visible_in_the_activity_timeline(sv, routes, fake_host, scene, approved):
@@ -410,15 +399,12 @@ def test_no_denied_engine_verb_was_ever_invoked(approved, denied_log):
     assert not denied_log.exists(), denied_log.read_text()
 
 
-# --------------------------------------------------------------------------- #
-# 5. the crash path: killed between the CAS and the report
-# --------------------------------------------------------------------------- #
+# --- 5. the crash path: killed between the CAS and the report ---
 
 
 @pytest.fixture
 def restarted(sv, studio, fake_ctx, clock, ids, fake_bun, fake_git, submitted):
-    """A kill after the CAS, then a second ``Services`` on the same data dir: new boot id, an empty host, the ack
-    deadline passed, startup reconciliation run. Durable rows survive; the host's slot memory does not."""
+    """Kill after the CAS, then a second ``Services`` on the same data dir (new boot, empty host, deadline past)."""
     assert _row(sv, submitted.action_id)["status"] == "Delivering"
     sv.storage.close()
     after = studio.services.Services.build(fake_ctx, clock=clock, ids=ids, bun_path=fake_bun, git_path=fake_git,
@@ -436,8 +422,7 @@ def restarted(sv, studio, fake_ctx, clock, ids, fake_bun, fake_git, submitted):
 
 
 def test_a_crash_between_the_cas_and_the_report_never_replays_the_decision(scene, restarted):
-    """The browser may or may not have sent; ``NotDelivered`` would license a replay, and the new boot id closes
-    the four-proof path by construction (C24/review R02)."""
+    """``NotDelivered`` would license a replay; the new boot id closes the four-proof path (C24/review R02)."""
     after = restarted.services
     assert restarted.report.actions_reevaluated >= 1
     row = dict(after.storage.get("actions", restarted.action_id))

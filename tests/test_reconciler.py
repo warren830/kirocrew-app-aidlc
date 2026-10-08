@@ -1,7 +1,4 @@
-"""Reconciliation: given exactly this evidence, what may Studio say? ``NotDelivered`` needs four proofs and never
-follows a restart; every doubt is ``ReconciliationRequired`` in one legal edge; a self-approved gate is an anomaly;
-the advisor pass is housekeeping. ``actions`` is a strict double over the real Storage; ``reconciler.py`` is unpatched.
-"""
+"""Reconciliation: four proofs for ``NotDelivered``, one legal edge per doubt, a self-approved gate is an anomaly."""
 
 from __future__ import annotations
 
@@ -41,9 +38,7 @@ def C(studio):
     return studio.constants
 
 
-# --------------------------------------------------------------------------- #
-# the broker double (real Storage, real transition table)
-# --------------------------------------------------------------------------- #
+# --- the broker double (real Storage, real transition table) ---
 
 #: Row columns a broker record carries through unchanged.
 _REC_COLUMNS = ("type", "risk_class", "repo_id", "resolved_repo_identity", "intent_uuid", "intent_dir", "space",
@@ -55,8 +50,7 @@ _TERMINAL_KINDS = {"StateChanged": "state_changed", "ResolvedNoTransition": "no_
 
 
 class FakeBroker:
-    """The ``HumanActionBroker`` methods the reconciler calls, over the real store. Deliberately strict:
-    ``transition`` validates against ``ALLOWED_TRANSITIONS`` and CASes, or "only legal edges" would be vacuous."""
+    """The broker methods the reconciler calls, over the real store; ``transition`` validates and CASes."""
 
     def __init__(self, studio_ns: Any, storage: Any, clock: Any, ids: Any) -> None:
         self._m, self._st, self._clock, self._ids = studio_ns, storage, clock, ids
@@ -191,9 +185,7 @@ def svc(studio, fake_ctx, fake_host, clock, ids, fake_git, R):
     storage.close()
 
 
-# --------------------------------------------------------------------------- #
-# scenario helpers
-# --------------------------------------------------------------------------- #
+# --- scenario helpers ---
 
 
 def _record(root: Path, intent_dir: str = GATE_DIR, space: str = "default") -> Path:
@@ -217,8 +209,7 @@ def append_audit(root: Path, *blocks: str) -> Path:
 
 @pytest.fixture
 def scene(svc, gate_repo, fake_host):
-    """One registered repo with its slot bound, and ``make`` for action rows in any status, written with the exact
-    columns ``submit`` commits; captured, evidence and baseline come from a real snapshot."""
+    """One repo with its slot bound; ``make`` writes action rows with the columns ``submit`` commits."""
     root = Path(gate_repo)
     repo = svc.repos.add(str(root))
     slot_key = f"aidlc-studio-{repo.repo_id}-{GATE_DIR}"
@@ -264,8 +255,7 @@ def scene(svc, gate_repo, fake_host):
 
 
 def approve_on_disk(root: Path, *, human_turns: int = 1, ts: str = "2026-09-04T10:00:00Z") -> None:
-    """The engine after a real gate approval, human turns dialled (0 and 2 are the §1.13 anomaly pair); the rows
-    share the turn's second, the case review P23 exists for."""
+    """The engine after a real gate approval; ``human_turns`` 0 and 2 are the §1.13 anomaly pair (review P23)."""
     append_audit(root, *[F.audit_block("HUMAN_TURN", ts) for _ in range(human_turns)],
                  F.audit_block("GATE_APPROVED", ts, Stage=GATE_STAGE, User_Input="Approve"),
                  F.audit_block("STAGE_COMPLETED", ts, Stage=GATE_STAGE, Details=f"Stage {GATE_STAGE} approved"))
@@ -285,8 +275,7 @@ def reject_on_disk(root: Path, *, ts: str = "2026-09-04T10:00:00Z") -> None:
 
 def finish_turn(fake_host, slot_key: str, *, wire_text: str = "Approve", user_ts: str = "2026-09-04T09:59:30Z",
                 reply_ts: str = "2026-09-04T10:00:10Z") -> None:
-    """A finished turn's transcript: the user row is the delivery evidence, and the reply behind it tells "the
-    turn finished" apart from "nothing ever started" (only the second belongs to the deadline path)."""
+    """A finished turn: the user row is the delivery evidence; the reply tells "finished" from "never started"."""
     slot = fake_host.get_slot(slot_key)
     slot.messages += [{"role": "user", "content": wire_text, "cls": "msg msg-u", "ts": user_ts, "meta": {}},
                       {"role": "assistant", "content": "done", "cls": "msg msg-a", "ts": reply_ts, "meta": {}}]
@@ -310,8 +299,7 @@ def finding_codes(svc, action_id: str) -> set[str]:
 
 
 def ended_turn(svc, scene, fake_host, wire: str, *blocks: str, after: str | None = None, **make: Any) -> str:
-    """Dispatch a ``Delivered`` action (a question unless told otherwise), leave ``after`` in the questions file
-    and ``blocks`` behind a real human turn, end the turn and tick once. Returns the action id."""
+    """Dispatch a ``Delivered`` action, leave ``after`` and ``blocks`` behind a human turn, end it, tick once."""
     make.setdefault("action_type", "question")
     action_id = scene.make(wire_text=wire, **make)
     if after is not None:
@@ -367,9 +355,7 @@ def test_changed_reconciliation_evidence_still_advances_generation(svc, scene, f
     assert after["evidence_json"]["delivery_confirmed"] is True
 
 
-# --------------------------------------------------------------------------- #
-# 1. startup ordering
-# --------------------------------------------------------------------------- #
+# --- 1. startup ordering ---
 
 
 def test_startup_reevaluates_every_inflight_action_before_scanning(svc, scene):
@@ -398,8 +384,7 @@ def test_startup_reevaluates_every_inflight_action_before_scanning(svc, scene):
 
 
 def test_startup_stamps_boot_id_mismatch_and_never_reaches_not_delivered(svc, scene, clock):
-    """After a restart "no user row" is what a lost transcript looks like, so the boot stamp is written first and
-    nothing is ever proven on evidence this process cannot have (review R02)."""
+    """After a restart "no user row" looks like a lost transcript: stamp the boot first, prove nothing (R02)."""
     action_id = scene.make(status="Delivering", boot_id=OTHER_BOOT, deadline_at=PAST_DEADLINE)
     svc.host.attach(None)
     svc.host._state = None  # the restarted process has an empty slot table
@@ -421,14 +406,11 @@ def test_startup_report_publishes_health_updated(svc, scene):
     assert "health.startup" in {row["kind"] for row in svc.storage.select("activity")}
 
 
-# --------------------------------------------------------------------------- #
-# 2. the ack deadline path
-# --------------------------------------------------------------------------- #
+# --- 2. the ack deadline path ---
 
 
 def test_ack_deadline_with_user_row_found_lands_on_reconciliation_required(svc, scene, fake_host):
-    """Sent and never reported: one tick, one legal edge, ``delivery_confirmed`` from the transcript row — and
-    ``Delivering → NotDelivered`` is never asked for (§1.13)."""
+    """Sent, never reported: one tick, one legal edge, ``delivery_confirmed`` from the row, no NotDelivered."""
     action_id = scene.make(status="Delivering", deadline_at=PAST_DEADLINE)
     finish_turn(fake_host, scene.slot_key)
     tick(svc)
@@ -452,8 +434,7 @@ def test_ack_deadline_matches_by_delivery_meta_before_content(svc, scene, fake_h
 
 
 def test_ack_deadline_with_no_row_and_all_four_proofs_reaches_not_delivered(svc, scene, clock):
-    """Row absent, slot never ran, baseline byte-identical, same boot: only then, and only from
-    ``ReconciliationRequired`` — re-queueing a delivered decision is the at-most-once violation (C24)."""
+    """Row absent, slot idle, baseline identical, same boot, and only from ``ReconciliationRequired`` (C24)."""
     action_id = scene.make(status="Delivering", deadline_at=PAST_DEADLINE)
     tick(svc)
     assert status_of(svc, action_id) == "ReconciliationRequired"
@@ -488,9 +469,7 @@ def test_a_lost_ack_reaches_a_human_in_one_tick_with_no_evidence_at_all(svc, sce
     assert svc.actions.transitions == [(action_id, "ReconciliationRequired", "ack_deadline")]
 
 
-# --------------------------------------------------------------------------- #
-# 3. deadlines, queued deliveries and replaced sessions
-# --------------------------------------------------------------------------- #
+# --- 3. deadlines, queued deliveries and replaced sessions ---
 
 
 def test_queued_delivery_waits_in_delivered_until_the_turn_starts(svc, scene, fake_host, clock):
@@ -542,9 +521,7 @@ def test_detached_host_does_not_mistake_a_missing_slot_for_a_dead_session(svc, s
     assert status_of(svc, action_id) == "Delivered"
 
 
-# --------------------------------------------------------------------------- #
-# 4. resolution contracts
-# --------------------------------------------------------------------------- #
+# --- 4. resolution contracts ---
 
 PLAN = "# Code Generation — Questions\n\n---\n\n## Plan Approval\n\n- Approve Plan\n- Request Changes\n\n[Answer]:\n\n"
 ASSUMPTION_QUESTIONS = (
@@ -647,8 +624,7 @@ def test_request_plan_changes_resolves_when_the_tag_is_cleared_for_revision(svc,
 
 
 def test_resolution_events_mirror_the_bundled_engines_gate_resolution_set(C):
-    """Read out of the bundled engine, so its next member fails here; ``AUTONOMY_MODE_SET`` is the documented
-    non-mirror (conditional on a mode Studio never produces)."""
+    """Read out of the bundled engine; ``AUTONOMY_MODE_SET`` is the documented non-mirror."""
     lib = (APP_ROOT / "payload" / "aidlc-kiro" / ".kiro" / "tools" / "aidlc-lib.ts").read_text("utf-8")
     start = lib.index("GATE_RESOLUTION_EVENTS = new Set([")
     engine = set(re.findall(r'"([A-Z_]+)"', lib[start : lib.index("]);", start)]))
@@ -712,8 +688,7 @@ def _force_stop(scene) -> str:
 
 
 def test_force_stop_resolves_when_the_slot_goes_idle_and_records_the_interruption(svc, scene):
-    """Host control needs no ``HUMAN_TURN`` (§1.12); the stamped ``interrupted_at`` is cleared only by a human,
-    never by run/resume (C28/P17)."""
+    """Host control needs no ``HUMAN_TURN`` (§1.12); ``interrupted_at`` is cleared only by a human (C28/P17)."""
     action_id = _force_stop(scene)
     tick(svc)
     assert status_of(svc, action_id) == "ResolvedNoTransition"
@@ -728,9 +703,7 @@ def test_force_stop_stays_pending_while_the_stop_is_in_progress(svc, scene, fake
     assert status_of(svc, action_id) == "Delivered"
 
 
-# --------------------------------------------------------------------------- #
-# 5. the presence invariant, per dispatch class
-# --------------------------------------------------------------------------- #
+# --- 5. the presence invariant, per dispatch class ---
 
 
 @pytest.mark.parametrize("human_turns", [0, 2])
@@ -774,8 +747,7 @@ def test_cursor_moved_between_dispatch_and_resolution_is_an_anomaly(svc, scene, 
 
 
 def test_row_found_in_another_slot_is_wrong_slot_and_waits_for_a_human(svc, scene, fake_host, clock):
-    """Delivered, but not to the session it was captured against: neither ``NotDelivered`` nor a disk resolution
-    is safe, so the finding is stored and the card waits (R08)."""
+    """Delivered to another session: neither ``NotDelivered`` nor a disk resolution is safe, a human decides (R08)."""
     action_id = scene.make(status="Delivering", deadline_at=PAST_DEADLINE)
     fake_host.add_slot("hand-made", project=str(scene.root), agent="aidlc")
     fake_host.get_slot("hand-made").messages.append(
@@ -789,9 +761,7 @@ def test_row_found_in_another_slot_is_wrong_slot_and_waits_for_a_human(svc, scen
     assert "wrong_slot" in finding_codes(svc, action_id)
 
 
-# --------------------------------------------------------------------------- #
-# 6. stable boundary, retirement, release
-# --------------------------------------------------------------------------- #
+# --- 6. stable boundary, retirement, release ---
 
 
 def test_stable_boundary_is_recorded_and_names_every_unmet_condition(svc, scene):
@@ -838,8 +808,7 @@ def _hide_intent(root: Path, intent_dir: str = GATE_DIR) -> Path:
 
 
 def test_cards_of_an_intent_that_left_the_disk_are_retired_after_the_grace(svc, scene, clock, C):
-    """§1.13 step 1b: a vanished intent's cards retire, but only after ``INTENT_MISSING_GRACE_SECS`` of absence,
-    since a listing can be empty for one tick mid-checkout."""
+    """§1.13 step 1b: a vanished intent's cards retire only after ``INTENT_MISSING_GRACE_SECS`` of absence."""
     gate = gate_card_after_a_tick(svc, scene)
     assert svc.reconciler.intents_on_disk() == 1
     failed_id = insert_card(svc, scene, type="failure", status="Failed", dedupe_key="failure:gone:fp",
@@ -923,9 +892,7 @@ def test_resolution_releases_the_execution_lease(svc, scene, fake_host):
     assert asyncio.run(svc.scheduler.get(scene.repo.resolved_identity)) is None
 
 
-# --------------------------------------------------------------------------- #
-# 7. failure classification
-# --------------------------------------------------------------------------- #
+# --- 7. failure classification ---
 
 
 @pytest.mark.parametrize("message,expected", [
@@ -990,9 +957,7 @@ def test_running_question_can_recover_from_tool_errors_before_it_finishes(svc, s
     assert svc.actions.failures == []
 
 
-# --------------------------------------------------------------------------- #
-# 8. scan pool, budget and retention
-# --------------------------------------------------------------------------- #
+# --- 8. scan pool, budget and retention ---
 
 
 def test_scan_fanout_bounded(svc, tmp_path, monkeypatch, R, C):
@@ -1124,8 +1089,7 @@ def test_reconciler_never_writes_aidlc_state(svc, scene):
 
 
 def test_an_idle_tick_writes_nothing_and_publishes_nothing(svc, scene, studio, clock):
-    """Over an unchanged repository later ticks must be indistinguishable from the first: no binding CAS and no
-    ``intent.updated`` frame per bound intent every five seconds (the clock must move, or the churn hides)."""
+    """Later ticks over an unchanged repo write nothing: no binding CAS, no ``intent.updated`` frame."""
     tick(svc)
 
     def state() -> tuple[Any, ...]:
@@ -1155,14 +1119,11 @@ def test_a_boundary_that_really_changes_is_still_written_and_published(svc, scen
     assert len([r for r in asyncio.run(svc.events.since(0)) if r.type == "intent.updated"]) > published
 
 
-# --------------------------------------------------------------------------- #
-# 9. the advisor pass: drafting ahead of the click (§1.13 step 6, A24)
-# --------------------------------------------------------------------------- #
+# --- 9. the advisor pass: drafting ahead of the click (§1.13 step 6, A24) ---
 
 
 class StubAdvisor:
-    """The two methods ``_advisor_pass`` calls, recording order and able to explode; ``expire`` stays the real
-    broker's write when a test hands it in, so "retention still ran" reaches the real table."""
+    """The two methods ``_advisor_pass`` calls, recording order and able to explode; ``expire`` may be real."""
 
     def __init__(self, *, raises: str = "", settled: int = 0, started: int = 0,
                  on_settle: Callable[[], None] | None = None, expire: Callable[[], Any] | None = None) -> None:
@@ -1191,8 +1152,7 @@ class StubAdvisor:
 
 @pytest.fixture
 def advisor(svc, studio, fake_host):
-    """The real ``AdvisorBroker`` attached as ``Services`` attaches it (§1.18); ``subagents`` is wired because
-    the settle half polls the host on the very next tick."""
+    """The real ``AdvisorBroker`` attached as ``Services`` attaches it (§1.18), with ``subagents`` wired."""
     module = studio.advisor
     assert module is not None, getattr(studio, "advisor__error", "advisor.py did not import")
     fake_host.subagents = SimpleNamespace(get=lambda spawn_id: svc.ctx.spawn.results.get(spawn_id))
@@ -1276,8 +1236,7 @@ def test_a_container_without_an_advisor_ticks_cleanly(svc, scene):
 
 
 def test_the_pass_settles_before_it_starts_anything_new(svc, scene):
-    """Settling frees the inflight slots the cap counts, and a pre-draft nobody watches would otherwise rot past
-    the host's result TTL; retention (step 7) trails both halves."""
+    """Settling frees the inflight slots the cap counts before anything new starts; retention trails both."""
     svc.advisor = StubAdvisor(settled=3, started=1)
     assert asyncio.run(svc.reconciler._advisor_pass()) == (3, 1)
     assert svc.advisor.calls == ["settle_open", "autodraft"]

@@ -1,5 +1,4 @@
-"""Action Center routes (§2.4): the card is exactly §2.11, ``submit`` hands the browser the call and never makes it,
-``not_delivered`` is proven and never believed, and a delivery report is idempotent."""
+"""Action Center routes (§2.4): §2.11 cards, ``submit`` never sends, proven ``not_delivered``, idempotent reports."""
 
 from __future__ import annotations
 
@@ -120,9 +119,7 @@ def receipt(http, gate, slot) -> dict:
     return body
 
 
-# --------------------------------------------------------------------------- #
-# the queue
-# --------------------------------------------------------------------------- #
+# --- the queue ---
 
 
 def test_the_queue_is_empty_until_a_boundary_is_on_disk(http):
@@ -200,9 +197,7 @@ def test_an_unknown_action_is_a_404(http):
     assert status == 404 and body["code"] == "action_not_found"
 
 
-# --------------------------------------------------------------------------- #
-# submit: phase one
-# --------------------------------------------------------------------------- #
+# --- submit: phase one ---
 
 
 def test_submit_commits_the_record_and_returns_the_call_the_browser_must_make(sv, fake_host, gate, slot, receipt):
@@ -275,9 +270,7 @@ def test_request_changes_without_feedback_is_refused(http, gate, slot):
     assert status == 400 and body["code"] == "feedback_required"
 
 
-# --------------------------------------------------------------------------- #
-# delivery: phase three
-# --------------------------------------------------------------------------- #
+# --- delivery: phase three ---
 
 
 def test_a_delivered_report_moves_the_row_and_is_idempotent(http, gate, slot, receipt):
@@ -362,9 +355,7 @@ def test_an_unknown_outcome_is_refused(http, gate, slot, receipt):
     assert status == 400 and body["code"] == "bad_param"
 
 
-# --------------------------------------------------------------------------- #
-# resolve
-# --------------------------------------------------------------------------- #
+# --- resolve ---
 
 
 def test_resolve_reconcile_runs_the_reconciler_against_one_row(http, gate, slot, receipt):
