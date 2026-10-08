@@ -600,7 +600,9 @@ def test_cancellation_does_not_release_lease_while_worker_deletes(
 
 @pytest.mark.parametrize("factory", [CT.anon_request, CT.user_request, CT.app_request])
 def test_both_routes_are_owner_only(sv, routes, fake_host, factory):
-    for entry in routes:
+    maintenance = [entry for entry in routes if "/maintenance/" in entry.path]
+    assert len(maintenance) == 2
+    for entry in maintenance:
         path = entry.path.replace("{repo_id}", "r_one")
         status, _ = call(sv, routes, "POST", path, factory("POST", path, host=fake_host, body={}))
         assert status in (401, 403)

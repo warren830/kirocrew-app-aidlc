@@ -24,16 +24,16 @@ import type { WorkspaceApi } from '../plan/workspaceTypes'
 
 import { ERROR_CODES, type ErrorCode } from './errorCodes.generated'
 import type {
-  ActionDetailResponse, ActionResponse, ActionsResponse, ActivityResponse, AddRepoResponse,
+  ActionDetailResponse, ActionsResponse, ActivityResponse, AddRepoResponse,
   AdvisorDraftGetResponse, AdvisorDraftResponse, AdvisorKind, ArtifactResponse, ArtifactsResponse,
   BindResponse, BindingResponse, BunToolResponse, ChatFolder, CommandResponse,
   DeliveryReport, DeliveryResponse, DiagnosticsBundle, DirectoryResponse, DoctorResponse, EventPollResponse,
-  HealthResponse, HostChatReceipt, IntentCreateResponse, IntentGitResponse, IntentResponse,
-  IntentsResponse, LeasesResponse, MapResponse, MaintenancePreview, MaintenanceResult, Organize, PauseResponse, PayloadResponse, PlanAdviseRequest, PlanPreviewResponse,
-  PlanRequest, PreflightResponse, PreviewPlanResponse, QuestionsResponse, ReceiptsResponse,
+  HealthResponse, HostChatReceipt, IntentCreateResponse, IntentResponse,
+  IntentsResponse, MapResponse, MaintenancePreview, MaintenanceResult, Organize, PauseResponse, PlanAdviseRequest, PlanPreviewResponse,
+  PlanRequest, PreflightResponse, PreviewPlanResponse,
   RecomposePreviewResponse, RecomposeResponse, RemoveRepoResponse, RepoDetailResponse,
   RepoGitResponse, RepoResponse, ReposResponse, RescanResponse, ResolvePayload, ResolveResponse,
-  ReviewResponse, SettingsResponse, SettingsValues, SlackCallbackResponse, SlotView, SubmitReceipt, HostSlot,
+  ReviewResponse, SettingsResponse, SettingsValues, SubmitReceipt, HostSlot,
   SubmitRequest, TakeoverPreviewResponse, TransactionAcceptedResponse, TransactionResponse, TransactionKind,
 } from './types'
 import { APP_NAME } from './app'
@@ -182,11 +182,10 @@ export interface ActivityFilter {
 
 export interface StudioApi extends WorkspaceApi {
   // -- diagnostics and policy -------------------------------------------- //
+  /** Also the status strip's lease counts (`counts.execution_leases`, `counts.admin_leases`). */
   health(o?: ReadOptions): Promise<HealthResponse>
   configureBun(path: string | null): Promise<BunToolResponse>
   probeBun(): Promise<BunToolResponse>
-  payload(includeFiles?: boolean, o?: ReadOptions): Promise<PayloadResponse>
-  leases(o?: ReadOptions): Promise<LeasesResponse>
   diagnostics(opts?: { export?: boolean; includeHumanText?: boolean } & ReadOptions): Promise<DiagnosticsBundle>
   settings(o?: ReadOptions): Promise<SettingsResponse>
   putSettings(patch: DeepPartial<SettingsValues>): Promise<SettingsResponse>
@@ -200,15 +199,11 @@ export interface StudioApi extends WorkspaceApi {
   action(actionId: string, o?: ReadOptions): Promise<ActionDetailResponse>
   submitAction(actionId: string, body: SubmitRequest): Promise<SubmitReceipt>
   reportDelivery(actionId: string, body: DeliveryReport): Promise<DeliveryResponse>
-  retryAction(actionId: string): Promise<ActionResponse>
-  reconcileAction(actionId: string): Promise<ActionResponse>
-  cancelAction(actionId: string, reason?: string | null): Promise<ActionResponse>
   resolveAction(actionId: string, payload: ResolvePayload): Promise<ResolveResponse>
 
-  // -- advisor and slack -------------------------------------------------- //
+  // -- advisor ------------------------------------------------------------ //
   requestDraft(body: { action_id: string; kind: AdvisorKind; question_index?: number | null; locale: string }): Promise<AdvisorDraftResponse>
   draft(draftId: string, o?: ReadOptions): Promise<AdvisorDraftGetResponse>
-  slackCallback(body: { action_id: string; slot_key: string; channel: string; thread_ts: string; message_ts: string; selection: string | null }): Promise<SlackCallbackResponse>
 
   // -- repos -------------------------------------------------------------- //
   repos(includeArchived?: boolean, o?: ReadOptions): Promise<ReposResponse>
@@ -227,19 +222,15 @@ export interface StudioApi extends WorkspaceApi {
   installApply(repoId: string, planDigest: string, kind?: TransactionKind): Promise<TransactionAcceptedResponse>
   transaction(repoId: string, transactionId: string, o?: ReadOptions): Promise<TransactionResponse>
   cancelTransaction(repoId: string, transactionId: string): Promise<TransactionResponse>
-  receipts(repoId: string, o?: ReadOptions): Promise<ReceiptsResponse>
   repoGit(repoId: string, o?: ReadOptions): Promise<RepoGitResponse>
 
   // -- intents ------------------------------------------------------------ //
   intents(repoId: string, filter?: { space?: string; state?: string; include_archived?: boolean; q?: string }, o?: ReadOptions): Promise<IntentsResponse>
   intent(repoId: string, intentKey: string, o?: ReadOptions): Promise<IntentResponse>
-  map(repoId: string, intentKey: string, density?: 'overview' | 'detailed' | 'dependencies', o?: ReadOptions): Promise<MapResponse>
+  map(repoId: string, intentKey: string, o?: ReadOptions): Promise<MapResponse>
   artifacts(repoId: string, intentKey: string, filter?: { stage?: string; unit?: string; kind?: string }, o?: ReadOptions): Promise<ArtifactsResponse>
   artifact(repoId: string, intentKey: string, artifactId: string, o?: ReadOptions): Promise<ArtifactResponse>
-  questions(repoId: string, intentKey: string, o?: ReadOptions): Promise<QuestionsResponse>
   review(repoId: string, intentKey: string, o?: ReadOptions): Promise<ReviewResponse>
-  intentGit(repoId: string, intentKey: string, o?: ReadOptions): Promise<IntentGitResponse>
-  intentActivity(repoId: string, intentKey: string, limit?: number, o?: ReadOptions): Promise<ActivityResponse>
   planPreview(repoId: string, body: PlanRequest): Promise<PlanPreviewResponse>
   /** Ask the Advisor to propose the plan settings for an intent that does not exist yet (202; FR-NEW-006). */
   requestPlanDraft(repoId: string, body: PlanAdviseRequest): Promise<AdvisorDraftResponse>
@@ -247,17 +238,14 @@ export interface StudioApi extends WorkspaceApi {
   compileRuntime(repoId: string, intentKey: string): Promise<{ ok: boolean; intent_key: string; runtime_graph_present: boolean }>
   recomposePreview(repoId: string, intentKey: string, body: { skip: string[]; add: string[] }): Promise<RecomposePreviewResponse>
   recompose(repoId: string, intentKey: string, body: { skip: string[]; add: string[]; proposal_digest: string }): Promise<RecomposeResponse>
-  run(repoId: string, intentKey: string): Promise<CommandResponse>
-  resume(repoId: string, intentKey: string): Promise<CommandResponse>
-  prepareCommit(repoId: string, intentKey: string): Promise<CommandResponse>
+  /** Queue the command card (`run`, or `resume` for a parked intent); the send is the Action Center's submit. */
+  run(repoId: string, intentKey: string, type: 'run' | 'resume'): Promise<CommandResponse>
   pause(repoId: string, intentKey: string, paused: boolean): Promise<PauseResponse>
   forceStop(repoId: string, intentKey: string): Promise<SubmitReceipt>
-  bindSession(repoId: string, intentKey: string, slotKey: string): Promise<BindResponse>
-  unbindSession(repoId: string, intentKey: string): Promise<BindingResponse>
+  /** Bind, move (a takeover, when already bound elsewhere) or, with `null`, forget the intent's slot. */
+  setSession(repoId: string, intentKey: string, slotKey: string | null): Promise<BindResponse>
   takeoverPreview(repoId: string, intentKey: string): Promise<TakeoverPreviewResponse>
-  takeover(repoId: string, intentKey: string, slotKey: string): Promise<BindingResponse>
-  archiveIntent(repoId: string, intentKey: string): Promise<BindingResponse>
-  restoreIntent(repoId: string, intentKey: string): Promise<BindingResponse>
+  archive(repoId: string, intentKey: string, archived: boolean): Promise<BindingResponse>
 
   // -- host chat (§2.13; the second declared prefix) --------------------- //
   listSlots(o?: ReadOptions): Promise<HostSlot[]>
@@ -321,8 +309,6 @@ export function useStudioApi(): StudioApi {
       health: (o) => get('/health', o),
       configureBun: (path) => send('put', '/tools/bun', { path }),
       probeBun: () => post('/tools/bun/probe', {}),
-      payload: (includeFiles, o) => get(`/payload${query({ files: includeFiles })}`, o),
-      leases: (o) => get('/leases', o),
       diagnostics: (opts) =>
         get(
           `/diagnostics${query({ export: opts?.export, include_human_text: opts?.includeHumanText })}`,
@@ -340,10 +326,6 @@ export function useStudioApi(): StudioApi {
       submitAction: (actionId, body) => post(`/actions/${encodeURIComponent(actionId)}/submit`, body),
       reportDelivery: (actionId, body) =>
         post(`/actions/${encodeURIComponent(actionId)}/delivery`, body),
-      retryAction: (actionId) => post(`/actions/${encodeURIComponent(actionId)}/retry`, {}),
-      reconcileAction: (actionId) => post(`/actions/${encodeURIComponent(actionId)}/reconcile`, {}),
-      cancelAction: (actionId, reason) =>
-        post(`/actions/${encodeURIComponent(actionId)}/cancel`, { reason: reason ?? null }),
       resolveAction: (actionId, payload) => {
         const { decision, ...rest } = payload as { decision: string } & Record<string, unknown>
         return post(`/actions/${encodeURIComponent(actionId)}/resolve`, { decision, payload: rest })
@@ -351,7 +333,6 @@ export function useStudioApi(): StudioApi {
 
       requestDraft: (body) => post('/advisor/draft', body),
       draft: (draftId, o) => get(`/advisor/drafts/${encodeURIComponent(draftId)}`, o),
-      slackCallback: (body) => post('/slack/actions/callback', body),
 
       repos: (includeArchived, o) => get(`/repos${query({ include_archived: includeArchived })}`, o),
       repo: (repoId, o) => get(repoPath(repoId), o),
@@ -366,15 +347,13 @@ export function useStudioApi(): StudioApi {
       rebindRepo: (repoId, path) => post(repoPath(repoId, '/rebind'), { path }),
       rescanRepo: (repoId) => post(repoPath(repoId, '/rescan'), {}),
       doctorRepo: (repoId) => post(repoPath(repoId, '/doctor'), { confirm: true }),
-      installPreview: (repoId, kind = 'install') =>
-        post(repoPath(repoId, `${kind === 'recovery' ? '/install/recovery' : `/${kind}`}/preview`), {}),
+      installPreview: (repoId, kind = 'install') => post(repoPath(repoId, '/transactions/preview'), { kind }),
       installApply: (repoId, planDigest, kind = 'install') =>
-        post(repoPath(repoId, kind === 'recovery' ? '/install/recovery' : `/${kind}`), { plan_digest: planDigest }),
+        post(repoPath(repoId, '/transactions'), { kind, plan_digest: planDigest }),
       transaction: (repoId, transactionId, o) =>
         get(repoPath(repoId, `/transactions/${encodeURIComponent(transactionId)}`), o),
       cancelTransaction: (repoId, transactionId) =>
         post(repoPath(repoId, `/transactions/${encodeURIComponent(transactionId)}/cancel`), {}),
-      receipts: (repoId, o) => get(repoPath(repoId, '/receipts'), o),
       repoGit: (repoId, o) => get(repoPath(repoId, '/git'), o),
       spaces: (repoId, o) => get(repoPath(repoId, '/spaces'), o),
       createSpace: (repoId, name) => post(repoPath(repoId, '/spaces'), { name }),
@@ -386,17 +365,12 @@ export function useStudioApi(): StudioApi {
 
       intents: (repoId, filter, o) => get(repoPath(repoId, `/intents${query({ ...filter })}`), o),
       intent: (repoId, intentKey, o) => get(intentPath(repoId, intentKey), o),
-      map: (repoId, intentKey, density, o) =>
-        get(intentPath(repoId, intentKey, `/map${query({ density })}`), o),
+      map: (repoId, intentKey, o) => get(intentPath(repoId, intentKey, '/map'), o),
       artifacts: (repoId, intentKey, filter, o) =>
         get(intentPath(repoId, intentKey, `/artifacts${query({ ...filter })}`), o),
       artifact: (repoId, intentKey, artifactId, o) =>
         get(intentPath(repoId, intentKey, `/artifacts/${encodeURIComponent(artifactId)}`), o),
-      questions: (repoId, intentKey, o) => get(intentPath(repoId, intentKey, '/questions'), o),
       review: (repoId, intentKey, o) => get(intentPath(repoId, intentKey, '/review'), o),
-      intentGit: (repoId, intentKey, o) => get(intentPath(repoId, intentKey, '/git'), o),
-      intentActivity: (repoId, intentKey, limit, o) =>
-        get(intentPath(repoId, intentKey, `/activity${query({ limit })}`), o),
       planPreview: (repoId, body) => post(repoPath(repoId, '/intents/plan/preview'), body),
       requestPlanDraft: (repoId, body) => post(repoPath(repoId, '/intents/plan/advise'), body),
       createIntent: (repoId, body) => post(repoPath(repoId, '/intents'), body),
@@ -404,21 +378,15 @@ export function useStudioApi(): StudioApi {
       recomposePreview: (repoId, intentKey, body) =>
         post(intentPath(repoId, intentKey, '/recompose/preview'), body),
       recompose: (repoId, intentKey, body) => post(intentPath(repoId, intentKey, '/recompose'), body),
-      run: (repoId, intentKey) => post(intentPath(repoId, intentKey, '/run'), {}),
-      resume: (repoId, intentKey) => post(intentPath(repoId, intentKey, '/resume'), {}),
-      prepareCommit: (repoId, intentKey) => post(intentPath(repoId, intentKey, '/prepare-commit'), {}),
+      run: (repoId, intentKey, type) => post(intentPath(repoId, intentKey, '/run'), { type }),
       pause: (repoId, intentKey, paused) => post(intentPath(repoId, intentKey, '/pause'), { paused }),
       forceStop: (repoId, intentKey) =>
         post(intentPath(repoId, intentKey, '/force-stop'), { confirm: true }),
-      bindSession: (repoId, intentKey, slotKey) =>
-        post(intentPath(repoId, intentKey, '/session/bind'), { slot_key: slotKey }),
-      unbindSession: (repoId, intentKey) => post(intentPath(repoId, intentKey, '/session/unbind'), {}),
+      setSession: (repoId, intentKey, slotKey) =>
+        post(intentPath(repoId, intentKey, '/session'), { slot_key: slotKey }),
       takeoverPreview: (repoId, intentKey) =>
         post(intentPath(repoId, intentKey, '/session/takeover/preview'), {}),
-      takeover: (repoId, intentKey, slotKey) =>
-        post(intentPath(repoId, intentKey, '/session/takeover'), { slot_key: slotKey }),
-      archiveIntent: (repoId, intentKey) => post(intentPath(repoId, intentKey, '/archive'), {}),
-      restoreIntent: (repoId, intentKey) => post(intentPath(repoId, intentKey, '/restore'), {}),
+      archive: (repoId, intentKey, archived) => post(intentPath(repoId, intentKey, '/archive'), { archived }),
 
       listSlots: async (o) => {
         try {

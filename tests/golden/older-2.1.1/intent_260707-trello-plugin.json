@@ -1348,7 +1348,6 @@
    "intent_key": "260707-trello-plugin",
    "interrupted": false,
    "is_active_cursor": true,
-   "keep_moving": false,
    "last_activity_at": "2026-07-10T07:52:56Z",
    "markers": {
     "compose_pending": false,

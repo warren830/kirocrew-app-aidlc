@@ -24,9 +24,9 @@ import { APP_NAME } from '../lib/app'
 const STRIP_KEY = `${APP_NAME}:strip`
 
 export interface StatusStripProps {
-  /** Turns executing right now (`/leases.live_execution`). */
+  /** Turns executing right now (`/health` `counts.execution_leases`). */
   running: number | null
-  /** Repo leases held, execution plus admin (`/leases.leases.length`). */
+  /** Repo leases held, execution plus admin (`counts.execution_leases + counts.admin_leases`). */
   leases: number | null
   /** Open circuit breakers. */
   circuits: number | null

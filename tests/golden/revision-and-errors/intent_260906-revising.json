@@ -275,7 +275,6 @@
    "intent_key": "260906-revising",
    "interrupted": false,
    "is_active_cursor": true,
-   "keep_moving": false,
    "last_activity_at": "2026-09-04T09:00:11Z",
    "markers": {
     "compose_pending": false,

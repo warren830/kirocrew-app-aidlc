@@ -13,7 +13,7 @@
  *   1. `POST   /api/chat/slots {"name": <canonical>, "agent": "aidlc"}`   (host)
  *   2. `PATCH  /api/chat/slots/{key}/title {"title": "<repo label> / <intent slug>"}` (host)
  *   3. `POST   /api/chat/slots/{key}/project {"project": <canonical_path>}` (host; 403 when sensitive)
- *   4. `POST   …/{intent}/session/bind {"slot_key": key}`                  (Studio; verifies 1-3)
+ *   4. `POST   …/{intent}/session {"slot_key": key}`                       (Studio; verifies 1-3)
  *   5. `PATCH  /api/chat/slots/{key}/folder {"folder_id": …}`              (host; sidebar placement)
  *
  * The primary button then starts the workflow: it names the text it sends (`/aidlc`), queues the run and
@@ -35,7 +35,8 @@
  * Adopting an existing conversation is offered beside creating one: a user who already has an `aidlc`
  * chat open on this repository must not be pushed into a second one. The list is filtered by the same
  * two rules `bind` enforces, so a slot Studio would refuse is never offered. Moving an already-bound
- * intent uses `…/session/takeover/preview` and its candidates verbatim, reasons included.
+ * intent uses `…/session/takeover/preview` and its candidates verbatim, reasons included; the same
+ * `…/session` call then moves it (a takeover, refused while a decision may be on the wire).
  *
  * Nothing here is a repair: every refusal is rendered, never swallowed, and the panel never re-points a
  * slot behind the user's back.
@@ -259,7 +260,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
       await api.setSlotAgent(key, AIDLC_AGENT)
       step = 5
       setAt(step)
-      const answer = await api.bindSession(intent.repo_id, intent.intent_key, key)
+      const answer = await api.setSession(intent.repo_id, intent.intent_key, key)
       remember(answer.binding, answer.slot)
       setSlots(null)
       onChanged(t('intents.session.done.bound', { slot: answer.binding.slot_key ?? key }))
@@ -297,7 +298,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
     async (slotKey: string) => {
       start('adopt')
       try {
-        const answer = await api.bindSession(intent.repo_id, intent.intent_key, slotKey)
+        const answer = await api.setSession(intent.repo_id, intent.intent_key, slotKey)
         remember(answer.binding, answer.slot)
         setSlots(null)
         onChanged(t('intents.session.done.bound', { slot: answer.binding.slot_key ?? slotKey }))
@@ -314,7 +315,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
   const unbind = useCallback(async () => {
     start('unbind')
     try {
-      const answer = await api.unbindSession(intent.repo_id, intent.intent_key)
+      const answer = await api.setSession(intent.repo_id, intent.intent_key, null)
       remember(answer.binding)
       setCandidates(null)
       onChanged(t('intents.session.done.unbound'))
@@ -341,8 +342,8 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
     async (slotKey: string) => {
       start('move')
       try {
-        const answer = await api.takeover(intent.repo_id, intent.intent_key, slotKey)
-        remember(answer.binding)
+        const answer = await api.setSession(intent.repo_id, intent.intent_key, slotKey)
+        remember(answer.binding, answer.slot)
         setCandidates(null)
         onChanged(t('intents.session.done.moved', { slot: answer.binding.slot_key ?? slotKey }))
       } catch (caught) {

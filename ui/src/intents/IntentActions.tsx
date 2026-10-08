@@ -104,10 +104,10 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
       } else if (pending === 'archive') {
         // PRD §11.2 archives from Paused: one confirmation names both steps, so nothing happens unasked.
         if (archiveNeedsPause) await api.pause(intent.repo_id, intent.intent_key, true)
-        await api.archiveIntent(intent.repo_id, intent.intent_key)
+        await api.archive(intent.repo_id, intent.intent_key, true)
         onChanged(t('intents.archived.done'))
       } else {
-        await api.restoreIntent(intent.repo_id, intent.intent_key)
+        await api.archive(intent.repo_id, intent.intent_key, false)
         onChanged(t('intents.restored.done'))
       }
       setPending(null)

@@ -404,7 +404,6 @@
    "intent_key": "260905-question-demo",
    "interrupted": false,
    "is_active_cursor": false,
-   "keep_moving": false,
    "last_activity_at": "2026-09-05T08:00:00Z",
    "markers": {
     "compose_pending": false,

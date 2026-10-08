@@ -5,10 +5,9 @@
  *
  *  - **The server sends facts, not the model.** `GET …/map` returns the graph, the state rows and what
  *    only a reader can parse; `buildMap` joins them into the lanes here.
- *  - **Density is a rendering choice, not a query.** `GET …/map` validates `?density=` and then ignores
- *    it, because the model already carries every stage, its unit lanes and its edges. So the resource
- *    key deliberately excludes density: switching Overview → Dependencies must not cost a round trip or
- *    blank the canvas mid-read.
+ *  - **Density is a rendering choice, not a query.** The model already carries every stage, its unit
+ *    lanes and its edges, so `GET …/map` takes no density and the resource key excludes it: switching
+ *    Overview → Dependencies must not cost a round trip or blank the canvas mid-read.
  *  - **Below 900px the canvas becomes accordions, not a smaller canvas** (FR-MAP-009). The switch is
  *    made in JS at 900px rather than with `useIsNarrow()` (767px) because the stylesheet already hides
  *    the inspector and collapses lanes to one column at 900px: deciding at 767px would leave a
@@ -130,7 +129,7 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
 
   const mapRes = useResource<MapResponse>(
     ready ? `map:${repo}:${intent}` : null,
-    useCallback((signal) => api.map(repo, intent, undefined, { signal }), [api, repo, intent]),
+    useCallback((signal) => api.map(repo, intent, { signal }), [api, repo, intent]),
   )
   const intentRes = useResource<IntentResponse>(
     ready ? `map:intent:${repo}:${intent}` : null,

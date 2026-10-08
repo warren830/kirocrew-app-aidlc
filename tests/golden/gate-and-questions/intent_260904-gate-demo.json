@@ -537,7 +537,6 @@
    "intent_key": "260904-gate-demo",
    "interrupted": false,
    "is_active_cursor": true,
-   "keep_moving": false,
    "last_activity_at": "2026-09-04T09:00:03Z",
    "markers": {
     "compose_pending": false,

@@ -588,7 +588,6 @@
    "intent_key": "260814-review-major-remediation",
    "interrupted": false,
    "is_active_cursor": false,
-   "keep_moving": false,
    "last_activity_at": null,
    "markers": {
     "compose_pending": false,

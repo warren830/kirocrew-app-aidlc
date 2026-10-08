@@ -588,7 +588,6 @@
    "intent_key": "260828-kiro-impact-poc",
    "interrupted": false,
    "is_active_cursor": true,
-   "keep_moving": false,
    "last_activity_at": null,
    "markers": {
     "compose_pending": false,
