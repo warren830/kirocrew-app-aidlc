@@ -1,24 +1,10 @@
 """``app.json``, ``agents/advisor.json`` and the payload manifest (§4.3).
 
-The manifest is the only thing the gateway reads before it will run a single line of Studio's code, and
-almost every field in it is a security decision rather than metadata:
-
-* ``permissions.api`` is the exact set of host paths an app *token* may reach. Two prefixes are
-  correct — Studio's own routes and ``/api/chat``, which the **browser** uses for the human lane. A
-  third prefix (the reviewed draft had ``/api/ask-question``) would widen the token's reach for a
-  feature the backend serves itself (review R13/C27).
-* ``permissions.events`` must equal the names ``events.py`` publishes, because the host's event bus
-  raises ``PermissionError`` for an undeclared name — the app would look fine and simply stop
-  notifying the dashboard.
-* ``spawn`` and ``storage`` are the advisor and the durable store; ``network`` and ``cron`` are false
-  because Studio has no reason to reach the internet and no unattended lane in v1 (there is no machine
-  lane, S12).
-* Every version-derived value is asserted **against the payload manifest**, never against a literal in
-  the test. A test that hard-codes ``"2.6.2"`` passes forever after a bad payload bump; a test that
-  compares three files to each other fails the moment they disagree (C21/review P03).
-
-The validation itself is the host's own ``AppManifest.validate``, so a field the gateway would reject
-at install time fails here instead of on a user's machine.
+Almost every manifest field is a security decision: ``permissions.api`` is the exact set of host paths an app token
+may reach (a third prefix widens it, R13/C27); ``permissions.events`` must equal what ``events.py`` publishes (the host
+bus raises on an undeclared name); ``network`` and ``cron`` stay off (no internet, no unattended lane, S12). Every
+version-derived value is asserted against the payload manifest, never a literal (C21/P03), and validation is the
+host's own ``AppManifest.validate``, so a field the gateway would reject fails here rather than on a user's machine.
 """
 
 from __future__ import annotations
@@ -33,8 +19,7 @@ APP_JSON = APP_ROOT / "app.json"
 ADVISOR_JSON = APP_ROOT / "agents" / "advisor.json"
 PAYLOAD_MANIFEST = APP_ROOT / "payload" / "manifest.json"
 
-#: §4.3, verbatim. Compared as equality, not containment: an added prefix is as much a finding as a
-#: missing one, because each entry widens what an app token can call.
+# §4.3 verbatim, compared as equality: an added prefix is as much a finding as a missing one
 EXPECTED_API_PREFIXES = ["/api/apps/aidlc-studio", "/api/chat"]
 EXPECTED_EVENTS = ["aidlc-studio:action", "aidlc-studio:repo", "aidlc-studio:transaction"]
 
@@ -49,11 +34,7 @@ def payload_manifest(studio):
     return studio.installer.PayloadManifest.load(PAYLOAD_MANIFEST)
 
 
-# --------------------------------------------------------------------------- #
-# the host's own verdict
-# --------------------------------------------------------------------------- #
-
-
+# --- the host's own verdict ---
 def test_the_host_accepts_the_manifest_with_no_complaints(raw):
     """``validate`` is what runs at install time; anything it returns is an install that fails."""
     from kiro_crew.apps.manifest import AppManifest
@@ -62,31 +43,23 @@ def test_the_host_accepts_the_manifest_with_no_complaints(raw):
 
 
 def test_identity_matches_the_constants_module(raw, studio):
-    assert raw["name"] == studio.constants.APP_NAME
-    assert raw["version"] == studio.constants.APP_VERSION
-    assert raw["minKiroCrewVersion"] == studio.constants.MIN_KIROCREW_VERSION
-    assert studio.constants.MIN_KIROCREW_VERSION == "0.8.0"
+    C = studio.constants
+    assert (raw["name"], raw["version"], raw["minKiroCrewVersion"]) == (C.APP_NAME, C.APP_VERSION,
+                                                                        C.MIN_KIROCREW_VERSION)
+    assert C.MIN_KIROCREW_VERSION == "0.8.0"
 
 
 def test_the_kirocrew_floor_is_the_loader_the_entry_points_need(raw):
     """0.8 registers the app's parent packages, which is what ``from . import studio`` relies on."""
-    text = (APP_ROOT / "backend" / "routes.py").read_text("utf-8")
-    assert "from . import studio" in text
+    assert "from . import studio" in (APP_ROOT / "backend" / "routes.py").read_text("utf-8")
     assert raw["minKiroCrewVersion"] == "0.8.0"
 
 
-# --------------------------------------------------------------------------- #
-# hooks and UI entry
-# --------------------------------------------------------------------------- #
-
-
+# --- hooks and UI entry ---
 def test_the_three_backend_hooks_point_at_files_that_exist(raw):
     hooks = raw["backend"]["hooks"]
-    assert hooks == {
-        "routes": "backend.routes:register_routes",
-        "on_startup": "backend.hooks:on_startup",
-        "on_shutdown": "backend.hooks:on_shutdown",
-    }
+    assert hooks == {"routes": "backend.routes:register_routes", "on_startup": "backend.hooks:on_startup",
+                     "on_shutdown": "backend.hooks:on_shutdown"}
     for spec in hooks.values():
         dotted, _, name = spec.partition(":")
         path = APP_ROOT / (dotted.replace(".", "/") + ".py")
@@ -109,16 +82,11 @@ def test_the_ui_entry_is_the_committed_bundle(raw):
 
 def test_the_single_ui_page_is_the_apps_own_route(raw):
     pages = raw["ui"]["pages"]
-    assert len(pages) == 1
-    assert pages[0]["route"] == "/apps/aidlc-studio"
+    assert len(pages) == 1 and pages[0]["route"] == "/apps/aidlc-studio"
     assert (APP_ROOT / "ui" / pages[0]["iconUrl"]).is_file()
 
 
-# --------------------------------------------------------------------------- #
-# permissions
-# --------------------------------------------------------------------------- #
-
-
+# --- permissions ---
 def test_the_api_permission_is_exactly_two_prefixes(raw):
     """Studio's own namespace and ``/api/chat``. Nothing else (review R13/C27)."""
     assert raw["permissions"]["api"] == EXPECTED_API_PREFIXES
@@ -132,29 +100,23 @@ def test_no_api_prefix_uses_a_wildcard(raw):
 
 def test_the_declared_events_are_the_ones_the_backend_publishes(raw, studio):
     """An undeclared name makes ``ctx.events.publish`` raise, so the dashboard silently stops updating."""
-    assert raw["permissions"]["events"] == EXPECTED_EVENTS
     C = studio.constants
+    assert raw["permissions"]["events"] == EXPECTED_EVENTS
     assert [C.HOST_EVENT_ACTION, C.HOST_EVENT_REPO, C.HOST_EVENT_TRANSACTION] == EXPECTED_EVENTS
 
 
 def test_storage_and_spawn_are_on_and_network_and_cron_are_off(raw):
     permissions = raw["permissions"]
-    assert permissions["storage"] is True    # the SQLite store
-    assert permissions["spawn"] is True      # the advisor subagent
-    assert permissions["network"] is False   # Studio reads local files and talks to the local host only
-    assert permissions["cron"] is False      # no unattended lane in v1 (there is no machine lane)
+    assert permissions["storage"] is True and permissions["spawn"] is True  # the SQLite store; the advisor subagent
+    assert permissions["network"] is False  # Studio reads local files and talks to the local host only
+    assert permissions["cron"] is False  # no unattended lane in v1 (there is no machine lane)
     assert permissions["mcpTools"] == []
 
 
-# --------------------------------------------------------------------------- #
-# the bundled payload — three files that must agree
-# --------------------------------------------------------------------------- #
-
-
+# --- the bundled payload: three files that must agree ---
 def test_the_declared_engine_version_is_the_payloads_own(raw, payload_manifest, studio):
     """Asserted against the manifest, not a literal: a bad payload bump must fail, not pass (C21)."""
-    declared = raw["extra"]["bundledAidlc"]["engineVersion"]
-    assert declared == payload_manifest.engine_version
+    assert raw["extra"]["bundledAidlc"]["engineVersion"] == payload_manifest.engine_version
     assert studio.constants.BUNDLED_ENGINE_VERSION == payload_manifest.engine_version
 
 
@@ -173,138 +135,84 @@ def test_the_parsers_accept_more_state_versions_than_the_payload_writes(payload_
 
 def test_the_manifest_path_and_harness_in_app_json_are_real(raw, payload_manifest):
     bundled = raw["extra"]["bundledAidlc"]
-    assert (APP_ROOT / bundled["manifest"]).is_file()
-    assert bundled["harness"] == payload_manifest.harness
+    assert (APP_ROOT / bundled["manifest"]).is_file() and bundled["harness"] == payload_manifest.harness
     assert (APP_ROOT / "payload" / f"aidlc-{payload_manifest.harness}").is_dir()
 
 
-def test_the_scope_grid_is_a_merge_target_keyed_on_the_scopes_the_payload_ships(payload_manifest):
-    """A composed scope lives in the *installed* copy of this file, so Studio owns rows and not bytes.
-
-    AI-DLC's composer agent appends the new scope's column to
-    ``.kiro/tools/data/scope-grid.json`` inside the user's repository — the harvested install at
-    ``tests/fixtures/aidlc-2.6.2-devdelta`` carries a tenth key the payload never shipped. Classified
-    ``framework`` that drift is ``owned_modified``: blocking, with no force flag, so a composed
-    repository could never be installed into or upgraded again. The managed key list is the payload
-    file's own top-level scope names, read here rather than written out, so a payload that ships one
-    more scope is a generator run and not an edit to this test (FR-INST-006, C21).
-    """
-    rel = ".kiro/tools/data/scope-grid.json"
-    row = next(f for f in payload_manifest.files if f.path == rel)
-    assert row.ownership == "merge"
+def merge_spec(payload_manifest, rel: str) -> tuple[dict, list[str]]:
+    """``rel``'s merge-target spec (its file row must be ``merge``) and the payload file's own sorted top-level keys."""
+    assert next(f for f in payload_manifest.files if f.path == rel).ownership == "merge"
     spec = payload_manifest.merge_targets[rel]
     assert spec["strategy"] == "json-managed-keys"
-    shipped = json.loads((APP_ROOT / "payload" / "aidlc-kiro" / rel).read_text("utf-8"))
-    assert spec["managedKeys"] == sorted(shipped)
+    return spec, sorted(json.loads((APP_ROOT / "payload" / "aidlc-kiro" / rel).read_text("utf-8")))
+
+
+def test_the_scope_grid_is_a_merge_target_keyed_on_the_scopes_the_payload_ships(payload_manifest):
+    """A composed scope adds a key to the installed grid; as ``framework`` that blocks every upgrade (FR-INST-006)."""
+    spec, shipped = merge_spec(payload_manifest, ".kiro/tools/data/scope-grid.json")
+    assert spec["managedKeys"] == shipped  # read from the payload, so one more shipped scope is a generator run
     assert "feature" in spec["managedKeys"], "the grid is no longer keyed by scope name"
-    # The composer's key is the user's: it must never appear on Studio's list, or the next upgrade
-    # would decide the composed scope was its own to rewrite.
+    # the composer's key is the user's: on Studio's list, the next upgrade would rewrite the composed scope
     assert "review-major-remediation" not in spec["managedKeys"]
 
 
 def test_the_harness_json_merge_target_manages_the_identity_keys_and_nothing_else(payload_manifest):
-    """``/aidlc plugin select`` appends ``plugins`` to the installed ``harness.json``.
-
-    It is a documented verb that works in a stock install with no plugins at all, so a user can reach
-    ``owned_modified`` — blocking, no force path — on a 75-byte file they never opened. As a merge target
-    Studio keeps the three identity keys every harness probe reads and leaves the rest of the file to
-    AI-DLC and to the operator. The literal list is deliberate: a payload that started shipping
-    ``documentExtractors`` (a key humans edit) would silently hand it to Studio, and that is a bump to
-    read before it ships, not one to wave through.
-    """
-    rel = ".kiro/tools/data/harness.json"
-    row = next(f for f in payload_manifest.files if f.path == rel)
-    assert row.ownership == "merge"
-    spec = payload_manifest.merge_targets[rel]
-    assert spec["strategy"] == "json-managed-keys"
-    shipped = json.loads((APP_ROOT / "payload" / "aidlc-kiro" / rel).read_text("utf-8"))
-    # 2.10.0 added four distribution-descriptor keys (the same values the engine ships in
-    # ``aidlc-projection.json``). Read before accepting: none is operator-edited, all are rewritten
-    # by the engine's own refresh, so Studio owning them keeps an upgrade able to refresh them.
-    assert spec["managedKeys"] == sorted(shipped) == [
-        "configNextStep", "distribution", "harnessDir", "name", "productName", "rulesSubdir",
-        "schemaVersion",
-    ]
+    """``/aidlc plugin select`` appends ``plugins``; the literal list makes a newly shipped key a bump to read first."""
+    spec, shipped = merge_spec(payload_manifest, ".kiro/tools/data/harness.json")
+    # 2.10.0 added four distribution-descriptor keys; none is operator-edited, all are refreshed by the engine
+    assert spec["managedKeys"] == shipped == ["configNextStep", "distribution", "harnessDir", "name", "productName",
+                                              "rulesSubdir", "schemaVersion"]
     assert "plugins" not in spec["managedKeys"]
 
 
 def test_every_merge_target_is_declared_by_a_merge_ownership_file(payload_manifest):
-    """The two lists are one decision: a target with no file, or a ``merge`` file with no target,
-    installs as "no fragment written" — a success that left the fragment unset (review P10)."""
-    assert set(payload_manifest.merge_targets) == {
-        f.path for f in payload_manifest.files if f.ownership == "merge"
-    }
+    """One decision: a target without a file, or a merge file without a target, installs no fragment (P10)."""
+    assert set(payload_manifest.merge_targets) == {f.path for f in payload_manifest.files if f.ownership == "merge"}
 
 
 def test_every_file_the_payload_manifest_lists_exists_and_matches_its_digest(payload_manifest, studio):
-    """The manifest is what decides which bytes land in a user's repository; drift is an install hazard."""
+    """The manifest decides which bytes land in a user's repository; drift is an install hazard."""
     root = APP_ROOT / "payload" / f"aidlc-{payload_manifest.harness}"
     assert payload_manifest.file_count == len(payload_manifest.files)
     missing = [f.path for f in payload_manifest.files if not (root / f.path).is_file()]
     assert missing == [], missing[:5]
-    sample = list(payload_manifest.files)[:8] + list(payload_manifest.files)[-8:]
-    for entry in sample:
-        digest = studio.security.sha256_bytes((root / entry.path).read_bytes())
-        assert digest == entry.sha256, entry.path
+    for entry in list(payload_manifest.files)[:8] + list(payload_manifest.files)[-8:]:
+        assert studio.security.sha256_bytes((root / entry.path).read_bytes()) == entry.sha256, entry.path
 
 
-# --------------------------------------------------------------------------- #
-# the advisor agent
-# --------------------------------------------------------------------------- #
-
-
+# --- the advisor agent ---
 def test_the_agent_file_app_json_declares_is_the_one_on_disk(raw):
-    assert raw["agents"] == ["agents/advisor.json"]
-    assert ADVISOR_JSON.is_file()
+    assert raw["agents"] == ["agents/advisor.json"] and ADVISOR_JSON.is_file()
 
 
 def test_the_advisor_declares_the_name_the_spawn_uses(studio):
-    """``SpawnSDK`` matches the *declared* name among this app's own files (C25/review P20/R14).
-
-    A mismatch here is not a warning: ``spawn.run`` refuses, and the advisor becomes permanently
-    ``advisor_unavailable`` with nothing in the logs pointing at a JSON field.
-    """
+    """``SpawnSDK`` matches the declared name (C25/P20/R14): a mismatch leaves the advisor silently unavailable."""
     agent = json.loads(ADVISOR_JSON.read_text("utf-8"))
     assert agent["name"] == studio.constants.ADVISOR_AGENT_NAME == "aidlc-studio-advisor"
     assert studio.advisor.ADVISOR_AGENT_NAME == studio.constants.ADVISOR_AGENT_NAME
 
 
 def test_the_advisor_has_exactly_one_tool_and_it_cannot_touch_anything(studio):
-    """Read-only by construction: the advisor sees an evidence package and returns prose.
-
-    ``thinking`` alone is the whole point — an agent with a filesystem or shell tool could act on the
-    repository it is advising about, which is a decision no advisor is allowed to make.
-    """
+    """Read-only by construction: with a filesystem or shell tool the advisor could act on the repository."""
     agent = json.loads(ADVISOR_JSON.read_text("utf-8"))
-    assert agent["tools"] == ["thinking"]
-    assert agent.get("allowedTools") == ["thinking"]
+    assert agent["tools"] == ["thinking"] and agent.get("allowedTools") == ["thinking"]
     assert agent.get("resources") in (None, [])
 
 
 def test_the_advisor_prompt_forbids_treating_evidence_as_instructions():
     """Artifacts and audit rows are untrusted text; the prompt is where that is enforced."""
     prompt = json.loads(ADVISOR_JSON.read_text("utf-8"))["prompt"]
-    assert "untrusted" in prompt.lower()
-    assert "Never decide for the user" in prompt
-    # A plan draft quotes the README and the manifest names (§1.7): the one prompt-injection vector
-    # the wizard newly opens, so the untrusted-DATA list must name it.
+    assert "untrusted" in prompt.lower() and "Never decide for the user" in prompt
+    # a plan draft quotes the README and the manifest names (§1.7), so the untrusted-DATA list must name them
     assert "repository file excerpt" in prompt
 
 
-# --------------------------------------------------------------------------- #
-# assets
-# --------------------------------------------------------------------------- #
-
-
-@pytest.mark.parametrize(
-    "key",
-    ["iconPath", "heroImage", "heroImageDark", "heroImageDetail", "heroImageDetailDark"],
-)
+# --- assets ---
+@pytest.mark.parametrize("key", ["iconPath", "heroImage", "heroImageDark", "heroImageDetail", "heroImageDetailDark"])
 def test_every_declared_asset_exists(raw, key):
     """A registry listing with a broken image is a listing nobody installs (08 §2.2)."""
-    relative = raw[key]
-    path = APP_ROOT / relative
-    assert path.is_file(), relative
+    path = APP_ROOT / raw[key]
+    assert path.is_file(), raw[key]
     assert path.stat().st_size > 0
 
 
