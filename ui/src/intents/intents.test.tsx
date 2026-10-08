@@ -40,7 +40,7 @@ const INTENT = {
   counts: { total: 33, not_started: 20, in_progress: 1, awaiting_approval: 1, revising: 0, completed: 7, skipped: 4, done: 11, unknown: 0 },
   open_actions: 2, blocking_findings: 0, warn_findings: 1,
   session: { slot_key: 's1', session_key: 'ses_1', running: false, bound_at: '2026-09-05T07:00:00Z' },
-  archived: false, paused: false, keep_moving: false, interrupted: false,
+  archived: false, paused: false, interrupted: false,
   last_activity_at: '2026-09-05T08:00:00Z', stable_boundary: null, unstable: false, is_active_cursor: true,
 } as unknown as IntentSummary
 
@@ -94,7 +94,7 @@ describe('the intents inventory', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Send /aidlc' }))
     expect(await screen.findByText('Sent /aidlc. The workflow has started in the conversation.')).toBeInTheDocument()
-    expect(api.run).toHaveBeenCalledWith('r_1', 'default~250901-guest-checkout')
+    expect(api.run).toHaveBeenCalledWith('r_1', 'default~250901-guest-checkout', 'run')
     expect(api.submitAction).toHaveBeenCalledWith('a_9', expect.objectContaining({
       payload: { decision: 'run' }, client_wire_text: '/aidlc',
     }))
@@ -118,7 +118,7 @@ describe('the intents inventory', () => {
         calls.push('pause')
         return { ok: true as const, binding: {} as never, blocked_actions: ['a_1', 'a_2'] }
       }),
-      archiveIntent: vi.fn(async () => {
+      archive: vi.fn(async () => {
         calls.push('archive')
         return { ok: true as const, binding: {} as never }
       }),
@@ -139,13 +139,32 @@ describe('the intents inventory', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Pause and archive' }))
     await waitFor(() => expect(calls).toEqual(['pause', 'archive']))
     expect(api.pause).toHaveBeenCalledWith('r_1', 'default~250901-guest-checkout', true)
+    expect(api.archive).toHaveBeenCalledWith('r_1', 'default~250901-guest-checkout', true)
     expect(onChanged).toHaveBeenCalledWith('Archived in Studio only. No AI-DLC file changed.')
+  })
+
+  it('restores an archived intent through the same archive call', async () => {
+    const api = {
+      archive: vi.fn(async () => ({ ok: true as const, binding: {} as never })),
+    } as unknown as StudioApi
+    const onChanged = vi.fn()
+    render(
+      <I18nProvider>
+        <IntentActions api={api} intent={{ ...INTENT, archived: true }} onGo={() => {}} onQueued={() => {}} onChanged={onChanged} onRecompose={() => {}} onSession={() => {}} />
+      </I18nProvider>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'Restore' }))
+    expect(screen.getByText('Restore this intent?')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    await waitFor(() => expect(api.archive).toHaveBeenCalledWith('r_1', 'default~250901-guest-checkout', false))
+    expect(onChanged).toHaveBeenCalledWith('Restored. No AI-DLC file changed.')
   })
 
   it('says a decision is still on its way when the backend refuses an archive for that', async () => {
     const api = {
       pause: vi.fn(),
-      archiveIntent: vi.fn(async () => {
+      archive: vi.fn(async () => {
         throw new StudioApiError('action_not_submittable', 'a decision for this intent may still be in flight',
           { operation: 'archive', reason: 'in_flight' }, 409)
       }),
@@ -350,7 +369,7 @@ function bindRoutes(folders: ChatFolder[], extra: Record<string, (body: unknown)
     [`PATCH ${CHAT}/slots/${SLOT}/title`]: () => ({ ok: true }),
     [`POST ${CHAT}/slots/${SLOT}/project`]: () => ({ ok: true, project: '/work/checkout-web' }),
     [`POST ${CHAT}/slots/${SLOT}/agent`]: () => ({ ok: true, agent: 'aidlc', agent_kind: 'template' }),
-    [`POST ${INTENT_PATH}/session/bind`]: () => ({
+    [`POST ${INTENT_PATH}/session`]: () => ({
       ok: true,
       binding: { slot_key: SLOT, session_key: 'ses_7' },
       slot: slot({ key: SLOT, running: true }),
@@ -368,7 +387,7 @@ const BEFORE_FOLDER = [
   { method: 'PATCH', path: `${CHAT}/slots/${SLOT}/title`, body: { title: 'checkout-web / guest-checkout' } },
   { method: 'POST', path: `${CHAT}/slots/${SLOT}/project`, body: { project: '/work/checkout-web' } },
   { method: 'POST', path: `${CHAT}/slots/${SLOT}/agent`, body: { agent: 'aidlc', agent_kind: 'template' } },
-  { method: 'POST', path: `${INTENT_PATH}/session/bind`, body: { slot_key: SLOT } },
+  { method: 'POST', path: `${INTENT_PATH}/session`, body: { slot_key: SLOT } },
 ]
 
 describe('the canonical conversation panel', () => {
@@ -550,7 +569,7 @@ describe('the canonical conversation panel', () => {
       [`POST ${CHAT}/slots/${SLOT}/project`]: () => {
         throw new StubApiError(403, { error: 'refusing a sensitive path: /work/checkout-web' })
       },
-      [`POST ${INTENT_PATH}/session/bind`]: () => ({ ok: true, binding: { slot_key: SLOT }, slot: null }),
+      [`POST ${INTENT_PATH}/session`]: () => ({ ok: true, binding: { slot_key: SLOT }, slot: null }),
     })
     mount(UNBOUND)
 
@@ -561,7 +580,7 @@ describe('the canonical conversation panel', () => {
     ).toBeInTheDocument()
     // The host's own words, verbatim: a 403 with no code would otherwise read as "you are not the owner".
     expect(screen.getByText(/refusing a sensitive path: \/work\/checkout-web/)).toBeInTheDocument()
-    expect(apiCalls.map((call) => call.path)).not.toContain(`${INTENT_PATH}/session/bind`)
+    expect(apiCalls.map((call) => call.path)).not.toContain(`${INTENT_PATH}/session`)
     expect(screen.getByRole('button', { name: 'Create and bind the conversation' })).toBeInTheDocument()
   })
 
@@ -573,7 +592,7 @@ describe('the canonical conversation panel', () => {
         slot({ key: 'general-chat', agent: 'general' }),
         slot({ key: 'aidlc-payments', project: '/work/payments-api' }),
       ],
-      [`POST ${INTENT_PATH}/session/bind`]: () => ({
+      [`POST ${INTENT_PATH}/session`]: () => ({
         ok: true,
         binding: { slot_key: 'aidlc-hand-made', session_key: 'ses_2' },
         slot: null,
@@ -593,7 +612,7 @@ describe('the canonical conversation panel', () => {
     await waitFor(() =>
       expect(apiCalls.at(-1)).toEqual({
         method: 'POST',
-        path: `${INTENT_PATH}/session/bind`,
+        path: `${INTENT_PATH}/session`,
         body: { slot_key: 'aidlc-hand-made' },
       }),
     )
@@ -611,7 +630,7 @@ describe('the canonical conversation panel', () => {
       [`POST ${CHAT}/slots/${SLOT}/agent`]: () => {
         throw new StubApiError(409, { error: 'the selected agent choice is not available', code: 'agent_choice_unavailable' })
       },
-      [`POST ${INTENT_PATH}/session/bind`]: () => ({ ok: true, binding: { slot_key: SLOT }, slot: null }),
+      [`POST ${INTENT_PATH}/session`]: () => ({ ok: true, binding: { slot_key: SLOT }, slot: null }),
     })
     mount(UNBOUND)
 
@@ -620,13 +639,13 @@ describe('the canonical conversation panel', () => {
     expect(
       await screen.findByText(/Step 4 of 6 was refused \(switch it to the aidlc agent\)/),
     ).toBeInTheDocument()
-    expect(apiCalls.map((call) => call.path)).not.toContain(`${INTENT_PATH}/session/bind`)
+    expect(apiCalls.map((call) => call.path)).not.toContain(`${INTENT_PATH}/session`)
   })
 
   it('numbers a refused bind of an existing conversation as the bind step', async () => {
     setApiRoutes({
       [`GET ${CHAT}/slots`]: () => [slot({ key: 'aidlc-hand-made', project: '/work/checkout-web' })],
-      [`POST ${INTENT_PATH}/session/bind`]: () => {
+      [`POST ${INTENT_PATH}/session`]: () => {
         throw new StubApiError(409, { error: 'the slot is not bound to this repository', code: 'slot_mismatch' })
       },
     })
@@ -640,7 +659,7 @@ describe('the canonical conversation panel', () => {
 
   it('shows the bound conversation and unbinds it', async () => {
     setApiRoutes({
-      [`POST ${INTENT_PATH}/session/unbind`]: () => ({ ok: true, binding: { slot_key: null, session_key: null } }),
+      [`POST ${INTENT_PATH}/session`]: () => ({ ok: true, binding: { slot_key: null, session_key: null }, slot: null }),
     })
     const onChanged = vi.fn()
     mount(INTENT, onChanged)
@@ -654,7 +673,7 @@ describe('the canonical conversation panel', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Create and bind the conversation' })).toBeInTheDocument(),
     )
-    expect(apiCalls).toEqual([{ method: 'POST', path: `${INTENT_PATH}/session/unbind`, body: {} }])
+    expect(apiCalls).toEqual([{ method: 'POST', path: `${INTENT_PATH}/session`, body: { slot_key: null } }])
     expect(onChanged).toHaveBeenCalledWith(
       'Unbound. Decisions for this intent will refuse to send until a conversation is bound.',
     )
@@ -666,9 +685,10 @@ describe('the canonical conversation panel', () => {
         candidates: [{ slot: slot({ key: 'aidlc-hand-made' }), reason: 'project_match' }],
         current: { slot_key: 's1' },
       }),
-      [`POST ${INTENT_PATH}/session/takeover`]: () => ({
+      [`POST ${INTENT_PATH}/session`]: () => ({
         ok: true,
         binding: { slot_key: 'aidlc-hand-made', session_key: 'ses_3' },
+        slot: null,
       }),
     })
     mount(INTENT)
@@ -680,7 +700,7 @@ describe('the canonical conversation panel', () => {
     await waitFor(() =>
       expect(apiCalls.at(-1)).toEqual({
         method: 'POST',
-        path: `${INTENT_PATH}/session/takeover`,
+        path: `${INTENT_PATH}/session`,
         body: { slot_key: 'aidlc-hand-made' },
       }),
     )

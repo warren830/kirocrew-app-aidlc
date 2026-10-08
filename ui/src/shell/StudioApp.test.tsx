@@ -12,7 +12,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { setApiRoutes, type RouteHandler } from '../test/stubs/app-sdk'
-import { settingsResponse } from '../test/fixtures'
+import { healthCounts, settingsResponse } from '../test/fixtures'
 import { I18nProvider, makeI18n } from '../i18n'
 import { EMPTY_ROUTE, VIEWS, type View } from '../lib/route'
 import { registerView, ViewRouter, viewLabelKey, viewRegistry } from './ViewRouter'
@@ -41,9 +41,9 @@ function routeTable(over: Record<string, unknown> = {}): Record<string, RouteHan
       ],
       totals: { repos: 1, unavailable: 0, open_actions: 2 },
     }),
-    [`GET ${BASE}/leases`]: () => ({ leases: [], global_concurrency_cap: 2, live_execution: 1 }),
     [`GET ${BASE}/settings`]: settingsResponse,
-    [`GET ${BASE}/health`]: () => ({ status: 'healthy', issues: [] }),
+    // One turn running: the strip's lease chips are `/health` counts.
+    [`GET ${BASE}/health`]: () => ({ status: 'healthy', issues: [], counts: healthCounts({ execution_leases: 1 }) }),
     [`GET ${BASE}/events/poll*`]: () => ({ events: [], cursor: 0, oldest_seq: 0, reset: false }),
   }
 }
@@ -140,6 +140,30 @@ describe('the app shell', () => {
     const strip = screen.getByRole('button', { name: 'Show execution status' }).parentElement
     expect(strip).toHaveTextContent('1 alert')
     expect(screen.getAllByText('1 alert').length).toBeGreaterThan(0)
+  })
+
+  it('counts admin leases with execution ones, and says unavailable rather than zero without counts', async () => {
+    setApiRoutes({
+      ...routeTable(),
+      [`GET ${BASE}/health`]: () => ({
+        status: 'healthy', issues: [], counts: healthCounts({ execution_leases: 1, admin_leases: 1 }),
+      }),
+    })
+    const { unmount } = mount()
+    await screen.findByText('2 repo leases held')
+    unmount()
+
+    setApiRoutes({
+      ...routeTable(),
+      [`GET ${BASE}/health`]: () => ({
+        status: 'error', issues: ['storage:storage_error'],
+        counts: healthCounts({ execution_leases: null, admin_leases: null }),
+      }),
+    })
+    mount()
+    await screen.findByText(/Studio reports 1 issue/)
+    expect(screen.queryByText(/turns? running/)).not.toBeInTheDocument()
+    expect(screen.getAllByText('Unavailable').length).toBeGreaterThanOrEqual(2)
   })
 
   it('shows the repo path in the scope bar and drops the selection when scope changes', async () => {

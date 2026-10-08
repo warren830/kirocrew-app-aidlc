@@ -129,7 +129,6 @@ function installRoutes(cards: ActionCard[], over: Record<string, RouteHandler> =
       repos: [{ repo_id: 'r_1', label: 'checkout-web', canonical_path: '/work/checkout-web', availability: 'available' }],
       totals: { repos: 1, unavailable: 0, open_actions: cards.length },
     }),
-    [`GET ${BASE}/leases`]: () => ({ leases: [], global_concurrency_cap: 2, live_execution: 0 }),
     [`GET ${BASE}/settings`]: () => ({
       settings: {},
       capabilities: { grouped_answers: { available: false, reason: 's1_s2_unverified' } },

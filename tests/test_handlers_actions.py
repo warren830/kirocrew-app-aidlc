@@ -426,8 +426,8 @@ def test_not_delivered_is_refused_without_an_authoritative_status(sv, routes, fa
     assert status == 409 and body["code"] == "not_delivered_unproven"
 
 
-def test_a_late_delivered_report_confirms_the_delivery_and_blocks_a_retry(sv, routes, fake_host, repo,
-                                                                        gate, slot):
+def test_a_late_delivered_report_confirms_the_delivery_and_blocks_a_resend(sv, routes, fake_host, repo,
+                                                                         gate, slot):
     """The browser came back after the deadline: the decision *was* sent, so it must never be replayed."""
     card = _card(sv, routes, fake_host, gate)
     _status, receipt = _submit(sv, routes, fake_host, gate, card)
@@ -442,10 +442,8 @@ def test_a_late_delivered_report_confirms_the_delivery_and_blocks_a_retry(sv, ro
     }))
     assert body["action"]["delivery"]["delivery_confirmed"] is True
 
-    retry = f"/actions/{gate.action_id}/retry"
-    status, refused = call(sv, routes, "POST", retry,
-                           CT.owner_request("POST", retry, host=fake_host, body={}))
-    assert status == 409 and refused["code"] == "retry_not_allowed"
+    status, refused = _submit(sv, routes, fake_host, gate, card)
+    assert status == 409, refused
 
 
 def test_an_uncertain_report_is_recorded_as_uncertain(sv, routes, fake_host, repo, gate, slot):
@@ -493,65 +491,24 @@ def test_an_unknown_outcome_is_refused(sv, routes, fake_host, repo, gate, slot):
 
 
 # --------------------------------------------------------------------------- #
-# retry, reconcile, cancel, resolve
+# resolve
 # --------------------------------------------------------------------------- #
 
 
-def test_retry_requeues_a_proven_undelivered_decision(sv, routes, fake_host, repo, gate, slot):
+def test_resolve_reconcile_runs_the_reconciler_against_one_row(sv, routes, fake_host, repo, gate, slot):
+    """An uncertain delivery's ``reconcile`` decides nothing itself: it applies the resolution contracts the
+    next tick would have applied, so a user staring at the card need not wait for it."""
     card = _card(sv, routes, fake_host, gate)
     _status, receipt = _submit(sv, routes, fake_host, gate, card)
     delivery = f"/actions/{gate.action_id}/delivery"
     call(sv, routes, "POST", delivery, CT.owner_request("POST", delivery, host=fake_host, body={
-        "delivery_id": receipt["delivery_id"], "outcome": "not_delivered", "http_status": 409,
-        "receipt": {"error": "slot agent mismatch"},
+        "delivery_id": receipt["delivery_id"], "outcome": "uncertain", "http_status": None, "receipt": None,
     }))
-    path = f"/actions/{gate.action_id}/retry"
-    status, body = call(sv, routes, "POST", path,
-                        CT.owner_request("POST", path, host=fake_host, body={}))
-    assert status == 200 and body["action"]["status"] == "Queued"
-
-
-def test_retry_is_refused_for_a_card_that_was_never_dispatched(sv, routes, fake_host, gate):
-    path = f"/actions/{gate.action_id}/retry"
-    status, body = call(sv, routes, "POST", path,
-                        CT.owner_request("POST", path, host=fake_host, body={}))
-    assert status == 409 and body["code"] == "retry_not_allowed"
-
-
-def test_reconcile_runs_the_reconciler_against_one_row(sv, routes, fake_host, repo, gate, slot):
-    card = _card(sv, routes, fake_host, gate)
-    _submit(sv, routes, fake_host, gate, card)
-    path = f"/actions/{gate.action_id}/reconcile"
-    status, body = call(sv, routes, "POST", path,
-                        CT.owner_request("POST", path, host=fake_host, body={}))
-    assert status == 200 and body["ok"] is True
+    path = f"/actions/{gate.action_id}/resolve"
+    status, body = call(sv, routes, "POST", path, CT.owner_request("POST", path, host=fake_host,
+                                                                  body={"decision": "reconcile", "payload": {}}))
+    assert status == 200 and body["ok"] is True, body
     assert set(body["action"]) == ACTION_CARD_KEYS
-
-
-def test_reconcile_of_an_unknown_action_is_a_404(sv, routes, fake_host):
-    path = "/actions/a_0000000000000009/reconcile"
-    status, body = call(sv, routes, "POST", path,
-                        CT.owner_request("POST", path, host=fake_host, body={}))
-    assert status == 404 and body["code"] == "action_not_found"
-
-
-def test_a_derived_gate_card_cannot_be_dismissed(sv, routes, fake_host, gate):
-    """The gate is on disk; hiding the card would lose the boundary rather than close it (C33)."""
-    path = f"/actions/{gate.action_id}/cancel"
-    status, body = call(sv, routes, "POST", path,
-                        CT.owner_request("POST", path, host=fake_host, body={"reason": "not now"}))
-    assert status == 409 and body["code"] == "cancel_not_safe"
-
-
-def test_a_command_the_user_queued_can_be_withdrawn(sv, routes, fake_host, repo, slot, runnable_demo):
-    run = f"/repos/{repo.repo_id}/intents/{INTENT}/run"
-    status, created = call(sv, routes, "POST", run,
-                           CT.owner_request("POST", run, host=fake_host, body={}))
-    assert status == 201, created
-    path = f"/actions/{created['action_id']}/cancel"
-    status, body = call(sv, routes, "POST", path,
-                        CT.owner_request("POST", path, host=fake_host, body={"reason": "changed mind"}))
-    assert status == 200 and body["action"]["status"] == "Cancelled"
 
 
 def test_resolve_refuses_a_decision_the_card_does_not_offer(sv, routes, fake_host, gate):

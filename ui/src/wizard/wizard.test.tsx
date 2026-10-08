@@ -69,7 +69,6 @@ vi.mock('../shell/StudioApp', async () => {
       repos: resource(REPOS),
       health: resource(HEALTH),
       actions: resource(null),
-      leases: resource(null),
       settings: resource(null),
       setQueueCount: () => {},
     }),

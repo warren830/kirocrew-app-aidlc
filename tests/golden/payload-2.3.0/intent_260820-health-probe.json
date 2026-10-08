@@ -617,7 +617,6 @@
    "intent_key": "260820-health-probe",
    "interrupted": false,
    "is_active_cursor": false,
-   "keep_moving": false,
    "last_activity_at": "2026-08-21T16:40:09Z",
    "markers": {
     "compose_pending": false,

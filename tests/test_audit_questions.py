@@ -64,6 +64,13 @@ def append(scene, *blocks, shard=None):
     return path
 
 
+def questions_view(sv, routes, fake_host, repo_id):
+    """The intent's questions as its detail page (and every question card) carries them."""
+    status, body = _get(sv, routes, fake_host, f"/repos/{repo_id}/intents/{INTENT}")
+    assert status == 200, body
+    return body["intent"]["questions"]
+
+
 def question_card(sv, routes, fake_host, scene):
     _rescan(sv, routes, fake_host, scene)
     cards = [card for card in _queue(sv, routes, fake_host) if card["type"] == "question"]
@@ -212,12 +219,9 @@ def test_api_audit_question_submit_answer_reconcile_without_host_pending(
     sv, routes, fake_host, scene, letter, label
 ):
     original = _tree_digest(scene.root)
-    path = f"/repos/{scene.repo_id}/intents/{INTENT}/questions"
-    status, body = _get(sv, routes, fake_host, path)
-    assert status == 200
-    assert body["host_cards"] == []
-    assert body["mode"] == "structured"
-    view = body["questions"]
+    view = questions_view(sv, routes, fake_host, scene.repo_id)
+    assert view["host_card"] is None
+    assert view["mode"] == "structured"
     assert view["origin"]["kind"] == "audit"
     assert view["relpath"].endswith("/audit/" + _shard(scene.root).name)
     assert view["questions"][0]["prompt"] == PROMPT
@@ -249,7 +253,7 @@ def test_api_audit_question_submit_answer_reconcile_without_host_pending(
     assert _row(sv, card["action_id"])["status"] == "ResolvedNoTransition"
     _rescan(sv, routes, fake_host, scene)
     assert not [c for c in _queue(sv, routes, fake_host) if c["type"] == "question"]
-    assert _get(sv, routes, fake_host, path)[1]["questions"] is None
+    assert questions_view(sv, routes, fake_host, scene.repo_id) is None
     assert _tree_digest(scene.root) == answered_tree
     transitions = sv.storage.select("action_transitions", {"action_id": card["action_id"]})
     assert sum(t["to_status"] == "Delivering" for t in transitions) == 1
@@ -933,17 +937,16 @@ def test_zero_unit_codegen_preserves_audit_and_receipt_guards(zero_unit_codegen_
     assert questions is None or questions.origin is None
 
 
-def test_zero_unit_codegen_learnings_reach_questions_api(sv, routes, fake_host, repo_builder, zero_unit_codegen_scene):
+def test_zero_unit_codegen_learnings_reach_the_intent_detail(sv, routes, fake_host, repo_builder, zero_unit_codegen_scene):
     scene = zero_unit_codegen_scene
     repo_builder.with_engine("payload")
     repo = sv.repos.add(str(scene.root), "zero-unit codegen")
     original = _tree_digest(scene.root)
-    status, body = _get(sv, routes, fake_host, f"/repos/{repo.repo_id}/intents/{INTENT}/questions")
-    assert status == 200, body
-    assert body["mode"] == "structured"
-    assert body["questions"]["origin"]["kind"] == "audit"
-    assert body["questions"]["origin"]["stage"] == CODEGEN_STAGE
-    assert body["questions"]["questions"][0]["prompt"] == PROMPT
+    view = questions_view(sv, routes, fake_host, repo.repo_id)
+    assert view["mode"] == "structured"
+    assert view["origin"]["kind"] == "audit"
+    assert view["origin"]["stage"] == CODEGEN_STAGE
+    assert view["questions"][0]["prompt"] == PROMPT
     assert _tree_digest(scene.root) == original
 
 
@@ -1128,12 +1131,9 @@ def test_question_notes_without_pending_tags_use_audited_routing_through_api_and
 ):
     path = unparsed_questions(scene, QUESTION_NOTES)
     original = _tree_digest(scene.root)
-    endpoint = f"/repos/{scene.repo_id}/intents/{INTENT}/questions"
-    status, body = _get(sv, routes, fake_host, endpoint)
-    assert status == 200
-    assert body["host_cards"] == []
-    assert body["mode"] == "structured"
-    view = body["questions"]
+    view = questions_view(sv, routes, fake_host, scene.repo_id)
+    assert view["host_card"] is None
+    assert view["mode"] == "structured"
     assert view["origin"]["kind"] == "audit"
     assert view["pending_count"] == 1
     assert view["questions"][0]["prompt"] == ROUTING_PROMPT
@@ -1157,10 +1157,10 @@ def test_question_notes_without_pending_tags_use_audited_routing_through_api_and
     _rescan(sv, routes, fake_host, scene)
     remaining = [c for c in _queue(sv, routes, fake_host) if c["type"] == "question"]
     assert all(c["action_id"] != card["action_id"] and not c["evidence"]["questions"].get("origin") for c in remaining)
-    after = _get(sv, routes, fake_host, endpoint)[1]
+    after = questions_view(sv, routes, fake_host, scene.repo_id)
     assert after["mode"] == "degraded"
-    assert after["questions"]["pending_count"] == 0
-    assert after["questions"]["questions"] == []
+    assert after["pending_count"] == 0
+    assert after["questions"] == []
     assert path.read_text() == QUESTION_NOTES
     transitions = sv.storage.select("action_transitions", {"action_id": card["action_id"]})
     assert sum(t["to_status"] == "Delivering" for t in transitions) == 1
@@ -1222,10 +1222,8 @@ def test_unsupported_pending_answers_keep_conversation_fallback_over_audit_routi
 ):
     path = unparsed_questions(scene, text)
     original = _tree_digest(scene.root)
-    endpoint = f"/repos/{scene.repo_id}/intents/{INTENT}/questions"
-    status, body = _get(sv, routes, fake_host, endpoint)
-    assert status == 200 and body["mode"] == "degraded"
-    view = body["questions"]
+    view = questions_view(sv, routes, fake_host, scene.repo_id)
+    assert view["mode"] == "degraded"
     assert not view.get("origin")
     assert view["unsupported_pending_count"] == view["pending_count"] == pending
     assert all(q["answered"] for q in view["questions"])
@@ -1266,9 +1264,7 @@ def test_h3_file_owns_the_actual_three_questions_despite_audit_options(
     path.write_text(H3_QUESTIONS)
     _shard(scene.root).write_text(start_audit() + decision(Options=options))
     original = _tree_digest(scene.root)
-    status, body = _get(sv, routes, fake_host, f"/repos/{scene.repo_id}/intents/{INTENT}/questions")
-    assert status == 200
-    view = body["questions"]
+    view = questions_view(sv, routes, fake_host, scene.repo_id)
     assert not view.get("origin")
     assert view["pending_count"] == 3
     assert [q["index"] for q in view["questions"]] == [1, 2, 3]

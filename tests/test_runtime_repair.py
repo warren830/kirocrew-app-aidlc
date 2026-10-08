@@ -9,18 +9,8 @@ from pathlib import Path
 import pytest
 
 import conftest as CT
-from test_handlers_auth import call, sv  # noqa: F401
+from test_handlers_auth import call, common, routes, sv  # noqa: F401
 from test_workspace_controls import INTENT, repo, state_path  # noqa: F401
-
-
-@pytest.fixture
-def runtime():
-    return CT.studio_module("handlers.runtime")
-
-
-@pytest.fixture
-def routes(sv, runtime):
-    return runtime.ROUTES(sv)
 
 
 def request(sv, routes, fake_host, repo, *, intent=INTENT, body=None):
@@ -291,7 +281,7 @@ def test_success_requires_a_readable_graph_for_the_selected_intent(
 
 @pytest.mark.parametrize("cancel_count", [1, 2])
 def test_disconnect_holds_lease_until_real_compile_finishes(
-    sv, runtime, fake_host, repo, monkeypatch, studio, cancel_count
+    sv, routes, fake_host, repo, monkeypatch, studio, cancel_count
 ):
     async def scenario():
         started, resume = asyncio.Event(), asyncio.Event()
@@ -306,7 +296,7 @@ def test_disconnect_holds_lease_until_real_compile_finishes(
         path = f"/repos/{repo.repo_id}/intents/{INTENT}/runtime/compile"
         req = CT.owner_request("POST", path, host=fake_host, body={})
         req.match_info.update(repo_id=repo.repo_id, intent=INTENT)
-        entry = runtime.ROUTES(sv)[0]
+        entry = next(r for r in routes if r.path.endswith("/runtime/compile"))
         task = asyncio.create_task(entry.handler(req, sv.ctx))
         await asyncio.wait_for(started.wait(), 5)
         try:

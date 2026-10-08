@@ -4,10 +4,11 @@
  * It owns four things and nothing else:
  *
  *  1. **Location.** One `useStudioRoute()` for the page, passed down. Areas navigate with `go`.
- *  2. **The shared reads.** `/actions`, `/repos`, `/leases`, `/settings` and `/health` are fetched
- *     once here and published through `ShellDataContext`. `GET /actions` snapshots every intent on the
- *     server, so the badge, the strip and the queue polling it separately would triple that cost —
- *     which is why an area is expected to read it from the context rather than fetch it again.
+ *  2. **The shared reads.** `/actions`, `/repos`, `/settings` and `/health` are fetched once here and
+ *     published through `ShellDataContext`. `GET /actions` snapshots every intent on the server, so the
+ *     badge, the strip and the queue polling it separately would triple that cost — which is why an area
+ *     is expected to read it from the context rather than fetch it again. `/health` also carries the
+ *     strip's lease counts, so it polls at the adaptive pace (fast while a turn runs).
  *  3. **The live transport.** One `EventSource` for the page (`sse.ts`), so every resource revalidates
  *     from the same cursor.
  *  4. **Failure that is still a page.** A render error inside a view becomes an in-place message with a
@@ -36,7 +37,7 @@ import { useHostMode } from '../lib/host'
 import { paneFor, useStudioRoute, type Navigate, type StudioRoute } from '../lib/route'
 import { EventStreamProvider, useStreamStatus } from '../lib/sse'
 import { useResource, type Resource } from '../lib/useResource'
-import type { ActionsResponse, HealthResponse, LeasesResponse, ReposResponse, SettingsResponse } from '../lib/types'
+import type { ActionsResponse, HealthResponse, ReposResponse, SettingsResponse } from '../lib/types'
 import { ErrorBoundary } from './ErrorBoundary'
 import { Icon } from './Icon'
 import { ScopeBar } from './ScopeBar'
@@ -57,7 +58,6 @@ export interface ShellData {
   go: Navigate
   actions: Resource<ActionsResponse>
   repos: Resource<ReposResponse>
-  leases: Resource<LeasesResponse>
   settings: Resource<SettingsResponse>
   health: Resource<HealthResponse>
   setQueueCount: (count: number | null) => void
@@ -108,20 +108,18 @@ function Shell({ api }: { api: StudioApi }) {
     // The registry does not change on its own; the events that do change it force a refetch anyway.
     { interval: 60_000 },
   )
-  const leases = useResource<LeasesResponse>(
-    'leases',
-    useCallback((signal) => api.leases({ signal }), [api]),
-  )
   const settings = useResource<SettingsResponse>(
     'settings',
     useCallback((signal) => api.settings({ signal }), [api]),
     { interval: 0 },
   )
+  // The adaptive pace (`looksBusy` reads `counts.execution_leases`): the strip's lease chips come from here.
   const health = useResource<HealthResponse>(
     'health',
     useCallback((signal) => api.health({ signal }), [api]),
-    { interval: 60_000 },
   )
+  const counts = health.data?.counts
+  const running = counts?.execution_leases ?? null
 
   // A lost cookie makes every resource fail with the same code; the banner is shown once and no toast
   // is raised per resource (§3.6). The host also announces it, for the case where nothing was polling.
@@ -132,7 +130,7 @@ function Shell({ api }: { api: StudioApi }) {
   }, [])
   const sessionLost =
     authLost ||
-    [actions.error, repos.error, leases.error, settings.error, health.error].some((e) => e?.authRequired)
+    [actions.error, repos.error, settings.error, health.error].some((e) => e?.authRequired)
 
   // Keep `actions` intact: in-flight records still drive fast polling, map links and delivery details.
   const queue = useMemo(() => actions.data ? forActionQueue(actions.data) : null, [actions.data])
@@ -148,8 +146,8 @@ function Shell({ api }: { api: StudioApi }) {
     [actions.data],
   )
   const shellData = useMemo<ShellData>(
-    () => ({ api, route, go, actions, repos, leases, settings, health, setQueueCount }),
-    [api, route, go, actions, repos, leases, settings, health],
+    () => ({ api, route, go, actions, repos, settings, health, setQueueCount }),
+    [api, route, go, actions, repos, settings, health],
   )
 
   const pane = paneFor(route)
@@ -181,8 +179,8 @@ function Shell({ api }: { api: StudioApi }) {
         unavailable={repos.data?.totals.unavailable ?? null}
       >
         <StatusStrip
-          running={leases.data?.live_execution ?? null}
-          leases={leases.data?.leases.length ?? null}
+          running={running}
+          leases={running === null || counts?.admin_leases == null ? null : running + counts.admin_leases}
           circuits={circuits}
           critical={queue?.counts.critical ?? null}
           streamMode={stream.mode}

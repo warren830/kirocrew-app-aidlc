@@ -1,7 +1,7 @@
-"""Live updates (§2.5/§2.12) and the merged timeline (§2.6).
+"""Live updates (§2.5, §2.12) and the timeline (§2.6).
 
-The stream and the cursor rules are ``EventLog``'s; the handlers only parse the cursor and hand over, because
-a second implementation of "did this client lose history" would eventually disagree with the first.
+The stream and its cursor rules are ``EventLog``'s; a second implementation of "did this client lose
+history" here would eventually disagree with the first.
 """
 
 from __future__ import annotations
@@ -15,28 +15,28 @@ from aiohttp import web
 from .. import constants as C
 from ..activity import TimelineEntry
 from ..storage import ActivityQuery
-from .common import json_ok, parse_intent_key, query_int, query_str, repo_or_404, route
+from .common import json_ok, parse_intent_key, query_int, query_str, repo_or_404
 
 
-async def stream_events(services: Any, request: web.Request) -> web.StreamResponse:
-    """``GET /events`` — SSE, replaying from ``cursor`` (or ``Last-Event-ID``) when it can be resumed."""
+async def stream(services: Any, request: web.Request) -> web.StreamResponse:
+    """SSE, replaying from ``cursor`` (or ``Last-Event-ID``) when it can be resumed."""
     return await services.events.stream(request, cursor=query_int(request, "cursor", None, lo=0))
 
 
-async def poll_events(services: Any, request: web.Request) -> web.Response:
-    """``GET /events/poll`` — the same ring for a client without ``EventSource``."""
+async def poll(services: Any, request: web.Request) -> web.Response:
+    """The same ring, for a client without ``EventSource``."""
     cursor = query_int(request, "cursor", None, lo=0)
     limit = query_int(request, "limit", None, lo=1, hi=C.EVENTS_RING_SIZE)
     return json_ok(await services.events.poll(cursor, limit or 500))
 
 
-async def get_activity(services: Any, request: web.Request) -> web.Response:
-    """``GET /activity`` — Studio's rows, or the merged timeline when a repo and an intent are named.
+async def activity(services: Any, request: web.Request) -> web.Response:
+    """Studio's rows, or one intent's merged timeline when ``repo`` and ``intent`` are named.
 
-    The merge is per intent because the AI-DLC half comes from that intent's own audit shards, and it has no
-    cursor: only one of its two authorities has stable row ids, so the client pages by narrowing ``until``.
+    The merge reads that intent's own audit shards, and it has no cursor: only one of its two authorities
+    has stable row ids, so the client pages by narrowing ``until``. Every filter is validated first, so a
+    bad one is a 400 in either mode.
     """
-    # Every parameter is validated up front, so a bad filter is a 400 on either path.
     q = ActivityQuery(
         repo_id=query_str(request, "repo"),
         space=query_str(request, "space"),
@@ -64,11 +64,3 @@ async def get_activity(services: Any, request: web.Request) -> web.Response:
 
     rows, next_cursor = await services.activity.query(q)
     return json_ok({"items": [TimelineEntry.of_row(row).to_json() for row in rows], "next_cursor": next_cursor})
-
-
-def ROUTES(services: Any) -> list[Any]:
-    return [
-        route("GET", "/events", stream_events, services=services),
-        route("GET", "/events/poll", poll_events, services=services),
-        route("GET", "/activity", get_activity, services=services),
-    ]

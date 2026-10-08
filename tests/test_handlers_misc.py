@@ -1,10 +1,9 @@
-"""Health, payload, leases, diagnostics, settings, events, activity, advisor
-and the Slack correlation hint (§2.1, §2.5–§2.9).
+"""Health, diagnostics, settings, events, activity and advisor routes (§2.1, §2.5–§2.8).
 
 Two properties are worth more than the shapes here.
 
-* **``/payload`` is compared to ``payload/manifest.json``, never to literals** (review P03/R03). A test
-  that asserted ``"2.6.2"`` would have to be edited when the payload is bumped, and then it would be
+* **Payload numbers are compared to ``payload/manifest.json``, never to literals** (review P03/R03). A
+  test that asserted ``"2.6.2"`` would have to be edited when the payload is bumped, and then it would be
   the test — not the product — that decided which engine version Studio claims to ship.
 * **``/diagnostics`` is redactable by construction.** The bundle is what a user pastes into an issue, so
   the assertions are about what is *absent*: verbatim decision text unless two switches are on, and no
@@ -49,24 +48,6 @@ def test_an_intent_key_splits_unambiguously_into_space_and_dir(common):
         with pytest.raises(Exception) as raised:
             common.parse_intent_key(bad)
         assert raised.value.code == "bad_param"
-
-
-def test_pagination_is_descending_and_its_cursor_round_trips(common):
-    rows = [{"id": n} for n in (9, 7, 5, 3, 1)]
-    page, cursor = common.paginate(rows, None, 2, lambda row: row["id"])
-    assert [row["id"] for row in page] == [9, 7]
-    assert common.decode_cursor(cursor) == 7
-
-    page, cursor = common.paginate(rows, cursor, 2, lambda row: row["id"])
-    assert [row["id"] for row in page] == [5, 3]
-
-    page, cursor = common.paginate(rows, cursor, 2, lambda row: row["id"])
-    assert [row["id"] for row in page] == [1]
-    assert cursor is None                      # no next page, so no cursor to offer
-
-    with pytest.raises(Exception) as raised:
-        common.paginate(rows, "not-base64!!", 2, lambda row: row["id"])
-    assert raised.value.code == "bad_param"
 
 
 # --------------------------------------------------------------------------- #
@@ -124,6 +105,27 @@ def test_health_reports_error_when_the_store_fails_its_integrity_check(sv, route
     assert "storage_integrity" in body["issues"]
 
 
+def test_health_counts_the_leases_the_status_strip_shows(sv, routes, fake_host, gate_repo):
+    """The strip's "turns running" and "leases held" are ``counts.execution_leases`` and ``admin_leases``."""
+    repo = sv.repos.add(str(gate_repo), "demo")
+    card = _seed_gate_card(sv, repo)
+    asyncio.run(sv.scheduler.acquire_execution(repo, intent_uuid=None, session_key="dashboard:slot",
+                                               action_id=card.action_id))
+    _status, body = call(sv, routes, "GET", "/health", CT.owner_request("GET", "/health", host=fake_host))
+    assert (body["counts"]["execution_leases"], body["counts"]["admin_leases"]) == (1, 0)
+
+
+def test_health_reports_no_counts_when_the_store_cannot_be_read(sv, routes, fake_host, studio, monkeypatch):
+    """Absent rather than zero: "0 turns running" would be a claim with nothing behind it."""
+    def unreadable(*_a, **_k):
+        raise studio.errors.StudioError("storage_error", "database is locked")
+
+    monkeypatch.setattr(sv.storage, "pragmas", unreadable)
+    _status, body = call(sv, routes, "GET", "/health", CT.owner_request("GET", "/health", host=fake_host))
+    assert body["status"] == "error" and "storage:storage_error" in body["issues"]
+    assert set(body["counts"].values()) == {None}
+
+
 # --------------------------------------------------------------------------- #
 # lifecycle (§1.23)
 # --------------------------------------------------------------------------- #
@@ -179,74 +181,6 @@ async def test_start_degrades_instead_of_failing_when_the_payload_manifest_is_un
 
 
 # --------------------------------------------------------------------------- #
-# payload
-# --------------------------------------------------------------------------- #
-
-
-def test_payload_is_the_manifest_plus_its_verification_status(sv, routes, fake_host):
-    status, body = call(sv, routes, "GET", "/payload",
-                        CT.owner_request("GET", "/payload", host=fake_host))
-    assert status == 200
-    assert body["schema"] == MANIFEST["schema"]
-    assert body["harness"] == MANIFEST["harness"]
-    assert body["engine_version"] == MANIFEST["engineVersion"]
-    assert body["source"] == MANIFEST["source"]
-    assert body["compatible_state_versions"] == sorted(set(MANIFEST["compatibleStateVersions"]))
-    assert body["stage_count"] == MANIFEST["stageCount"]
-    assert body["payload_digest"] == MANIFEST["payloadDigest"]
-    assert body["file_count"] == MANIFEST["fileCount"]
-    assert body["merge_targets"] == MANIFEST["mergeTargets"]
-    assert sum(body["ownership_counts"].values()) == len(MANIFEST["files"])
-    assert body["status"]["ok"] is True
-    assert "files" not in body
-
-
-def test_payload_lists_the_files_only_when_asked(sv, routes, fake_host):
-    request = CT.owner_request("GET", "/payload", host=fake_host, query={"files": "1"})
-    _status, body = call(sv, routes, "GET", "/payload", request)
-    assert len(body["files"]) == len(MANIFEST["files"])
-    assert set(body["files"][0]) == {"path", "sha256", "size", "ownership"}
-
-
-def test_payload_refuses_a_bad_boolean_rather_than_guessing(sv, routes, fake_host):
-    request = CT.owner_request("GET", "/payload", host=fake_host, query={"files": "yes"})
-    status, body = call(sv, routes, "GET", "/payload", request)
-    assert status == 400 and body["code"] == "bad_param"
-
-
-# --------------------------------------------------------------------------- #
-# leases
-# --------------------------------------------------------------------------- #
-
-
-def test_leases_is_empty_and_reports_the_cap(sv, routes, fake_host):
-    _status, body = call(sv, routes, "GET", "/leases",
-                         CT.owner_request("GET", "/leases", host=fake_host))
-    assert body["leases"] == []
-    assert body["live_execution"] == 0
-    assert body["global_concurrency_cap"] == sv.settings.global_concurrency_cap()
-
-
-def test_leases_shows_a_live_execution_lease_with_its_intent_key(sv, routes, fake_host, gate_repo):
-    repo = sv.repos.add(str(gate_repo), "demo")
-    card = _seed_gate_card(sv, repo)
-    grant = asyncio.run(
-        sv.scheduler.acquire_execution(
-            repo, intent_uuid=None, session_key="dashboard:slot", action_id=card.action_id
-        )
-    )
-    _status, body = call(sv, routes, "GET", "/leases",
-                         CT.owner_request("GET", "/leases", host=fake_host))
-    assert body["live_execution"] == 1
-    view = body["leases"][0]
-    assert view["kind"] == "execution"
-    assert view["repo_id"] == repo.repo_id
-    assert view["generation"] == grant.generation
-    assert view["intent_key"] == "260904-gate-demo"
-    assert view["orphaned"] is False
-
-
-# --------------------------------------------------------------------------- #
 # diagnostics
 # --------------------------------------------------------------------------- #
 
@@ -265,6 +199,18 @@ def test_diagnostics_carries_every_section_and_says_it_is_redacted(sv, routes, f
     assert body["redacted"] is True
     assert body["health"]["app"] == "aidlc-studio"
     assert body["repos"][0]["label"] == "demo"
+
+
+def test_diagnostics_names_the_intent_an_execution_lease_is_working_on(sv, routes, fake_host, gate_repo):
+    repo = sv.repos.add(str(gate_repo), "demo")
+    card = _seed_gate_card(sv, repo)
+    grant = asyncio.run(sv.scheduler.acquire_execution(repo, intent_uuid=None, session_key="dashboard:slot",
+                                                       action_id=card.action_id))
+    _status, body = call(sv, routes, "GET", "/diagnostics", CT.owner_request("GET", "/diagnostics", host=fake_host))
+    [view] = body["leases"]
+    assert (view["kind"], view["repo_id"], view["generation"]) == ("execution", repo.repo_id, grant.generation)
+    assert view["intent_key"] == "260904-gate-demo"
+    assert view["orphaned"] is False
 
 
 def test_diagnostics_keeps_the_registered_root_and_scrubs_every_other_path(sv, routes, fake_host,
@@ -579,41 +525,6 @@ def test_an_unknown_draft_is_a_404(sv, routes, fake_host):
     path = "/advisor/drafts/d_0000000000000001"
     status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))
     assert status == 404 and body["code"] == "draft_not_found"
-
-
-# --------------------------------------------------------------------------- #
-# slack correlation
-# --------------------------------------------------------------------------- #
-
-
-def test_the_slack_callback_is_a_404_for_an_unknown_action(sv, routes, fake_host):
-    request = CT.owner_request("POST", "/slack/actions/callback", host=fake_host,
-                               body={"action_id": "a_0000000000000009"})
-    status, body = call(sv, routes, "POST", "/slack/actions/callback", request)
-    assert status == 404 and body["code"] == "action_not_found"
-
-
-def test_the_slack_callback_records_the_thread_on_the_action_and_authorises_nothing(
-    sv, routes, fake_host, gate_repo
-):
-    repo = sv.repos.add(str(gate_repo), "demo")
-    rec = _seed_gate_card(sv, repo)
-    request = CT.owner_request(
-        "POST", "/slack/actions/callback", host=fake_host,
-        body={
-            "action_id": rec.action_id, "slot_key": "aidlc-studio-x", "channel": "C1",
-            "thread_ts": "1700000000.1", "message_ts": "1700000000.2", "selection": None,
-        },
-    )
-    status, body = call(sv, routes, "POST", "/slack/actions/callback", request)
-    assert status == 200 and body == {"ok": True, "recorded": True}
-
-    after = asyncio.run(sv.actions.get(rec.action_id))
-    assert after.evidence["slack"]["thread_ts"] == "1700000000.1"
-    # Nothing was authorised: the status did not move and no transition was recorded. (The generation
-    # does advance — `actions` is a CAS table, and even an evidence-only write goes through it.)
-    assert after.status == rec.status
-    assert sv.storage.select("action_transitions", {"action_id": rec.action_id}) == []
 
 
 # --------------------------------------------------------------------------- #

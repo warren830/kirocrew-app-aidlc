@@ -54,9 +54,7 @@ export function useStartRun(api: StudioApi, onSettled?: () => void) {
       reset()
       setQueueing(true)
       try {
-        const queued = which === 'run'
-          ? await api.run(intent.repo_id, intent.intent_key)
-          : await api.resume(intent.repo_id, intent.intent_key)
+        const queued = await api.run(intent.repo_id, intent.intent_key, which)
         setQueueing(false)
         await submit({ card: queued.action, payload: { decision: which }, clientWireText: startText(which) })
       } catch (caught) {

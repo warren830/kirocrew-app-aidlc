@@ -73,7 +73,7 @@ const LIVE_STATUSES: readonly string[] = ['Delivering', 'Delivered']
 /**
  * Does this payload describe work in progress?
  *
- * Structural on purpose: the same predicate has to answer for `/actions`, `/leases`, one intent and
+ * Structural on purpose: the same predicate has to answer for `/actions`, `/health`, one intent and
  * one card, and a per-route flag would be four places to forget. Unknown shapes answer `false` — a
  * wrong "busy" costs a 2 s poll forever on an idle install.
  */
@@ -81,7 +81,11 @@ export function looksBusy(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false
   const record = value as Record<string, unknown>
 
-  if (typeof record['live_execution'] === 'number' && record['live_execution'] > 0) return true
+  // `/health`: a turn is executing somewhere.
+  const counts = record['counts']
+  if (counts && typeof counts === 'object' && Number((counts as Record<string, unknown>)['execution_leases']) > 0) {
+    return true
+  }
 
   const actions = record['actions']
   if (Array.isArray(actions) && actions.some((a) => isLiveCard(a))) return true

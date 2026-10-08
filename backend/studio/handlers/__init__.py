@@ -1,8 +1,7 @@
 """HTTP handlers, one module per §2 section.
 
-The package is imported eagerly by ``common.all_routes`` rather than here: every module imports
-``common``, and importing them from this file too would make the import order of the package decide
-whether that succeeds.
+``common.all_routes`` imports the handler modules named in ``common.ROUTES``; importing them here too would
+let the package's import order decide whether that succeeds, since every one of them imports ``common``.
 """
 
 from __future__ import annotations

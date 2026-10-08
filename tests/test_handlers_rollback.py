@@ -37,9 +37,9 @@ def test_rollback_preview_acceptance_completion_and_target_disappears(
     assert status == 200, body
     assert body["repo"]["install"]["rollback_target"]["engine_version"] == "2.6.2"
 
-    path = detail + "/rollback"
+    path = detail + "/transactions"
     status, preview = call(sv, routes, "POST", path + "/preview",
-                          CT.owner_request("POST", path + "/preview", host=fake_host, body={}))
+                          CT.owner_request("POST", path + "/preview", host=fake_host, body={"kind": "rollback"}))
     assert status == 200 and preview["plan"]["kind"] == "rollback", preview
     assert not preview["plan"]["blocking"]
     assert preview["plan"]["engine_from"] == "2.7.0" and preview["plan"]["engine_to"] == "2.6.2"
@@ -51,7 +51,7 @@ def test_rollback_preview_acceptance_completion_and_target_disappears(
 
     monkeypatch.setattr(sv.installer, "run", record_run)
     status, accepted = call(sv, routes, "POST", path, CT.owner_request(
-        "POST", path, host=fake_host, body={"plan_digest": preview["plan_digest"]},
+        "POST", path, host=fake_host, body={"kind": "rollback", "plan_digest": preview["plan_digest"]},
     ))
     assert status == 202, accepted
     assert len(delegated) == 1
@@ -68,15 +68,15 @@ def test_changed_files_block_rollback_and_stale_confirmation_creates_no_transact
     sv, routes, fake_host, upgraded_repo,
 ):
     repo = upgraded_repo
-    path = f"/repos/{repo.repo_id}/rollback"
+    path = f"/repos/{repo.repo_id}/transactions"
     plan = sv.installer.preview(repo, "rollback")
     changed = Path(repo.canonical_path) / ".kiro/tools/aidlc-utility.ts"
     changed.write_text("user modification\n")
     status, preview = call(sv, routes, "POST", path + "/preview",
-                          CT.owner_request("POST", path + "/preview", host=fake_host, body={}))
+                          CT.owner_request("POST", path + "/preview", host=fake_host, body={"kind": "rollback"}))
     assert status == 200 and preview["plan"]["blocking"], preview
     status, body = call(sv, routes, "POST", path, CT.owner_request(
-        "POST", path, host=fake_host, body={"plan_digest": plan.digest()},
+        "POST", path, host=fake_host, body={"kind": "rollback", "plan_digest": plan.digest()},
     ))
     assert status == 409 and body["code"] == "install_conflict", body
     assert changed.read_text() == "user modification\n"
@@ -105,9 +105,9 @@ def test_application_recovery_restores_interrupted_receipt_transaction_without_p
         pytest.fail("receipt recovery must not depend on the bundled payload")
 
     monkeypatch.setattr(handler, "_require_payload", no_payload)
-    path = f"/repos/{repo.repo_id}/install/recovery"
+    path = f"/repos/{repo.repo_id}/transactions"
     status, preview = call(sv, routes, "POST", path + "/preview",
-                          CT.owner_request("POST", path + "/preview", host=fake_host, body={}))
+                          CT.owner_request("POST", path + "/preview", host=fake_host, body={"kind": "recovery"}))
     assert status == 200 and not preview["plan"]["blocking"], preview
     assert preview["plan"]["recovery_transaction_id"] == failed.transaction_id
     assert preview["plan"]["recovery_kind"] == kind
@@ -119,7 +119,7 @@ def test_application_recovery_restores_interrupted_receipt_transaction_without_p
 
     monkeypatch.setattr(sv.installer, "run", record_run)
     status, accepted = call(sv, routes, "POST", path, CT.owner_request(
-        "POST", path, host=fake_host, body={"plan_digest": preview["plan_digest"]},
+        "POST", path, host=fake_host, body={"kind": "recovery", "plan_digest": preview["plan_digest"]},
     ))
     assert status == 202 and accepted["transaction_id"] == failed.transaction_id, accepted
     assert len(delegated) == 1

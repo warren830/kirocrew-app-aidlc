@@ -97,8 +97,7 @@ def base(repo: Any, suffix: str = "") -> str:
 _SUMMARY_KEYS = {
     "repo_id", "repo_label", "space", "intent_dir", "intent_key", "uuid", "slug", "scope",
     "registry_status", "title", "operational_state", "disk", "counts", "open_actions",
-    "blocking_findings", "warn_findings", "session", "archived", "paused", "keep_moving",
-    "interrupted", "last_activity_at", "stable_boundary", "unstable", "is_active_cursor",
+    "blocking_findings", "warn_findings", "session", "archived", "paused", "interrupted", "last_activity_at", "stable_boundary", "unstable", "is_active_cursor",
 }
 
 
@@ -112,7 +111,6 @@ def test_listing_intents_reports_the_summary_the_spaces_and_the_cursor(sv, route
     summary = body["intents"][0]
     assert set(summary) == _SUMMARY_KEYS
     assert summary["intent_key"] == INTENT
-    assert summary["keep_moving"] is False           # there is no machine lane to turn on
     assert summary["is_active_cursor"] is True
     assert set(summary["disk"]) == {
         "status", "lifecycle_phase", "current_stage", "next_stage", "state_version", "total_stages",
@@ -192,13 +190,6 @@ def test_the_map_sends_the_graph_and_the_state_rows_for_the_ui_to_join(sv, route
     assert inputs["current_stage"] == inputs["directive_stage"] == STAGE
 
 
-def test_the_map_refuses_an_unknown_density(sv, routes, fake_host, repo):
-    path = base(repo, "/map")
-    request = CT.owner_request("GET", path, host=fake_host, query={"density": "everything"})
-    status, body = call(sv, routes, "GET", path, request)
-    assert status == 400 and body["code"] == "bad_param"
-
-
 def test_artifacts_lists_metadata_and_filters_by_stage_and_kind(sv, routes, fake_host, repo):
     path = base(repo, "/artifacts")
     status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))
@@ -258,28 +249,30 @@ def test_questions_use_supported_files_but_degrade_during_a_native_wait(sv, rout
                                                                      slot):
     """A stable file supplies the form; a blocking host widget keeps its own answering endpoint."""
     _bind(sv, routes, fake_host, repo, slot)
-    path = base(repo, "/questions")
-    status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))
-    assert status == 200
-    assert set(body) == {"questions", "mode", "host_cards", "slot_key"}
-    assert body["slot_key"] == slot
-    assert body["mode"] == "structured"
-    assert body["host_cards"] == []
-    assert body["questions"]["pending_count"] >= 1
+
+    def questions() -> dict:
+        status, body = call(sv, routes, "GET", base(repo), CT.owner_request("GET", base(repo), host=fake_host))
+        assert status == 200, body
+        return body["intent"]["questions"]
+
+    view = questions()
+    assert view["mode"] == "structured"
+    assert view["host_card"] is None
+    assert view["pending_count"] >= 1
 
     fake_host.get_slot(slot)._question_pending = {
         "ask-1": {"slot": slot, "ts": 1, "questions": [{"question": "Which store?", "options": []}]}
     }
-    _status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))
-    assert body["mode"] == "structured"
-    assert body["host_cards"] and body["host_cards"][0]["slot"] == slot
+    view = questions()
+    assert view["mode"] == "structured"
+    assert view["host_card"]["slot"] == slot
 
     fake_host._pending_questions = {
         "blocking-ask": {"slot": slot, "ts": 2, "questions": [{"question": "Native?", "options": []}]}
     }
-    _status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))
-    assert body["mode"] == "degraded"
-    assert body["host_cards"][0]["ask_id"] == "blocking-ask"
+    view = questions()
+    assert view["mode"] == "degraded"
+    assert view["host_card"]["ask_id"] == "blocking-ask"
 
 
 def test_question_context_reaches_the_api_detail_and_action_evidence(sv, routes, fake_host, repo, slot):
@@ -294,20 +287,15 @@ def test_question_context_reaches_the_api_detail_and_action_evidence(sv, routes,
     question_path = Path(repo.canonical_path) / "aidlc/spaces/default/intents" / INTENT / QUESTIONS_REL
     question_path.write_text(text)
     _bind(sv, routes, fake_host, repo, slot)
-    path = base(repo, "/questions")
-    status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))
-    assert status == 200 and body["mode"] == "structured"
-    question = body["questions"]["questions"][0]
+    status, body = call(sv, routes, "GET", base(repo),
+                        CT.owner_request("GET", base(repo), host=fake_host))
+    assert status == 200 and body["intent"]["questions"]["mode"] == "structured"
+    question = body["intent"]["questions"]["questions"][0]
     assert question["context"] == context
     assert question["multi_select"] is True
     assert [option["text"] for option in question["options"]] == [
         "Capabilities 1 and 2", "Capability 3", "Other",
     ]
-
-    status, body = call(sv, routes, "GET", base(repo),
-                        CT.owner_request("GET", base(repo), host=fake_host))
-    assert status == 200
-    assert body["intent"]["questions"]["questions"][0]["context"] == context
     snap = sv.projection.snapshot(repo, "default", INTENT)
     evidence = sv.projection.evidence(snap).to_json()
     assert evidence["questions"]["questions"][0]["context"] == context
@@ -345,20 +333,17 @@ def test_unsupported_domain_questions_keep_waiting_and_reach_real_routes(
     assert len(cards) == 1
     assert cards[0].decisions == ()
 
-    for suffix in ("/questions", ""):
-        path = base(repo, suffix)
-        status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))
-        assert status == 200
-        if not suffix:
-            assert body["intent"]["operational_state"] == "WaitingForYou"
-        view = body["questions"] if suffix else body["intent"]["questions"]
-        assert view == cards[0].evidence["questions"]
-        assert view["mode"] == "degraded"
-        assert view["pending_count"] == 3
-        assert view["unsupported_pending_count"] == 3
-        assert all(q["answered"] for q in view["questions"])
-        assert [q["index"] for q in view["questions"]] == [1, 2, 3, 4, 5]
-    assert sv.storage.select("actions") == []  # the GETs and projection never mint actions
+    status, body = call(sv, routes, "GET", base(repo), CT.owner_request("GET", base(repo), host=fake_host))
+    assert status == 200
+    assert body["intent"]["operational_state"] == "WaitingForYou"
+    view = body["intent"]["questions"]
+    assert view == cards[0].evidence["questions"]
+    assert view["mode"] == "degraded"
+    assert view["pending_count"] == 3
+    assert view["unsupported_pending_count"] == 3
+    assert all(q["answered"] for q in view["questions"])
+    assert [q["index"] for q in view["questions"]] == [1, 2, 3, 4, 5]
+    assert sv.storage.select("actions") == []  # the GET and projection never mint actions
     assert (root / "aidlc/spaces/default/intents" / INTENT / question_rel).read_text() == text
 
 
@@ -372,24 +357,6 @@ def test_review_reports_the_verdict_the_findings_and_the_audit_receipts(sv, rout
     assert body["verdict"] == "READY"
     assert body["reviewer"] == "reviewer-agent"
     assert isinstance(body["receipts"], list)
-
-
-def test_intent_git_reports_commits_and_changed_artifacts(sv, routes, fake_host, repo):
-    path = base(repo, "/git")
-    status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))
-    assert status == 200
-    assert set(body) == {"git", "commits", "changed_artifacts"}
-    assert isinstance(body["commits"], list)
-    assert isinstance(body["changed_artifacts"], list)
-
-
-def test_intent_activity_is_the_merged_timeline(sv, routes, fake_host, repo):
-    path = base(repo, "/activity")
-    status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))
-    assert status == 200
-    assert body["next_cursor"] is None
-    assert {item["source"] for item in body["items"]} == {"aidlc"}
-    assert all(item["message_key"].startswith("audit.") for item in body["items"])
 
 
 # --------------------------------------------------------------------------- #
@@ -632,17 +599,29 @@ def test_run_is_refused_while_the_intent_is_archived(sv, routes, fake_host, repo
 
 
 def test_resume_needs_a_parked_intent(sv, routes, fake_host, repo, slot):
-    path = base(repo, "/resume")
+    path = base(repo, "/run")
     status, body = call(sv, routes, "POST", path,
-                        CT.owner_request("POST", path, host=fake_host, body={}))
+                        CT.owner_request("POST", path, host=fake_host, body={"type": "resume"}))
     assert status == 400 and body["code"] == "invalid_decision"
 
 
-def test_prepare_commit_creates_its_own_card_type(sv, routes, fake_host, repo, slot):
-    path = base(repo, "/prepare-commit")
+def test_resume_creates_its_own_card_type_for_a_parked_intent(sv, routes, fake_host, repo, slot, demo,
+                                                            runnable_demo):
+    state = demo / "aidlc" / "spaces" / "default" / "intents" / INTENT / "aidlc-state.md"
+    state.write_text(F.insert_runtime_field(_state({STAGE: "-"}), "Parked", "2026-09-04T09:30:00Z"))
+    path = base(repo, "/run")
     status, body = call(sv, routes, "POST", path,
-                        CT.owner_request("POST", path, host=fake_host, body={}))
-    assert status == 201 and body["action"]["type"] == "prepare_commit"
+                        CT.owner_request("POST", path, host=fake_host, body={"type": "resume"}))
+    assert status == 201, body
+    assert body["action"]["type"] == "resume"
+
+
+def test_run_takes_only_the_two_commands_a_human_starts(sv, routes, fake_host, repo, slot):
+    path = base(repo, "/run")
+    status, body = call(sv, routes, "POST", path,
+                        CT.owner_request("POST", path, host=fake_host, body={"type": "prepare_commit"}))
+    assert status == 400 and body["code"] == "bad_body"
+    assert body["details"] == {"key": "type", "choices": ["run", "resume"]}
 
 
 def test_pause_reports_the_cards_it_just_blocked(sv, routes, fake_host, repo, slot, runnable_demo):
@@ -662,11 +641,13 @@ def test_pause_reports_the_cards_it_just_blocked(sv, routes, fake_host, repo, sl
     assert body["blocked_actions"] == []
 
 
-def test_pause_needs_a_boolean(sv, routes, fake_host, repo):
-    path = base(repo, "/pause")
-    request = CT.owner_request("POST", path, host=fake_host, body={"paused": "yes"})
-    status, body = call(sv, routes, "POST", path, request)
-    assert status == 400 and body["code"] == "bad_body"
+@pytest.mark.parametrize("suffix,flag", [("/pause", "paused"), ("/archive", "archived")])
+def test_pause_and_archive_need_a_boolean(sv, routes, fake_host, repo, suffix, flag):
+    path = base(repo, suffix)
+    for body in ({flag: "yes"}, {}):
+        status, answer = call(sv, routes, "POST", path, CT.owner_request("POST", path, host=fake_host, body=body))
+        assert status == 400 and answer["code"] == "bad_body", body
+        assert answer["details"] == {"missing": [flag]}
 
 
 def test_force_stop_needs_a_confirmation_and_a_bound_session(sv, routes, fake_host, repo):
@@ -717,26 +698,25 @@ def test_binding_refuses_a_slot_pointed_at_another_project(sv, routes, fake_host
     other.mkdir()
     fake_host.add_slot("stranger", project=str(other), agent="aidlc", app="")
     sv.host.attach(fake_host)
-    path = base(repo, "/session/bind")
+    path = base(repo, "/session")
     request = CT.owner_request("POST", path, host=fake_host, body={"slot_key": "stranger"})
     status, body = call(sv, routes, "POST", path, request)
     assert status == 409 and body["code"] == "slot_mismatch"
 
 
 def test_binding_needs_a_slot_key(sv, routes, fake_host, repo):
-    path = base(repo, "/session/bind")
+    path = base(repo, "/session")
     status, body = call(sv, routes, "POST", path,
                         CT.owner_request("POST", path, host=fake_host, body={}))
     assert status == 400 and body["code"] == "bad_body"
     assert body["details"]["missing"] == ["slot_key"]
 
 
-def test_unbinding_forgets_the_slot(sv, routes, fake_host, repo, slot):
+def test_unbinding_forgets_the_slot(sv, routes, fake_host, repo, slot, studio):
     _bind(sv, routes, fake_host, repo, slot)
-    path = base(repo, "/session/unbind")
-    status, body = call(sv, routes, "POST", path,
-                        CT.owner_request("POST", path, host=fake_host, body={}))
-    assert status == 200 and body["binding"]["slot_key"] is None
+    status, body = _bind(sv, routes, fake_host, repo, None)
+    assert status == 200 and body["binding"]["slot_key"] is None and body["slot"] is None
+    assert "session.unbound" in _activity_kinds(sv, studio)
 
 
 def test_takeover_preview_lists_the_other_slots_for_this_repository(sv, routes, fake_host, repo, slot):
@@ -752,14 +732,28 @@ def test_takeover_preview_lists_the_other_slots_for_this_repository(sv, routes, 
     assert body["current"]["slot_key"] == slot
 
 
-def test_takeover_moves_the_binding(sv, routes, fake_host, repo, slot):
+def test_pointing_a_bound_intent_at_another_slot_is_a_takeover(sv, routes, fake_host, repo, slot, studio):
     _bind(sv, routes, fake_host, repo, slot)
     fake_host.add_slot("hand-opened", project=str(repo.canonical_path), agent="aidlc", app="")
     sv.host.attach(fake_host)
-    path = base(repo, "/session/takeover")
-    request = CT.owner_request("POST", path, host=fake_host, body={"slot_key": "hand-opened"})
-    status, body = call(sv, routes, "POST", path, request)
+    status, body = _bind(sv, routes, fake_host, repo, "hand-opened")
     assert status == 200 and body["binding"]["slot_key"] == "hand-opened"
+    assert body["slot"]["key"] == "hand-opened"
+    assert "session.takeover" in _activity_kinds(sv, studio)
+
+
+def test_a_takeover_waits_for_a_decision_that_may_be_on_the_wire(sv, routes, fake_host, repo, slot):
+    _bind(sv, routes, fake_host, repo, slot)
+    fake_host.add_slot("hand-opened", project=str(repo.canonical_path), agent="aidlc", app="")
+    sv.host.attach(fake_host)
+    path = base(repo, "/force-stop")
+    status, _receipt = call(sv, routes, "POST", path,
+                            CT.owner_request("POST", path, host=fake_host, body={"confirm": True}))
+    assert status == 201
+    for target in ("hand-opened", None):
+        status, body = _bind(sv, routes, fake_host, repo, target)
+        assert status == 409 and body["code"] == "action_not_submittable", target
+        assert body["details"]["operation"] == ("takeover" if target else "unbind")
 
 
 def test_archiving_and_restoring_an_intent_touches_no_aidlc_file(sv, routes, fake_host, repo, demo):
@@ -767,12 +761,11 @@ def test_archiving_and_restoring_an_intent_touches_no_aidlc_file(sv, routes, fak
     before = state.read_bytes()
     path = base(repo, "/archive")
     status, body = call(sv, routes, "POST", path,
-                        CT.owner_request("POST", path, host=fake_host, body={}))
+                        CT.owner_request("POST", path, host=fake_host, body={"archived": True}))
     assert status == 200 and body["binding"]["archive_state"] == "archived"
 
-    path = base(repo, "/restore")
     _status, body = call(sv, routes, "POST", path,
-                         CT.owner_request("POST", path, host=fake_host, body={}))
+                         CT.owner_request("POST", path, host=fake_host, body={"archived": False}))
     assert body["binding"]["archive_state"] == "active"
     assert state.read_bytes() == before
 
@@ -782,7 +775,7 @@ def test_archiving_is_refused_while_a_card_is_live(sv, routes, fake_host, repo, 
     call(sv, routes, "POST", run, CT.owner_request("POST", run, host=fake_host, body={}))
     path = base(repo, "/archive")
     status, body = call(sv, routes, "POST", path,
-                        CT.owner_request("POST", path, host=fake_host, body={}))
+                        CT.owner_request("POST", path, host=fake_host, body={"archived": True}))
     assert status == 409 and body["code"] == "action_not_submittable"
 
 
@@ -800,18 +793,23 @@ def test_a_paused_intent_archives_and_its_cards_leave_the_queue_until_restored(
         assert status == 200, listed
         return [card["action_id"] for card in listed["actions"]]
 
-    pause, archive, restore = base(repo, "/pause"), base(repo, "/archive"), base(repo, "/restore")
-    status, body = call(sv, routes, "POST", archive, CT.owner_request("POST", archive, host=fake_host, body={}))
+    pause, archive = base(repo, "/pause"), base(repo, "/archive")
+
+    def archived(value: bool) -> tuple[int, Any]:
+        return call(sv, routes, "POST", archive,
+                    CT.owner_request("POST", archive, host=fake_host, body={"archived": value}))
+
+    status, body = archived(True)
     assert status == 409 and body["details"]["reason"] == "live_not_paused"
 
     call(sv, routes, "POST", pause, CT.owner_request("POST", pause, host=fake_host, body={"paused": True}))
-    status, _ = call(sv, routes, "POST", archive, CT.owner_request("POST", archive, host=fake_host, body={}))
+    status, _ = archived(True)
     assert status == 200
     assert queued not in queue()
     # The intent's own page still names it.
     assert queued in queue(intent=INTENT)
 
-    call(sv, routes, "POST", restore, CT.owner_request("POST", restore, host=fake_host, body={}))
+    archived(False)
     assert queued in queue()
 
 
@@ -820,8 +818,8 @@ def test_a_paused_intent_archives_and_its_cards_leave_the_queue_until_restored(
 # --------------------------------------------------------------------------- #
 
 
-def _bind(sv: Any, routes: Any, fake_host: Any, repo: Any, slot: str) -> tuple[int, Any]:
-    path = base(repo, "/session/bind")
+def _bind(sv: Any, routes: Any, fake_host: Any, repo: Any, slot: str | None) -> tuple[int, Any]:
+    path = base(repo, "/session")
     request = CT.owner_request("POST", path, host=fake_host, body={"slot_key": slot})
     return call(sv, routes, "POST", path, request)
 

@@ -10,8 +10,8 @@
  */
 
 import type {
-  ActionCard, ActionType, ActionsResponse, ArtifactMeta, DecisionSpec, Decision, MapInputs, MapNode, ReviewFinding,
-  Severity, SettingsResponse, StageRow, StageState,
+  ActionCard, ActionType, ActionsResponse, ArtifactMeta, DecisionSpec, Decision, HealthCounts, MapInputs, MapNode,
+  ReviewFinding, Severity, SettingsResponse, StageRow, StageState,
 } from '../lib/types'
 import type { RouteHandler } from './stubs/app-sdk'
 
@@ -207,6 +207,11 @@ export function actionCard(over: Partial<ActionCard> = {}): ActionCard {
   }
 }
 
+/** `/health` counts; the status strip's lease chips read `execution_leases` and `admin_leases`. */
+export function healthCounts(over: Partial<HealthCounts> = {}): HealthCounts {
+  return { repos: 1, intents: 1, live_actions: 0, execution_leases: 0, admin_leases: 0, ...over }
+}
+
 export function actionsResponse(cards: ActionCard[]): ActionsResponse {
   const counts: ActionsResponse['counts'] = { total: cards.length, critical: 0, blocking: 0, attention: 0, info: 0 }
   for (const card of cards) counts[card.severity as Severity] += 1
@@ -214,7 +219,7 @@ export function actionsResponse(cards: ActionCard[]): ActionsResponse {
 }
 
 /**
- * The five reads the shell issues on mount, plus the event poll.
+ * The four reads the shell issues on mount, plus the event poll.
  *
  * Any test that mounts `StudioApp` needs all of them: a missing one is a resource error, and the shell
  * turns a failed `/health` into a banner that changes what is on screen.
@@ -239,9 +244,8 @@ export function shellRoutes(cards: ActionCard[] = []): Record<string, RouteHandl
       ],
       totals: { repos: 1, unavailable: 0, open_actions: cards.length },
     }),
-    [`GET ${API_BASE}/leases`]: () => ({ leases: [], global_concurrency_cap: 2, live_execution: 0 }),
     [`GET ${API_BASE}/settings`]: settingsResponse,
-    [`GET ${API_BASE}/health`]: () => ({ status: 'healthy', issues: [] }),
+    [`GET ${API_BASE}/health`]: () => ({ status: 'healthy', issues: [], counts: healthCounts() }),
     [`GET ${API_BASE}/events/poll*`]: () => ({ events: [], cursor: 0, oldest_seq: 0, reset: false }),
   }
 }

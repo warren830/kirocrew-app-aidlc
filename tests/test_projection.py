@@ -1573,8 +1573,8 @@ def test_artifacts_truncation_is_reported(projection, repo_record, gate_repo, mo
 SUMMARY_KEYS = {
     "repo_id", "repo_label", "space", "intent_dir", "intent_key", "uuid", "slug", "scope",
     "registry_status", "title", "operational_state", "disk", "counts", "open_actions",
-    "blocking_findings", "warn_findings", "session", "archived", "paused", "keep_moving",
-    "interrupted", "last_activity_at", "stable_boundary", "unstable", "is_active_cursor",
+    "blocking_findings", "warn_findings", "session", "archived", "paused", "interrupted",
+    "last_activity_at", "stable_boundary", "unstable", "is_active_cursor",
 }
 DETAIL_EXTRA_KEYS = {
     "state_sections", "phases", "stages", "findings", "actions", "directive", "recovery", "markers",
@@ -1599,7 +1599,6 @@ def test_intent_summary_wire_shape(projection, gate_snap, C):
     assert body["open_actions"] == 1                      # the revision card is not a queue item (C18)
     assert body["blocking_findings"] == 1 and body["warn_findings"] == 1
     assert body["session"]["slot_key"] == SessionStub().slot_key
-    assert body["keep_moving"] is False                   # always false in v1 (machine lane absent)
     assert body["is_active_cursor"] is True
     # the STAGE_AWAITING_APPROVAL row, not the later HUMAN_TURN/SESSION rows (NOISE_EVENTS)
     assert body["last_activity_at"] == "2026-09-04T09:00:03Z"

@@ -75,7 +75,7 @@ def test_request_factory_shapes(request_factory, fake_host):
     assert r.app["state"] is fake_host
     a = request_factory.anon("GET", "/health")
     assert a.get("user") is None
-    i = request_factory.internal("POST", "/slack/actions/callback", body={})
+    i = request_factory.internal("POST", "/repos", body={})
     assert i.headers["X-Internal-Secret"] == "test-internal-secret"
 
 

@@ -987,7 +987,7 @@ def test_a_foreign_harness_is_not_studios_install_so_install_is_still_offered(st
     Keying the lane on ``own_engine_version`` opens it without touching what Studio reads: ``status``
     stays ``installed`` and ``engine_dir`` stays ``.claude`` on purpose, because that harness is what
     dispatch and the stage graph resolve through, and calling the repository uninstalled would take
-    intent creation away from it (backend/studio/plan.py ``_require_ready``).
+    intent creation away from it (backend/studio/plan.py ``require_ready``).
     """
     version_ts = 'export const AIDLC_VERSION = "2.6.2";\n'  # the payload's own version
     root = repo_builder.with_git().build()

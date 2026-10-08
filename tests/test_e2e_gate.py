@@ -195,7 +195,7 @@ def scene(sv, routes, fake_host, repo_dir):
     slot_key = f"aidlc-studio-{repo_id}-{INTENT}"
     fake_host.add_slot(slot_key, project=str(repo_dir), agent="aidlc", app="")
     sv.host.attach(fake_host)
-    bind = f"/repos/{repo_id}/intents/{INTENT}/session/bind"
+    bind = f"/repos/{repo_id}/intents/{INTENT}/session"
     status, bound = call(
         sv, routes, "POST", bind,
         CT.owner_request("POST", bind, host=fake_host, body={"slot_key": slot_key}),
@@ -443,12 +443,14 @@ def test_the_execution_lease_is_held_while_the_decision_is_in_flight(sv, routes,
     card = _gate_card(sv, routes, fake_host)
     _status, receipt = _submit(sv, routes, fake_host, card)
 
-    status, body = _get(sv, routes, fake_host, "/leases")
+    status, body = _get(sv, routes, fake_host, f"/repos/{scene.repo_id}")
     assert status == 200
-    execution = [row for row in body["leases"] if row["kind"] == "execution"]
-    assert [row["repo_id"] for row in execution] == [scene.repo_id]
-    assert execution[0]["action_id"] == card["action_id"]
-    assert execution[0]["generation"] == receipt["lease_generation"]
+    execution = body["repo"]["leases"]["execution"]
+    assert execution["action_id"] == card["action_id"]
+    assert execution["generation"] == receipt["lease_generation"]
+    assert body["repo"]["leases"]["admin"] is None
+    counts = _get(sv, routes, fake_host, "/health")[1]["counts"]
+    assert (counts["execution_leases"], counts["admin_leases"]) == (1, 0)
 
 
 def test_the_queue_shows_the_decision_as_in_flight_rather_than_waiting(sv, routes, fake_host, scene):

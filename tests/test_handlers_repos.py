@@ -3,7 +3,7 @@
 The shapes matter, but three behaviours matter more and each has a test that would fail loudly if it
 regressed:
 
-* **A 202 is not an install.** ``POST …/install`` answers with a transaction id and the row it points at
+* **A 202 is not an install.** ``POST …/transactions`` answers with a transaction id and the row it points at
   already exists; the writing happens afterwards. A test that accepted a 200 would be endorsing a
   request that blocks a user's browser for the length of a whole-payload transaction.
 * **Nothing is written without the digest the user was shown.** A stale ``plan_digest`` is
@@ -279,9 +279,7 @@ def test_doctor_runs_the_engine_verb_under_an_admin_lease_and_releases_it(sv, ro
 
 def test_install_preview_offers_a_plan_and_its_digest_for_a_bare_directory(sv, routes, fake_host, bare):
     repo = sv.repos.add(str(bare), "bare")
-    path = f"/repos/{repo.repo_id}/install/preview"
-    status, body = call(sv, routes, "POST", path, CT.owner_request("POST", path, host=fake_host,
-                                                                  body={}))
+    status, body = _preview(sv, routes, fake_host, repo, "install")
     assert status == 200
     assert body["plan"]["kind"] == "install"
     assert body["plan"]["engine_to"] == MANIFEST["engineVersion"]
@@ -293,26 +291,20 @@ def test_install_preview_offers_a_plan_and_its_digest_for_a_bare_directory(sv, r
 def test_install_preview_refuses_a_repository_that_already_has_the_engine(sv, routes, fake_host,
                                                                          gate_repo):
     repo = sv.repos.add(str(gate_repo), "demo")
-    path = f"/repos/{repo.repo_id}/install/preview"
-    status, body = call(sv, routes, "POST", path, CT.owner_request("POST", path, host=fake_host,
-                                                                  body={}))
+    status, body = _preview(sv, routes, fake_host, repo, "install")
     assert status == 409 and body["code"] == "already_installed"
 
 
 def test_upgrade_preview_refuses_when_the_bundled_engine_is_already_installed(sv, routes, fake_host,
                                                                              gate_repo):
     repo = sv.repos.add(str(gate_repo), "demo")
-    path = f"/repos/{repo.repo_id}/upgrade/preview"
-    status, body = call(sv, routes, "POST", path, CT.owner_request("POST", path, host=fake_host,
-                                                                  body={}))
+    status, body = _preview(sv, routes, fake_host, repo, "upgrade")
     assert status == 409 and body["code"] == "same_version_installed"
 
 
 def test_upgrade_preview_refuses_a_repository_with_nothing_installed(sv, routes, fake_host, bare):
     repo = sv.repos.add(str(bare), "bare")
-    path = f"/repos/{repo.repo_id}/upgrade/preview"
-    status, body = call(sv, routes, "POST", path, CT.owner_request("POST", path, host=fake_host,
-                                                                  body={}))
+    status, body = _preview(sv, routes, fake_host, repo, "upgrade")
     assert status == 409 and body["code"] == "not_installed"
 
 
@@ -326,9 +318,7 @@ def test_install_preview_is_offered_when_only_a_harness_studio_does_not_manage_i
     the payload's version — which left no route at all for adding Studio's ``.kiro`` (FR-INST-003).
     """
     repo = sv.repos.add(str(foreign()), "foreign")
-    path = f"/repos/{repo.repo_id}/install/preview"
-    status, body = call(sv, routes, "POST", path, CT.owner_request("POST", path, host=fake_host,
-                                                                  body={}))
+    status, body = _preview(sv, routes, fake_host, repo, "install")
     assert status == 200
     assert body["plan"]["engine_from"] is None
     assert body["plan"]["kind"] == "install"
@@ -340,9 +330,7 @@ def test_upgrade_preview_refuses_a_repository_where_only_a_foreign_harness_is_in
 ):
     """There is nothing to upgrade: no receipt, no ``.kiro`` tree, and none of those files are Studio's."""
     repo = sv.repos.add(str(foreign()), "foreign")
-    path = f"/repos/{repo.repo_id}/upgrade/preview"
-    status, body = call(sv, routes, "POST", path, CT.owner_request("POST", path, host=fake_host,
-                                                                  body={}))
+    status, body = _preview(sv, routes, fake_host, repo, "upgrade")
     assert status == 409 and body["code"] == "not_installed"
 
 
@@ -381,9 +369,7 @@ def test_install_answers_202_with_a_transaction_that_already_exists(sv, routes, 
     # answers 202 with a pollable id and hands the work to a background task.
     monkeypatch.setattr(sv.installer, "run", record_run)
 
-    path = f"/repos/{repo.repo_id}/install"
-    request = CT.owner_request("POST", path, host=fake_host, body={"plan_digest": plan.digest()})
-    status, body = call(sv, routes, "POST", path, request)
+    status, body = _begin(sv, routes, fake_host, repo, {"kind": "install", "plan_digest": plan.digest()})
     assert status == 202
     assert body["ok"] is True
     assert body["transaction_id"].startswith("tx_")
@@ -398,40 +384,39 @@ def test_install_answers_202_with_a_transaction_that_already_exists(sv, routes, 
 
 def test_install_refuses_a_digest_the_repository_has_moved_past(sv, routes, fake_host, bare):
     repo = sv.repos.add(str(bare), "bare")
-    path = f"/repos/{repo.repo_id}/install"
-    request = CT.owner_request("POST", path, host=fake_host, body={"plan_digest": "0" * 64})
-    status, body = call(sv, routes, "POST", path, request)
+    status, body = _begin(sv, routes, fake_host, repo, {"kind": "install", "plan_digest": "0" * 64})
     assert status == 409 and body["code"] == "install_conflict"
     assert body["details"]["reason"] == "preview_changed"
 
 
-def test_install_needs_a_plan_digest(sv, routes, fake_host, bare):
+def test_a_transaction_needs_its_kind_and_a_plan_digest(sv, routes, fake_host, bare):
     repo = sv.repos.add(str(bare), "bare")
-    path = f"/repos/{repo.repo_id}/install"
-    status, body = call(sv, routes, "POST", path,
-                        CT.owner_request("POST", path, host=fake_host, body={}))
+    status, body = _begin(sv, routes, fake_host, repo, {"kind": "install"})
     assert status == 400 and body["code"] == "bad_body"
     assert body["details"]["missing"] == ["plan_digest"]
+
+    status, body = _begin(sv, routes, fake_host, repo, {})
+    assert status == 400 and body["details"]["missing"] == ["kind", "plan_digest"]
+
+    status, body = _preview(sv, routes, fake_host, repo, "reinstall")
+    assert status == 400 and body["code"] == "bad_body"
+    assert body["details"] == {"key": "kind", "choices": ["install", "upgrade", "recovery", "uninstall", "rollback"]}
 
 
 def test_every_install_path_refuses_while_the_payload_is_degraded(sv, routes, fake_host, bare):
     repo = sv.repos.add(str(bare), "bare")
     sv.payload_error = "payload_degraded"
-    for suffix in ("install/preview", "install", "upgrade/preview", "upgrade",
-                   "install/recovery/preview", "install/recovery"):
-        path = f"/repos/{repo.repo_id}/{suffix}"
-        request = CT.owner_request("POST", path, host=fake_host, body={"plan_digest": "0" * 64})
-        status, body = call(sv, routes, "POST", path, request)
-        assert status == 409 and body["code"] == "payload_degraded", suffix
+    for kind in ("install", "upgrade", "recovery"):
+        for status, body in (_preview(sv, routes, fake_host, repo, kind),
+                             _begin(sv, routes, fake_host, repo, {"kind": kind, "plan_digest": "0" * 64})):
+            assert status == 409 and body["code"] == "payload_degraded", kind
 
 
 def test_recovery_preview_is_offered_for_an_installed_repository(sv, routes, fake_host, gate_repo):
     """``install_recovery_required`` is not an error here — recovery is exactly what it needs."""
     repo = sv.repos.add(str(gate_repo), "demo")
     sv.storage.update("repos", repo.repo_id, {"install_status": "recovery_required"})
-    path = f"/repos/{repo.repo_id}/install/recovery/preview"
-    status, body = call(sv, routes, "POST", path, CT.owner_request("POST", path, host=fake_host,
-                                                                  body={}))
+    status, body = _preview(sv, routes, fake_host, repo, "recovery")
     assert status == 200 and body["plan"]["kind"] == "recovery"
 
 
@@ -447,21 +432,17 @@ def test_recovery_preview_is_offered_when_the_failed_install_left_no_readable_en
     """
     repo = sv.repos.add(str(bare), "bare")
     sv.storage.update("repos", repo.repo_id, {"install_status": "recovery_required"})
-    path = f"/repos/{repo.repo_id}/install/recovery/preview"
-    status, body = call(sv, routes, "POST", path, CT.owner_request("POST", path, host=fake_host,
-                                                                  body={}))
+    status, body = _preview(sv, routes, fake_host, repo, "recovery")
     assert status == 200 and body["plan"]["kind"] == "recovery", body
     assert body["plan"]["engine_from"] is None, "nothing readable is installed, and recovery is still offered"
 
     # The waiver is scoped to recovery: upgrade on the same repository still refuses.
-    path = f"/repos/{repo.repo_id}/upgrade/preview"
-    status, body = call(sv, routes, "POST", path, CT.owner_request("POST", path, host=fake_host,
-                                                                  body={}))
+    status, body = _preview(sv, routes, fake_host, repo, "upgrade")
     assert status == 409 and body["code"] == "not_installed"
 
 
 # --------------------------------------------------------------------------- #
-# transactions, receipts, git
+# transactions, git
 # --------------------------------------------------------------------------- #
 
 
@@ -470,13 +451,6 @@ def test_an_unknown_transaction_is_a_404(sv, routes, fake_host, gate_repo):
     path = f"/repos/{repo.repo_id}/transactions/tx_0000000000000009"
     status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))
     assert status == 404 and body["code"] == "transaction_not_found"
-
-
-def test_receipts_is_empty_before_any_install(sv, routes, fake_host, gate_repo):
-    repo = sv.repos.add(str(gate_repo), "demo")
-    path = f"/repos/{repo.repo_id}/receipts"
-    status, body = call(sv, routes, "GET", path, CT.owner_request("GET", path, host=fake_host))
-    assert status == 200 and body == {"receipts": []}
 
 
 def test_repo_git_reports_the_observation_and_the_owned_dirty_split(sv, routes, fake_host, gate_repo):
@@ -545,3 +519,13 @@ def test_repo_git_still_answers_once_a_receipt_exists(sv, routes, fake_host, gat
 
 def _events(sv: Any) -> list[tuple[str, dict]]:
     return [(record.type, record.payload) for record in asyncio.run(sv.events.since(0))]
+
+
+def _preview(sv: Any, routes: Any, fake_host: Any, repo: Any, kind: str) -> tuple[int, Any]:
+    path = f"/repos/{repo.repo_id}/transactions/preview"
+    return call(sv, routes, "POST", path, CT.owner_request("POST", path, host=fake_host, body={"kind": kind}))
+
+
+def _begin(sv: Any, routes: Any, fake_host: Any, repo: Any, body: dict) -> tuple[int, Any]:
+    path = f"/repos/{repo.repo_id}/transactions"
+    return call(sv, routes, "POST", path, CT.owner_request("POST", path, host=fake_host, body=body))

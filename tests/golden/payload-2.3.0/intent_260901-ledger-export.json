@@ -1286,7 +1286,6 @@
    "intent_key": "260901-ledger-export",
    "interrupted": false,
    "is_active_cursor": true,
-   "keep_moving": false,
    "last_activity_at": "2026-09-03T14:23:05Z",
    "markers": {
     "compose_pending": false,
