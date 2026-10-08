@@ -40,11 +40,12 @@ def after(monkeypatch: pytest.MonkeyPatch, owner: Any, name: str, effect: Callab
 
 
 class ThreadRecordingStore:
-    """Delegates to the real ``Storage`` and records the thread every method call arrives on."""
+    """Delegates to the real ``Storage`` and records each method called and the thread it arrived on."""
 
     def __init__(self, inner: Any) -> None:
         self._inner = inner
         self.threads: list[str] = []
+        self.calls: list[str] = []
 
     def __getattr__(self, name: str) -> Any:
         target = getattr(self._inner, name)
@@ -53,6 +54,7 @@ class ThreadRecordingStore:
 
         def recorded(*args: Any, **kwargs: Any) -> Any:
             self.threads.append(threading.current_thread().name)
+            self.calls.append(name)
             return target(*args, **kwargs)
 
         return recorded
