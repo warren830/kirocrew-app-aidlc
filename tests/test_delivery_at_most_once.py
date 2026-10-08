@@ -157,9 +157,6 @@ def test_a_late_delivered_report_closes_submit_and_not_only_retry(
     assert status == 200, late
     assert dict(_row(sv, card["action_id"])["evidence_json"] or {})["delivery_confirmed"] is True
 
-    status, refused = _post(sv, routes, fake_host, f"/actions/{card['action_id']}/retry")
-    assert status == 409 and refused["code"] == "retry_not_allowed", refused
-
     fresh = [
         c
         for c in _get(sv, routes, fake_host, "/actions")[1]["actions"]

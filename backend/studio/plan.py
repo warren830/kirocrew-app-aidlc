@@ -324,7 +324,7 @@ class PlanService:
         activity: "ActivityProjector", events: "EventLog", clock: "C.Clock", ids: Any,
     ) -> None:
         self._reader = reader
-        self._engine = engine
+        self.engine = engine
         self._scheduler = scheduler
         self._registry = registry
         self._projection = projection
@@ -413,7 +413,7 @@ class PlanService:
         wanted_skip = _slug_list(skip)
         wanted_add = _slug_list(add)
         req = self._request_from_state(repo, snap, skip=wanted_skip, add=wanted_add)
-        plan = self.effective_plan(repo, self._engine_dir(repo, snap), req, snap=snap)
+        plan = self.effective_plan(repo, self.engine_dir(repo, snap), req, snap=snap)
         refusals: list[PlanIssue] = []
         for slug in (*wanted_skip, *wanted_add):
             refusals.extend(self._recompose_refusals(plan, slug))
@@ -441,13 +441,13 @@ class PlanService:
     ) -> IntentCreateResult:
         """Create an intent, apply its confirmed overrides, compile its runtime, and verify all on disk. Never
         sends a prompt: the new intent is ``Idle`` until a human presses Run (FR-RUN-001)."""
-        self._require_ready(repo)
+        self.require_ready(repo)
         blocking = [f for f in blocking_findings if getattr(f, "severity", "") == "blocking"]
         if blocking:
             raise StudioError("state_inconsistent",
                               "the repository has blocking findings; resolve them before creating an intent",
                               details={"findings": [f.to_json() for f in blocking]})
-        engine_dir = self._engine_dir(repo, None)
+        engine_dir = self.engine_dir(repo, None)
         space = req.space or C.DEFAULT_SPACE
         root = Path(repo.canonical_path)
         active_space = await asyncio.to_thread(self._reader.active_space, root)
@@ -473,12 +473,12 @@ class PlanService:
         try:
             # Listed under the lease, so nothing but this verb can add the one new record.
             before = set(await asyncio.to_thread(self._reader.list_intent_dirs, root, space))
-            result = await self._engine.run(
+            result = await self.engine.run(
                 "utility.intent_create", root, engine_dir, scope=req.scope, arguments=arguments, label=label,
                 depth=req.depth or "", test_strategy=req.test_strategy or "", review=req.review_cap or "",
                 **lease,
             )
-            self._require_engine_ok(result)
+            self.require_engine_ok(result)
             intent_dir, verified = await asyncio.to_thread(self._verify_created, root, space, before)
             phase = "plan_composition"
             try:
@@ -491,13 +491,13 @@ class PlanService:
 
                     changes = await diff()
                     if changes:
-                        composed = await self._engine.run(
+                        composed = await self.engine.run(
                             "utility.recompose", root, engine_dir,
                             skip=",".join(change.slug for change in changes if not change.to_enabled),
                             add=",".join(change.slug for change in changes if change.to_enabled),
                             dir_name=intent_dir, slug=space, **lease,
                         )
-                        self._require_engine_ok(composed)
+                        self.require_engine_ok(composed)
                         remaining = await diff()
                         if remaining:
                             raise StudioError(
@@ -507,7 +507,7 @@ class PlanService:
                             )
                     verified["plan_overrides"] = dict(req.overrides)
                 phase = "runtime_compile"
-                self._require_engine_ok(await self._engine.run("runtime.compile", root, engine_dir, **lease))
+                self.require_engine_ok(await self.engine.run("runtime.compile", root, engine_dir, **lease))
                 runtime_path = f"{self._reader.record_rel(space, intent_dir)}/runtime-graph.json"
                 runtime_snap = await asyncio.to_thread(self._reader.read_artifact, root, runtime_path)
                 try:
@@ -554,8 +554,8 @@ class PlanService:
         proposal_digest: str,
     ) -> RecomposeResult:
         """Apply a previewed recompose, rebuilt from a FRESH ``snap`` and bound to the confirmed digest."""
-        self._require_ready(repo)
-        engine_dir = self._engine_dir(repo, snap)
+        self.require_ready(repo)
+        engine_dir = self.engine_dir(repo, snap)
         proposal = await asyncio.to_thread(self.recompose_preview, repo, snap, skip=list(skip), add=list(add))
         if proposal.digest() != proposal_digest:
             raise StudioError("plan_invalid", "the plan changed since this proposal was previewed",
@@ -571,12 +571,12 @@ class PlanService:
         try:
             # The record is named explicitly (both flags): an omitted selector lets the engine resolve the
             # calling session's binding, which is how a confirmed change lands on a record nobody was shown.
-            result = await self._engine.run(
+            result = await self.engine.run(
                 "utility.recompose", root, engine_dir, skip=",".join(proposal.skip), add=",".join(proposal.add),
                 dir_name=snap.intent_dir, slug=snap.space, lease_generation=grant.generation,
                 repo_id=repo.repo_id,
             )
-            self._require_engine_ok(result)
+            self.require_engine_ok(result)
             verified = await asyncio.to_thread(
                 self._verify_recomposed, root, snap.space, snap.intent_dir, proposal
             )
@@ -594,7 +594,7 @@ class PlanService:
     ) -> dict[str, Any]:
         """Preview ``scope-change``/``config-change``, including the engine's row rebuild: 2.7.1 cannot keep
         gate/revision marks across a scope change, so those are refused before the engine touches the record."""
-        self._require_ready(repo)
+        self.require_ready(repo)
         unknown = set(changes) - {"scope", "depth", "test_strategy"}
         if unknown:
             raise StudioError("bad_body", "unknown settings", details={"keys": sorted(unknown)})
@@ -652,8 +652,8 @@ class PlanService:
         kwargs = {**after, "dir_name": snap.intent_dir, "slug": snap.space}
         if not changing_scope:
             kwargs.pop("scope")
-        argv = self._engine.build_argv(
-            self._engine.verb_for(verb), Path(repo.canonical_path), self._engine_dir(repo, snap), **kwargs
+        argv = self.engine.build_argv(
+            self.engine.verb_for(verb), Path(repo.canonical_path), self.engine_dir(repo, snap), **kwargs
         )
         proposal = {
             "repo_id": repo.repo_id, "intent_key": snap.intent_key,
@@ -665,7 +665,7 @@ class PlanService:
         }
         digest = _sha256_json({
             "proposal": proposal, "state_sha256": snap.state_sha256,
-            "identity": repo.resolved_identity, "engine_dir": self._engine_dir(repo, snap),
+            "identity": repo.resolved_identity, "engine_dir": self.engine_dir(repo, snap),
             "graph": [node.to_json() for node in snap.graph], "grid": snap.grid,
         })
         return {"proposal": proposal, "proposal_digest": digest}
@@ -674,7 +674,7 @@ class PlanService:
         self, repo: "RepoRecord", snap: "IntentSnapshot", changes: Mapping[str, Any], *, proposal_digest: str,
     ) -> dict[str, Any]:
         """Re-read and compare under the lease, then verify settings and every existing mark on disk."""
-        self._require_ready(repo)
+        self.require_ready(repo)
         grant = await self._scheduler.acquire_admin(
             repo, operation_type=OP_SCOPE_CHANGE if "scope" in changes else OP_CONFIG_CHANGE,
             transaction_id=None,
@@ -696,11 +696,11 @@ class PlanService:
             # event cannot land in another intent's audit.
             await self._require_current(repo)
             cursor = await asyncio.to_thread(
-                self._engine.switch_cursor_sync, Path(repo.canonical_path), self._engine_dir(repo, fresh),
+                self.engine.switch_cursor_sync, Path(repo.canonical_path), self.engine_dir(repo, fresh),
                 fresh.space, fresh.intent_dir, C.attr(fresh.row, "uuid"),
                 lease_generation=grant.generation, repo_id=repo.repo_id,
             )
-            await self._engine.drain_activity()
+            await self.engine.drain_activity()
             await self._events.publish("repo.updated", {"repo_id": repo.repo_id})
             if not cursor.ok or any(not item.ok for item in cursor.results):
                 raise StudioError("state_inconsistent", "the selected intent could not be activated",
@@ -712,12 +712,12 @@ class PlanService:
             if proposal["verb_key"] == "utility.config_change":
                 kwargs.pop("scope")
             await self._require_current(repo)
-            result = await self._engine.run(
-                proposal["verb_key"], Path(repo.canonical_path), self._engine_dir(repo, fresh),
+            result = await self.engine.run(
+                proposal["verb_key"], Path(repo.canonical_path), self.engine_dir(repo, fresh),
                 dir_name=fresh.intent_dir, slug=fresh.space, lease_generation=grant.generation,
                 repo_id=repo.repo_id, **kwargs,
             )
-            self._require_engine_ok(result)
+            self.require_engine_ok(result)
             observed = await asyncio.to_thread(
                 self._reader.read_state, Path(repo.canonical_path), fresh.space, fresh.intent_dir
             )
@@ -980,7 +980,7 @@ class PlanService:
     # ---- engine plumbing ---------------------------------------------------
 
     @staticmethod
-    def _require_engine_ok(result: "EngineResult") -> None:
+    def require_engine_ok(result: "EngineResult") -> None:
         """A refused or timed-out verb is never treated as applied."""
         if result.ok:
             return
@@ -992,7 +992,7 @@ class PlanService:
                                    "stderr": result.stderr[-2000:]})
 
     @staticmethod
-    def _require_ready(repo: "RepoRecord") -> None:
+    def require_ready(repo: "RepoRecord") -> None:
         """Refuse before taking a lease when the repository cannot host an engine verb at all."""
         if repo.availability == "identity_unprovable":
             raise StudioError("identity_unprovable", "this repository's identity cannot be proved",
@@ -1012,7 +1012,7 @@ class PlanService:
         self._scheduler.require_host_idle(repo)
 
     @staticmethod
-    def _engine_dir(repo: "RepoRecord", snap: "IntentSnapshot | None") -> str:
+    def engine_dir(repo: "RepoRecord", snap: "IntentSnapshot | None") -> str:
         if snap is not None and snap.engine is not None and snap.engine.dir:
             return snap.engine.dir
         return repo.engine_dir or C.STUDIO_HARNESS_DIR

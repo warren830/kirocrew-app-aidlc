@@ -75,8 +75,6 @@ export interface EvidenceRef { kind: 'file' | 'audit' | 'studio' | 'host' | 'git
 export interface ReviewFinding { level: 'blocker' | 'advisory' | 'resolved' | 'unknown'; title: string; quote: string | null; anchor: string | null; reviewer: string | null; iteration: number | null }
 export interface ArtifactMeta { artifact_id: string; relpath: string; name: string; stage: string | null; phase: string | null; unit: string | null; size: number; mtime: string; sha256: string | null; kind: 'artifact' | 'questions' | 'memory' | 'review' | 'traceability' | 'contribution' | 'other'; renderable: boolean }
 export interface GitObservation { available: boolean; reason: string | null; branch: string | null; detached: boolean; head: string | null; head_subject: string | null; dirty: boolean; dirty_files: number; ahead: number | null; behind: number | null; upstream: string | null; observed_at: string; took_ms: number }
-/** DRIFT: §3.1 has no `GitCommit`, but `GET …/{intent}/git` returns a list of them. */
-export interface GitCommit { sha: string; at: string; subject: string }
 export interface LeaseView { kind: LeaseKind; repo_id: string; resolved_repo_identity: string; generation: number; acquired_at: string; heartbeat_at: string; intent_uuid: string | null; intent_key: string | null; session_key: string | null; action_id: string | null; operation_type: string | null; transaction_id: string | null; observed_busy_state: string | null; orphaned: boolean }
 export interface StableBoundary { stable: boolean; reasons: string[]; stage: string | null; marker: string | null; boundary_token: string | null; recorded_at: string }
 /** `waiting_approval`: the conversation is parked on a host tool approval; `approval` says what it asks. */
@@ -145,21 +143,12 @@ export interface PreviewPlan {
 export type TransactionStatus = 'staged' | 'leased' | 'backed_up' | 'written' | 'merged' | 'validated' | 'committed' | 'rolling_back' | 'rolled_back' | 'recovery_required' | 'failed'
 export interface StepRecord { name: string; started_at: string; finished_at: string | null; ok: boolean | null; detail: Record<string, unknown> }
 export interface TransactionResult { transaction_id: string; repo_id: string; kind: TransactionKind; status: TransactionStatus; steps: StepRecord[]; receipt_id: string | null; prior_receipt_id: string | null; error: string | null; failed_dir: string | null; repo_install_status: InstallStatus; started_at: string; finished_at: string | null; engine_version: string }
-export interface ReceiptFile { path: string; ownership: Ownership; kind: 'file' | 'fragment'; sha256: string | null; canonical_digest: string | null; fragment_key: string | null; adopted: boolean }
-/**
- * DRIFT: §3.1 has `Receipt extends ReceiptSummary` with `files: number` plus an optional
- * `files_list`. `installer.Receipt.to_json()` has no file *count*, puts the file *list* in `files`
- * (or `null` when `include_files=False`), and adds `resolved_repo_identity`. `GET
- * /repos/{id}/receipts` sends the list only for the current receipt, so `files === null` on a
- * superseded one means "not sent", never "no files".
- */
-export interface Receipt { receipt_id: string; repo_id: string; resolved_repo_identity: string | null; studio_version: string; engine_version: string; payload_digest: string; committed_at: string; prior_receipt_id: string | null; transaction_id: string; status: 'current' | 'superseded' | 'rolled_back' | 'uninstalled'; files: ReceiptFile[] | null }
 export interface RepoScan { repo_id: string; availability: Availability; install: InstallHealth; intents: IntentSummary[]; findings: Finding[]; took_ms: number; truncated: boolean; scanned_at: string }
 
 // ---- intents ----
 export interface DiskState { status: string | null; lifecycle_phase: string | null; current_stage: string | null; next_stage: string | null; state_version: number | null; total_stages: number | null; completed: number | null; revision_count: number; parked_at: string | null; last_updated: string | null }
 export interface StageCounts { total: number; not_started: number; in_progress: number; awaiting_approval: number; revising: number; completed: number; skipped: number; done: number; unknown: number }
-export interface IntentSummary { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; uuid: string | null; slug: string; scope: string | null; registry_status: string | null; title: string | null; operational_state: IntentState; disk: DiskState; counts: StageCounts; open_actions: number; blocking_findings: number; warn_findings: number; session: SessionRef | null; archived: boolean; paused: boolean; keep_moving: false; interrupted: boolean; last_activity_at: string | null; stable_boundary: StableBoundary | null; unstable: boolean; is_active_cursor: boolean }
+export interface IntentSummary { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; uuid: string | null; slug: string; scope: string | null; registry_status: string | null; title: string | null; operational_state: IntentState; disk: DiskState; counts: StageCounts; open_actions: number; blocking_findings: number; warn_findings: number; session: SessionRef | null; archived: boolean; paused: boolean; interrupted: boolean; last_activity_at: string | null; stable_boundary: StableBoundary | null; unstable: boolean; is_active_cursor: boolean }
 export interface StageRow { slug: string; mark: string; state: StageState; phase: string | null; suffix: string | null }
 export interface AuditEventView { shard: string; pos: number; timestamp: string; event: string; fields: Record<string, string>; raw: string }
 /**
@@ -264,7 +253,6 @@ export interface SubmitReceipt { ok: true; action_id: string; status: 'Deliverin
 export interface HostChatReceipt { ok: boolean; slot?: string; mid?: string; queued?: boolean; steered?: boolean; info?: string; error?: string; code?: string }
 export interface DeliveryReport { delivery_id: string; outcome: 'delivered' | 'not_delivered' | 'uncertain'; http_status: number | null; receipt: HostChatReceipt | null }
 export interface DeliveryResponse { ok: true; action: ActionCard; idempotent: boolean }
-export interface ActionResponse { ok: true; action: ActionCard }
 export interface ResolveResponse { ok: true; action: ActionCard; created_action_id: string | null }
 
 // ---- plan / estimates ----
@@ -312,28 +300,24 @@ export interface Capability { available: boolean; reason: string | null }
 export interface BunToolResponse { tool: { found: boolean; path: string | null; configured_path?: string | null; version: string | null; source: string | null; searched: string[] } }
 export type CapabilityName = 'slack' | 'advisor' | 'slack_quick_actions' | 'grouped_answers'
 export interface SettingsResponse { settings: SettingsValues; capabilities: Record<CapabilityName, Capability>; versions: { studio: string; bundled_engine: string; min_kirocrew: string; host: string | null }; updated_at: string | null }
-export interface HealthResponse { app: string; version: string; bundled_engine_version: string; min_kirocrew_version: string; boot_id: string; host_version: string | null; started_at: string | null; status: 'healthy' | 'degraded' | 'error'; issues: string[]; storage: { path_hash: string; schema_version: number; integrity: 'ok' | 'error'; wal: boolean }; payload: { ok: boolean; engine_version: string; file_count: number; mismatches: number }; host: { attached: boolean; capabilities: Record<string, Capability> }; tools: { bun: { found: boolean; path: string | null; version: string | null; source: string | null; searched: string[] }; git: { found: boolean; path: string | null; version: string | null } }; reconciler: { running: boolean; last_tick_at: string | null; last_tick_ms: number | null; repos_scanned: number }; counts: { repos: number; intents: number; live_actions: number; execution_leases: number; admin_leases: number } }
+export interface HealthResponse { app: string; version: string; bundled_engine_version: string; min_kirocrew_version: string; boot_id: string; host_version: string | null; started_at: string | null; status: 'healthy' | 'degraded' | 'error'; issues: string[]; storage: { path_hash: string; schema_version: number; integrity: 'ok' | 'error'; wal: boolean }; payload: { ok: boolean; engine_version: string; file_count: number; mismatches: number }; host: { attached: boolean; capabilities: Record<string, Capability> }; tools: { bun: { found: boolean; path: string | null; version: string | null; source: string | null; searched: string[] }; git: { found: boolean; path: string | null; version: string | null } }; reconciler: { running: boolean; last_tick_at: string | null; last_tick_ms: number | null; repos_scanned: number }; counts: HealthCounts }
+/** Absent (`null`) when the store could not be read, never a guessed zero. The status strip shows the lease counts. */
+export interface HealthCounts { repos: number | null; intents: number | null; live_actions: number | null; execution_leases: number | null; admin_leases: number | null }
 
-// ---- payload / diagnostics (§2.1; §3.1 defines none of these) ----
-export interface PayloadFile { path: string; sha256: string; size: number; ownership: Ownership }
-export interface PayloadStatus { ok: boolean; engine_version: string; file_count: number; mismatches: string[]; missing: string[]; extra: string[]; checked_at: string }
-export interface PayloadResponse { schema: string; harness: string; engine_version: string; source: Record<string, unknown>; compatible_state_versions: number[]; stage_count: number; payload_digest: string; file_count: number; ownership_counts: Record<Ownership, number>; merge_targets: Record<string, Record<string, unknown>>; status: PayloadStatus; files?: PayloadFile[] }
+// ---- diagnostics (§2.1; §3.1 defines none of these) ----
 export interface BreakerView { key: string; count: number; opened_at: string | null; fingerprint_class: string | null }
 export interface DiagnosticsBundle { generated_at: string; health: HealthResponse; settings: SettingsValues; repos: RepoRecord[]; live_actions: ActionCard[]; leases: LeaseView[]; recent_transactions: TransactionResult[]; recent_activity: TimelineEntry[]; breakers: BreakerView[]; redacted: true }
 
 // ---- response envelopes (§2, one per route; the handlers wrap every object) ----
 export interface ReposResponse { repos: RepoRecord[]; totals: { repos: number; unavailable: number; open_actions: number } }
 export interface RepoDetailResponse { repo: RepoRecord; intents: IntentSummary[]; transactions: TransactionResult[] }
-export interface LeasesResponse { leases: LeaseView[]; global_concurrency_cap: number; live_execution: number }
 export interface IntentsResponse { intents: IntentSummary[]; spaces: string[]; active_space: string }
 export interface ArtifactsResponse { artifacts: ArtifactMeta[]; truncated: boolean; count: number }
 export interface ArtifactResponse { artifact: ArtifactMeta; content: string | null; encoding: 'utf-8' | 'binary'; truncated: boolean; review: { verdict: string | null; findings: ReviewFinding[] } | null; toc: { level: number; text: string; anchor: string }[]; prior: { available: boolean; source: 'git' | null; diff: string | null } }
-export interface QuestionsResponse { questions: QuestionsView | null; mode: 'degraded' | 'structured'; host_cards: HostQuestionCard[]; slot_key: string | null }
 export interface ReviewResponse { stage: string | null; verdict: string | null; findings: ReviewFinding[]; receipts: { event: string; ts: string; reviewer: string | null; iteration: number | null; verdict: string | null; fingerprint: string | null }[]; review_class: string | null; reviewer: string | null; revisions: number }
-export interface IntentGitResponse { git: GitObservation; commits: GitCommit[]; changed_artifacts: { relpath: string; status: string }[] }
 export interface RepoGitResponse { git: GitObservation; owned_dirty: string[]; unrelated_dirty: number }
 export interface BindingResponse { ok: true; binding: BindingView }
-/** DRIFT: §2.3 types `slot` as `SlotView`; `bind_session` sends `null` when the host has no such slot. */
+/** `slot` is `null` once unbound, and when the host has no such slot. */
 export interface BindResponse { ok: true; binding: BindingView; slot: SlotView | null }
 export interface PauseResponse { ok: true; binding: BindingView; blocked_actions: string[] }
 export interface TakeoverPreviewResponse { candidates: { slot: SlotView; reason: string }[]; current: BindingView }
@@ -352,10 +336,8 @@ export interface AddRepoResponse { ok: true; repo: RepoRecord; preflight: Prefli
 export interface RepoResponse { ok: true; repo: RepoRecord }
 export interface RemoveRepoResponse { ok: true; removed: string }
 export interface RescanResponse { ok: true; scan: RepoScan }
-export interface ReceiptsResponse { receipts: Receipt[] }
 export interface TransactionResponse { transaction: TransactionResult }
 export interface PlanPreviewResponse { plan: EffectivePlan }
-export interface SlackCallbackResponse { ok: true; recorded: true }
 export interface MapResponse { map_inputs: MapInputs }
 export interface IntentResponse { intent: IntentDetail }
 export interface DirectoryResponse {

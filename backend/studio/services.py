@@ -476,13 +476,10 @@ class Services:
             "integrity": "error",
             "wal": False,
         }
-        counts = {
-            "repos": 0,
-            "intents": 0,
-            "live_actions": 0,
-            "execution_leases": 0,
-            "admin_leases": 0,
-        }
+        # Absent, not zero, when the store cannot be read: the status strip shows these lease counts, and
+        # "0 turns running" would be a claim with no evidence behind it.
+        counts: dict[str, int | None] = dict.fromkeys(
+            ("repos", "intents", "live_actions", "execution_leases", "admin_leases"))
         try:
             pragmas = self.storage.pragmas()
             problems = self.storage.integrity_check()

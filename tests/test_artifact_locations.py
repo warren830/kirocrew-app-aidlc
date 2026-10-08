@@ -213,7 +213,7 @@ def test_complete_brownfield_can_submit_gate_through_api(sv, routes, fake_host, 
     slot = f"aidlc-studio-{repo_id}-{INTENT}"
     fake_host.add_slot(slot, project=str(root), agent="aidlc", app="")
     sv.host.attach(fake_host)
-    status, body = request("POST", f"/repos/{repo_id}/intents/{INTENT}/session/bind", {"slot_key": slot})
+    status, body = request("POST", f"/repos/{repo_id}/intents/{INTENT}/session", {"slot_key": slot})
     assert status == 200, body
     status, body = request("POST", f"/repos/{repo_id}/rescan", {})
     assert status == 200, body

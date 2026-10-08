@@ -199,12 +199,6 @@ def test_every_mutation_carries_the_owner_only_marker_and_no_read_does(routes):
         assert owner_only is (entry.method in MUTATING), f"{entry.method} {entry.path}"
 
 
-def test_the_slack_callback_is_owner_only_like_every_other_mutation(routes):
-    entry = next(e for e in routes if e.path == "/slack/actions/callback")
-    assert entry.method == "POST"
-    assert getattr(entry.handler, "__kirocrew_owner_only__") is True
-
-
 # --------------------------------------------------------------------------- #
 # the gate
 # --------------------------------------------------------------------------- #
@@ -217,9 +211,9 @@ def test_anonymous_is_401_on_a_read(sv, routes, fake_host):
 
 def test_an_internal_secret_header_alone_is_still_401(sv, routes, fake_host):
     """There is no internal-secret auth mode (review R09): the header authorises nothing here."""
-    request = CT.internal_request("POST", "/slack/actions/callback", host=fake_host,
-                                  body={"action_id": "a_1"})
-    status, body = call(sv, routes, "POST", "/slack/actions/callback", request)
+    request = CT.internal_request("POST", "/actions/a_1/submit", host=fake_host,
+                                  body={"payload": {"decision": "approve"}})
+    status, body = call(sv, routes, "POST", "/actions/a_1/submit", request)
     assert status == 401 and body["code"] == "unauthorized"
 
 
@@ -228,16 +222,15 @@ def test_an_internal_secret_header_alone_is_still_401(sv, routes, fake_host):
     ("POST", "/actions/a_0000000000000001/submit"),
     ("POST", "/actions/a_0000000000000001/delivery"),
     ("POST", "/advisor/draft"),
-    ("POST", "/slack/actions/callback"),
     ("POST", "/repos"),
     ("POST", "/repos/preflight"),
     ("DELETE", "/repos/r_000000000001"),
     ("POST", "/repos/r_000000000001/rescan"),
-    ("POST", "/repos/r_000000000001/install"),
+    ("POST", "/repos/r_000000000001/transactions"),
     ("POST", "/repos/r_000000000001/intents"),
     ("POST", "/repos/r_000000000001/intents/plan/advise"),
     ("POST", "/repos/r_000000000001/intents/demo/run"),
-    ("POST", "/repos/r_000000000001/intents/demo/session/bind"),
+    ("POST", "/repos/r_000000000001/intents/demo/session"),
 ])
 def test_a_non_owner_gets_403_owner_required_on_every_mutation(sv, routes, fake_host, method, path):
     request = CT.user_request(method, path, host=fake_host, body={})
@@ -247,13 +240,12 @@ def test_a_non_owner_gets_403_owner_required_on_every_mutation(sv, routes, fake_
 
 @pytest.mark.parametrize("method,path", [
     ("PUT", "/settings"),
-    ("POST", "/actions/a_0000000000000001/retry"),
+    ("POST", "/actions/a_0000000000000001/resolve"),
     ("POST", "/advisor/draft"),
-    ("POST", "/slack/actions/callback"),
     ("POST", "/repos"),
     ("DELETE", "/repos/r_000000000001"),
     ("POST", "/repos/r_000000000001/doctor"),
-    ("POST", "/repos/r_000000000001/upgrade"),
+    ("POST", "/repos/r_000000000001/transactions/preview"),
     ("POST", "/repos/r_000000000001/intents/plan/advise"),
     ("POST", "/repos/r_000000000001/intents/demo/force-stop"),
     ("POST", "/repos/r_000000000001/intents/demo/archive"),
@@ -288,14 +280,12 @@ def test_reads_accept_an_app_token(sv, routes, fake_host):
 
 
 def test_the_owner_is_let_through(sv, routes, fake_host):
-    status, body = call(
-        sv, routes, "GET", "/leases", CT.owner_request("GET", "/leases", host=fake_host)
-    )
-    assert status == 200 and body["leases"] == []
+    status, body = call(sv, routes, "GET", "/repos", CT.owner_request("GET", "/repos", host=fake_host))
+    assert status == 200 and body["repos"] == []
 
 
 def test_a_user_who_is_not_the_configured_owner_can_still_read(sv, routes, fake_host):
-    status, _ = call(sv, routes, "GET", "/leases", CT.user_request("GET", "/leases", host=fake_host))
+    status, _ = call(sv, routes, "GET", "/repos", CT.user_request("GET", "/repos", host=fake_host))
     assert status == 200
 
 

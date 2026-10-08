@@ -9,7 +9,7 @@ import pytest
 
 import conftest as CT
 import fixtures as F
-from test_handlers_auth import call, sv  # noqa: F401
+from test_handlers_auth import call, common, sv  # noqa: F401
 
 INTENT = "260910-workspace-proof"
 BUN = Path("/Users/ychchen/.bun/bin/bun")
@@ -32,13 +32,14 @@ def repo(sv, studio, repo_builder):
     root = (repo_builder.with_engine("payload").with_workspace()
             .with_intent(INTENT, state=state, scope="feature").with_git().build())
     sv.engine = studio.engine.EngineRunner(bun_path=str(BUN), clock=sv.clock, activity=sv.activity)
-    sv.plan._engine = sv.engine
+    sv.plan.engine = sv.engine
     return sv.repos.add(str(root), "workspace proof")
 
 
 @pytest.fixture
-def routes(workspace, sv):
-    return workspace.ROUTES(sv)
+def routes(common, sv):
+    """The workspace routes of the one table, so the owner sweep below covers exactly them."""
+    return [r for r in common.all_routes(sv) if r.handler.__module__.endswith(".handlers.workspace")]
 
 
 def request(sv, routes, fake_host, repo, method, suffix, body=None):
@@ -357,7 +358,7 @@ def test_inactive_intent_is_activated_so_state_and_audit_target_the_same_record(
     assert (root / "aidlc/active-space").read_text().strip() == "team-two"
 
 
-def test_cancelled_request_keeps_lease_until_engine_finishes(sv, workspace, fake_host, repo, monkeypatch, studio):
+def test_cancelled_request_keeps_lease_until_engine_finishes(sv, routes, fake_host, repo, monkeypatch, studio):
     async def scenario():
         started, finish = asyncio.Event(), asyncio.Event()
         engine_run = sv.engine.run
@@ -371,7 +372,7 @@ def test_cancelled_request_keeps_lease_until_engine_finishes(sv, workspace, fake
         path = f"/repos/{repo.repo_id}/spaces"
         req = CT.owner_request("POST", path, host=fake_host, body={"name": "finishing"})
         req.match_info["repo_id"] = repo.repo_id
-        entry = next(r for r in workspace.ROUTES(sv) if r.method == "POST" and r.path.endswith("/spaces"))
+        entry = next(r for r in routes if r.method == "POST" and r.path.endswith("/spaces"))
         task = asyncio.create_task(entry.handler(req, sv.ctx))
         await asyncio.wait_for(started.wait(), 3)
         task.cancel()

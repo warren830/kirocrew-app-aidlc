@@ -131,8 +131,8 @@ def test_same_version_refresh_is_offered_and_commits_through_api(refresh_env):
     assert env.old_receipt.payload_digest != installer.manifest.payload_digest
     assert _install_json(env)["upgrade_available"] is True
 
-    prefix = f"/repos/{env.repo.repo_id}/upgrade"
-    status, preview = env.request("POST", prefix + "/preview")
+    prefix = f"/repos/{env.repo.repo_id}/transactions"
+    status, preview = env.request("POST", prefix + "/preview", {"kind": "upgrade"})
     assert status == 200, preview
     assert preview["plan"]["same_version"] is False
     assert preview["plan"]["blocking"] is False
@@ -140,9 +140,9 @@ def test_same_version_refresh_is_offered_and_commits_through_api(refresh_env):
     assert preview["plan"]["requires_admin_lease"] is True
 
     async def apply_and_wait():
-        entry = next(r for r in env.routes if r.method == "POST" and r.path == "/repos/{repo_id}/upgrade")
+        entry = next(r for r in env.routes if r.method == "POST" and r.path == "/repos/{repo_id}/transactions")
         request = CT.owner_request("POST", prefix, host=env.host, body={
-            "plan_digest": preview["plan_digest"],
+            "kind": "upgrade", "plan_digest": preview["plan_digest"],
         })
         request.match_info["repo_id"] = env.repo.repo_id
         request.app["ctx"] = env.services.ctx
@@ -170,7 +170,7 @@ def test_same_version_refresh_is_offered_and_commits_through_api(refresh_env):
     assert env.services.storage.get("repos", env.repo.repo_id)["receipt_version"] == current.receipt_id
     assert env.services.scheduler.live() == []
     assert _install_json(env)["upgrade_available"] is False
-    assert env.request("POST", prefix + "/preview")[1]["code"] == "same_version_installed"
+    assert env.request("POST", prefix + "/preview", {"kind": "upgrade"})[1]["code"] == "same_version_installed"
 
 
 @pytest.mark.parametrize("entrypoint", ["begin", "run"])
@@ -180,7 +180,7 @@ def test_unchanged_bundle_is_a_refused_noop_at_every_entrypoint(refresh_env, stu
     plan = installer.preview(env.repo, "upgrade")
     assert plan.same_version is True
     assert _install_json(env)["upgrade_available"] is False
-    status, body = env.request("POST", f"/repos/{env.repo.repo_id}/upgrade/preview")
+    status, body = env.request("POST", f"/repos/{env.repo.repo_id}/transactions/preview", {"kind": "upgrade"})
     assert status == 409 and body["code"] == "same_version_installed"
     transactions = installer.transactions(env.repo.repo_id)
     with pytest.raises(studio.errors.StudioError) as exc:
@@ -212,7 +212,7 @@ def test_refresh_requires_a_trusted_current_receipt(refresh_env, studio, change)
         }[change]
         env.services.storage.update("install_receipts", receipt_id, mutation)
     assert _install_json(env)["upgrade_available"] is False
-    status, body = env.request("POST", f"/repos/{env.repo.repo_id}/upgrade/preview")
+    status, body = env.request("POST", f"/repos/{env.repo.repo_id}/transactions/preview", {"kind": "upgrade"})
     assert status == 409 and body["code"] == "same_version_installed"
     plan = installer.preview(env.repo, "upgrade")
     assert plan.same_version is True
@@ -226,7 +226,7 @@ def test_newer_installed_version_still_blocks_refresh(refresh_env, studio):
     installer = env.bundle("fixed")
     install = _install_json(env)
     assert install["upgrade_available"] is False and install["newer_installed"] is True
-    status, body = env.request("POST", f"/repos/{env.repo.repo_id}/upgrade/preview")
+    status, body = env.request("POST", f"/repos/{env.repo.repo_id}/transactions/preview", {"kind": "upgrade"})
     assert status == 409 and body["code"] == "newer_installed"
     plan = installer.preview(env.repo, "upgrade")
     with pytest.raises(studio.errors.StudioError) as exc:
@@ -244,7 +244,7 @@ def test_foreign_harness_does_not_gain_refresh_authority(refresh_env, studio):
     assert install["engine_version"] == VERSION
     assert install["own_engine_version"] is None
     assert install["upgrade_available"] is False
-    status, body = env.request("POST", f"/repos/{env.repo.repo_id}/upgrade/preview")
+    status, body = env.request("POST", f"/repos/{env.repo.repo_id}/transactions/preview", {"kind": "upgrade"})
     assert status == 409 and body["code"] == "not_installed"
     assert _tree(env.root) == before
 
@@ -270,7 +270,7 @@ def test_incompatible_state_still_blocks_refresh(refresh_env, studio):
     before = _tree(env.root)
     plan = installer.preview(env.repo, "upgrade")
     assert plan.state_version_blocked
-    status, body = env.request("POST", f"/repos/{env.repo.repo_id}/upgrade/preview")
+    status, body = env.request("POST", f"/repos/{env.repo.repo_id}/transactions/preview", {"kind": "upgrade"})
     assert status == 409 and body["code"] == "state_version_migration_unconfirmed"
     with pytest.raises(studio.errors.StudioError) as exc:
         asyncio.run(installer.begin(env.repo, "upgrade", plan_digest=plan.digest()))

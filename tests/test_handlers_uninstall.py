@@ -22,9 +22,9 @@ def owned_repo(sv, tmp_path):
 
 def test_uninstall_preview_acceptance_and_completion(sv, routes, fake_host, owned_repo, monkeypatch):
     repo = owned_repo
-    path = f"/repos/{repo.repo_id}/uninstall"
+    path = f"/repos/{repo.repo_id}/transactions"
     status, preview = call(sv, routes, "POST", path + "/preview",
-                          CT.owner_request("POST", path + "/preview", host=fake_host, body={}))
+                          CT.owner_request("POST", path + "/preview", host=fake_host, body={"kind": "uninstall"}))
     assert status == 200 and preview["plan"]["kind"] == "uninstall", preview
     assert not preview["plan"]["blocking"]
     original = sv.installer.run
@@ -36,7 +36,7 @@ def test_uninstall_preview_acceptance_and_completion(sv, routes, fake_host, owne
     monkeypatch.setattr(sv.installer, "run", record_run)
     status, accepted = call(sv, routes, "POST", path,
                            CT.owner_request("POST", path, host=fake_host,
-                                            body={"plan_digest": preview["plan_digest"]}))
+                                            body={"kind": "uninstall", "plan_digest": preview["plan_digest"]}))
     assert status == 202, accepted
     assert accepted["status"] == "staged"
     assert sv.installer.transaction(accepted["transaction_id"]).kind == "uninstall"
@@ -55,9 +55,9 @@ def test_uninstall_preview_acceptance_and_completion(sv, routes, fake_host, owne
 
 
 def test_uninstall_rejects_stale_preview_before_acceptance(sv, routes, fake_host, owned_repo):
-    path = f"/repos/{owned_repo.repo_id}/uninstall"
+    path = f"/repos/{owned_repo.repo_id}/transactions"
     status, body = call(sv, routes, "POST", path,
-                        CT.owner_request("POST", path, host=fake_host, body={"plan_digest": "stale"}))
+                        CT.owner_request("POST", path, host=fake_host, body={"kind": "uninstall", "plan_digest": "stale"}))
     assert status == 409 and body["code"] == "install_conflict", body
     assert all(tx.kind != "uninstall" for tx in sv.installer.transactions(owned_repo.repo_id))
 

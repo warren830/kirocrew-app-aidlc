@@ -11,17 +11,12 @@ from threading import Event
 import pytest
 
 import conftest as CT
-from test_handlers_auth import call, sv  # noqa: F401
+from test_handlers_auth import call, common, routes, sv  # noqa: F401
 
 
 @pytest.fixture
 def maintenance():
     return CT.studio_module("maintenance")
-
-
-@pytest.fixture
-def routes(sv):
-    return CT.studio_module("handlers.maintenance").ROUTES(sv)
 
 
 @pytest.fixture

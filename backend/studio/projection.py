@@ -504,7 +504,6 @@ class IntentSummary(WireRecord):
     session: Any | None
     archived: bool
     paused: bool
-    keep_moving: bool
     interrupted: bool
     last_activity_at: str | None
     stable_boundary: Any | None
@@ -1284,7 +1283,7 @@ class Projection:
             blocking_findings=sum(1 for f in findings if str(_attr(f, "severity", "")) == "blocking"),
             warn_findings=sum(1 for f in findings if str(_attr(f, "severity", "")) == "warn"),
             session=host, archived=str(_attr(binding, "archive_state", "active")) == "archived",
-            paused=bool(_attr(binding, "paused", False)), keep_moving=False,
+            paused=bool(_attr(binding, "paused", False)),
             interrupted=bool(_attr(binding, "interrupted_at")),
             last_activity_at=self._latest_ts(snap, C.MOVEMENT_EVENTS, None),
             stable_boundary=_attr(binding, "last_stable_boundary"), unstable=not snap.stable,

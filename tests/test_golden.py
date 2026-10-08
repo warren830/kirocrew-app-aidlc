@@ -157,9 +157,8 @@ def _views(sv: Any, routes: Any, host: Any, repo: Any) -> dict[str, Any]:
         "repo": _read(sv, routes, host, "GET", f"/repos/{rid}"),
         "intents": _read(sv, routes, host, "GET", f"/repos/{rid}/intents"),
         "actions": _read(sv, routes, host, "GET", "/actions"),
-        "install_preview": _read(sv, routes, host, "POST", f"/repos/{rid}/install/preview", {}),
-        "upgrade_preview": _read(sv, routes, host, "POST", f"/repos/{rid}/upgrade/preview", {}),
-        "uninstall_preview": _read(sv, routes, host, "POST", f"/repos/{rid}/uninstall/preview", {}),
+        **{f"{kind}_preview": _read(sv, routes, host, "POST", f"/repos/{rid}/transactions/preview", {"kind": kind})
+           for kind in ("install", "upgrade", "uninstall")},
         "plan_preview": _read(sv, routes, host, "POST", f"/repos/{rid}/intents/plan/preview",
                               {"scope": "poc", "depth": "Standard"}),
     }
