@@ -24,6 +24,8 @@
   "shell.format.mb": "{n} MB",
   "shell.format.range": "{low} – {high}",
   "shell.format.ratio": "{used} / {cap}",
+  "shell.instance": "Test copy · {name}",
+  "shell.instanceHint": "A side-by-side copy of Studio with its own database. It holds none of the shipped Studio's install receipts, so it cannot upgrade or uninstall what that one installed.",
   "shell.notBuilt.body": "This part of Studio is not in this build yet. Nothing is being hidden from you — the view does not exist.",
   "shell.notBuilt.title": "{view} is not built yet",
   "shell.strip.alerts_one": "{n} alert",

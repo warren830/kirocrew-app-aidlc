@@ -16,6 +16,8 @@ import { Btn } from '@kirocrew/app-sdk/ui'
 import { useI18n } from '../i18n'
 import { plural } from '../lib/format'
 import type { Navigate, StudioRoute, View } from '../lib/route'
+import { APP_NAME, DEFAULT_APP_NAME } from '../lib/app'
+import { Chip } from './Chip'
 import { Icon, type IconName } from './Icon'
 
 /** The rail, in PRD §8.1 order. `new-intent` is not here on purpose (see the module comment). */
@@ -66,6 +68,10 @@ export function TopBar({ route, go, queueCount, showBack, onBack }: TopBarProps)
           <Icon name="logo" size={15} />
         </span>
         <span className="studio-brand-name">{t('shell.brand')}</span>
+        {/* A side-by-side copy looks identical but owns nothing the shipped Studio installed: say so. */}
+        {APP_NAME !== DEFAULT_APP_NAME ? (
+          <Chip tone="warn" title={t('shell.instanceHint')}>{t('shell.instance', { name: APP_NAME })}</Chip>
+        ) : null}
       </span>
 
       <nav className="studio-nav" aria-label={t('shell.a11y.primaryNav')}>

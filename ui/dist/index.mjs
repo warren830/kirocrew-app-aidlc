@@ -1814,6 +1814,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"shell.format.mb": "{n} MB",
 	"shell.format.range": "{low} – {high}",
 	"shell.format.ratio": "{used} / {cap}",
+	"shell.instance": "Test copy · {name}",
+	"shell.instanceHint": "A side-by-side copy of Studio with its own database. It holds none of the shipped Studio's install receipts, so it cannot upgrade or uninstall what that one installed.",
 	"shell.notBuilt.body": "This part of Studio is not in this build yet. Nothing is being hidden from you — the view does not exist.",
 	"shell.notBuilt.title": "{view} is not built yet",
 	"shell.strip.alerts_one": "{n} alert",
@@ -4067,6 +4069,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"shell.format.mb": "{n} MB",
 	"shell.format.range": "{low} – {high}",
 	"shell.format.ratio": "{used} / {cap}",
+	"shell.instance": "测试实例 · {name}",
+	"shell.instanceHint": "与正式版并排安装的副本，有自己的数据库。它没有正式版的安装凭据，所以不能升级或卸载正式版安装的内容。",
 	"shell.notBuilt.body": "此版本尚未包含 Studio 的这一部分。没有任何内容被隐藏 — 该视图还不存在。",
 	"shell.notBuilt.title": "{view} 尚未实现",
 	"shell.strip.alerts_one": "{n} 项警报",
@@ -5921,17 +5925,25 @@ function Bt({ route: e, go: t, queueCount: n, showBack: r, onBack: i }) {
 			}) : null,
 			/* @__PURE__ */ h("span", {
 				className: "studio-brand",
-				children: [/* @__PURE__ */ m("span", {
-					className: "studio-brand-mark",
-					"aria-hidden": !0,
-					children: /* @__PURE__ */ m(Y, {
-						name: "logo",
-						size: 15
+				children: [
+					/* @__PURE__ */ m("span", {
+						className: "studio-brand-mark",
+						"aria-hidden": !0,
+						children: /* @__PURE__ */ m(Y, {
+							name: "logo",
+							size: 15
+						})
+					}),
+					/* @__PURE__ */ m("span", {
+						className: "studio-brand-name",
+						children: o("shell.brand")
+					}),
+					N === "aidlc-studio" ? null : /* @__PURE__ */ m(X, {
+						tone: "warn",
+						title: o("shell.instanceHint"),
+						children: o("shell.instance", { name: N })
 					})
-				}), /* @__PURE__ */ m("span", {
-					className: "studio-brand-name",
-					children: o("shell.brand")
-				})]
+				]
 			}),
 			/* @__PURE__ */ m("nav", {
 				className: "studio-nav",

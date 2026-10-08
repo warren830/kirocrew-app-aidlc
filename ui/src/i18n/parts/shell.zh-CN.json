@@ -24,6 +24,8 @@
   "shell.format.mb": "{n} MB",
   "shell.format.range": "{low} – {high}",
   "shell.format.ratio": "{used} / {cap}",
+  "shell.instance": "测试实例 · {name}",
+  "shell.instanceHint": "与正式版并排安装的副本，有自己的数据库。它没有正式版的安装凭据，所以不能升级或卸载正式版安装的内容。",
   "shell.notBuilt.body": "此版本尚未包含 Studio 的这一部分。没有任何内容被隐藏 — 该视图还不存在。",
   "shell.notBuilt.title": "{view} 尚未实现",
   "shell.strip.alerts_one": "{n} 项警报",
