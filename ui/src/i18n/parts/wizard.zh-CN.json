@@ -116,7 +116,7 @@
   "wizard.review.estimates": "估算值，附来源与置信度",
   "wizard.review.products": "这个计划将产出的产物",
   "wizard.review.productsNone": "这个计划里没有任何阶段声明产物，通常意味着什么都没选。",
-  "wizard.review.consequence": "创建不会运行任何东西。意图创建后保持暂停；由你用“运行到下一个检查点”启动。Keep moving、预算和 Advisor 草稿都不会从别的意图继承过来。",
+  "wizard.review.consequence": "创建不会运行任何东西。意图创建后保持暂停；由你用“运行到下一个检查点”启动。预算和 Advisor 草稿都不会从别的意图继承过来。",
   "wizard.review.blockedInvalid": "AI-DLC 不会接受这样的计划。原因列在“计划”步骤里。",
   "wizard.review.blockedFindings_one": "这个仓库报告了 {n} 条阻塞发现，解决之前不会创建任何东西。",
   "wizard.review.blockedFindings_other": "这个仓库报告了 {n} 条阻塞发现，解决之前不会创建任何东西。",

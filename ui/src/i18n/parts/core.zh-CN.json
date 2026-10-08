@@ -110,7 +110,6 @@
   "errors.illegal_transition": "不允许该状态变更。",
   "errors.stale_generation": "该记录已被其他操作先行修改。",
   "errors.state_inconsistent": "AI-DLC 的文件互相矛盾，解决之前不会发送任何内容。",
-  "errors.machine_lane_unavailable": "无人值守执行不可用：尚未验证机器通道。",
   "errors.install_conflict": "受管路径上的文件与将要安装的内容不一致。",
   "errors.install_recovery_required": "该仓库需要先恢复安装才能运行 AI-DLC。",
   "errors.not_installed": "该仓库未安装 AI-DLC。",
@@ -165,6 +164,5 @@
   "common.durationMinutes": "{n} 分钟",
   "common.durationHours": "{n} 小时",
   "common.durationDays": "{n} 天",
-  "errors.lease_lost": "准备决定期间仓库租约发生变化，因此未发送任何内容。",
   "errors.grouped_answers_unavailable": "一次回答多个问题的方式尚未验证，请逐个作答或打开会话。"
 }

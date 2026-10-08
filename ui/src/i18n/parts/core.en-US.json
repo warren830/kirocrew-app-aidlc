@@ -110,7 +110,6 @@
   "errors.illegal_transition": "That state change is not permitted.",
   "errors.stale_generation": "Something else changed this record first.",
   "errors.state_inconsistent": "AI-DLC's files disagree with each other, so nothing will be sent until that is resolved.",
-  "errors.machine_lane_unavailable": "Unattended work is unavailable: no machine lane has been proven.",
   "errors.install_conflict": "A file at a managed path differs from what Studio would install.",
   "errors.install_recovery_required": "This repository needs install recovery before it can run AI-DLC.",
   "errors.not_installed": "AI-DLC is not installed in this repository.",
@@ -165,6 +164,5 @@
   "common.durationMinutes": "{n} min",
   "common.durationHours": "{n} h",
   "common.durationDays": "{n} d",
-  "errors.lease_lost": "The repository lease changed while the decision was being prepared, so nothing was sent.",
   "errors.grouped_answers_unavailable": "Answering several questions in one message is not yet verified, so answer them one at a time or open the conversation."
 }

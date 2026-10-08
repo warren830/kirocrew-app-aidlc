@@ -169,7 +169,6 @@
   "activity.intent.archived": "Intent archived.",
   "activity.intent.restored": "Intent restored from the archive.",
   "activity.intent.force_stop": "Force stop requested on the bound session.",
-  "activity.machine_lane.refused": "Unattended dispatch refused. Studio never forges human presence.",
   "activity.settings.updated": "Settings updated.",
   "activity.health.startup": "Studio started.",
   "audit.unknown_event": "An audit event this version of Studio does not recognise. The raw block is in the Evidence drawer.",

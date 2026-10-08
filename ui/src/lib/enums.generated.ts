@@ -54,7 +54,6 @@ export const LIVE_ACTION_STATUS: readonly ActionStatus[] = ["Queued", "Deliverin
 export const TERMINAL_ACTION_STATUS: readonly ActionStatus[] = ["StateChanged", "ResolvedNoTransition", "Cancelled"]
 
 /** Machine-lane features are unavailable in v1; the UI shows this reason code. */
-export const MACHINE_LANE_REASON = "s12_unproven"
 export const ACCEPT_AS_IS_MIN_ATTEMPT = 4
 export const DEEP_LINK_BASE = "/apps/aidlc-studio"
 

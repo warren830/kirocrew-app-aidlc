@@ -139,7 +139,6 @@ def gen_enums() -> str:
         + "]",
         "",
         "/** Machine-lane features are unavailable in v1; the UI shows this reason code. */",
-        f"export const MACHINE_LANE_REASON = {ts_string(C.MACHINE_LANE_REASON)}",
         f"export const ACCEPT_AS_IS_MIN_ATTEMPT = {C.ACCEPT_AS_IS_MIN_ATTEMPT}",
         f"export const DEEP_LINK_BASE = {ts_string(C.DEEP_LINK_BASE)}",
         "",

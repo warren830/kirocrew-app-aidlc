@@ -223,8 +223,7 @@ MAX_README_CHARS = 3000                     # README excerpt in the plan package
 # breaker
 BREAKER_TRANSIENT_THRESHOLD = 3
 TRANSIENT_FINGERPRINT_CLASSES = ("transport", "rate_limit", "acp_timeout")
-DETERMINISTIC_FINGERPRINT_CLASSES = ("validation", "permission", "dependency", "guard",
-                                     "human_marker_movement", "config")
+DETERMINISTIC_FINGERPRINT_CLASSES = ("validation", "permission", "dependency", "guard", "config")
 
 # grammar (compiled re.Pattern, MULTILINE where noted)
 CHECKBOX_RE = r"^- \[([ xXsSrR?-])\] (\S+)(?:\s*(?:—|–|--)\s*(.*))?$"
@@ -1880,8 +1879,7 @@ Failure fingerprint classes: host ACP transport messages (`stream closed`, `conn
 `rate limit`, `429`, `throttl` → `rate_limit`; `turn exceeded the .* ceiling` / `TimeoutError` → `acp_timeout`;
 `ERROR_LOGGED` with `Refusing to` → `guard`; `Unknown intent|Ambiguous intent|Invalid scope|Cannot use` → `validation`;
 `EACCES|permission denied` → `permission`; `bun: command not found|Cannot find module` → `dependency`; anything else →
-`config` (deterministic). `human_marker_movement` is still listed as deterministic, but nothing produces it since
-`MachineActionBroker` was removed.
+`config` (deterministic).
 
 Stable boundary evaluation (PRD §12.2) — all must hold: `snap.stable`; marker ∈ {row `[?]`/`[R]`, `questions.pending_count > 0`
 or `questions.pending_checkpoint`, `parked_at`, `status == Completed`, latest `PHASE_COMPLETED`/`STAGE_COMPLETED` newer than any
@@ -2328,7 +2326,7 @@ action.updated action.submitted action.delivery action.resolved action.cancelled
 breaker.opened breaker.reset lease.acquired lease.released lease.reclaimed engine.run install.transaction
 migration.previewed migration.applied advisor.requested advisor.auto_requested advisor.completed advisor.failed
 notification.sent slack.sent session.bound session.unbound session.takeover intent.created intent.paused
-intent.resumed intent.archived intent.restored intent.force_stop machine_lane.refused settings.updated
+intent.resumed intent.archived intent.restored intent.force_stop settings.updated
 health.startup`.
 
 `advisor.auto_requested` is a separate kind from `advisor.requested` rather than a param on it (FR-ADV-010): the one
@@ -2953,10 +2951,9 @@ Notation below: `→ 200 {…}` success body; `✗ code` = error codes the route
                                                                           // PATH, then BUN_CANDIDATE_PATHS (A28)
            "git": {"found": bool, "path": str|null, "version": str|null}}, // git is PATH-only and carries neither field
  "reconciler": {"running": bool, "last_tick_at": iso|null, "last_tick_ms": int|null, "repos_scanned": int},
- "counts": {"repos": int, "intents": int, "live_actions": int, "execution_leases": int, "admin_leases": int},
+ "counts": {"repos": int, "intents": int, "live_actions": int, "execution_leases": int, "admin_leases": int}}
                                  # intents = intent directories the last complete scan of every repository found (Reconciler.intents_on_disk()),
                                  # NOT intent_bindings rows — a binding outlives a deleted intent on purpose (archive flag, session binding).
- "machine_lane": {"available": false, "reason": "machine_lane_unavailable"}}
 ```
 
 `GET /payload` → 200 `{"schema","harness","engine_version":"2.7.1","source":{...},"compatible_state_versions":[8],"stage_count":33,"payload_digest","file_count":293,"ownership_counts":{"framework":249,"framework-mutable":29,"merge":6,"shell":9},"merge_targets":{...six entries...},"status":PayloadStatus}` — every value is read from `payload/manifest.json` at runtime (the numbers here are today's; `test_handlers_misc.py` compares the body to the manifest, never to literals — review P03/R03). Never the file list; `GET /payload?files=1` adds `"files": [PayloadFile]`.
@@ -3081,7 +3078,7 @@ and `permissions.api` stays at the two architecture prefixes (review R13).
 |---|---|---|---|
 | `GET /actions` `?organize=priority|repo|type|oldest&repo=&space=&intent=&type=&status=&include=revision&limit=` | — | `{"actions": [ActionCard], "organize": str, "groups": [{"key": str, "label_key": str, "action_ids": [str]}], "counts": {"total","critical","blocking","attention","info"}, "generated_at": iso}` | |
 | `GET /actions/{action_id}` | — | `{"action": ActionCard, "transitions": [{"from_status","to_status","generation","at","reason","evidence"}], "drafts": [AdvisorDraft (summary)]}` | `action_not_found` |
-| `POST /actions/{action_id}/submit` [owner] | `SubmitRequest` | 200 `SubmitReceipt` | `action_not_submittable`, `invalid_decision`, `feedback_required`, `answers_incomplete`, `grouped_answers_unavailable`, `intent_paused`, `intent_archived`, `breaker_open` (run/resume only), `action_stale` (details.card), `state_inconsistent` (details.findings), `unstable_read`, `session_unbound`, `slot_mismatch`, `slot_busy` (details.reasons), `repo_busy`, `cursor_mismatch` (details.mismatch), `lease_lost`, `rate_limited`, `host_unavailable` |
+| `POST /actions/{action_id}/submit` [owner] | `SubmitRequest` | 200 `SubmitReceipt` | `action_not_submittable`, `invalid_decision`, `feedback_required`, `answers_incomplete`, `grouped_answers_unavailable`, `intent_paused`, `intent_archived`, `breaker_open` (run/resume only), `action_stale` (details.card), `state_inconsistent` (details.findings), `unstable_read`, `session_unbound`, `slot_mismatch`, `slot_busy` (details.reasons), `repo_busy`, `cursor_mismatch` (details.mismatch), `rate_limited`, `host_unavailable` |
 | `POST /actions/{action_id}/delivery` [owner] | `DeliveryReport` | `{"ok": true, "action": ActionCard, "idempotent": bool}` | `delivery_ack_invalid`, `illegal_transition` (only a conflicting outcome after the host said ok), `not_delivered_unproven` (a `Delivering` row moves to `ReconciliationRequired`; details.checks = {row_absent, slot_idle, disk_baseline_unchanged, boot_unchanged}, details.reason = `evidence`|`receipt_not_authoritative`) |
 | `POST /actions/{action_id}/retry` [owner] | `{}` | `{"ok": true, "action": ActionCard}` (may be a NEW run action) | `retry_not_allowed` (retry resets an open breaker; it never raises `breaker_open`) |
 | `POST /actions/{action_id}/reconcile` [owner] | `{}` | `{"ok": true, "action": ActionCard}` | `action_not_found` |
@@ -3490,7 +3487,7 @@ export interface PlanAdviseRequest { space: string; objective: string; context: 
 export interface SettingsValues { locale: 'auto' | 'en-US' | 'zh-CN'; density: 'compact' | 'comfortable'; queue_organize: Organize; global_concurrency_cap: number; slack: { enabled: boolean; muted_repo_ids: string[] }; diagnostics: { retention_days: number; export_include_human_text: boolean }; human_text_retention_days: number; advisor: { enabled: boolean; auto_draft_repo_ids: string[] }; installer: { run_doctor_after_install: boolean }; notifications: { dashboard: boolean } }
 export interface Capability { available: boolean; reason: string | null }
 export interface SettingsResponse { settings: SettingsValues; capabilities: Record<'slack' | 'advisor' | 'slack_quick_actions' | 'grouped_answers', Capability>; versions: { studio: string; bundled_engine: string; min_kirocrew: string; host: string | null }; updated_at: string | null }
-export interface HealthResponse { app: 'aidlc-studio'; version: string; bundled_engine_version: string; min_kirocrew_version: string; boot_id: string; host_version: string | null; started_at: string | null; status: 'healthy' | 'degraded' | 'error'; issues: string[]; storage: { path_hash: string; schema_version: number; integrity: 'ok' | 'error'; wal: boolean }; payload: { ok: boolean; engine_version: string; file_count: number; mismatches: number }; host: { attached: boolean; capabilities: Record<string, Capability> }; tools: { bun: { found: boolean; path: string | null; version: string | null; source: string | null; searched: string[] }; git: { found: boolean; path: string | null; version: string | null } }; reconciler: { running: boolean; last_tick_at: string | null; last_tick_ms: number | null; repos_scanned: number }; counts: { repos: number; intents: number; live_actions: number; execution_leases: number; admin_leases: number }; machine_lane: { available: false; reason: 'machine_lane_unavailable' } }
+export interface HealthResponse { app: 'aidlc-studio'; version: string; bundled_engine_version: string; min_kirocrew_version: string; boot_id: string; host_version: string | null; started_at: string | null; status: 'healthy' | 'degraded' | 'error'; issues: string[]; storage: { path_hash: string; schema_version: number; integrity: 'ok' | 'error'; wal: boolean }; payload: { ok: boolean; engine_version: string; file_count: number; mismatches: number }; host: { attached: boolean; capabilities: Record<string, Capability> }; tools: { bun: { found: boolean; path: string | null; version: string | null; source: string | null; searched: string[] }; git: { found: boolean; path: string | null; version: string | null } }; reconciler: { running: boolean; last_tick_at: string | null; last_tick_ms: number | null; repos_scanned: number }; counts: { repos: number; intents: number; live_actions: number; execution_leases: number; admin_leases: number } }
 export interface MigrationPreview { applicable: boolean; reason: string | null; source_path: string; source_sha256: string | null; rows_in: number; rows: { legacy_id: string; path: string; label: string; added_at: string | null; resolution: string; identity: string | null; error: string | null }[]; rows_out: number; console_installed: boolean; console_enabled: boolean; already_applied: boolean }
 ```
 

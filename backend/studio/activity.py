@@ -48,7 +48,7 @@ ACTIVITY_KINDS: tuple[str, ...] = (
     "advisor.requested", "advisor.auto_requested", "advisor.completed", "advisor.failed",
     "notification.sent", "slack.sent", "slack.callback", "session.bound", "session.unbound", "session.takeover",
     "intent.created", "intent.paused", "intent.resumed", "intent.archived", "intent.restored", "intent.force_stop",
-    "machine_lane.refused", "settings.updated", "health.startup",
+    "settings.updated", "health.startup",
 )
 _KIND_SET = frozenset(ACTIVITY_KINDS)
 

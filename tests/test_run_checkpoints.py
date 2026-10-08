@@ -103,6 +103,15 @@ def test_running_session_does_not_accumulate_another_run(sv, routes, fake_host, 
     assert fake_host.get_slot(scene.slot_key).running is True
 
 
+def test_a_queued_run_is_in_the_scanned_summary_even_when_no_card_is_derived(sv, routes, fake_host, scene):
+    """Mid-stage nothing is derived; the scan's summary must still count the human's queued Run."""
+    status, body = command(sv, routes, fake_host, scene)
+    assert status == 201, body
+    summary = next(s for s in _rescan(sv, routes, fake_host, scene)["intents"] if s["intent_dir"] == INTENT)
+    assert summary["open_actions"] == 1
+    assert summary["operational_state"] == "Queued"
+
+
 def test_unstable_snapshot_cannot_retire_a_run(sv, routes, fake_host, scene):
     _, created = command(sv, routes, fake_host, scene)
     checkpoint(scene, "gate")

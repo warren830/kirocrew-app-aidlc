@@ -166,7 +166,7 @@ class Resolution(WireRecord):
 
 
 @dataclass(frozen=True, slots=True)
-class StartupReport:
+class StartupReport(WireRecord):
     """What the ordered startup pass found, published as ``health.updated``. ``within_budget=False`` is not an
     error: the remaining work leads the first tick, and a caller that could not tell would either block the
     gateway or silently skip repositories."""
@@ -187,24 +187,6 @@ class StartupReport:
     repos_pending: int
     within_budget: bool
     issues: tuple[str, ...]
-
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "boot_id": self.boot_id,
-            "started_at": self.started_at,
-            "finished_at": self.finished_at,
-            "took_ms": self.took_ms,
-            "integrity": list(self.integrity),
-            "payload_ok": self.payload_ok,
-            "payload_mismatches": self.payload_mismatches,
-            "transactions_settled": list(self.transactions_settled),
-            "actions_reevaluated": self.actions_reevaluated,
-            "boot_id_mismatches": self.boot_id_mismatches,
-            "repos_scanned": self.repos_scanned,
-            "repos_pending": self.repos_pending,
-            "within_budget": self.within_budget,
-            "issues": list(self.issues),
-        }
 
 
 # --------------------------------------------------------------------------- #
@@ -388,6 +370,9 @@ class Reconciler:
         self._intents_on_disk: dict[str, int] = {}
         #: Binding keys whose state file this process read as not completed: only their completion is announced.
         self._unfinished: set[str] = set()
+        #: Gate and question cards created before this instant were minted by an earlier process (or by v1, which
+        #: never announced them); they are already on the user's queue and are not announced again.
+        self._announce_since: str = services.clock.iso()
         self._running = False
         self._last_tick_at: str | None = None
         self._last_tick_ms: int | None = None
@@ -738,14 +723,21 @@ class Reconciler:
             self._s.projection.derive_cards, snap, findings=findings, binding=binding, install=install,
             breakers=breakers, live_actions=live, slot=slot, host_card=self._host_card(binding.slot_key),
         ))
-        live = await self._s.actions.upsert_derived(seeds)
+        await self._s.actions.upsert_derived(seeds)
         keys = {seed.dedupe_key for seed in seeds if seed.dedupe_key}
         await self._s.actions.retire_stale(repo.repo_id, space, intent_dir, keys)
+        # Re-read rather than use upsert's answer, which is empty when nothing was derived: a queued Run or an
+        # in-flight decision still belongs in this intent's summary and boundary.
+        live = await self._s.actions.list_live(
+            repo_id=repo.repo_id, space=space, intent_dir=intent_dir, include_revision=True
+        )
         if not binding.archived:  # an archived intent's cards are set aside with it
             for rec in live:
                 # A gate or question this scan leaves open is announced once; the notification ledger remembers.
+                # Only cards this process minted: an upgrade or restart must not replay every pending decision.
                 if (_attr(rec, "type") in ("gate", "question") and _attr(rec, "status") == "Queued"
-                        and _attr(rec, "dedupe_key") in keys):
+                        and _attr(rec, "dedupe_key") in keys
+                        and str(_attr(rec, "created_at") or "") >= self._announce_since):
                     await self._notify("action", rec, snap=snap)
 
         boundary = await self._record_boundary(repo, snap, binding, live, slot, leases)

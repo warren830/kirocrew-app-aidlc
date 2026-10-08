@@ -222,10 +222,9 @@ authorizes nothing.
 
 Every KiroCrew path that reaches kiro-cli is `session/prompt` and fires `userPromptSubmit`
 (`02-…` §5); `_session/steer` is unproven and needs a live turn. Therefore `Keep moving`, night window,
-stable-boundary auto-failover and any unattended continuation are **absent** in v1: settings show them as
-`Unavailable — S12 unproven` with the reason; `/keep-moving` returns `409 machine_lane_unavailable`; Run
-performs exactly one human-initiated turn (FR-RUN-001 second sentence). `MachineActionBroker` exists as a
-module that always refuses and records a Studio Activity row, so the security breaker (FR-SES-010) has a home.
+stable-boundary auto-failover and any unattended continuation are **absent**: v2 removed the inert settings,
+the `/keep-moving` route and the always-refusing machine broker, so there is no machine lane to show. Run
+performs exactly one human-initiated turn (FR-RUN-001 second sentence).
 
 ### 3.3 Admin lane — engine-owned utility verbs, no model turn
 
@@ -402,7 +401,7 @@ lease's own generation), which waives the boundary because demanding one there d
 never reclaims (`FR-SES-007`). Global concurrency cap from preferences applies across repos.
 
 Circuit breaker (§11.4): key `intent:fingerprint`; transient fingerprints (`transport|rate_limit|acp_timeout`) open at 3;
-deterministic (`validation|permission|dependency|guard|human_marker_movement|config`) open immediately; opening
+deterministic (`validation|permission|dependency|guard|config`) open immediately; opening
 creates one `circuit_breaker` action and one notification; `Retry now` resets.
 
 ---

@@ -10,8 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 #: ``code -> HTTP status``, one row per status: every code a module raises, plus ``route_not_found``, which
-#: the UI also uses for a bare host 404. ``lease_lost``: the execution lease vanished between acquire and the
-#: Delivering CAS (review P15); ``grouped_answers_unavailable``: a grouped submit while
+#: the UI also uses for a bare host 404. ``grouped_answers_unavailable``: a grouped submit while
 #: ``GROUPED_ANSWERS_VERIFIED`` is off (P18).
 _CODES_BY_STATUS: dict[int, str] = {
     400: (
@@ -26,8 +25,8 @@ _CODES_BY_STATUS: dict[int, str] = {
     ),
     409: (
         "duplicate_identity repo_unavailable identity_unprovable action_stale action_not_submittable "
-        "run_not_applicable repo_busy illegal_transition stale_generation lease_lost state_inconsistent "
-        "machine_lane_unavailable grouped_answers_unavailable install_conflict install_recovery_required "
+        "run_not_applicable repo_busy illegal_transition stale_generation state_inconsistent "
+        "grouped_answers_unavailable install_conflict install_recovery_required "
         "not_installed already_installed newer_installed same_version_installed "
         "state_version_migration_unconfirmed payload_degraded session_unbound slot_mismatch slot_busy "
         "session_busy unstable_read breaker_open intent_paused intent_archived cancel_not_safe "

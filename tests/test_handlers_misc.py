@@ -76,7 +76,6 @@ def test_pagination_is_descending_and_its_cursor_round_trips(common):
 _HEALTH_KEYS = {
     "app", "version", "bundled_engine_version", "min_kirocrew_version", "boot_id", "host_version",
     "started_at", "status", "issues", "storage", "payload", "host", "tools", "reconciler", "counts",
-    "machine_lane",
 }
 
 
@@ -103,7 +102,6 @@ def test_health_reports_the_whole_envelope(sv, routes, fake_host, studio):
     assert body["tools"]["bun"]["found"] is True
     assert body["tools"]["git"]["found"] is True
     assert body["host"]["attached"] is True
-    assert body["machine_lane"] == {"available": False, "reason": "machine_lane_unavailable"}
 
 
 def test_health_is_degraded_while_the_host_is_not_attached(sv, routes, fake_host, studio):

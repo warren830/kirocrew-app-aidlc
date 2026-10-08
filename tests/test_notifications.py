@@ -424,6 +424,35 @@ def test_a_scan_announces_each_new_gate_and_question_once(sv, fake_host, gate_re
     assert not {action_id for _, action_id in later} & {action_id for _, action_id in first}
 
 
+def test_cards_an_earlier_process_minted_are_not_announced_after_a_restart(
+    sv, fake_host, gate_repo, studio, monkeypatch
+):
+    """An upgrade from v1 (which never announced gates) or any restart must not replay the whole queue."""
+    repo = sv.repos.add(str(gate_repo), "ledger")
+    notifications = sv.notifications
+    monkeypatch.setattr(sv, "notifications", None)       # the earlier process: cards minted, nothing sent
+    _scan(sv, repo)
+    assert {rec.type for rec in asyncio.run(sv.actions.list_live(repo_id=repo.repo_id))} >= {"gate", "question"}
+
+    sv.clock.advance(60)
+    monkeypatch.setattr(sv, "notifications", notifications)
+    sv.reconciler = studio.reconciler.Reconciler(sv)
+    _scan(sv, repo)
+    assert _announced(fake_host) == []
+
+    # Positive control: what the engine opens after the restart is news.
+    record = _record(gate_repo)
+    (record / "aidlc-state.md").write_text(F.state_text(
+        marks={"requirements-analysis": "x", "user-stories": "?"},
+        fields={"Current Stage": "user-stories", "Status": "Running", "Next Stage": "refined-mockups"},
+    ))
+    shard = next((record / "audit").glob("*.md"))
+    shard.write_text(shard.read_text() + F.audit_block(
+        "STAGE_AWAITING_APPROVAL", "2026-09-04T11:00:00Z", Stage="user-stories"))
+    _scan(sv, repo)
+    assert [kind for kind, _ in _announced(fake_host)] == ["gate"]
+
+
 def test_an_archived_intents_cards_are_not_announced(sv, fake_host, gate_repo):
     repo = sv.repos.add(str(gate_repo), "ledger")
     asyncio.run(sv.sessions.set_archived(repo.repo_id, "default", GATE_INTENT, True))

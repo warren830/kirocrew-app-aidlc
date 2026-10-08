@@ -561,7 +561,6 @@ class Services:
             },
             "reconciler": self.reconciler.status(),
             "counts": counts,
-            "machine_lane": {"available": False, "reason": "machine_lane_unavailable"},
         }
 
 

@@ -116,7 +116,7 @@
   "wizard.review.estimates": "Estimated, with source and confidence",
   "wizard.review.products": "Products this plan will create",
   "wizard.review.productsNone": "No stage in this plan declares an artifact, which usually means nothing is selected.",
-  "wizard.review.consequence": "Create does not run anything. The intent is created paused; you start it with Run to next checkpoint. Keep moving, budgets and Advisor drafts are never inherited from another intent.",
+  "wizard.review.consequence": "Create does not run anything. The intent is created paused; you start it with Run to next checkpoint. Budgets and Advisor drafts are never inherited from another intent.",
   "wizard.review.blockedInvalid": "AI-DLC will not accept this plan as described. The reasons are listed on the Plan step.",
   "wizard.review.blockedFindings_one": "This repository reports {n} blocking finding, so nothing will be created until it is resolved.",
   "wizard.review.blockedFindings_other": "This repository reports {n} blocking findings, so nothing will be created until they are resolved.",

@@ -216,7 +216,6 @@ DETERMINISTIC_FINGERPRINT_CLASSES = (
     "permission",
     "dependency",
     "guard",
-    "human_marker_movement",
     "config",
 )
 
@@ -806,10 +805,6 @@ HOST_CHAT_SLOTS_PATH = "/api/chat/slots"
 SLOT_KEY_TEMPLATE = APP_NAME + "-{repo_id}-{intent_dir}"
 
 DEEP_LINK_BASE = f"/apps/{APP_NAME}"
-#: Machine-lane features stay off until a host-authenticated non-human submission path is proven
-#: (PRD P-08 / S12). The string is a code the UI translates, not prose.
-MACHINE_LANE_REASON = "s12_unproven"
-
 #: File-backed groups were round-tripped on KiroCrew 0.6.0-insider.6 / AI-DLC 2.7.1 on 2026-09-11:
 #: four matching Answer tags, one complete audit receipt, one host message, and an unanswered summary
 #: checkpoint. See docs/verification/2026-09-11-grouped-answers/README.md. Native blocking widgets use
