@@ -1,10 +1,10 @@
 """An ended reply can yield a new gate or a follow-up without a faithful answer receipt."""
 
 import asyncio
-import os
 
 import fixtures as F
 import pytest
+from _helpers_a import stamp_human_turn
 from test_audit_questions import (  # noqa: F401
     repo_dir, question_card, answer_payload, append, start_audit, decision, activate_unit,
 )
@@ -23,52 +23,35 @@ WITHOUT_GATE = ("no_gate", "follow_up", "old_gate", "other_unit", "other_workflo
     "mismatch_at_gate", "exact_at_gate", "no_gate", "follow_up", "old_gate", "other_unit",
     "solo_unit_gate", "missing_presence", "still_running", "no_receipt", "other_workflow",
 ])
-def test_unverified_reply_releases_only_after_a_scoped_receipt(
-    sv, routes, fake_host, scene, case,
-):
+def test_unverified_reply_releases_only_after_a_scoped_receipt(sv, routes, fake_host, scene, case):
     wire = "Persist none"
     unit = {"Unit": "unit-a", "Attempt_Generation": "2"} if case == "solo_unit_gate" else {}
     if unit:
         activate_unit(sv, scene)
     _shard(scene.root).write_text(start_audit() + decision(
-        Decision="Persist learning candidates?", Options="Persist none,Persist selected candidates",
-        **unit,
-    ))
+        Decision="Persist learning candidates?", Options="Persist none,Persist selected candidates", **unit))
     card = question_card(sv, routes, fake_host, scene)
     assert _row(sv, card["action_id"])["unit"] == ("unit-a" if unit else None)
-    status, receipt = _submit(
-        sv, routes, fake_host, card, payload=answer_payload(), wire_text=wire,
-    )
+    status, receipt = _submit(sv, routes, fake_host, card, payload=answer_payload(), wire_text=wire)
     assert status == 200
     _finish_the_turn(fake_host, scene.slot_key, wire_text=wire)
     fake_host.get_slot(scene.slot_key).messages[-1]["content"] = "Review the next gate."
     assert _report(sv, routes, fake_host, card["action_id"], receipt)[0] == 200
     if case != "missing_presence":
         append(scene, F.audit_block("HUMAN_TURN", "2026-09-04T10:00:20Z"))
-        marker = _record_dir(scene.root) / ".aidlc-human-turn"
-        marker.write_text("2026-09-04T10:00:20Z\n")
-        os.utime(marker, ns=(2_000_000_000, 2_000_000_000))
+        stamp_human_turn(_record_dir(scene.root), "2026-09-04T10:00:20Z")
     if case != "no_receipt":
-        append(scene, F.audit_block(
-            "QUESTION_ANSWERED", "2026-09-04T10:00:20Z",
-            Stage=STAGE, Details=wire if case == "exact_at_gate" else "Nothing to add; persist none",
-            **unit,
-        ))
+        details = wire if case == "exact_at_gate" else "Nothing to add; persist none"
+        append(scene, F.audit_block("QUESTION_ANSWERED", "2026-09-04T10:00:20Z", Stage=STAGE, Details=details, **unit))
     if case == "follow_up":
-        append(scene, decision(
-            "2026-09-04T10:00:21Z", Decision="Which candidates should persist?",
-            Options="Persist all,Persist selected candidates",
-        ))
+        append(scene, decision("2026-09-04T10:00:21Z", Decision="Which candidates should persist?",
+                               Options="Persist all,Persist selected candidates"))
     elif case not in ("no_gate",):
         # A solo gate row carries no Unit even when the stage runs one (`aidlc-state.ts` gate-start).
         append(scene, F.audit_block(
-            "STAGE_AWAITING_APPROVAL",
-            "2026-09-04T09:59:00Z" if case == "old_gate" else "2026-09-04T10:00:21Z",
-            Stage=STAGE, **(
-                {"Unit": "another-unit"} if case == "other_unit"
-                else {"Workflow": "another-workflow"} if case == "other_workflow" else {}
-            ),
-        ))
+            "STAGE_AWAITING_APPROVAL", "2026-09-04T09:59:00Z" if case == "old_gate" else "2026-09-04T10:00:21Z",
+            Stage=STAGE, **{"other_unit": {"Unit": "another-unit"},
+                            "other_workflow": {"Workflow": "another-workflow"}}.get(case, {})))
         state = _gate_state()
         if unit:
             state = F.insert_runtime_field(state, "Active Unit", "unit-a")
@@ -80,11 +63,9 @@ def test_unverified_reply_releases_only_after_a_scoped_receipt(
     row = _row(sv, card["action_id"])
     if case in ("exact_at_gate", *AT_GATE, *WITHOUT_GATE):
         assert row["status"] == "ResolvedNoTransition"
-        expected = (
+        assert row["resolution_json"]["reason"] == (
             "question_answered" if case == "exact_at_gate"
-            else "answer_not_verified_at_gate" if case in AT_GATE else "answer_not_verified"
-        )
-        assert row["resolution_json"]["reason"] == expected
+            else "answer_not_verified_at_gate" if case in AT_GATE else "answer_not_verified")
         assert not sv.scheduler.live()
         if case != "exact_at_gate":
             evidence = row["resolution_json"]["evidence"]

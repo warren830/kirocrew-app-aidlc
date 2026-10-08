@@ -1,27 +1,27 @@
 """A queued Run must not outlive the work or displace a human checkpoint."""
 
 import asyncio
-import os
 from dataclasses import replace
 
 import fixtures as F
 import pytest
 
+from _helpers_a import stamp_human_turn
 from test_e2e_gate import (  # noqa: F401
     INTENT, STAGE, NEXT_STAGE, QUESTIONS_REL, _gate_state, _get, _post, _queue,
     _finish_the_turn, _record_dir, _report, _rescan, _shard, _submit, _tree_digest, scene,
 )
 from test_handlers_auth import common, routes, sv  # noqa: F401
 
+CHOICE = [("Which store?", ["SQLite", "Postgres"])]
+
 
 @pytest.fixture
 def repo_dir(repo_builder):
     return repo_builder.with_engine("payload").with_workspace().with_intent(
         INTENT, state=_gate_state().replace(f"[?] {STAGE}", f"[-] {STAGE}"),
-        audit=F.audit_text(
-            F.audit_block("HUMAN_TURN", "2026-09-04T09:00:00Z"),
-            F.audit_block("STAGE_STARTED", "2026-09-04T09:00:01Z", Stage=STAGE),
-        ),
+        audit=F.audit_text(F.audit_block("HUMAN_TURN", "2026-09-04T09:00:00Z"),
+                           F.audit_block("STAGE_STARTED", "2026-09-04T09:00:01Z", Stage=STAGE)),
         directive={"version": 1, "stage": STAGE, "state_sha256": "AUTO"},
         artifacts={f"inception/{STAGE}/requirements.md": "# Requirements\n\n## Review\n\n**Verdict**: READY\n"},
     ).with_git().build()
@@ -31,32 +31,48 @@ def command(sv, routes, fake_host, scene, kind="run"):
     return _post(sv, routes, fake_host, f"/repos/{scene.repo_id}/intents/{INTENT}/{kind}")
 
 
+def submit_run(sv, routes, fake_host, card):
+    return _submit(sv, routes, fake_host, card, payload={"decision": "run"}, wire_text="/aidlc")
+
+
+def get(sv, action_id):
+    return asyncio.run(sv.actions.get(action_id))
+
+
+def _edit(path, old, new):
+    path.write_text(path.read_text().replace(old, new))
+
+
 def checkpoint(scene, kind):
     record = _record_dir(scene.root)
+    state, questions = record / "aidlc-state.md", record / QUESTIONS_REL
+    if kind in ("gate", "questions", "summary", "plan"):
+        questions.parent.mkdir(parents=True, exist_ok=True)
     if kind == "gate":
-        (record / "aidlc-state.md").write_text(_gate_state())
-        path = record / QUESTIONS_REL
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(F.questions_text(
-            stage=STAGE, questions=[("Which store?", ["SQLite", "Postgres"])], answers={1: "A"},
-        ))
+        state.write_text(_gate_state())
+        questions.write_text(F.questions_text(stage=STAGE, questions=CHOICE, answers={1: "A"}))
         with _shard(scene.root).open("a") as file:
             file.write(F.audit_block("STAGE_AWAITING_APPROVAL", "2026-09-04T09:59:00Z", Stage=STAGE))
-    elif kind in ("questions", "summary", "plan"):
-        path = record / QUESTIONS_REL
-        path.parent.mkdir(parents=True, exist_ok=True)
-        text = F.questions_text(stage=STAGE, questions=[("Which store?", ["SQLite", "Postgres"])])
-        if kind != "questions":
-            heading = "Consolidated Summary Confirmation" if kind == "summary" else "Plan Approval"
-            text = f"# Questions\n\n## {heading}\n\n[Answer]:\n"
-        path.write_text(text)
+    elif kind == "questions":
+        questions.write_text(F.questions_text(stage=STAGE, questions=CHOICE))
+    elif kind in ("summary", "plan"):
+        heading = "Consolidated Summary Confirmation" if kind == "summary" else "Plan Approval"
+        questions.write_text(f"# Questions\n\n## {heading}\n\n[Answer]:\n")
     elif kind == "stage":
-        text = (record / "aidlc-state.md").read_text().replace(f"[-] {STAGE}", f"[x] {STAGE}")
-        text = text.replace(f"**Current Stage**: {STAGE}", f"**Current Stage**: {NEXT_STAGE}")
-        (record / "aidlc-state.md").write_text(text)
+        _edit(state, f"[-] {STAGE}", f"[x] {STAGE}")
+        _edit(state, f"**Current Stage**: {STAGE}", f"**Current Stage**: {NEXT_STAGE}")
     elif kind == "completed":
-        path = record / "aidlc-state.md"
-        path.write_text(path.read_text().replace("**Status**: Running", "**Status**: Completed"))
+        _edit(state, "**Status**: Running", "**Status**: Completed")
+
+
+def _restored(sv, studio, fake_bun, fake_git, boot_id):
+    """A second ``Services`` over the same store, built the way a Studio reload builds it (no host attached)."""
+    restored = studio.services.Services.build(
+        sv.ctx, clock=sv.clock, ids=sv.ids, bun_path=fake_bun, git_path=fake_git, app_root=sv.app_root,
+        boot_id=boot_id, bun_version=lambda _: "1.1.42")
+    restored.storage.open()
+    restored.settings.load()
+    return restored
 
 
 @pytest.mark.parametrize("kind", ["gate", "questions", "summary", "plan", "stage", "completed"])
@@ -70,9 +86,9 @@ def test_queued_run_is_retired_when_its_purpose_has_expired(sv, routes, fake_hos
     if path == "scan":
         _rescan(sv, routes, fake_host, scene)
     else:
-        status, body = _submit(sv, routes, fake_host, card, payload={"decision": "run"}, wire_text="/aidlc")
+        status, body = submit_run(sv, routes, fake_host, card)
         assert status == 409 and body["code"] == "run_not_applicable", body
-    record = asyncio.run(sv.actions.get(card["action_id"]))
+    record = get(sv, card["action_id"])
     assert record.status == "Cancelled"
     assert record.delivery_id is None and record.delivering_at is None
     assert record.evidence["superseded"] is True
@@ -115,23 +131,19 @@ def test_a_queued_run_is_in_the_scanned_summary_even_when_no_card_is_derived(sv,
 def test_unstable_snapshot_cannot_retire_a_run(sv, routes, fake_host, scene):
     _, created = command(sv, routes, fake_host, scene)
     checkpoint(scene, "gate")
-    repo = sv.repos.get(scene.repo_id)
-    snap = replace(sv.projection.snapshot(repo, "default", INTENT), stable=False)
-    record = asyncio.run(sv.actions.get(created["action_id"]))
-    asyncio.run(sv.reconciler.reconcile_action(record, snap))
-    assert asyncio.run(sv.actions.get(record.action_id)).status == "Queued"
+    snap = replace(sv.projection.snapshot(sv.repos.get(scene.repo_id), "default", INTENT), stable=False)
+    asyncio.run(sv.reconciler.reconcile_action(get(sv, created["action_id"]), snap))
+    assert get(sv, created["action_id"]).status == "Queued"
 
 
 def test_dispatched_run_is_never_cancelled_by_checkpoint_cleanup(sv, routes, fake_host, scene):
     _, created = command(sv, routes, fake_host, scene)
-    status, receipt = _submit(
-        sv, routes, fake_host, created["action"], payload={"decision": "run"}, wire_text="/aidlc",
-    )
+    status, receipt = submit_run(sv, routes, fake_host, created["action"])
     assert status == 200, receipt
     fake_host.get_slot(scene.slot_key).running = True
     checkpoint(scene, "gate")
     _rescan(sv, routes, fake_host, scene)
-    record = asyncio.run(sv.actions.get(created["action_id"]))
+    record = get(sv, created["action_id"])
     assert record.status != "Cancelled" and record.delivery_id == receipt["delivery_id"]
     assert sv.scheduler.live()
 
@@ -146,11 +158,9 @@ def test_checkpoint_appearing_under_lease_refuses_the_send(sv, routes, fake_host
         return result
 
     monkeypatch.setattr(sv.engine, "switch_cursor_sync", switch_then_ask)
-    status, body = _submit(
-        sv, routes, fake_host, created["action"], payload={"decision": "run"}, wire_text="/aidlc",
-    )
+    status, body = submit_run(sv, routes, fake_host, created["action"])
     assert status == 409 and body["code"] == "run_not_applicable", body
-    record = asyncio.run(sv.actions.get(created["action_id"]))
+    record = get(sv, created["action_id"])
     assert record.status == "Cancelled" and record.delivery_id is None
     assert not sv.scheduler.live()
     assert fake_host.get_slot(scene.slot_key).messages == []
@@ -169,26 +179,22 @@ def test_cleanup_cannot_cancel_a_concurrent_dispatch(sv, routes, fake_host, scen
 
     monkeypatch.setattr(sv.actions, "transition", dispatch_first)
     asyncio.run(sv.reconciler.reconcile_now(created["action_id"]))
-    record = asyncio.run(sv.actions.get(created["action_id"]))
+    record = get(sv, created["action_id"])
     assert record.status == "Delivering" and record.delivery_id == "dl_racing_dispatch"
 
 
 def test_revision_still_allows_agent_work(sv, routes, fake_host, scene):
-    path = _record_dir(scene.root) / "aidlc-state.md"
-    path.write_text(path.read_text().replace(f"[-] {STAGE}", f"[R] {STAGE}"))
+    _edit(_record_dir(scene.root) / "aidlc-state.md", f"[-] {STAGE}", f"[R] {STAGE}")
     status, created = command(sv, routes, fake_host, scene)
     assert status == 201, created
     _rescan(sv, routes, fake_host, scene)
-    assert asyncio.run(sv.actions.get(created["action_id"])).status == "Queued"
+    assert get(sv, created["action_id"]).status == "Queued"
 
 
-def test_studio_reload_preserves_an_active_conversation_and_its_lease(
-    sv, routes, fake_host, scene, studio, fake_bun, fake_git,
-):
+def test_studio_reload_preserves_an_active_conversation_and_its_lease(sv, routes, fake_host, scene, studio, fake_bun,
+                                                                     fake_git):
     _, created = command(sv, routes, fake_host, scene)
-    status, receipt = _submit(
-        sv, routes, fake_host, created["action"], payload={"decision": "run"}, wire_text="/aidlc",
-    )
+    status, receipt = submit_run(sv, routes, fake_host, created["action"])
     assert status == 200, receipt
     slot = fake_host.get_slot(scene.slot_key)
     slot.running = True
@@ -198,17 +204,11 @@ def test_studio_reload_preserves_an_active_conversation_and_its_lease(
 
     async def reload():
         await sv.stop()
-        restored = studio.services.Services.build(
-            sv.ctx, clock=sv.clock, ids=sv.ids, bun_path=fake_bun, git_path=fake_git,
-            app_root=sv.app_root, boot_id="reloaded-studio", bun_version=lambda _: "1.1.42",
-        )
-        restored.storage.open()
-        restored.settings.load()
+        restored = _restored(sv, studio, fake_bun, fake_git, "reloaded-studio")
         restored.host.attach(fake_host)
         try:
             await restored.reconciler.startup()
-            record = await restored.actions.get(created["action_id"])
-            assert record.status == "Delivered"
+            assert (await restored.actions.get(created["action_id"])).status == "Delivered"
             after = restored.scheduler.live()[0]
             assert (after.action_id, after.generation) == (lease.action_id, lease.generation)
             assert slot.running is True and slot.messages == []
@@ -219,45 +219,31 @@ def test_studio_reload_preserves_an_active_conversation_and_its_lease(
     asyncio.run(reload())
 
 
-def test_cold_start_cannot_treat_plan_approval_as_an_ended_turn(
-    sv, routes, fake_host, scene, studio, fake_bun, fake_git,
-):
+def test_cold_start_cannot_treat_plan_approval_as_an_ended_turn(sv, routes, fake_host, scene, studio, fake_bun,
+                                                               fake_git):
     checkpoint(scene, "plan")
     _rescan(sv, routes, fake_host, scene)
     card = next(a for a in _queue(sv, routes, fake_host) if a["type"] == "question")
-    status, receipt = _submit(
-        sv, routes, fake_host, card, payload={"decision": "approve_plan"}, wire_text="Approve Plan",
-    )
+    status, receipt = _submit(sv, routes, fake_host, card, payload={"decision": "approve_plan"},
+                              wire_text="Approve Plan")
     assert status == 200, receipt
-    slot = fake_host.get_slot(scene.slot_key)
-    slot.running = True
+    fake_host.get_slot(scene.slot_key).running = True
     assert _report(sv, routes, fake_host, card["action_id"], receipt)[0] == 200
     record = _record_dir(scene.root)
-    path = record / QUESTIONS_REL
-    path.write_text(path.read_text().replace("[Answer]:", "[Answer]: Approve Plan"))
+    _edit(record / QUESTIONS_REL, "[Answer]:", "[Answer]: Approve Plan")
     with _shard(scene.root).open("a") as file:
         file.write(F.audit_text(
             F.audit_block("HUMAN_TURN", "2026-09-04T10:00:20Z"),
-            F.audit_block("PLAN_APPROVAL_RECORDED", "2026-09-04T10:00:20Z",
-                          Stage=STAGE, Details="Approve Plan"),
-        ))
-    marker = record / ".aidlc-human-turn"
-    marker.write_text("2026-09-04T10:00:20Z\n")
-    os.utime(marker, ns=(2_000_000_000, 2_000_000_000))
+            F.audit_block("PLAN_APPROVAL_RECORDED", "2026-09-04T10:00:20Z", Stage=STAGE, Details="Approve Plan")))
+    stamp_human_turn(record, "2026-09-04T10:00:20Z")
     lease = sv.scheduler.live()[0]
 
     async def cold_start():
         await sv.stop()
-        restored = studio.services.Services.build(
-            sv.ctx, clock=sv.clock, ids=sv.ids, bun_path=fake_bun, git_path=fake_git,
-            app_root=sv.app_root, boot_id="host-not-attached-yet", bun_version=lambda _: "1.1.42",
-        )
-        restored.storage.open()
-        restored.settings.load()
+        restored = _restored(sv, studio, fake_bun, fake_git, "host-not-attached-yet")
         try:
             await restored.reconciler.startup()
-            current = await restored.actions.get(card["action_id"])
-            assert current.status == "Delivered"
+            assert (await restored.actions.get(card["action_id"])).status == "Delivered"
             assert restored.scheduler.live()[0].generation == lease.generation
             restored.host.attach(fake_host)
             await restored.reconciler.reconcile_now(card["action_id"])
