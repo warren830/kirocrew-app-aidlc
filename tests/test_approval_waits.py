@@ -2,15 +2,12 @@
 
 import asyncio
 
-from test_e2e_gate import (  # noqa: F401
-    INTENT, _get, _rescan, repo_dir, scene,
-)
+from test_e2e_gate import INTENT, _get, _rescan, repo_dir, scene  # noqa: F401
 from test_handlers_auth import common, routes, sv  # noqa: F401
 
-PERMISSION = {
-    "role": "permission", "ts": "2026-09-04T10:00:30Z", "content": "Locate the load-steering instructions",
-    "cls": '{"tool_input": "grep -n steering .kiro/skills/aidlc/SKILL.md", "approval_id": "req-1"}',
-}
+TOOL, TOOL_INPUT = "Locate the load-steering instructions", "grep -n steering .kiro/skills/aidlc/SKILL.md"
+PERMISSION = {"role": "permission", "ts": "2026-09-04T10:00:30Z", "content": TOOL,
+              "cls": '{"tool_input": "grep -n steering .kiro/skills/aidlc/SKILL.md", "approval_id": "req-1"}'}
 
 
 class Pending:
@@ -23,6 +20,10 @@ def _approvals(sent):
     return [note for note in sent if note["meta"]["kind"] == "approval"]
 
 
+def _scan(sv, scene):
+    asyncio.run(sv.reconciler.scan_repo(sv.repos.get(scene.repo_id)))
+
+
 def park(fake_host, scene):
     slot = fake_host.get_slot(scene.slot_key)
     slot.messages.append(PERMISSION)
@@ -33,34 +34,26 @@ def park(fake_host, scene):
 def test_the_queue_lists_a_parked_conversation_with_what_it_asks(sv, routes, fake_host, scene):
     status, body = _get(sv, routes, fake_host, "/actions")
     assert status == 200 and body["approval_waits"] == []
-
     park(fake_host, scene)
     status, body = _get(sv, routes, fake_host, "/actions")
     assert status == 200
     assert body["approval_waits"] == [{
         "repo_id": scene.repo_id, "repo_label": "ledger", "space": "default", "intent_dir": INTENT,
-        "intent_key": INTENT, "slot_key": scene.slot_key,
-        "tool": "Locate the load-steering instructions",
-        "tool_input": "grep -n steering .kiro/skills/aidlc/SKILL.md",
-    }]
+        "intent_key": INTENT, "slot_key": scene.slot_key, "tool": TOOL, "tool_input": TOOL_INPUT}]
     # The queue's own filter applies: another repository's queue does not show it.
     status, body = _get(sv, routes, fake_host, "/actions", repo="r_other")
     assert status == 200 and body["approval_waits"] == []
-
     status, body = _get(sv, routes, fake_host, f"/repos/{scene.repo_id}/intents")
     session = next(i for i in body["intents"] if i["intent_dir"] == INTENT)["session"]
     assert session["waiting_approval"] is True
-    assert session["approval"] == {
-        "tool": "Locate the load-steering instructions",
-        "tool_input": "grep -n steering .kiro/skills/aidlc/SKILL.md",
-    }
+    assert session["approval"] == {"tool": TOOL, "tool_input": TOOL_INPUT}
 
 
 def test_a_scan_notifies_once_per_approval_with_a_link_to_the_conversation(sv, routes, fake_host, scene):
     park(fake_host, scene)
     before = len(fake_host.notifications)
     for _ in range(2):
-        asyncio.run(sv.reconciler.scan_repo(sv.repos.get(scene.repo_id)))
+        _scan(sv, scene)
     sent = _approvals(fake_host.notifications[before:])
     assert len(sent) == 1
     assert sent[0]["title"] == "AI-DLC is waiting for your approval: gate-demo"
@@ -70,19 +63,16 @@ def test_a_scan_notifies_once_per_approval_with_a_link_to_the_conversation(sv, r
 def test_a_sub_agents_approval_on_the_coordinator_is_shown_and_notified(sv, routes, fake_host, scene):
     """A sub-agent's approval waits on the host's coordinator, not on the slot's own futures."""
     slot = fake_host.get_slot(scene.slot_key)
-    slot.coordinator_approvals.append({
-        "id": "spawn:dev-1", "tool": "Run the unit tests", "tool_input": "go test ./backend/plugins/servicenow/...",
-    })
+    slot.coordinator_approvals.append(
+        {"id": "spawn:dev-1", "tool": "Run the unit tests", "tool_input": "go test ./backend/plugins/servicenow/..."})
     status, body = _get(sv, routes, fake_host, "/actions")
     assert status == 200
     assert [(w["slot_key"], w["tool"], w["tool_input"]) for w in body["approval_waits"]] == [
-        (scene.slot_key, "Run the unit tests", "go test ./backend/plugins/servicenow/..."),
-    ]
+        (scene.slot_key, "Run the unit tests", "go test ./backend/plugins/servicenow/...")]
     before = len(fake_host.notifications)
-    asyncio.run(sv.reconciler.scan_repo(sv.repos.get(scene.repo_id)))
+    _scan(sv, scene)
     sent = _approvals(fake_host.notifications[before:])
     assert len(sent) == 1 and "go test ./backend/plugins/servicenow/..." in sent[0]["body"]
-
     slot.coordinator_approvals.clear()
     status, body = _get(sv, routes, fake_host, "/actions")
     assert body["approval_waits"] == []
