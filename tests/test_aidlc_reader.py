@@ -195,7 +195,7 @@ def test_state_file_parses_every_real_fixture(R, tree, intent, version, stage_co
 def test_state_supported_versions_and_stage_counts_match_constants(studio):
     C = studio.constants
     assert set(version for _, _, version, _ in STATE_FIXTURES) == set(C.SUPPORTED_STATE_VERSIONS)
-    assert set(count for _, _, _, count in STATE_FIXTURES) == set(C.SUPPORTED_STAGE_COUNTS)
+    assert set(count for _, _, _, count in STATE_FIXTURES) == {32, 33}   # application-design vs domain/contract design
 
 
 def test_state_empty_value_with_trailing_space_is_empty_string(R):
@@ -1501,9 +1501,9 @@ def test_stage_graph_carries_the_review_artifact_and_absorbs_a_graph_without_one
 def test_bundled_payload_engine_reads_back_its_pinned_shape(reader, repo_builder, studio):
     repo = repo_builder.with_engine("payload").build()
     graph = reader.read_stage_graph(repo, ".kiro")
-    assert len(graph) == studio.constants.BUNDLED_STAGE_COUNT
+    assert len(graph) == 33
     assert reader.detect_harness_dirs(repo)[0].engine_version == studio.constants.BUNDLED_ENGINE_VERSION
-    assert reader.detect_harness_dirs(repo)[0].engine_state_version == studio.constants.BUNDLED_STATE_VERSION
+    assert reader.detect_harness_dirs(repo)[0].engine_state_version == 8
     # Every scope file the payload ships is a stock scope. The count is derived from disk rather than
     # written out, so a scope added by a future engine cannot pass while `STOCK_SCOPES` stays behind —
     # the `project_owned` line below is the tripwire, and this line only proves it was given work to do.
@@ -1520,7 +1520,7 @@ def test_detect_harness_dirs_per_engine_generation(reader, repo_builder, tmp_pat
     assert payload[0].rules_subdir == "steering"
     # Read off the live payload, so the literal belongs to `constants`, not to this assertion.
     assert payload[0].engine_version == studio.constants.BUNDLED_ENGINE_VERSION
-    assert payload[0].stage_count == studio.constants.BUNDLED_STAGE_COUNT
+    assert payload[0].stage_count == 33
     assert payload[0].has_utility is True
     assert payload[0].engine_state_version == 8
 

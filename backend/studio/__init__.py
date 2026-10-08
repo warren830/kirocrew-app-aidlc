@@ -13,8 +13,8 @@ half-initialised module later.
 
 from __future__ import annotations
 
-from . import constants, errors, security          # foundation: no intra-package dependencies
-from . import storage                              # durable store (CAS, leases, events, activity)
+from . import constants, errors, security, wire    # foundation: no intra-package dependencies
+from . import storage                              # durable store (CAS, activity, preferences)
 from . import aidlc_reader, engine, git_observer    # readers over someone else's files and tools
 from . import consistency, repo_registry            # judgements over what the readers found
 from . import activity, events, leases, projection, settings  # the read model and Studio's own records
@@ -49,4 +49,5 @@ __all__ = [
     "sessions",
     "settings",
     "storage",
+    "wire",
 ]

@@ -46,11 +46,12 @@ from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 from . import constants as C
 from . import sessions as _sessions
 from .actions import ABSENCE_PROOF
-from .aidlc_reader import WireRecord, audit_question_accepts_text, audit_question_answer
+from .aidlc_reader import audit_question_accepts_text, audit_question_answer
 from .consistency import RepoFacts
 from .errors import IllegalTransition, StaleGeneration, StudioError
 from .projection import run_unavailable_reason
 from .repo_registry import RepoScan
+from .wire import WireRecord
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .projection import StableBoundary

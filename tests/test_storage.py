@@ -2,11 +2,9 @@
 
 The properties under test are the ones the rest of the product trusts blindly: a compare-and-set that
 exactly one racing writer can win, a committed ``Delivering`` record another connection can already
-see, a bounded event ring a client can replay from, stable activity paging, and a retention purge that
-clears the verbatim human text without touching anything else.
-
-Where a test needs a limit lowered (the event ring, the vacuum threshold) it patches the constant
-rather than the code, so the production value stays the only one in the source.
+see, a migration ladder that takes any shipped file to today's schema without losing a row it keeps,
+stable activity paging, and a retention purge that clears the verbatim human text without touching
+anything else.
 """
 
 from __future__ import annotations
@@ -48,8 +46,8 @@ def db_path(fake_ctx, C) -> Path:
 
 
 @pytest.fixture
-def store(S, db_path, clock, ids):
-    st = S.Storage(db_path, clock=clock, ids=ids)
+def store(S, db_path, clock):
+    st = S.Storage(db_path, clock=clock)
     st.open()
     yield st
     st.close()
@@ -111,6 +109,32 @@ def activity_row(S, **over):
     return S.ActivityRow(**fields)
 
 
+#: The tables version 4 dropped: nothing has read or written them since leases, events and calibration moved.
+DROPPED = {"execution_leases", "admin_leases", "lease_generations", "events", "calibration", "migrations"}
+
+
+def legacy_file(S, db_path, version):
+    """A raw connection to a database exactly as ``version`` left it: the ladder up to there, stamped so."""
+    raw = sqlite3.connect(str(db_path))
+    for target in range(1, version + 1):
+        for statement in S._statements(S.MIGRATIONS[target]):
+            raw.execute(statement)
+    raw.execute("INSERT INTO schema_meta(key, value) VALUES('schema_version', ?)", (str(version),))
+    raw.execute("INSERT INTO repos(id, resolved_identity, canonical_path, label, added_at, platform) "
+                "VALUES('r_1', '1:r_1', '/FIXTURE/repo/r_1', 'r_1', ?, 'darwin')", (TS,))
+    return raw
+
+
+def schema_of(path):
+    """Every table and index definition in the file, as SQLite itself stores them."""
+    raw = sqlite3.connect(str(path))
+    try:
+        return raw.execute("SELECT type, name, tbl_name, sql FROM sqlite_master "
+                           "WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name").fetchall()
+    finally:
+        raw.close()
+
+
 # --------------------------------------------------------------------------- #
 # schema, PRAGMAs, migration path
 # --------------------------------------------------------------------------- #
@@ -123,7 +147,9 @@ def test_ddl_applies_to_an_empty_file(store, S, db_path):
     # every table the key map claims exists and is readable; only schema_meta starts non-empty
     for table in sorted(set(S.TABLE_KEYS) - {"schema_meta"}):
         assert store.select(table, limit=1) == []
-    assert store.pragmas()["schema_version"] == S.SCHEMA_VERSION == 3
+    # ...and the key map is every table there is: a fresh file runs the whole ladder, drops included
+    assert {name for kind, name, _, _ in schema_of(db_path) if kind == "table"} == set(S.TABLE_KEYS)
+    assert store.pragmas()["schema_version"] == S.SCHEMA_VERSION == 4
     assert store.integrity_check() == []
 
 
@@ -141,18 +167,12 @@ def test_the_partial_dedupe_index_covers_exactly_the_live_statuses(store, C):
     assert "Failed" not in statuses and "Failed" in C.LIVE_ACTION_STATUS
 
 
-def test_version_3_folds_the_retired_action_statuses_into_their_neighbours(S, C, db_path, clock, ids):
+def test_version_3_folds_the_retired_action_statuses_into_their_neighbours(S, C, db_path, clock):
     """``Processing`` was a ``Delivered`` whose turn had started, ``DeliveryUncertain`` an early
     ``ReconciliationRequired``, and ``Draft`` was never created. An upgraded file holds only statuses the code
     can still move: the turn's start is kept as evidence (the reconciler's own stamp when it made one, else the
     delivery), and the live-dedupe index is rebuilt over the statuses that remain."""
-    raw = sqlite3.connect(str(db_path))
-    for script in (S.SCHEMA_V1, S.SCHEMA_V2):
-        for statement in S._statements(script):
-            raw.execute(statement)
-    raw.execute("INSERT INTO schema_meta(key, value) VALUES('schema_version', '2')")
-    raw.execute("INSERT INTO repos(id, resolved_identity, canonical_path, label, added_at, platform) "
-                "VALUES('r_1', '1:r_1', '/FIXTURE/repo/r_1', 'r_1', ?, 'darwin')", (TS,))
+    raw = legacy_file(S, db_path, 2)
 
     def old_row(action_id, status, evidence, *, delivered_at=None, dedupe=None):
         raw.execute(
@@ -176,7 +196,7 @@ def test_version_3_folds_the_retired_action_statuses_into_their_neighbours(S, C,
     raw.commit()
     raw.close()
 
-    store = S.Storage(db_path, clock=clock, ids=ids)
+    store = S.Storage(db_path, clock=clock)
     store.open()
     try:
         assert {r["action_id"]: r["status"] for r in store.select("actions")} == {
@@ -200,12 +220,109 @@ def test_version_3_folds_the_retired_action_statuses_into_their_neighbours(S, C,
             ("ReconciliationRequired", "ReconciliationRequired", "uncertain_escalated"),
             ("Delivered", "Processing", "turn_started"),
         ]
-        assert store.pragmas()["schema_version"] == S.SCHEMA_VERSION == 3
+        assert store.pragmas()["schema_version"] == S.SCHEMA_VERSION
         assert store.integrity_check() == []
         with pytest.raises(sqlite3.IntegrityError):
             action(store, "a_twin", status="ReconciliationRequired", dedupe_key="k1")
     finally:
         store.close()
+
+
+def test_version_4_drops_the_unread_tables_and_keeps_every_other_row(S, db_path, clock):
+    """A lease is an in-flight action or a ``flock`` now, events live in memory, and calibration and the console
+    migration are gone. Upgrading a version 3 file removes exactly their six tables, rows and all, and leaves
+    every row of every other table byte for byte as it was."""
+    raw = legacy_file(S, db_path, 3)
+    raw.execute("INSERT INTO schema_meta(key, value) VALUES('created_at', '2026-01-01T00:00:00Z')")
+    raw.execute("INSERT INTO actions(action_id, type, risk_class, repo_id, intent_dir, space, status, created_at, "
+                "updated_at, waiting_since, lease_generation, dedupe_key) VALUES('a_1', 'gate', 'human_lane', 'r_1', "
+                "'260904-gate-demo', 'default', 'Delivered', ?, ?, ?, 7, 'k1')", (TS, TS, TS))
+    raw.execute("INSERT INTO action_transitions(action_id, from_status, to_status, generation, at, reason) "
+                "VALUES('a_1', 'Delivering', 'Delivered', 2, ?, 'ack')", (TS,))
+    raw.execute("INSERT INTO intent_bindings(binding_key, repo_id, space, intent_dir, created_at, updated_at) "
+                "VALUES('r_1:default:260904-gate-demo', 'r_1', 'default', '260904-gate-demo', ?, ?)", (TS, TS))
+    raw.execute("INSERT INTO preferences(key, value_json, updated_at) VALUES('settings', '{\"locale\": \"zh-CN\"}', ?)",
+                (TS,))
+    raw.execute("INSERT INTO activity(at, source, kind, severity, repo_id, message_key, params_json) "
+                "VALUES(?, 'studio', 'repo.added', 'info', 'r_1', 'activity.repo.added', '{}')", (TS,))
+    raw.execute("INSERT INTO breakers(key, count, reason) VALUES('r_1:260904-gate-demo:fp', 2, 'transport')")
+    raw.execute("INSERT INTO install_transactions(transaction_id, repo_id, kind, status, studio_version, "
+                "engine_version, payload_digest, started_at) VALUES('tx_1', 'r_1', 'install', 'committed', '1.1.6', "
+                "'2.10.0', 'd', ?)", (TS,))
+    raw.execute("INSERT INTO install_receipts(receipt_id, repo_id, studio_version, engine_version, payload_digest, "
+                "committed_at, transaction_id, files_json, status) VALUES('rc_1', 'r_1', '1.1.6', '2.10.0', 'd', ?, "
+                "'tx_1', '[]', 'current')", (TS,))
+    raw.execute("INSERT INTO advisor_drafts(draft_id, action_id, kind, status, request_json, created_at, updated_at, "
+                "expires_at) VALUES('d_1', 'a_1', 'gate_analysis', 'ready', '{}', ?, ?, ?)", (TS, TS, TS))
+    # One row in each dropped table, as the last version 3 process could have left it.
+    raw.execute("INSERT INTO execution_leases(resolved_repo_identity, repo_id, action_id, acquired_at, heartbeat_at, "
+                "generation) VALUES('1:r_1', 'r_1', 'a_1', ?, ?, 7)", (TS, TS))
+    raw.execute("INSERT INTO admin_leases(resolved_repo_identity, repo_id, operation_type, acquired_at, heartbeat_at, "
+                "generation, boot_id) VALUES('2:r_2', 'r_1', 'install', ?, ?, 3, 'boot-old')", (TS, TS))
+    raw.execute("INSERT INTO lease_generations(resolved_repo_identity, last_generation) VALUES('1:r_1', 7)")
+    raw.execute("INSERT INTO events(at, type, payload_json) VALUES(?, 'repo.updated', '{}')", (TS,))
+    raw.execute("INSERT INTO calibration(at, scope, depth, stage_class, est_json, actual_json) "
+                "VALUES(?, 'poc', 'Standard', 'operation', '{}', '{}')", (TS,))
+    raw.execute("INSERT INTO migrations(id, applied_at, status, summary_json) VALUES('console', ?, 'applied', '{}')",
+                (TS,))
+    raw.commit()
+    kept = sorted(set(S.TABLE_KEYS) - {"schema_meta"})
+    before = {table: raw.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall() for table in kept}
+    raw.close()
+    assert all(before.values()), "every kept table carries a row into the upgrade"
+
+    clock.advance(3600)
+    store = S.Storage(db_path, clock=clock)
+    store.open()
+    try:
+        assert {name for kind, name, _, _ in schema_of(db_path) if kind == "table"} == set(S.TABLE_KEYS)
+        other = sqlite3.connect(str(db_path))
+        try:
+            assert {table: other.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall() for table in kept} == before
+            sequences = {name for (name,) in other.execute("SELECT name FROM sqlite_sequence")}
+        finally:
+            other.close()
+        assert not sequences & DROPPED                       # the autoincrement counters went with their tables
+        meta = {r["key"]: r["value"] for r in store.select("schema_meta")}
+        assert meta == {"schema_version": "4", "created_at": "2026-01-01T00:00:00Z", "migrated_at": clock.iso()}
+        assert store.integrity_check() == []
+        with pytest.raises(sqlite3.IntegrityError):             # the live-dedupe index survived the upgrade
+            action(store, "a_twin", status="Queued", dedupe_key="k1")
+    finally:
+        store.close()
+
+
+def test_the_whole_ladder_takes_a_version_1_file_to_the_schema_a_fresh_file_has(S, db_path, tmp_path, clock):
+    """A database last opened by version 1 still upgrades in one ``open``: every step applies to a populated file
+    (the version 2 column to a lease that has a row, the version 3 rewrite to retired statuses, the version 4 drops
+    to tables with content), and what comes out is exactly the schema a fresh install builds."""
+    raw = legacy_file(S, db_path, 1)
+    for action_id, status in (("a_ran", "Processing"), ("a_unsure", "DeliveryUncertain"), ("a_new", "Queued")):
+        raw.execute("INSERT INTO actions(action_id, type, risk_class, repo_id, intent_dir, space, status, created_at, "
+                    "updated_at, waiting_since, delivered_at) VALUES(?, 'gate', 'human_lane', 'r_1', "
+                    "'260904-gate-demo', 'default', ?, ?, ?, ?, ?)", (action_id, status, TS, TS, TS, TS))
+    raw.execute("INSERT INTO admin_leases(resolved_repo_identity, repo_id, operation_type, acquired_at, heartbeat_at, "
+                "generation) VALUES('1:r_1', 'r_1', 'install', ?, ?, 1)", (TS, TS))
+    raw.execute("INSERT INTO events(at, type, payload_json) VALUES(?, 'repo.updated', '{}')", (TS,))
+    raw.commit()
+    raw.close()
+
+    store = S.Storage(db_path, clock=clock)
+    fresh = S.Storage(tmp_path / "fresh" / "studio.sqlite3", clock=clock)
+    store.open()
+    fresh.open()
+    try:
+        assert schema_of(db_path) == schema_of(fresh.path)
+        assert {r["action_id"]: r["status"] for r in store.select("actions")} == {
+            "a_ran": "Delivered", "a_unsure": "ReconciliationRequired", "a_new": "Queued",
+        }
+        assert store.get("actions", "a_ran")["evidence_json"] == {"turn_started_at": TS}
+        assert store.get("repos", "r_1")["label"] == "r_1"
+        assert store.pragmas()["schema_version"] == fresh.pragmas()["schema_version"] == S.SCHEMA_VERSION
+        assert store.integrity_check() == []
+    finally:
+        store.close()
+        fresh.close()
 
 
 def test_pragmas_are_in_force_on_the_connection(store, C):
@@ -226,8 +343,8 @@ def test_foreign_keys_refuse_orphans_and_cascade_on_repo_delete(store):
     assert store.select("actions") == [] and store.select("intent_bindings") == []
 
 
-def test_reopening_at_the_current_version_is_a_no_op(S, db_path, clock, ids):
-    st = S.Storage(db_path, clock=clock, ids=ids)
+def test_reopening_at_the_current_version_is_a_no_op(S, db_path, clock):
+    st = S.Storage(db_path, clock=clock)
     st.open()
     repo(st)
     stamps = {r["key"]: r["value"] for r in st.select("schema_meta")}
@@ -235,7 +352,7 @@ def test_reopening_at_the_current_version_is_a_no_op(S, db_path, clock, ids):
     st.close()
 
     clock.advance(3600)
-    again = S.Storage(db_path, clock=clock, ids=ids)
+    again = S.Storage(db_path, clock=clock)
     again.open()
     try:
         after = {r["key"]: r["value"] for r in again.select("schema_meta")}
@@ -248,8 +365,8 @@ def test_reopening_at_the_current_version_is_a_no_op(S, db_path, clock, ids):
         again.close()
 
 
-def test_a_file_written_by_a_newer_schema_is_refused(S, db_path, clock, ids, studio):
-    st = S.Storage(db_path, clock=clock, ids=ids)
+def test_a_file_written_by_a_newer_schema_is_refused(S, db_path, clock, studio):
+    st = S.Storage(db_path, clock=clock)
     st.open()
     st.close()
     raw = sqlite3.connect(str(db_path))
@@ -258,20 +375,20 @@ def test_a_file_written_by_a_newer_schema_is_refused(S, db_path, clock, ids, stu
     raw.close()
 
     with pytest.raises(studio.errors.StudioError) as exc:
-        S.Storage(db_path, clock=clock, ids=ids).open()
+        S.Storage(db_path, clock=clock).open()
     assert exc.value.code == "storage_error"
     assert exc.value.details == {"found": 99, "supported": S.SCHEMA_VERSION}
 
 
-def test_use_before_open_and_after_close_is_a_storage_error(S, db_path, clock, ids, studio):
-    st = S.Storage(db_path, clock=clock, ids=ids)
+def test_use_before_open_and_after_close_is_a_storage_error(S, db_path, clock, studio):
+    st = S.Storage(db_path, clock=clock)
     with pytest.raises(studio.errors.StudioError) as before:
-        st.pref_all()
+        st.pref_get("locale")
     assert before.value.code == "storage_unavailable"
     st.open()
     st.close()
     with pytest.raises(studio.errors.StudioError) as after:
-        st.pref_all()
+        st.pref_get("locale")
     assert after.value.code == "storage_unavailable"
     st.open()          # open() is idempotent and re-usable after a close
     assert st.integrity_check() == []
@@ -283,9 +400,8 @@ def test_every_public_method_is_one_transaction(S):
     source = Path(S.__file__).read_text("utf-8")
     tree = ast.parse(source)
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Storage")
-    # These cannot be inside a transaction: SQLite refuses VACUUM in one, and the rest only read
-    # PRAGMAs or lifecycle state.
-    outside = {"open", "close", "pragmas", "integrity_check", "vacuum_if_needed", "path"}
+    # These only read PRAGMAs or lifecycle state.
+    outside = {"open", "close", "pragmas", "integrity_check", "path"}
     seen = set()
     for node in cls.body:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or node.name.startswith("_"):
@@ -355,8 +471,8 @@ def _cas_case(store, table):
 
 
 @pytest.mark.parametrize("table", ["actions", "intent_bindings"])
-def test_cas_update_bumps_the_generation_and_the_tables_own_timestamp(store, S, clock, table):
-    gen_col, ts_col = S.CAS_TABLES[table]
+def test_cas_update_bumps_the_generation_and_updated_at(store, S, clock, table):
+    gen_col = S.CAS_TABLES[table]
     key, values = _cas_case(store, table)
     before = store.get(table, key)
     clock.advance(60)
@@ -364,14 +480,14 @@ def test_cas_update_bumps_the_generation_and_the_tables_own_timestamp(store, S, 
     new_gen = store.cas_update(table, key, before[gen_col], values)
     after = store.get(table, key)
     assert new_gen == before[gen_col] + 1 == after[gen_col]
-    assert after[ts_col] == clock.iso() != before[ts_col]
+    assert after["updated_at"] == clock.iso() != before["updated_at"]
     for name, value in values.items():
         assert after[name] == value
 
 
 @pytest.mark.parametrize("table", ["actions", "intent_bindings"])
 def test_cas_update_raises_stale_generation_with_expected_and_actual(store, S, studio, table):
-    gen_col, _ = S.CAS_TABLES[table]
+    gen_col = S.CAS_TABLES[table]
     key, values = _cas_case(store, table)
     actual = store.get(table, key)[gen_col]
 
@@ -587,38 +703,19 @@ def test_activity_delete_before_drops_only_rows_older_than_the_cutoff(store, S):
 def test_preferences_round_trip_every_json_shape(store, clock):
     assert store.pref_get("locale") is None
     store.pref_set("locale", "zh-CN")
-    store.pref_set("night_window", {"enabled": False, "start_local": "22:00", "turn_cap": 40})
+    store.pref_set("runtime.bun", {"path": "/opt/bun/bin/bun", "probe": {"ok": True, "tries": 2}})
     store.pref_set("muted_repo_ids", ["r_1", "r_2"])
     store.pref_set("credit_cap", None)
     store.pref_set("locale", "en-US")                      # upsert, not a duplicate row
 
     assert store.pref_get("locale") == "en-US"
-    assert store.pref_get("night_window")["turn_cap"] == 40
+    assert store.pref_get("runtime.bun")["probe"]["tries"] == 2
     assert store.pref_get("muted_repo_ids") == ["r_1", "r_2"]
     assert store.pref_get("credit_cap") is None
-    assert list(store.pref_all()) == ["credit_cap", "locale", "muted_repo_ids", "night_window"]
+    assert [r["key"] for r in store.select("preferences", order_by="key")] == [
+        "credit_cap", "locale", "muted_repo_ids", "runtime.bun",
+    ]
     assert store.get("preferences", "locale")["updated_at"] == clock.iso()
-
-
-def test_vacuum_only_runs_when_the_free_list_is_worth_it(store, C, monkeypatch):
-    repo(store)
-    for n in range(200):
-        store.insert("events", {"at": TS, "type": "activity.appended",
-                               "payload_json": {"n": n, "pad": "x" * 400}})
-    for row in store.select("events"):
-        store.delete("events", str(row["seq"]))
-    free_before = store.pragmas()["freelist_count"]
-    assert free_before > 0
-
-    store.vacuum_if_needed()                                # thresholds unmet: no rewrite
-    assert store.pragmas()["freelist_count"] == free_before
-
-    monkeypatch.setattr(C, "VACUUM_MIN_FREELIST_PAGES", 1)
-    monkeypatch.setattr(C, "VACUUM_FREELIST_RATIO", 0.0)
-    store.vacuum_if_needed()
-    assert store.pragmas()["freelist_count"] == 0
-    assert store.get("repos", "r_1")["label"] == "r_1"
-    assert store.integrity_check() == []
 
 
 def test_the_injectable_protocols_live_in_constants(C, clock, ids):

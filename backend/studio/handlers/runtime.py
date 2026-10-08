@@ -54,7 +54,6 @@ async def _compile(services: Any, repo: Any, snap: Any) -> dict[str, Any]:
             fresh.space, fresh.intent_dir, expected[1],
             lease_generation=grant.generation, repo_id=repo.repo_id,
         )
-        await services.engine.drain_activity()
         if not cursor.ok or any(not result.ok for result in cursor.results):
             raise StudioError("cursor_mismatch", "the selected intent could not be activated",
                               details={"mismatch": list(cursor.mismatch)})

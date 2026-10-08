@@ -13,13 +13,13 @@ English only: the host's notification bus has no locale, and the UI renders its 
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from . import constants as C
 from . import security as S
+from .wire import WireRecord
 
 logger = logging.getLogger(f"kirocrew.app.{C.APP_NAME}.notifications")
 
@@ -46,7 +46,7 @@ _BODY_LIMIT = 500
 
 
 @dataclass(frozen=True, slots=True)
-class NotificationResult:
+class NotificationResult(WireRecord):
     """What actually happened, so a caller (and a test) can assert it without reading Slack."""
 
     dashboard: bool
@@ -54,9 +54,6 @@ class NotificationResult:
     slack_ts: str | None
     deep_link: str
     dedupe_hit: bool
-
-    def to_json(self) -> dict[str, Any]:
-        return dataclasses.asdict(self)
 
 
 @dataclass(slots=True)

@@ -71,7 +71,7 @@ def sv(studio, fake_ctx, fake_host, clock, ids, fake_bun, fake_git):
     services.storage.open()
     services.settings.load()
     services.host.attach(fake_host)
-    studio.services.register(services)
+    studio.services._REGISTRY[fake_ctx.name] = services
     yield services
     studio.services.discard(fake_ctx.name)
     services.storage.close()

@@ -80,7 +80,6 @@ def refresh_env(sv, studio, tmp_path, routes, fake_host):
             sv.storage, sv.repos, sv.reader, sv.engine, sv.scheduler, sv.activity,
             sv.events, sv.clock, sv.ids, payload_dir=manifest_path.parent,
             manifest=sv.payload, data_dir=Path(sv.ctx.data_dir), settings=sv.settings,
-            boot_id=sv.boot_id,
         )
         sv.payload_status = sv.installer.verify_payload()
         assert sv.payload_status.ok

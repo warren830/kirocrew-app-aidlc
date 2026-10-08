@@ -39,7 +39,6 @@ from .aidlc_reader import (
     StageNode,
     StageRow,
     StateFile,
-    WireRecord,
     boundary_token,
     evidence_digest,
     file_questions_support_forms,
@@ -49,6 +48,7 @@ from .aidlc_reader import (
     stage_attempt,
 )
 from .errors import StudioError
+from .wire import WireRecord
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     # `consistency` imports this module under TYPE_CHECKING; importing it at runtime would close a cycle.

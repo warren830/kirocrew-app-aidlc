@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any, Mapping, NoReturn, Sequence
 from . import constants as C
 from . import security
 from .aidlc_reader import (
-    PresenceBaseline, WireRecord, audit_question_accepts_text, file_questions_support_forms, is_audit_text_label,
+    PresenceBaseline, audit_question_accepts_text, file_questions_support_forms, is_audit_text_label,
 )
 from .consistency import ACTION_STORED_FINDING_CODES, RepoFacts
 from .engine import CursorReadback
@@ -46,6 +46,7 @@ from .projection import (
 )
 from .repo_registry import RepoRecord
 from .sessions import busy_reasons
+from .wire import WireRecord
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .activity import ActivityProjector

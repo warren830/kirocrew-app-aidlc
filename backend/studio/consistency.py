@@ -15,9 +15,10 @@ from typing import TYPE_CHECKING, Any, Iterable, Mapping, Sequence
 from . import constants as C
 from .aidlc_reader import (
     ACTIVE_INTENT_FILENAME, DIRECTIVE_FILENAME, INTENTS_DIRNAME, INTENTS_REGISTRY_FILENAME, SPACES_DIRNAME,
-    STAGE_GRAPH_REL, STATE_FILENAME, WORKSPACE_DIRNAME, WireRecord,
+    STAGE_GRAPH_REL, STATE_FILENAME, WORKSPACE_DIRNAME,
 )
 from .storage import EvidenceRef
+from .wire import WireRecord
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     # Annotations only: `projection` imports this module at runtime, so importing it back would close a

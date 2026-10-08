@@ -22,9 +22,9 @@ from . import constants as C
 from . import plan_advice
 from . import security
 from .errors import StudioError
-from .estimates import Jsonable
 from .plan import DEPTHS, REVIEW_CAPS, TEST_STRATEGIES, PlanRequest
 from .repo_registry import RepoRecord
+from .wire import WireRecord
 
 ADVISOR_AGENT_NAME: str = C.ADVISOR_AGENT_NAME
 #: ``SpawnSDK`` only accepts agents whose *file* carries this prefix, so a user agent declaring the same name is
@@ -188,7 +188,7 @@ def default_agent_lister() -> list[Any] | None:
 
 
 @dataclass(frozen=True, slots=True)
-class EvidencePackage(Jsonable):
+class EvidencePackage(WireRecord):
     """Everything the advisor may know, already bounded and redacted; no field can carry a path or slot key."""
 
     version: int
@@ -218,7 +218,7 @@ class EvidencePackage(Jsonable):
 
 
 @dataclass(frozen=True, slots=True)
-class DraftRequest(Jsonable):
+class DraftRequest(WireRecord):
     action_id: str
     kind: str
     question_index: int | None
@@ -240,7 +240,7 @@ class DraftRequest(Jsonable):
 
 
 @dataclass(frozen=True, slots=True)
-class DraftResult(Jsonable):
+class DraftResult(WireRecord):
     """The only object the agent may emit. Every field is already redacted and capped."""
 
     verdict: str | None
@@ -268,10 +268,12 @@ class DraftResult(Jsonable):
 
 
 @dataclass(frozen=True, slots=True)
-class AdvisorDraft(Jsonable):
+class AdvisorDraft(WireRecord):
     """The pinned §2.7/§3.1 draft. ``spawn_id`` (host-internal) and ``subject`` (storage only) never reach the
     wire; ``plan_proposal`` appears only for a card-less kind, so a card draft keeps its eleven keys."""
 
+    _wire_keys = ("draft_id", "action_id", "kind", "status", "request", "result", "error", "created_at", "updated_at",
+                  "expires_at", "neutrality", "plan_proposal")
     draft_id: str
     action_id: str
     kind: str
@@ -288,10 +290,9 @@ class AdvisorDraft(Jsonable):
     subject: dict[str, Any] | None = None
     #: The resolved ``PlanRequest`` patch of a ready ``plan_draft``.
     plan_proposal: dict[str, Any] | None = None
-    _hidden = ("spawn_id", "subject")
 
     def to_json(self) -> dict[str, Any]:
-        payload = Jsonable.to_json(self)
+        payload = WireRecord.to_json(self)
         if self.kind not in ADVISOR_CARDLESS_KINDS:
             del payload["plan_proposal"]
         return payload

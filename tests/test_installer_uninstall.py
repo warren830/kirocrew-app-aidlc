@@ -12,7 +12,6 @@ import pytest
 from conftest import fork_process
 
 from test_installer import (
-    BOOT,
     I,
     build_upgrade_payload,
     do,

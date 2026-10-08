@@ -160,7 +160,7 @@ def test_every_notification_records_a_registered_activity_kind(studio, clock, no
 
 
 def test_a_notification_lands_in_the_real_activity_projector(studio, clock, tmp_path):
-    store = studio.storage.Storage(tmp_path / "studio.sqlite3", clock=clock, ids=None)
+    store = studio.storage.Storage(tmp_path / "studio.sqlite3", clock=clock)
     store.open()
     try:
         projector = studio.activity.ActivityProjector(store, clock)

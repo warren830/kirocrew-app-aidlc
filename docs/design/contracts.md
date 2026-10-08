@@ -19,6 +19,15 @@ UI still says "Being processed"); `DeliveryUncertain` is `ReconciliationRequired
 Storage version 3 rewrites older rows (§1.4). `MachineActionBroker`, the always-refusing `POST …/keep-moving` route,
 `api.keepMoving` and the Intents page's keep-moving column are removed: with no machine lane there is nothing to refuse.
 
+2026-10-08 amendment (storage round): storage version 4 drops the six tables nothing reads or writes —
+`execution_leases`, `admin_leases`, `lease_generations` (a lease is an in-flight action or a `flock`, §1.10), `events`
+(an in-memory ring), `calibration` and `migrations` — and `CAS_TABLES` maps a table to its generation column only
+(every CAS stamps `updated_at`, §1.4). Every record serialises through `wire.WireRecord` (§1). `Storage` takes no
+`ids` and `EstimateService` no arguments; removed because only tests called them: `Storage.pref_all`/`vacuum_if_needed`,
+`EngineRunner.drain_activity`/`pending_activity`, `LeaseGrant.to_json`, `services.register`, and the constants
+`BUNDLED_STATE_VERSION`, `BUNDLED_STAGE_COUNT`, `SUPPORTED_STAGE_COUNTS`, `DETERMINISTIC_FINGERPRINT_CLASSES`,
+`WIRE_TEXT`, `WIRE_TEXT_SOURCE`, `HOST_EVENTS` and `VACUUM_*`. `SCAN_POOL_WORKERS` is folded into `SCAN_CONCURRENCY`.
+
 Status: **binding** for implementation. Companion to `docs/design/architecture.md` (module layout,
 authority model, decision log) and `docs/AI-DLC-Studio-PRD.md` (invariants §6, enums §11, API list §15).
 Where this document is more specific than the architecture, this document wins; where it disagrees with
@@ -134,7 +143,7 @@ findings keep `FINDING_SEVERITY`; when a finding is projected into the timeline 
 
 | Kind | Rule |
 |---|---|
-| **sync, blocking** (`Storage`, `AidlcReader`, `ConsistencyEngine`, `Projection`, `EngineRunner.run_sync`, `GitObserver.run_sync`, `Installer` file steps, `PlanService`, `Estimates`, `Migration` file steps) | Never called on the event loop. Handlers call them via `await asyncio.to_thread(fn, ...)` (the process default executor). The reconciler's repo scans and hashing run on Studio's **own** small pool `Services.scan_pool = ThreadPoolExecutor(max_workers=SCAN_POOL_WORKERS, thread_name_prefix="aidlc-studio-scan")` via `loop.run_in_executor(scan_pool, fn)` so a 64-repo walk can never starve the host's default executor (which the host uses for chat persistence, spawns and `atomic_write`; review R11). Each call must finish within its stated deadline; the gateway loop-stall watchdog kills the process after ~25 s of a blocked loop (`01 §1.4`). |
+| **sync, blocking** (`Storage`, `AidlcReader`, `ConsistencyEngine`, `Projection`, `EngineRunner.run_sync`, `GitObserver.run_sync`, `Installer` file steps, `PlanService`, `Estimates`, `Migration` file steps) | Never called on the event loop. Handlers call them via `await asyncio.to_thread(fn, ...)` (the process default executor). The reconciler's repo scans and hashing run on Studio's **own** small pool `Services.scan_pool = ThreadPoolExecutor(max_workers=SCAN_CONCURRENCY, thread_name_prefix="aidlc-studio-scan")` via `loop.run_in_executor(scan_pool, fn)` so a 64-repo walk can never starve the host's default executor (which the host uses for chat persistence, spawns and `atomic_write`; review R11). Each call must finish within its stated deadline; the gateway loop-stall watchdog kills the process after ~25 s of a blocked loop (`01 §1.4`). |
 | **async** (`HostBridge`, `SessionBinder`, `HumanActionBroker`, `Reconciler`, `AdvisorBroker`, `NotificationAdapter`, `EventLog.stream`, handlers, `Services.start/stop`) | Run on the gateway loop. They may `await asyncio.to_thread(...)`; they must never call a sync module directly for disk or subprocess work. |
 | **host objects** (`DashboardState`, `_ChatSlot`, `SlackClient`, `SubagentManager`) | Touched only from the loop thread, only through `HostBridge`. Never from a worker thread. |
 
@@ -154,17 +163,24 @@ Every public dataclass is `@dataclass(frozen=True, slots=True)` unless stated; e
 Module owners may add private helpers freely; they may not add public names not listed here without
 updating this document.
 
+**One serializer.** `to_json` comes from `wire.WireRecord` (a leaf module, so the store and the readers share it):
+fields in declaration order, nested records through their own `to_json`, tuples as lists, mappings copied, `None`
+kept. `_wire_keys` lists the wire keys when they are not exactly the fields: a dropped field is left out, a renamed one
+is a property (`Settings.settings`), and `name?` drops a `None`. A class writes its own `to_json` only when it
+computes something: a derived key (`ActionRecord.human_text_present`, `StageNode.per_unit`,
+`PayloadManifest.ownership_counts`), a per-instance rule (`PreviewPlan`'s per-kind bindings, `AdvisorDraft`'s
+card-less `plan_proposal`, `ReceiptFile`'s empty `engine_state_versions`, `Receipt`'s `include_files`), or a
+reshaped one (`SessionRef.approval`, `BoundaryInputs`, `SubmitReceipt.ok`).
+
 ### 1.1 `constants.py`
 
 ```python
-APP_NAME = "aidlc-studio"
+APP_NAME = "aidlc-studio"                   # the installed name (`_kirocrew_app_<name>`); DEFAULT_APP_NAME is the shipped one
 APP_VERSION = "1.1.6"                       # must equal app.json "version" (test pins)
-MIN_KIROCREW_VERSION = "0.3.0"              # == app.json minKiroCrewVersion (architecture §2/A10; review P19/R05)
-BUNDLED_ENGINE_VERSION = "2.7.1"            # == payload/manifest.json engineVersion. Tests assert equality with
-BUNDLED_STATE_VERSION = 8                   #    PayloadManifest.load(); they never compare against a literal
-BUNDLED_STAGE_COUNT = 33                    #    (review P03/R03). /health, /payload, RepoRecord.install derive from the manifest.
+MIN_KIROCREW_VERSION = "0.8.0"              # == app.json minKiroCrewVersion
+BUNDLED_ENGINE_VERSION = "2.10.0"           # == payload/manifest.json engineVersion. /health, /payload and RepoRecord.install
+                                            #    read stage count and state versions from the manifest (review P03/R03).
 SUPPORTED_STATE_VERSIONS = (7, 8)           # parser support; NOT what the installed engine accepts
-SUPPORTED_STAGE_COUNTS = (32, 33)
 # Studio process identity
 BOOT_ID_BYTES = 8                           # Services.boot_id = secrets.token_hex(BOOT_ID_BYTES) (review R02)
 
@@ -186,8 +202,7 @@ SUBPROCESS_TIMEOUT_SECS = 60.0
 ENGINE_READ_TIMEOUT_SECS = 20.0
 GIT_TIMEOUT_SECS = 15.0
 RECONCILE_INTERVAL_SECS = 5.0
-SCAN_CONCURRENCY = 2                        # concurrent scan_repo calls (asyncio.Semaphore); review R11
-SCAN_POOL_WORKERS = 2                       # Services.scan_pool size
+SCAN_CONCURRENCY = 2                        # concurrent scan_repo calls (asyncio.Semaphore) and Services.scan_pool's size; review R11
 SCAN_TICK_BUDGET_SECS = 4.0                 # per-tick wall budget for scans; repos without open actions are round-robined across ticks
 DELIVERY_ACK_DEADLINE_SECS = 90
 PROCESSING_DEADLINE_CAP_SECS = 7200         # min(agent.chat_turn_timeout_secs, this)
@@ -222,8 +237,7 @@ MAX_README_CHARS = 3000                     # README excerpt in the plan package
 
 # breaker
 BREAKER_TRANSIENT_THRESHOLD = 3
-TRANSIENT_FINGERPRINT_CLASSES = ("transport", "rate_limit", "acp_timeout")
-DETERMINISTIC_FINGERPRINT_CLASSES = ("validation", "permission", "dependency", "guard", "config")
+TRANSIENT_FINGERPRINT_CLASSES = ("transport", "rate_limit", "acp_timeout")   # open after the threshold; any other class at once
 
 # grammar (compiled re.Pattern, MULTILINE where noted)
 CHECKBOX_RE = r"^- \[([ xXsSrR?-])\] (\S+)(?:\s*(?:—|–|--)\s*(.*))?$"
@@ -259,15 +273,6 @@ SUMMARY_CONFIRMATION_HEADING = "Consolidated Summary Confirmation"
 PLAN_APPROVAL_HEADING = "Plan Approval"
 POST_APPROVAL_AMENDMENT_HEADING = "Post-approval Amendment"
 
-# runtime files any Kiro session over the repo touches — excluded from every "nothing changed" claim (FR-ADV-007),
-# because their movement says nothing about the workflow. 2.7.1 added the seven per-turn unit/claim entries, and the
-# payload's own `.gitignore` lists them, which is the engine saying the same thing.
-VOLATILE_RUNTIME_PATHS = ("aidlc/.aidlc-turn-counter", "aidlc/.aidlc-readonly-latch", "aidlc/.aidlc-human-turn",
-    "aidlc/.aidlc-sessions", "aidlc/.aidlc-clone-id", "aidlc/.aidlc-unit-scope.json", "aidlc/.aidlc-unit-parked",
-    "aidlc/.aidlc-unit-participant", "aidlc/.aidlc-claim-generations.json", "aidlc/.aidlc-claim-registry.json",
-    "aidlc/.aidlc-unit-releases", "aidlc/.aidlc-unit-merges", ".aidlc-hooks-health", ".aidlc-stop-hook",
-    ".aidlc-engine-touch", ".aidlc-sensors", "runtime-graph.json")
-
 # audit event sets
 GATE_EVENTS = ("STAGE_AWAITING_APPROVAL", "GATE_APPROVED", "GATE_REJECTED", "STAGE_REVISING")
 QUESTION_EVENTS = ("DECISION_RECORDED", "QUESTION_ANSWERED", "SUMMARY_CONFIRMATION_RECORDED",
@@ -297,8 +302,9 @@ ENV_FORBIDDEN_PREFIXES = ("AIDLC_", "CLAUDE_", "AWS_AIDLC_", "KIRO", "KIROCREW_"
 ENV_MUST_BE_ABSENT = ("AIDLC_SKIP_HUMAN_PRESENCE_GUARD", "AIDLC_SKIP_ARTIFACT_GUARD", "CLAUDE_PROJECT_DIR")
 
 # wire text (protocol constants, FR-GATE-002) — the ONLY source. `docs/design/wire-text.json` is the pinned
-# snapshot both this module and `ui/src/lib/wire.ts` are tested against (test_constants.py / wire.test.ts); the
-# architecture §3.1 table is derived from the same file (review R17). Casing per checkpoint: 05 addendum A8.
+# snapshot: test_actions.py compares every WIRE_* constant with it, both ways, and scripts/gen_ui_sources.py
+# generates the UI's copy from it; the architecture §3.1 table is derived from the same file (review R17). Casing
+# per checkpoint: 05 addendum A8. The grouped-answer suffixes and the assumption options are in the file too.
 WIRE_APPROVE = "Approve"                                    # stage gate
 WIRE_REQUEST_CHANGES_PREFIX = "Request Changes: "           # stage gate AND plan approval (capital C)
 WIRE_ACCEPT_AS_IS = "Accept as-is"                          # stage gate, revision-loop escape hatch only
@@ -395,10 +401,10 @@ be called through `asyncio.to_thread`. Thread-safe via `self._lock = threading.R
 runs inside `BEGIN IMMEDIATE … COMMIT` (or `ROLLBACK` on exception).
 
 ```python
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 4                    # MIGRATIONS = {1: SCHEMA_V1, 2: SCHEMA_V2, 3: SCHEMA_V3, 4: SCHEMA_V4}
 
 class Storage:
-    def __init__(self, path: Path, *, clock: Clock, ids: IdFactory) -> None
+    def __init__(self, path: Path, *, clock: Clock) -> None
     def open(self) -> None            # creates file, applies PRAGMAs, runs migrations up to SCHEMA_VERSION
     def close(self) -> None
     # PRAGMAs applied at open: journal_mode=WAL, synchronous=FULL, busy_timeout=5000, foreign_keys=ON
@@ -413,11 +419,9 @@ class Storage:
     def cas_update(self, table: str, key: str, expected_generation: int,
                    new_values: Mapping[str, Any]) -> int
         # one BEGIN IMMEDIATE: SELECT gen; if gen != expected → raise StaleGeneration(details={"expected","actual"})
-        # UPDATE … SET <new_values>, <gen_col> = gen+1, <ts_col> = now; return gen+1
-        # Data-driven (review R06): the timestamp column is per table:
-        #   CAS_TABLES = {"actions": ("status_generation", "updated_at"), "intent_bindings": ("binding_generation", "updated_at"),
-        #                 "execution_leases": ("generation", "heartbeat_at"), "admin_leases": ("generation", "heartbeat_at")}
-        # anything else → ValueError. The two lease tables are unused since P2a (§1.10) and are dropped by a later storage step.
+        # UPDATE … SET <new_values>, <gen_col> = gen+1, updated_at = now; return gen+1
+        #   CAS_TABLES = {"actions": "status_generation", "intent_bindings": "binding_generation"}
+        # anything else → ValueError; update() refuses these two tables.
 
     # ---- activity ----
     def activity_append(self, row: ActivityRow) -> int
@@ -428,13 +432,16 @@ class Storage:
     # ---- preferences ----
     def pref_get(self, key: str) -> Any | None
     def pref_set(self, key: str, value: Any) -> None
-    def pref_all(self) -> dict[str, Any]
 
-    # ---- housekeeping ----
-    def vacuum_if_needed(self) -> None
+    # ---- health ----
     def integrity_check(self) -> list[str]          # PRAGMA quick_check lines; [] when ok
+    def pragmas(self) -> dict[str, Any]             # the connection's PRAGMAs, page counts and schema_version (/health)
 
 ```
+
+Tables after version 4: `schema_meta`, `repos`, `intent_bindings`, `actions`, `action_transitions` (served verbatim
+as the card's transition history, §2), `install_transactions`, `install_receipts`, `preferences`, `activity`,
+`breakers`, `advisor_drafts` — exactly `TABLE_KEYS`, the only names the generic helpers accept.
 
 #### DDL (verbatim; `storage.py::SCHEMA_V1`)
 
@@ -602,11 +609,19 @@ free-text `message` (strings must be translatable); `advisor_drafts.spawn_id/err
 adds a column, an index or a `SCHEMA_V1` bump. Do not migrate one in — the at-most-once check reads
 `request_json`, and a duplicated boolean would be two truths about the same draft with no rule for which wins.
 
-`SCHEMA_VERSION = 3`. `MIGRATIONS[3]` (`SCHEMA_V3`) rewrites rows from before the status merge (§0.5): `Processing` →
-`Delivered` with `evidence.turn_started_at` (from `delivered_at` when missing: a row that never recorded it was not
-queued), `DeliveryUncertain` → `ReconciliationRequired`, `Draft` → `Queued`, the same two renames in
-`action_transitions` (`Processing` history rows keep their label), and recreates `actions_live_dedupe` over
-`Queued Delivering Delivered ReconciliationRequired NotDelivered`. The DDL above stays as version 1 shipped.
+The migration ladder (`SCHEMA_VERSION = 4`; the DDL above stays as version 1 shipped, and a fresh file runs every
+step, so it ends with exactly the schema an upgraded one has — `test_storage.py` checks both from a populated file):
+
+- `MIGRATIONS[2]` (`SCHEMA_V2`) adds `admin_leases.boot_id`.
+- `MIGRATIONS[3]` (`SCHEMA_V3`) rewrites rows from before the status merge (§0.5): `Processing` → `Delivered` with
+  `evidence.turn_started_at` (from `delivered_at` when missing: a row that never recorded it was not queued),
+  `DeliveryUncertain` → `ReconciliationRequired`, `Draft` → `Queued`, the same two renames in `action_transitions`
+  (`Processing` history rows keep their label), and recreates `actions_live_dedupe` over
+  `Queued Delivering Delivered ReconciliationRequired NotDelivered`.
+- `MIGRATIONS[4]` (`SCHEMA_V4`) drops `execution_leases`, `admin_leases`, `lease_generations` (leases are derived,
+  §1.10), `events` (an in-memory ring, §1.20), `calibration` (the feature is gone) and `migrations` (the console
+  migration it recorded never shipped); every other row is untouched. `schema_meta` keeps the bookkeeping:
+  `schema_version`, `created_at` (first migration) and `migrated_at` (latest).
 
 Storage must NOT: parse AI-DLC files, touch any path outside `ctx.data_dir`, hold the lock across an
 `await` (it is sync), or decide who holds a repository (§1.10).
@@ -1029,7 +1044,7 @@ ConsistencyEngine must NOT read files, write anything, or pick a "true" source �
 
 Sync, pure over reader/consistency output plus Studio rows passed in. Produces the read model the API serialises.
 Its wire records (`DiskState`, `StableBoundary`, `MarkersView`, `AuditEventView`, `QuestionsView`, `EvidenceSnapshot`,
-`IntentSummary`/`IntentDetail`) serialise through `aidlc_reader.WireRecord`: fields in declaration order, or `_wire_keys`
+`IntentSummary`/`IntentDetail`) serialise through `wire.WireRecord` (§1): fields in declaration order, or `_wire_keys`
 where the wire order differs (`name?` drops a `None`).
 
 ```python
@@ -2194,10 +2209,9 @@ class PlanService:
         # NEVER submits a prompt; returns paused (Idle) intent; Activity kind "intent.created"
     async def recompose(self, repo, snap, *, skip, add, proposal_digest: str) -> RecomposeResult      # admin lease "recompose"; refuses when Status != Running or autonomy autonomous (recompose_not_allowed)
 
-class EstimateService:
-    def __init__(self, storage: Storage, clock: Clock) -> None
+class EstimateService:                          # stateless: calibration history and its table are gone (storage v4)
     def estimate(self, stages: Sequence[PlanStage], *, depth: str, units: int | None, scope: str) -> Estimate
-        # storage, clock and scope are unused (calibration history was removed; the calibration table stays in SCHEMA)
+        # scope is unused
 ```
 
 Plan rules: a stage is `locked` when `execution == "ALWAYS"` (`always`), when an enabled stage lists it in
@@ -2827,12 +2841,12 @@ class Services:
     storage: Storage; settings: SettingsService; repos: RepoRegistry; reader: AidlcReader
     consistency: ConsistencyEngine; projection: Projection; engine: EngineRunner; scheduler: RepoScheduler
     host: HostBridge; sessions: SessionBinder; actions: HumanActionBroker
-    reconciler: Reconciler; installer: Installer; plan: PlanService; estimates: EstimateService
+    reconciler: Reconciler; installer: Installer; plan: PlanService
     git: GitObserver; activity: ActivityProjector; advisor: AdvisorBroker; notifications: NotificationAdapter
-    events: EventLog; migration: MigrationService
+    events: EventLog
     payload: PayloadManifest; payload_status: PayloadStatus | None; started_at: str | None; background: list[asyncio.Task]
     boot_id: str                          # secrets.token_hex(BOOT_ID_BYTES) at build; stamped on Delivering rows (review R02)
-    scan_pool: concurrent.futures.ThreadPoolExecutor   # max_workers=SCAN_POOL_WORKERS, thread_name_prefix="aidlc-studio-scan" (review R11)
+    scan_pool: concurrent.futures.ThreadPoolExecutor   # max_workers=SCAN_CONCURRENCY, thread_name_prefix="aidlc-studio-scan" (review R11)
 
     @classmethod
     def build(cls, ctx: AppContext, *, clock: Clock | None = None, ids: IdFactory | None = None,

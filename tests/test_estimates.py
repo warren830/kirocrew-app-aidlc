@@ -41,18 +41,8 @@ def P(studio):
 
 
 @pytest.fixture
-def store(studio, fake_ctx, clock, ids):
-    st = studio.storage.Storage(
-        Path(fake_ctx.data_dir) / studio.constants.DB_FILENAME, clock=clock, ids=ids
-    )
-    st.open()
-    yield st
-    st.close()
-
-
-@pytest.fixture
-def svc(E, store, clock):
-    return E.EstimateService(store, clock)
+def svc(E):
+    return E.EstimateService()
 
 
 def stage(

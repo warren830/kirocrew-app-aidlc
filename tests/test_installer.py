@@ -59,7 +59,7 @@ def C(studio):
 @pytest.fixture
 def store(studio, fake_ctx, clock, ids):
     st = studio.storage.Storage(
-        Path(fake_ctx.data_dir) / studio.constants.DB_FILENAME, clock=clock, ids=ids
+        Path(fake_ctx.data_dir) / studio.constants.DB_FILENAME, clock=clock
     )
     st.open()
     yield st
@@ -295,10 +295,6 @@ def payload_v2(tmp_path_factory) -> tuple[Path, Path]:
 # --------------------------------------------------------------------------- #
 
 
-#: The boot id the harness runs under, stamped by the installer the way ``Services`` does.
-BOOT = "boot-harness"
-
-
 class Harness:
     """Everything one installer needs, kept together so a test can reach any of the peers."""
 
@@ -352,7 +348,6 @@ def make_harness(studio, store, clock, ids, fake_bun, fake_ctx):
             manifest=manifest,
             data_dir=Path(fake_ctx.data_dir),
             settings=settings,
-            boot_id=BOOT,
         )
         installer.fault_injector = fault
         return Harness(installer, store, activity, events, registry, fault, settings,
@@ -443,8 +438,8 @@ def test_manifest_load_reads_the_shipped_payload(I, C):
     manifest = I.PayloadManifest.load(REAL_PAYLOAD / "manifest.json")
     assert manifest.schema == I.PAYLOAD_SCHEMA
     assert manifest.engine_version == C.BUNDLED_ENGINE_VERSION
-    assert manifest.stage_count == C.BUNDLED_STAGE_COUNT
-    assert C.BUNDLED_STATE_VERSION in manifest.compatible_state_versions
+    assert manifest.stage_count == 33
+    assert 8 in manifest.compatible_state_versions
     assert len(manifest.files) == manifest.file_count
     counts = manifest.ownership_counts()
     assert sum(counts.values()) == manifest.file_count

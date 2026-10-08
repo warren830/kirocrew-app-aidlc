@@ -22,6 +22,7 @@ from typing import Any, Mapping, Sequence
 
 from . import constants as C
 from .errors import StudioError
+from .wire import WireRecord
 
 #: Every preference with the value a fresh install runs on (contracts §1.21). Only leaves listed in
 #: ``SCHEMA`` are storable; a test checks the two tables against each other.
@@ -183,22 +184,19 @@ def _decode(raw: Any) -> tuple[dict[str, Any], str | None]:
 
 
 @dataclass(frozen=True, slots=True)
-class Settings:
-    """One coherent answer to ``GET /settings``: the values, what is unavailable, and which versions."""
+class Settings(WireRecord):
+    """One coherent answer to ``GET /settings``: the values, what is unavailable, and which versions. The §2.8
+    body pins the values' wire name as ``settings``."""
 
+    _wire_keys = ("settings", "capabilities", "versions", "updated_at")
     values: dict
     capabilities: dict
     versions: dict
     updated_at: str | None
 
-    def to_json(self) -> dict[str, Any]:
-        """The §2.8 body (``settings``, not ``values`` — the wire name is pinned there)."""
-        return {
-            "settings": copy.deepcopy(self.values),
-            "capabilities": copy.deepcopy(self.capabilities),
-            "versions": dict(self.versions),
-            "updated_at": self.updated_at,
-        }
+    @property
+    def settings(self) -> dict:
+        return self.values
 
 
 class SettingsService:
