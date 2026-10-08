@@ -9,8 +9,13 @@ from pathlib import Path
 import pytest
 
 import conftest as CT
+from _helpers_c import after
 from test_handlers_auth import call, common, routes, sv  # noqa: F401
 from test_workspace_controls import INTENT, repo, state_path  # noqa: F401
+
+#: Where an interleaving runs its effect: right after the admin lease, the cursor switch, or the compile itself.
+HOOKS = {"after_lease": ("scheduler", "acquire_admin"), "after_cursor": ("engine", "switch_cursor_sync"),
+         "during_compile": ("engine", "run")}
 
 
 def request(sv, routes, fake_host, repo, *, intent=INTENT, body=None):
@@ -19,7 +24,18 @@ def request(sv, routes, fake_host, repo, *, intent=INTENT, body=None):
                 CT.owner_request("POST", path, host=fake_host, body={} if body is None else body))
 
 
-def test_real_compile_and_retry_preserve_state_and_never_create_an_intent(sv, routes, fake_host, repo):
+@pytest.fixture
+def repair(sv, routes, fake_host, repo):
+    """POST the repair route as the owner: ``repair(intent=..., body=...)``."""
+    return lambda **kwargs: request(sv, routes, fake_host, repo, **kwargs)
+
+
+def hook(monkeypatch, sv, when, effect):
+    owner, name = HOOKS[when]
+    after(monkeypatch, getattr(sv, owner), name, effect)
+
+
+def test_real_compile_and_retry_preserve_state_and_never_create_an_intent(sv, repair, fake_host, repo):
     root = Path(repo.canonical_path)
     state = state_path(repo)
     before = state.read_bytes()
@@ -27,7 +43,7 @@ def test_real_compile_and_retry_preserve_state_and_never_create_an_intent(sv, ro
     dirs = sv.reader.list_intent_dirs(root, "default")
     assert not (state.parent / "runtime-graph.json").exists()
     for _ in range(2):
-        status, body = request(sv, routes, fake_host, repo)
+        status, body = repair()
         assert status == 200, body
         assert body == {"ok": True, "intent_key": INTENT, "runtime_graph_present": True}
         graph = json.loads((state.parent / "runtime-graph.json").read_bytes())
@@ -39,7 +55,7 @@ def test_real_compile_and_retry_preserve_state_and_never_create_an_intent(sv, ro
     assert fake_host._slots == {}
 
 
-def test_real_compile_failure_keeps_created_intent_and_retry_repairs_it(sv, routes, fake_host, repo):
+def test_real_compile_failure_keeps_created_intent_and_retry_repairs_it(sv, repair, repo):
     root = Path(repo.canonical_path)
     state = state_path(repo)
     before = state.read_bytes()
@@ -48,7 +64,7 @@ def test_real_compile_failure_keeps_created_intent_and_retry_repairs_it(sv, rout
     source = tool.read_bytes()
     tool.write_text('process.stderr.write("compile failed in test\\n"); process.exit(7);\n')
     try:
-        status, body = request(sv, routes, fake_host, repo)
+        status, body = repair()
         assert status == 409 and body["code"] == "state_inconsistent", body
         assert body["details"]["verb_key"] == "runtime.compile"
         assert body["details"]["exit_code"] == 7
@@ -59,7 +75,7 @@ def test_real_compile_failure_keeps_created_intent_and_retry_repairs_it(sv, rout
     finally:
         tool.write_bytes(source)
     for _ in range(2):
-        status, body = request(sv, routes, fake_host, repo)
+        status, body = repair()
         assert status == 200 and body["runtime_graph_present"], body
     assert sv.reader.list_intent_dirs(root, "default") == [INTENT]
     assert state.read_bytes() == before
@@ -67,18 +83,16 @@ def test_real_compile_failure_keeps_created_intent_and_retry_repairs_it(sv, rout
 
 
 def test_inactive_intent_in_another_space_is_selected_and_only_its_graph_is_written(
-    sv, routes, fake_host, repo, repo_builder
-):
+        sv, repair, fake_host, repo, repo_builder):
     root = Path(repo.canonical_path)
     original = state_path(repo)
     before = original.read_bytes()
     other = "260910-second-runtime"
     repo_builder.with_workspace(active_space="team-two").with_intent(
-        other, space="team-two", state=before.decode(), scope="feature",
-    )
+        other, space="team-two", state=before.decode(), scope="feature")
     (root / "aidlc/active-space").write_text("default\n")
     other_state = root / f"aidlc/spaces/team-two/intents/{other}/aidlc-state.md"
-    status, body = request(sv, routes, fake_host, repo, intent=f"team-two~{other}")
+    status, body = repair(intent=f"team-two~{other}")
     assert status == 200 and body["intent_key"] == f"team-two~{other}", body
     assert (other_state.parent / "runtime-graph.json").is_file()
     assert not (original.parent / "runtime-graph.json").exists()
@@ -90,15 +104,14 @@ def test_inactive_intent_in_another_space_is_selected_and_only_its_graph_is_writ
 
 
 @pytest.mark.parametrize("kind", ["execution", "admin"])
-def test_busy_lease_is_never_preempted(sv, routes, fake_host, repo, kind):
+def test_busy_lease_is_never_preempted(sv, repair, repo, kind):
     if kind == "execution":
-        grant = asyncio.run(sv.scheduler.acquire_execution(
-            repo, intent_uuid=None, session_key=None, action_id="other-action",
-        ))
+        lease = sv.scheduler.acquire_execution(repo, intent_uuid=None, session_key=None, action_id="other-action")
     else:
-        grant = asyncio.run(sv.scheduler.acquire_admin(repo, operation_type="install", transaction_id=None))
+        lease = sv.scheduler.acquire_admin(repo, operation_type="install", transaction_id=None)
+    grant = asyncio.run(lease)
     try:
-        status, body = request(sv, routes, fake_host, repo)
+        status, body = repair()
         assert status == 409 and body["code"] == "repo_busy", body
         assert not (state_path(repo).parent / "runtime-graph.json").exists()
         assert asyncio.run(sv.scheduler.get(repo.resolved_identity)).generation == grant.generation
@@ -107,33 +120,17 @@ def test_busy_lease_is_never_preempted(sv, routes, fake_host, repo, kind):
 
 
 @pytest.mark.parametrize("when", ["before_request", "after_lease", "after_cursor"])
-def test_external_host_execution_is_rechecked_before_compile(sv, routes, fake_host, repo, monkeypatch, when):
+def test_external_host_execution_is_rechecked_before_compile(sv, repair, fake_host, repo, monkeypatch, when):
     def busy():
         fake_host.add_slot("manual", project=repo.canonical_path, agent="aidlc", running=True)
 
     if when == "before_request":
         busy()
-    elif when == "after_lease":
-        original = sv.scheduler.acquire_admin
-
-        async def acquire(*args, **kwargs):
-            grant = await original(*args, **kwargs)
-            busy()
-            return grant
-
-        monkeypatch.setattr(sv.scheduler, "acquire_admin", acquire)
     else:
-        original = sv.engine.switch_cursor_sync
-
-        def switch(*args, **kwargs):
-            result = original(*args, **kwargs)
-            busy()
-            return result
-
-        monkeypatch.setattr(sv.engine, "switch_cursor_sync", switch)
+        hook(monkeypatch, sv, when, busy)
     state = state_path(repo)
     before = state.read_bytes()
-    status, body = request(sv, routes, fake_host, repo)
+    status, body = repair()
     assert status == 409 and body["code"] == "repo_busy", body
     assert not (state.parent / "runtime-graph.json").exists()
     assert state.read_bytes() == before
@@ -141,41 +138,11 @@ def test_external_host_execution_is_rechecked_before_compile(sv, routes, fake_ho
 
 
 @pytest.mark.parametrize("when", ["after_lease", "after_cursor", "during_compile"])
-def test_changed_state_is_not_overwritten_or_reported_as_success(sv, routes, fake_host, repo, monkeypatch, when):
+def test_changed_state_is_not_overwritten_or_reported_as_success(sv, repair, repo, monkeypatch, when):
     state = state_path(repo)
     changed = state.read_bytes() + b"\nUser note added during repair.\n"
-
-    def edit():
-        state.write_bytes(changed)
-
-    if when == "after_lease":
-        original = sv.scheduler.acquire_admin
-
-        async def acquire(*args, **kwargs):
-            grant = await original(*args, **kwargs)
-            edit()
-            return grant
-
-        monkeypatch.setattr(sv.scheduler, "acquire_admin", acquire)
-    elif when == "after_cursor":
-        original = sv.engine.switch_cursor_sync
-
-        def switch(*args, **kwargs):
-            result = original(*args, **kwargs)
-            edit()
-            return result
-
-        monkeypatch.setattr(sv.engine, "switch_cursor_sync", switch)
-    else:
-        original = sv.engine.run
-
-        async def compile_then_edit(*args, **kwargs):
-            result = await original(*args, **kwargs)
-            edit()
-            return result
-
-        monkeypatch.setattr(sv.engine, "run", compile_then_edit)
-    status, body = request(sv, routes, fake_host, repo)
+    hook(monkeypatch, sv, when, lambda: state.write_bytes(changed))
+    status, body = repair()
     assert status == 409 and body["code"] == "unstable_read", body
     assert state.read_bytes() == changed
     assert asyncio.run(sv.scheduler.list()) == []
@@ -184,7 +151,7 @@ def test_changed_state_is_not_overwritten_or_reported_as_success(sv, routes, fak
 
 
 @pytest.mark.parametrize("when", ["after_lease", "after_cursor"])
-def test_replaced_repo_identity_cannot_authorize_compilation(sv, routes, fake_host, repo, monkeypatch, when):
+def test_replaced_repo_identity_cannot_authorize_compilation(sv, repair, repo, monkeypatch, when):
     root = Path(repo.canonical_path)
     saved = root.with_name("saved-original")
 
@@ -192,25 +159,8 @@ def test_replaced_repo_identity_cannot_authorize_compilation(sv, routes, fake_ho
         root.rename(saved)
         shutil.copytree(saved, root)
 
-    if when == "after_lease":
-        original = sv.scheduler.acquire_admin
-
-        async def acquire(*args, **kwargs):
-            grant = await original(*args, **kwargs)
-            swap()
-            return grant
-
-        monkeypatch.setattr(sv.scheduler, "acquire_admin", acquire)
-    else:
-        original = sv.engine.switch_cursor_sync
-
-        def switch(*args, **kwargs):
-            result = original(*args, **kwargs)
-            swap()
-            return result
-
-        monkeypatch.setattr(sv.engine, "switch_cursor_sync", switch)
-    status, body = request(sv, routes, fake_host, repo)
+    hook(monkeypatch, sv, when, swap)
+    status, body = repair()
     assert status == 409 and body["code"] == "repo_unavailable", body
     assert not (state_path(repo).parent / "runtime-graph.json").exists()
     assert not (saved / state_path(repo).parent.relative_to(root) / "runtime-graph.json").exists()
@@ -218,7 +168,7 @@ def test_replaced_repo_identity_cannot_authorize_compilation(sv, routes, fake_ho
 
 
 @pytest.mark.parametrize("when", [1, 2])
-def test_unstable_snapshot_never_reaches_engine(sv, routes, fake_host, repo, monkeypatch, when):
+def test_unstable_snapshot_never_reaches_engine(sv, repair, repo, monkeypatch, when):
     original = sv.projection.snapshot
     calls = 0
 
@@ -229,29 +179,24 @@ def test_unstable_snapshot_never_reaches_engine(sv, routes, fake_host, repo, mon
         return replace(snap, stable=False) if calls == when else snap
 
     monkeypatch.setattr(sv.projection, "snapshot", unstable)
-    status, body = request(sv, routes, fake_host, repo)
+    status, body = repair()
     assert status == 409 and body["code"] == "unstable_read", body
     assert not (state_path(repo).parent / "runtime-graph.json").exists()
     assert asyncio.run(sv.scheduler.list()) == []
 
 
-def test_cursor_readback_mismatch_blocks_compile(sv, routes, fake_host, repo, monkeypatch):
+def test_cursor_readback_mismatch_blocks_compile(sv, repair, repo, monkeypatch):
     original = sv.engine.switch_cursor_sync
-
-    def mismatch(*args, **kwargs):
-        return replace(original(*args, **kwargs), ok=False, mismatch=("intent_list_active",))
-
-    monkeypatch.setattr(sv.engine, "switch_cursor_sync", mismatch)
-    status, body = request(sv, routes, fake_host, repo)
+    monkeypatch.setattr(sv.engine, "switch_cursor_sync", lambda *args, **kwargs: replace(
+        original(*args, **kwargs), ok=False, mismatch=("intent_list_active",)))
+    status, body = repair()
     assert status == 409 and body["code"] == "cursor_mismatch", body
     assert not (state_path(repo).parent / "runtime-graph.json").exists()
     assert asyncio.run(sv.scheduler.list()) == []
 
 
 @pytest.mark.parametrize("kind", ["missing", "invalid_json", "invalid_shape", "wrong_target", "skipped", "unstable"])
-def test_success_requires_a_readable_graph_for_the_selected_intent(
-    sv, routes, fake_host, repo, monkeypatch, kind
-):
+def test_success_requires_a_readable_graph_for_the_selected_intent(sv, repair, repo, monkeypatch, kind):
     original = sv.engine.run
     graph = state_path(repo).parent / "runtime-graph.json"
 
@@ -272,17 +217,15 @@ def test_success_requires_a_readable_graph_for_the_selected_intent(
     monkeypatch.setattr(sv.engine, "run", damaged)
     if kind == "unstable":
         read = sv.reader.read_artifact
-        monkeypatch.setattr(sv.reader, "read_artifact",
-                            lambda *args: replace(read(*args), unstable=True))
-    status, body = request(sv, routes, fake_host, repo)
+        monkeypatch.setattr(sv.reader, "read_artifact", lambda *args: replace(read(*args), unstable=True))
+    status, body = repair()
     assert status == 409 and body["code"] == "state_inconsistent", body
     assert asyncio.run(sv.scheduler.list()) == []
 
 
 @pytest.mark.parametrize("cancel_count", [1, 2])
-def test_disconnect_holds_lease_until_real_compile_finishes(
-    sv, routes, fake_host, repo, monkeypatch, studio, cancel_count
-):
+def test_disconnect_holds_lease_until_real_compile_finishes(sv, routes, fake_host, repo, monkeypatch, studio,
+                                                            cancel_count):
     async def scenario():
         started, resume = asyncio.Event(), asyncio.Event()
         original = sv.engine.run
@@ -293,8 +236,8 @@ def test_disconnect_holds_lease_until_real_compile_finishes(
             return await original(*args, **kwargs)
 
         monkeypatch.setattr(sv.engine, "run", paused)
-        path = f"/repos/{repo.repo_id}/intents/{INTENT}/runtime/compile"
-        req = CT.owner_request("POST", path, host=fake_host, body={})
+        req = CT.owner_request("POST", f"/repos/{repo.repo_id}/intents/{INTENT}/runtime/compile", host=fake_host,
+                               body={})
         req.match_info.update(repo_id=repo.repo_id, intent=INTENT)
         entry = next(r for r in routes if r.path.endswith("/runtime/compile"))
         task = asyncio.create_task(entry.handler(req, sv.ctx))
@@ -319,14 +262,14 @@ def test_disconnect_holds_lease_until_real_compile_finishes(
 
 
 @pytest.mark.parametrize("body", [{"path": "../other"}, {"intent_key": "another"}, {"force": True}])
-def test_only_empty_body_is_accepted(sv, routes, fake_host, repo, body):
-    status, answer = request(sv, routes, fake_host, repo, body=body)
+def test_only_empty_body_is_accepted(sv, repair, body):
+    status, answer = repair(body=body)
     assert status == 400 and answer["code"] == "bad_body", answer
     assert asyncio.run(sv.scheduler.list()) == []
 
 
-def test_nonexistent_intent_cannot_be_created_by_repair(sv, routes, fake_host, repo):
-    status, body = request(sv, routes, fake_host, repo, intent="260910-missing")
+def test_nonexistent_intent_cannot_be_created_by_repair(sv, repair, repo):
+    status, body = repair(intent="260910-missing")
     assert status == 404 and body["code"] == "intent_not_found", body
     assert sv.reader.list_intent_dirs(Path(repo.canonical_path), "default") == [INTENT]
     assert asyncio.run(sv.scheduler.list()) == []
