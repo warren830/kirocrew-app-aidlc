@@ -1245,7 +1245,7 @@ async def test_cancel_is_allowed_for_commands_and_refused_for_a_live_derived_car
 async def test_force_stop_commits_delivering_with_the_stop_call_and_no_lease(world):
     await bind(world)
     receipt = await force_stop(world)
-    assert (receipt.lane, receipt.wire_text, receipt.lease_generation) == ("host_control", None, None)
+    assert receipt.lane == "host_control" and receipt.wire_text is None and receipt.lease_generation is None
     assert receipt.host.path == f"/api/chat/slots/{SLOT}/stop" and receipt.host.body == {}
     rec = await world.broker.get(receipt.action_id)
     assert (rec.status, rec.boot_id) == ("Delivering", BOOT)
