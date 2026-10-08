@@ -4798,8 +4798,6 @@ function Te() {
 			health: (e) => t("/health", e),
 			configureBun: (e) => n("put", "/tools/bun", { path: e }),
 			probeBun: () => r("/tools/bun/probe", {}),
-			payload: (e, n) => t(`/payload${we({ files: e })}`, n),
-			leases: (e) => t("/leases", e),
 			diagnostics: (e) => t(`/diagnostics${we({
 				export: e?.export,
 				include_human_text: e?.includeHumanText
@@ -4815,9 +4813,6 @@ function Te() {
 			action: (e, n) => t(`/actions/${encodeURIComponent(e)}`, n),
 			submitAction: (e, t) => r(`/actions/${encodeURIComponent(e)}/submit`, t),
 			reportDelivery: (e, t) => r(`/actions/${encodeURIComponent(e)}/delivery`, t),
-			retryAction: (e) => r(`/actions/${encodeURIComponent(e)}/retry`, {}),
-			reconcileAction: (e) => r(`/actions/${encodeURIComponent(e)}/reconcile`, {}),
-			cancelAction: (e, t) => r(`/actions/${encodeURIComponent(e)}/cancel`, { reason: t ?? null }),
 			resolveAction: (e, t) => {
 				let { decision: n, ...i } = t;
 				return r(`/actions/${encodeURIComponent(e)}/resolve`, {
@@ -4827,7 +4822,6 @@ function Te() {
 			},
 			requestDraft: (e) => r("/advisor/draft", e),
 			draft: (e, n) => t(`/advisor/drafts/${encodeURIComponent(e)}`, n),
-			slackCallback: (e) => r("/slack/actions/callback", e),
 			repos: (e, n) => t(`/repos${we({ include_archived: e })}`, n),
 			repo: (e, n) => t(a(e), n),
 			preflight: (e) => r("/repos/preflight", { path: e }),
@@ -4846,11 +4840,13 @@ function Te() {
 			rebindRepo: (e, t) => r(a(e, "/rebind"), { path: t }),
 			rescanRepo: (e) => r(a(e, "/rescan"), {}),
 			doctorRepo: (e) => r(a(e, "/doctor"), { confirm: !0 }),
-			installPreview: (e, t = "install") => r(a(e, `${t === "recovery" ? "/install/recovery" : `/${t}`}/preview`), {}),
-			installApply: (e, t, n = "install") => r(a(e, n === "recovery" ? "/install/recovery" : `/${n}`), { plan_digest: t }),
+			installPreview: (e, t = "install") => r(a(e, "/transactions/preview"), { kind: t }),
+			installApply: (e, t, n = "install") => r(a(e, "/transactions"), {
+				kind: n,
+				plan_digest: t
+			}),
 			transaction: (e, n, r) => t(a(e, `/transactions/${encodeURIComponent(n)}`), r),
 			cancelTransaction: (e, t) => r(a(e, `/transactions/${encodeURIComponent(t)}/cancel`), {}),
-			receipts: (e, n) => t(a(e, "/receipts"), n),
 			repoGit: (e, n) => t(a(e, "/git"), n),
 			spaces: (e, n) => t(a(e, "/spaces"), n),
 			createSpace: (e, t) => r(a(e, "/spaces"), { name: t }),
@@ -4859,30 +4855,22 @@ function Te() {
 			changeIntentSettings: (e, t, n) => r(i(e, t, "/settings"), n),
 			intents: (e, n, r) => t(a(e, `/intents${we({ ...n })}`), r),
 			intent: (e, n, r) => t(i(e, n), r),
-			map: (e, n, r, a) => t(i(e, n, `/map${we({ density: r })}`), a),
+			map: (e, n, r) => t(i(e, n, "/map"), r),
 			artifacts: (e, n, r, a) => t(i(e, n, `/artifacts${we({ ...r })}`), a),
 			artifact: (e, n, r, a) => t(i(e, n, `/artifacts/${encodeURIComponent(r)}`), a),
-			questions: (e, n, r) => t(i(e, n, "/questions"), r),
 			review: (e, n, r) => t(i(e, n, "/review"), r),
-			intentGit: (e, n, r) => t(i(e, n, "/git"), r),
-			intentActivity: (e, n, r, a) => t(i(e, n, `/activity${we({ limit: r })}`), a),
 			planPreview: (e, t) => r(a(e, "/intents/plan/preview"), t),
 			requestPlanDraft: (e, t) => r(a(e, "/intents/plan/advise"), t),
 			createIntent: (e, t) => r(a(e, "/intents"), t),
 			compileRuntime: (e, t) => r(i(e, t, "/runtime/compile"), {}),
 			recomposePreview: (e, t, n) => r(i(e, t, "/recompose/preview"), n),
 			recompose: (e, t, n) => r(i(e, t, "/recompose"), n),
-			run: (e, t) => r(i(e, t, "/run"), {}),
-			resume: (e, t) => r(i(e, t, "/resume"), {}),
-			prepareCommit: (e, t) => r(i(e, t, "/prepare-commit"), {}),
+			run: (e, t, n) => r(i(e, t, "/run"), { type: n }),
 			pause: (e, t, n) => r(i(e, t, "/pause"), { paused: n }),
 			forceStop: (e, t) => r(i(e, t, "/force-stop"), { confirm: !0 }),
-			bindSession: (e, t, n) => r(i(e, t, "/session/bind"), { slot_key: n }),
-			unbindSession: (e, t) => r(i(e, t, "/session/unbind"), {}),
+			setSession: (e, t, n) => r(i(e, t, "/session"), { slot_key: n }),
 			takeoverPreview: (e, t) => r(i(e, t, "/session/takeover/preview"), {}),
-			takeover: (e, t, n) => r(i(e, t, "/session/takeover"), { slot_key: n }),
-			archiveIntent: (e, t) => r(i(e, t, "/archive"), {}),
-			restoreIntent: (e, t) => r(i(e, t, "/restore"), {}),
+			archive: (e, t, n) => r(i(e, t, "/archive"), { archived: n }),
 			listSlots: async (t) => {
 				try {
 					return await e.get(`${_e}/slots`, t?.signal ? { signal: t.signal } : void 0);
@@ -5155,15 +5143,15 @@ function Ke() {
 var qe = 2e3, Je = 15e3, Ye = 2e4, Xe = /* @__PURE__ */ new Map(), Ze = ["Delivering", "Delivered"];
 function Qe(e) {
 	if (!e || typeof e != "object") return !1;
-	let t = e;
-	if (typeof t.live_execution == "number" && t.live_execution > 0) return !0;
-	let n = t.actions;
-	if (Array.isArray(n) && n.some((e) => $e(e)) || $e(t.action)) return !0;
-	let r = t.intents;
-	if (Array.isArray(r) && r.some((e) => et(e)) || et(t.intent) || et(t)) return !0;
-	let i = t.transaction;
-	if (i && typeof i == "object") {
-		let e = i.status;
+	let t = e, n = t.counts;
+	if (n && typeof n == "object" && Number(n.execution_leases) > 0) return !0;
+	let r = t.actions;
+	if (Array.isArray(r) && r.some((e) => $e(e)) || $e(t.action)) return !0;
+	let i = t.intents;
+	if (Array.isArray(i) && i.some((e) => et(e)) || et(t.intent) || et(t)) return !0;
+	let a = t.transaction;
+	if (a && typeof a == "object") {
+		let e = a.status;
 		if (typeof e == "string" && e !== "committed" && e !== "rolled_back" && e !== "failed") return !0;
 	}
 	return !1;
@@ -12675,7 +12663,7 @@ function Ka(e, t) {
 		start: i(async (t, i) => {
 			c(i), p(null), r(), u(!0);
 			try {
-				let r = i === "run" ? await e.run(t.repo_id, t.intent_key) : await e.resume(t.repo_id, t.intent_key);
+				let r = await e.run(t.repo_id, t.intent_key, i);
 				u(!1), await n({
 					card: r.action,
 					payload: { decision: i },
@@ -12795,7 +12783,7 @@ function Ya({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 				if (g === "pause" || g === "unpause") {
 					let n = await e.pause(t.repo_id, t.intent_key, g === "pause");
 					a(g === "pause" ? q(f, "intents.paused.done", n.blocked_actions.length) : p("intents.unpaused.done"));
-				} else g === "archive" ? (T && await e.pause(t.repo_id, t.intent_key, !0), await e.archiveIntent(t.repo_id, t.intent_key), a(p("intents.archived.done"))) : (await e.restoreIntent(t.repo_id, t.intent_key), a(p("intents.restored.done")));
+				} else g === "archive" ? (T && await e.pause(t.repo_id, t.intent_key, !0), await e.archive(t.repo_id, t.intent_key, !0), a(p("intents.archived.done"))) : (await e.archive(t.repo_id, t.intent_key, !1), a(p("intents.restored.done")));
 				_(null);
 			} catch (e) {
 				E(e);
@@ -13378,7 +13366,7 @@ function vo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 		try {
 			let o = (await e.createSlot(j)).key, c = typeof o == "string" && o ? o : j;
 			i = 2, f(i), await e.setSlotTitle(c, `${t.label} / ${n.slug || n.intent_dir}`), i = 3, f(i), await e.setSlotProject(c, t.canonical_path), i = 4, f(i), await e.setSlotAgent(c, oo), i = 5, f(i);
-			let l = await e.bindSession(n.repo_id, n.intent_key, c);
+			let l = await e.setSession(n.repo_id, n.intent_key, c);
 			L(l.binding, l.slot), T(null), a(s("intents.session.done.bound", { slot: l.binding.slot_key ?? c })), i = 6, f(i);
 			try {
 				x(await go(e, t, n, l.binding.slot_key ?? c));
@@ -13419,7 +13407,7 @@ function vo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 	]), V = i(async (t) => {
 		R("adopt");
 		try {
-			let r = await e.bindSession(n.repo_id, n.intent_key, t);
+			let r = await e.setSession(n.repo_id, n.intent_key, t);
 			L(r.binding, r.slot), T(null), a(s("intents.session.done.bound", { slot: r.binding.slot_key ?? t }));
 		} catch (e) {
 			I(e, lo);
@@ -13437,7 +13425,7 @@ function vo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 	]), H = i(async () => {
 		R("unbind");
 		try {
-			let t = await e.unbindSession(n.repo_id, n.intent_key);
+			let t = await e.setSession(n.repo_id, n.intent_key, null);
 			L(t.binding), D(null), a(s("intents.session.done.unbound"));
 		} catch (e) {
 			I(e, 0);
@@ -13470,8 +13458,8 @@ function vo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 	]), te = i(async (t) => {
 		R("move");
 		try {
-			let r = await e.takeover(n.repo_id, n.intent_key, t);
-			L(r.binding), D(null), a(s("intents.session.done.moved", { slot: r.binding.slot_key ?? t }));
+			let r = await e.setSession(n.repo_id, n.intent_key, t);
+			L(r.binding, r.slot), D(null), a(s("intents.session.done.moved", { slot: r.binding.slot_key ?? t }));
 		} catch (e) {
 			I(e, 0);
 		} finally {
@@ -15167,7 +15155,7 @@ function ps(e, t) {
 	return cs.has(t) ? e.t(`enum.phase.${t}`) : e.t("map.phase.unknown");
 }
 function ms({ api: e, route: t, go: n, cards: r }) {
-	let a = U(), { t: o } = a, [s, c] = ds(), [f, g] = d(!1), [_, v] = d(!1), [y, b] = d(null), C = fs(), w = u(null), [T, E] = d(null), D = t.repo, O = t.intent, k = !!D && !!O, A = `${D}:${O}`, j = y === A, M = J(k ? `map:${D}:${O}` : null, i((t) => e.map(D, O, void 0, { signal: t }), [
+	let a = U(), { t: o } = a, [s, c] = ds(), [f, g] = d(!1), [_, v] = d(!1), [y, b] = d(null), C = fs(), w = u(null), [T, E] = d(null), D = t.repo, O = t.intent, k = !!D && !!O, A = `${D}:${O}`, j = y === A, M = J(k ? `map:${D}:${O}` : null, i((t) => e.map(D, O, { signal: t }), [
 		e,
 		D,
 		O
@@ -21543,30 +21531,28 @@ function Zl({ api: e }) {
 		e,
 		a.repo,
 		a.intent
-	])), b = J("repos", i((t) => e.repos(!1, { signal: t }), [e]), { interval: 6e4 }), x = J("leases", i((t) => e.leases({ signal: t }), [e])), S = J("settings", i((t) => e.settings({ signal: t }), [e]), { interval: 0 }), C = J("health", i((t) => e.health({ signal: t }), [e]), { interval: 6e4 });
+	])), b = J("repos", i((t) => e.repos(!1, { signal: t }), [e]), { interval: 6e4 }), x = J("settings", i((t) => e.settings({ signal: t }), [e]), { interval: 0 }), S = J("health", i((t) => e.health({ signal: t }), [e])), C = S.data?.counts, w = C?.execution_leases ?? null;
 	o(() => {
 		let e = () => _(!0);
 		return window.addEventListener(ve, e), () => window.removeEventListener(ve, e);
 	}, []);
-	let w = g || [
+	let T = g || [
 		y.error,
 		b.error,
 		x.error,
-		S.error,
-		C.error
-	].some((e) => e?.authRequired), T = l(() => y.data ? ut(y.data) : null, [y.data]), E = T?.counts.total ?? null, D = f ?? E;
+		S.error
+	].some((e) => e?.authRequired), E = l(() => y.data ? ut(y.data) : null, [y.data]), D = E?.counts.total ?? null, O = f ?? D;
 	o(() => {
-		u(D ?? 0);
-	}, [D, u]);
-	let O = l(() => y.data?.actions.filter((e) => e.failure?.breaker_open).length ?? null, [y.data]), k = l(() => ({
+		u(O ?? 0);
+	}, [O, u]);
+	let k = l(() => y.data?.actions.filter((e) => e.failure?.breaker_open).length ?? null, [y.data]), A = l(() => ({
 		api: e,
 		route: a,
 		go: s,
 		actions: y,
 		repos: b,
-		leases: x,
-		settings: S,
-		health: C,
+		settings: x,
+		health: S,
 		setQueueCount: p
 	}), [
 		e,
@@ -21575,13 +21561,12 @@ function Zl({ api: e }) {
 		y,
 		b,
 		x,
-		S,
-		C
-	]), A = wt(a), j = n(Kl(a.view)), M = C.data && C.data.status !== "healthy" ? C.data.issues.length : 0;
+		S
+	]), j = wt(a), M = n(Kl(a.view)), N = S.data && S.data.status !== "healthy" ? S.data.issues.length : 0;
 	return /* @__PURE__ */ h("div", {
 		className: "studio",
 		"data-mode": r,
-		"data-pane": A,
+		"data-pane": j,
 		"data-view": a.view,
 		children: [
 			/* @__PURE__ */ m("a", {
@@ -21592,8 +21577,8 @@ function Zl({ api: e }) {
 			/* @__PURE__ */ m(Bt, {
 				route: a,
 				go: s,
-				queueCount: D,
-				showBack: A === "detail" && a.view === "actions",
+				queueCount: O,
+				showBack: j === "detail" && a.view === "actions",
 				onBack: () => s({
 					action: "",
 					artifact: ""
@@ -21606,14 +21591,14 @@ function Zl({ api: e }) {
 				registered: b.data?.totals.repos ?? null,
 				unavailable: b.data?.totals.unavailable ?? null,
 				children: /* @__PURE__ */ m(Rt, {
-					running: x.data?.live_execution ?? null,
-					leases: x.data?.leases.length ?? null,
-					circuits: O,
-					critical: T?.counts.critical ?? null,
+					running: w,
+					leases: w === null || C?.admin_leases == null ? null : w + C.admin_leases,
+					circuits: k,
+					critical: E?.counts.critical ?? null,
 					streamMode: c.mode
 				})
 			}),
-			w ? /* @__PURE__ */ h("div", {
+			T ? /* @__PURE__ */ h("div", {
 				className: "studio-banner",
 				"data-tone": "danger",
 				role: "alert",
@@ -21634,7 +21619,7 @@ function Zl({ api: e }) {
 					})
 				]
 			}) : null,
-			M > 0 ? /* @__PURE__ */ h("div", {
+			N > 0 ? /* @__PURE__ */ h("div", {
 				className: "studio-banner",
 				"data-tone": "warn",
 				role: "status",
@@ -21645,7 +21630,7 @@ function Zl({ api: e }) {
 					}),
 					/* @__PURE__ */ m("span", {
 						className: "studio-grow",
-						children: q(t, "shell.banner.degraded", M)
+						children: q(t, "shell.banner.degraded", N)
 					}),
 					/* @__PURE__ */ m("button", {
 						type: "button",
@@ -21659,9 +21644,9 @@ function Zl({ api: e }) {
 				className: "studio-view",
 				id: "studio-view",
 				children: /* @__PURE__ */ h(Jl.Provider, {
-					value: k,
+					value: A,
 					children: [/* @__PURE__ */ m(Mt, {
-						where: j,
+						where: M,
 						resetKey: a.view,
 						children: /* @__PURE__ */ m(ql, {
 							route: a,
