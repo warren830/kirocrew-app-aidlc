@@ -1,7 +1,7 @@
 /**
  * What happened after the 202.
  *
- * `POST …/install` answers immediately with a transaction id and then writes in the background, so the
+ * `POST …/transactions` answers immediately with a transaction id and then writes in the background, so the
  * only truthful progress indicator is the transaction row itself (§2.2). This drawer polls it and shows
  * the recorded steps, in the order they actually ran — including the rollback steps, because "it failed
  * and here is what was restored" is the outcome a user most needs to be able to read.

@@ -46,9 +46,12 @@ describe('looksBusy — the poll-pace reducer', () => {
     }
   })
 
-  it('recognises a live execution count from /leases', () => {
-    expect(looksBusy({ leases: [], global_concurrency_cap: 2, live_execution: 1 })).toBe(true)
-    expect(looksBusy({ leases: [], global_concurrency_cap: 2, live_execution: 0 })).toBe(false)
+  it('recognises a running turn from the /health lease counts', () => {
+    expect(looksBusy({ status: 'healthy', counts: { execution_leases: 1, admin_leases: 0 } })).toBe(true)
+    expect(looksBusy({ status: 'healthy', counts: { execution_leases: 0, admin_leases: 1 } })).toBe(false)
+    expect(looksBusy({ status: 'error', counts: { execution_leases: null, admin_leases: null } })).toBe(false)
+    // `/actions` has top-level counts too, and none of them is a lease.
+    expect(looksBusy({ actions: [], counts: { total: 3, critical: 1 } })).toBe(false)
   })
 
   it('recognises exactly the two in-flight card statuses, in a list and on its own', () => {

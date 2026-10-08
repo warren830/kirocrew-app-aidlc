@@ -255,7 +255,7 @@ function transaction(over: Json = {}): Json {
   }
 }
 
-/** The shell's own reads, so mounting `StudioApp` does not 404 on four unrelated routes. */
+/** The shell's own reads, so mounting `StudioApp` does not 404 on three unrelated routes. */
 function shellRoutes(): Record<string, RouteHandler> {
   return {
     [`GET ${BASE}/actions`]: () => ({
@@ -265,7 +265,6 @@ function shellRoutes(): Record<string, RouteHandler> {
       counts: { total: 0, critical: 0, blocking: 0, attention: 0, info: 0 },
       generated_at: '2026-09-05T08:00:00Z',
     }),
-    [`GET ${BASE}/leases`]: () => ({ leases: [], global_concurrency_cap: 3, live_execution: 0 }),
     [`GET ${BASE}/settings`]: () => ({
       settings: {},
       capabilities: {},
@@ -735,8 +734,8 @@ describe('uninstalling the harness', () => {
       [`GET ${BASE}/repos`]: () => ({ repos: [record], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
       [`GET ${BASE}/repos/r_1`]: () => ({ repo: record, intents: [], transactions: [] }),
       [`GET ${BASE}/repos/r_1/git`]: () => ({ git: record.git, owned_dirty: [], unrelated_dirty: 0 }),
-      [`POST ${BASE}/repos/r_1/uninstall/preview`]: () => ({ plan: removal, plan_digest: 'reviewed-removal' }),
-      [`POST ${BASE}/repos/r_1/uninstall`]: () => ({ ok: true, transaction_id: 'tx_9', status: 'staged' }),
+      [`POST ${BASE}/repos/r_1/transactions/preview`]: () => ({ plan: removal, plan_digest: 'reviewed-removal' }),
+      [`POST ${BASE}/repos/r_1/transactions`]: () => ({ ok: true, transaction_id: 'tx_9', status: 'staged' }),
       [`GET ${BASE}/repos/r_1/transactions/tx_9`]: () => ({ transaction: transaction({
         kind: 'uninstall', status: 'committed', error: null, failed_dir: null, repo_install_status: 'not_installed',
       }) }),
@@ -746,10 +745,10 @@ describe('uninstalling the harness', () => {
     expect(await screen.findByText('Content that will remain')).toBeInTheDocument()
     expect(screen.getAllByText('The older receipt does not identify the exact content Studio added.').length).toBeGreaterThan(0)
     expect(screen.getAllByText('This configurable file changed after installation. It will remain with its current contents.').length).toBeGreaterThan(0)
-    expect(apiCalls.some((call) => call.path.endsWith('/uninstall'))).toBe(false)
+    expect(apiCalls.some((call) => call.path.endsWith('/transactions'))).toBe(false)
     await userEvent.click(screen.getByRole('button', { name: 'Uninstall the reviewed harness' }))
     await waitFor(() => expect(apiCalls).toContainEqual({
-      method: 'POST', path: `${BASE}/repos/r_1/uninstall`, body: { plan_digest: 'reviewed-removal' },
+      method: 'POST', path: `${BASE}/repos/r_1/transactions`, body: { kind: 'uninstall', plan_digest: 'reviewed-removal' },
     }))
   })
 })
@@ -769,8 +768,8 @@ describe('engine version rollback', () => {
       [`GET ${BASE}/repos`]: () => ({ repos: [record], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
       [`GET ${BASE}/repos/r_1`]: () => ({ repo: record, intents: [], transactions: [] }),
       [`GET ${BASE}/repos/r_1/git`]: () => ({ git: record.git, owned_dirty: [], unrelated_dirty: 0 }),
-      [`POST ${BASE}/repos/r_1/rollback/preview`]: () => ({ plan: rollbackPlan, plan_digest: 'reviewed-rollback' }),
-      [`POST ${BASE}/repos/r_1/rollback`]: () => ({ ok: true, transaction_id: 'tx_9', status: 'staged' }),
+      [`POST ${BASE}/repos/r_1/transactions/preview`]: () => ({ plan: rollbackPlan, plan_digest: 'reviewed-rollback' }),
+      [`POST ${BASE}/repos/r_1/transactions`]: () => ({ ok: true, transaction_id: 'tx_9', status: 'staged' }),
       [`GET ${BASE}/repos/r_1/transactions/tx_9`]: () => ({ transaction: transaction({
         kind: 'rollback', status: 'committed', engine_version: '2.5.0', error: null, failed_dir: null,
         repo_install_status: 'installed',
@@ -781,10 +780,10 @@ describe('engine version rollback', () => {
     const preview = await screen.findByRole('region', { name: 'Roll back the AI-DLC engine' })
     expect(within(preview).getByText('2.6.1')).toBeInTheDocument()
     expect(within(preview).getByText('2.5.0')).toBeInTheDocument()
-    expect(apiCalls.some((call) => call.path.endsWith('/rollback'))).toBe(false)
+    expect(apiCalls.some((call) => call.path.endsWith('/transactions'))).toBe(false)
     await userEvent.click(within(preview).getByRole('button', { name: 'Restore engine 2.5.0' }))
     await waitFor(() => expect(apiCalls).toContainEqual({
-      method: 'POST', path: `${BASE}/repos/r_1/rollback`, body: { plan_digest: 'reviewed-rollback' },
+      method: 'POST', path: `${BASE}/repos/r_1/transactions`, body: { kind: 'rollback', plan_digest: 'reviewed-rollback' },
     }))
     expect(await screen.findByText('Committed. The receipt for 2.5.0 is now the current one.')).toBeInTheDocument()
   })
@@ -813,8 +812,8 @@ describe('the install preview', () => {
       [`GET ${BASE}/repos`]: () => ({ repos: [fresh], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
       [`GET ${BASE}/repos/r_new`]: () => ({ repo: fresh, intents: [], transactions: [] }),
       [`GET ${BASE}/repos/r_new/git`]: () => ({ git: fresh['git'], owned_dirty: [], unrelated_dirty: 0 }),
-      [`POST ${BASE}/repos/r_new/install/preview`]: () => ({ plan: plan({ repo_id: 'r_new' }), plan_digest: 'digest-aaa' }),
-      [`POST ${BASE}/repos/r_new/install`]: () => ({ ok: true, transaction_id: 'tx_1', status: 'staged' }),
+      [`POST ${BASE}/repos/r_new/transactions/preview`]: () => ({ plan: plan({ repo_id: 'r_new' }), plan_digest: 'digest-aaa' }),
+      [`POST ${BASE}/repos/r_new/transactions`]: () => ({ ok: true, transaction_id: 'tx_1', status: 'staged' }),
       [`GET ${BASE}/repos/r_new/transactions/tx_1`]: () => ({
         transaction: transaction({ transaction_id: 'tx_1', kind: 'install', status: 'committed', error: null, failed_dir: null, steps: [] }),
       }),
@@ -835,7 +834,7 @@ describe('the install preview', () => {
     expect(screen.queryByRole('region', { name: 'Install preview' })).not.toBeInTheDocument()
     const entry = screen.getByRole('button', { name: 'Install AI-DLC' })
     expect(screen.getAllByRole('button', { name: /Install AI-DLC/ })).toEqual([entry])
-    expect(apiCalls.some((call) => call.method === 'POST' && call.path === `${BASE}/repos/r_new/install`)).toBe(false)
+    expect(apiCalls.some((call) => call.method === 'POST' && call.path === `${BASE}/repos/r_new/transactions`)).toBe(false)
   })
 
   it('names every managed path with its ownership kind, and offers no force control', async () => {
@@ -873,7 +872,7 @@ describe('the install preview', () => {
 
   it('blocks the confirmation on a conflict and shows its diff', async () => {
     installRoutes({
-      [`POST ${BASE}/repos/r_new/install/preview`]: () => ({
+      [`POST ${BASE}/repos/r_new/transactions/preview`]: () => ({
         plan: plan({
           repo_id: 'r_new',
           entries: [entry(), CONFLICT],
@@ -900,7 +899,7 @@ describe('the install preview', () => {
 
   it('names what would be retired, and that a modified retired file is kept', async () => {
     installRoutes({
-      [`POST ${BASE}/repos/r_new/install/preview`]: () => ({
+      [`POST ${BASE}/repos/r_new/transactions/preview`]: () => ({
         plan: plan({
           repo_id: 'r_new',
           entries: [
@@ -926,7 +925,7 @@ describe('the install preview', () => {
   it('confirms with the digest it showed, and refuses and re-reads when the server disagrees', async () => {
     let previews = 0
     installRoutes({
-      [`POST ${BASE}/repos/r_new/install/preview`]: () => {
+      [`POST ${BASE}/repos/r_new/transactions/preview`]: () => {
         previews += 1
         return previews === 1
           ? { plan: plan({ repo_id: 'r_new' }), plan_digest: 'digest-aaa' }
@@ -941,7 +940,7 @@ describe('the install preview', () => {
               plan_digest: 'digest-bbb',
             }
       },
-      [`POST ${BASE}/repos/r_new/install`]: () => {
+      [`POST ${BASE}/repos/r_new/transactions`]: () => {
         throw new StubApiError(409, {
           error: 'the plan changed',
           code: 'install_conflict',
@@ -957,8 +956,8 @@ describe('the install preview', () => {
     await userEvent.click(confirm)
 
     // The digest the user read is the digest that was sent.
-    const applied = apiCalls.find((call) => call.method === 'POST' && call.path === `${BASE}/repos/r_new/install`)
-    expect(applied?.body).toEqual({ plan_digest: 'digest-aaa' })
+    const applied = apiCalls.find((call) => call.method === 'POST' && call.path === `${BASE}/repos/r_new/transactions`)
+    expect(applied?.body).toEqual({ kind: 'install', plan_digest: 'digest-aaa' })
 
     // Refused, said so, and re-read the plan rather than letting a second click confirm the stale one.
     expect(await within(preview).findByText('The repository changed while you were reading')).toBeInTheDocument()
@@ -993,7 +992,7 @@ describe('the upgrade preview', () => {
       [`GET ${BASE}/repos`]: () => ({ repos: [drifted], totals: { repos: 1, unavailable: 0, open_actions: 2 } }),
       [`GET ${BASE}/repos/r_1`]: () => ({ repo: drifted, intents: [], transactions: [] }),
       [`GET ${BASE}/repos/r_1/git`]: () => ({ git: drifted['git'], owned_dirty: ['.kiro/steering/aidlc.md'], unrelated_dirty: 4 }),
-      [`POST ${BASE}/repos/r_1/upgrade/preview`]: () => {
+      [`POST ${BASE}/repos/r_1/transactions/preview`]: () => {
         throw new StubApiError(409, {
           error: 'state version',
           code: 'state_version_migration_unconfirmed',
@@ -1190,10 +1189,10 @@ describe('install recovery required', () => {
       [`GET ${BASE}/repos`]: () => ({ repos: [broken], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
       [`GET ${BASE}/repos/r_1`]: () => ({ repo: broken, intents: [], transactions: [transaction()] }),
       [`GET ${BASE}/repos/r_1/git`]: () => ({ git: broken.git, owned_dirty: [], unrelated_dirty: 0 }),
-      [`POST ${BASE}/repos/r_1/install/recovery/preview`]: () => ({
+      [`POST ${BASE}/repos/r_1/transactions/preview`]: () => ({
         plan: plan({ kind: 'recovery' }), plan_digest: 'reviewed-recovery',
       }),
-      [`POST ${BASE}/repos/r_1/install/recovery`]: () => starting,
+      [`POST ${BASE}/repos/r_1/transactions`]: () => starting,
       [`GET ${BASE}/repos/r_1/transactions/tx_9`]: () => ({ transaction: transaction({ status: 'committed', error: null }) }),
     })
     mount('?view=repos&repo=r_1')
@@ -1211,11 +1210,11 @@ describe('install recovery required', () => {
     await userEvent.click(cancel)
     await userEvent.click(refresh)
     expect(preview).toBeInTheDocument()
-    expect(apiCalls.filter((call) => call.path.endsWith('/install/recovery/preview'))).toHaveLength(1)
+    expect(apiCalls.filter((call) => call.path.endsWith('/transactions/preview'))).toHaveLength(1)
 
     await act(async () => accept({ ok: true, transaction_id: 'tx_9', status: 'staged' }))
     expect(await screen.findByRole('region', { name: 'Transaction tx_9' })).toBeInTheDocument()
-    expect(apiCalls.filter((call) => call.path.endsWith('/install/recovery'))).toHaveLength(1)
+    expect(apiCalls.filter((call) => call.path.endsWith('/transactions'))).toHaveLength(1)
   })
 
   it('explains restoration of an interrupted uninstall and submits its recovery preview', async () => {
@@ -1229,8 +1228,8 @@ describe('install recovery required', () => {
       [`GET ${BASE}/repos`]: () => ({ repos: [broken], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
       [`GET ${BASE}/repos/r_1`]: () => ({ repo: broken, intents: [], transactions: [transaction({ kind: 'uninstall' })] }),
       [`GET ${BASE}/repos/r_1/git`]: () => ({ git: broken.git, owned_dirty: [], unrelated_dirty: 0 }),
-      [`POST ${BASE}/repos/r_1/install/recovery/preview`]: () => ({ plan: restoration, plan_digest: 'restore-reviewed' }),
-      [`POST ${BASE}/repos/r_1/install/recovery`]: () => ({ ok: true, transaction_id: 'tx_9', status: 'staged' }),
+      [`POST ${BASE}/repos/r_1/transactions/preview`]: () => ({ plan: restoration, plan_digest: 'restore-reviewed' }),
+      [`POST ${BASE}/repos/r_1/transactions`]: () => ({ ok: true, transaction_id: 'tx_9', status: 'staged' }),
       [`GET ${BASE}/repos/r_1/transactions/tx_9`]: () => ({ transaction: transaction({
         kind: 'uninstall', status: 'rolled_back', engine_version: '2.6.1', error: null,
         steps: [{ name: 'confirm_recovery', ok: true, detail: {} }], repo_install_status: 'installed',
@@ -1242,7 +1241,7 @@ describe('install recovery required', () => {
     expect(await within(preview).findByText(/Restore interrupted Uninstall transaction tx_9/)).toBeInTheDocument()
     await userEvent.click(within(preview).getByRole('button', { name: 'Restore the interrupted transaction' }))
     await waitFor(() => expect(apiCalls).toContainEqual({
-      method: 'POST', path: `${BASE}/repos/r_1/install/recovery`, body: { plan_digest: 'restore-reviewed' },
+      method: 'POST', path: `${BASE}/repos/r_1/transactions`, body: { kind: 'recovery', plan_digest: 'restore-reviewed' },
     }))
     expect(await screen.findByText('Everything was restored. The repository keeps its previous complete installation and receipt.')).toBeInTheDocument()
   })
@@ -1271,7 +1270,7 @@ describe('install recovery required', () => {
       [`GET ${BASE}/repos`]: () => ({ repos: [broken], totals: { repos: 1, unavailable: 0, open_actions: 2 } }),
       [`GET ${BASE}/repos/r_1`]: () => ({ repo: broken, intents: [], transactions: [transaction()] }),
       [`GET ${BASE}/repos/r_1/git`]: () => ({ git: broken['git'], owned_dirty: [], unrelated_dirty: 0 }),
-      [`POST ${BASE}/repos/r_1/install/recovery/preview`]: () => ({
+      [`POST ${BASE}/repos/r_1/transactions/preview`]: () => ({
         plan: plan({ kind: 'recovery', engine_from: '2.6.1' }),
         plan_digest: 'digest-recover',
       }),
