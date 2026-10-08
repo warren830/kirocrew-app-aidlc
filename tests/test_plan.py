@@ -588,7 +588,8 @@ def test_create_intent_refuses_a_repository_that_cannot_host_a_verb(studio, P, d
 
 
 def test_create_intent_refuses_blocking_findings(P, deps, fresh_repo, errors):
-    finding = SimpleNamespace(severity="blocking", to_json=lambda: {"code": "duplicate_identity", "severity": "blocking"})
+    finding = SimpleNamespace(severity="blocking",
+                              to_json=lambda: {"code": "duplicate_identity", "severity": "blocking"})
     with pytest.raises(errors.StudioError) as excinfo:
         run(deps.svc.create_intent(fresh_repo, request(P, "poc"), blocking_findings=[finding]))
     assert excinfo.value.code == "state_inconsistent"

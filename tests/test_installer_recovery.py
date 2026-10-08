@@ -34,7 +34,8 @@ def reserve(harness, repo):
 
 
 def resume(harness, repo, plan, pending):
-    return run(harness.installer.run(repo, "recovery", plan_digest=plan.digest(), transaction_id=pending.transaction_id))
+    return run(harness.installer.run(repo, "recovery", plan_digest=plan.digest(),
+                                     transaction_id=pending.transaction_id))
 
 
 def restore_target(plan) -> str:

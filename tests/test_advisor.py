@@ -1063,8 +1063,8 @@ def pick(package: dict, field: str, *tokens: str) -> dict:
 
 
 def plan_result(*answers: dict, **over: Any) -> dict:
-    return {**good_result(verdict=None, suggested_answers=list(answers), summary="A small change to an existing module."),
-            **over}
+    summary = "A small change to an existing module."
+    return {**good_result(verdict=None, suggested_answers=list(answers), summary=summary), **over}
 
 
 def settle_plan(w, A, compose, **over: Any):

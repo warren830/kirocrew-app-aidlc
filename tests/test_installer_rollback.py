@@ -80,7 +80,8 @@ def test_rollback_begin_run_and_terminal_reentry(upgraded):
     result = run(up.installer.run(repo, "rollback", plan_digest=plan.digest(), transaction_id=pending.transaction_id))
     assert result.status == "committed"
     before = tree(root)
-    assert run(up.installer.rollback(repo, confirm_digest=plan.digest(), transaction_id=pending.transaction_id)) == result
+    again = run(up.installer.rollback(repo, confirm_digest=plan.digest(), transaction_id=pending.transaction_id))
+    assert again == result
     assert tree(root) == before
 
 

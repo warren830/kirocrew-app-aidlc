@@ -217,7 +217,7 @@ def build_upgrade_payload(root: Path, *, change_model_defaults: bool = True) -> 
             ".kiro/skills/aidlc/STAGES.md": "# new in v2\n",
             CLI: json.dumps(cli, indent=2) + "\n",
             "AGENTS.md": "# AI-DLC v2\n\nRun /aidlc to begin.\n",
-            ".gitignore": "aidlc/.aidlc-turn-counter\naidlc/.aidlc-clone-id\n.aidlc-hooks-health/\naidlc/.aidlc-sessions\n",
+            ".gitignore": MINI_FILES[".gitignore"] + "aidlc/.aidlc-sessions\n",
         },
         drop=[".kiro/tools/aidlc-utility.ts"],
     )
@@ -312,7 +312,7 @@ def fresh(studio, h, repo_builder):
 
 
 def tree(root: Path) -> dict[str, str]:
-    """Every regular file under ``root`` as ``relpath -> sha256`` (``.git`` skipped): the whole tree, not a spot check."""
+    """Every regular file under ``root`` as ``relpath -> sha256`` (``.git`` skipped): the whole tree."""
     out: dict[str, str] = {}
     for path in sorted(root.rglob("*")):
         if not path.is_file() or path.is_symlink():

@@ -11,20 +11,9 @@ from pathlib import Path
 import pytest
 
 from _helpers_c import die_in_child
-from test_installer import (
-    I,
-    build_upgrade_payload,
-    do,
-    entry_of,
-    h,
-    insert_repo,
-    make_harness,
-    payload_v1,
-    payload_v2,
-    reload_repo,
-    run,
-    store,
-    tree,
+from test_installer import (  # noqa: F401 - fixtures
+    I, build_upgrade_payload, do, entry_of, h, insert_repo, make_harness, payload_v1, payload_v2, reload_repo, run,
+    store, tree,
 )
 
 OWNED = ".kiro/tools/aidlc-utility.ts"
@@ -342,7 +331,8 @@ def test_legacy_receipt_preserves_unprovable_fragments(h, installed):
 def test_stale_digest_and_transaction_identity_are_rejected(studio, h, installed):
     root, repo = installed
     plan = h.installer.preview(repo, "uninstall")
-    (root / CLI).write_text(json.dumps({**json.loads((root / CLI).read_bytes()), "user.setting": "edited after preview"}))
+    edited = {**json.loads((root / CLI).read_bytes()), "user.setting": "edited after preview"}
+    (root / CLI).write_text(json.dumps(edited))
     before = tree(root)
     with pytest.raises(studio.errors.StudioError) as exc:
         run(h.installer.uninstall(repo, confirm_digest=plan.digest()))
