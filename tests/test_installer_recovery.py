@@ -7,59 +7,60 @@ import os
 
 import pytest
 
-from conftest import fork_process
-
-from test_installer import (
-    I, do, h, make_harness, payload_v1, payload_v2, reload_repo, run, store, tree,
-)
-from test_installer_uninstall import installed
+from _helpers_c import die_in_child
+from test_installer import h, make_harness, payload_v1, payload_v2, run, store, tree  # noqa: F401 - fixtures
 from test_installer_rollback import upgraded
+from test_installer_uninstall import installed
 
 
 @pytest.fixture(params=["uninstall", "rollback"])
 def interrupted(request, installed, upgraded):
-    # Both fixtures share the store: upgraded supplies a current v2 receipt for either operation.
+    """``(root, repo, harness, before, failed)``; ``upgraded`` supplies the current v2 receipt either kind needs."""
     root, repo, harness, _ = upgraded
     before = tree(root)
     kind = request.param
     plan = harness.installer.preview(repo, kind)
-    harness.fault.at(
-        "after:remove_files" if kind == "uninstall" else "after:restore_version",
-        "before:restore_backups",
-    )
+    harness.fault.at("after:remove_files" if kind == "uninstall" else "after:restore_version", "before:restore_backups")
     failed = run(harness.installer.run(repo, kind, plan_digest=plan.digest()))
     assert failed.status == "recovery_required"
     harness.fault.markers.clear()
     return root, repo, harness, before, failed
 
 
+def reserve(harness, repo):
+    """``(plan, pending)``: a previewed recovery and its reserved transaction."""
+    plan = harness.installer.preview(repo, "recovery")
+    return plan, run(harness.installer.begin(repo, "recovery", plan_digest=plan.digest()))
+
+
+def resume(harness, repo, plan, pending):
+    return run(harness.installer.run(repo, "recovery", plan_digest=plan.digest(), transaction_id=pending.transaction_id))
+
+
+def restore_target(plan) -> str:
+    return next(e.path for e in plan.entries if e.action == "restore_backup")
+
+
 def test_generic_recovery_preview_begin_run_restores_original_transaction(interrupted, tmp_path):
     root, repo, harness, before, failed = interrupted
     harness.installer._payload_root = tmp_path / "bundle-is-unavailable"
-    plan = harness.installer.preview(repo, "recovery")
+    plan, pending = reserve(harness, repo)
     assert not plan.blocking
     assert plan.kind == "recovery" and plan.recovery_transaction_id == failed.transaction_id
     assert plan.recovery_kind == failed.kind
     assert plan.to_json()["recovery_transaction_id"] == failed.transaction_id
-    pending = run(harness.installer.begin(repo, "recovery", plan_digest=plan.digest()))
     assert pending.transaction_id == failed.transaction_id and pending.status == "staged"
-    recovered = run(harness.installer.run(
-        repo, "recovery", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
-    ))
+    recovered = resume(harness, repo, plan, pending)
     assert recovered.status == "rolled_back" and tree(root) == before
     assert harness.store.get("repos", repo.repo_id)["install_status"] == "installed"
     assert harness.lease() is None
-    assert run(harness.installer.run(
-        repo, "recovery", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
-    )) == recovered
+    assert resume(harness, repo, plan, pending) == recovered
 
 
 def test_generic_recovery_blocks_corrupt_evidence_instead_of_installing_bundle(interrupted):
     root, repo, harness, _, failed = interrupted
     path = harness.data_dir / "backups" / failed.transaction_id / f"{failed.kind}-journal.json"
-    snapshot = json.loads(path.read_bytes())
-    snapshot["files"] = []
-    path.write_text(json.dumps(snapshot))
+    path.write_text(json.dumps({**json.loads(path.read_bytes()), "files": []}))
     before = tree(root)
     plan = harness.installer.preview(repo, "recovery")
     assert plan.blocking and plan.recovery_transaction_id == failed.transaction_id
@@ -68,13 +69,10 @@ def test_generic_recovery_blocks_corrupt_evidence_instead_of_installing_bundle(i
 
 
 @pytest.mark.parametrize("valid_before_image", [False, True])
-def test_generic_recovery_confirmation_is_rechecked_under_the_new_lease(
-    studio, interrupted, valid_before_image,
-):
+def test_generic_recovery_confirmation_is_rechecked_under_the_new_lease(interrupted, valid_before_image):
     root, repo, harness, _, failed = interrupted
-    plan = harness.installer.preview(repo, "recovery")
-    pending = run(harness.installer.begin(repo, "recovery", plan_digest=plan.digest()))
-    target = next(e.path for e in plan.entries if e.action == "restore_backup")
+    plan, pending = reserve(harness, repo)
+    target = restore_target(plan)
     changed = ((harness.data_dir / "backups" / failed.transaction_id / target).read_bytes()
                if valid_before_image else b"user's new work")
 
@@ -83,43 +81,34 @@ def test_generic_recovery_confirmation_is_rechecked_under_the_new_lease(
         (root / target).write_bytes(changed)
 
     harness.fault.on("after:acquire_admin_lease", edit)
-    result = run(harness.installer.run(
-        repo, "recovery", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
-    ))
-    assert result.status == "recovery_required"
+    assert resume(harness, repo, plan, pending).status == "recovery_required"
     assert (root / target).read_bytes() == changed
     assert harness.lease() is None
 
 
-def test_generic_recovery_stale_preview_is_refused_before_reservation(studio, interrupted):
+@pytest.mark.parametrize("valid_before_image", [False, True])
+def test_generic_recovery_stale_preview_is_refused_before_reservation(studio, interrupted, valid_before_image):
+    """A changed target blocks the preview; even the backup's own bytes (safe) move the digest it was bound to."""
     root, repo, harness, _, failed = interrupted
     plan = harness.installer.preview(repo, "recovery")
-    target = next(e.path for e in plan.entries if e.action == "restore_backup")
+    target = restore_target(plan)
     (root / target).parent.mkdir(parents=True, exist_ok=True)
-    (root / target).write_bytes(b"new user data")
+    (root / target).write_bytes((harness.data_dir / "backups" / failed.transaction_id / target).read_bytes()
+                                if valid_before_image else b"new user data")
     changed = harness.installer.preview(repo, "recovery")
-    assert changed.blocking
-    assert any(e.reason == "user_changed_recovery_target" for e in changed.blockers)
+    if valid_before_image:
+        assert not changed.blocking
+    else:
+        assert changed.blocking
+        assert any(e.reason == "user_changed_recovery_target" for e in changed.blockers)
     with pytest.raises(studio.errors.StudioError):
         run(harness.installer.begin(repo, "recovery", plan_digest=plan.digest()))
     assert harness.installer.transaction(failed.transaction_id).status == "recovery_required"
 
 
-def test_generic_recovery_digest_binds_an_otherwise_safe_before_image(studio, interrupted):
-    root, repo, harness, _, failed = interrupted
-    plan = harness.installer.preview(repo, "recovery")
-    target = next(e.path for e in plan.entries if e.action == "restore_backup")
-    (root / target).parent.mkdir(parents=True, exist_ok=True)
-    (root / target).write_bytes((harness.data_dir / "backups" / failed.transaction_id / target).read_bytes())
-    assert not harness.installer.preview(repo, "recovery").blocking
-    with pytest.raises(studio.errors.StudioError):
-        run(harness.installer.begin(repo, "recovery", plan_digest=plan.digest()))
-
-
 def test_generic_recovery_preview_checks_backup_bytes(interrupted):
     _, repo, harness, _, failed = interrupted
-    plan = harness.installer.preview(repo, "recovery")
-    target = next(e.path for e in plan.entries if e.action == "restore_backup")
+    target = restore_target(harness.installer.preview(repo, "recovery"))
     (harness.data_dir / "backups" / failed.transaction_id / target).write_bytes(b"damaged backup")
     blocked = harness.installer.preview(repo, "recovery")
     assert blocked.blocking
@@ -128,20 +117,16 @@ def test_generic_recovery_preview_checks_backup_bytes(interrupted):
 
 def test_reserved_generic_recovery_rejects_the_wrong_confirmation(studio, interrupted):
     root, repo, harness, _, _ = interrupted
-    plan = harness.installer.preview(repo, "recovery")
-    pending = run(harness.installer.begin(repo, "recovery", plan_digest=plan.digest()))
+    _, pending = reserve(harness, repo)
     before = tree(root)
     with pytest.raises(studio.errors.StudioError):
-        run(harness.installer.run(
-            repo, "recovery", plan_digest="wrong", transaction_id=pending.transaction_id,
-        ))
+        run(harness.installer.run(repo, "recovery", plan_digest="wrong", transaction_id=pending.transaction_id))
     assert tree(root) == before
 
 
 def test_reserved_recovery_cannot_resume_the_destructive_operation(studio, interrupted):
     root, repo, harness, _, failed = interrupted
-    plan = harness.installer.preview(repo, "recovery")
-    pending = run(harness.installer.begin(repo, "recovery", plan_digest=plan.digest()))
+    _, pending = reserve(harness, repo)
     original = next(s.detail["confirm_digest"] for s in failed.steps if s.name == f"confirm_{failed.kind}")
     before = tree(root)
     with pytest.raises(studio.errors.StudioError):
@@ -152,53 +137,35 @@ def test_reserved_recovery_cannot_resume_the_destructive_operation(studio, inter
 
 def test_generic_recovery_records_late_evidence_failure_without_staying_staged(interrupted):
     root, repo, harness, _, failed = interrupted
-    plan = harness.installer.preview(repo, "recovery")
-    pending = run(harness.installer.begin(repo, "recovery", plan_digest=plan.digest()))
-    path = harness.data_dir / "backups" / failed.transaction_id / f"{failed.kind}-journal.json"
-    path.write_bytes(b"corrupt after confirmation")
+    plan, pending = reserve(harness, repo)
+    (harness.data_dir / "backups" / failed.transaction_id / f"{failed.kind}-journal.json").write_bytes(
+        b"corrupt after confirmation")
     before = tree(root)
-    result = run(harness.installer.run(
-        repo, "recovery", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
-    ))
-    assert result.status == "recovery_required" and tree(root) == before
+    assert resume(harness, repo, plan, pending).status == "recovery_required" and tree(root) == before
 
 
 def test_generic_recovery_lease_race_returns_a_retryable_outcome(interrupted):
-    root, repo, harness, _, failed = interrupted
-    plan = harness.installer.preview(repo, "recovery")
-    pending = run(harness.installer.begin(repo, "recovery", plan_digest=plan.digest()))
-    grant = run(harness.scheduler.acquire_execution(repo, intent_uuid=None, session_key=None,
-                                                    action_id="new-owner"))
+    root, repo, harness, _, _ = interrupted
+    plan, pending = reserve(harness, repo)
+    grant = run(harness.scheduler.acquire_execution(repo, intent_uuid=None, session_key=None, action_id="new-owner"))
     before = tree(root)
-    result = run(harness.installer.run(
-        repo, "recovery", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
-    ))
+    result = resume(harness, repo, plan, pending)
     assert result.status == "recovery_required" and result.error == "repo_busy"
     assert tree(root) == before
     run(harness.scheduler.release(grant))
 
 
-def test_process_death_during_generic_recovery_can_use_the_same_application_flow(studio, interrupted):
+def test_process_death_during_generic_recovery_can_use_the_same_application_flow(interrupted):
     root, repo, harness, before, failed = interrupted
-    plan = harness.installer.preview(repo, "recovery")
-    pending = run(harness.installer.begin(repo, "recovery", plan_digest=plan.digest()))
+    plan, pending = reserve(harness, repo)
 
     def child():
         harness.store.close()
         harness.store.open()
         harness.fault.on("after:acquire_admin_lease", lambda: os._exit(77))
-        run(harness.installer.run(
-            repo, "recovery", plan_digest=plan.digest(), transaction_id=pending.transaction_id,
-        ))
+        resume(harness, repo, plan, pending)
 
-    process = fork_process(child)
-    process.start()
-    process.join(15)
-    if process.is_alive():
-        process.terminate()
-        process.join()
-        pytest.fail("isolated recovery process did not exit")
-    assert process.exitcode == 77
+    die_in_child(child)
     # The child died holding the lock; the recovery below can only take it because the kernel let go.
     assert run(harness.installer.settle_abandoned()) == [pending.transaction_id]
     assert harness.installer.transaction(failed.transaction_id).status == "recovery_required"
