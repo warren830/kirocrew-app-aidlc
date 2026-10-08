@@ -12,16 +12,11 @@ import sys
 
 
 INSTALLER = Path(__file__).resolve().parents[1] / "scripts" / "dev-install.sh"
-
-
-BUNDLED_PY = Path(
-    "/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/bin/python3.12"
-)
+BUNDLED_PY = Path("/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/bin/python3.12")
 
 
 def run_installer(tmp_path: Path, *, quoted_checkout=False, build=False, installed=False, kc_py="path"):
-    """``kc_py``: ``"path"`` sets KC_PY to the wrapper's path, ``"name"`` to a command name on PATH,
-    ``None`` leaves it unset with the wrapper as ``python3`` on PATH."""
+    """``kc_py``: ``"path"``/``"name"`` set KC_PY to the wrapper's path/a PATH name; ``None`` leaves it unset."""
     root = tmp_path / ('checkout with "quotes"' if quoted_checkout else "checkout")
     (root / "scripts").mkdir(parents=True)
     (root / "ui").mkdir()
@@ -67,22 +62,13 @@ def run_installer(tmp_path: Path, *, quoted_checkout=False, build=False, install
         "    print(json.dumps({'ok': True, 'status': 'healthy'}))\n"
     )
     api.chmod(0o755)
-    env = os.environ.copy()
-    env.update({"PATH": str(tools)})
-    env.pop("KC_PY", None)
-    if kc_py == "path":
-        env["KC_PY"] = str(python)
-    elif kc_py == "name":
-        env["KC_PY"] = "python3-gateway"
-    env.pop("NODE_BIN", None)
-    result = subprocess.run(
-        [str(tools / "bash"), str(root / "scripts/dev-install.sh"),
-         *([] if build else ["--no-build"])],
-        cwd=root, env=env, text=True, capture_output=True, timeout=15,
-    )
-    rows = [
-        json.loads(line) for line in requests.read_text().splitlines()
-    ] if requests.exists() else []
+    env = {key: value for key, value in os.environ.items() if key not in ("KC_PY", "NODE_BIN")}
+    env["PATH"] = str(tools)
+    if kc_py is not None:
+        env["KC_PY"] = str(python) if kc_py == "path" else "python3-gateway"
+    argv = [str(tools / "bash"), str(root / "scripts/dev-install.sh"), *([] if build else ["--no-build"])]
+    result = subprocess.run(argv, cwd=root, env=env, text=True, capture_output=True, timeout=15)
+    rows = [json.loads(line) for line in requests.read_text().splitlines()] if requests.exists() else []
     return result, root, rows, python_log
 
 
@@ -100,16 +86,12 @@ def test_prebuilt_install_uses_configured_python_without_node(tmp_path):
 
 
 def test_update_serializes_checkout_path_without_corrupting_json(tmp_path):
-    result, root, requests, _ = run_installer(
-        tmp_path, quoted_checkout=True, installed=True,
-    )
+    result, root, requests, _ = run_installer(tmp_path, quoted_checkout=True, installed=True)
     assert result.returncode == 0, result.stdout + result.stderr
     mutations = [r for r in requests if r["method"] == "POST"]
     assert mutations[0]["path"] == "/api/apps/aidlc-studio/disable"
     assert {key: mutations[1][key] for key in ("method", "path", "body")} == {
-        "method": "POST", "path": "/api/apps/aidlc-studio/update",
-        "body": {"source": str(root)},
-    }
+        "method": "POST", "path": "/api/apps/aidlc-studio/update", "body": {"source": str(root)}}
     assert mutations[-1]["path"] == "/api/apps/aidlc-studio/enable"
 
 
@@ -140,10 +122,8 @@ def test_a_missing_interpreter_is_named_before_any_api_call(tmp_path):
     requests_file = tmp_path / "requests.jsonl"
     requests_file.unlink(missing_ok=True)
     env = {"PATH": str(tmp_path / "tools"), "KC_PY": "python3-gateway", "HOME": str(tmp_path)}
-    again = subprocess.run(
-        [str(tmp_path / "tools" / "bash"), str(root / "scripts/dev-install.sh"), "--no-build"],
-        cwd=root, env=env, text=True, capture_output=True, timeout=15,
-    )
+    again = subprocess.run([str(tmp_path / "tools" / "bash"), str(root / "scripts/dev-install.sh"), "--no-build"],
+                           cwd=root, env=env, text=True, capture_output=True, timeout=15)
     assert again.returncode != 0
     assert "KC_PY" in again.stderr and "python3-gateway" in again.stderr
     assert not requests_file.exists()
@@ -151,13 +131,9 @@ def test_a_missing_interpreter_is_named_before_any_api_call(tmp_path):
 
 def test_kcapi_names_a_missing_gateway_python_instead_of_blaming_the_gateway(tmp_path):
     kcapi = Path(__file__).resolve().parents[1] / "scripts" / "kcapi.sh"
-    env = {
-        "PATH": os.environ.get("PATH", ""), "HOME": str(tmp_path),
-        "KC_PY": str(tmp_path / "no-such-python"), "KC_JAR": str(tmp_path / "jar"),
-        "KC_PORT": "1",
-    }
-    done = subprocess.run(["bash", str(kcapi), "GET", "/api/apps"], env=env,
-                          text=True, capture_output=True, timeout=15)
+    env = {"PATH": os.environ.get("PATH", ""), "HOME": str(tmp_path), "KC_PY": str(tmp_path / "no-such-python"),
+           "KC_JAR": str(tmp_path / "jar"), "KC_PORT": "1"}
+    done = subprocess.run(["bash", str(kcapi), "GET", "/api/apps"], env=env, text=True, capture_output=True, timeout=15)
     assert done.returncode == 1
     assert "gateway Python not found" in done.stderr and "KC_PY" in done.stderr
     assert "is the gateway running" not in done.stderr
