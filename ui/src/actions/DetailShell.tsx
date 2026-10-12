@@ -600,7 +600,7 @@ export function DetailShell({
               onOpenAnchor={openAnchor}
             />
           ) : activeTab === 'activity' ? (
-            <TransitionList transitions={currentDetail?.transitions ?? []} />
+            <TransitionList createdAt={card.created_at} transitions={currentDetail?.transitions ?? []} />
           ) : activeTab === 'conversation' ? (
             <Conversation slotKey={card.evidence.session?.slot_key ?? ''} />
           ) : (
@@ -683,22 +683,26 @@ function RefusalDetails({ refusal, onOpenAction }: { refusal: StudioApiError; on
  * compare-and-swap was refused. Both are useful; conflating them would present Studio's records as
  * AI-DLC's own events (FR-ADV-009).
  */
-function TransitionList({ transitions }: { transitions: ActionTransition[] }) {
+function TransitionList({ createdAt, transitions }: { createdAt: string; transitions: ActionTransition[] }) {
   const i18n = useI18n()
   const { t } = i18n
-  if (transitions.length === 0) {
-    return (
-      <div className="studio-block">
-        <p className="studio-muted">{t('detail.transitions.empty')}</p>
-      </div>
-    )
-  }
+  // Creation is not a stored transition, so a fresh card would read "Studio has not changed this item yet"
+  // beside an Activity view that lists it being created: the record starts with that row.
+  const created = transitions.some((row) => !row.from_status) ? null : (
+    <li key="created">
+      <span className="studio-mono studio-muted">{at(i18n, createdAt)}</span>
+      <span className="studio-grow">
+        {t('detail.transitions.row', { from: t('detail.transitions.initial'), to: statusLabel(i18n, 'Queued') })}
+      </span>
+    </li>
+  )
   return (
     <section className="studio-block">
       <h3>
         <Icon name="activity" size={13} /> {t('detail.transitions.title')}
       </h3>
       <ol className="studio-translist">
+        {created}
         {transitions.map((row, index) => (
           <li key={`${row.at}-${index}`}>
             <span className="studio-mono studio-muted">{at(i18n, row.at)}</span>

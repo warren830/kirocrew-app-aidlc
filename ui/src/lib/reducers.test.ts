@@ -108,6 +108,15 @@ describe('tabsFor — which detail tabs exist', () => {
     ])
   })
 
+  it('counts the card being created in its Activity, which lists it first', () => {
+    const detail = (transitions: ActionDetailResponse['transitions']) =>
+      ({ action: actionCard(), transitions, drafts: [] }) as ActionDetailResponse
+    const activity = (d: ActionDetailResponse) => tabsFor(actionCard(), d).find((entry) => entry.tab === 'activity')
+    expect(activity(detail([]))).toEqual({ tab: 'activity', count: 1 })
+    const sent = { from_status: 'Queued', to_status: 'Delivering', generation: 2, at: '2026-10-12T15:49:20Z', reason: 'submitted:approve' }
+    expect(activity(detail([sent] as ActionDetailResponse['transitions']))).toEqual({ tab: 'activity', count: 2 })
+  })
+
   it('offers Artifacts only when the card captured some, counting install drift with them', () => {
     const withArtifacts = actionCard({
       evidence: { ...actionCard().evidence, artifacts: [artifactMeta(), artifactMeta({ artifact_id: 'art_2' })] },

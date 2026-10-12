@@ -41,7 +41,8 @@ export interface TabState {
 export function tabsFor(card: ActionCard, detail: ActionDetailResponse | null): TabState[] {
   const artifacts = card.evidence.artifacts.length + (card.install?.drift.length ?? 0)
   const findings = card.evidence.review?.findings.length ?? 0
-  const transitions = detail?.transitions.length ?? null
+  // Creation counts: the tab lists it first even though it is not a stored transition.
+  const transitions = detail ? detail.transitions.length + (detail.transitions.some((row) => !row.from_status) ? 0 : 1) : null
   const out: TabState[] = [{ tab: 'decision', count: null }]
   if (artifacts > 0) out.push({ tab: 'artifacts', count: artifacts })
   if (findings > 0) out.push({ tab: 'review', count: findings })
