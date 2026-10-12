@@ -568,6 +568,7 @@ describe('questions template', () => {
     expect(await screen.findByRole('region', { name: 'Artifact code-generation-plan.md, read-only' })).toBeInTheDocument()
     expect(screen.queryByText(en.t('template.questions.group'))).toBeNull()
     expect(screen.queryByText(en.t('template.questions.none'))).toBeNull()
+    expect(screen.queryByText(en.t('template.questions.fileSource'))).toBeNull()
   })
 
   it('renders the ordered group with its prompts and option labels verbatim', () => {

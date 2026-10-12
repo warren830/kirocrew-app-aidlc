@@ -274,7 +274,8 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
       <DecisionBrief card={card} />
       {view?.origin?.kind === 'audit' ? (
         <Consequence icon="doc">{t('template.questions.auditSource')}</Consequence>
-      ) : view && !degraded ? (
+      ) : view && !degraded && showGroup ? (
+        // About the question group: a card that is only a checkpoint (a plan approval) has no questions.
         <Consequence icon="doc">{t('template.questions.fileSource')}</Consequence>
       ) : null}
       {sameTurn ? <Consequence icon="question">{t('template.questions.sameTurnBody')}</Consequence> : null}
