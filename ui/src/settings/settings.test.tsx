@@ -239,8 +239,48 @@ describe('Slack', () => {
     await renderSettings()
 
     const quick = row('Slack quick actions')
-    expect(within(quick).getByText(/Unavailable — the host offers no seam/)).toBeInTheDocument()
+    expect(within(quick).getByText('Unavailable — KiroCrew does not provide a way to do this')).toBeInTheDocument()
     expect(within(quick).queryByRole('checkbox')).toBeNull()
+  })
+
+  it('says why Slack is unavailable in a sentence, never as the reason code', async () => {
+    routes({
+      'GET /api/apps/aidlc-studio/settings': () => ({
+        ...SETTINGS,
+        capabilities: { ...SETTINGS.capabilities, slack: { available: false, reason: 'slack_not_configured' } },
+      }),
+    })
+    await renderSettings()
+
+    const slack = row('Slack notifications')
+    expect(within(slack).getByText('Unavailable — Slack is not set up in KiroCrew')).toBeInTheDocument()
+    expect(within(slack).queryByText(/slack_not_configured/)).toBeNull()
+    expect(within(slack).getByRole('checkbox', { name: /Send Slack notifications/ })).toBeDisabled()
+  })
+
+  it('reads a host symbol by its prefix, and an unknown code as a sentence that does not print it', async () => {
+    routes({
+      'GET /api/apps/aidlc-studio/settings': () => ({
+        ...SETTINGS,
+        capabilities: {
+          ...SETTINGS.capabilities,
+          slack: { available: false, reason: 'missing:slack_client.post_blocks' },
+          slack_quick_actions: { available: false, reason: 'some_future_reason' },
+        },
+      }),
+    })
+    await renderSettings()
+
+    const slack = row('Slack notifications')
+    expect(
+      within(slack).getByText('Unavailable — this version of KiroCrew does not provide what Studio needs for it'),
+    ).toBeInTheDocument()
+    expect(within(slack).queryByText(/post_blocks/)).toBeNull()
+    const quick = row('Slack quick actions')
+    expect(
+      within(quick).getByText('Unavailable — KiroCrew gave a reason this version of Studio does not recognise'),
+    ).toBeInTheDocument()
+    expect(within(quick).queryByText(/some_future_reason/)).toBeNull()
   })
 })
 

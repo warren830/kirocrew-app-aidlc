@@ -2,7 +2,7 @@
   "advisor.title": "AI Advisor",
   "advisor.titleDraft": "AI Advisor — draft only",
   "advisor.notRun": "Advisor has not run",
-  "advisor.notRunCopy": "The Advisor runs only when it is asked — by you, here, or once per card if this repository has been granted drafting ahead in Settings. It uses a separate read-only session, cannot write files or move the workflow, and never produces human-turn evidence.",
+  "advisor.notRunCopy": "The Advisor runs only when it is asked — by you, here, or once per card if this repository has been granted drafting ahead in Settings. It uses a separate read-only session, cannot write files or move the workflow, and AI-DLC never counts anything it does as a reply from you.",
   "advisor.disabled": "The Advisor is turned off in Settings, so nothing here can be drafted.",
   "advisor.running": "Reading the evidence for {kind}…",
   "advisor.draftNotDecision": "draft, not a decision",
@@ -45,5 +45,5 @@
   "advisor.kind.question_explain": "an explanation",
   "advisor.kind.diagnose": "a diagnosis",
   "advisor.kind.plan_draft": "a plan proposal",
-  "advisor.disclaimer": "Advisor activity is recorded in Studio Activity only. It is never written into the AI-DLC audit trail, and it cannot mint a HUMAN_TURN."
+  "advisor.disclaimer": "Advisor activity is recorded in Studio Activity only. It is never written into the AI-DLC audit trail, and AI-DLC never counts it as a reply from you."
 }

@@ -14,7 +14,9 @@ Checks that fail the build (they are the i18n gate):
   * a missing ``errors.<code>`` for any code in ``backend/studio/errors.py``,
   * a missing ``enum.<group>.<value>`` for any canonical enum value,
   * a missing ``action.<type>.headline`` or ``action.<type>.consequence.<variant>`` for any card the
-    backend can build (``ACTION_TYPE`` and ``CARD_CONSEQUENCE_VARIANTS``).
+    backend can build (``ACTION_TYPE`` and ``CARD_CONSEQUENCE_VARIANTS``),
+  * a missing ``finding.<code>.title`` or ``finding.<code>.body`` for any finding code the backend can
+    emit (``consistency.FINDING_CODES`` and ``repo_registry.PREFLIGHT_WARNING_SEVERITY``).
 
 Usage: ``python3 scripts/build_i18n.py [--check]``. ``--check`` writes nothing and exits non-zero on
 any problem, which is what CI runs.
@@ -133,6 +135,15 @@ def main(argv: list[str]) -> int:
             key = f"action.{action_type}.consequence.{variant}"
             if key not in base:
                 problems.append(f"missing {key} (card consequence has no text)")
+
+    # Finding copy. A code without a title falls back to "Finding <code>" on the repository page and to a
+    # generic sentence on a card: the reader learns nothing about what disagrees or what to do about it.
+    consistency = load_backend("consistency")
+    registry = load_backend("repo_registry")
+    for code in dict.fromkeys((*consistency.FINDING_CODES, *registry.PREFLIGHT_WARNING_SEVERITY)):
+        for part in ("title", "body"):
+            if f"finding.{code}.{part}" not in base:
+                problems.append(f"missing finding.{code}.{part} (finding code has no explanation)")
 
     if problems:
         for problem in problems:

@@ -142,6 +142,32 @@ export function ref(i18n: I18n, value: I18nRef | null | undefined, fallbackKey?:
   return fallbackKey ? i18n.t(fallbackKey, params) : value.key
 }
 
+/** A finding in words: a short title, and what it means and what to do. */
+export interface FindingCopy {
+  title: string
+  body: string | null
+}
+
+/**
+ * A backend finding's `finding.<code>.title` and `finding.<code>.body`, filled from its params.
+ *
+ * `null` when this build has no copy for the code (one the backend gained before the catalogue did), so
+ * each caller keeps the fallback that suits where it renders. `scripts/build_i18n.py` fails on a code in
+ * the backend's finding tables that has no title or body, so in a clean tree `null` is only ever that.
+ */
+export function findingCopy(
+  i18n: I18n,
+  finding: { code: string; params: Record<string, unknown> },
+): FindingCopy | null {
+  const base = `finding.${finding.code}`
+  if (!i18n.has(`${base}.title`)) return null
+  const params = refParams(i18n, { key: base, params: finding.params })
+  return {
+    title: i18n.t(`${base}.title`, params),
+    body: i18n.has(`${base}.body`) ? i18n.t(`${base}.body`, params) : null,
+  }
+}
+
 /**
  * Pick the `_one` / `_other` form.
  *

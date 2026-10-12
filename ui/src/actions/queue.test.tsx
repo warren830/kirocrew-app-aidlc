@@ -398,7 +398,7 @@ describe('the decision pane', () => {
     expect(within(panel).getByText('Button: Approve → sends: Approve')).toBeInTheDocument()
     // The bytes, in a `pre`, exactly once.
     expect(within(panel).getByText('Approve', { selector: 'pre' })).toBeInTheDocument()
-    expect(within(panel).getByText(/userPromptSubmit hook mints the protected HUMAN_TURN/)).toBeInTheDocument()
+    expect(within(panel).getByText(/AI-DLC records it as your reply and makes the change itself/)).toBeInTheDocument()
     expect(within(panel).getByRole('button', { name: /Yes, send this exact text/ })).toBeEnabled()
   })
 
