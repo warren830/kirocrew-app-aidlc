@@ -425,6 +425,85 @@ def test_the_public_queue_depth_twin_is_used_when_the_private_one_is_gone(bridge
     assert bridge.slot(SLOT).subagents_queued == 3
 
 
+class LoopStrictSubagents(Subagents):
+    """KiroCrew's task store in dev mode: its connection taken on the event loop raises (and stalls otherwise)."""
+
+    def __init__(self, **kw: Any) -> None:
+        super().__init__(**kw)
+        self.reads: list[str] = []
+
+    def queued_count_for(self, parent_session_key: str) -> int:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            self.reads.append("thread")
+            return self._queued
+        raise RuntimeError("task store: connection taken on the event loop")
+
+    async def queued_count_for_async(self, parent_session_key: str) -> int:
+        self.reads.append("async")
+        return self._queued
+
+
+async def _settle(rounds: int = 50) -> None:
+    for _ in range(rounds):
+        await asyncio.sleep(0.001)
+
+
+def test_on_the_loop_the_queue_depth_comes_through_the_hosts_async_entry(bridge, clock):
+    subagents = LoopStrictSubagents(queued=4)
+    bridge.attach(host(Slot(), subagents=subagents))
+
+    async def views() -> tuple[int, int]:
+        first = bridge.slot(SLOT).subagents_queued  # nothing read yet; the read is now in flight
+        await _settle()
+        return first, bridge.slot(SLOT).subagents_queued
+
+    assert run(views()) == (0, 4)
+    assert subagents.reads == ["async"], "the second view is inside the refresh interval"
+    assert bridge.capabilities()["subagents"].available is True
+
+
+def test_the_queue_depth_is_reread_once_the_refresh_interval_has_passed(bridge, clock):
+    subagents = LoopStrictSubagents(queued=1)
+    bridge.attach(host(Slot(), subagents=subagents))
+
+    async def views() -> int:
+        bridge.slot(SLOT)
+        await _settle()
+        subagents._queued = 0  # the wave started
+        bridge.slot(SLOT)
+        await _settle()
+        clock.advance(1.0)
+        bridge.slot(SLOT)
+        await _settle()
+        return bridge.slot(SLOT).subagents_queued
+
+    assert run(views()) == 0
+    assert subagents.reads == ["async", "async"]
+
+
+def test_a_host_without_the_async_queue_entry_is_read_off_the_loop(bridge):
+    class Older(LoopStrictSubagents):
+        queued_count_for_async = None  # type: ignore[assignment]
+
+    subagents = Older(queued=2)
+    bridge.attach(host(Slot(), subagents=subagents))
+
+    async def views() -> int:
+        bridge.slot(SLOT)
+        await _settle()
+        return bridge.slot(SLOT).subagents_queued
+
+    assert run(views()) == 2 and subagents.reads == ["thread"]
+
+
+def test_without_a_running_loop_the_queue_depth_is_read_live(bridge):
+    subagents = LoopStrictSubagents(queued=3)
+    bridge.attach(host(Slot(), subagents=subagents))
+    assert bridge.slot(SLOT).subagents_queued == 3 and subagents.reads == ["thread"]
+
+
 # --- HostBridge: transcript evidence ---
 
 
