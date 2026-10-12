@@ -160,6 +160,7 @@
 - 14 个视图完全一致；其余差异都在预期内：`keep_moving` 字段已删（P5b）；两边各自生成了一张同样的恢复卡（假宿主没有会话），只是 id 和时间不同。
 - 一处是 v2 的修复：devlake 的卸载预览在 v1 里报 `409 identity_changed`（macOS 重启后设备号变了），v2 给出正常的计划（移除 278 个、保留 1 个）。
 - 两个仓库的升级预览完全一致（devlake：160 个归属 Studio、0 冲突）。
+- 2026-10-12：`app.json` 和顾问 agent 直接改名为 `aidlc-studio-v2` / “AI-DLC Studio v2”。原因：清单仍叫 `aidlc-studio` 时，在 KiroCrew 里“从文件夹安装”会落到 1.x 的名字上，被拒绝并报出 1.x 的版本号 1.1.6；现在这个文件夹本身就能装在 1.x 旁边，不再需要 `dev-slug.sh`。测试环境改为按清单里的名字加载后端（和网关一致），测试里写死的名字都从清单派生。
 
 ## 金样变更记录
 
@@ -169,3 +170,4 @@
   等价性：`buildMap` 用新录的 9 份输入重放 v1 的 9 份流程图金样，逐字段一致（`ui/src/map/golden/` 永久保留 3 份）；另把 Python 流程图测试的 35 次调用和 480 个随机快照的新旧拼装结果一次性逐个比对，全部一致。
 - **P5 · `repo`、`intents`、`intent_*`（2026-10-08）**：`IntentSummary`（以及继承它的 intent 详情）去掉 `keep_moving` 字段，共 19 个视图、27 行，均只删这一个键；原因：机器通道已删，该字段恒为 `false`，前端也不再读。同阶段去掉的流程图 `?density=` 参数本来就被忽略，金样请求不带它，没有视图变化。
 - **P8 · `install_preview`（bare-repo）、`upgrade_preview`（devdelta-2.6.2）（2026-10-12）**：`studio_version` 1.1.6 → 2.0.0-beta.1，以及把它算进去的 `plan_digest`。原因：v2 改为以 `aidlc-studio-v2` 与 1.x 并排安装的测试版，版本号要能和 1.x 区分开。别的字段没变。
+- **P8 · 待办卡片的 `deep_link`（2026-10-12）**：6 个场景中 12 个视图共 16 行，`/apps/aidlc-studio?…` → `/apps/aidlc-studio-v2?…`。原因：v2 改用自己的应用名，链接按运行时的名字生成。逐行核对过：把新值里的名字换回去就与旧金样完全相同。

@@ -73,7 +73,7 @@ def test_health_reports_the_whole_envelope(ocall, studio):
     status, body = ocall("GET", "/health")
     assert status == 200
     assert set(body) == _HEALTH_KEYS
-    assert body["app"] == "aidlc-studio"
+    assert body["app"] == CT.APP_NAME
     assert body["version"] == studio.constants.APP_VERSION
     assert body["min_kirocrew_version"] == studio.constants.MIN_KIROCREW_VERSION
     assert body["bundled_engine_version"] == MANIFEST["engineVersion"]  # from the manifest, not a literal (C21)
@@ -181,7 +181,7 @@ def test_diagnostics_carries_every_section_and_says_it_is_redacted(sv, ocall, ga
     assert status == 200
     assert set(body) == _DIAGNOSTICS_KEYS
     assert body["redacted"] is True
-    assert body["health"]["app"] == "aidlc-studio"
+    assert body["health"]["app"] == CT.APP_NAME
     assert body["repos"][0]["label"] == "demo"
 
 

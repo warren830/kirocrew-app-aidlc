@@ -15,13 +15,14 @@ from typing import Any
 import pytest
 
 from _helpers_a import refused
+from conftest import APP_NAME
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 TS = "2026-09-04T10:00:00Z"
 #: The host's transcript spelling (offset-aware, microseconds) sorts BEFORE the same second's `…Z` as a string.
 HOST_TS = "2026-09-04T10:00:00.500000+00:00"
 IDENTITY = "1:100"
-SLOT = "aidlc-studio-r_1-260904-gate-demo"
+SLOT = f"{APP_NAME}-r_1-260904-gate-demo"
 INTENT = "260904-gate-demo"
 BINDING = f"r_1:default:{INTENT}"
 
@@ -459,7 +460,7 @@ def test_recent_rows_compares_instants_not_strings(bridge, rows):
 
 def test_recent_rows_on_an_absent_slot_is_empty_evidence_not_proof(S, bridge):
     bridge.attach(host(Slot()))
-    assert bridge.recent_rows("aidlc-studio-r_1-gone", since_ts=TS) == []
+    assert bridge.recent_rows(f"{APP_NAME}-r_1-gone", since_ts=TS) == []
     cap = bridge.capabilities()["slot_messages"]
     assert cap.available is False and cap.reason == S.REASON_SLOT_ABSENT
 
@@ -525,7 +526,7 @@ def test_slot_matches_repo_requires_project_agent_and_app(bridge, tmp_path):
         return bridge.slot(slot.key)
 
     assert bridge.slot_matches_repo(view_for(), canonical) is True
-    assert bridge.slot_matches_repo(view_for(app="aidlc-studio"), canonical) is True
+    assert bridge.slot_matches_repo(view_for(app=APP_NAME), canonical) is True
     assert bridge.slot_matches_repo(view_for(app="other-app"), canonical) is False
     assert bridge.slot_matches_repo(view_for(agent="kiro"), canonical) is False
     assert bridge.slot_matches_repo(view_for(project=str(other)), canonical) is False
@@ -551,11 +552,11 @@ def test_slots_for_project_and_by_prefix(bridge, tmp_path):
     canonical = os.path.realpath(str(repo))
     state = host()
     for slot in (Slot(SLOT, project=canonical), Slot("chat-7", project=canonical),
-                 Slot("aidlc-studio-r_1-other-intent", project=str(tmp_path))):
+                 Slot(f"{APP_NAME}-r_1-other-intent", project=str(tmp_path))):
         state._slots[slot.key] = slot
     bridge.attach(state)
     assert sorted(v.key for v in bridge.slots_for_project(canonical)) == sorted([SLOT, "chat-7"])
-    assert sorted(v.key for v in bridge.slots_by_prefix("aidlc-studio-r_1-")) == [SLOT, "aidlc-studio-r_1-other-intent"]
+    assert sorted(v.key for v in bridge.slots_by_prefix(f"{APP_NAME}-r_1-")) == [SLOT, f"{APP_NAME}-r_1-other-intent"]
 
 
 def test_a_host_without_a_slot_table_degrades_the_slots_capability(bridge):
@@ -1037,14 +1038,14 @@ def test_takeover_preview_lists_project_and_name_matches_without_the_current_slo
                                                                                   repo_dir, tmp_path):
     attach_slot(bridge, repo_dir)  # the current binding
     attach_slot(bridge, repo_dir, key="chat-7")  # project match
-    renamed = attach_slot(bridge, repo_dir, key="aidlc-studio-r_1-260904-old")
+    renamed = attach_slot(bridge, repo_dir, key=f"{APP_NAME}-r_1-260904-old")
     renamed.project = str(tmp_path / "moved")  # name match only
     attach_slot(bridge, str(tmp_path), key="chat-8")  # unrelated
     bind(binder, registered)
     candidates = run(binder.takeover_preview(registered, "default", INTENT))
     assert [(c.slot.key, c.reason) for c in candidates] == [
-        ("aidlc-studio-r_1-260904-old", "name_match"), ("chat-7", "project_match")]
-    assert candidates[0].to_json()["slot"]["key"] == "aidlc-studio-r_1-260904-old"
+        (f"{APP_NAME}-r_1-260904-old", "name_match"), ("chat-7", "project_match")]
+    assert candidates[0].to_json()["slot"]["key"] == f"{APP_NAME}-r_1-260904-old"
     assert all(c.reason in studio.sessions.TAKEOVER_REASONS for c in candidates)
 
 

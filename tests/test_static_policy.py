@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import HOST_NS
+
 APP_ROOT = Path(__file__).resolve().parent.parent
 BACKEND = APP_ROOT / "backend"
 UI_SRC = APP_ROOT / "ui" / "src"
@@ -224,7 +226,7 @@ def test_the_bridge_never_imports_a_private_host_module():
 # --- imports inside the package stay relative (the loader has no parent package on 0.3.0) ---
 def test_every_intra_package_import_is_relative():
     """The app is loaded by file path; ``backend/routes.py`` and ``hooks.py`` are pinned by the next test instead."""
-    roots = {"backend", "studio", "_kirocrew_app_aidlc-studio"}
+    roots = {"backend", "studio", HOST_NS}
     offences = []
     for path, tree in parsed():
         if path.parent == BACKEND:

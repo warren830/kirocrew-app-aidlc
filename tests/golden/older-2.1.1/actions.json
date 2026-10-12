@@ -39,7 +39,7 @@
      }
     ],
     "dedupe_key": "recovery:r_000000000001:260707-trello-plugin:feasibility:cee25aebb6ee4a9405524851f7af656bcc43259eab5cb7ab3dd6a867aea6373c",
-    "deep_link": "/apps/aidlc-studio?view=actions&action=a_0000000000000001",
+    "deep_link": "/apps/aidlc-studio-v2?view=actions&action=a_0000000000000001",
     "delivery": {
      "boot_id_unchanged": null,
      "deadline_at": null,
@@ -454,7 +454,7 @@
      }
     ],
     "dedupe_key": "question:r_000000000001:260707-trello-plugin:feasibility:b3b8160fff364b43a26b1ba08cdb6ae0c8814284fb3ae71a368b930ab980af07",
-    "deep_link": "/apps/aidlc-studio?view=actions&action=a_0000000000000002",
+    "deep_link": "/apps/aidlc-studio-v2?view=actions&action=a_0000000000000002",
     "delivery": {
      "boot_id_unchanged": null,
      "deadline_at": null,

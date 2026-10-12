@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 import fixtures as F
+from conftest import APP_NAME
 from test_handlers_auth import sv  # noqa: F401 - fixture
 
 GATE_INTENT = "260904-gate-demo"
@@ -116,7 +117,7 @@ def _card(**over: Any) -> dict[str, Any]:
 
 def test_deep_link_identifies_and_authorises_nothing(studio, clock):
     link = _adapter(studio, clock).deep_link("a_1")
-    assert link == "/apps/aidlc-studio?view=actions&action=a_1"
+    assert link == f"/apps/{APP_NAME}?view=actions&action=a_1"
     assert "token" not in link and "secret" not in link  # a link cannot be an authorisation
 
 

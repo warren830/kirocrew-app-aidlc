@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 
 import fixtures as F
+from conftest import APP_NAME
 from test_e2e_gate import _get, _post
 from test_handlers_auth import BOOT, common, routes, sv  # noqa: F401 - fixtures
 
@@ -141,7 +142,7 @@ def test_the_card_has_exactly_the_contract_keys(http, repo, gate):
                             "availability": "available", "availability_detail": None, "archived": False}
     assert card["intent"]["intent_key"] == INTENT and card["stage"]["slug"] == STAGE
     assert card["headline"]["key"] == "action.gate.headline"
-    assert card["deep_link"] == f"/apps/aidlc-studio?view=actions&action={card['action_id']}"
+    assert card["deep_link"] == f"/apps/{APP_NAME}?view=actions&action={card['action_id']}"
     assert card["human_text_present"] is False, "the verbatim decision text is never on the card"
     assert [d["decision"] for d in card["decisions"]] == ["approve", "request_changes"]
     assert all(d["lane"] in ("human_lane", "studio_only") for d in card["decisions"])

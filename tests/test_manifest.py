@@ -19,9 +19,12 @@ APP_JSON = APP_ROOT / "app.json"
 ADVISOR_JSON = APP_ROOT / "agents" / "advisor.json"
 PAYLOAD_MANIFEST = APP_ROOT / "payload" / "manifest.json"
 
+#: v2 installs beside the 1.x Studio (``aidlc-studio``) instead of replacing it, so it has a name of its own:
+#: KiroCrew refuses to install a folder whose manifest names an app that is already installed.
+APP_NAME = "aidlc-studio-v2"
 # §4.3 verbatim, compared as equality: an added prefix is as much a finding as a missing one
-EXPECTED_API_PREFIXES = ["/api/apps/aidlc-studio", "/api/chat"]
-EXPECTED_EVENTS = ["aidlc-studio:action", "aidlc-studio:repo", "aidlc-studio:transaction"]
+EXPECTED_API_PREFIXES = [f"/api/apps/{APP_NAME}", "/api/chat"]
+EXPECTED_EVENTS = [f"{APP_NAME}:action", f"{APP_NAME}:repo", f"{APP_NAME}:transaction"]
 
 
 @pytest.fixture(scope="module")
@@ -82,7 +85,7 @@ def test_the_ui_entry_is_the_committed_bundle(raw):
 
 def test_the_single_ui_page_is_the_apps_own_route(raw):
     pages = raw["ui"]["pages"]
-    assert len(pages) == 1 and pages[0]["route"] == "/apps/aidlc-studio"
+    assert len(pages) == 1 and pages[0]["route"] == f"/apps/{APP_NAME}"
     assert (APP_ROOT / "ui" / pages[0]["iconUrl"]).is_file()
 
 
@@ -188,7 +191,7 @@ def test_the_agent_file_app_json_declares_is_the_one_on_disk(raw):
 def test_the_advisor_declares_the_name_the_spawn_uses(studio):
     """``SpawnSDK`` matches the declared name (C25/P20/R14): a mismatch leaves the advisor silently unavailable."""
     agent = json.loads(ADVISOR_JSON.read_text("utf-8"))
-    assert agent["name"] == studio.constants.ADVISOR_AGENT_NAME == "aidlc-studio-advisor"
+    assert agent["name"] == studio.constants.ADVISOR_AGENT_NAME == f"{APP_NAME}-advisor"
     assert studio.advisor.ADVISOR_AGENT_NAME == studio.constants.ADVISOR_AGENT_NAME
 
 

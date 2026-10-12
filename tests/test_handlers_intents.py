@@ -274,7 +274,7 @@ def test_plan_preview_returns_the_effective_plan(api, repo):
 
 def arm_advisor(sv: Any, fake_ctx: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     """Give the real broker the app's own agent (host discovery is absent here); ``fake_ctx.spawn`` only records."""
-    agent = SimpleNamespace(name=CT.studio_module("advisor").ADVISOR_AGENT_NAME, filename="aidlc-studio--advisor.json")
+    agent = SimpleNamespace(name=CT.studio_module("advisor").ADVISOR_AGENT_NAME, filename=f"{CT.APP_NAME}--advisor.json")
     monkeypatch.setattr(sv.advisor, "_agent_lister", lambda: [agent])
     fake_ctx.spawn.spawned.clear()
 

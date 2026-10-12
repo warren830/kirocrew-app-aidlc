@@ -79,8 +79,8 @@ def test_fake_ctx_is_a_real_app_context_with_a_recording_bus(fake_ctx):
     assert isinstance(fake_ctx, AppContext)
     fake_ctx.storage.set("k", {"a": 1})
     assert fake_ctx.storage.get("k") == {"a": 1}
-    fake_ctx.events.publish("aidlc-studio:action", {"id": "a_1"})
-    assert fake_ctx.events.published == [("aidlc-studio:action", {"id": "a_1"})]
+    fake_ctx.events.publish(f"{CT.APP_NAME}:action", {"id": "a_1"})
+    assert fake_ctx.events.published == [(f"{CT.APP_NAME}:action", {"id": "a_1"})]
     with pytest.raises(PermissionError):
         fake_ctx.events.publish("something-else", {})
     assert fake_ctx.config["bundledAidlc"]["engineVersion"] == MANIFEST["engineVersion"]
@@ -88,5 +88,5 @@ def test_fake_ctx_is_a_real_app_context_with_a_recording_bus(fake_ctx):
 
 def test_backend_loads_through_the_app_namespace(routes, studio):
     assert hasattr(routes, "register_routes")
-    assert studio.constants.APP_NAME == "aidlc-studio"
+    assert studio.constants.APP_NAME == CT.APP_NAME
     assert studio.security.HAS_HOST_SECURITY is True

@@ -43,7 +43,7 @@
     }
    ],
    "dedupe_key": "failure:r_000000000001:260907-error-burst:requirements-analysis:9c2f39c325be797dee44675dcaeb4f16781df7476c6ccfcac41498e537099ed9",
-   "deep_link": "/apps/aidlc-studio?view=actions&action=a_0000000000000002",
+   "deep_link": "/apps/aidlc-studio-v2?view=actions&action=a_0000000000000002",
    "delivery": {
     "boot_id_unchanged": null,
     "deadline_at": null,

@@ -26,8 +26,8 @@ from kiro_crew.apps.app_storage import AppStorage  # noqa: E402
 from kiro_crew.apps.context import AppContext  # noqa: E402
 
 manifest = json.loads((app_root / "app.json").read_text())
-ctx = AppContext(name="aidlc-studio", data_dir=data_dir, config=dict(manifest.get("extra", {})),
-                 storage=AppStorage("aidlc-studio", data_dir),
+ctx = AppContext(name=CT.APP_NAME, data_dir=data_dir, config=dict(manifest.get("extra", {})),
+                 storage=AppStorage(CT.APP_NAME, data_dir),
                  events=CT.FakeEventBus(manifest["permissions"]["events"]))
 sv = services_mod.Services.build(ctx, app_root=app_root, bun_path=shutil.which("bun") or str(Path.home() / ".bun/bin/bun"),
                                  git_path=shutil.which("git"))

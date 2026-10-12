@@ -1,5 +1,5 @@
 {
-  "name": "aidlc-studio-advisor",
+  "name": "aidlc-studio-v2-advisor",
   "description": "AI-DLC Studio Advisor — analyses an evidence package that AI-DLC Studio passes in-band and returns a draft recommendation. Read-only by construction: no filesystem, shell, or workflow tools.",
   "model": "auto",
   "tools": [

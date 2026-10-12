@@ -127,7 +127,7 @@ def wiring(studio, A, K, store, fake_ctx, fake_host, clock, ids, gate_repo, fake
     w = SimpleNamespace(
         store=store, ctx=fake_ctx, host=fake_host, bridge=host, reader=reader, projection=projection,
         activity=activity, events=events, settings=settings, actions=FakeActions(action_record()),
-        agents=[FakeAgentInfo(name=A.ADVISOR_AGENT_NAME, filename="aidlc-studio--advisor.json")], ids=ids,
+        agents=[FakeAgentInfo(name=A.ADVISOR_AGENT_NAME, filename=f"{CT.APP_NAME}--advisor.json")], ids=ids,
         repo=Path(gate_repo), clock=clock, plan=plan, denied_log=denied_log,
     )
     w.broker = make_broker(A, w)
@@ -206,7 +206,7 @@ def assert_contract_spelled_out(A, task: str) -> None:
 def test_the_agent_name_is_the_declared_name_in_the_agent_json(A, app_root):
     """The spawn must pass the JSON's inner ``name``; a filename would be refused (C25)."""
     declared = json.loads((app_root / "agents" / "advisor.json").read_text("utf-8"))
-    assert A.ADVISOR_AGENT_NAME == "aidlc-studio-advisor" == declared["name"]
+    assert A.ADVISOR_AGENT_NAME == f"{CT.APP_NAME}-advisor" == declared["name"]
     assert declared["tools"] == declared["allowedTools"] == ["thinking"]
 
 
@@ -408,7 +408,7 @@ def disable_advisor(w, *_):
         slice(None), [FakeAgentInfo(name=A.ADVISOR_AGENT_NAME, filename="advisor.json")]),
         "agent_missing", id="same-name-outside-the-app"),
     pytest.param(lambda w, A: w.agents.append(
-        FakeAgentInfo(name=A.ADVISOR_AGENT_NAME, filename="aidlc-studio--advisor-copy.json")),
+        FakeAgentInfo(name=A.ADVISOR_AGENT_NAME, filename=f"{CT.APP_NAME}--advisor-copy.json")),
         "agent_name_collision", id="colliding-name"),
     pytest.param(lambda w, A: setattr(w.broker, "_agent_lister", lambda: None),
                  "agent_discovery_unavailable", id="discovery-unavailable"),
@@ -929,7 +929,7 @@ def test_an_install_wide_refusal_stops_the_pass_and_spends_no_cards_one_shot(wir
     assert autodraft(wiring, limit=3) == 0
     assert drafts_of(wiring) == [] and wiring.ctx.spawn.spawned == []
     assert [r.params["reason"] for r in rows_of(wiring, "advisor.failed")] == ["agent_missing"]
-    wiring.agents.append(FakeAgentInfo(name=A.ADVISOR_AGENT_NAME, filename="aidlc-studio--advisor.json"))
+    wiring.agents.append(FakeAgentInfo(name=A.ADVISOR_AGENT_NAME, filename=f"{CT.APP_NAME}--advisor.json"))
     assert autodraft(wiring) == 1  # same process: unmarked, so the shot was not spent
     assert [row["action_id"] for row in drafts_of(wiring)] == ["a_auto1"]
 

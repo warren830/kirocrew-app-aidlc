@@ -202,7 +202,7 @@ def test_the_scan_derives_exactly_one_gate_card_with_its_evidence_and_no_duplica
     assert card["status"] == "Queued" and card["stage"]["slug"] == STAGE
     assert card["risk_class"] == "human_lane" and card["priority_group"] == 2
     assert [d["decision"] for d in card["decisions"]] == ["approve", "request_changes"]
-    assert card["deep_link"] == f"/apps/aidlc-studio?view=actions&action={card['action_id']}"
+    assert card["deep_link"] == f"/apps/{CT.APP_NAME}?view=actions&action={card['action_id']}"
     assert card["evidence"]["state"]["current_stage"] == STAGE
     assert card["evidence"]["review"] is not None
     assert card["evidence"]["artifacts"], "the gate must show what it is approving"
@@ -382,7 +382,7 @@ def test_the_flow_is_visible_on_the_event_stream(sv, routes, fake_host, approved
     assert "action.created" in types and "action.updated" in types
     assert body["cursor"] >= len(body["events"]) and body["reset"] is False
     published = [name for name, _data in sv.ctx.events.published]
-    assert "aidlc-studio:action" in published, "the host bus must see the app's own declared name"
+    assert f"{CT.APP_NAME}:action" in published, "the host bus must see the app's own declared name"
 
 
 def test_studio_never_wrote_a_byte_of_ai_dlc_state(scene, approved):

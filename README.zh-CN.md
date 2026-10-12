@@ -9,8 +9,8 @@ AI-DLC 自己的会话送回去，从不绕过它。
 ![待办中心：一个审批关卡和它的证据](assets/screenshots/action-center-gate.png)
 
 > **这是 v2 分支（2.0.0 测试版）。** 功能与 1.x 相同，后端代码少了 40%，需要 KiroCrew 0.8+。
-> 它以自己的名字与 1.x 并排安装，用自己的数据库：
-> `bash scripts/dev-slug.sh aidlc-studio-v2 --label "AI-DLC Studio v2"`。两者不共享安装凭据，所以 1.x 装过的仓库
+> 它以 **AI-DLC Studio v2**（`aidlc-studio-v2`）的名字与 1.x 并排安装，用自己的数据库：在 KiroCrew 的应用页
+> 直接从这个文件夹安装，或运行 `bash scripts/dev-install.sh`。两者不共享安装凭据，所以 1.x 装过的仓库
 > 请在 1.x 里升级或卸载；同一个 intent 的决定只在一个 Studio 里回答（各自会开自己的会话）。进展与改动见
 > [`docs/plan.md`](docs/plan.md)。
 

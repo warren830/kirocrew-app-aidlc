@@ -30,7 +30,7 @@ import asyncio, json, sys, time
 from pathlib import Path
 
 APP_ROOT = Path(sys.argv[1])
-APP = "aidlc-studio"
+APP = json.loads((APP_ROOT / "app.json").read_text("utf-8"))["name"]
 HOST_NS = "_kirocrew_app_" + APP
 
 from kiro_crew.apps import module_loader as ML
@@ -161,7 +161,7 @@ def test_the_app_is_loaded_from_this_repository_inside_the_hosts_per_app_namespa
     assert {"constants", "services", "handlers", "storage", "actions"} <= set(linked["studio_attrs"])
     assert linked["packages"], linked
     assert all(p.startswith(f"{HOST_NS}.backend.studio") for p in linked["packages"]), linked["packages"]
-    assert linked["app_name"] == "aidlc-studio"  # the name comes from the namespace the host chose
+    assert linked["app_name"] == CT.APP_NAME  # the name comes from the namespace the host chose
 
 
 def test_importing_the_backend_is_fast_enough_for_the_enable_path(linked):

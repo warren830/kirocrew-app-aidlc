@@ -46,7 +46,7 @@
      }
     ],
     "dedupe_key": "gate:r_000000000001:260901-ledger-export:requirements-analysis:ba4776072539f019a389fedd69c5643925b639f7c840911bb51575a6aefcd3b5",
-    "deep_link": "/apps/aidlc-studio?view=actions&action=a_0000000000000001",
+    "deep_link": "/apps/aidlc-studio-v2?view=actions&action=a_0000000000000001",
     "delivery": {
      "boot_id_unchanged": null,
      "deadline_at": null,
@@ -413,7 +413,7 @@
      }
     ],
     "dedupe_key": "question:r_000000000001:260901-ledger-export:requirements-analysis:93bced32300db1187327053c93b7beb1e7a244ccea2effcaa87b193061c0f26e",
-    "deep_link": "/apps/aidlc-studio?view=actions&action=a_0000000000000002",
+    "deep_link": "/apps/aidlc-studio-v2?view=actions&action=a_0000000000000002",
     "delivery": {
      "boot_id_unchanged": null,
      "deadline_at": null,

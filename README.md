@@ -10,8 +10,8 @@ never around it.
 ![The Action Center with an approval gate and its evidence](assets/screenshots/action-center-gate.png)
 
 > **This is the v2 branch (2.0.0 beta).** Same features as 1.x on a backend 40% smaller, for KiroCrew 0.8+.
-> It installs next to 1.x under its own name and keeps its own database:
-> `bash scripts/dev-slug.sh aidlc-studio-v2 --label "AI-DLC Studio v2"`. Because the two do not share install
+> It installs next to 1.x as **AI-DLC Studio v2** (`aidlc-studio-v2`) and keeps its own database: install this
+> folder from KiroCrew's Apps page, or run `bash scripts/dev-install.sh`. Because the two do not share install
 > receipts, upgrade or uninstall the repositories 1.x installed from 1.x, and answer each intent's decisions in one
 > Studio only (each opens its own conversation). Progress and what changed: [`docs/plan.md`](docs/plan.md).
 

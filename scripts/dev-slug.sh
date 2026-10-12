@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Install this working tree into the local gateway under ANOTHER app name, next to the shipped Studio.
 #
-#   scripts/dev-slug.sh aidlc-studio-next              # build, stage, rename, install, trust, enable
-#   scripts/dev-slug.sh aidlc-studio-next --no-build   # reuse ui/dist as it is
-#   scripts/dev-slug.sh aidlc-studio-v2 --label "AI-DLC Studio v2"   # the name the sidebar shows
+#   scripts/dev-slug.sh aidlc-studio-v2-next              # build, stage, rename, install, trust, enable
+#   scripts/dev-slug.sh aidlc-studio-v2-next --no-build   # reuse ui/dist as it is
+#   scripts/dev-slug.sh aidlc-studio-v2-next --label "AI-DLC Studio v2 (next)"   # the name the sidebar shows
+#
+# This tree itself already installs as aidlc-studio-v2, beside the 1.x Studio (scripts/dev-install.sh, or
+# KiroCrew's install-from-folder); this script is for a further copy next to both.
 #
 # The staged copy differs from this tree only where the app name is written down: app.json (name,
 # display name, page route, API prefix, event names) and the advisor agent's declared name. Backend and

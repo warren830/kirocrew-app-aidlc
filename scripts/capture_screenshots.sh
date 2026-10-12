@@ -19,6 +19,7 @@ OUT="${OUT:-assets/screenshots}"
 PLAYWRIGHT="${PLAYWRIGHT:-/Users/ychchen/.nvm/versions/node/v25.2.1/bin/playwright}"
 BUNDLE_PY="${BUNDLE_PY:-/Applications/KiroCrew.app/Contents/Resources/backend-dist/kirocrew-backend-arm64/bin/python3.12}"
 BASE="${BASE:-http://localhost:5476}"
+APP="$(python3 -c 'import json; print(json.load(open("app.json"))["name"])')"
 WAIT="${WAIT:-6000}"
 DESKTOP="1600,1000"
 MOBILE="390,844"
@@ -50,7 +51,7 @@ mkdir -p "$OUT"
 # Fill in the newest action and the first repo/intent when the caller did not name them, so the shots
 # show real data instead of empty states.
 if [ -z "$ACTION" ]; then
-  ACTION=$(scripts/kcapi.sh GET /api/apps/aidlc-studio/actions 2>/dev/null |
+  ACTION=$(scripts/kcapi.sh GET "/api/apps/${APP}/actions" 2>/dev/null |
     /usr/bin/python3 -c 'import json,sys
 try:
     rows = json.load(sys.stdin).get("actions") or []
@@ -59,7 +60,7 @@ except Exception:
 print(rows[0]["action_id"] if rows else "")' 2>/dev/null)
 fi
 if [ -z "$REPO" ]; then
-  read -r REPO INTENT <<<"$(scripts/kcapi.sh GET /api/apps/aidlc-studio/actions 2>/dev/null |
+  read -r REPO INTENT <<<"$(scripts/kcapi.sh GET "/api/apps/${APP}/actions" 2>/dev/null |
     /usr/bin/python3 -c 'import json,sys
 try:
     rows = json.load(sys.stdin).get("actions") or []
@@ -72,7 +73,7 @@ fi
 shot() { # shot <name> <query> <viewport>
   local name="$1" query="$2" viewport="$3"
   if "$PLAYWRIGHT" screenshot --viewport-size "$viewport" --wait-for-timeout "$WAIT" \
-      "${BASE}/apps/aidlc-studio?token=${TOKEN}${query}" "${OUT}/${name}.png" >/dev/null 2>&1; then
+      "${BASE}/apps/${APP}?token=${TOKEN}${query}" "${OUT}/${name}.png" >/dev/null 2>&1; then
     printf '  %-28s %s\n' "$name" "$(/usr/bin/wc -c <"${OUT}/${name}.png" | tr -d ' ') bytes"
   else
     printf '  %-28s FAILED\n' "$name"

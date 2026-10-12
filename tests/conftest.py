@@ -41,9 +41,11 @@ PAYLOAD = APP_ROOT / "payload"
 
 sys.path.insert(0, str(APP_ROOT / "tests"))  # so `import fixtures` resolves to tests/fixtures/
 
+#: The name the host installs this tree under: the manifest's own, so the harness runs as the gateway does.
+APP_NAME: str = json.loads((APP_ROOT / "app.json").read_text("utf-8"))["name"]
 #: The package KiroCrew 0.8 loads the backend into (``_kirocrew_app_<name>.backend``); tests load the
 #: entry points the same way, so the module objects (and the Services registry) are the gateway's.
-HOST_NS = "_kirocrew_app_aidlc-studio"
+HOST_NS = f"_kirocrew_app_{APP_NAME}"
 STUDIO_NS = f"{HOST_NS}.backend"
 
 _LOADED: dict[str, ModuleType] = {}
@@ -423,10 +425,10 @@ def fake_ctx(tmp_path: Path, kirocrew_home: Path, manifest: dict) -> Any:
     data_dir = tmp_path / "appdata"
     data_dir.mkdir(parents=True, exist_ok=True)
     ctx = AppContext(
-        name="aidlc-studio",
+        name=APP_NAME,
         data_dir=data_dir,
         config=dict(manifest.get("extra", {})),
-        storage=AppStorage("aidlc-studio", data_dir),
+        storage=AppStorage(APP_NAME, data_dir),
         events=FakeEventBus(manifest["permissions"]["events"]),  # type: ignore[arg-type]
     )
     ctx.spawn = FakeSpawnSDK()  # type: ignore[assignment]
@@ -976,8 +978,8 @@ def user_request(method: str, path: str, **kwargs: Any) -> Any:
 
 
 def app_request(method: str, path: str, **kwargs: Any) -> Any:
-    kwargs["user"] = "aidlc-studio"
-    kwargs["app"] = "aidlc-studio"
+    kwargs["user"] = APP_NAME
+    kwargs["app"] = APP_NAME
     return make_request(method, path, **kwargs)
 
 

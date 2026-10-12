@@ -222,7 +222,7 @@ def test_every_mutation_in_the_table_refuses_an_app_token(sv, routes, fake_host)
 
 def test_reads_accept_an_app_token(sv, routes, fake_host):
     status, body = call(sv, routes, "GET", "/health", CT.app_request("GET", "/health", host=fake_host))
-    assert status == 200 and body["app"] == "aidlc-studio"
+    assert status == 200 and body["app"] == CT.APP_NAME
     status, _ = call(sv, routes, "GET", "/settings", CT.app_request("GET", "/settings", host=fake_host))
     assert status == 200
 

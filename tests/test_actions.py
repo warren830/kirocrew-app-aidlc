@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 import fixtures as F
+from conftest import APP_NAME
 from _helpers_a import aio, refused
 
 APP_ROOT = Path(__file__).resolve().parent.parent
@@ -1750,7 +1751,7 @@ async def test_human_text_keeps_only_what_the_person_typed(world):
 async def test_every_transition_publishes_an_event_and_an_activity_row(world):
     gate = await bound_card(world)
     await submit(world, gate)
-    assert [name for name, _ in world.ctx.events.published].count("aidlc-studio:action") >= 2
+    assert [name for name, _ in world.ctx.events.published].count(f"{APP_NAME}:action") >= 2
     payloads = [data for _, data in world.ctx.events.published]
     assert payloads[-1]["payload"]["status"] == "Delivering" and payloads[-1]["payload"]["from_status"] == "Queued"
     kinds = [row["kind"] for row in world.store.select("activity")]
