@@ -156,12 +156,18 @@ export function ActionsView({ route, go }: ViewProps) {
             selected={route.action}
             onSelect={select}
             emptyBecauseNothingWaits={cards.length === 0}
-            emptyAction={
+            emptyAction={route.intent ? (
               <Btn onClick={() => go({ view: 'map' })}>
                 <Icon name="map" size={14} />
                 {t('queue.empty.action')}
               </Btn>
-            }
+            ) : (
+              // The Map draws one intent; with none in scope it could only say "No intent is selected".
+              <Btn onClick={() => go({ view: 'intents' })}>
+                <Icon name="intent" size={14} />
+                {t('queue.empty.actionIntents')}
+              </Btn>
+            )}
           />
         )}
       </aside>

@@ -300,11 +300,13 @@ describe('the action queue', () => {
     expect(screen.queryByText('Nothing needs your judgment')).not.toBeInTheDocument()
   })
 
-  it('points at the Workflow Map when nothing needs a person', async () => {
+  it('points at the intents when nothing needs a person and no intent is in scope', async () => {
+    // The Map draws one intent: from "All repositories" it could only say that none is selected.
     installRoutes([])
     mount()
     await waitFor(() => expect(screen.getByText('Nothing needs your judgment')).toBeInTheDocument())
-    expect(screen.getByRole('button', { name: /Watch the Workflow Map/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /See what each intent is doing/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Watch the Workflow Map/ })).toBeNull()
   })
 
   it('persists the organize choice and regroups by repo', async () => {

@@ -1,6 +1,7 @@
 {
   "queue.count": "{visible} of {total}",
   "queue.empty.action": "Watch the Workflow Map",
+  "queue.empty.actionIntents": "See what each intent is doing",
   "queue.empty.body": "Every registered intent is running, finished, or waiting on something that is not a decision. The next stop that needs a person appears here.",
   "queue.empty.title": "Nothing needs your judgment",
   "queue.filterLabel": "Filter the queue",

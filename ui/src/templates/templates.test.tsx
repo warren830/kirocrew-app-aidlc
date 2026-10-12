@@ -484,6 +484,26 @@ describe('questions template', () => {
     expect(apiCalls.filter((call) => call.method !== 'GET')).toHaveLength(0)
   })
 
+  it('sets AI-DLC\'s backtick spans as code and counts what is still to choose in this form', async () => {
+    setApiRoutes({})
+    const view = questionsView({ questions: [
+      question({ index: 1, prompt: 'Where does `test_calc.py` live?', options: [
+        { letter: 'A', text: 'At the root, run with `python3 -m unittest`', is_other: false },
+        { letter: 'B', text: 'In `tests/`', is_other: false },
+      ] }),
+      question({ index: 2 }),
+    ] })
+    mount(QuestionsTemplate, questionCard(view))
+    const option = screen.getByRole('radio', { name: /At the root/ })
+    const code = option.closest('label')?.querySelector('code.studio-icode')
+    expect(code?.textContent).toBe('python3 -m unittest')
+    expect(option.closest('label')?.textContent).not.toContain('`')
+    expect(screen.getByText(/Where does/).querySelector('code')?.textContent).toBe('test_calc.py')
+    expect(screen.getByText('2 of 2 unanswered')).toBeInTheDocument()
+    await userEvent.click(option)
+    expect(screen.getByText('1 of 2 unanswered')).toBeInTheDocument()
+  })
+
   it('passes raw HTML in question context as text to the existing safe Markdown renderer', () => {
     setApiRoutes({})
     const context = '<script>window.questionContextExecuted = true</script>\n\n<img src=x onerror="alert(1)">'

@@ -782,6 +782,14 @@ button.studio-chip:hover { border-color: var(--border-hover); }
 /* The host sets `word-break: break-all` on inline code, which splits `calc.py` at whichever letter reaches
    the end of the line. Two classes so this wins whichever stylesheet loads last. */
 .studio .studio-md :not(pre) > code { word-break: normal; }
+/* Inline code in AI-DLC's question and option text. */
+.studio-icode {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.92em;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--bg-accent);
+}
 .studio-plain {
   margin: 0;
   font-size: 12.5px;

@@ -23,7 +23,7 @@
  *    a notice saying whose words they are, with one control that takes them back out again.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { MarkdownRenderer } from '@kirocrew/app-sdk/ui'
 
 import { ArtifactViewer, useArtifactBody } from '../artifacts/ArtifactViewer'
@@ -86,6 +86,16 @@ function sameAnswer(stored: AnswerDraft | undefined, filled: AnswerDraft): boole
   return stored.option_letters.every((letter, i) => letter === filled.option_letters[i])
 }
 
+/**
+ * The engine's text with its backtick spans set as code. Nothing else is interpreted: options are the
+ * engine's own words (FR-Q-001), and only the backticks were showing up as literal characters.
+ */
+export function withInlineCode(text: string): ReactNode {
+  const parts = text.split(/`([^`\n]+)`/)
+  if (parts.length === 1) return text
+  return parts.map((part, index) => (index % 2 ? <code key={index} className="studio-icode">{part}</code> : part))
+}
+
 export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, api, go }: TemplateProps) {
   const i18n = useI18n()
   const { t } = i18n
@@ -93,6 +103,12 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
   const view = card.evidence.questions
   const questions = view?.questions ?? []
   const pending = pendingQuestions(view)
+  // What is still to choose in this form: the file stays unanswered until the reply lands, so counting it
+  // read "4 of 4 unanswered" with every answer already picked.
+  const unchosen = pending.filter((question) => {
+    const answer = draft.answers[String(question.index)]
+    return !answer || (answer.option_letters.length === 0 && !(answer.free_text ?? '').trim())
+  }).length
   const unsupportedPending = view?.unsupported_pending_count ?? 0
   const hasPending = pending.length > 0 || unsupportedPending > 0
   const degraded = view?.mode === 'degraded' || unsupportedPending > 0
@@ -281,7 +297,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
           <Chip tone={hasPending ? 'accent' : 'ok'} icon={hasPending ? 'question' : 'check'}>
             {unsupportedPending > 0
               ? t('template.questions.unsupportedPending', { n: unsupportedPending })
-              : t('template.questions.pending', { n: pending.length, total: questions.length })}
+              : t('template.questions.pending', { n: unchosen, total: questions.length })}
           </Chip>
           {view ? <Chip mono>{view.stage}</Chip> : null}
           {view?.unit ? <Chip mono>{view.unit}</Chip> : null}
@@ -318,7 +334,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
               <div className="studio-q" key={question.index} data-answered={String(question.answered)}>
                 {/* The prompt is the engine's sentence, numbered as the file numbers it. */}
                 <p className="studio-q-prompt">
-                  {question.index}. {question.prompt}
+                  {question.index}. {withInlineCode(question.prompt)}
                 </p>
                 {question.context?.trim() ? (
                   // Use the same sanitising renderer as artifacts. Context is evidence, never a draft answer.
@@ -402,7 +418,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
                           <span className="studio-opt-body">
                             <span className="studio-opt-letter">{option.letter}</span>
                             {/* The option label is the engine's own text, verbatim (FR-Q-001). */}
-                            <span className="studio-opt-label">{option.text}</span>
+                            <span className="studio-opt-label">{withInlineCode(option.text)}</span>
                             {option.is_other ? (
                               <span className="studio-opt-desc">{t('template.questions.otherDesc')}</span>
                             ) : null}
