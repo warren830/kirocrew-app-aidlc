@@ -118,7 +118,7 @@ SEED_CONSEQUENCE: dict[str, str | None] = {kind: row[2] for kind, row in _SEED_T
 _CHECKPOINT_DECISIONS: dict[str, tuple[str, ...]] = {
     "summary_confirmation": ("confirm_summary",),
     "assumption_confirmation": ("accept_assumptions", "convert_assumptions"),
-    "plan_approval": ("approve_plan", "request_plan_changes"),
+    "plan_approval": C.PLAN_REPLY_DECISIONS,
 }
 
 #: Blocking findings that never become a `recovery` card: `delivery_uncertain_action` already has one (the
@@ -1051,10 +1051,10 @@ class Projection:
             # and a checkpoint confirmation must not skip them.
             pending, checkpoint = questions.pending_count, questions.pending_checkpoint
             decisions = (["answers"] if pending > 0 else []) + list(_CHECKPOINT_DECISIONS.get(checkpoint, ()))
-            # AI-DLC 2.10 binds a Plan Approval to the conversation session that asked it. Once the host has
-            # started a new session (a long idle restarts it), no reply can be recorded: AI-DLC must ask again
-            # in this one, which a resumed run does. Offering Approve would send a reply bound to be refused.
-            stale = checkpoint == "plan_approval" and plan_asked_in_an_earlier_session(snap)
+            # AI-DLC 2.10 binds a Plan Approval to the conversation session that asked it. Once that session is
+            # gone, no reply can be recorded: AI-DLC must ask again in the new one, which a resumed run does.
+            # Offering Approve would send a reply bound to be refused.
+            stale = checkpoint == "plan_approval" and plan_session_stale(snap, slot)
             if stale:
                 decisions = [d for d in decisions if d not in _CHECKPOINT_DECISIONS["plan_approval"]] + ["resume"]
             seeds.append(self._seed(
@@ -1556,6 +1556,13 @@ def _repo_label(card: Any) -> tuple[str, str]:
 
 def _repo_id_of(card: Any) -> str:
     return str(_attr(_attr(card, "repo", {}), "repo_id", "") or "")
+
+
+def plan_session_stale(snap: IntentSnapshot, slot: Any | None) -> bool:
+    """Is the session that asked this Plan Approval gone, so that AI-DLC cannot record a reply to it? Either the
+    conversation already moved to another session, or the host dropped the idle one and the next message opens a
+    new session (``slot.session_live``)."""
+    return plan_asked_in_an_earlier_session(snap) or _attr(slot, "session_live", None) is False
 
 
 def plan_asked_in_an_earlier_session(snap: IntentSnapshot) -> bool:

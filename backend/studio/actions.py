@@ -42,7 +42,7 @@ from .engine import CursorReadback
 from .errors import IllegalTransition, StaleGeneration, StudioError
 from .projection import (
     SEED_SEVERITY, SEVERITY_RANK, UNCERTAIN_STATUSES, dedupe_key, priority_group_for, queue_type_for,
-    plan_asked_in_an_earlier_session, run_unavailable_reason,
+    plan_session_stale, run_unavailable_reason,
 )
 from .repo_registry import RepoRecord
 from .sessions import busy_reasons
@@ -775,16 +775,8 @@ class HumanActionBroker:
     async def _assert_run_current(self, decision: str, snap: "IntentSnapshot", rec: ActionRecord | None = None) -> None:
         """A Run/Resume must still be what the checkpoint asks for; a never-sent stale one is retired on the way
         out, so the user is shown the current checkpoint instead."""
-        if decision not in ("run", "resume"):
-            return
-        if rec is not None and rec.type == "question":
-            # A question card offers Resume only for a Plan Approval asked in a session the conversation has left:
-            # the pending checkpoint the command rule refuses is the reason for it. The card is the derived one,
-            # never retired here; once AI-DLC asks again in this session its seed offers Approve instead.
-            if not plan_asked_in_an_earlier_session(snap):
-                _refuse("action_stale", "AI-DLC has asked for this plan approval again in this session",
-                        fields=["plan_session"], card=await self.card(rec, snap))
-            return
+        if decision not in ("run", "resume") or (rec is not None and rec.type == "question"):
+            return  # a question card's Resume answers to `_assert_plan_session`
         reason = run_unavailable_reason(snap, stage=rec.stage if rec else None, unit=rec.unit if rec else None)
         if reason is None:
             return
@@ -793,6 +785,20 @@ class HumanActionBroker:
                 "superseded": True, "command_unavailable_reason": reason, "current_stage": snap.stage})
         _refuse("run_not_applicable", "open the intent's current checkpoint instead of this run", reason=reason,
                 current_stage=snap.stage, **({"card": await self.card(rec, snap)} if rec is not None else {}))
+
+    async def _assert_plan_session(self, decision: str, snap: "IntentSnapshot", rec: ActionRecord,
+                                   slot: Any | None) -> None:
+        """AI-DLC 2.10 records a Plan Approval reply only in the session that asked it, so a question card offers
+        Resume while that session is gone and a reply while it is not (`plan_session_stale`). The other one is
+        refused with the card as it stands, never retired: the card's seed follows the session on the next scan.
+        The pending checkpoint is the reason for this Resume, so the command Run rule does not judge it."""
+        if rec.type != "question" or decision not in ("resume", *C.PLAN_REPLY_DECISIONS):
+            return
+        stale = plan_session_stale(snap, slot)
+        if (decision == "resume") != stale:
+            _refuse("action_stale", "the session that asked this plan approval is gone; resume so AI-DLC asks again"
+                    if stale else "AI-DLC has asked for this plan approval again in this session",
+                    fields=["plan_session"], card=await self.card(rec, snap))
 
     async def create_force_stop(
         self, repo: RepoRecord, space: str, intent_dir: str, *, snap: "IntentSnapshot",
@@ -862,6 +868,8 @@ class HumanActionBroker:
 
         snap = await self._snapshot(repo, rec.space, rec.intent_dir)
         await self._assert_run_current(decision, snap, rec)
+        await self._assert_plan_session(decision, snap, rec, self._host.slot(binding.slot_key) if binding.slot_key
+                                        else None)
         card_questions = rec.evidence.get("questions") or {}
         audit_question = rec.type == "question" and (card_questions.get("origin") or {}).get("kind") == "audit"
         file_answer = decision == "answers" and not audit_question
@@ -943,6 +951,7 @@ class HumanActionBroker:
                 if not snap.stable:
                     _refuse("unstable_read", "the intent changed before dispatch")
                 await self._assert_run_current(decision, snap, rec)
+            await self._assert_plan_session(decision, snap, rec, self._host.slot(slot_key))
             presence = await asyncio.to_thread(self._reader.presence_baseline, Path(repo.canonical_path), rec.space,
                                                rec.intent_dir, snap.audit, live_captured.state_hash)
             if file_answer:

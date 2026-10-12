@@ -1394,7 +1394,7 @@ class HostCapability:
     @staticmethod
     def unavailable(name: str, reason: str) -> "HostCapability"
 
-CAPABILITIES = ("state", "slots", "slot_messages", "sessions_busy", "owner", "notify", "slack", "subagents", "pending_questions")
+CAPABILITIES = ("state", "slots", "slot_messages", "sessions_busy", "sessions_live", "owner", "notify", "slack", "subagents", "pending_questions")
 
 @dataclass(frozen=True, slots=True)
 class SlotView:                 # from slot.to_dict() (kc:dashboard/state.py:4580) + direct attributes
@@ -1410,6 +1410,9 @@ class SlotView:                 # from slot.to_dict() (kc:dashboard/state.py:458
     subagents_running: int          # len(state.subagents.running_agents_for(session_key))
     subagents_queued: int           # state.subagents._queued_depth(session_key)
     deliveries_inflight: int        # slot._subagent_deliveries_inflight
+    # not on the wire: False once the host dropped the idle session (state.sessions.has_session), so the next
+    # dashboard message opens a fresh kiro-cli session (Tool Search replays history instead of session/load); None unknown
+    session_live: bool | None
 
 BUSY_REASONS = ("running", "stage_execution", "stopping", "queued", "approval_pending", "subagents", "deliveries_inflight")
 def busy_reasons(view: SlotView) -> tuple[str, ...]
@@ -1798,7 +1801,7 @@ from this table). Rules that apply to every row:
 | question / approve_plan | — | `question_digest` changed AND `plan_approval.answered` AND `plan_approval.answer` starts with `WIRE_APPROVE_PLAN`; AND turn ended |
 | question / request_plan_changes | — | `question_digest` changed AND (`plan_approval` tag now holds a `Request Changes…` answer OR was cleared for revision), OR a new plan-approval `QUESTION_ANSWERED` whose `Details` is `Request Changes`; AND turn ended |
 | question / approve_plan, request_plan_changes (refused) | — | `plan_reply_not_recorded` (`ResolvedNoTransition`, `answer_verified: false`): no new plan-approval receipt (`PLAN_APPROVAL_RECORDED` / `QUESTION_ANSWERED`) AND either a new `DECISION_RECORDED` for the same plan (checkpoint, unit, questions file) or an `ERROR_LOGGED` refusing the Plan Approval; AND turn ended. AI-DLC 2.10 records a plan reply only when it equals an offered choice, in the session that asked; settling frees the boundary for a fresh card. Nothing is approved and the reply is never resent |
-| question / resume (plan asked in an earlier session) | — | `plan_asked_again` when a new plan `DECISION_RECORDED` follows, else `resumed_without_reask`; AND turn ended. Offered instead of `approve_plan`/`request_plan_changes` when the newest plan decision names a session that a later `SESSION_STARTED`/`HUMAN_TURN` has replaced (consequence `plan_session_stale`). Submit checks that rule, not the command Run rule (whose `question_pending` would retire the card); once the plan is asked again in this session it refuses `action_stale` (`fields: ["plan_session"]`) and leaves the card `Queued` |
+| question / resume (plan asked in an earlier session) | — | `plan_asked_again` when a new plan `DECISION_RECORDED` follows, else `resumed_without_reask`; AND turn ended. Offered instead of `approve_plan`/`request_plan_changes` when the session that asked is gone (`plan_session_stale`): the newest plan decision names a session that a later `SESSION_STARTED`/`HUMAN_TURN` has replaced, or the host dropped the idle session (`slot.session_live is False`) (consequence `plan_session_stale`). Submit checks that rule, not the command Run rule (whose `question_pending` would retire the card): a Resume while the session is back, or an `approve_plan`/`request_plan_changes` while it is gone, refuses `action_stale` (`fields: ["plan_session"]`) and leaves the card `Queued` |
 | missing_input / provide_input | scope: `Scope` field == scope | free_text: turn ended |
 | missing_input / pick_intent (studio-only) | — | immediately at `resolve()` once the read-back is ok; the card retires when `active-intent == intent_dir` on the next scan |
 | run / resume | any stage row state changed, or `Current Stage` changed, or new MOVEMENT_EVENTS row, after delivering_at AND turn ended | turn ended with none of the above (e.g. engine emitted `ask`/`done`/`parked` → also refreshes cards) |

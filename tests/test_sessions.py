@@ -185,11 +185,13 @@ class Subagents:
 
 
 def host(slot: Slot | PartialSlot | None = None, *, owner: str = "owner-1", slack: Any = ...,
-         subagents: Any = ..., busy: set[str] | None = None) -> SimpleNamespace:
+         subagents: Any = ..., busy: set[str] | None = None, ended: set[str] | None = None) -> SimpleNamespace:
     """A duck-typed ``DashboardState`` carrying every symbol the bridge feature-detects."""
     slots: dict[str, Any] = {slot.key: slot} if slot is not None else {}
     state = SimpleNamespace(_slots=slots, _pending_questions={}, notifications=[], get_slot=slots.get,
-                            sessions=SimpleNamespace(is_busy=lambda key: key in (busy or set())), owner_id=owner,
+                            sessions=SimpleNamespace(is_busy=lambda key: key in (busy or set()),
+                                                     has_session=lambda key: key not in (ended or set())),
+                            owner_id=owner,
                             slack_client=Slack() if slack is ... else slack,
                             subagents=Subagents() if subagents is ... else subagents)
 
@@ -843,6 +845,7 @@ CAPABILITY_BREAKAGE = {
     "state": ("missing:state.get_slot", ("_slots", "get_slot")),
     "slots": ("missing:state._slots", ("_slots", "get_slot")),
     "sessions_busy": ("missing:state.sessions", ("sessions",)),
+    "sessions_live": ("missing:state.sessions", ("sessions",)),
     "owner": ("missing:state.owner_id", ("owner_id",)),
     "notify": ("missing:state.notify", ("notify",)),
 }
@@ -859,6 +862,22 @@ def test_a_missing_state_symbol_marks_exactly_its_capability(bridge, name):
     assert cap.available is False and cap.reason == reason
     assert cap.checked_at == TS
 
+
+
+def test_a_slot_says_whether_the_host_still_holds_its_session(S, bridge):
+    """The host drops an idle session and the next message opens a new one, which no plan challenge survives."""
+    bridge.attach(host(Slot()))
+    assert bridge.slot(SLOT).session_live is True
+    bridge.attach(host(Slot(), ended={f"dashboard:{SLOT}"}))
+    view = bridge.slot(SLOT)
+    assert view.session_live is False
+    assert "session_live" not in view.to_json(), "the pinned SlotView wire type does not carry it"
+    state = host(Slot())
+    del state.sessions.has_session
+    bridge.attach(state)
+    assert bridge.slot(SLOT).session_live is None, "a host that cannot say must not read as ended"
+    cap = bridge.capabilities()["sessions_live"]
+    assert cap.available is False and cap.reason == "missing:state.sessions.has_session"
 
 def test_the_remaining_capabilities_have_an_unavailable_path(S, bridge):
     """`slack`, `subagents`, `slot_messages` and `pending_questions` complete the nine."""

@@ -585,7 +585,7 @@ describe('questions template', () => {
       primary: { decision: 'resume', label_key: 'decision.resume.label' },
       evidence: { ...card().evidence, questions: view, artifacts: [] },
     }))
-    expect(screen.getByText(/asked for this approval in an earlier session/)).toBeInTheDocument()
+    expect(screen.getByText(/only in the conversation session that asked for it, and that session has ended/)).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: /Change request feedback/ })).toBeNull()
   })
 

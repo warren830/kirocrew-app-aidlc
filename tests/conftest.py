@@ -288,9 +288,14 @@ class FakeSlackClient:
 class FakeSessionManager:
     def __init__(self) -> None:
         self.busy: set[str] = set()
+        #: Sessions the host dropped after its idle timeout; every other one is held.
+        self.ended: set[str] = set()
 
     def is_busy(self, key: str) -> bool:
         return key in self.busy
+
+    def has_session(self, key: str) -> bool:
+        return key not in self.ended
 
     def set_slack_link(self, key: str, thread_ts: str | None, channel: str | None) -> None:
         self.links.append((key, thread_ts, channel))

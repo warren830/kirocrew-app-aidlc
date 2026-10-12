@@ -46,8 +46,8 @@ __all__ = ["BUSY_REASONS", "BindingView", "CAPABILITIES", "HostBridge", "HostCap
 
 #: What ``GET /health`` reports under ``host.capabilities``: one name per host seam, so a missing symbol
 #: switches off exactly the feature that needed it.
-CAPABILITIES = ("state", "slots", "slot_messages", "sessions_busy", "owner", "notify", "slack", "subagents",
-                "pending_questions")
+CAPABILITIES = ("state", "slots", "slot_messages", "sessions_busy", "sessions_live", "owner", "notify", "slack",
+                "subagents", "pending_questions")
 
 #: Reason codes, never prose (C11). A host symbol that moved reads ``missing:<symbol>`` (absent) or
 #: ``unusable:<symbol>`` (raised or misshapen), so an upgrade is diagnosable from one ``/health`` line.
@@ -176,6 +176,9 @@ class SlotView(WireRecord):
     deliveries_inflight: int = 0
     #: The newest unresolved tool approval (``tool``, ``tool_input``, ``request_id``); not on the wire.
     approval: Mapping[str, str] | None = None
+    #: Does the host still hold this slot's session? ``False``: it ended an idle one, and the next message starts a
+    #: new session, where a reply AI-DLC bound to the old one is refused. ``None`` when it cannot say; not on the wire.
+    session_live: bool | None = None
 
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any], **facts: Any) -> "SlotView":
@@ -544,6 +547,9 @@ class HostBridge:
             "sessions_busy": [(sessions is not None, "missing:state.sessions"),
                               (callable(getattr(sessions, "is_busy", None)),
                                "missing:state.sessions.is_busy")],
+            "sessions_live": [(sessions is not None, "missing:state.sessions"),
+                              (callable(getattr(sessions, "has_session", None)),
+                               "missing:state.sessions.has_session")],
             "owner": [(hasattr(state, "owner_id"), "missing:state.owner_id"), (owned, REASON_OWNER_UNKNOWN)],
             "notify": [(callable(getattr(state, "notify", None)), "missing:state.notify")],
             "slack": [(client is not None, REASON_SLACK_NOT_CONFIGURED),
@@ -659,7 +665,24 @@ class HostBridge:
             subagents_queued=queued,
             deliveries_inflight=_count(getattr(slot, "_subagent_deliveries_inflight", 0)),
             approval=_pending_approval(payload.get("pending_approval_info")) if approvals else None,
+            session_live=self._session_live(session_key),
         )
+
+    def _session_live(self, session_key: str) -> bool | None:
+        """Is this session still in the host's table? An idle one is dropped after the host's session timeout, and
+        a dashboard turn then opens a fresh kiro-cli session instead of reloading it (Tool Search replays the
+        conversation into it), so nothing bound to the old session id survives."""
+        sessions = getattr(self._state, "sessions", None)
+        if sessions is None:
+            return self._note("sessions_live", "missing:state.sessions")
+        if not callable(getattr(sessions, "has_session", None)):
+            return self._note("sessions_live", "missing:state.sessions.has_session")
+        try:
+            live = bool(sessions.has_session(str(session_key or "")))
+        except (AttributeError, TypeError, KeyError) as exc:
+            return self._note("sessions_live", "unusable:state.sessions.has_session", exc)
+        self._note("sessions_live")
+        return live
 
     def _subagent_depth(self, session_key: str) -> tuple[int, int]:
         """Running and queued subagents of this session: a queued wave is pending work, not idleness."""

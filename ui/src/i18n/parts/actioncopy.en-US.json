@@ -34,5 +34,5 @@
   "action.question.plan_approval.headline": "{stage} is waiting for you to approve its plan.",
   "action.question.consequence.summary_confirmation": "Your reply confirms the recorded summary or requests changes before the stage continues.",
   "action.question.consequence.plan_approval": "Your reply approves the recorded plan or requests changes before implementation continues.",
-  "action.question.consequence.plan_session_stale": "AI-DLC asked for this approval in an earlier session of the conversation, which has since restarted, so it cannot record a reply to it any more. Resume the workflow: AI-DLC asks for the approval again in this session, and a new card lets you answer it."
+  "action.question.consequence.plan_session_stale": "AI-DLC records a reply to this approval only in the conversation session that asked for it, and that session has ended (the host ends a session that sits idle and starts a new one for the next message). A reply sent now would be refused. Resume the workflow: AI-DLC asks for the approval again in the new session, and a new card lets you answer it."
 }

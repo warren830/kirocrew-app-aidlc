@@ -304,3 +304,32 @@ def test_a_plan_asked_again_refuses_the_old_resume_without_retiring_the_card(sv,
     record = get(sv, card["action_id"])
     assert record.status == "Queued" and record.delivery_id is None
     assert not sv.scheduler.live()
+
+
+def _plan_asked_in_this_session(scene):
+    record = _record_dir(scene.root)
+    (record / QUESTIONS_REL).parent.mkdir(parents=True, exist_ok=True)
+    (record / QUESTIONS_REL).write_text("# Questions\n\n## Plan Approval\n\n- Approve Plan\n- Request Changes\n\n[Answer]:\n")
+    with _shard(scene.root).open("a") as file:
+        file.write(F.audit_block("DECISION_RECORDED", "2026-09-04T09:10:00Z", Stage=STAGE,
+                                 Checkpoint="Code Generation Plan Approval", Session="s-1"))
+
+
+def test_a_plan_whose_session_the_host_dropped_offers_resume_and_refuses_the_doomed_approve(
+        sv, routes, fake_host, scene):
+    """KiroCrew ends a dashboard session after its idle timeout and opens a fresh kiro-cli session for the next
+    message, where 2.10 refuses the reply. An Approve the browser still shows is refused before anything is sent."""
+    _plan_asked_in_this_session(scene)
+    _rescan(sv, routes, fake_host, scene)
+    card = next(a for a in _queue(sv, routes, fake_host) if a["type"] == "question")
+    assert [d["decision"] for d in card["decisions"]] == ["approve_plan", "request_plan_changes"]
+    fake_host.sessions.ended.add(f"dashboard:{scene.slot_key}")
+    status, body = _submit(sv, routes, fake_host, card, payload={"decision": "approve_plan"}, wire_text="Approve Plan")
+    assert status == 409 and body["code"] == "action_stale", body
+    assert body["details"]["fields"] == ["plan_session"]
+    assert get(sv, card["action_id"]).status == "Queued" and not sv.scheduler.live()
+    _rescan(sv, routes, fake_host, scene)
+    card = next(a for a in _queue(sv, routes, fake_host) if a["action_id"] == card["action_id"])
+    assert [d["decision"] for d in card["decisions"]] == ["resume"], "the same card follows the session"
+    status, receipt = _submit(sv, routes, fake_host, card, payload={"decision": "resume"}, wire_text="/aidlc --resume")
+    assert status == 200, receipt

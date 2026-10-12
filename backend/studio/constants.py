@@ -384,6 +384,8 @@ PLAN_APPROVAL_HEADING = "Plan Approval"
 PLAN_APPROVAL_AUDIT_CHECKPOINT = "Code Generation Plan Approval"
 #: The ``Details`` of the plan-approval ``QUESTION_ANSWERED`` row 2.10 writes for a Request Changes choice.
 PLAN_REQUEST_CHANGES_CHOICE = "Request Changes"
+#: The replies a Plan Approval card sends; AI-DLC records them only in the session that asked.
+PLAN_REPLY_DECISIONS = ("approve_plan", "request_plan_changes")
 POST_APPROVAL_AMENDMENT_HEADING = "Post-approval Amendment"
 #: 2.10's intent-capture Step 5: kept assumptions are accepted or turned into follow-up questions. The engine fills
 #: the tag with the chosen option verbatim (``A. Accept assumptions``), so the option texts are its wire text.

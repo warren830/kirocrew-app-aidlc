@@ -80,6 +80,7 @@ class SlotStub:
     last_turn_ts: str = ""
     session_key: str = "dashboard:aidlc-studio-r_000000000001-260904-gate-demo"
     busy_reasons: tuple[str, ...] = ()
+    session_live: bool | None = True
 
 
 @dataclass(frozen=True)
@@ -666,6 +667,20 @@ def test_a_plan_asked_in_an_earlier_session_is_resumed_not_approved(projection, 
         assert question.decisions == ("approve_plan", "request_plan_changes")
         assert question.consequence_variant == "plan_approval"
 
+
+
+@pytest.mark.parametrize("live,decisions", [
+    (True, ("approve_plan", "request_plan_changes")), (None, ("approve_plan", "request_plan_changes")),
+    (False, ("resume",)),
+])
+def test_a_plan_whose_session_the_host_dropped_is_resumed_not_approved(projection, snap_of, repo_builder, live,
+                                                                       decisions):
+    """Asked in the current session, which the host then ended idle: the next message opens a new one."""
+    snap = snap_of(build(repo_builder, "plan_approval", state=F.state_text(marks={GATE_STAGE: "-"}, fields=RUNNING),
+                         audit=STARTED_AUDIT + _plan_asked("s-1"), questions={QUESTIONS_REL: PLAN_TEXT}))
+    question = _by_type(_seeds(projection, snap, slot=SlotStub(session_live=live)))["question"]
+    assert question.decisions == decisions
+    assert question.consequence_variant == ("plan_session_stale" if live is False else "plan_approval")
 
 def test_blank_question_group_yields_one_atomic_card(projection, snap_of, question_repo):
     """FR-Q-002/D13: one group is one card, never one card per question."""
