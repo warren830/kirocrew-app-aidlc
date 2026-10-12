@@ -21,6 +21,7 @@ import { useI18n } from '../i18n'
 import type { ArtifactMeta, ReviewFinding } from '../lib/types'
 import { ArtifactDiff } from '../artifacts/ArtifactDiff'
 import { ArtifactViewer, useArtifactBody } from '../artifacts/ArtifactViewer'
+import { SourceChanges, hasSourceManifest } from '../artifacts/SourceChanges'
 import { FindingList } from '../artifacts/FindingList'
 import { bytes, at as formatAt } from '../lib/format'
 import { Chip } from '../shell/Chip'
@@ -152,6 +153,13 @@ export function GateTemplate({ card, detail, draft, setDraft, refreshing, api, r
           </Pane>
         </div>
       </Block>
+
+      {hasSourceManifest(card) ? (
+        // The code this gate approves; the artifact above is the plan its reviewer judged.
+        <Block title={t('template.gate.codeChanges')} icon="git">
+          <SourceChanges card={card} />
+        </Block>
+      ) : null}
 
       <ConsistencyFindings card={card} title={t('template.gate.risks')} />
 

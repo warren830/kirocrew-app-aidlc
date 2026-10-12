@@ -346,6 +346,20 @@ class GitObserver:
         run = self._run(repo, ("show", "--no-textconv", spec), stdout_cap=C.MAX_ARTIFACT_RENDER_BYTES)
         return run.stdout if run.ok and not run.truncated else None
 
+    def head_blob(self, repo: Path, relpath: str) -> tuple[str, bytes | None]:
+        """One path's bytes at HEAD, for a caller that knows HEAD exists: ``("present", bytes)``, ``("absent",
+        None)`` when HEAD has no such file, ``("too_large", None)`` over ``MAX_ARTIFACT_RENDER_BYTES`` (probed first,
+        so the blob is never in memory), ``("unknown", None)`` when git could not read one it has."""
+        spec = f"HEAD:{self._safe_rel(repo, relpath, allow_tree=False)}"
+        size = self._run(repo, ("cat-file", "-s", spec), stdout_cap=C.MAX_TEXT_PREVIEW_BYTES)
+        text = size.text().strip() if size.ok else ""
+        if not text.isdigit():
+            return "absent", None
+        if int(text) > C.MAX_ARTIFACT_RENDER_BYTES:
+            return "too_large", None
+        run = self._run(repo, ("show", "--no-textconv", spec), stdout_cap=C.MAX_ARTIFACT_RENDER_BYTES)
+        return ("present", run.stdout) if run.ok and not run.truncated else ("unknown", None)
+
     def diff(self, repo: Path, relpath: str) -> str | None:
         """Working-tree diff for one path, capped with a visible marker. ``None`` means no diff could be had
         (a degraded capability); ``""`` means no local change (information)."""

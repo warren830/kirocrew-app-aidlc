@@ -83,6 +83,7 @@ ROUTES: tuple[tuple[str, str, str], ...] = (
     ("GET", f"{_INTENT}/artifacts", "intents.list_artifacts"),
     ("GET", f"{_INTENT}/artifacts/{{artifact_id}}", "intents.get_artifact"),
     ("GET", f"{_INTENT}/review", "intents.get_review"),
+    ("GET", f"{_INTENT}/changes", "intents.get_changes"),
     ("POST", f"{_INTENT}/recompose/preview", "intents.recompose_preview"),
     ("POST", f"{_INTENT}/recompose", "intents.recompose"),
     ("POST", f"{_INTENT}/settings/preview", "workspace.settings_preview"),

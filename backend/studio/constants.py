@@ -384,6 +384,12 @@ PLAN_APPROVAL_HEADING = "Plan Approval"
 PLAN_APPROVAL_AUDIT_CHECKPOINT = "Code Generation Plan Approval"
 #: The ``Details`` of the plan-approval ``QUESTION_ANSWERED`` row 2.10 writes for a Request Changes choice.
 PLAN_REQUEST_CHANGES_CHOICE = "Request Changes"
+#: What a code stage lists as written (``writes[].path``) in its record; a gate on it shows those files' change.
+SOURCE_MANIFEST_NAME = "source-manifest.json"
+MAX_SOURCE_CHANGE_FILES = 50
+MAX_SOURCE_CHANGE_DIFF_BYTES = 64 * 1024
+#: The whole ``…/changes`` response: past it, the remaining files list their counts without a diff.
+MAX_SOURCE_CHANGES_DIFF_BYTES = 512 * 1024
 #: The replies a Plan Approval card sends; AI-DLC records them only in the session that asked.
 PLAN_REPLY_DECISIONS = ("approve_plan", "request_plan_changes")
 POST_APPROVAL_AMENDMENT_HEADING = "Post-approval Amendment"

@@ -1,0 +1,132 @@
+"""The code a stage wrote, compared with HEAD (``source_changes``), against a real git repository.
+
+The statuses that do not show a diff are claims too: a secret file must never leak, a path outside the repository
+must never be read, and none of them may read as "unchanged".
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+MANIFEST = "aidlc/spaces/default/intents/i-1/construction/code-generation/source-manifest.json"
+
+
+@pytest.fixture
+def git_bin() -> str:
+    path = shutil.which("git")
+    if path is None:  # pragma: no cover - depends on the machine
+        pytest.skip("needs a real git to compare with HEAD")
+    return path
+
+
+def _git(repo: Path, git: str, *args: str) -> None:
+    env = {"PATH": os.environ.get("PATH", os.defpath), "HOME": str(repo.parent), "GIT_CONFIG_NOSYSTEM": "1",
+           "GIT_CONFIG_GLOBAL": os.devnull, "GIT_AUTHOR_NAME": "lab", "GIT_AUTHOR_EMAIL": "lab@example.invalid",
+           "GIT_COMMITTER_NAME": "lab", "GIT_COMMITTER_EMAIL": "lab@example.invalid"}
+    subprocess.run([git, *args], cwd=repo, env=env, check=True, capture_output=True)
+
+
+def _repo(tmp_path: Path, git: str, *, commit: bool = True) -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "calc.py").write_text("def add(a, b):\n    return a + b\n")
+    (repo / "old.py").write_text("gone = True\n")
+    (repo / "same.py").write_text("x = 1\n")
+    (repo / "add").write_text("spelled like a git write verb\n")
+    _git(repo, git, "-c", "init.defaultBranch=main", "init", "-q", ".")
+    if commit:
+        _git(repo, git, "add", "-A")
+        _git(repo, git, "commit", "-qm", "base")
+    return repo
+
+
+def _manifest(repo: Path, paths: list[str]) -> None:
+    target = repo / MANIFEST
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps({"version": 1, "stage": "code-generation", "unit": None,
+                                  "writes": [{"path": path} for path in paths]}))
+
+
+@pytest.fixture
+def read(studio, git_bin, clock):
+    def run(repo: Path, *, git: str | None = git_bin):
+        return studio.source_changes.read_changes(studio.aidlc_reader.AidlcReader(clock),
+                                                  studio.git_observer.GitObserver(git, clock), repo, MANIFEST)
+    return run
+
+
+def _by_path(out: dict) -> dict[str, dict]:
+    return {row["path"]: row for row in out["files"]}
+
+
+def test_each_written_file_is_diffed_against_head(read, tmp_path, git_bin):
+    repo = _repo(tmp_path, git_bin)
+    (repo / "calc.py").write_text("def add(a, b):\n    return a + b\n\n\ndef subtract(a, b):\n    return a - b\n")
+    (repo / "test_calc.py").write_text("import unittest\n")
+    (repo / "old.py").unlink()
+    (repo / "add").write_text("still readable\n")
+    _manifest(repo, ["calc.py", "test_calc.py", "old.py", "same.py", "add", "calc.py"])
+    out = read(repo)
+    assert out["available"] is True and out["manifest_readable"] is True and out["truncated"] is False
+    rows = _by_path(out)
+    assert list(rows) == ["calc.py", "test_calc.py", "old.py", "same.py", "add"], "listed once, in manifest order"
+    calc = rows["calc.py"]
+    assert (calc["status"], calc["additions"], calc["deletions"]) == ("modified", 4, 0)
+    assert calc["diff"].startswith("--- a/calc.py\n+++ b/calc.py\n@@") and "+def subtract(a, b):\n" in calc["diff"]
+    assert rows["test_calc.py"]["status"] == "added"
+    assert rows["test_calc.py"]["diff"].startswith("--- /dev/null\n+++ b/test_calc.py\n")
+    assert (rows["old.py"]["status"], rows["old.py"]["deletions"]) == ("deleted", 1)
+    assert rows["old.py"]["diff"].startswith("--- a/old.py\n+++ /dev/null\n")
+    assert rows["same.py"]["status"] == "unchanged" and rows["same.py"]["diff"] is None
+    assert rows["add"]["status"] == "modified", "a path is never a bare git token, so no write-verb refusal"
+
+
+def test_what_is_not_shown_says_why(read, tmp_path, git_bin):
+    repo = _repo(tmp_path, git_bin)
+    (repo / ".env").write_text("API_KEY=do-not-show\n")
+    (repo / "logo.bin").write_bytes(b"\x89PNG\x00\x01")
+    (tmp_path / "escape.py").write_text("outside = True\n")
+    _manifest(repo, [".env", "logo.bin", "../escape.py", "never-written.py"])
+    rows = _by_path(read(repo))
+    assert rows[".env"]["status"] == "secret" and rows[".env"]["diff"] is None
+    assert (rows["logo.bin"]["status"], rows["logo.bin"]["change"]) == ("binary", "added")
+    assert rows["../escape.py"]["status"] == "outside" and rows["../escape.py"]["diff"] is None
+    assert rows["never-written.py"]["status"] == "unknown", "listed yet neither on disk nor at HEAD"
+    assert "do-not-show" not in json.dumps(rows)
+
+
+def test_without_a_commit_every_written_file_is_new(read, tmp_path, git_bin):
+    repo = _repo(tmp_path, git_bin, commit=False)
+    _manifest(repo, ["calc.py"])
+    assert _by_path(read(repo))["calc.py"]["status"] == "added"
+
+
+def test_without_git_nothing_is_claimed_about_a_file(read, tmp_path, git_bin):
+    repo = _repo(tmp_path, git_bin)
+    _manifest(repo, ["calc.py"])
+    out = read(repo, git=None)
+    assert out["available"] is False and out["reason"]
+    assert [(row["path"], row["status"]) for row in out["files"]] == [("calc.py", "unknown")]
+
+
+def test_an_unreadable_manifest_lists_nothing(read, tmp_path, git_bin):
+    repo = _repo(tmp_path, git_bin)
+    (repo / MANIFEST).parent.mkdir(parents=True, exist_ok=True)
+    (repo / MANIFEST).write_text("{not json")
+    out = read(repo)
+    assert out["files"] == [] and out["manifest_readable"] is False
+
+
+def test_a_long_diff_is_cut_with_a_marker(read, studio, tmp_path, git_bin, monkeypatch):
+    repo = _repo(tmp_path, git_bin)
+    (repo / "big.py").write_text("".join(f"line_{n} = {n}\n" for n in range(400)))
+    _manifest(repo, ["big.py"])
+    monkeypatch.setattr(studio.constants, "MAX_SOURCE_CHANGE_DIFF_BYTES", 512)
+    row = _by_path(read(repo))["big.py"]
+    assert row["truncated"] is True and len(row["diff"]) <= 512

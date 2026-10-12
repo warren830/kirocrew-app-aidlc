@@ -159,6 +159,14 @@ def test_artifacts_lists_metadata_and_filters_by_stage_and_kind(api, repo):
     assert body["count"] >= 1 and all(a["stage"] == STAGE for a in body["artifacts"])
 
 
+
+def test_changes_needs_a_stage_and_says_when_it_listed_no_writes(api, repo):
+    """The code a gate approves comes from the stage's source manifest; a stage without one names none."""
+    assert refusal(api("GET", base(repo, "/changes"))) == (400, "bad_param")
+    status, body = api("GET", base(repo, "/changes"), stage=STAGE)
+    assert status == 200 and body["manifest"] is None and body["files"] == []
+    assert (body["stage"], body["unit"]) == (STAGE, None)
+
 def test_one_artifact_carries_its_content_review_and_table_of_contents(sv, api, repo):
     status, body = api("GET", base(repo, f"/artifacts/{artifact(sv, repo, 'requirements.md').artifact_id}"))
     assert status == 200 and set(body) == {"artifact", "content", "encoding", "truncated", "review", "toc", "prior"}

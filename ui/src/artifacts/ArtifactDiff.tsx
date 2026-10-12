@@ -57,14 +57,9 @@ export interface ArtifactDiffProps {
 }
 
 export function ArtifactDiff({ prior, name }: ArtifactDiffProps) {
-  const { t, fmt } = useI18n()
-  const [budget, setBudget] = useState(DIFF_LINE_BUDGET)
-  const lines = useMemo(() => (prior.diff ? parseDiff(prior.diff) : []), [prior.diff])
+  const { t } = useI18n()
 
   if (!prior.available) return null
-
-  const shown = lines.slice(0, budget)
-  const hidden = lines.length - shown.length
 
   return (
     <section className="studio-diff" aria-label={t('artifact.diff.label', { name })}>
@@ -81,36 +76,49 @@ export function ArtifactDiff({ prior, name }: ArtifactDiffProps) {
         <p className="studio-muted studio-diff-note">
           <Icon name="warn" size={13} /> {t('artifact.diff.unavailable')}
         </p>
-      ) : lines.length === 0 ? (
+      ) : parseDiff(prior.diff).length === 0 ? (
         <p className="studio-muted studio-diff-note">
           <Icon name="check" size={13} /> {t('artifact.diff.unchanged')}
         </p>
       ) : (
-        <>
-          <div className="studio-difflines">
-            {shown.map((line, index) => (
-              <div className="studio-diffline" data-kind={line.kind} key={`${index}-${line.text}`}>
-                {line.kind === 'add' || line.kind === 'del' ? (
-                  <span className="studio-sr">
-                    {line.kind === 'add' ? t('artifact.diff.added') : t('artifact.diff.removed')}
-                  </span>
-                ) : null}
-                {/* A zero-width-safe blank: an empty context line must still occupy a row. */}
-                {line.text === '' ? ' ' : line.text}
-              </div>
-            ))}
-          </div>
-          {hidden > 0 ? (
-            <button
-              type="button"
-              className="studio-btn studio-btn-sm"
-              onClick={() => setBudget(lines.length)}
-            >
-              {t('artifact.diff.showRest', { n: fmt.number(hidden) })}
-            </button>
-          ) : null}
-        </>
+        <DiffLines diff={prior.diff} />
       )}
     </section>
+  )
+}
+
+/** A unified diff's lines, `DIFF_LINE_BUDGET` at a time; shared by the artifact diff and a stage's code changes. */
+export function DiffLines({ diff }: { diff: string }) {
+  const { t, fmt } = useI18n()
+  const [budget, setBudget] = useState(DIFF_LINE_BUDGET)
+  const lines = useMemo(() => parseDiff(diff), [diff])
+  const shown = lines.slice(0, budget)
+  const hidden = lines.length - shown.length
+
+  return (
+    <>
+      <div className="studio-difflines">
+        {shown.map((line, index) => (
+          <div className="studio-diffline" data-kind={line.kind} key={`${index}-${line.text}`}>
+            {line.kind === 'add' || line.kind === 'del' ? (
+              <span className="studio-sr">
+                {line.kind === 'add' ? t('artifact.diff.added') : t('artifact.diff.removed')}
+              </span>
+            ) : null}
+            {/* A zero-width-safe blank: an empty context line must still occupy a row. */}
+            {line.text === '' ? ' ' : line.text}
+          </div>
+        ))}
+      </div>
+      {hidden > 0 ? (
+        <button
+          type="button"
+          className="studio-btn studio-btn-sm"
+          onClick={() => setBudget(lines.length)}
+        >
+          {t('artifact.diff.showRest', { n: fmt.number(hidden) })}
+        </button>
+      ) : null}
+    </>
   )
 }

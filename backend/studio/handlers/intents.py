@@ -20,6 +20,7 @@ from ..aidlc_reader import parse_review_section
 from ..errors import StudioError
 from ..plan import PlanRequest
 from ..plan_advice import PlanDraftRequest
+from ..source_changes import read_changes
 from .common import (
     body_bool, body_choice, card_of, intent_view, json_ok, query_bool, query_str, read_json, repo_and_snapshot,
     repo_or_404, summarize_intent, summary_args, user_of,
@@ -143,6 +144,27 @@ async def get_artifact(services: Any, request: web.Request) -> web.Response:
         "toc": _toc(text) if utf8 else [],
         "prior": {"available": prior is not None, "source": "git" if prior is not None else None, "diff": diff},
     })
+
+
+async def get_changes(services: Any, request: web.Request) -> web.Response:
+    """The source files a stage lists in its ``source-manifest.json``, each diffed against HEAD: the code a
+    code-generation gate asks the human to approve, beside the plan its reviewer judged. ``manifest`` is ``null``
+    when the stage wrote no manifest (no code stage, or not reached yet)."""
+    stage = query_str(request, "stage", pattern=C.STAGE_SLUG_RE)
+    unit = query_str(request, "unit", pattern=C.UNIT_NAME_RE)
+    if stage is None:
+        raise StudioError("bad_param", "stage is required", details={"param": "stage"})
+    repo, snap = await repo_and_snapshot(services, request)
+    metas, _truncated = await asyncio.to_thread(services.projection.artifacts, snap)
+    manifest = next((meta for meta in metas if meta.name == C.SOURCE_MANIFEST_NAME and meta.stage == stage
+                     and (meta.unit or None) == unit), None)
+    body: dict[str, Any] = {"stage": stage, "unit": unit, "manifest": manifest.relpath if manifest else None}
+    if manifest is None:
+        return json_ok({**body, "available": True, "reason": None, "files": [], "truncated": False,
+                        "manifest_readable": False})
+    changes = await asyncio.to_thread(read_changes, services.reader, services.git, Path(repo.canonical_path),
+                                      manifest.relpath)
+    return json_ok({**body, **changes})
 
 
 async def get_review(services: Any, request: web.Request) -> web.Response:

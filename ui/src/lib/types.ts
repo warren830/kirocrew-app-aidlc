@@ -313,6 +313,20 @@ export interface ReposResponse { repos: RepoRecord[]; totals: { repos: number; u
 export interface RepoDetailResponse { repo: RepoRecord; intents: IntentSummary[]; transactions: TransactionResult[] }
 export interface IntentsResponse { intents: IntentSummary[]; spaces: string[]; active_space: string }
 export interface ArtifactsResponse { artifacts: ArtifactMeta[]; truncated: boolean; count: number }
+/** One path a stage's `source-manifest.json` lists, compared with HEAD; the not-shown statuses say why. */
+export type SourceChangeStatus =
+  | 'added' | 'modified' | 'deleted' | 'unchanged' | 'binary' | 'too_large' | 'secret' | 'outside' | 'unknown'
+export interface SourceChange {
+  path: string; status: SourceChangeStatus; additions: number; deletions: number; diff: string | null
+  truncated: boolean
+  /** A `binary` file's own change (`added`/`modified`/`deleted`), since its diff is not shown. */
+  change?: 'added' | 'modified' | 'deleted'
+}
+/** `GET …/{intent}/changes?stage=&unit=`: `manifest` is `null` when the stage listed no writes. */
+export interface SourceChangesResponse {
+  stage: string; unit: string | null; manifest: string | null; available: boolean; reason: string | null
+  files: SourceChange[]; truncated: boolean; manifest_readable: boolean
+}
 export interface ArtifactResponse { artifact: ArtifactMeta; content: string | null; encoding: 'utf-8' | 'binary'; truncated: boolean; review: { verdict: string | null; findings: ReviewFinding[] } | null; toc: { level: number; text: string; anchor: string }[]; prior: { available: boolean; source: 'git' | null; diff: string | null } }
 export interface ReviewResponse { stage: string | null; verdict: string | null; findings: ReviewFinding[]; receipts: { event: string; ts: string; reviewer: string | null; iteration: number | null; verdict: string | null; fingerprint: string | null }[]; review_class: string | null; reviewer: string | null; revisions: number }
 export interface RepoGitResponse { git: GitObservation; owned_dirty: string[]; unrelated_dirty: number; owned_uncommitted?: number }

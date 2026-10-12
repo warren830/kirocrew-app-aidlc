@@ -17,6 +17,7 @@
   "template.gate.criteria": "阶段验收标准 — 已满足 {met} / {total}",
   "template.gate.criteriaUnknown": "阶段验收标准 — 共 {total} 条，Studio 不对其做判定",
   "template.gate.compare": "产出物与评审",
+  "template.gate.codeChanges": "本阶段写入的代码",
   "template.gate.reviewer": "评审发现",
   "template.gate.noBlockers": "没有未解决的阻塞项",
   "template.gate.noFindings": "评审没有为该阶段记录任何发现。",

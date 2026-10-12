@@ -1451,6 +1451,22 @@ button.studio-chip:hover { border-color: var(--border-hover); }
 .studio-diffline[data-kind='del'] { background: var(--diff-del); color: var(--diff-del-text); }
 .studio-diffline[data-kind='meta'] { color: var(--muted); }
 
+/* The code a stage wrote (its source manifest), on its gate: one row per file, the diff under it on demand. */
+.studio-srcchanges { display: flex; flex-direction: column; gap: 8px; }
+.studio-srcchange-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.studio-srcchange {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.studio-srcchange-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.studio-srcchange-path { font-family: var(--mono); font-size: 12px; color: var(--text-strong); overflow-wrap: anywhere; }
+.studio-srcchange-head .studio-btn { margin-left: auto; }
+
 /* ---------- transaction steps ---------- */
 
 .studio-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }

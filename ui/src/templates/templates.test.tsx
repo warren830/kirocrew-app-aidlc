@@ -18,7 +18,7 @@
  */
 
 import { useState } from 'react'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
@@ -405,6 +405,48 @@ describe('gate template', () => {
     await userEvent.click(screen.getByRole('button', { name: en.t('review.inArtifact') }))
     // The finding's raw anchor is slugified, because the route drops anything that is not `h-<slug>`.
     expect(patches.at(-1)).toEqual({ tab: 'artifacts', artifact: 'art_1', anchor: 'h-decline-path' })
+  })
+
+  it('shows the code a stage wrote beside the plan its reviewer judged', async () => {
+    const intent = `${BASE}/repos/r_1/intents/default~250901-guest`
+    setApiRoutes({
+      [`GET ${intent}/artifacts/art_1`]: () => ({
+        artifact: artifact(), content: '# Plan\n', encoding: 'utf-8', truncated: false, review: null, toc: [],
+        prior: { available: false, source: null, diff: null },
+      }),
+      [`GET ${intent}/changes*`]: () => ({
+        stage: 'functional-design', unit: null, manifest: 'record/source-manifest.json', available: true,
+        reason: null, truncated: false, manifest_readable: true,
+        files: [
+          { path: 'calc.py', status: 'modified', additions: 1, deletions: 1, truncated: false,
+            diff: '--- a/calc.py\n+++ b/calc.py\n@@ -1 +1 @@\n-x = 1\n+x = 2\n' },
+          { path: 'test_calc.py', status: 'added', additions: 1, deletions: 0, truncated: false,
+            diff: '--- /dev/null\n+++ b/test_calc.py\n@@ -0,0 +1 @@\n+import unittest\n' },
+          { path: '.env', status: 'secret', additions: 0, deletions: 0, diff: null, truncated: false },
+        ],
+      }),
+    })
+    const manifest = artifact({ artifact_id: 'art_2', name: 'source-manifest.json', relpath: 'record/source-manifest.json' })
+    mount(GateTemplate, card({ evidence: { ...card().evidence, artifacts: [artifact(), manifest] } }))
+    const block = await screen.findByRole('region', { name: en.t('changes.label', { stage: 'functional-design' }) })
+    expect(within(block).getByText(en.t('changes.summary', { n: '3', added: '2', removed: '1' }))).toBeInTheDocument()
+    expect(within(block).getByText(en.t('changes.status.modified'))).toBeInTheDocument()
+    // A modified file opens on its diff; a new one, often long, waits for a click.
+    expect(block.querySelector('.studio-diffline[data-kind="add"]')).toHaveTextContent('+x = 2')
+    expect(within(block).queryByText('+import unittest')).toBeNull()
+    await userEvent.click(within(block).getByRole('button', { name: en.t('changes.showDiff') }))
+    expect(within(block).getByText('+import unittest')).toBeInTheDocument()
+    expect(within(block).getByText(en.t('changes.addedNote'))).toBeInTheDocument()
+    // A secret is listed with the reason it is not shown, never as "unchanged".
+    expect(within(block).getByText(en.t('changes.why.secret'))).toBeInTheDocument()
+    expect(within(block).queryByText(en.t('changes.status.unchanged'))).toBeNull()
+  })
+
+  it('asks for no code change on a stage without a source manifest', () => {
+    setApiRoutes({})
+    mount(GateTemplate, card())
+    expect(screen.queryByText(en.t('template.gate.codeChanges'))).toBeNull()
+    expect(apiCalls.some((call) => call.path.includes('/changes'))).toBe(false)
   })
 
   it('says a gate produced no artifact instead of showing an empty pane', () => {
