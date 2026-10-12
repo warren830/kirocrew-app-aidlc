@@ -2244,6 +2244,7 @@
   "wizard.preset.review.none": "No reviewer pass. Gates still require you.",
   "wizard.preset.reviewHelp": "The strongest review class any stage may use. It can only ever reduce review work.",
   "wizard.preset.scope": "Scope",
+  "wizard.preset.scopeGrid": "Runs {on} of {total} stages as installed; select it for the exact plan.",
   "wizard.preset.scopeHelp": "AI-DLC's scope decides which of the known stages are eligible. Studio reads the list from this repository.",
   "wizard.preset.scopeMetaDepth": "depth {value}",
   "wizard.preset.scopeMetaProjectOwned": "defined by this project",

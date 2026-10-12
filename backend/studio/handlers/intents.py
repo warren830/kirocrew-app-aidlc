@@ -196,6 +196,22 @@ async def get_review(services: Any, request: web.Request) -> web.Response:
 # --------------------------------------------------------------------------- #
 
 
+async def plan_scopes(services: Any, request: web.Request) -> web.Response:
+    """Every scope the installed engine defines, with its own description and how many of the graph's stages its
+    grid runs: what the wizard's scope cards compare before one is picked. Read from the repository's installed
+    ``.kiro/scopes`` and ``scope-grid.json``; the exact plan still comes from ``plan/preview``."""
+    repo = await repo_or_404(services, request.match_info["repo_id"])
+    catalog = await asyncio.to_thread(services.plan.catalog, repo, repo.engine_dir or C.STUDIO_HARNESS_DIR)
+    metas = {meta.name: meta for meta in catalog.scopes}
+    total = len(catalog.stages)
+    rows = []
+    for name in sorted(set(metas) | set(catalog.grid)):
+        meta, grid = metas.get(name), catalog.grid.get(name)
+        rows.append({"name": name, "description": meta.description if meta is not None else None,
+                     "stages": sum(1 for value in grid.values() if value == "EXECUTE") if grid else None})
+    return json_ok({"scopes": rows, "graph_stage_count": total})
+
+
 async def plan_preview(services: Any, request: web.Request) -> web.Response:
     """The plan a request describes, unwritten."""
     body = await read_json(request)

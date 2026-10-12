@@ -1,11 +1,13 @@
 /**
  * Step 2 — Preset: the scope, and the three settings that cap how much work it implies.
  *
- * The scope list is read from the repository, never hard-coded. There is no "list scopes" route, so the
- * names come from the engine's own refusal: previewing with no scope answers `scope_unknown` with the
- * scopes it does know (`WizardView.knownScopesFrom`). That is why an unselected card shows no stage count
- * — the count for a scope only exists once the server has composed that scope's plan, and inventing
- * "27 of 33 stages" from a table in a design document is exactly the kind of number that goes stale.
+ * The scope list is read from the repository, never hard-coded: the engine's own refusal (previewing with no
+ * scope answers `scope_unknown` with the scopes it knows, `WizardView.knownScopesFrom`), or the installed
+ * catalog (`plan/scopes`). Every card says what its scope is for and how many of the graph's stages the
+ * installed `scope-grid.json` runs for it, so scopes can be compared before one is picked; the selected card
+ * shows the exact count of the plan the server composed, which per-stage choices can still change. A count
+ * from a table in a design document would be exactly the kind of number that goes stale, so none is shown
+ * when the repository cannot be read.
  *
  * Test strategy and review cap have a "From the scope" choice that sends nothing, so the engine's own
  * default applies. Depth does not: the wire contract requires one of the three values, so the selected
@@ -21,7 +23,7 @@ import { type ReactNode } from 'react'
 import { Chip } from '../shell/Chip'
 import { Icon } from '../shell/Icon'
 import { useI18n } from '../i18n'
-import type { EffectivePlan, PlanDepth } from '../lib/types'
+import type { EffectivePlan, PlanDepth, PlanScopesResponse } from '../lib/types'
 import type { ReviewCap, ScopeMetaView, WizardState } from './WizardView'
 
 const DEPTHS: readonly PlanDepth[] = ['Minimal', 'Standard', 'Comprehensive']
@@ -30,6 +32,8 @@ const CAPS: readonly ReviewCap[] = ['none', 'advisory', 'adversarial']
 export interface StepPresetProps {
   state: WizardState
   scopes: string[]
+  /** The installed scopes' descriptions and grid counts; `null` while unread or unreadable. */
+  catalog?: PlanScopesResponse | null
   meta: ScopeMetaView | null
   plan: EffectivePlan | null
   unreadable: boolean
@@ -39,7 +43,7 @@ export interface StepPresetProps {
   advisorPanel: ReactNode
 }
 
-export function StepPreset({ state, scopes, meta, plan, unreadable, onPickScope, onPatch, advisorPanel }: StepPresetProps) {
+export function StepPreset({ state, scopes, catalog = null, meta, plan, unreadable, onPickScope, onPatch, advisorPanel }: StepPresetProps) {
   const i18n = useI18n()
   const { t } = i18n
   // The selected scope may not be in the discovered list (a scope this repo defines but the last refusal
@@ -67,6 +71,12 @@ export function StepPreset({ state, scopes, meta, plan, unreadable, onPickScope,
           <div className="studio-picks">
             {options.map((scope) => {
               const selected = scope === state.scope
+              const row = catalog?.scopes.find((candidate) => candidate.name === scope) ?? null
+              const gridCount = row && row.stages !== null && catalog
+                ? t('wizard.preset.scopeGrid', {
+                    on: i18n.fmt.number(row.stages), total: i18n.fmt.number(catalog.graph_stage_count) })
+                : null
+              const description = (selected ? meta?.description : null) ?? row?.description ?? null
               return (
                 <button
                   type="button"
@@ -77,10 +87,10 @@ export function StepPreset({ state, scopes, meta, plan, unreadable, onPickScope,
                 >
                   {/* AI-DLC's own scope name: verbatim, in every locale. */}
                   <span className="studio-pick-l studio-mono">{scope}</span>
+                  {description ? <span className="studio-pick-d">{description}</span> : null}
                   <span className="studio-pick-d">
-                    {selected ? selectedCounts ?? t('common.loading') : t('wizard.preset.scopeUnselected')}
+                    {selected ? selectedCounts ?? t('common.loading') : gridCount ?? t('wizard.preset.scopeUnselected')}
                   </span>
-                  {selected && meta?.description ? <span className="studio-pick-d">{meta.description}</span> : null}
                 </button>
               )
             })}

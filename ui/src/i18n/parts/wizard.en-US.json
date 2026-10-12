@@ -68,6 +68,7 @@
   "wizard.preset.scopeHelp": "AI-DLC's scope decides which of the known stages are eligible. Studio reads the list from this repository.",
   "wizard.preset.scopeUnreadable": "Studio could not read the scope list from this repository, so no preset can be offered.",
   "wizard.preset.scopeSelected": "{on} of {total} stages selected",
+  "wizard.preset.scopeGrid": "Runs {on} of {total} stages as installed; select it for the exact plan.",
   "wizard.preset.scopeUnselected": "Select it to read the exact stage count from the installed graph.",
   "wizard.preset.scopeResets": "Changing the scope resets the stage matrix to that scope's own selection.",
   "wizard.preset.scopeMetaDepth": "depth {value}",

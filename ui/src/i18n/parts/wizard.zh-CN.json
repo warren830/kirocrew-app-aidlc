@@ -68,6 +68,7 @@
   "wizard.preset.scopeHelp": "AI-DLC 的范围决定哪些已知阶段可用。列表由 Studio 从这个仓库读取。",
   "wizard.preset.scopeUnreadable": "Studio 无法从这个仓库读到范围列表，因此无法提供预设。",
   "wizard.preset.scopeSelected": "已选 {total} 个阶段中的 {on} 个",
+  "wizard.preset.scopeGrid": "按已安装的配置运行 {total} 个阶段中的 {on} 个；选中后显示确切计划。",
   "wizard.preset.scopeUnselected": "选中它即可从已安装的阶段图读出确切数量。",
   "wizard.preset.scopeResets": "更换范围会把阶段矩阵重置为该范围自身的选择。",
   "wizard.preset.scopeMetaDepth": "深度 {value}",

@@ -76,6 +76,7 @@ ROUTES: tuple[tuple[str, str, str], ...] = (
     ("POST", f"{_REPO}/spaces/switch", "workspace.switch_space"),
     ("GET", f"{_REPO}/intents", "intents.list_intents"),
     ("POST", f"{_REPO}/intents", "intents.create_intent"),
+    ("GET", f"{_REPO}/intents/plan/scopes", "intents.plan_scopes"),
     ("POST", f"{_REPO}/intents/plan/preview", "intents.plan_preview"),
     ("POST", f"{_REPO}/intents/plan/advise", "intents.plan_advise"),
     ("GET", _INTENT, "intents.get_intent"),

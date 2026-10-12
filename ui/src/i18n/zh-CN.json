@@ -2244,6 +2244,7 @@
   "wizard.preset.review.none": "不做评审。Gate 仍然需要你决定。",
   "wizard.preset.reviewHelp": "任何阶段可用的最强评审级别。它只会减少评审工作量。",
   "wizard.preset.scope": "范围",
+  "wizard.preset.scopeGrid": "按已安装的配置运行 {total} 个阶段中的 {on} 个；选中后显示确切计划。",
   "wizard.preset.scopeHelp": "AI-DLC 的范围决定哪些已知阶段可用。列表由 Studio 从这个仓库读取。",
   "wizard.preset.scopeMetaDepth": "深度 {value}",
   "wizard.preset.scopeMetaProjectOwned": "由本项目定义",

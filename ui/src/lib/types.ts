@@ -313,6 +313,11 @@ export interface ReposResponse { repos: RepoRecord[]; totals: { repos: number; u
 export interface RepoDetailResponse { repo: RepoRecord; intents: IntentSummary[]; transactions: TransactionResult[] }
 export interface IntentsResponse { intents: IntentSummary[]; spaces: string[]; active_space: string }
 export interface ArtifactsResponse { artifacts: ArtifactMeta[]; truncated: boolean; count: number }
+/** `GET /repos/{id}/intents/plan/scopes`: each installed scope's own description and how many stages its grid runs. */
+export interface PlanScopesResponse {
+  scopes: { name: string; description: string | null; stages: number | null }[]
+  graph_stage_count: number
+}
 /** One path a stage's `source-manifest.json` lists, compared with HEAD; the not-shown statuses say why. */
 export type SourceChangeStatus =
   | 'added' | 'modified' | 'deleted' | 'unchanged' | 'binary' | 'too_large' | 'secret' | 'outside' | 'unknown'

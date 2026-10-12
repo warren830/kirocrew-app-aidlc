@@ -30,7 +30,7 @@ import type {
   DeliveryReport, DeliveryResponse, DiagnosticsBundle, DirectoryResponse, DoctorResponse, EventPollResponse,
   HealthResponse, HostChatReceipt, IntentCreateResponse, IntentResponse,
   IntentsResponse, MapResponse, MaintenancePreview, MaintenanceResult, Organize, PauseResponse, PlanAdviseRequest, PlanPreviewResponse,
-  PlanRequest, PreflightResponse, PreviewPlanResponse,
+  PlanRequest, PlanScopesResponse, PreflightResponse, PreviewPlanResponse,
   RecomposePreviewResponse, RecomposeResponse, RemoveRepoResponse, RepoDetailResponse,
   RepoGitResponse, RepoResponse, ReposResponse, RescanResponse, ResolvePayload, ResolveResponse,
   ReviewResponse, SettingsResponse, SettingsValues, SourceChangesResponse, SubmitReceipt, HostSlot,
@@ -233,6 +233,8 @@ export interface StudioApi extends WorkspaceApi {
   review(repoId: string, intentKey: string, o?: ReadOptions): Promise<ReviewResponse>
   /** The files a stage's `source-manifest.json` lists, each diffed against HEAD. */
   changes(repoId: string, intentKey: string, filter: { stage: string; unit?: string }, o?: ReadOptions): Promise<SourceChangesResponse>
+  /** Every scope the installed engine defines, described and counted, for comparing them before one is picked. */
+  planScopes(repoId: string, o?: ReadOptions): Promise<PlanScopesResponse>
   planPreview(repoId: string, body: PlanRequest): Promise<PlanPreviewResponse>
   /** Ask the Advisor to propose the plan settings for an intent that does not exist yet (202; FR-NEW-006). */
   requestPlanDraft(repoId: string, body: PlanAdviseRequest): Promise<AdvisorDraftResponse>
@@ -375,6 +377,7 @@ export function useStudioApi(): StudioApi {
       review: (repoId, intentKey, o) => get(intentPath(repoId, intentKey, '/review'), o),
       changes: (repoId, intentKey, filter, o) =>
         get(intentPath(repoId, intentKey, `/changes${query({ ...filter })}`), o),
+      planScopes: (repoId, o) => get(repoPath(repoId, '/intents/plan/scopes'), o),
       planPreview: (repoId, body) => post(repoPath(repoId, '/intents/plan/preview'), body),
       requestPlanDraft: (repoId, body) => post(repoPath(repoId, '/intents/plan/advise'), body),
       createIntent: (repoId, body) => post(repoPath(repoId, '/intents'), body),

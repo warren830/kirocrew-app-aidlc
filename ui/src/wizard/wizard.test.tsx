@@ -691,6 +691,35 @@ describe('the new intent wizard', () => {
   })
 })
 
+describe('scope cards before one is picked', () => {
+  it('describes and counts every installed scope, and keeps the exact count for the picked one', async () => {
+    installRoutes({
+      [`GET ${BASE}/repos/r_1/intents/plan/scopes`]: () => ({
+        graph_stage_count: 33,
+        scopes: [
+          { name: 'bugfix', description: 'Fix a specific bug', stages: 9 },
+          { name: 'express', description: 'Lightest run: requirements to deploy', stages: 10 },
+        ],
+      }),
+    })
+    mount()
+    await toPreset()
+    const express = await screen.findByRole('button', { name: /^express/ })
+    await waitFor(() => expect(express).toHaveTextContent('Runs 10 of 33 stages as installed; select it for the exact plan.'))
+    expect(express).toHaveTextContent('Lightest run: requirements to deploy')
+    expect(express).not.toHaveTextContent('Select it to read the exact stage count')
+    expect(scopeButton('bugfix')).toHaveTextContent('Fix a specific bug')
+  })
+
+  it('names no count it could not read from the repository', async () => {
+    installRoutes()
+    mount()
+    await toPreset()
+    await pickScope('bugfix')
+    expect(scopeButton('feature')).toHaveTextContent('Select it to read the exact stage count from the installed graph.')
+  })
+})
+
 describe('async scope previews', () => {
   function deferred<T>() {
     let resolve!: (value: T) => void

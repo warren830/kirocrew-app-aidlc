@@ -160,6 +160,16 @@ def test_artifacts_lists_metadata_and_filters_by_stage_and_kind(api, repo):
 
 
 
+
+def test_plan_scopes_describes_and_counts_every_installed_scope(api, repo):
+    """The wizard compares scopes before picking one: their own descriptions, and their grid's stage counts."""
+    status, body = api("GET", f"/repos/{repo.repo_id}/intents/plan/scopes")
+    assert status == 200 and body["graph_stage_count"] > 0
+    rows = {row["name"]: row for row in body["scopes"]}
+    assert "express" in rows and 0 < rows["express"]["stages"] <= body["graph_stage_count"]
+    assert rows["express"]["description"], "the scope's own frontmatter, read from the repository"
+    assert list(rows) == sorted(rows)
+
 def test_changes_needs_a_stage_and_says_when_it_listed_no_writes(api, repo):
     """The code a gate approves comes from the stage's source manifest; a stage without one names none."""
     assert refusal(api("GET", base(repo, "/changes"))) == (400, "bad_param")

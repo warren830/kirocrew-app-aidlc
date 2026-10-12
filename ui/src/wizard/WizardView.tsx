@@ -42,7 +42,8 @@ import { useI18n } from '../i18n'
 import { StudioApiError } from '../lib/api'
 import { DEFAULT_SPACE, type Navigate, type StudioRoute } from '../lib/route'
 import type {
-  EffectivePlan, IntentCreateResponse, IntentsResponse, PlanDepth, PlanIssue, PlanRequest, RepoRecord,
+  EffectivePlan, IntentCreateResponse, IntentsResponse, PlanDepth, PlanIssue, PlanRequest, PlanScopesResponse,
+  RepoRecord,
 } from '../lib/types'
 import { useResource } from '../lib/useResource'
 import { canonicalJson, sha256Hex } from './digest'
@@ -155,6 +156,11 @@ export function refusedSlugs(issue: PlanIssue): string[] {
 }
 
 /** The scope names this repository defines, as reported by the `scope_unknown` refusal. */
+/** The installed catalog's scopes, then any the engine's refusal named that the catalog did not. */
+export function mergeScopes(catalog: readonly string[], known: readonly string[]): string[] {
+  return [...catalog, ...known.filter((name) => !catalog.includes(name))]
+}
+
 export function knownScopesFrom(plan: EffectivePlan | null): string[] {
   const issue = plan?.issues.find((entry) => entry.code === 'scope_unknown')
   const known = issue?.params['known']
@@ -262,6 +268,12 @@ export function WizardView({ route, go }: WizardViewProps) {
     { interval: 0, revalidateOn: ['intent.updated', 'repo.updated', 'reset'] },
   )
   const activeSpace = inventory.data?.active_space ?? ''
+  // What each scope card says before it is picked: the installed scopes' own descriptions and grid counts.
+  const catalog = useResource<PlanScopesResponse>(
+    repo && !blocked ? `wizard-scopes:${repo.repo_id}` : null,
+    useCallback((signal) => api.planScopes(state.repo, { signal }), [api, state.repo]),
+    { interval: 0, revalidateOn: ['repo.updated', 'reset'] },
+  )
   const spaces = inventory.data?.spaces ?? []
 
   const previewSequence = useRef(0)
@@ -667,7 +679,8 @@ export function WizardView({ route, go }: WizardViewProps) {
         {step === 'preset' ? (
           <StepPreset
             state={state}
-            scopes={scopes}
+            scopes={mergeScopes(catalog.data?.scopes.map((row) => row.name) ?? [], scopes)}
+            catalog={catalog.data ?? null}
             meta={meta}
             plan={plan}
             unreadable={Boolean(previewError)}
