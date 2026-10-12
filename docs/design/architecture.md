@@ -79,7 +79,7 @@ kirocrew-app-aidlc/                     (published as awslabs/aidlc-workflows/in
 ```json
 {
   "name": "aidlc-studio",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "displayName": "AI-DLC Studio",
   "description": "Cross-repository Action Center, Workflow Map, plan composer, transactional installer and evidence trail for AI-DLC Workflows. Every workflow decision travels through the intent's own AI-DLC conversation; Studio never edits AI-DLC state.",
   "author": "ychchen",

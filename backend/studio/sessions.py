@@ -121,6 +121,9 @@ NOTIFY_KIND = "aidlc_studio"
 #: after Studio started — and nothing would ever call it again to discover otherwise.
 HOST_PROBE_TTL_SECS = 30.0
 
+#: Re-read one session's queued-subagent count from the host's task store at most this often.
+QUEUE_DEPTH_REFRESH_SECS = 1.0
+
 #: Ordered exactly as §1.11 lists them; the tuple is the golden order a test pins, because the first
 #: reason is what the UI shows the user as "why can I not send this".
 BUSY_REASONS = (
@@ -472,6 +475,9 @@ class HostBridge:
         self._probed_at: float | None = None
         self._notify_kwargs: tuple[str, ...] = ("meta", "url")
         self._turn_timeout: int | None = None
+        self._queued: dict[str, int] = {}
+        self._queued_at: dict[str, float] = {}
+        self._queued_reads: dict[str, asyncio.Task[None]] = {}
         self._reset(REASON_NOT_ATTACHED)
 
     # ---- attachment ------------------------------------------------------- #
@@ -491,6 +497,8 @@ class HostBridge:
         if state is not self._state:
             self._state = state
             self._turn_timeout = None
+            self._queued.clear()
+            self._queued_at.clear()
         self._probe()
 
     def attached(self) -> bool:
@@ -1204,25 +1212,57 @@ class HostBridge:
             self._mark("subagents", False, _missing("state.subagents"))
             return 0, 0
         running = 0
-        queued = 0
         try:
             rows = manager.running_agents_for(session_key)
             running = len(list(rows or ()))
         except (AttributeError, TypeError, KeyError) as exc:
             self._miss("subagents", _unusable("state.subagents.running_agents_for"), exc)
             return 0, 0
+        self._ok("subagents")
+        return running, self._queued_count(manager, session_key)
+
+    def _queued_count(self, manager: Any, session_key: str) -> int:
+        """Part of the queue lives in the host's task store, which the gateway loop must not read synchronously:
+        a contended SQLite busy wait would stall every session's turn (KiroCrew warns, and raises in dev mode).
+        On the loop this answers the last count read for the session and fetches the next one through the
+        host's async entry, so a view is at most a tick behind; with no loop running it reads live."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return self._queued_now(manager, session_key)
+        now = self._clock.monotonic()
+        last = self._queued_at.get(session_key)
+        if session_key not in self._queued_reads and (last is None or now - last >= QUEUE_DEPTH_REFRESH_SECS):
+            self._queued_at[session_key] = now
+            task = loop.create_task(self._read_queued(manager, session_key), name="aidlc-studio-queue-depth")
+            self._queued_reads[session_key] = task
+            task.add_done_callback(lambda _done, key=session_key: self._queued_reads.pop(key, None))
+        return self._queued.get(session_key, 0)
+
+    def _queued_now(self, manager: Any, session_key: str) -> int:
         # `_queued_depth` is the name §1.11 pins; `queued_count_for` is its public twin. Trying both
         # keeps a queued wave visible on either host generation instead of reading as "no pending work".
         for name in ("_queued_depth", "queued_count_for"):
             probe = getattr(manager, name, None)
             if callable(probe):
                 try:
-                    queued = _count(probe(session_key))
-                    break
+                    return _count(probe(session_key))
                 except (AttributeError, TypeError, KeyError) as exc:
                     self._log.debug("subagent queue depth unreadable via %s: %s", name, exc)
-        self._ok("subagents")
-        return running, queued
+        return 0
+
+    async def _read_queued(self, manager: Any, session_key: str) -> None:
+        read = getattr(manager, "queued_count_for_async", None)
+        try:
+            if callable(read):
+                count = await read(session_key)
+            else:  # a host without the async entry: its synchronous one, off the loop
+                count = await asyncio.to_thread(self._queued_now, manager, session_key)
+        except Exception as exc:  # the store may be locked or gone: keep the last count, the next view retries
+            self._log.debug("subagent queue depth unreadable: %s", exc)
+            return
+        if getattr(self._state, "subagents", None) is manager:
+            self._queued[session_key] = _count(count)
 
 
 #: The host's own implicit-owner subjects (``source_providers._LOCAL_DASHBOARD_OWNER_SUBJECTS``). Copied
