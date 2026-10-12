@@ -28,6 +28,7 @@ import { Btn } from '@kirocrew/app-sdk/ui'
 import { Icon } from '../shell/Icon'
 import { useI18n } from '../i18n'
 import type { ActionCard, DecisionSpec, ResolvePayload, SubmitPayload } from '../lib/types'
+import { WIRE } from '../lib/wire.generated'
 import { beforeSend, type SubmitState } from './useSubmit'
 
 /** The panel's DOM id, so the control that opened it can point at it with `aria-controls`. */
@@ -62,6 +63,9 @@ export interface ConfirmPanelProps {
   /** Opens the intent's conversation panel, offered when the send is blocked for want of a bound session. */
   onOpenSession?: () => void
 }
+
+/** Longest wire text the label line quotes inline. */
+const INLINE_WIRE_MAX = 80
 
 export function ConfirmPanel({
   card, pending, submit, busy, refreshing, acknowledged, onAcknowledge, onSend, onCancel, onOpenBlockingAction,
@@ -112,6 +116,10 @@ export function ConfirmPanel({
   const settled = submit.stage === 'settled' && submit.actionId === card.action_id
   const serverWire = submit.receipt?.wire_text ?? null
   const mismatch = settled && sendsWire && serverWire !== null && serverWire !== pending.wire
+  // The label line quotes a short text; a long one is shown once, in full, in the block under it.
+  const inline = pending.wire !== null && pending.wire.length <= INLINE_WIRE_MAX && !pending.wire.includes('\n')
+  const deliveryNote = pending.wire !== null &&
+    [WIRE.GROUPED_ANSWER_SUFFIX, WIRE.AUDIT_GROUPED_ANSWER_SUFFIX].some((suffix) => pending.wire?.endsWith(suffix))
 
   return (
     <section className="studio-confirm" id={CONFIRM_PANEL_ID} role="group" aria-label={t('confirm.label')}>
@@ -123,13 +131,16 @@ export function ConfirmPanel({
       {sendsWire ? (
         <>
           <p className="studio-confirm-label">
-            {t('confirm.labelSends', { label, wire: pending.wire ?? t('confirm.noWireText') })}
+            {pending.wire === null || inline
+              ? t('confirm.labelSends', { label, wire: pending.wire ?? t('confirm.noWireText') })
+              : t('confirm.labelSendsBelow', { label })}
           </p>
           {pending.wire === null ? null : (
             // `<pre>`, not a paragraph: every byte matters and collapsed whitespace would hide a
             // difference the conductor will not forgive.
             <pre className="studio-sendtext studio-wrap-any">{pending.wire}</pre>
           )}
+          {deliveryNote ? <p className="studio-muted">{t('confirm.deliveryNote')}</p> : null}
         </>
       ) : (
         <p className="studio-confirm-label">

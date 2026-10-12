@@ -27,6 +27,8 @@
   "confirm.hostControlHint": "至多一次：Studio 会在发出停止请求之前先记录它，之后只做对账而不会重复请求。",
   "confirm.label": "确认",
   "confirm.labelSends": "按钮：{label} → 发送：{wire}",
+  "confirm.labelSendsBelow": "按钮：{label} → 原样发送下面的文字：",
+  "confirm.deliveryNote": "最后一段是 Studio 写给 AI-DLC 的投递说明：请它把你的回答记录为一次回复。它也是发送内容的一部分。",
   "confirm.mismatch": "KiroCrew 记录的文本与本页显示的不一致。下面是实际发送的内容。",
   "confirm.noWireText": "暂无内容",
   "confirm.routing": "将作为你本人的消息发送到 {repo}/{intent} 的规范会话 {session}。AI-DLC 会把它记录为你的回复，并自行完成变更。Studio 不会修改 aidlc-state.md，也不会绕过 AI-DLC 的任何检查。",

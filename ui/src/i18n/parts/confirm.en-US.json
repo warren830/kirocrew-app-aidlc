@@ -27,6 +27,8 @@
   "confirm.hostControlHint": "At most once: Studio records the stop request before making it, and reconciles rather than repeating it.",
   "confirm.label": "Confirmation",
   "confirm.labelSends": "Button: {label} → sends: {wire}",
+  "confirm.labelSendsBelow": "Button: {label} → sends the text below, exactly:",
+  "confirm.deliveryNote": "The last paragraph is Studio's delivery note to AI-DLC: it asks the agent to record your answers as one reply. It is part of the text sent.",
   "confirm.mismatch": "KiroCrew recorded different text from what this page displayed. What was actually sent is below.",
   "confirm.noWireText": "nothing yet",
   "confirm.routing": "Sent as your own message to the canonical session {session} for {repo}/{intent}. AI-DLC records it as your reply and makes the change itself. Studio does not edit aidlc-state.md or bypass any of AI-DLC's checks.",
