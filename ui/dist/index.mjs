@@ -1078,6 +1078,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"intents.action.a11y": "Actions for {intent}",
 	"intents.action.archive": "Archive",
 	"intents.action.bindSession": "Bind a conversation",
+	"intents.action.completedNoop": "The workflow is complete: there is no turn left to pause and no stage left to change.",
 	"intents.action.details": "Workflow Map",
 	"intents.action.openAction": "Open decision",
 	"intents.action.pause": "Pause after current turn",
@@ -3446,6 +3447,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"intents.action.a11y": "{intent} 的操作",
 	"intents.action.archive": "归档",
 	"intents.action.bindSession": "绑定会话",
+	"intents.action.completedNoop": "工作流已完成：没有可暂停的回合，也没有可调整的阶段。",
 	"intents.action.details": "工作流地图",
 	"intents.action.openAction": "打开决策",
 	"intents.action.pause": "当前回合结束后暂停",
@@ -13296,7 +13298,7 @@ function so({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 	]), O = !!t.session?.slot_key, k = ro(t, p) ?? (O ? null : p("intents.run.disabledUnbound")), A = !!t.disk.parked_at, j = t.disk.status === "Running" && !t.archived, M = j ? null : p("plan.issue.recompose_not_allowed", {
 		required_status: "Running",
 		status: t.disk.status ?? p("common.unavailable")
-	}), N = g === "run" || g === "resume", P = g === "archive" && T, F = (e) => e.code === "action_not_submittable" && e.details.operation === "archive" ? e.details.reason === "in_flight" ? p("intents.archive.inFlight") : J(f, "intents.archive.pauseFirst", Math.max(1, t.open_actions)) : e.known ? p(`errors.${e.code}`) : e.message;
+	}), N = t.disk.status === "Completed", P = N ? p("intents.action.completedNoop") : null, F = g === "run" || g === "resume", I = g === "archive" && T, L = (e) => e.code === "action_not_submittable" && e.details.operation === "archive" ? e.details.reason === "in_flight" ? p("intents.archive.inFlight") : J(f, "intents.archive.pauseFirst", Math.max(1, t.open_actions)) : e.known ? p(`errors.${e.code}`) : e.message;
 	return /* @__PURE__ */ h("div", {
 		className: "studio-col studio-intent-actions",
 		role: "group",
@@ -13383,14 +13385,16 @@ function so({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 					l ? /* @__PURE__ */ m("button", {
 						type: "button",
 						className: "studio-btn studio-btn-sm",
-						disabled: v || t.archived,
+						disabled: v || t.archived || N,
+						...P ? { title: P } : {},
 						onClick: () => l(t),
 						children: p("workspace.settings.title")
 					}) : null,
 					/* @__PURE__ */ h("button", {
 						type: "button",
 						className: "studio-btn studio-btn-sm",
-						disabled: v || t.archived,
+						disabled: v || t.archived || N && !t.paused,
+						...P && !t.paused ? { title: P } : {},
 						onClick: () => _(t.paused ? "unpause" : "pause"),
 						children: [/* @__PURE__ */ m(X, {
 							name: t.paused ? "play" : "pause",
@@ -13423,7 +13427,7 @@ function so({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 					size: 13
 				}), /* @__PURE__ */ m("span", {
 					className: "studio-grow",
-					children: F(b)
+					children: L(b)
 				})]
 			}) : null,
 			/* @__PURE__ */ m(ao, { run: C }),
@@ -13440,9 +13444,9 @@ function so({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 					e.key === "Escape" && _(null);
 				},
 				children: [
-					/* @__PURE__ */ m("h3", { children: p(P ? "intents.confirm.archive.pauseFirst.title" : `intents.confirm.${g}.title`) }),
-					/* @__PURE__ */ m("p", { children: P ? J(f, "intents.confirm.archive.pauseFirst.body", t.open_actions) : p(`intents.confirm.${g}.body`, { text: N ? to(g) : "" }) }),
-					g === "archive" && !P && t.open_actions > 0 ? /* @__PURE__ */ h("p", {
+					/* @__PURE__ */ m("h3", { children: p(I ? "intents.confirm.archive.pauseFirst.title" : `intents.confirm.${g}.title`) }),
+					/* @__PURE__ */ m("p", { children: I ? J(f, "intents.confirm.archive.pauseFirst.body", t.open_actions) : p(`intents.confirm.${g}.body`, { text: F ? to(g) : "" }) }),
+					g === "archive" && !I && t.open_actions > 0 ? /* @__PURE__ */ h("p", {
 						className: "studio-consequence",
 						children: [/* @__PURE__ */ m(X, {
 							name: "info",
@@ -13465,7 +13469,7 @@ function so({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 							ref: S,
 							disabled: v,
 							onClick: () => void D(),
-							children: N ? p("intents.start.send", { text: to(g) }) : p(P ? "intents.confirm.archive.pauseFirst.go" : "intents.confirm.go")
+							children: F ? p("intents.start.send", { text: to(g) }) : p(I ? "intents.confirm.archive.pauseFirst.go" : "intents.confirm.go")
 						}), /* @__PURE__ */ m("button", {
 							type: "button",
 							className: "studio-btn studio-btn-sm",

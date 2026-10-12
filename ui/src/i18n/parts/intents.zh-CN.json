@@ -98,6 +98,7 @@
   "intents.action.resume": "继续",
   "intents.action.pause": "当前回合结束后暂停",
   "intents.action.pauseIdle": "暂停",
+  "intents.action.completedNoop": "工作流已完成：没有可暂停的回合，也没有可调整的阶段。",
   "intents.action.unpause": "重新允许派发",
   "intents.action.openAction": "打开决策",
   "intents.action.details": "工作流地图",

@@ -130,6 +130,10 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
         status: intent.disk.status ?? t('common.unavailable'),
       })
 
+  // A finished workflow has no turn left to pause and no stage left to rescope.
+  const completed = intent.disk.status === 'Completed'
+  const completedReason = completed ? t('intents.action.completedNoop') : null
+
   const starting = pending === 'run' || pending === 'resume'
   const pauseFirst = pending === 'archive' && archiveNeedsPause
 
@@ -214,7 +218,8 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
           {t('intents.action.recompose')}
         </button>
         {onSettings ? (
-          <button type="button" className="studio-btn studio-btn-sm" disabled={busy || intent.archived}
+          <button type="button" className="studio-btn studio-btn-sm" disabled={busy || intent.archived || completed}
+            {...(completedReason ? { title: completedReason } : {})}
             onClick={() => onSettings(intent)}>
             {t('workspace.settings.title')}
           </button>
@@ -223,7 +228,8 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
         <button
           type="button"
           className="studio-btn studio-btn-sm"
-          disabled={busy || intent.archived}
+          disabled={busy || intent.archived || (completed && !intent.paused)}
+          {...(completedReason && !intent.paused ? { title: completedReason } : {})}
           onClick={() => setPending(intent.paused ? 'unpause' : 'pause')}
         >
           <Icon name={intent.paused ? 'play' : 'pause'} size={13} />

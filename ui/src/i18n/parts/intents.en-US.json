@@ -98,6 +98,7 @@
   "intents.action.resume": "Resume",
   "intents.action.pause": "Pause after current turn",
   "intents.action.pauseIdle": "Pause",
+  "intents.action.completedNoop": "The workflow is complete: there is no turn left to pause and no stage left to change.",
   "intents.action.unpause": "Allow dispatch again",
   "intents.action.openAction": "Open decision",
   "intents.action.details": "Workflow Map",

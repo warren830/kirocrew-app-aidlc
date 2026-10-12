@@ -1065,6 +1065,7 @@
   "intents.action.a11y": "Actions for {intent}",
   "intents.action.archive": "Archive",
   "intents.action.bindSession": "Bind a conversation",
+  "intents.action.completedNoop": "The workflow is complete: there is no turn left to pause and no stage left to change.",
   "intents.action.details": "Workflow Map",
   "intents.action.openAction": "Open decision",
   "intents.action.pause": "Pause after current turn",

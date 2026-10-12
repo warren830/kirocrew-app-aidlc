@@ -196,6 +196,22 @@ describe('the intents inventory', () => {
     expect(api.pause).not.toHaveBeenCalled()
   })
 
+  it('offers no pause or rescope once the workflow is complete', () => {
+    const done = { ...INTENT, disk: { ...INTENT.disk, status: 'Completed' } }
+    render(
+      <I18nProvider>
+        <IntentActions api={{} as StudioApi} intent={done} onGo={() => {}} onQueued={() => {}} onChanged={() => {}}
+          onRecompose={() => {}} onSession={() => {}} onSettings={() => {}} />
+      </I18nProvider>,
+    )
+    const en = makeI18n('en-US')
+    const why = en.t('intents.action.completedNoop')
+    expect(screen.getByRole('button', { name: en.t('intents.action.pauseIdle') })).toBeDisabled()
+    expect(screen.getByRole('button', { name: en.t('intents.action.pauseIdle') })).toHaveAttribute('title', why)
+    expect(screen.getByRole('button', { name: en.t('workspace.settings.title') })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Archive' })).toBeEnabled()
+  })
+
   it('points at the Action Center when the run could not be sent', async () => {
     const runnable = { ...INTENT, operational_state: 'Idle' as const,
       counts: { ...INTENT.counts, awaiting_approval: 0 } }
