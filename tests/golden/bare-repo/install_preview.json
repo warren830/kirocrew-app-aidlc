@@ -3977,10 +3977,10 @@
    "state_version_blocked": false,
    "state_versions_found": [],
    "state_versions_unreadable": [],
-   "studio_version": "1.1.6",
+   "studio_version": "2.0.0-beta.1",
    "warnings": []
   },
-  "plan_digest": "c7c8af34451caed8d7955a7997fe33d46c01bb3636cbd9cc287690af2ccf6622"
+  "plan_digest": "c2586133acfc71eff61616cd21b5433ef90afdd26645039079ce6389df4888b3"
  },
  "status": 200
 }

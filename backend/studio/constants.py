@@ -33,7 +33,7 @@ def _installed_name(module_name: str) -> str:
 
 APP_NAME = _installed_name(__name__)
 #: Must equal ``app.json`` ``version`` (pinned by tests/test_manifest.py).
-APP_VERSION = "1.1.6"
+APP_VERSION = "2.0.0-beta.1"
 #: Must equal ``app.json`` ``minKiroCrewVersion``: the 0.8 loader registers the app's parent packages, which is
 #: what lets ``backend/routes.py`` import ``studio`` relatively.
 MIN_KIROCREW_VERSION = "0.8.0"

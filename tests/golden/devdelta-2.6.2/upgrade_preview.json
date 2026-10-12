@@ -4138,10 +4138,10 @@
     8
    ],
    "state_versions_unreadable": [],
-   "studio_version": "1.1.6",
+   "studio_version": "2.0.0-beta.1",
    "warnings": []
   },
-  "plan_digest": "8d83e0cad054844012a68968235414543413d70b960abec342e192bee2cdefa7"
+  "plan_digest": "5d3567b6aa6775491d2eac8b6574faadd99ce1217fd10b174e69e2a94f060330"
  },
  "status": 200
 }

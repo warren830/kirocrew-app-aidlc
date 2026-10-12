@@ -168,3 +168,4 @@
 - **P3 · `map_*`（2026-10-08）**：`GET …/map` 不再返回拼好的模型，改为返回原始事实 `map_inputs`（阶段图节点、状态行、产物、跳过原因、各阶段最近一次尝试的起止时间、服务器 `now`）。原因：拼装只是展示（合并、分组、计数），按 P3 移到 `ui/src/map/buildMap.ts`，后端只留一个收集事实的方法；界面拿到的模型不变。
   等价性：`buildMap` 用新录的 9 份输入重放 v1 的 9 份流程图金样，逐字段一致（`ui/src/map/golden/` 永久保留 3 份）；另把 Python 流程图测试的 35 次调用和 480 个随机快照的新旧拼装结果一次性逐个比对，全部一致。
 - **P5 · `repo`、`intents`、`intent_*`（2026-10-08）**：`IntentSummary`（以及继承它的 intent 详情）去掉 `keep_moving` 字段，共 19 个视图、27 行，均只删这一个键；原因：机器通道已删，该字段恒为 `false`，前端也不再读。同阶段去掉的流程图 `?density=` 参数本来就被忽略，金样请求不带它，没有视图变化。
+- **P8 · `install_preview`（bare-repo）、`upgrade_preview`（devdelta-2.6.2）（2026-10-12）**：`studio_version` 1.1.6 → 2.0.0-beta.1，以及把它算进去的 `plan_digest`。原因：v2 改为以 `aidlc-studio-v2` 与 1.x 并排安装的测试版，版本号要能和 1.x 区分开。别的字段没变。

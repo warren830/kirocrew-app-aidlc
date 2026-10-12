@@ -9,6 +9,12 @@ never around it.
 
 ![The Action Center with an approval gate and its evidence](assets/screenshots/action-center-gate.png)
 
+> **This is the v2 branch (2.0.0 beta).** Same features as 1.x on a backend 40% smaller, for KiroCrew 0.8+.
+> It installs next to 1.x under its own name and keeps its own database:
+> `bash scripts/dev-slug.sh aidlc-studio-v2 --label "AI-DLC Studio v2"`. Because the two do not share install
+> receipts, upgrade or uninstall the repositories 1.x installed from 1.x, and answer each intent's decisions in one
+> Studio only (each opens its own conversation). Progress and what changed: [`docs/plan.md`](docs/plan.md).
+
 ## Why Studio
 
 AI-DLC is rigorous by design. It has five phases, 33 stages and 14 specialist agents, and it stops for a
