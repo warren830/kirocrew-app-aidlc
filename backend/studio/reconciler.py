@@ -1109,6 +1109,15 @@ class Reconciler:
         if decision == "approve_plan":
             return self._plan_approval_row(rec, snap, questions, stage, digest_changed, seen)
 
+        if decision == "resume":
+            # Offered when the plan was asked in an earlier session: resumed, AI-DLC asks it again in this one. The
+            # card closes either way once the turn ends, and the next scan offers whatever is waiting then.
+            asked = self._plan_rows(rec, snap, stage, "DECISION_RECORDED")
+            if asked:
+                return Resolution("no_transition", "plan_asked_again",
+                                  {**seen, "plan_asked_again": _json_of(max(asked, key=_event_order))})
+            return Resolution("no_transition", "resumed_without_reask", seen)
+
         if decision == "request_plan_changes":
             plan = _attr(questions, "plan_approval")
             seen["plan_answer"] = answer = str(_attr(plan, "answer", "") or "").strip()
@@ -1205,16 +1214,20 @@ class Reconciler:
         ]
 
     def _plan_asked_again(self, rec: Any, snap: Any, stage: Any) -> dict[str, Any] | None:
-        """AI-DLC put this plan to the person again after the reply and recorded no answer to it: the engine refused
-        the reply (2.10 records only an offered choice) or it never reached the hook. Settling the card lets the next
-        scan open a fresh one for the prompt that is waiting; the reply is never resent and nothing is approved."""
-        asked = self._plan_rows(rec, snap, stage, "DECISION_RECORDED")
-        if not asked or self._plan_rows(rec, snap, stage, "PLAN_APPROVAL_RECORDED", "QUESTION_ANSWERED"):
+        """AI-DLC recorded no answer to this plan after the reply, and either refused it (2.10 records only an
+        offered choice, in the session that asked) or put the plan to the person again. Settling the card lets the
+        next scan open a fresh one for what is waiting — another approval, or a resume when the question belongs to
+        an earlier session; the reply is never resent and nothing is approved."""
+        if self._plan_rows(rec, snap, stage, "PLAN_APPROVAL_RECORDED", "QUESTION_ANSWERED"):
             return None
+        asked = self._plan_rows(rec, snap, stage, "DECISION_RECORDED")
         refusals = [event for event in self._new_events(rec, snap, (C.ERROR_EVENT,), None)
                     if "Plan Approval" in _error_text(event)]
+        if not asked and not refusals:
+            return None
         return {
-            "answer_verified": False, "plan_asked_again": _json_of(max(asked, key=_event_order)),
+            "answer_verified": False,
+            "plan_asked_again": _json_of(max(asked, key=_event_order)) if asked else None,
             "refusal": _error_text(max(refusals, key=_event_order)) if refusals else None,
         }
 

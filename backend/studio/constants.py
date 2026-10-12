@@ -222,7 +222,7 @@ ACTION_TYPE = (
 #: runtime (``gate`` on the last stage, ``run``); ``tests/test_constants.py`` checks seeds and overrides against it.
 CARD_CONSEQUENCE_VARIANTS: dict[str, tuple[str, ...]] = {
     "gate": ("approve_unlocks", "final_stage"),
-    "question": ("advances_turn",),
+    "question": ("advances_turn", "plan_session_stale"),
     "recovery": ("blocked_until_agree",),
     "delivery_uncertain": ("no_replay",),
     "failure": ("no_dispatch",),
@@ -315,7 +315,7 @@ DECISIONS: dict[str, tuple[str, ...]] = {
     "gate": ("approve", "request_changes", "accept_as_is"),
     "question": (
         "answers", "confirm_summary", "accept_assumptions", "convert_assumptions", "approve_plan",
-        "request_plan_changes",
+        "request_plan_changes", "resume",
     ),
     "missing_input": ("provide_input", "pick_intent"),
     "recovery": ("rebind_session", "mark_not_delivered", "acknowledge"),

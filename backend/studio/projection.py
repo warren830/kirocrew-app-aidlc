@@ -1051,6 +1051,12 @@ class Projection:
             # and a checkpoint confirmation must not skip them.
             pending, checkpoint = questions.pending_count, questions.pending_checkpoint
             decisions = (["answers"] if pending > 0 else []) + list(_CHECKPOINT_DECISIONS.get(checkpoint, ()))
+            # AI-DLC 2.10 binds a Plan Approval to the conversation session that asked it. Once the host has
+            # started a new session (a long idle restarts it), no reply can be recorded: AI-DLC must ask again
+            # in this one, which a resumed run does. Offering Approve would send a reply bound to be refused.
+            stale = checkpoint == "plan_approval" and _plan_asked_in_an_earlier_session(snap)
+            if stale:
+                decisions = [d for d in decisions if d not in _CHECKPOINT_DECISIONS["plan_approval"]] + ["resume"]
             seeds.append(self._seed(
                 snap, "question", snap.stage, base, self._question_asked_at(snap),
                 # the host wants input the file does not show: answer in the file's own vocabulary
@@ -1058,7 +1064,8 @@ class Projection:
                 {"stage": snap.stage, "pending": pending, "checkpoint": checkpoint},
                 token=questions.sha256 if snap.stage is not None else None,
                 consequence=(
-                    checkpoint if pending == 0 and checkpoint in C.QUESTION_CHECKPOINT_KINDS else "__default__"
+                    "plan_session_stale" if stale and pending == 0
+                    else checkpoint if pending == 0 and checkpoint in C.QUESTION_CHECKPOINT_KINDS else "__default__"
                 ),
                 reason=checkpoint or ("needs_input" if needs_input and pending == 0 else "questions"),
             ))
@@ -1549,6 +1556,23 @@ def _repo_label(card: Any) -> tuple[str, str]:
 
 def _repo_id_of(card: Any) -> str:
     return str(_attr(_attr(card, "repo", {}), "repo_id", "") or "")
+
+
+def _plan_asked_in_an_earlier_session(snap: IntentSnapshot) -> bool:
+    """Did AI-DLC ask this unit's Plan Approval in a session the conversation has since left? The newest
+    plan-approval ``DECISION_RECORDED`` names its session; a later ``SESSION_STARTED`` or ``HUMAN_TURN`` naming
+    another one means a reply now reaches a session that holds no challenge for it."""
+    unit = snap.unit or None
+    events = list(snap.audit.events)
+    asked = [event for event in events if event.event == "DECISION_RECORDED"
+             and event.fields.get("Checkpoint") == C.PLAN_APPROVAL_AUDIT_CHECKPOINT
+             and (event.fields.get("Unit") or None) == unit and event.fields.get("Session")]
+    if not asked:
+        return False
+    newest = max(asked, key=lambda event: event.sort_key)
+    later = [event for event in events if event.event in ("SESSION_STARTED", "HUMAN_TURN")
+             and event.sort_key > newest.sort_key and event.fields.get("Session")]
+    return bool(later) and max(later, key=lambda event: event.sort_key).fields["Session"] != newest.fields["Session"]
 
 
 def _run_review_class(snap: IntentSnapshot, node: StageNode | None) -> str | None:

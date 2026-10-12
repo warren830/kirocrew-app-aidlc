@@ -571,6 +571,24 @@ describe('questions template', () => {
     expect(screen.queryByText(en.t('template.questions.fileSource'))).toBeNull()
   })
 
+  it('explains a plan asked in an earlier session and offers no change request it could not record', () => {
+    setApiRoutes({})
+    const view = questionsView({
+      stage: 'code-generation', questions: [], pending_count: 0, pending_checkpoint: 'plan_approval',
+      plan_approval: { kind: 'plan_approval', present: true, answered: false, answer: null, options: [], context: null },
+    })
+    mount(QuestionsTemplate, card({
+      type: 'question',
+      headline: { key: 'action.question.headline', params: {} },
+      consequence: { key: 'action.question.consequence.plan_session_stale', params: {} },
+      decisions: [spec('resume', [])],
+      primary: { decision: 'resume', label_key: 'decision.resume.label' },
+      evidence: { ...card().evidence, questions: view, artifacts: [] },
+    }))
+    expect(screen.getByText(/asked for this approval in an earlier session/)).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /Change request feedback/ })).toBeNull()
+  })
+
   it('renders the ordered group with its prompts and option labels verbatim', () => {
     setApiRoutes({})
     mount(QuestionsTemplate, questionCard())

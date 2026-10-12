@@ -650,8 +650,28 @@ def test_a_plan_reply_aidlc_refused_and_asked_again_settles_unverified(svc, scen
     assert evidence["answer_verified"] is False and evidence["refusal"].startswith("Refusing to record Plan Approval")
 
 
+def test_a_refused_plan_reply_settles_even_when_aidlc_does_not_ask_again(svc, scene, fake_host):
+    """In a session that did not ask it, the reply is refused and the agent may stop without re-asking; the card
+    must not wait forever. The next scan offers a resume, which makes AI-DLC ask again in this session."""
+    _questions_file(scene, PLAN)
+    action_id = ended_turn(svc, scene, fake_host, "Approve Plan", REFUSAL, decision="approve_plan", after=PLAN)
+    row = svc.storage.get("actions", action_id)
+    assert (row["status"], row["resolution_json"]["reason"]) == ("ResolvedNoTransition", "plan_reply_not_recorded")
+
+
+@pytest.mark.parametrize("blocks,reason", [
+    pytest.param(lambda scene: (_plan_row(scene, "DECISION_RECORDED"),), "plan_asked_again", id="asked-again"),
+    pytest.param(lambda scene: (), "resumed_without_reask", id="not-asked"),
+])
+def test_resuming_a_plan_from_an_earlier_session_closes_when_the_turn_ends(svc, scene, fake_host, C, blocks, reason):
+    _questions_file(scene, PLAN)
+    action_id = ended_turn(svc, scene, fake_host, C.WIRE_RESUME, *blocks(scene), decision="resume", after=PLAN,
+                           payload={"decision": "resume"})
+    row = svc.storage.get("actions", action_id)
+    assert (row["status"], row["resolution_json"]["reason"]) == ("ResolvedNoTransition", reason)
+
+
 @pytest.mark.parametrize("blocks", [
-    pytest.param(lambda scene: (REFUSAL,), id="refused-but-not-asked-again"),
     pytest.param(lambda scene: (_plan_row(scene, "DECISION_RECORDED"), _plan_row(scene, "PLAN_APPROVAL_RECORDED",
                                                                                   Details="Approve Plan")),
                  id="asked-again-after-recording-the-answer"),

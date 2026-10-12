@@ -639,6 +639,34 @@ def test_question_card_decisions_follow_the_pending_checkpoint(projection, snap_
     assert question.consequence_variant == checkpoint and question.dedupe_key.endswith(snap.questions.sha256)
 
 
+PLAN_TEXT = "# Q\n\n## Plan Approval\n\n- Approve Plan\n- Request Changes\n\n[Answer]:\n"
+
+
+def _plan_asked(session: str, ts: str = "2026-09-04T09:01:00Z") -> str:
+    return F.audit_block("DECISION_RECORDED", ts, Stage=GATE_STAGE, Checkpoint="Code Generation Plan Approval",
+                         Session=session)
+
+
+@pytest.mark.parametrize("audit,stale", [
+    pytest.param(_plan_asked("s-1") + F.audit_block("HUMAN_TURN", "2026-09-04T09:02:00Z", Session="s-1"), False,
+                 id="same-session"),
+    pytest.param(_plan_asked("s-1") + F.audit_block("SESSION_STARTED", "2026-09-04T12:00:00Z", Session="s-2")
+                 + F.audit_block("HUMAN_TURN", "2026-09-04T12:00:02Z", Session="s-2"), True, id="restarted"),
+    pytest.param(F.audit_block("SESSION_STARTED", "2026-09-04T08:00:00Z", Session="s-0") + _plan_asked("s-1"), False,
+                 id="asked-after-the-restart"),
+])
+def test_a_plan_asked_in_an_earlier_session_is_resumed_not_approved(projection, snap_of, repo_builder, audit, stale):
+    """2.10 records a plan reply only in the session that asked; after a restart Approve could only be refused."""
+    snap = snap_of(build(repo_builder, "plan_approval", state=F.state_text(marks={GATE_STAGE: "-"}, fields=RUNNING),
+                         audit=STARTED_AUDIT + audit, questions={QUESTIONS_REL: PLAN_TEXT}))
+    question = _by_type(_seeds(projection, snap))["question"]
+    if stale:
+        assert question.decisions == ("resume",) and question.consequence_variant == "plan_session_stale"
+    else:
+        assert question.decisions == ("approve_plan", "request_plan_changes")
+        assert question.consequence_variant == "plan_approval"
+
+
 def test_blank_question_group_yields_one_atomic_card(projection, snap_of, question_repo):
     """FR-Q-002/D13: one group is one card, never one card per question."""
     snap = snap_of(question_repo)

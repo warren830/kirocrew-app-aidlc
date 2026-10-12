@@ -33,5 +33,6 @@
   "action.question.consequence.assumption_confirmation": "你的回复会接受列出的假设，或者把它们转成追问，然后再继续此阶段。",
   "action.question.plan_approval.headline": "{stage} 正在等待你批准计划。",
   "action.question.consequence.summary_confirmation": "你的回复会确认已记录的汇总或要求修改，然后再继续此阶段。",
-  "action.question.consequence.plan_approval": "你的回复会批准已记录的计划或要求修改，然后再继续实施。"
+  "action.question.consequence.plan_approval": "你的回复会批准已记录的计划或要求修改，然后再继续实施。",
+  "action.question.consequence.plan_session_stale": "AI-DLC 是在会话之前的一个 session 里请求这次审批的，会话之后已重新开始，所以它已无法记录对那次请求的回复。请恢复工作流：AI-DLC 会在当前 session 里重新请求审批，届时会出现一张新卡片让你作答。"
 }

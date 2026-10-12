@@ -20,6 +20,7 @@
   "action.question.consequence.advances_turn": "Your answers are sent as one message, and the conversation continues from them.",
   "action.question.consequence.assumption_confirmation": "Your reply accepts the listed assumptions or turns them into follow-up questions before the stage continues.",
   "action.question.consequence.plan_approval": "Your reply approves the recorded plan or requests changes before implementation continues.",
+  "action.question.consequence.plan_session_stale": "AI-DLC asked for this approval in an earlier session of the conversation, which has since restarted, so it cannot record a reply to it any more. Resume the workflow: AI-DLC asks for the approval again in this session, and a new card lets you answer it.",
   "action.question.consequence.summary_confirmation": "Your reply confirms the recorded summary or requests changes before the stage continues.",
   "action.question.headline": "{stage} cannot continue until you answer its open questions. {pending} still pending.",
   "action.question.plan_approval.headline": "{stage} is waiting for you to approve its plan.",
