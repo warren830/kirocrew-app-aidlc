@@ -22,7 +22,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { isAbort, StudioApiError } from './api'
-import { useStudioEvents } from './sse'
+import { useStudioEvents, type StreamEvent } from './sse'
 import type { StudioEventType } from './types'
 
 /** Poll cadence while something is in flight (§3.6). */
@@ -65,8 +65,34 @@ export interface ResourceOptions<T> {
   enabled?: boolean
 }
 
+/** A read on the wire: `seen` is the newest announced change it was issued after. */
+interface Flight {
+  promise: Promise<unknown>
+  order: number
+  seen: number
+}
+
 /** In-flight requests by key, so two subscribers in one tick share one HTTP call. */
-const inflight = new Map<string, Promise<unknown>>()
+const inflight = new Map<string, Flight>()
+let flights = 0
+
+/**
+ * Announced changes, numbered. Every subscriber is handed the same event object, so the first one to
+ * see it numbers it and the rest reuse that number: a read issued for the change is then shared, while a
+ * read issued *before* it is not (it may predate the change, and joining it left a view stale until the
+ * next poll: the wizard said "AI-DLC is not installed" a minute after the install committed).
+ */
+let announced = 0
+const numbered = new WeakMap<object, number>()
+
+function announcement(event: StreamEvent): number {
+  let n = numbered.get(event)
+  if (n === undefined) {
+    n = ++announced
+    numbered.set(event, n)
+  }
+  return n
+}
 
 const LIVE_STATUSES: readonly string[] = ['Delivering', 'Delivered']
 
@@ -162,6 +188,8 @@ export function useResource<T>(
   fetcherRef.current = fetcher
   const keyRef = useRef(key)
   const mounted = useRef(true)
+  // The newest read this hook applied: an older read that lands late must not overwrite it.
+  const applied = useRef(0)
 
   useEffect(() => {
     mounted.current = true
@@ -174,22 +202,27 @@ export function useResource<T>(
   // previous action's evidence under the new action's title.
   useEffect(() => {
     keyRef.current = key
+    applied.current = 0
     setData(null)
     setError(null)
   }, [key])
 
-  const run = useCallback(async (): Promise<void> => {
+  // `after`: the number of the change this read must reflect; omitted for a poll or a first read.
+  const read = useCallback(async (after?: number): Promise<void> => {
     const current = keyRef.current
     if (current === null || !enabled) return
+    const accept = (flight: Flight, value: T) => {
+      if (mounted.current && keyRef.current === current && flight.order >= applied.current) {
+        applied.current = flight.order
+        setData(value)
+        setError(null)
+      }
+    }
     const shared = inflight.get(current)
-    if (shared) {
-      // Someone else is already asking. Wait for their answer instead of asking again.
+    if (shared && (after === undefined || shared.seen >= after)) {
+      // Someone else is already asking, after the change this read is for. Share their answer.
       try {
-        const value = (await shared) as T
-        if (mounted.current && keyRef.current === current) {
-          setData(value)
-          setError(null)
-        }
+        accept(shared, (await shared.promise) as T)
       } catch {
         // The owner of the request reports its own failure; a waiter re-reporting it would show the
         // same banner twice.
@@ -199,25 +232,24 @@ export function useResource<T>(
 
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-    const promise = fetcherRef.current(controller.signal)
-    inflight.set(current, promise)
+    const flight: Flight = { promise: fetcherRef.current(controller.signal), order: ++flights, seen: announced }
+    inflight.set(current, flight)
     setPending((n) => n + 1)
     try {
-      const value = await promise
-      if (mounted.current && keyRef.current === current) {
-        setData(value)
-        setError(null)
-      }
+      accept(flight, (await flight.promise) as T)
     } catch (caught) {
-      if (mounted.current && keyRef.current === current && !isAbort(caught)) {
+      if (mounted.current && keyRef.current === current && !isAbort(caught) && flight.order >= applied.current) {
         setError(caught instanceof StudioApiError ? caught : new StudioApiError('internal_error', String(caught), {}, 0))
       }
     } finally {
       clearTimeout(timer)
-      if (inflight.get(current) === promise) inflight.delete(current)
+      if (inflight.get(current) === flight) inflight.delete(current)
       if (mounted.current) setPending((n) => Math.max(0, n - 1))
     }
   }, [enabled])
+  const run = useCallback(() => read(), [read])
+  // A caller that just changed something asks for a read issued after its change.
+  const refresh = useCallback(() => read(++announced), [read])
 
   // First read, and a fresh read whenever the key changes.
   useEffect(() => {
@@ -252,9 +284,9 @@ export function useResource<T>(
   // route that owns it. Applying event payloads directly would give the UI a second, thinner copy of
   // the read model that drifts from the one the backend serialises.
   useStudioEvents(
-    useCallback(() => {
-      void run()
-    }, [run]),
+    useCallback((event: StreamEvent) => {
+      void read(announcement(event))
+    }, [read]),
     revalidateOn,
   )
 
@@ -264,9 +296,9 @@ export function useResource<T>(
       error,
       loading: pending > 0 && data === null,
       stale: pending > 0,
-      refresh: run,
-      refetch: run,
+      refresh,
+      refetch: refresh,
     }),
-    [data, error, pending, run],
+    [data, error, pending, refresh],
   )
 }

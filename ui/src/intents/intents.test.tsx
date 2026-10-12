@@ -37,7 +37,7 @@ const INTENT = {
     next_stage: '2.4 nfr-requirements', state_version: 6, total_stages: 33, completed: 7,
     revision_count: 1, parked_at: null, last_updated: '2026-09-05T08:00:00Z',
   },
-  counts: { total: 33, not_started: 20, in_progress: 1, awaiting_approval: 1, revising: 0, completed: 7, skipped: 4, done: 11, unknown: 0 },
+  counts: { total: 33, not_started: 20, in_progress: 1, awaiting_approval: 1, revising: 0, completed: 7, skipped: 4, done: 11, unknown: 0, planned: 0, planned_done: 0 },
   open_actions: 2, blocking_findings: 0, warn_findings: 1,
   session: { slot_key: 's1', session_key: 'ses_1', running: false, bound_at: '2026-09-05T07:00:00Z' },
   archived: false, paused: false, interrupted: false,
@@ -47,6 +47,17 @@ const INTENT = {
 afterEach(() => window.history.replaceState(null, '', '/apps/aidlc-studio'))
 
 describe('the intents inventory', () => {
+  it('measures progress against the stages the plan runs, not the whole graph', () => {
+    const express = { ...INTENT, counts: { ...INTENT.counts, planned: 7, planned_done: 3 } } as IntentSummary
+    render(
+      <I18nProvider>
+        <IntentList intents={[express]} failures={[]} narrow={false} renderActions={() => null} />
+      </I18nProvider>,
+    )
+    expect(screen.getByText('3 of 7 planned stages')).toBeInTheDocument()
+    expect(screen.queryByText('11 of 33 stages')).toBeNull()
+  })
+
   it('renders a row with its state and stage, and no keep-moving column', () => {
     render(
       <I18nProvider>
@@ -480,6 +491,10 @@ describe('the canonical conversation panel', () => {
     expect(apiCalls.find((call) => call.path === `${BASE}/actions/a_run/submit`)?.body).toMatchObject({
       payload: { decision: 'run' }, client_wire_text: '/aidlc',
     })
+    // Started here, so running: no "Not running", and no second /aidlc on offer.
+    expect(screen.getByText('A turn is running')).toBeInTheDocument()
+    expect(screen.queryByText('Not running')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Start the workflow (sends /aidlc)' })).toBeNull()
   })
 
   it('creates and binds only, sending nothing, when asked to', async () => {

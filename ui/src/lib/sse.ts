@@ -66,7 +66,8 @@ interface Bus {
   subscribe: (handler: Handler) => () => void
 }
 
-const BusContext = createContext<Bus | null>(null)
+/** Exported so a hook test can hand events to subscribers without standing up a transport. */
+export const BusContext = createContext<Bus | null>(null)
 const StatusContext = createContext<StreamStatus>({ mode: 'offline', cursor: null, attempts: 0 })
 
 export interface EventStreamProviderProps {

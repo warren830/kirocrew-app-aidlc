@@ -22,6 +22,7 @@
   "intents.col.stage": "Stage",
   "intents.col.actions": "Actions",
   "intents.stage.progress": "{done} of {total} stages",
+  "intents.stage.progressPlanned": "{done} of {total} planned stages",
   "intents.stage.none": "No stage recorded yet",
   "intents.stage.next": "next {stage}",
   "intents.openActions_one": "{n} decision waiting",

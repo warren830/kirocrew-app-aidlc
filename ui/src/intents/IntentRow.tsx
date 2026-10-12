@@ -114,10 +114,15 @@ export function IntentRow({ intent, layout, actions }: IntentRowProps) {
     <>
       <span className="studio-mono studio-wrap-any">{stageText(i18n, intent)}</span>
       <span className="studio-row-sub">
-        {t('intents.stage.progress', {
-          done: count(i18n, intent.counts.done),
-          total: count(i18n, intent.counts.total),
-        })}
+        {intent.counts.planned > 0
+          ? t('intents.stage.progressPlanned', {
+              done: count(i18n, intent.counts.planned_done),
+              total: count(i18n, intent.counts.planned),
+            })
+          : t('intents.stage.progress', {
+              done: count(i18n, intent.counts.done),
+              total: count(i18n, intent.counts.total),
+            })}
       </span>
       {intent.disk.next_stage ? (
         <span className="studio-row-sub studio-mono">{t('intents.stage.next', { stage: intent.disk.next_stage })}</span>

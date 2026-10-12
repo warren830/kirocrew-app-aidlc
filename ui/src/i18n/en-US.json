@@ -1109,6 +1109,7 @@
   "intents.stage.next": "next {stage}",
   "intents.stage.none": "No stage recorded yet",
   "intents.stage.progress": "{done} of {total} stages",
+  "intents.stage.progressPlanned": "{done} of {total} planned stages",
   "intents.start.go": "Start the workflow (sends {text})",
   "intents.start.notSent": "{text} was not sent ({reason}). The command is waiting in the Action Center as {action}.",
   "intents.start.refused": "{text} was not sent: {reason}",

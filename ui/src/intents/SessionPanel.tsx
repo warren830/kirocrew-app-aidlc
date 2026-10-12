@@ -201,13 +201,20 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
    */
   const [confirmed, setConfirmed] = useState<{ value: Bound | null } | null>(null)
 
-  const bound = confirmed ? confirmed.value : fromSession(intent.session)
+  const row = fromSession(intent.session)
+  // The confirmation outranks the row only until the row names the same conversation. From then on the row
+  // is the live one: it learns that the turn started, which a confirmation taken at bind time never will (it
+  // kept saying "Not running" and offering a second /aidlc while the first was running).
+  const caughtUp = !!confirmed?.value && row?.slotKey === confirmed.value.slotKey
+  const bound = confirmed && !caughtUp ? confirmed.value : row
   const wanted = canonicalSlotKey(intent.repo_id, intent.intent_dir)
   const run = useStartRun(api, () => onChanged())
   const kind = startKind(intent)
-  // A just-bound conversation is idle; the inventory row's `running` is one poll behind.
-  const blocked = startBlockedReason(bound ? { ...intent, session: null } : intent, t)
-    ?? (bound?.running ? t('intents.run.disabledRunning') : null)
+  // A start this panel just delivered is running even before the row says so.
+  const started = run.state.stage === 'settled' && run.state.attempt?.outcome === 'delivered'
+  // A just-bound conversation is idle; the inventory row's `running` is one poll behind until it catches up.
+  const blocked = startBlockedReason(bound && !caughtUp ? { ...intent, session: null } : intent, t)
+    ?? (bound?.running || started ? t('intents.run.disabledRunning') : null)
   const stepLabel = (step: number): string => t(STEP_KEYS[step - 1] ?? STEP_KEYS[0])
 
   const fail = useCallback((caught: unknown, step: number) => {
@@ -385,8 +392,8 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
                 key: 'state',
                 label: t('intents.session.fact.state'),
                 value: (
-                  <Chip icon={bound.running ? 'play' : 'clock'} tone={bound.running ? 'ok' : 'neutral'}>
-                    {bound.running ? t('intents.session.running') : t('intents.session.idle')}
+                  <Chip icon={bound.running || started ? 'play' : 'clock'} tone={bound.running || started ? 'ok' : 'neutral'}>
+                    {bound.running || started ? t('intents.session.running') : t('intents.session.idle')}
                   </Chip>
                 ),
               },

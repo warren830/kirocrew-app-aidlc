@@ -196,6 +196,8 @@
     "done": 7,
     "in_progress": 1,
     "not_started": 25,
+    "planned": 33,
+    "planned_done": 7,
     "revising": 0,
     "skipped": 0,
     "total": 33,

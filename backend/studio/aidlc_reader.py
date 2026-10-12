@@ -389,6 +389,11 @@ def parse_state_file(text: str) -> StateFile:
     for state_name in C.STAGE_STATE:
         counts[state_name] = sum(1 for row in stages if row.state == state_name)
     counts["done"] = sum(counts[name] for name in C.DONE_STAGE_STATES)
+    # The rows the plan runs (`— EXECUTE`): progress is measured against these, as the engine's own
+    # "Progress: 5/8 in-scope stages" is. 0 for a state file that marks no plan, and then `total` is all there is.
+    planned = [row for row in stages if (row.suffix or "").upper().startswith("EXECUTE")]
+    counts["planned"] = len(planned)
+    counts["planned_done"] = sum(1 for row in planned if row.state in C.DONE_STAGE_STATES)
 
     def named(title: str) -> dict[str, str]:
         return dict(sections.get(title, {}))

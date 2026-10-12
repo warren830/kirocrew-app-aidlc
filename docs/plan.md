@@ -173,3 +173,4 @@
 - **P8 · `install_preview`（bare-repo）、`upgrade_preview`（devdelta-2.6.2）（2026-10-12）**：`studio_version` 1.1.6 → 2.0.0-beta.1，以及把它算进去的 `plan_digest`。原因：v2 改为以 `aidlc-studio-v2` 与 1.x 并排安装的测试版，版本号要能和 1.x 区分开。别的字段没变。
 - **P8 · 待办卡片的 `deep_link`（2026-10-12）**：6 个场景中 12 个视图共 16 行，`/apps/aidlc-studio?…` → `/apps/aidlc-studio-v2?…`。原因：v2 改用自己的应用名，链接按运行时的名字生成。逐行核对过：把新值里的名字换回去就与旧金样完全相同。
 - **P8 · payload-2.3.0 卡片的 `evidence.review.review_class`（2026-10-12）**：4 个视图共 6 行，`null` → `"advisory"`。原因：卡片上的评审类型改成按本次运行实际会做的评审来算：阶段图里的类型，再按 scope 的上限和状态文件里的 Review Override 封顶，和计划矩阵用同一条规则。2.3.0 的阶段图只有 reviewer、没有类型，计划矩阵一直把它算作 advisory，卡片现在和它一致。反过来，express 这类不跑评审的 scope，卡片不再显示 “advisory review”。
+- **P8 · 每个 intent 视图的 `counts`（2026-10-12）**：6 个场景、19 个视图，各新增 `planned` 和 `planned_done` 两个键，共 54 行，其余不变。原因：intent 列表的进度原来写成“3 of 33 stages”，分母是阶段图的全部阶段；express 只跑 7 个。现在按状态文件里标 `— EXECUTE` 的行算（和引擎自己的 “in-scope stages” 进度一致），没有标的旧文件仍用全部阶段。

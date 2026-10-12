@@ -147,7 +147,7 @@ export interface RepoScan { repo_id: string; availability: Availability; install
 
 // ---- intents ----
 export interface DiskState { status: string | null; lifecycle_phase: string | null; current_stage: string | null; next_stage: string | null; state_version: number | null; total_stages: number | null; completed: number | null; revision_count: number; parked_at: string | null; last_updated: string | null }
-export interface StageCounts { total: number; not_started: number; in_progress: number; awaiting_approval: number; revising: number; completed: number; skipped: number; done: number; unknown: number }
+export interface StageCounts { total: number; not_started: number; in_progress: number; awaiting_approval: number; revising: number; completed: number; skipped: number; done: number; unknown: number; planned: number; planned_done: number }
 export interface IntentSummary { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; uuid: string | null; slug: string; scope: string | null; registry_status: string | null; title: string | null; operational_state: IntentState; disk: DiskState; counts: StageCounts; open_actions: number; blocking_findings: number; warn_findings: number; session: SessionRef | null; archived: boolean; paused: boolean; interrupted: boolean; last_activity_at: string | null; stable_boundary: StableBoundary | null; unstable: boolean; is_active_cursor: boolean }
 export interface StageRow { slug: string; mark: string; state: StageState; phase: string | null; suffix: string | null }
 export interface AuditEventView { shard: string; pos: number; timestamp: string; event: string; fields: Record<string, string>; raw: string }

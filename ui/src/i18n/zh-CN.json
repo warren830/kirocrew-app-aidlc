@@ -1109,6 +1109,7 @@
   "intents.stage.next": "下一个 {stage}",
   "intents.stage.none": "尚未记录阶段",
   "intents.stage.progress": "{total} 个阶段中已完成 {done} 个",
+  "intents.stage.progressPlanned": "计划的 {total} 个阶段中已完成 {done} 个",
   "intents.start.go": "开始运行（发送 {text}）",
   "intents.start.notSent": "{text} 没有发出去（{reason}），命令留在待办中心：{action}。",
   "intents.start.refused": "{text} 没有发送：{reason}",
