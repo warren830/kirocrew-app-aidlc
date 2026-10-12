@@ -40,6 +40,7 @@ from .aidlc_reader import (
     StageRow,
     StateFile,
     boundary_token,
+    effective_review_class,
     evidence_digest,
     file_questions_support_forms,
     latest_event,
@@ -774,7 +775,7 @@ class Projection:
             "complete": snap.audit.complete,
         }
         node = snap.node(target)
-        review_class = node.review_class if node is not None else None
+        review_class = _run_review_class(snap, node)
         review_json: dict | None = None
         if bundle.review is not None:
             verdict, found = bundle.review
@@ -782,7 +783,7 @@ class Projection:
                 "verdict": verdict,
                 "findings": [f.to_json() for f in found],
                 "reviewer": next((f.reviewer for f in found if f.reviewer), None)
-                or (node.reviewer if node is not None else None),
+                or (node.reviewer if node is not None and review_class is not None else None),
                 "review_class": review_class,
                 "iteration": next((f.iteration for f in found if f.iteration is not None), None),
                 # False when the findings were in a shape Studio could not enumerate: an empty list then means
@@ -1539,3 +1540,17 @@ def _repo_label(card: Any) -> tuple[str, str]:
 
 def _repo_id_of(card: Any) -> str:
     return str(_attr(_attr(card, "repo", {}), "repo_id", "") or "")
+
+
+def _run_review_class(snap: IntentSnapshot, node: StageNode | None) -> str | None:
+    """The class this run reviews the stage at: the graph's, capped by the intent's scope and its Review
+    Override (the planner's rule). ``None`` when the caps turn review off: ``express`` runs no reviewer, so a
+    card showing the graph's "advisory" would promise a review that never happens."""
+    if node is None:
+        return None
+    state = snap.state
+    scope = (state.project.get("Scope") or "").strip() if state is not None else ""
+    meta = next((s for s in snap.scopes if s.name == scope), None)
+    override = (state.scope_config.get("Review Override") or "").strip() or None if state is not None else None
+    effective = effective_review_class(node, (meta.review_cap if meta is not None else None, override))
+    return None if effective == "none" else effective

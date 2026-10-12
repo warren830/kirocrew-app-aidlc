@@ -1284,3 +1284,24 @@ def test_no_seed_offers_a_decision_its_type_does_not_allow(projection, snap_of, 
     # every decision these four repositories can offer was exercised (`provide_input` needs an empty `Scope`)
     assert {d for _, d in seen} == {"approve", "request_changes", "answers", "confirm_summary", "pick_intent",
                                     "acknowledge", "mark_not_delivered", "rebind_session", "retry_now", "keep_paused"}
+
+
+# --- the review a card promises is the one this run performs ---
+def _review_snap(scope: str, override: str = "", scopes: tuple = ()) -> Any:
+    from types import SimpleNamespace as NS
+    return NS(state=NS(project={"Scope": scope}, scope_config={"Review Override": override}), scopes=scopes)
+
+
+@pytest.mark.parametrize(("scope_cap", "override", "node_class", "reviewer", "expected"), [
+    ("none", "", "advisory", "aidlc-product-lead-agent", None),        # express: no reviewer runs
+    (None, "", "adversarial", "aidlc-architect-agent", "adversarial"),
+    (None, "advisory", "adversarial", "aidlc-architect-agent", "advisory"),   # the state's override caps it
+    ("advisory", "", "adversarial", "aidlc-architect-agent", "advisory"),
+    (None, "", None, "aidlc-reviewer", "advisory"),                    # an older graph: a reviewer, no class
+    (None, "", None, None, None),
+])
+def test_a_cards_review_class_is_capped_like_the_plan(proj_mod, scope_cap, override, node_class, reviewer, expected):
+    from types import SimpleNamespace as NS
+    snap = _review_snap("s", override, scopes=(NS(name="s", review_cap=scope_cap),))
+    assert proj_mod._run_review_class(snap, NS(review_class=node_class, reviewer=reviewer)) == expected
+    assert proj_mod._run_review_class(snap, None) is None

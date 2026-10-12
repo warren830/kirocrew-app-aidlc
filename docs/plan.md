@@ -172,3 +172,4 @@
 - **P5 · `repo`、`intents`、`intent_*`（2026-10-08）**：`IntentSummary`（以及继承它的 intent 详情）去掉 `keep_moving` 字段，共 19 个视图、27 行，均只删这一个键；原因：机器通道已删，该字段恒为 `false`，前端也不再读。同阶段去掉的流程图 `?density=` 参数本来就被忽略，金样请求不带它，没有视图变化。
 - **P8 · `install_preview`（bare-repo）、`upgrade_preview`（devdelta-2.6.2）（2026-10-12）**：`studio_version` 1.1.6 → 2.0.0-beta.1，以及把它算进去的 `plan_digest`。原因：v2 改为以 `aidlc-studio-v2` 与 1.x 并排安装的测试版，版本号要能和 1.x 区分开。别的字段没变。
 - **P8 · 待办卡片的 `deep_link`（2026-10-12）**：6 个场景中 12 个视图共 16 行，`/apps/aidlc-studio?…` → `/apps/aidlc-studio-v2?…`。原因：v2 改用自己的应用名，链接按运行时的名字生成。逐行核对过：把新值里的名字换回去就与旧金样完全相同。
+- **P8 · payload-2.3.0 卡片的 `evidence.review.review_class`（2026-10-12）**：4 个视图共 6 行，`null` → `"advisory"`。原因：卡片上的评审类型改成按本次运行实际会做的评审来算：阶段图里的类型，再按 scope 的上限和状态文件里的 Review Override 封顶，和计划矩阵用同一条规则。2.3.0 的阶段图只有 reviewer、没有类型，计划矩阵一直把它算作 advisory，卡片现在和它一致。反过来，express 这类不跑评审的 scope，卡片不再显示 “advisory review”。

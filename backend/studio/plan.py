@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
 from . import constants as C
-from .aidlc_reader import match_intent_row
+from .aidlc_reader import REVIEW_CAPS, effective_review_class, match_intent_row
 from .errors import StudioError
 from .estimates import Estimate, EstimateService
 from .wire import WireRecord
@@ -34,9 +34,6 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 DEPTHS = ("Minimal", "Standard", "Comprehensive")
 TEST_STRATEGIES = DEPTHS
-REVIEW_CAPS = ("none", "advisory", "adversarial")
-#: The effective review class is the *minimum* rank of stage, scope cap and request cap.
-REVIEW_RANK = {name: rank for rank, name in enumerate(REVIEW_CAPS)}
 
 LOCK_ALWAYS, LOCK_COMPLETED, LOCK_CURRENT, LOCK_AT_GATE = "always", "completed", "current", "at_gate"
 LOCK_BEHIND_CURSOR, LOCK_NOT_IN_GRAPH = "behind_cursor", "not_in_graph"
@@ -822,7 +819,7 @@ class PlanService:
                 slug=slug, number=node.number if known else "", name=node.name if known else slug, phase=phase,
                 execution=node.execution if known else "", in_grid=bool(base.get(slug)), enabled=is_enabled,
                 locked=reason is not None, lock_reason=reason, gate=phase != "initialization",
-                review_class=_effective_review_class(node, caps), reviewer=node.reviewer if known else None,
+                review_class=effective_review_class(node, caps), reviewer=node.reviewer if known else None,
                 per_unit=bool(node.per_unit) if known else False,
                 produces=tuple(node.produces) if known else (),
                 consumes=tuple(c.artifact for c in node.consumes) if known else (),
@@ -1125,18 +1122,6 @@ def _row_selected(row: "StageRow") -> bool:
     if row.state == "skipped":
         return False
     return not (row.suffix or "").strip().upper().startswith("SKIP")
-
-
-def _effective_review_class(node: "StageNode | None", caps: tuple[str | None, str | None]) -> str:
-    """``min(stage class, scope cap, request cap)`` by rank; a reviewer without a class counts as advisory."""
-    if node is None:
-        return "none"
-    base = node.review_class if node.review_class in REVIEW_CAPS else ("advisory" if node.reviewer else "none")
-    rank = REVIEW_RANK[base]
-    for cap in caps:
-        if cap in REVIEW_RANK:
-            rank = min(rank, REVIEW_RANK[cap])
-    return REVIEW_CAPS[rank]
 
 
 def _best_lock(reasons: Sequence[str | None]) -> str | None:

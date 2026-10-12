@@ -647,6 +647,23 @@ class Consume(WireRecord):
     conditional_on: str | None
 
 
+REVIEW_CAPS = ("none", "advisory", "adversarial")
+#: The effective review class is the *minimum* rank of stage, scope cap and request cap.
+REVIEW_RANK = {name: rank for rank, name in enumerate(REVIEW_CAPS)}
+
+
+def effective_review_class(node: "StageNode | None", caps: tuple[str | None, ...]) -> str:
+    """``min(stage class, scope cap, request cap)`` by rank; a reviewer without a class counts as advisory."""
+    if node is None:
+        return "none"
+    base = node.review_class if node.review_class in REVIEW_CAPS else ("advisory" if node.reviewer else "none")
+    rank = REVIEW_RANK[base]
+    for cap in caps:
+        if cap in REVIEW_RANK:
+            rank = min(rank, REVIEW_RANK[cap])
+    return REVIEW_CAPS[rank]
+
+
 @dataclass(frozen=True, slots=True)
 class StageNode(WireRecord):
     """One ``stage-graph.json`` stage, keyed on ``slug``; keys old graphs lack are empty (FORMAT-NOTES §11.7)."""
