@@ -315,7 +315,7 @@ export interface IntentsResponse { intents: IntentSummary[]; spaces: string[]; a
 export interface ArtifactsResponse { artifacts: ArtifactMeta[]; truncated: boolean; count: number }
 export interface ArtifactResponse { artifact: ArtifactMeta; content: string | null; encoding: 'utf-8' | 'binary'; truncated: boolean; review: { verdict: string | null; findings: ReviewFinding[] } | null; toc: { level: number; text: string; anchor: string }[]; prior: { available: boolean; source: 'git' | null; diff: string | null } }
 export interface ReviewResponse { stage: string | null; verdict: string | null; findings: ReviewFinding[]; receipts: { event: string; ts: string; reviewer: string | null; iteration: number | null; verdict: string | null; fingerprint: string | null }[]; review_class: string | null; reviewer: string | null; revisions: number }
-export interface RepoGitResponse { git: GitObservation; owned_dirty: string[]; unrelated_dirty: number }
+export interface RepoGitResponse { git: GitObservation; owned_dirty: string[]; unrelated_dirty: number; owned_uncommitted?: number }
 export interface BindingResponse { ok: true; binding: BindingView }
 /** `slot` is `null` once unbound, and when the host has no such slot. */
 export interface BindResponse { ok: true; binding: BindingView; slot: SlotView | null }

@@ -69,15 +69,21 @@ async def get_repo(services: Any, request: web.Request) -> web.Response:
 
 async def repo_git(services: Any, request: web.Request) -> web.Response:
     """Drift in files Studio installed blocks an upgrade; the user's unrelated work must not, so the two
-    are counted apart (FR-GIT-004)."""
+    are counted apart (FR-GIT-004). A receipt-owned file Git calls changed but whose bytes still match the
+    receipt is Studio's own output not committed yet (a fresh install is all untracked), not a local change."""
     repo = await repo_or_404(services, request.match_info["repo_id"])
     root = Path(repo.canonical_path)
     observation = await asyncio.to_thread(services.git.observe, root)
     receipt = await asyncio.to_thread(services.installer.current_receipt, repo.repo_id)
     owned = [f.path for f in receipt.files] if receipt is not None else []
     split = await asyncio.to_thread(services.git.dirty_split, root, owned)
-    return json_ok({"git": observation.to_json(), "owned_dirty": split["owned_dirty"],
-                    "unrelated_dirty": int(split["unrelated_dirty"])})
+    drifted = ({entry.path for entry in await asyncio.to_thread(services.installer.drift, repo, receipt)}
+               if receipt is not None else set())
+    owned_dirty = [path for path in split["owned_dirty"] if path in drifted]
+    return json_ok({"git": observation.to_json(), "owned_dirty": owned_dirty,
+                    "unrelated_dirty": int(split["unrelated_dirty"]),
+                    "owned_uncommitted": len(split["owned_dirty"]) - len(owned_dirty)
+                    + len(split.get("owned_untracked_dirs") or ())})
 
 
 async def get_transaction(services: Any, request: web.Request) -> web.Response:

@@ -313,7 +313,7 @@ def test_an_unknown_transaction_is_a_404(api, demo):
 def test_repo_git_reports_the_observation_and_the_owned_dirty_split(api, demo):
     """FR-GIT-004: owned files are named, the user's own work only counted (``fake_git`` answers its defaults)."""
     status, body = api("GET", f"/repos/{demo.repo_id}/git")
-    assert status == 200 and set(body) == {"git", "owned_dirty", "unrelated_dirty"}
+    assert status == 200 and set(body) == {"git", "owned_dirty", "unrelated_dirty", "owned_uncommitted"}
     assert body["git"]["branch"] == "main"
     assert body["owned_dirty"] == []  # no receipt yet, so Studio owns nothing: an unrelated dirty file is never named
     assert isinstance(body["unrelated_dirty"], int)
@@ -330,7 +330,36 @@ def test_repo_git_still_answers_once_a_receipt_exists(sv, api, demo):
         "status": "current"})
     status, body = api("GET", f"/repos/{demo.repo_id}/git")
     assert status == 200, body
-    assert set(body) == {"git", "owned_dirty", "unrelated_dirty"} and isinstance(body["owned_dirty"], list)
+    assert set(body) == {"git", "owned_dirty", "unrelated_dirty", "owned_uncommitted"}
+    assert isinstance(body["owned_dirty"], list)
+
+
+def test_an_owned_file_git_calls_changed_is_a_local_change_only_when_its_bytes_left_the_receipt(
+        sv, api, demo, gate_repo, monkeypatch):
+    """A fresh install is all untracked, and Studio's own bytes are not the user's local change."""
+    import hashlib
+
+    rel = "aidlc/spaces/default/memory/org.md"
+    target = Path(gate_repo) / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("# Org memory\n")
+    sv.storage.insert("install_receipts", {
+        "receipt_id": "rc_1", "repo_id": demo.repo_id, "resolved_repo_identity": demo.resolved_identity,
+        "studio_version": "2.0.0", "engine_version": "2.10.0", "payload_digest": "d" * 64,
+        "committed_at": "2026-10-13T00:00:00Z", "prior_receipt_id": None, "transaction_id": "tx_1",
+        "files_json": [{"path": rel, "ownership": "framework-mutable", "kind": "file",
+                        "sha256": hashlib.sha256(target.read_bytes()).hexdigest(), "canonical_digest": None,
+                        "fragment_key": None, "adopted": False}],
+        "status": "current"})
+    # What `git status` says for a fresh install: the file and the untracked `.kiro/` around Studio's others.
+    monkeypatch.setattr(type(sv.git), "dirty_split", lambda self, root, owned: {
+        "owned_dirty": [rel], "unrelated_dirty": 0, "owned_changes": [{"relpath": rel, "status": "?"}],
+        "owned_untracked_dirs": [".kiro/"], "available": True, "reason": None, "truncated": False})
+    body = api("GET", f"/repos/{demo.repo_id}/git")[1]
+    assert (body["owned_dirty"], body["owned_uncommitted"]) == ([], 2)
+    target.write_text("# Org memory\n\nA line the user added.\n")
+    body = api("GET", f"/repos/{demo.repo_id}/git")[1]
+    assert (body["owned_dirty"], body["owned_uncommitted"]) == ([rel], 1)
 
 
 def test_a_sent_decision_counts_as_in_flight_not_as_waiting_for_you(api, sv, demo):

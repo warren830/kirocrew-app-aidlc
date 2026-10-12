@@ -521,10 +521,20 @@ def test_dirty_split_keeps_receipt_owned_drift_apart_from_the_users_work(obs, sc
     assert split["available"] is True and split["reason"] is None
 
 
+def test_an_untracked_install_directory_is_studios_output_not_the_users_work(obs, scripted, work):
+    """Git lists a fresh install's untracked `.kiro/` as one entry; it holds receipt-owned files."""
+    entries = ("? .kiro/", "? aidlc/", "? notes/", "? AGENTS.md")
+    scripted.plan({"status": {"stdout": status_text(entries=entries)}})
+    split = obs.dirty_split(work, [".kiro/agents/aidlc.json", "aidlc/spaces/default/memory/org.md", "AGENTS.md"])
+    assert split["owned_untracked_dirs"] == [".kiro/", "aidlc/"]
+    assert split["owned_dirty"] == ["AGENTS.md"] and split["unrelated_dirty"] == 1
+
+
 def test_dirty_split_does_not_claim_a_clean_tree_when_git_failed(G, obs, scripted, work):
     scripted.plan({"status": {"exit": 128, "stderr": "fatal: not a git repository\n"}})
     assert obs.dirty_split(work, [".kiro"]) == {"owned_dirty": [], "unrelated_dirty": 0, "owned_changes": [],
-                                                "available": False, "reason": G.REASON_NOT_A_REPO, "truncated": False}
+                                                "owned_untracked_dirs": [], "available": False,
+                                                "reason": G.REASON_NOT_A_REPO, "truncated": False}
 
 
 def test_dirty_split_and_common_dir_over_the_real_repository(observer, gate_repo):

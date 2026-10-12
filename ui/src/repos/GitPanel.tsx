@@ -31,9 +31,11 @@ export function GitSummaryChips({ git }: { git: GitObservation | null }) {
   const i18n = useI18n()
   const { t } = i18n
 
-  if (!git || !git.available) {
+  // Not read is not off: the repository list carries an observation only once a scan has made one.
+  if (!git) return <Chip icon="git">{t('repos.git.notRead')}</Chip>
+  if (!git.available) {
     return (
-      <Chip tone="warn" icon="warn" title={git?.reason ?? undefined}>
+      <Chip tone="warn" icon="warn" title={git.reason ?? undefined}>
         {t('repos.git.unavailable')}
       </Chip>
     )
@@ -107,6 +109,9 @@ export function GitPanel({ api, repoId, enabled }: GitPanelProps) {
                   <Note tone="warn">{t('repos.git.ownedDirty.body')}</Note>
                 </>
               )}
+              {(git.data.owned_uncommitted ?? 0) > 0 ? (
+                <Note>{plural(i18n, 'repos.git.ownedUncommitted', git.data.owned_uncommitted ?? 0)}</Note>
+              ) : null}
               {git.data.unrelated_dirty > 0 ? (
                 <Note>{plural(i18n, 'repos.git.unrelatedDirty', git.data.unrelated_dirty)}</Note>
               ) : null}

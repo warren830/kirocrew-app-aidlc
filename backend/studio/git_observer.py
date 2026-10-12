@@ -381,14 +381,19 @@ class GitObserver:
         owned = [self._safe_rel(repo, path, allow_tree=True) for path in owned_paths if str(path).strip()]
         run = self._run(repo, _STATUS_ARGV, stdout_cap=C.MAX_SUBPROCESS_STDOUT)
         if not run.ok:
-            return {"owned_dirty": [], "unrelated_dirty": 0, "owned_changes": [], "available": False,
-                    "reason": run.failure_reason(), "truncated": False}
+            return {"owned_dirty": [], "unrelated_dirty": 0, "owned_changes": [], "owned_untracked_dirs": [],
+                    "available": False, "reason": run.failure_reason(), "truncated": False}
         whole_tree = "." in owned  # a caller that names the repository root owns everything in it
         changes: list[dict[str, str]] = []
+        install_dirs: list[str] = []
         unrelated = 0
         for path, status in _parse_status(run.text())[1]:
             if whole_tree or any(path == root or path.startswith(root + "/") for root in owned):
                 changes.append({"relpath": path, "status": status})
+            elif path.endswith("/") and any(root.startswith(path) for root in owned):
+                # Git lists an untracked directory as one entry: a fresh install's `.kiro/` and `aidlc/` are
+                # Studio's own output not committed yet, not the user's work.
+                install_dirs.append(path)
             else:
                 unrelated += 1
         changes.sort(key=lambda row: row["relpath"])
@@ -396,6 +401,7 @@ class GitObserver:
             "owned_dirty": [row["relpath"] for row in changes],
             "unrelated_dirty": unrelated,
             "owned_changes": changes,
+            "owned_untracked_dirs": sorted(install_dirs),
             "available": True,
             "reason": None,
             "truncated": run.truncated,
