@@ -157,11 +157,11 @@ pwd
 
    ![Install from Path in the External Registries panel](docs/images/install/install-from-path.png)
 
-3. Open **Library**, find **AI-DLC Studio** and click **Enable**. If it is not listed, check whether
+3. Open **Library**, find **AI-DLC Studio v2** and click **Enable**. If it is not listed, check whether
    **Show enabled only** is on. Once enabled, its **⋯** menu also offers **Sync** (used for updates),
    **Disable** and **Uninstall**.
 
-   ![AI-DLC Studio enabled in Library, with its ⋯ menu open](docs/images/install/library-enable.png)
+   ![AI-DLC Studio v2 enabled in Library, with its ⋯ menu open](docs/images/install/library-enable.png)
 
 4. If KiroCrew opens the app's details and asks for trust, grant it to this app only; blanket
    third-party trust is not needed.
@@ -184,9 +184,9 @@ bash scripts/dev-install.sh --no-build
 ```
 
 The helper installs or updates this checkout in the **local running gateway**, grants trust to
-`aidlc-studio` only, enables its backend, and prints hook and app health. Its defaults match an Apple
+`aidlc-studio-v2` only, enables its backend, and prints hook and app health. Its defaults match an Apple
 Silicon macOS desktop installation: port `5476` and the Python runtime bundled inside
-`/Applications/KiroCrew.app`. Open **Apps → AI-DLC Studio** after installation; the final app-health
+`/Applications/KiroCrew.app`. Open **Apps → AI-DLC Studio v2** after installation; the final app-health
 response should report `"status": "healthy"`.
 
 For Linux, Intel macOS, or a source/virtual-environment installation, set `KC_PY` to the **same Python
@@ -204,7 +204,8 @@ explicit step in **Repos → Add repository → Install AI-DLC**, described unde
 
 ### Install from the GitHub registry
 
-This repository is also an app registry: its `app-registry.json` lists the `release` branch. In
+This repository is also an app registry: its `app-registry.json` lists the `release` branch, so this
+installs the 1.x **AI-DLC Studio** (`aidlc-studio`), not this branch's v2. In
 **Discover → Add source → Add Registry**, add `https://github.com/warren830/kirocrew-app-aidlc` with
 branch `release`, then **Discover → AI-DLC Studio → Install**, and later **Update** when a new release lands. From a
 script, `GET /api/apps/registries` first: `PUT` replaces the whole list, so send your existing rows plus
@@ -220,7 +221,7 @@ Run an update when no Studio operation is active. Pull the new code into your cl
 git pull --ff-only
 ```
 
-For an app installed from a path, click **Library → AI-DLC Studio → ⋯ → Sync**: KiroCrew re-syncs it
+For an app installed from a path, click **Library → AI-DLC Studio v2 → ⋯ → Sync**: KiroCrew re-syncs it
 from its source directory and reloads its backend. For a helper installation, rerun the helper, which
 briefly disables the app to reload its backend hooks:
 
@@ -240,7 +241,7 @@ bash scripts/dev-install.sh       # builds ui/dist/index.mjs, then installs
 `curl` wrapper for the local gateway; use it to check an installation without changing it:
 
 ```bash
-bash scripts/kcapi.sh GET /api/apps/aidlc-studio/health
+bash scripts/kcapi.sh GET /api/apps/aidlc-studio-v2/health
 ```
 
 If token creation or cookie exchange fails, check that KiroCrew is running, `KC_PORT` points to that

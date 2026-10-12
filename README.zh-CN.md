@@ -83,11 +83,11 @@ pwd
 然后在 KiroCrew 里安装并启用：
 
 1. **Discover → Add source**，把上面的路径填入 **Install from Path**，点 **Install**。
-2. **Library → AI-DLC Studio → Enable**。如果提示授予信任，只为这个应用授予即可。
+2. **Library → AI-DLC Studio v2 → Enable**。如果提示授予信任，只为这个应用授予即可。
 
 不方便用界面时，也可以在克隆目录中执行 `bash scripts/dev-install.sh --no-build`。
 
-接着打开 AI-DLC Studio：
+接着打开 AI-DLC Studio v2：
 
 1. **仓库 → 添加仓库**，选择项目目录。Studio 会先做只读预检。
 2. 如果仓库里还没有 AI-DLC，点 **安装 AI-DLC**。写入任何文件之前，你会先看到全部变更。

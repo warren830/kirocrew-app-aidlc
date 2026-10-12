@@ -83,12 +83,12 @@ pwd
 
    ![External Registries 面板下方的 Install from Path](images/install/install-from-path.png)
 
-3. 打开 **Library**，找到 **AI-DLC Studio**，点击 **Enable**。若列表中没有，检查是否开启了 **Show enabled only**。启用后，**⋯** 菜单中还有 **Sync**（更新时使用）、**Disable** 和 **Uninstall**。
+3. 打开 **Library**，找到 **AI-DLC Studio v2**，点击 **Enable**。若列表中没有，检查是否开启了 **Show enabled only**。启用后，**⋯** 菜单中还有 **Sync**（更新时使用）、**Disable** 和 **Uninstall**。
 
-   ![Library 中已启用的 AI-DLC Studio 及其 ⋯ 菜单](images/install/library-enable.png)
+   ![Library 中已启用的 AI-DLC Studio v2 及其 ⋯ 菜单](images/install/library-enable.png)
 
 4. 如果启用时 KiroCrew 打开应用详情并要求授予信任，只为这个应用授予即可，无需开启第三方应用的全局信任。
-5. 启用后，AI-DLC Studio 会出现在侧栏，也可以在 Library 中点击 **Open** 打开。
+5. 启用后，AI-DLC Studio v2 会出现在侧栏，也可以在 Library 中点击 **Open** 打开。
 
 路径必须是 Gateway 所在机器上的目录。这种方式直接使用仓库内置的 UI 构建产物，无需 Node.js、npm 或安装脚本。
 
@@ -100,7 +100,7 @@ pwd
 bash scripts/dev-install.sh --no-build
 ```
 
-脚本会安装或更新当前代码，只为 `aidlc-studio` 授予应用信任，启用后端，并输出健康检查结果。
+脚本会安装或更新当前代码，只为 `aidlc-studio-v2` 授予应用信任，启用后端，并输出健康检查结果。
 
 默认配置对应 Apple Silicon Mac 的桌面版 KiroCrew：
 
@@ -123,14 +123,14 @@ bash scripts/dev-install.sh --no-build
 
 ### 方式三：添加 GitHub registry
 
-本仓库本身就是一个应用 registry，`app-registry.json` 指向 `release` 分支。在 **Discover → Add source** 面板中点击 **Add Registry**，添加 `https://github.com/warren830/kirocrew-app-aidlc`，分支填 `release`，然后在 **Discover → AI-DLC Studio → Install** 安装；有新版本时在同一处 **Update**。如果用脚本调用，请先 `GET /api/apps/registries`：`PUT` 会整体替换列表，因此要把已有条目连同 `{"name": "aidlc-studio", "repo": "https://github.com/warren830/kirocrew-app-aidlc", "branch": "release"}` 一起提交。Gateway 自己克隆 registry，不会继承终端里的代理变量，所以它需要能直接访问 GitHub；无法访问时改用方式一。
+本仓库本身就是一个应用 registry，`app-registry.json` 指向 `release` 分支，因此这种方式安装的是 1.x 版 **AI-DLC Studio**（`aidlc-studio`），不是本分支的 v2。在 **Discover → Add source** 面板中点击 **Add Registry**，添加 `https://github.com/warren830/kirocrew-app-aidlc`，分支填 `release`，然后在 **Discover → AI-DLC Studio → Install** 安装；有新版本时在同一处 **Update**。如果用脚本调用，请先 `GET /api/apps/registries`：`PUT` 会整体替换列表，因此要把已有条目连同 `{"name": "aidlc-studio", "repo": "https://github.com/warren830/kirocrew-app-aidlc", "branch": "release"}` 一起提交。Gateway 自己克隆 registry，不会继承终端里的代理变量，所以它需要能直接访问 GitHub；无法访问时改用方式一。
 
 ## 3. 确认安装结果
 
-**Library** 中的 AI-DLC Studio 应显示为已启用，打开后能正常加载页面。使用安装脚本时，最后的应用健康检查应返回 `"status": "healthy"`。也可在克隆目录中单独执行：
+**Library** 中的 AI-DLC Studio v2 应显示为已启用，打开后能正常加载页面。使用安装脚本时，最后的应用健康检查应返回 `"status": "healthy"`。也可在克隆目录中单独执行：
 
 ```bash
-bash scripts/kcapi.sh GET /api/apps/aidlc-studio/health
+bash scripts/kcapi.sh GET /api/apps/aidlc-studio-v2/health
 ```
 
 ## 4. 给项目安装 AI-DLC
@@ -149,7 +149,7 @@ bash scripts/kcapi.sh GET /api/apps/aidlc-studio/health
 git pull --ff-only
 ```
 
-从本地路径安装的，在 **Library → AI-DLC Studio → ⋯ → Sync** 中从原目录重新同步，KiroCrew 会停止并重新加载应用后端。使用安装脚本的，重新执行脚本，它会短暂禁用应用以重新加载后端：
+从本地路径安装的，在 **Library → AI-DLC Studio v2 → ⋯ → Sync** 中从原目录重新同步，KiroCrew 会停止并重新加载应用后端。使用安装脚本的，重新执行脚本，它会短暂禁用应用以重新加载后端：
 
 ```bash
 bash scripts/dev-install.sh --no-build
@@ -169,7 +169,7 @@ bash scripts/dev-install.sh
 | 现象 | 检查方法 |
 |---|---|
 | Install from Path 提示 `source is not a directory` | 填写 Gateway 所在机器上克隆目录的绝对路径，即克隆目录中 `pwd` 的输出 |
-| Library 中启用后跳到应用详情 | 在详情中为 AI-DLC Studio 授予信任；如仍未启用，再点一次 **Enable** |
+| Library 中启用后跳到应用详情 | 在详情中为 AI-DLC Studio v2 授予信任；如仍未启用，再点一次 **Enable** |
 | `gateway Python not found` | `KC_PY` 指向的解释器不存在或不可执行；将其设置为 Gateway 实际使用的 Python |
 | `could not mint a token` | 确认 Gateway 已启动，`KC_PY` 指向其实际 Python，并由运行 Gateway 的同一系统用户执行命令 |
 | `cookie exchange failed` | 确认 `KC_PORT` 与当前 Gateway 一致，且没有连接到另一套 KiroCrew 实例 |
