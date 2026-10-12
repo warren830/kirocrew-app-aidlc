@@ -37,6 +37,8 @@
   "intents.pausedChip": "已暂停",
   "intents.cursorChip": "AI-DLC 的当前意图",
   "intents.waiting": "已等待 {duration}",
+  "intents.lastActivity": "最近活动于 {when}",
+  "intents.noActivity": "尚无活动",
   "intents.session": "已绑定会话",
   "intents.noSession": "未绑定会话",
   "intents.session.title": "规范会话 — {intent}",

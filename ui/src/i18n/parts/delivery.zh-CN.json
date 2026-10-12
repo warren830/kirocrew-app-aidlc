@@ -23,7 +23,7 @@
   "delivery.state.unchanged": "未记录到变更",
   "delivery.step.delivered": "已发送",
   "delivery.step.processing": "智能体处理中",
-  "delivery.step.queued": "已排队",
+  "delivery.step.queued": "等你决定",
   "delivery.step.reconciliation": "核对工作流",
   "delivery.step.stateChanged": "状态已变更",
   "delivery.step.unchanged": "状态未变更",

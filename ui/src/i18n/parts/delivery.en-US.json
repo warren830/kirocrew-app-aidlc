@@ -24,7 +24,7 @@
   "delivery.state.cancelled": "cancelled",
   "delivery.step.delivered": "Sent",
   "delivery.step.processing": "Agent processing",
-  "delivery.step.queued": "Queued",
+  "delivery.step.queued": "Your decision",
   "delivery.step.reconciliation": "Reconcile workflow",
   "delivery.step.stateChanged": "State changed",
   "delivery.step.unchanged": "No state change",

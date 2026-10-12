@@ -7,7 +7,7 @@
   "nav.activity": "活动",
   "nav.settings": "设置",
   "nav.newIntent": "新建意图",
-  "enum.actionStatus.Queued": "已排队",
+  "enum.actionStatus.Queued": "尚未发送",
   "enum.actionStatus.Delivering": "发送中",
   "enum.actionStatus.Delivered": "已发送",
   "enum.actionStatus.Processing": "处理中",

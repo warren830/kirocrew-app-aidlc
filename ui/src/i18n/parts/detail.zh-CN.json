@@ -33,6 +33,7 @@
   "detail.transitions.row": "{from} → {to}",
   "detail.transitions.title": "Studio 对这个决定的记录",
   "detail.waiting": "已等待 {duration}",
+  "detail.sentAgo": "发送于 {when}",
   "detail.bar.closed": "这是一条已关闭的记录。请打开当前待办继续。",
   "detail.closedTitle": "{type} · {status}",
   "detail.history": "历史记录",

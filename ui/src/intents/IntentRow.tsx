@@ -15,7 +15,7 @@ import type { ReactNode } from 'react'
 import { Chip, type ChipTone } from '../shell/Chip'
 import { Icon, type IconName } from '../shell/Icon'
 import { useI18n, type I18n } from '../i18n'
-import { count, plural, waiting } from '../lib/format'
+import { count, plural, since, waiting } from '../lib/format'
 import type { IntentState } from '../lib/enums.generated'
 import type { IntentSummary } from '../lib/types'
 
@@ -45,6 +45,19 @@ export function stageText(i18n: I18n, intent: IntentSummary): string {
   return intent.disk.current_stage || i18n.t('intents.stage.none')
 }
 
+/**
+ * Under the state: how long it has waited when it waits on the person, otherwise only when it last moved.
+ * "Running · waiting 2 min" read as if a running turn were stuck.
+ */
+export function activityText(i18n: I18n, intent: IntentSummary): string {
+  if (intent.operational_state === 'WaitingForYou') {
+    return i18n.t('intents.waiting', { duration: waiting(i18n, intent.last_activity_at) })
+  }
+  return intent.last_activity_at
+    ? i18n.t('intents.lastActivity', { when: since(i18n, intent.last_activity_at) })
+    : i18n.t('intents.noActivity')
+}
+
 /** The whole row as one sentence, for a reader that is not walking the table cell by cell. */
 export function rowSummary(i18n: I18n, intent: IntentSummary): string {
   const primary = intent.open_actions > 0 ? plural(i18n, 'intents.openActions', intent.open_actions) : ''
@@ -53,7 +66,7 @@ export function rowSummary(i18n: I18n, intent: IntentSummary): string {
     repo: intent.repo_label,
     state: i18n.t(`enum.intentState.${intent.operational_state}`),
     stage: stageText(i18n, intent),
-    waiting: i18n.t('intents.waiting', { duration: waiting(i18n, intent.last_activity_at) }),
+    waiting: activityText(i18n, intent),
     primary,
   })
 }
@@ -105,7 +118,7 @@ export function IntentRow({ intent, layout, actions }: IntentRowProps) {
         {t(`enum.intentState.${intent.operational_state}`)}
       </Chip>
       <span className="studio-row-sub studio-mono">
-        {t('intents.waiting', { duration: waiting(i18n, intent.last_activity_at) })}
+        {activityText(i18n, intent)}
       </span>
     </>
   )

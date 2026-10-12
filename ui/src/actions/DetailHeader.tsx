@@ -17,7 +17,7 @@ import { Btn } from '@kirocrew/app-sdk/ui'
 import { Chip } from '../shell/Chip'
 import { Icon } from '../shell/Icon'
 import { useI18n } from '../i18n'
-import { at, ref, waiting } from '../lib/format'
+import { at, ref, since, waiting } from '../lib/format'
 import { isClosedAction, isRepositoryUnavailable } from '../lib/actionQueue'
 import { DEFAULT_SPACE } from '../lib/route'
 import type { ActionCard } from '../lib/types'
@@ -75,6 +75,8 @@ export function DetailHeader({ card, onOpenCurrent }: DetailHeaderProps) {
     ? t('detail.closedTitle', { type: typeLabel, status: statusLabel(i18n, card.status, card.resolution.reason) })
     : i18n.has(card.headline.key) ? ref(i18n, card.headline) : typeLabel
   const refreshing = isRefreshing(card)
+  // Sent and not settled: it waits on AI-DLC now, so neither its urgency nor its age is the person's.
+  const sent = card.status === 'Delivering' || card.status === 'Delivered'
   const reviewClass = card.evidence.review?.review_class ?? null
   const revision = card.evidence.state?.revision_count ?? null
 
@@ -97,7 +99,7 @@ export function DetailHeader({ card, onOpenCurrent }: DetailHeaderProps) {
       <h1 className="studio-dtitle">{headline}</h1>
 
       <div className="studio-dfacts">
-        {unavailable ? <Chip icon="doc">{t('detail.repoUnavailable.saved')}</Chip> : closed ? <Chip icon="doc">{t('detail.history')}</Chip> : (
+        {unavailable ? <Chip icon="doc">{t('detail.repoUnavailable.saved')}</Chip> : closed ? <Chip icon="doc">{t('detail.history')}</Chip> : sent ? null : (
           <Chip tone={SEVERITY_TONE[card.severity]} icon={card.severity === 'info' ? 'info' : 'warn'}>
             {t(`enum.severity.${card.severity}`)}
           </Chip>
@@ -106,6 +108,8 @@ export function DetailHeader({ card, onOpenCurrent }: DetailHeaderProps) {
           card.resolution.resolved_at
             ? <Chip icon="clock">{t('detail.closedAt', { at: at(i18n, card.resolution.resolved_at) })}</Chip>
             : null
+        ) : sent ? (
+          <Chip icon="clock">{t('detail.sentAgo', { when: since(i18n, card.delivery.delivered_at ?? card.updated_at) })}</Chip>
         ) : <Chip icon="clock">{t('detail.waiting', { duration: waiting(i18n, card.waiting_since) })}</Chip>}
         <Chip tone={statusTone(card.status)}>
           {statusLabel(i18n, card.status, card.resolution.reason, card.delivery.turn_started_at)}

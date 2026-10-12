@@ -38,6 +38,7 @@
   "detail.transitions.row": "{from} → {to}",
   "detail.transitions.title": "Studio's record of this decision",
   "detail.waiting": "waiting {duration}",
+  "detail.sentAgo": "sent {when}",
   "detail.repoUnavailable.title": "Repository unavailable",
   "detail.repoUnavailable.saved": "Saved decision",
   "detail.repoUnavailable.recordedAt": "Last recorded {at}",

@@ -373,10 +373,10 @@ describe('the decision pane', () => {
     expect(screen.getByRole('button', { name: /deep link/ })).toBeInTheDocument()
 
     const strip = screen.getByRole('region', { name: 'Delivery state' })
-    // The four steps, in order. Read off the list rather than by text: "Queued" is also the card's
-    // status chip in the same region, and a `getByText` would match both.
+    // The four steps, in order. Read off the list rather than by text, so a step label never matches the
+    // card's status chip in the same region. Nothing was sent, so the first step is the person's.
     const steps = [...strip.querySelectorAll('.studio-dstep .studio-dstep-label')].map((node) => node.textContent)
-    expect(steps).toEqual(['Queued', 'Sent', 'Agent processing', 'State changed'])
+    expect(steps).toEqual(['Your decision', 'Sent', 'Agent processing', 'State changed'])
   })
 
   it('opens a confirmation showing the localized label and the exact wire text, and never preselects it', async () => {

@@ -15,7 +15,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { I18nProvider } from '../i18n'
+import { I18nProvider, makeI18n } from '../i18n'
 import { StudioApiError, useStudioApi, type StudioApi } from '../lib/api'
 import { buildRoute, parseRoute } from '../lib/route'
 import type { ChatFolder, IntentSummary, RepoRecord, SlotView } from '../lib/types'
@@ -25,6 +25,7 @@ import { apiCalls, navigations, setApiRoutes, StubApiError } from '../test/stubs
 import { ApprovalWaitNotice } from './ApprovalWait'
 import { IntentActions } from './IntentActions'
 import { IntentList } from './IntentList'
+import { activityText } from './IntentRow'
 import { readInventory } from './IntentsView'
 import { intentFolder, repoFolder, SessionPanel } from './SessionPanel'
 
@@ -434,6 +435,19 @@ const slotCalls = (folderId: string) => [
   { method: 'POST', path: `${INTENT_PATH}/session`, body: { slot_key: SLOT } },
   { method: 'PATCH', path: `${CHAT}/slots/${SLOT}/folder`, body: { folder_id: folderId } },
 ]
+
+describe('the time under an intent\'s state', () => {
+  it('says how long it waited only while it waits on the person, and otherwise when it last moved', () => {
+    const i18n = makeI18n('en-US')
+    const twoMinutesAgo = new Date(Date.now() - 120_000).toISOString()
+    const at = (operational_state: string, last_activity_at: string | null) =>
+      activityText(i18n, { ...INTENT, operational_state, last_activity_at } as IntentSummary)
+    expect(at('WaitingForYou', twoMinutesAgo)).toMatch(/^waiting /)
+    expect(at('Running', twoMinutesAgo)).toMatch(/^last activity /)
+    expect(at('Running', twoMinutesAgo)).not.toMatch(/waiting/)
+    expect(at('Idle', null)).toBe('no activity yet')
+  })
+})
 
 describe('the canonical conversation panel', () => {
   it('creates, titles, points and binds the conversation, then files it under the repository folder', async () => {

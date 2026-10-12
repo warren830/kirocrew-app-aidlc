@@ -7,7 +7,7 @@
   "nav.activity": "Activity",
   "nav.settings": "Settings",
   "nav.newIntent": "New intent",
-  "enum.actionStatus.Queued": "Queued",
+  "enum.actionStatus.Queued": "Not sent yet",
   "enum.actionStatus.Delivering": "Sending",
   "enum.actionStatus.Delivered": "Sent",
   "enum.actionStatus.Processing": "Being processed",

@@ -37,6 +37,8 @@
   "intents.pausedChip": "Paused",
   "intents.cursorChip": "AI-DLC's active intent",
   "intents.waiting": "waiting {duration}",
+  "intents.lastActivity": "last activity {when}",
+  "intents.noActivity": "no activity yet",
   "intents.session": "session bound",
   "intents.noSession": "no conversation bound",
   "intents.session.title": "Canonical conversation — {intent}",
