@@ -372,7 +372,7 @@ cd ui && npm run check      # tsc --noEmit && vitest run && vite build
 
 # regenerate the bundled payload inventory after changing payload/aidlc-kiro/
 python3 scripts/build_payload_manifest.py --version 2.10.0 \
-  --source-ref "v2.10.0 @ 2a883858 + Studio requirement-traceability compatibility patch" \
+  --source-ref "v2.10.0 @ 2a883858 + Studio requirement-traceability and KiroCrew-reply compatibility patches" \
   --source-commit 2a883858f5483bce3b48f43b8f6d3ca2c042d6ae \
   --dist-path "aidlc-copy-runtime-2.10.0.tar.gz:runtime/kiro" --state-versions 8
 ```

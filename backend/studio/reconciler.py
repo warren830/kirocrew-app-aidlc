@@ -1115,6 +1115,16 @@ class Reconciler:
             seen["plan_cleared"] = bool(_attr(plan, "present", False)) and not bool(_attr(plan, "answered", False))
             if digest_changed and (answer.lower().startswith("request changes") or seen["plan_cleared"]):
                 return Resolution("no_transition", "plan_changes_requested", seen)
+            # 2.10 records a Request Changes choice as a plan-approval QUESTION_ANSWERED, then may revise nothing
+            # the questions file shows before asking again.
+            receipt = next((event for event in self._plan_rows(rec, snap, stage, "QUESTION_ANSWERED")
+                            if (_attr(event, "fields", {}) or {}).get("Details") == C.PLAN_REQUEST_CHANGES_CHOICE), None)
+            if receipt is not None:
+                return Resolution("no_transition", "plan_changes_requested",
+                                  {**seen, "plan_changes_recorded": _json_of(receipt)})
+            refused = self._plan_asked_again(rec, snap, stage)
+            if refused is not None:
+                return Resolution("no_transition", "plan_reply_not_recorded", {**seen, **refused})
             return Resolution("pending", "plan_unchanged", seen)
 
         return Resolution("pending", "no_contract_row", seen)
@@ -1178,7 +1188,35 @@ class Reconciler:
             if receipt is not None:
                 return Resolution("no_transition", "plan_approval_recorded_before_reset", {
                     **seen, "plan_approval_recorded": _json_of(receipt), "current_plan_requires_approval": True})
+        refused = self._plan_asked_again(rec, snap, stage)
+        if refused is not None:
+            return Resolution("no_transition", "plan_reply_not_recorded", {**seen, **refused})
         return Resolution("pending", "plan_not_approved", seen)
+
+    def _plan_rows(self, rec: Any, snap: Any, stage: Any, *types: str) -> list[Any]:
+        """This dispatch's audit rows of the given types for the plan this card showed: same checkpoint, unit and
+        questions file."""
+        unit = rec.unit or None
+        relpath = (rec.evidence.get("questions") or {}).get("relpath")
+        return [
+            event for event in self._new_events(rec, snap, types, stage)
+            if (fields := _attr(event, "fields", {}) or {}).get("Checkpoint") == C.PLAN_APPROVAL_AUDIT_CHECKPOINT
+            and (fields.get("Unit") or None) == unit and (not relpath or fields.get("Questions File") == relpath)
+        ]
+
+    def _plan_asked_again(self, rec: Any, snap: Any, stage: Any) -> dict[str, Any] | None:
+        """AI-DLC put this plan to the person again after the reply and recorded no answer to it: the engine refused
+        the reply (2.10 records only an offered choice) or it never reached the hook. Settling the card lets the next
+        scan open a fresh one for the prompt that is waiting; the reply is never resent and nothing is approved."""
+        asked = self._plan_rows(rec, snap, stage, "DECISION_RECORDED")
+        if not asked or self._plan_rows(rec, snap, stage, "PLAN_APPROVAL_RECORDED", "QUESTION_ANSWERED"):
+            return None
+        refusals = [event for event in self._new_events(rec, snap, (C.ERROR_EVENT,), None)
+                    if "Plan Approval" in _error_text(event)]
+        return {
+            "answer_verified": False, "plan_asked_again": _json_of(max(asked, key=_event_order)),
+            "refusal": _error_text(max(refusals, key=_event_order)) if refusals else None,
+        }
 
     # ---- resolution outcome and failure classification -------------------- #
 

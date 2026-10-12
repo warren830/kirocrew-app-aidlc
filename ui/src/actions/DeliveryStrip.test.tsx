@@ -114,6 +114,20 @@ describe('delivery outcomes describe observed progress', () => {
     expect(strip).not.toHaveTextContent(i18n.t('enum.actionStatus.ResolvedNoTransition'))
   })
 
+  it.each(['en-US', 'zh-CN'] as const)('sends a refused plan reply to the new card (%s)', (locale) => {
+    document.documentElement.lang = locale
+    const i18n = makeI18n(locale)
+    const card = actionCard({ status: 'ResolvedNoTransition', resolution: {
+      kind: 'no_transition', reason: 'plan_reply_not_recorded', evidence: null, resolved_at: null,
+    } })
+    render(<I18nProvider><DeliveryStrip card={card} /></I18nProvider>)
+    const strip = screen.getByRole('region', { name: i18n.t('delivery.label') })
+    expect(strip).toHaveTextContent(i18n.t('delivery.planReplyNotRecorded'))
+    expect(strip).toHaveTextContent(i18n.t('delivery.planAskedAgainReview'))
+    expect(screen.getByRole('alert')).toHaveTextContent(i18n.t('delivery.planReplyNotRecordedBody'))
+    expect(strip).not.toHaveTextContent(i18n.t('enum.actionStatus.ResolvedNoTransition'))
+  })
+
   it('marks every step complete when the workflow state did change', () => {
     const strip = show('StateChanged')
     expect([...strip.querySelectorAll('.studio-dstep')].map((step) => step.getAttribute('data-state'))).toEqual([

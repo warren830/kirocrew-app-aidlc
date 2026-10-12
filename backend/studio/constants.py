@@ -379,6 +379,8 @@ SUMMARY_CONFIRMATION_HEADING = "Consolidated Summary Confirmation"
 PLAN_APPROVAL_HEADING = "Plan Approval"
 #: The engine's audit name for the same checkpoint differs from the Markdown heading.
 PLAN_APPROVAL_AUDIT_CHECKPOINT = "Code Generation Plan Approval"
+#: The ``Details`` of the plan-approval ``QUESTION_ANSWERED`` row 2.10 writes for a Request Changes choice.
+PLAN_REQUEST_CHANGES_CHOICE = "Request Changes"
 POST_APPROVAL_AMENDMENT_HEADING = "Post-approval Amendment"
 #: 2.10's intent-capture Step 5: kept assumptions are accepted or turned into follow-up questions. The engine fills
 #: the tag with the chosen option verbatim (``A. Accept assumptions``), so the option texts are its wire text.

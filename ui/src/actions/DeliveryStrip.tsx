@@ -93,6 +93,10 @@ export function statusLabel(
   if (status === 'ResolvedNoTransition' && reason === 'plan_approval_recorded_before_reset') {
     return i18n.t('delivery.previousPlanApproval')
   }
+  // AI-DLC recorded nothing for this reply and put the same plan to the person again.
+  if (status === 'ResolvedNoTransition' && reason === 'plan_reply_not_recorded') {
+    return i18n.t('delivery.planReplyNotRecorded')
+  }
   return i18n.t(status === 'ResolvedNoTransition' && reason === 'answer_requires_text'
     ? 'delivery.answerNeedsText' : `enum.actionStatus.${status}`)
 }
@@ -121,8 +125,10 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
   const atNewGate = card.resolution.reason === 'answer_not_verified_at_gate'
   const answerNotVerified = noTransition && (atNewGate || card.resolution.reason === 'answer_not_verified')
   const planReset = noTransition && card.resolution.reason === 'plan_approval_recorded_before_reset'
+  const planAskedAgain = noTransition && card.resolution.reason === 'plan_reply_not_recorded'
   const unverifiedLabel = atNewGate ? 'delivery.newGateReview' : 'delivery.conversationReview'
   const remainingLabel = planReset ? 'delivery.updatedPlanReview'
+    : planAskedAgain ? 'delivery.planAskedAgainReview'
     : answerNotVerified ? unverifiedLabel : 'delivery.noTransition'
   const sent = !BEFORE_SEND.includes(status)
 
@@ -142,6 +148,7 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
               </span>
               <span className="studio-dstep-label">{t(
                 state === 'unchanged' ? (planReset ? 'delivery.updatedPlanReview'
+                  : planAskedAgain ? 'delivery.planAskedAgainReview'
                   : answerNotVerified ? unverifiedLabel : 'delivery.step.unchanged')
                   : state === 'cancelled' ? 'enum.actionStatus.Cancelled'
                   : confirmedPending && position === 2 ? 'delivery.step.reconciliation' : key,
@@ -180,6 +187,12 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
         <div className="studio-banner studio-dwarn" data-tone="warn" role="alert">
           <Icon name="warn" size={15} />
           <p>{t('delivery.previousPlanApprovalBody')}</p>
+        </div>
+      ) : null}
+      {planAskedAgain ? (
+        <div className="studio-banner studio-dwarn" data-tone="warn" role="alert">
+          <Icon name="warn" size={15} />
+          <p>{t('delivery.planReplyNotRecordedBody')}</p>
         </div>
       ) : null}
 

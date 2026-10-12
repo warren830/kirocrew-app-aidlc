@@ -6,5 +6,8 @@
   "delivery.answerNotVerifiedFollowUpBody": "The turn ended and AI-DLC recorded an answer to this question, but the audit receipt did not match the reply sent. The idle lease was released. Review the conversation and whatever AI-DLC asks next; the earlier reply will not be resent.",
   "delivery.previousPlanApproval": "Previous approval recorded",
   "delivery.updatedPlanReview": "Review the updated plan",
-  "delivery.previousPlanApprovalBody": "The original plan approval was recorded, and that reply is complete. The plan was later reset for review. Its current version still requires approval; no new write authority was granted and the earlier reply will not be resent."
+  "delivery.previousPlanApprovalBody": "The original plan approval was recorded, and that reply is complete. The plan was later reset for review. Its current version still requires approval; no new write authority was granted and the earlier reply will not be resent.",
+  "delivery.planReplyNotRecorded": "Reply not recorded",
+  "delivery.planAskedAgainReview": "Answer the new card",
+  "delivery.planReplyNotRecordedBody": "AI-DLC did not record this reply as your choice and asked for the same plan again, so nothing was approved and the idle lease was released. Studio opens a new card for that plan; answer it there. The earlier reply will not be resent."
 }

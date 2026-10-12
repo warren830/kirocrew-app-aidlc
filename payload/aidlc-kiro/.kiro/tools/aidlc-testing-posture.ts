@@ -2404,6 +2404,8 @@ export function recordPlanApprovalChallenge(
     : createChallenge();
 }
 
+const REQUEST_CHANGES_WITH_FEEDBACK = /^request changes\s*:\s*\S/i;
+
 function offeredCheckpointChoice<T extends string>(
   options: [string, string],
   responseText: string,
@@ -2426,6 +2428,16 @@ function offeredCheckpointChoice<T extends string>(
   );
   if (matchedIndex >= 0) {
     return matchedIndex === 0 ? approveChoice : "Request Changes";
+  }
+  // AI-DLC Studio compatibility patch: `Request Changes: <what to change>` is the
+  // Request Changes choice with its reason in the same reply, which is how AI-DLC
+  // Studio sends it. It can only select the non-approving option, so no approval
+  // is loosened; the feedback stays in the turn for the conductor to act on.
+  const offersRequestChanges = hashedOptionLabels
+    ? options[1] === createHash("sha256").update("request changes", "utf-8").digest("hex")
+    : options[1].toLowerCase() === "request changes";
+  if (offersRequestChanges && REQUEST_CHANGES_WITH_FEEDBACK.test(response)) {
+    return "Request Changes";
   }
   if (requireExactOptionLabels) return null;
   if (response === "1") return approveChoice;

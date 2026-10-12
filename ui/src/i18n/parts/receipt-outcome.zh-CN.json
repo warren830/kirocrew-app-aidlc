@@ -6,5 +6,8 @@
   "delivery.answerNotVerifiedFollowUpBody": "回合已结束，AI-DLC 已为这个问题记录回答，但审计回执与发送的回复不一致。空闲租约已释放。请核对会话以及 AI-DLC 接下来的提问；此前的回复不会被重新发送。",
   "delivery.previousPlanApproval": "此前审批已记录",
   "delivery.updatedPlanReview": "复核更新后的计划",
-  "delivery.previousPlanApprovalBody": "原计划的审批已记录，此次回复已完成。计划随后被重置为待审，当前版本仍需审批；本次回收没有授予新的写权限，也不会重发此前的回复。"
+  "delivery.previousPlanApprovalBody": "原计划的审批已记录，此次回复已完成。计划随后被重置为待审，当前版本仍需审批；本次回收没有授予新的写权限，也不会重发此前的回复。",
+  "delivery.planReplyNotRecorded": "回复未被记录",
+  "delivery.planAskedAgainReview": "请回答新卡片",
+  "delivery.planReplyNotRecordedBody": "AI-DLC 没有把这次回复记录为你的选择，并就同一份计划再次提问，因此没有任何内容被批准，空闲租约已释放。Studio 会为这份计划新开一张卡片，请在那里作答；此前的回复不会被重新发送。"
 }

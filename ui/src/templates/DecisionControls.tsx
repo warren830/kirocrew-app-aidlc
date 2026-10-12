@@ -242,6 +242,8 @@ export function DecisionBrief({ card }: { card: ActionCard }) {
               ? 'delivery.answerNotVerifiedFollowUpBody'
             : card.resolution.reason === 'plan_approval_recorded_before_reset'
               ? 'delivery.previousPlanApprovalBody'
+            : card.resolution.reason === 'plan_reply_not_recorded'
+              ? 'delivery.planReplyNotRecordedBody'
             : card.resolution.reason === 'command_superseded'
               ? 'template.command.superseded' : 'template.common.closedBody')}</p>
           <details>

@@ -4,7 +4,7 @@
   "engineVersion": "2.10.0",
   "source": {
     "repository": "https://github.com/awslabs/aidlc-workflows",
-    "ref": "v2.10.0 @ 2a883858 + Studio requirement-traceability compatibility patch",
+    "ref": "v2.10.0 @ 2a883858 + Studio requirement-traceability and KiroCrew-reply compatibility patches",
     "commit": "2a883858f5483bce3b48f43b8f6d3ca2c042d6ae",
     "distPath": "aidlc-copy-runtime-2.10.0.tar.gz:runtime/kiro",
     "license": "MIT-0"
@@ -13,7 +13,7 @@
     8
   ],
   "stageCount": 33,
-  "payloadDigest": "68af01a58eb5d4018fc481867756ee88a6e19a5e61405afed17e94cb79ba5878",
+  "payloadDigest": "9cf8c10272dbe3b474b7126d4bba321ccc0197baaca299cc688de8264e6d1467",
   "fileCount": 326,
   "mergeTargets": {
     ".kiro/settings/cli.json": {
@@ -534,8 +534,8 @@
     },
     {
       "path": ".kiro/hooks/aidlc-kiro-adapter.ts",
-      "sha256": "b6882f536babc637926031d05079cdc25b2b285955f7f13d4489510f176c0c28",
-      "size": 50429,
+      "sha256": "19ff561e4b7704c98abcd63ca1aee7eb7a88dfc93e48ee9f43deb279df561b77",
+      "size": 51927,
       "ownership": "framework"
     },
     {
@@ -1740,8 +1740,8 @@
     },
     {
       "path": ".kiro/tools/aidlc-testing-posture.ts",
-      "sha256": "d16655a549c74dad9dd4280c7b48f734adf102cde2604da48fa868861c743bef",
-      "size": 172194,
+      "sha256": "c1b07fa7af39a3777a7206d0c4ef5ccd5ad322996790f45a6ebdb388f78fb749",
+      "size": 172896,
       "ownership": "framework"
     },
     {

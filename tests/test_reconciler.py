@@ -623,6 +623,63 @@ def test_request_plan_changes_resolves_when_the_tag_is_cleared_for_revision(svc,
     assert status_of(svc, action_id) == "ResolvedNoTransition"
 
 
+def _plan_row(scene, event: str, **fields: str) -> str:
+    """A plan-approval audit row for the questions file the scene's card shows."""
+    rel = scene.snapshot().questions.relpath
+    return F.audit_block(event, T0, Stage=GATE_STAGE, Checkpoint="Code Generation Plan Approval",
+                         **{"Questions File": rel, **fields})
+
+
+REFUSAL = F.audit_block("ERROR_LOGGED", T0, Tool="aidlc-log", Error=(
+    "Refusing to record Plan Approval: Plan Approval requires the actual offered choice from this prompt and session"))
+
+
+@pytest.mark.parametrize("decision,wire", [
+    ("approve_plan", "Approve Plan"), ("request_plan_changes", "Request Changes: Split the plan.")])
+def test_a_plan_reply_aidlc_refused_and_asked_again_settles_unverified(svc, scene, fake_host, decision, wire):
+    """2.10 records a plan reply only when it equals an offered choice. Refused, it resets the tag and asks again:
+    the card settles unverified, which frees its boundary for the fresh card the next scan derives (the broker's
+    terminal-rows rule, ``test_actions``)."""
+    _questions_file(scene, PLAN)
+    action_id = ended_turn(svc, scene, fake_host, wire, REFUSAL, _plan_row(scene, "DECISION_RECORDED"),
+                           decision=decision, after=PLAN, payload={"decision": decision, "feedback": "Split the plan."})
+    row = svc.storage.get("actions", action_id)
+    assert row["status"] == "ResolvedNoTransition"
+    assert row["resolution_json"]["reason"] == "plan_reply_not_recorded"
+    evidence = row["resolution_json"]["evidence"]
+    assert evidence["answer_verified"] is False and evidence["refusal"].startswith("Refusing to record Plan Approval")
+
+
+@pytest.mark.parametrize("blocks", [
+    pytest.param(lambda scene: (REFUSAL,), id="refused-but-not-asked-again"),
+    pytest.param(lambda scene: (_plan_row(scene, "DECISION_RECORDED"), _plan_row(scene, "PLAN_APPROVAL_RECORDED",
+                                                                                  Details="Approve Plan")),
+                 id="asked-again-after-recording-the-answer"),
+    pytest.param(lambda scene: (F.audit_block("DECISION_RECORDED", T0, Stage=GATE_STAGE,
+                                              Checkpoint="Code Generation Plan Approval",
+                                              **{"Questions File": "elsewhere/code-generation-questions.md"}),),
+                 id="another-plan-asked"),
+    pytest.param(lambda scene: (_plan_row(scene, "DECISION_RECORDED", Unit="unit-b"),), id="another-unit-asked"),
+])
+def test_a_plan_approval_keeps_waiting_unless_aidlc_asked_this_plan_again_unanswered(svc, scene, fake_host, blocks):
+    _questions_file(scene, PLAN)
+    action_id = ended_turn(svc, scene, fake_host, "Approve Plan", *blocks(scene), decision="approve_plan", after=PLAN)
+    assert status_of(svc, action_id) == "Delivered"
+
+
+def test_a_recorded_request_changes_settles_even_when_the_file_reads_as_before(svc, scene, fake_host, C):
+    """Its plan-approval ``QUESTION_ANSWERED`` row is the engine's own receipt for the choice."""
+    _questions_file(scene, PLAN)
+    wire = C.WIRE_REQUEST_CHANGES_PREFIX + "Split the plan."
+    action_id = ended_turn(
+        svc, scene, fake_host, wire, _plan_row(scene, "QUESTION_ANSWERED", Details="Request Changes"),
+        _plan_row(scene, "DECISION_RECORDED"), decision="request_plan_changes", after=PLAN,
+        payload={"decision": "request_plan_changes", "feedback": "Split the plan."})
+    row = svc.storage.get("actions", action_id)
+    assert row["status"] == "ResolvedNoTransition"
+    assert row["resolution_json"]["reason"] == "plan_changes_requested"
+
+
 def test_resolution_events_mirror_the_bundled_engines_gate_resolution_set(C):
     """Read out of the bundled engine; ``AUTONOMY_MODE_SET`` is the documented non-mirror."""
     lib = (APP_ROOT / "payload" / "aidlc-kiro" / ".kiro" / "tools" / "aidlc-lib.ts").read_text("utf-8")

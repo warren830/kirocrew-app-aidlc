@@ -322,6 +322,30 @@ function shouldPreDispatchNext(args: string[], cwd: string): boolean {
   return args.includes("--scope") && !existsSync(stateFilePath(cwd));
 }
 
+// AI-DLC Studio compatibility patch (KiroCrew dashboard turns).
+//
+// KiroCrew hands kiro-cli every dashboard turn inside its own context frame and
+// puts the person's text last, after one `[CURRENT USER REQUEST -- respond to
+// this]` header (written with an em dash, folded to `--` on the wire). KiroCrew
+// neutralizes that header everywhere else in the turn, the person's own text
+// included, so the text after the last one is what the person sent. Without
+// this, a reply that must equal an offered choice ("Approve Plan", "Request
+// Changes", "Override Plan Approval: <reason>") never does: the hook sees the
+// whole frame. Only a frame whose first [RUNTIME] line names the dashboard is
+// unwrapped. Cron, subagent, task-runner and channel turns stay whole, exactly
+// as before, so none of them gains a way to answer a protected question.
+const KIROCREW_REQUEST_HEADER = /\[CURRENT USER REQUEST\s*(?:—|–|-{1,2})\s*respond to this\]/g;
+const KIROCREW_RUNTIME_LINE = /^\[RUNTIME\] ([^\n]*)$/m;
+
+function kiroCrewDashboardRequest(prompt: string): string {
+  let header: RegExpMatchArray | null = null;
+  for (const match of prompt.matchAll(KIROCREW_REQUEST_HEADER)) header = match;
+  if (header === null || header.index === undefined) return prompt;
+  const frame = prompt.slice(0, header.index);
+  if (KIROCREW_RUNTIME_LINE.exec(frame)?.[1]?.trim() !== "KiroCrew dashboard") return prompt;
+  return prompt.slice(header.index + header[0].length).trim();
+}
+
 if (target === "verb-intercept") {
   // The whole turn's only job here is to deterministically handle a terminal
   // command; anything else falls through to the conductor untouched (exit 0, no
@@ -365,7 +389,7 @@ if (target === "verb-intercept") {
     runCore("aidlc-record-human-turn.ts", {
       hook_event_name: "UserPromptSubmit",
       ...(kiro.session_id ? { session_id: kiro.session_id } : {}),
-      prompt: kiro.prompt ?? "",
+      prompt: kiroCrewDashboardRequest(kiro.prompt ?? ""),
     });
   } catch { /* presence best-effort - record-human-turn never blocks the turn */ }
   if (cmd === null) {

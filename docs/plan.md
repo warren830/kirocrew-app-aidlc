@@ -162,6 +162,7 @@
 - 两个仓库的升级预览完全一致（devlake：160 个归属 Studio、0 冲突）。
 - 2026-10-12：`app.json` 和顾问 agent 直接改名为 `aidlc-studio-v2` / “AI-DLC Studio v2”。原因：清单仍叫 `aidlc-studio` 时，在 KiroCrew 里“从文件夹安装”会落到 1.x 的名字上，被拒绝并报出 1.x 的版本号 1.1.6；现在这个文件夹本身就能装在 1.x 旁边，不再需要 `dev-slug.sh`。测试环境改为按清单里的名字加载后端（和网关一致），测试里写死的名字都从清单派生。
 - 2026-10-12 实机跑通（从文件夹安装的 v2，一次性测试仓库 `studio-v2-live-test`）：注册仓库 → 装 AI-DLC 2.10.0（创建 311 个文件，0 冲突）→ 建 express intent → 建会话并绑定 → `/aidlc` 走两段式提交 → 出现 reverse-engineering 关卡 → 批准 → 卡片变 `StateChanged`，进入 requirements-analysis。约 30 分钟里网关没有一次“task store: connection taken ON the event loop”警告（修复前 v1 大约每分钟一次），Studio 没有报错。用 `kcapi.sh` 的令牌脚本化建会话时，`POST /api/chat/slots` 会回 `store_unavailable`（令牌没有成员身份），但会话其实已建好；界面用的是主人的 cookie，不受影响。
+- 2026-10-13 第二次实机（全程点击）发现计划审批被 AI-DLC 拒收：KiroCrew 把每条面板消息包在自己的上下文框里（`[RUNTIME] KiroCrew dashboard … [CURRENT USER REQUEST -- respond to this]` 后面才是人发的文字），AI-DLC 2.10 的 human-turn 钩子拿整段文字去和选项比，所以从 KiroCrew 发出的 “Approve Plan” 永远对不上（人自己在聊天里打也一样）。修法是 bundled 引擎的第二个兼容补丁：Kiro 适配器只对首个 `[RUNTIME]` 行是 `KiroCrew dashboard` 的消息取最后一个请求头之后的文字交给核心钩子（cron、subagent、task runner、Slack 等照旧整段，拿不到审批权）；选项匹配另外接受 `Request Changes: <意见>` 作为 Request Changes（只可能选中不批准的那一项）。`tests/test_payload_human_reply.py` 用真 bun 跑补丁后的钩子，去掉补丁时 7 个正例全挂。Studio 这边：AI-DLC 拒收后会就同一份计划重新提问，原来的卡片就一直停在“处理中”、Action Center 却是空的；现在对账看到同一计划的新 `DECISION_RECORDED` 且没有任何计划回执时，把卡片结为 `plan_reply_not_recorded`（不算批准、不重发），下一次扫描为等待中的提问开新卡。另查明 23:49:20 那次 reverse-engineering 批准不是脚本点的：Studio 只有“选决定 → 发送”和 Run/Resume 两条提交路径，脚本那段时间没有这两种点击，是另一个 Studio 窗口发出的。
 
 ## 金样变更记录
 
