@@ -161,6 +161,7 @@
 - 一处是 v2 的修复：devlake 的卸载预览在 v1 里报 `409 identity_changed`（macOS 重启后设备号变了），v2 给出正常的计划（移除 278 个、保留 1 个）。
 - 两个仓库的升级预览完全一致（devlake：160 个归属 Studio、0 冲突）。
 - 2026-10-12：`app.json` 和顾问 agent 直接改名为 `aidlc-studio-v2` / “AI-DLC Studio v2”。原因：清单仍叫 `aidlc-studio` 时，在 KiroCrew 里“从文件夹安装”会落到 1.x 的名字上，被拒绝并报出 1.x 的版本号 1.1.6；现在这个文件夹本身就能装在 1.x 旁边，不再需要 `dev-slug.sh`。测试环境改为按清单里的名字加载后端（和网关一致），测试里写死的名字都从清单派生。
+- 2026-10-12 实机跑通（从文件夹安装的 v2，一次性测试仓库 `studio-v2-live-test`）：注册仓库 → 装 AI-DLC 2.10.0（创建 311 个文件，0 冲突）→ 建 express intent → 建会话并绑定 → `/aidlc` 走两段式提交 → 出现 reverse-engineering 关卡 → 批准 → 卡片变 `StateChanged`，进入 requirements-analysis。约 30 分钟里网关没有一次“task store: connection taken ON the event loop”警告（修复前 v1 大约每分钟一次），Studio 没有报错。用 `kcapi.sh` 的令牌脚本化建会话时，`POST /api/chat/slots` 会回 `store_unavailable`（令牌没有成员身份），但会话其实已建好；界面用的是主人的 cookie，不受影响。
 
 ## 金样变更记录
 
