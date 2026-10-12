@@ -119,7 +119,10 @@ function Shell({ api }: { api: StudioApi }) {
     useCallback((signal) => api.health({ signal }), [api]),
   )
   const counts = health.data?.counts
-  const running = counts?.execution_leases ?? null
+  // Bound conversations mid-turn. Not the execution leases: those end when a decision settles, not when its turn does.
+  const running = counts?.turns_running ?? null
+  const leases = counts?.execution_leases == null || counts.admin_leases == null
+    ? null : counts.execution_leases + counts.admin_leases
 
   // A lost cookie makes every resource fail with the same code; the banner is shown once and no toast
   // is raised per resource (§3.6). The host also announces it, for the case where nothing was polling.
@@ -180,7 +183,7 @@ function Shell({ api }: { api: StudioApi }) {
       >
         <StatusStrip
           running={running}
-          leases={running === null || counts?.admin_leases == null ? null : running + counts.admin_leases}
+          leases={leases}
           circuits={circuits}
           critical={queue?.counts.critical ?? null}
           streamMode={stream.mode}

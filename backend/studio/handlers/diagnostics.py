@@ -22,9 +22,16 @@ DIAGNOSTICS_ACTIVITY_ROWS = 200
 DIAGNOSTICS_TRANSACTIONS = 20
 
 
+async def _health(services: Any) -> dict[str, Any]:
+    body = await asyncio.to_thread(services.health)  # SQLite reads: off the event loop (§0.6)
+    if body["counts"].get("repos") is not None:  # the store was readable
+        body["counts"]["turns_running"] = await services.turns_running()
+    return body
+
+
 async def health(services: Any, request: web.Request) -> web.Response:
-    """The status strip's lease counts come from here too (``counts.execution_leases``/``admin_leases``)."""
-    return json_ok(await asyncio.to_thread(services.health))  # SQLite reads: off the event loop (§0.6)
+    """The status strip's counts come from here (``counts.turns_running``, ``execution_leases``, ``admin_leases``)."""
+    return json_ok(await _health(services))
 
 
 async def bundle(services: Any, request: web.Request) -> web.Response:
@@ -45,7 +52,7 @@ async def bundle(services: Any, request: web.Request) -> web.Response:
                                               include_human_text=include_human_text, allowed_roots=roots)
     body: dict[str, Any] = {
         "generated_at": services.clock.iso(),
-        "health": await asyncio.to_thread(services.health),
+        "health": await _health(services),
         "settings": services.settings.values(),
         "repos": [repo.to_json() for repo in repos],
         "live_actions": [await services.actions.card(rec, None)

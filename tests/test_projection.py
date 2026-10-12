@@ -1097,6 +1097,16 @@ DETAIL_EXTRA_KEYS = {"state_sections", "phases", "stages", "findings", "actions"
                      "active_directive_stage"}
 
 
+@pytest.mark.parametrize("status,waiting", [
+    ("Queued", 1), ("NotDelivered", 1), ("ReconciliationRequired", 1), ("Failed", 1),
+    ("Delivering", 0), ("Delivered", 0),
+])
+def test_a_sent_decision_is_not_counted_as_waiting_for_you(projection, gate_snap, status, waiting):
+    """A sent decision waits on AI-DLC; the Action Center hides it, so "1 decision waiting" must not count it."""
+    body = projection.summarize(gate_snap, live_actions=[ActionStub(status=status)]).to_json()
+    assert body["open_actions"] == waiting
+
+
 def test_intent_summary_wire_shape(projection, gate_snap, C):
     body = projection.summarize(
         gate_snap, binding=BindingStub(slot_key="slot-1"), host=SessionStub(),

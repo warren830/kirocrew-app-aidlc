@@ -1284,8 +1284,10 @@ class Projection:
             disk=self._disk(snap),
             counts=(dict(state.counts) if state is not None
                     else {"total": 0, "done": 0, **dict.fromkeys(C.STAGE_STATE, 0)}),
-            # `revision` cards are informational and kept out of the queue (C18), so they stay out of the badge too.
-            open_actions=sum(1 for a in live_actions if str(_attr(a, "type", "")) != "revision"),
+            # `revision` cards are informational and kept out of the queue (C18), so they stay out of the badge too,
+            # as does a decision already sent: it waits on AI-DLC, not on the person.
+            open_actions=sum(1 for a in live_actions if str(_attr(a, "type", "")) != "revision"
+                             and str(_attr(a, "status", "")) in C.AWAITING_PERSON_STATUS),
             blocking_findings=sum(1 for f in findings if str(_attr(f, "severity", "")) == "blocking"),
             warn_findings=sum(1 for f in findings if str(_attr(f, "severity", "")) == "warn"),
             session=host, archived=str(_attr(binding, "archive_state", "active")) == "archived",

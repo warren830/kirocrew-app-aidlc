@@ -182,6 +182,9 @@ LIVE_ACTION_STATUS = (
     "Failed",
 )
 TERMINAL_ACTION_STATUS = ("StateChanged", "ResolvedNoTransition", "Cancelled")
+#: Live statuses that wait on a person. A sent decision (``Delivering``/``Delivered``) waits on AI-DLC: the Action
+#: Center hides it (``ui/src/lib/actionQueue.ts``), so no "waiting for you" count may include it either.
+AWAITING_PERSON_STATUS = ("Queued", "ReconciliationRequired", "NotDelivered", "Failed")
 
 INTENT_STATE = (
     "Idle",

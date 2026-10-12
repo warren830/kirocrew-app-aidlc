@@ -43,7 +43,7 @@ function routeTable(over: Record<string, unknown> = {}): Record<string, RouteHan
     }),
     [`GET ${BASE}/settings`]: settingsResponse,
     // One turn running: the strip's lease chips are `/health` counts.
-    [`GET ${BASE}/health`]: () => ({ status: 'healthy', issues: [], counts: healthCounts({ execution_leases: 1 }) }),
+    [`GET ${BASE}/health`]: () => ({ status: 'healthy', issues: [], counts: healthCounts({ execution_leases: 1, turns_running: 1 }) }),
     [`GET ${BASE}/events/poll*`]: () => ({ events: [], cursor: 0, oldest_seq: 0, reset: false }),
   }
 }
@@ -157,13 +157,25 @@ describe('the app shell', () => {
       ...routeTable(),
       [`GET ${BASE}/health`]: () => ({
         status: 'error', issues: ['storage:storage_error'],
-        counts: healthCounts({ execution_leases: null, admin_leases: null }),
+        counts: healthCounts({ execution_leases: null, admin_leases: null, turns_running: null }),
       }),
     })
     mount()
     await screen.findByText(/Studio reports 1 issue/)
     expect(screen.queryByText(/turns? running/)).not.toBeInTheDocument()
     expect(screen.getAllByText('Unavailable').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('counts turns from the bound conversations, not from the leases decisions hold', async () => {
+    setApiRoutes({
+      ...routeTable(),
+      [`GET ${BASE}/health`]: () => ({
+        status: 'healthy', issues: [], counts: healthCounts({ turns_running: 1, execution_leases: 0, admin_leases: 0 }),
+      }),
+    })
+    mount()
+    await screen.findByText('1 turn running')
+    expect(screen.getByText('0 repo leases held')).toBeInTheDocument()
   })
 
   it('shows the repo path in the scope bar and drops the selection when scope changes', async () => {

@@ -350,6 +350,19 @@ class Services:
             with self._bun_config_lock:
                 self._apply_bun(BunLocation(None, None, BUN_SOURCE_EXPLICIT, ()), None)
 
+    async def turns_running(self) -> int | None:
+        """Bound conversations with a turn in progress, read on the loop like every host read, or ``None`` when
+        the store or the host cannot say. Not the execution leases: a lease ends when a decision settles, and a
+        turn started from the conversation itself holds none."""
+        try:
+            rows = await asyncio.to_thread(self.storage.select, "intent_bindings")
+        except StudioError:
+            return None
+        keys = {str(row.get("canonical_session_key") or "") or (f"dashboard:{row['slot_key']}" if row.get("slot_key")
+                                                                 else "") for row in rows}
+        busy = [self.host.is_busy(key) for key in sorted(keys) if key]
+        return None if None in busy else sum(1 for value in busy if value)
+
     def health(self) -> dict:
         """The ``GET /health`` body (§2.1). Sync — the handler runs it in a worker thread.
 
@@ -368,7 +381,7 @@ class Services:
         # Absent, not zero, when the store cannot be read: the status strip shows these lease counts, and
         # "0 turns running" would be a claim with no evidence behind it.
         counts: dict[str, int | None] = dict.fromkeys(
-            ("repos", "intents", "live_actions", "execution_leases", "admin_leases"))
+            ("repos", "intents", "live_actions", "execution_leases", "admin_leases", "turns_running"))
         try:
             pragmas = self.storage.pragmas()
             problems = self.storage.integrity_check()
@@ -393,6 +406,8 @@ class Services:
                 ),
                 "execution_leases": sum(1 for rec in leases if rec.kind == "execution"),
                 "admin_leases": sum(1 for rec in leases if rec.kind == "admin"),
+                # Filled in on the loop by ``turns_running``: the host is not read from this worker thread.
+                "turns_running": None,
             }
         except StudioError as exc:
             integrity = "error"

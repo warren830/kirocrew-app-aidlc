@@ -207,9 +207,9 @@ export function actionCard(over: Partial<ActionCard> = {}): ActionCard {
   }
 }
 
-/** `/health` counts; the status strip's lease chips read `execution_leases` and `admin_leases`. */
+/** `/health` counts; the status strip reads `turns_running`, and its lease chip `execution_leases` + `admin_leases`. */
 export function healthCounts(over: Partial<HealthCounts> = {}): HealthCounts {
-  return { repos: 1, intents: 1, live_actions: 0, execution_leases: 0, admin_leases: 0, ...over }
+  return { repos: 1, intents: 1, live_actions: 0, execution_leases: 0, admin_leases: 0, turns_running: 0, ...over }
 }
 
 export function actionsResponse(cards: ActionCard[]): ActionsResponse {

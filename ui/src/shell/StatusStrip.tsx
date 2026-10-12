@@ -24,7 +24,7 @@ import { APP_NAME } from '../lib/app'
 const STRIP_KEY = `${APP_NAME}:strip`
 
 export interface StatusStripProps {
-  /** Turns executing right now (`/health` `counts.execution_leases`). */
+  /** Bound conversations with a turn in progress (`/health` `counts.turns_running`). */
   running: number | null
   /** Repo leases held, execution plus admin (`counts.execution_leases + counts.admin_leases`). */
   leases: number | null

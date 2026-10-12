@@ -352,7 +352,7 @@ async def _repo_json(services: Any, repo: Any, *, leases: Sequence[Any], fresh: 
     body["counts"] = {
         "intents": len(summaries) if summaries is not None else await _count_intents(services, repo),
         "in_flight": sum(1 for rec in live if rec.status in ("Delivering", "Delivered")),
-        "open_actions": len(live),
+        "open_actions": sum(1 for rec in live if rec.status in C.AWAITING_PERSON_STATUS),
         "blocking_findings": sum(1 for finding in (findings or ()) if C.attr(finding, "severity") == "blocking"),
     }
     body["leases"] = {

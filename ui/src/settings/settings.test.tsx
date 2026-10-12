@@ -62,7 +62,7 @@ const HEALTH = {
   host: { attached: true, capabilities: {} },
   tools: { bun: { found: true, path: '/usr/bin/bun', version: '1.2.0' }, git: { found: true, path: '/usr/bin/git', version: '2.45.0' } },
   reconciler: { running: true, last_tick_at: '2026-09-05T09:59:00+00:00', last_tick_ms: 12, repos_scanned: 3 },
-  counts: { repos: 1, intents: 2, live_actions: 0, execution_leases: 0, admin_leases: 0 },
+  counts: { repos: 1, intents: 2, live_actions: 0, execution_leases: 0, admin_leases: 0, turns_running: 0 },
 } as unknown as HealthResponse
 
 const REPO = {

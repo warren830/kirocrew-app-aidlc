@@ -82,7 +82,8 @@ def test_health_reports_the_whole_envelope(ocall, studio):
     assert body["storage"]["integrity"] == "ok"
     assert body["storage"]["wal"] is True
     assert "/" not in body["storage"]["path_hash"]  # a path hash, never the path: /health is the most scraped
-    assert body["counts"] == {"repos": 0, "intents": 0, "live_actions": 0, "execution_leases": 0, "admin_leases": 0}
+    assert body["counts"] == {"repos": 0, "intents": 0, "live_actions": 0, "execution_leases": 0, "admin_leases": 0,
+                              "turns_running": 0}
     assert body["tools"]["bun"]["found"] is True
     assert body["tools"]["git"]["found"] is True
     assert body["host"]["attached"] is True
@@ -106,10 +107,22 @@ def test_health_reports_error_when_the_store_fails_its_integrity_check(sv, ocall
 
 
 def test_health_counts_the_leases_the_status_strip_shows(sv, ocall, gate_repo):
-    """The strip's "turns running" and "leases held" are ``counts.execution_leases`` and ``admin_leases``."""
+    """The strip's "leases held" is ``counts.execution_leases`` plus ``admin_leases``."""
     gate_lease(sv, gate_repo)
     _status, body = ocall("GET", "/health")
     assert (body["counts"]["execution_leases"], body["counts"]["admin_leases"]) == (1, 0)
+    assert body["counts"]["turns_running"] == 0, "a lease is not a turn"
+
+
+def test_health_counts_the_bound_conversations_with_a_turn_running(sv, ocall, gate_repo, fake_host):
+    """A turn started from the conversation itself holds no lease, and a settled decision's turn can run on."""
+    repo = sv.repos.add(str(gate_repo), "demo")
+    for intent_dir, slot_key in (("261012-a", "slot-a"), ("261012-b", "slot-b")):
+        fake_host.add_slot(slot_key, project=str(gate_repo), agent="aidlc")
+        asyncio.run(sv.sessions.bind(repo, "default", intent_dir, slot_key=slot_key, intent_uuid=None))
+    fake_host.sessions.busy.add("dashboard:slot-b")
+    _status, body = ocall("GET", "/health")
+    assert (body["counts"]["turns_running"], body["counts"]["execution_leases"]) == (1, 0)
 
 
 def test_health_reports_no_counts_when_the_store_cannot_be_read(sv, ocall, studio, monkeypatch):

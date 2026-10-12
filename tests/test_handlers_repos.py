@@ -331,3 +331,16 @@ def test_repo_git_still_answers_once_a_receipt_exists(sv, api, demo):
     status, body = api("GET", f"/repos/{demo.repo_id}/git")
     assert status == 200, body
     assert set(body) == {"git", "owned_dirty", "unrelated_dirty"} and isinstance(body["owned_dirty"], list)
+
+
+def test_a_sent_decision_counts_as_in_flight_not_as_waiting_for_you(api, sv, demo):
+    """The Action Center hides a sent decision, so the repo's "waiting for you" must not count it either."""
+    from test_handlers_misc import _seed_gate_card
+
+    card = _seed_gate_card(sv, demo)
+    record = api("GET", "/repos")[1]["repos"][0]
+    assert (record["counts"]["open_actions"], record["counts"]["in_flight"]) == (1, 0)
+    sv.storage.cas_update("actions", card.action_id, card.status_generation, {"status": "Delivered"})
+    body = api("GET", "/repos")[1]
+    assert (body["repos"][0]["counts"]["open_actions"], body["repos"][0]["counts"]["in_flight"]) == (0, 1)
+    assert body["totals"]["open_actions"] == 0
