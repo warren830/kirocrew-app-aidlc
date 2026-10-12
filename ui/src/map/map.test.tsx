@@ -251,6 +251,9 @@ describe('the workflow map', () => {
     expect(excluded).not.toHaveAccessibleName(/\bGate\b/)
     expect(excluded).not.toHaveTextContent('Gate')
     expect(screen.getByText('2 of 7 stages recorded as done')).toBeInTheDocument()
+    // The lane holding the unselected stage counts it as not selected, never as "0 skipped".
+    const inception = canvas.querySelector('[data-lane="inception"] .studio-lane-sub')
+    expect(inception).toHaveTextContent(/not selected/)
     await userEvent.click(excluded)
     expect(within(screen.getByRole('complementary', { name: 'Stage inspector' })).queryByText('Gate')).toBeNull()
     expect(within(screen.getByRole('complementary', { name: 'Stage inspector' }))

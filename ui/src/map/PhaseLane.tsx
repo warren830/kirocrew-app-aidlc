@@ -51,9 +51,19 @@ export function PhaseLane({
       <div className="studio-lane-h">
         <span className="studio-lane-name">{phaseLabel}</span>
         <span className="studio-lane-sub studio-mono">
-          {plural(i18n, 'map.lane.counts', phase.counts.total, {
-            skipped: i18n.fmt.number(phase.counts.skipped),
-          })}
+          {/* Not selected is not skipped: with every stage shown, "7 stages · 0 skipped" sat beside the
+              record's own "Skipped" for a phase the plan never selected. */}
+          {plural(
+            i18n,
+            phase.counts.total > phase.counts.in_scope
+              ? (phase.counts.skipped > 0 ? 'map.lane.countsNotSelectedSkipped' : 'map.lane.countsNotSelected')
+              : 'map.lane.counts',
+            phase.counts.total,
+            {
+              skipped: i18n.fmt.number(phase.counts.skipped),
+              excluded: i18n.fmt.number(phase.counts.total - phase.counts.in_scope),
+            },
+          )}
         </span>
         {/* The record's own word for the phase, verbatim: it is AI-DLC's vocabulary, not Studio's. */}
         {phase.status ? (
