@@ -6,7 +6,6 @@
   "map.empty.plan": "No stages are selected in this plan. Show all stages to inspect the full workflow.",
   "map.hiddenSelection": "The linked stage is outside this plan. Show all stages to inspect it.",
   "map.error.title": "The map could not be read",
-
   "map.bar.scope": "{repo} / {intent}",
   "map.bar.stagesKnown_one": "{n} stage known · exact",
   "map.bar.stagesKnown_other": "{n} stages known · exact",
@@ -23,19 +22,15 @@
   "map.bar.showCanvas": "Show as swimlanes",
   "map.bar.showAllStages": "Show all stages",
   "map.bar.showPlanOnly": "Show current plan only",
-
   "map.density.overview": "Overview",
   "map.density.detailed": "Detailed",
   "map.density.dependencies": "Dependencies",
-
   "map.consequence": "The current plan is shown by default. Show all stages to inspect excluded stages and their reasons. Stage numbers stay unchanged, and dependency links follow the visible stages.",
   "map.accordion.note": "Phases are accordions on a narrow screen. The canvas is not shrunk to fit, so no stage card becomes unreadable.",
-
   "map.lane.counts_one": "{n} stage · {skipped} skipped",
   "map.lane.counts_other": "{n} stages · {skipped} skipped",
   "map.phase.unknown": "Unrecognised phase",
   "map.phase.statusTitle": "Phase status recorded on disk: {status}",
-
   "map.state.excluded": "Not selected",
   "map.chip.gate": "Gate",
   "map.chip.conditional": "Conditional",
@@ -49,13 +44,10 @@
   "map.chip.reviewerTitle": "Reviewer: {reviewer}",
   "map.chip.modeTitle": "Execution mode: {mode}",
   "map.chip.elapsedTitle": "Elapsed on the latest attempt: {duration}",
-
   "map.rel.upstream": "upstream",
   "map.rel.downstream": "downstream",
-
   "map.units.row": "{number} {slug} — per unit",
   "map.units.note": "Per-unit state is presentational. The record keeps one row per stage, so a unit card never authorises a decision.",
-
   "map.a11y.canvas": "Workflow map swimlanes",
   "map.a11y.lane": "{phase} phase",
   "map.a11y.stage": "Stage {number} {slug}, {phase} phase, {state}, {repo} / {intent}. {facts}",
@@ -66,11 +58,9 @@
   "map.a11y.elapsed": "Elapsed {duration}",
   "map.a11y.reason": "Reason: {reason}",
   "map.a11y.tableCaption": "Visible stages of {intent}, in phase order: phase, number, stage, state, agent, Gate, review, elapsed time, files and notes.",
-
   "map.status.executing": "Executing {number} {slug}",
   "map.status.idle": "No stage is executing",
   "map.status.progress": "{done} of {total} stages recorded as done",
-
   "map.col.phase": "Phase",
   "map.col.number": "No.",
   "map.col.stage": "Stage",
@@ -81,7 +71,6 @@
   "map.col.elapsed": "Elapsed",
   "map.col.artifacts": "Files",
   "map.col.notes": "Notes",
-
   "map.inspector.title": "Stage inspector",
   "map.inspector.close": "Clear the stage selection",
   "map.inspector.pick": "Select a stage to see its files, review contract, audit trail and the one operation it permits.",
@@ -102,6 +91,7 @@
   "map.inspector.reviewContract": "Configured review: {class} by {reviewer}.",
   "map.inspector.reviewContractNoReviewer": "Configured review: {class}.",
   "map.inspector.reviewNone": "This stage is configured without a reviewer.",
+  "map.inspector.reviewOff": "This run does not review this stage: the intent's scope or its Review Override turns review off.",
   "map.inspector.reviewOtherStage": "The record's latest review belongs to stage {stage}, not to this one.",
   "map.inspector.reviewVerdict": "Verdict: {verdict}",
   "map.inspector.reviewRevisions_one": "{n} revision",
@@ -120,13 +110,11 @@
   "map.inspector.reasonAhead": "This stage is ahead of the cursor. The engine reaches it on its own.",
   "map.inspector.units": "Units",
   "map.inspector.summaryConfirmation": "Summary confirmation: {value}",
-
   "map.review.level.blocker": "Blocker",
   "map.review.level.advisory": "Advisory",
   "map.review.level.resolved": "Answered",
   "map.review.level.unknown": "Unclassified",
   "map.review.more": "{n} more",
-
   "map.artifactKind.artifact": "Artifact",
   "map.artifactKind.questions": "Questions",
   "map.artifactKind.memory": "Memory",
@@ -134,7 +122,6 @@
   "map.artifactKind.traceability": "Traceability",
   "map.artifactKind.contribution": "Contribution",
   "map.artifactKind.other": "Other",
-
   "map.alert.recovery": "Recovery is required for this intent. Until the evidence agrees, treat the map as a reading of disk, not as the plan's state.",
   "map.alert.openAction": "Open the action",
   "map.alert.unstable": "The record changed while Studio was reading it. This map is one snapshot and may already be out of date."

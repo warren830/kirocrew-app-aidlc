@@ -1400,7 +1400,9 @@ class Projection:
                 {
                     "slug": node.slug, "number": node.number, "name": node.name, "phase": node.phase,
                     "execution": node.execution, "mode": node.mode, "lead_agent": node.lead_agent,
-                    "reviewer": node.reviewer, "review_class": node.review_class,
+                    # The class this run reviews at, as on the cards: an express intent's Map promised the
+                    # graph's "adversarial" review that its scope never runs.
+                    "reviewer": node.reviewer, "review_class": _run_review_class(snap, node),
                     "summary_confirmation": node.summary_confirmation, "per_unit": node.per_unit,
                     "consumes": [consume.artifact for consume in node.consumes],
                     "produces": list(node.produces), "requires_stage": list(node.requires_stage),

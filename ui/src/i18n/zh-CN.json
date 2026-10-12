@@ -1260,6 +1260,7 @@
   "map.inspector.reviewContractNoReviewer": "配置的评审：{class}。",
   "map.inspector.reviewEmpty": "该阶段没有评审结论记录。",
   "map.inspector.reviewNone": "该阶段未配置评审者。",
+  "map.inspector.reviewOff": "这次运行不评审该阶段：intent 的 scope 或 Review Override 关闭了评审。",
   "map.inspector.reviewOtherStage": "记录中最近一次评审属于阶段 {stage}，不属于当前阶段。",
   "map.inspector.reviewRevisions_one": "{n} 次返工",
   "map.inspector.reviewRevisions_other": "{n} 次返工",

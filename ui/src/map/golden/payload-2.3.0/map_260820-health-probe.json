@@ -345,7 +345,7 @@
         "user-flow",
         "rough-mockups-questions"
        ],
-       "review_class": null,
+       "review_class": "advisory",
        "reviewer": "aidlc-product-lead-agent",
        "skipped_reason": null,
        "slug": "rough-mockups",
@@ -528,7 +528,7 @@
         "requirements",
         "requirements-analysis-questions"
        ],
-       "review_class": null,
+       "review_class": "advisory",
        "reviewer": "aidlc-product-lead-agent",
        "skipped_reason": null,
        "slug": "requirements-analysis",
@@ -567,7 +567,7 @@
         "personas",
         "user-stories-assessment"
        ],
-       "review_class": null,
+       "review_class": "advisory",
        "reviewer": "aidlc-product-lead-agent",
        "skipped_reason": null,
        "slug": "user-stories",
@@ -609,7 +609,7 @@
         "accessibility-checklist",
         "refined-mockups-questions"
        ],
-       "review_class": null,
+       "review_class": "advisory",
        "reviewer": "aidlc-product-lead-agent",
        "skipped_reason": null,
        "slug": "refined-mockups",
@@ -652,7 +652,7 @@
         "component-dependency",
         "decisions"
        ],
-       "review_class": null,
+       "review_class": "advisory",
        "reviewer": "aidlc-architecture-reviewer-agent",
        "skipped_reason": null,
        "slug": "application-design",
@@ -699,7 +699,7 @@
         "unit-of-work-dependency",
         "unit-of-work-story-map"
        ],
-       "review_class": null,
+       "review_class": "advisory",
        "reviewer": "aidlc-architecture-reviewer-agent",
        "skipped_reason": null,
        "slug": "units-generation",
@@ -796,7 +796,7 @@
         "business-rules",
         "domain-entities"
        ],
-       "review_class": null,
+       "review_class": "advisory",
        "reviewer": "aidlc-architecture-reviewer-agent",
        "skipped_reason": null,
        "slug": "functional-design",
@@ -846,7 +846,7 @@
         "reliability-requirements",
         "tech-stack-decisions"
        ],
-       "review_class": null,
+       "review_class": "advisory",
        "reviewer": "aidlc-architecture-reviewer-agent",
        "skipped_reason": null,
        "slug": "nfr-requirements",
@@ -899,7 +899,7 @@
         "reliability-design",
         "logical-components"
        ],
-       "review_class": null,
+       "review_class": "advisory",
        "reviewer": "aidlc-architecture-reviewer-agent",
        "skipped_reason": null,
        "slug": "nfr-design",
@@ -953,7 +953,7 @@
         "monitoring-design",
         "cicd-pipeline"
        ],
-       "review_class": null,
+       "review_class": "advisory",
        "reviewer": "aidlc-architecture-reviewer-agent",
        "skipped_reason": null,
        "slug": "infrastructure-design",
@@ -1005,7 +1005,7 @@
         "code-generation-plan",
         "code-summary"
        ],
-       "review_class": null,
+       "review_class": "advisory",
        "reviewer": "aidlc-architecture-reviewer-agent",
        "skipped_reason": null,
        "slug": "code-generation",

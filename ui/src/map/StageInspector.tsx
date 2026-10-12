@@ -190,7 +190,8 @@ export function StageInspector({
             ? stage.reviewer
               ? t('map.inspector.reviewContract', { class: stage.review_class, reviewer: stage.reviewer })
               : t('map.inspector.reviewContractNoReviewer', { class: stage.review_class })
-            : t('map.inspector.reviewNone')}
+            // A reviewer with no class: the intent's scope or Review Override turns this stage's review off.
+            : t(stage.reviewer ? 'map.inspector.reviewOff' : 'map.inspector.reviewNone')}
         </p>
         {review && !reviewIsThisStage && review.stage ? (
           <p className="studio-muted">{t('map.inspector.reviewOtherStage', { stage: review.stage })}</p>

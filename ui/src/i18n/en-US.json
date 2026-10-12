@@ -1260,6 +1260,7 @@
   "map.inspector.reviewContractNoReviewer": "Configured review: {class}.",
   "map.inspector.reviewEmpty": "No review finding is recorded for this stage.",
   "map.inspector.reviewNone": "This stage is configured without a reviewer.",
+  "map.inspector.reviewOff": "This run does not review this stage: the intent's scope or its Review Override turns review off.",
   "map.inspector.reviewOtherStage": "The record's latest review belongs to stage {stage}, not to this one.",
   "map.inspector.reviewRevisions_one": "{n} revision",
   "map.inspector.reviewRevisions_other": "{n} revisions",

@@ -376,6 +376,17 @@ describe('the workflow map', () => {
     expect(navigations.at(-1)).toContain('view=actions')
   })
 
+  it('says the run reviews nothing when the scope turns a stage\'s review off', async () => {
+    const map = mapFixture()
+    installRoutes({ map: { ...map, nodes: map.nodes.map((node) =>
+      node.slug === 'requirements-analysis' ? { ...node, review_class: null } : node) } })
+    mount({ cards: [gateCard()] })
+    await userEvent.click(await screen.findByRole('button', { name: /requirements-analysis/ }))
+    const inspector = screen.getByRole('complementary', { name: 'Stage inspector' })
+    expect(within(inspector).getByText(/This run does not review this stage/)).toBeInTheDocument()
+    expect(within(inspector).queryByText(/Configured review/)).toBeNull()
+  })
+
   it('refuses an operation, with the reason, when the stage or the intent does not permit one', async () => {
     installRoutes()
     mount({ cards: [gateCard()] })

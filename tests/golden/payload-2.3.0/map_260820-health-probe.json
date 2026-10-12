@@ -297,7 +297,7 @@
       "scope-definition",
       "team-formation"
      ],
-     "review_class": null,
+     "review_class": "advisory",
      "reviewer": "aidlc-product-lead-agent",
      "slug": "rough-mockups",
      "summary_confirmation": null
@@ -420,7 +420,7 @@
       "approval-handoff",
       "reverse-engineering"
      ],
-     "review_class": null,
+     "review_class": "advisory",
      "reviewer": "aidlc-product-lead-agent",
      "slug": "requirements-analysis",
      "summary_confirmation": null
@@ -447,7 +447,7 @@
      "requires_stage": [
       "requirements-analysis"
      ],
-     "review_class": null,
+     "review_class": "advisory",
      "reviewer": "aidlc-product-lead-agent",
      "slug": "user-stories",
      "summary_confirmation": null
@@ -477,7 +477,7 @@
      "requires_stage": [
       "user-stories"
      ],
-     "review_class": null,
+     "review_class": "advisory",
      "reviewer": "aidlc-product-lead-agent",
      "slug": "refined-mockups",
      "summary_confirmation": null
@@ -508,7 +508,7 @@
       "requirements-analysis",
       "refined-mockups"
      ],
-     "review_class": null,
+     "review_class": "advisory",
      "reviewer": "aidlc-architecture-reviewer-agent",
      "slug": "application-design",
      "summary_confirmation": null
@@ -538,7 +538,7 @@
      "requires_stage": [
       "application-design"
      ],
-     "review_class": null,
+     "review_class": "advisory",
      "reviewer": "aidlc-architecture-reviewer-agent",
      "slug": "units-generation",
      "summary_confirmation": null
@@ -600,7 +600,7 @@
      "requires_stage": [
       "units-generation"
      ],
-     "review_class": null,
+     "review_class": "advisory",
      "reviewer": "aidlc-architecture-reviewer-agent",
      "slug": "functional-design",
      "summary_confirmation": null
@@ -630,7 +630,7 @@
       "units-generation",
       "functional-design"
      ],
-     "review_class": null,
+     "review_class": "advisory",
      "reviewer": "aidlc-architecture-reviewer-agent",
      "slug": "nfr-requirements",
      "summary_confirmation": null
@@ -662,7 +662,7 @@
       "units-generation",
       "nfr-requirements"
      ],
-     "review_class": null,
+     "review_class": "advisory",
      "reviewer": "aidlc-architecture-reviewer-agent",
      "slug": "nfr-design",
      "summary_confirmation": null
@@ -695,7 +695,7 @@
       "units-generation",
       "nfr-design"
      ],
-     "review_class": null,
+     "review_class": "advisory",
      "reviewer": "aidlc-architecture-reviewer-agent",
      "slug": "infrastructure-design",
      "summary_confirmation": null
@@ -729,7 +729,7 @@
       "nfr-design",
       "infrastructure-design"
      ],
-     "review_class": null,
+     "review_class": "advisory",
      "reviewer": "aidlc-architecture-reviewer-agent",
      "slug": "code-generation",
      "summary_confirmation": null
