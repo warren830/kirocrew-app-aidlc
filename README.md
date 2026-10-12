@@ -88,7 +88,7 @@ Studio removes that cost without weakening the method.
 
 | | |
 |---|---|
-| KiroCrew | 0.3.0 or newer (`minKiroCrewVersion`) |
+| KiroCrew | 0.8.0 or newer (`minKiroCrewVersion`) |
 | Platform | macOS or Linux |
 | For running AI-DLC in a repository | [Bun installed on the gateway](#install-bun-for-ai-dlc), a signed-in `kiro-cli`, and a paid Kiro plan for the models AI-DLC expects |
 | For Git observation | `git` on `PATH` (optional; Studio degrades to "Git unavailable" without it) |
@@ -138,9 +138,40 @@ Bun, paste the full path printed by `command -v bun` into **Absolute path to Bun
 Desktop-launched gateways may have a different `PATH` from your terminal; these settings apply
 immediately without restarting Studio.
 
-### Install from GitHub
+### Install from a local clone in Discover
 
-Start KiroCrew on the machine where you want the app installed. The installation helper needs Git,
+Clone the repository on the machine running the KiroCrew Gateway and note its absolute path:
+
+```bash
+git clone https://github.com/warren830/kirocrew-app-aidlc.git
+cd kirocrew-app-aidlc
+pwd
+```
+
+1. In KiroCrew, open **Discover** and click **Add source** at the bottom of the **Sources** list.
+
+   ![Add source at the bottom of the Discover Sources list](docs/images/install/discover-add-source.png)
+
+2. In the **External Registries** panel, paste the path printed by `pwd` into **Install from Path**
+   and click **Install**.
+
+   ![Install from Path in the External Registries panel](docs/images/install/install-from-path.png)
+
+3. Open **Library**, find **AI-DLC Studio** and click **Enable**. If it is not listed, check whether
+   **Show enabled only** is on. Once enabled, its **⋯** menu also offers **Sync** (used for updates),
+   **Disable** and **Uninstall**.
+
+   ![AI-DLC Studio enabled in Library, with its ⋯ menu open](docs/images/install/library-enable.png)
+
+4. If KiroCrew opens the app's details and asks for trust, grant it to this app only; blanket
+   third-party trust is not needed.
+
+The path must be a directory on the gateway's machine. This uses the built UI checked into the
+repository, so it needs neither Node.js, npm nor the helper script.
+
+### Install with the helper script
+
+Use this from a terminal, inside a Docker container or for a remote gateway. The installation helper needs Git,
 Bash, `curl` and the gateway's Python: `KC_PY` when set (a path or a command name on `PATH`),
 otherwise the runtime bundled in `/Applications/KiroCrew.app` when present, otherwise `python3` on
 `PATH`. It passes the same interpreter to `scripts/kcapi.sh`. The repository includes the built UI,
@@ -171,11 +202,11 @@ KC_PY=/path/to/kirocrew/.venv/bin/python KC_PORT=5476 \
 Installing Studio adds the KiroCrew app. Installing the AI-DLC harness into a project is a separate,
 explicit step in **Repos → Add repository → Install AI-DLC**, described under [First run](#first-run).
 
-### Install from Discover
+### Install from the GitHub registry
 
-This repository is also an app registry: its `app-registry.json` lists the `release` branch. Add
-`https://github.com/warren830/kirocrew-app-aidlc` with branch `release` to KiroCrew's app registries,
-then **Discover → AI-DLC Studio → Install**, and later **Update** when a new release lands. From a
+This repository is also an app registry: its `app-registry.json` lists the `release` branch. In
+**Discover → Add source → Add Registry**, add `https://github.com/warren830/kirocrew-app-aidlc` with
+branch `release`, then **Discover → AI-DLC Studio → Install**, and later **Update** when a new release lands. From a
 script, `GET /api/apps/registries` first: `PUT` replaces the whole list, so send your existing rows plus
 `{"name": "aidlc-studio", "repo": "https://github.com/warren830/kirocrew-app-aidlc", "branch": "release"}`.
 The gateway clones the registry itself, without your shell's proxy variables, so it needs direct access to
@@ -183,11 +214,17 @@ GitHub. Grant trust to this app when prompted; blanket third-party trust is not 
 
 ### Update or rebuild
 
-Run an update when no Studio operation is active: the helper briefly disables the app to reload its
-backend hooks.
+Run an update when no Studio operation is active. Pull the new code into your clone first:
 
 ```bash
 git pull --ff-only
+```
+
+For an app installed from a path, click **Library → AI-DLC Studio → ⋯ → Sync**: KiroCrew re-syncs it
+from its source directory and reloads its backend. For a helper installation, rerun the helper, which
+briefly disables the app to reload its backend hooks:
+
+```bash
 bash scripts/dev-install.sh --no-build
 ```
 

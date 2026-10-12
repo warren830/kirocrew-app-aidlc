@@ -16,7 +16,8 @@ enforces the mechanical half.
 The app is published from its own public repository, `https://github.com/warren830/kirocrew-app-aidlc`
 (app at the repository root, no `subdirectory`). It reaches users through three channels:
 
-1. **Direct install** — `git clone` plus `bash scripts/dev-install.sh --no-build` (README → Install).
+1. **Direct install** — `git clone`, then **Discover → Add source → Install from Path** or
+   `bash scripts/dev-install.sh --no-build` (README → Install).
 2. **Self-hosted registry** — this repository's own `app-registry.json` lists the `release` branch.
    An owner adds the repository under Settings → App registries, and Discover then offers install
    and update. Such a registry is `index` trust: no verified badge.

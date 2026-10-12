@@ -69,23 +69,32 @@ Studio 去掉了这些代价，同时不削弱这套方法本身。
 
 ## 快速开始
 
-需要：KiroCrew 0.3.0 或更新版本，macOS 或 Linux。要在仓库里运行 AI-DLC，还需要 Bun、已登录的 `kiro-cli`，
+需要：KiroCrew 0.8.0 或更新版本，macOS 或 Linux。要在仓库里运行 AI-DLC，还需要 Bun、已登录的 `kiro-cli`，
 以及支持所用模型的 Kiro 订阅。
+
+在 Gateway 所在机器上克隆仓库，并记下目录的绝对路径：
 
 ```bash
 git clone https://github.com/warren830/kirocrew-app-aidlc.git
 cd kirocrew-app-aidlc
-bash scripts/dev-install.sh --no-build
+pwd
 ```
 
-然后在 KiroCrew 里打开 AI-DLC Studio：
+然后在 KiroCrew 里安装并启用：
+
+1. **Discover → Add source**，把上面的路径填入 **Install from Path**，点 **Install**。
+2. **Library → AI-DLC Studio → Enable**。如果提示授予信任，只为这个应用授予即可。
+
+不方便用界面时，也可以在克隆目录中执行 `bash scripts/dev-install.sh --no-build`。
+
+接着打开 AI-DLC Studio：
 
 1. **仓库 → 添加仓库**，选择项目目录。Studio 会先做只读预检。
 2. 如果仓库里还没有 AI-DLC，点 **安装 AI-DLC**。写入任何文件之前，你会先看到全部变更。
 3. **新建意图**：依次完成「工作、预设、计划、复核」四步。新建的意图默认暂停。
 4. 在意图上点 **创建会话并开始运行**。工作流跑到第一个需要你决定的地方时，它会出现在待办中心。
 
-Bun 安装、从 Discover 安装、更新等完整步骤，见 [中文安装说明](docs/installation.zh-CN.md)。
+Bun 安装、安装脚本、GitHub registry、更新等完整步骤，见 [中文安装说明](docs/installation.zh-CN.md)。
 
 ## 文档
 

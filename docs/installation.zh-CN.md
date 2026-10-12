@@ -6,12 +6,13 @@
 
 ## 安装条件
 
-- macOS 或 Linux，已启动 KiroCrew。应用声明的最低 KiroCrew 版本为 0.3.0。
+- macOS 或 Linux，已启动 KiroCrew。应用声明的最低 KiroCrew 版本为 0.8.0。
+- 在 Discover 中从本地路径安装时，只需要用 Git 克隆本仓库。
 - 安装脚本需要 Git、Bash、`curl` 和 Gateway 所用的 Python。优先使用 `KC_PY`（可以是路径，也可以是 `PATH` 中的命令名）；未设置时，若存在 `/Applications/KiroCrew.app` 自带的 Python 则使用它，否则使用 `PATH` 中的 `python3`。安装脚本会把同一个解释器传给 `scripts/kcapi.sh`。
 - 使用 `--no-build` 安装预构建 UI 时，无需 Node.js 或 npm；重新构建 UI 时才需要。
 - 在项目中运行 AI-DLC 时，还需要 Bun、已登录的 Kiro CLI，以及支持所用模型的 Kiro 订阅。
 
-安装命令应在运行 KiroCrew Gateway 的机器上执行。安装 Studio 和向项目安装 AI-DLC 是两个独立步骤。
+克隆和安装命令都应在运行 KiroCrew Gateway 的机器上执行。安装 Studio 和向项目安装 AI-DLC 是两个独立步骤。
 
 ## 1. 安装 AI-DLC 所需的 Bun
 
@@ -64,11 +65,38 @@ export PATH="$HOME/.bun/bin:$PATH"
 
 ## 2. 下载并安装应用
 
-在终端执行：
+先在 Gateway 所在机器上克隆本仓库，并记下目录的绝对路径：
 
 ```bash
 git clone https://github.com/warren830/kirocrew-app-aidlc.git
 cd kirocrew-app-aidlc
+pwd
+```
+
+### 方式一：在 Discover 中从本地路径安装（推荐）
+
+1. 在 KiroCrew 中打开 **Discover**，点击左侧 **Sources** 列表底部的 **Add source**。
+
+   ![Discover 左侧 Sources 列表底部的 Add source](images/install/discover-add-source.png)
+
+2. 在弹出的 **External Registries** 面板中，把上面 `pwd` 输出的路径填入下方 **Install from Path** 的输入框，点击 **Install**。
+
+   ![External Registries 面板下方的 Install from Path](images/install/install-from-path.png)
+
+3. 打开 **Library**，找到 **AI-DLC Studio**，点击 **Enable**。若列表中没有，检查是否开启了 **Show enabled only**。启用后，**⋯** 菜单中还有 **Sync**（更新时使用）、**Disable** 和 **Uninstall**。
+
+   ![Library 中已启用的 AI-DLC Studio 及其 ⋯ 菜单](images/install/library-enable.png)
+
+4. 如果启用时 KiroCrew 打开应用详情并要求授予信任，只为这个应用授予即可，无需开启第三方应用的全局信任。
+5. 启用后，AI-DLC Studio 会出现在侧栏，也可以在 Library 中点击 **Open** 打开。
+
+路径必须是 Gateway 所在机器上的目录。这种方式直接使用仓库内置的 UI 构建产物，无需 Node.js、npm 或安装脚本。
+
+### 方式二：使用安装脚本
+
+适合命令行、Docker 容器或远程 Gateway。在克隆目录中执行：
+
+```bash
 bash scripts/dev-install.sh --no-build
 ```
 
@@ -87,23 +115,23 @@ KC_PY=/path/to/kirocrew/.venv/bin/python KC_PORT=5476 \
   bash scripts/dev-install.sh --no-build
 ```
 
-也可以通过 Discover 安装：本仓库本身就是一个应用 registry，`app-registry.json` 指向 `release` 分支。在 KiroCrew 的应用 registry 设置中添加 `https://github.com/warren830/kirocrew-app-aidlc`，分支填 `release`，然后在 **Discover → AI-DLC Studio → Install** 安装；有新版本时在同一处 **Update**。如果用脚本调用，请先 `GET /api/apps/registries`：`PUT` 会整体替换列表，因此要把已有条目连同 `{"name": "aidlc-studio", "repo": "https://github.com/warren830/kirocrew-app-aidlc", "branch": "release"}` 一起提交。Gateway 自己克隆 registry，不会继承终端里的代理变量，所以它需要能直接访问 GitHub。
-
 如果 Gateway 已在 Docker 中运行，先用 `docker exec -it <容器名> bash` 进入容器，再在其中执行 Bun 安装、仓库克隆和应用安装。官方镜像中 `PATH` 里的 `python3` 就是 Gateway 的 Python，无需设置 `KC_PY`，也无需额外安装 Node 或 `/usr/bin/python3`：
 
 ```bash
 bash scripts/dev-install.sh --no-build
 ```
 
+### 方式三：添加 GitHub registry
+
+本仓库本身就是一个应用 registry，`app-registry.json` 指向 `release` 分支。在 **Discover → Add source** 面板中点击 **Add Registry**，添加 `https://github.com/warren830/kirocrew-app-aidlc`，分支填 `release`，然后在 **Discover → AI-DLC Studio → Install** 安装；有新版本时在同一处 **Update**。如果用脚本调用，请先 `GET /api/apps/registries`：`PUT` 会整体替换列表，因此要把已有条目连同 `{"name": "aidlc-studio", "repo": "https://github.com/warren830/kirocrew-app-aidlc", "branch": "release"}` 一起提交。Gateway 自己克隆 registry，不会继承终端里的代理变量，所以它需要能直接访问 GitHub；无法访问时改用方式一。
+
 ## 3. 确认安装结果
 
-安装脚本最后的应用健康检查应返回 `"status": "healthy"`。也可单独执行：
+**Library** 中的 AI-DLC Studio 应显示为已启用，打开后能正常加载页面。使用安装脚本时，最后的应用健康检查应返回 `"status": "healthy"`。也可在克隆目录中单独执行：
 
 ```bash
 bash scripts/kcapi.sh GET /api/apps/aidlc-studio/health
 ```
-
-然后在 KiroCrew 中打开 **Apps → AI-DLC Studio**。
 
 ## 4. 给项目安装 AI-DLC
 
@@ -115,10 +143,15 @@ bash scripts/kcapi.sh GET /api/apps/aidlc-studio/health
 
 ## 更新与开发
 
-更新前先结束正在进行的 Studio 操作。安装脚本会短暂禁用应用，以重新加载后端：
+更新前先结束正在进行的 Studio 操作，然后在克隆目录中拉取新代码：
 
 ```bash
 git pull --ff-only
+```
+
+从本地路径安装的，在 **Library → AI-DLC Studio → ⋯ → Sync** 中从原目录重新同步，KiroCrew 会停止并重新加载应用后端。使用安装脚本的，重新执行脚本，它会短暂禁用应用以重新加载后端：
+
+```bash
 bash scripts/dev-install.sh --no-build
 ```
 
@@ -135,6 +168,8 @@ bash scripts/dev-install.sh
 
 | 现象 | 检查方法 |
 |---|---|
+| Install from Path 提示 `source is not a directory` | 填写 Gateway 所在机器上克隆目录的绝对路径，即克隆目录中 `pwd` 的输出 |
+| Library 中启用后跳到应用详情 | 在详情中为 AI-DLC Studio 授予信任；如仍未启用，再点一次 **Enable** |
 | `gateway Python not found` | `KC_PY` 指向的解释器不存在或不可执行；将其设置为 Gateway 实际使用的 Python |
 | `could not mint a token` | 确认 Gateway 已启动，`KC_PY` 指向其实际 Python，并由运行 Gateway 的同一系统用户执行命令 |
 | `cookie exchange failed` | 确认 `KC_PORT` 与当前 Gateway 一致，且没有连接到另一套 KiroCrew 实例 |
@@ -143,6 +178,6 @@ bash scripts/dev-install.sh
 | `bun: command not found` | 按 Bun 安装步骤配置 `PATH`，重新打开终端并运行 `bun --version` |
 | 终端能运行 Bun，但 Studio 显示未找到 | 在 Gateway 机器上运行 `command -v bun`，将输出填入 Studio 设置中的 Bun 绝对路径，再保存并校验 |
 | 页面已打开，但项目无法运行 AI-DLC | 在 Studio 设置中检查 Bun；确认 Kiro CLI 已登录，并已对目标项目执行 Install AI-DLC |
-| Discover 中找不到应用 | 使用上面的 GitHub 克隆和本地安装方式 |
+| Discover 中找不到应用 | 改用方式一，在 **Install from Path** 中安装本地克隆 |
 
 认证辅助脚本会取得本机 Gateway 的会话，无需把 API token 复制到代码或配置文件中。
