@@ -166,8 +166,9 @@ describe('recovery notices explain the actual cause and lifecycle', () => {
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('the bound conversation could not be found')
     expect(screen.getByText('The recorded conversation was unavailable when this notice was created.')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Manage conversation in Intents' }))
+    // `tab=conversation` opens that intent's conversation panel, not just the intents list.
     expect(go).toHaveBeenLastCalledWith({
-      ...EMPTY_ROUTE, view: 'intents', repo: card.repo.repo_id, intent: card.intent.intent_key,
+      ...EMPTY_ROUTE, view: 'intents', repo: card.repo.repo_id, intent: card.intent.intent_key, tab: 'conversation',
     })
     expect(apiCalls.filter((call) => call.method !== 'GET')).toEqual([])
   })
