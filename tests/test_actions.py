@@ -1533,6 +1533,19 @@ async def test_a_queued_card_picks_up_a_conversation_bound_after_it_was_derived(
 
 
 @aio
+async def test_a_plan_asked_in_a_replaced_session_explains_itself_and_offers_resume(world):
+    """Its consequence must not say the reply approves the plan: AI-DLC cannot record it until it asks again."""
+    (world.builder.record(INTENT) / QUESTIONS_REL).write_text("## Plan Approval\n\n- Approve Plan\n- Request Changes\n\n[Answer]:\n")
+    world.builder.append_audit(INTENT, F.audit_block(
+        "DECISION_RECORDED", F._plus(TS, 10), Stage=STAGE, Checkpoint="Code Generation Plan Approval", Session="s-1"))
+    world.builder.append_audit(INTENT, F.audit_block("SESSION_STARTED", F._plus(TS, 20), Session="s-2"))
+    question = pick(await seed(world), "question")
+    card = await world.broker.card(question, snapshot(world))
+    assert [d["decision"] for d in card["decisions"]] == ["resume"]
+    assert card["consequence"]["key"] == "action.question.consequence.plan_session_stale"
+
+
+@aio
 async def test_retire_stale_cancels_a_queued_card_and_only_marks_a_failed_one(world):
     gate = pick(await seed(world), "gate")
     rec = await _retyped(world, "Failed", dedupe_key="gate:gone:forever")

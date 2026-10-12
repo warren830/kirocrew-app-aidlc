@@ -1448,9 +1448,13 @@ class HumanActionBroker:
         checkpoint = checkpoint if rec.type == "question" and checkpoint in C.QUESTION_CHECKPOINT_KINDS else None
         params = meta.get("headline_params") or {}
         variant = meta.get("consequence_variant")
+        # A checkpoint names its own consequence unless the seed chose a more specific one: a plan asked in a
+        # replaced session cannot be approved from here, so "your reply approves the plan" would be false.
+        specific = variant if variant not in (None, checkpoint, "advances_turn") else None
         consequence = None
         if checkpoint or variant:
-            key = f"question.consequence.{checkpoint}" if checkpoint else f"{rec.type}.consequence.{variant}"
+            key = (f"{rec.type}.consequence.{specific}" if specific
+                   else f"question.consequence.{checkpoint}" if checkpoint else f"{rec.type}.consequence.{variant}")
             consequence = {"key": f"action.{key}", "params": dict(params)}
         return {
             "action_id": rec.action_id, "type": rec.type, "queue_type": queue_type, "status": rec.status,
