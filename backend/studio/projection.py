@@ -1054,7 +1054,7 @@ class Projection:
             # AI-DLC 2.10 binds a Plan Approval to the conversation session that asked it. Once the host has
             # started a new session (a long idle restarts it), no reply can be recorded: AI-DLC must ask again
             # in this one, which a resumed run does. Offering Approve would send a reply bound to be refused.
-            stale = checkpoint == "plan_approval" and _plan_asked_in_an_earlier_session(snap)
+            stale = checkpoint == "plan_approval" and plan_asked_in_an_earlier_session(snap)
             if stale:
                 decisions = [d for d in decisions if d not in _CHECKPOINT_DECISIONS["plan_approval"]] + ["resume"]
             seeds.append(self._seed(
@@ -1558,7 +1558,7 @@ def _repo_id_of(card: Any) -> str:
     return str(_attr(_attr(card, "repo", {}), "repo_id", "") or "")
 
 
-def _plan_asked_in_an_earlier_session(snap: IntentSnapshot) -> bool:
+def plan_asked_in_an_earlier_session(snap: IntentSnapshot) -> bool:
     """Did AI-DLC ask this unit's Plan Approval in a session the conversation has since left? The newest
     plan-approval ``DECISION_RECORDED`` names its session; a later ``SESSION_STARTED`` or ``HUMAN_TURN`` naming
     another one means a reply now reaches a session that holds no challenge for it."""

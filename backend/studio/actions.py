@@ -42,7 +42,7 @@ from .engine import CursorReadback
 from .errors import IllegalTransition, StaleGeneration, StudioError
 from .projection import (
     SEED_SEVERITY, SEVERITY_RANK, UNCERTAIN_STATUSES, dedupe_key, priority_group_for, queue_type_for,
-    run_unavailable_reason,
+    plan_asked_in_an_earlier_session, run_unavailable_reason,
 )
 from .repo_registry import RepoRecord
 from .sessions import busy_reasons
@@ -776,6 +776,14 @@ class HumanActionBroker:
         """A Run/Resume must still be what the checkpoint asks for; a never-sent stale one is retired on the way
         out, so the user is shown the current checkpoint instead."""
         if decision not in ("run", "resume"):
+            return
+        if rec is not None and rec.type == "question":
+            # A question card offers Resume only for a Plan Approval asked in a session the conversation has left:
+            # the pending checkpoint the command rule refuses is the reason for it. The card is the derived one,
+            # never retired here; once AI-DLC asks again in this session its seed offers Approve instead.
+            if not plan_asked_in_an_earlier_session(snap):
+                _refuse("action_stale", "AI-DLC has asked for this plan approval again in this session",
+                        fields=["plan_session"], card=await self.card(rec, snap))
             return
         reason = run_unavailable_reason(snap, stage=rec.stage if rec else None, unit=rec.unit if rec else None)
         if reason is None:

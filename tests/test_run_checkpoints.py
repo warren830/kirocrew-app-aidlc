@@ -257,3 +257,50 @@ def test_cold_start_cannot_treat_plan_approval_as_an_ended_turn(sv, routes, fake
             await restored.stop()
 
     asyncio.run(cold_start())
+
+
+def _plan_asked_then_restarted(scene):
+    """A Plan Approval AI-DLC asked in session s-1, after which the conversation restarted as s-2."""
+    record = _record_dir(scene.root)
+    (record / QUESTIONS_REL).parent.mkdir(parents=True, exist_ok=True)
+    (record / QUESTIONS_REL).write_text("# Questions\n\n## Plan Approval\n\n- Approve Plan\n- Request Changes\n\n[Answer]:\n")
+    with _shard(scene.root).open("a") as file:
+        file.write(F.audit_text(
+            F.audit_block("DECISION_RECORDED", "2026-09-04T09:10:00Z", Stage=STAGE,
+                          Checkpoint="Code Generation Plan Approval", Session="s-1"),
+            F.audit_block("SESSION_STARTED", "2026-09-04T12:00:00Z", Session="s-2")))
+
+
+def test_a_stale_plan_cards_resume_is_sent_not_retired_as_an_obsolete_run(sv, routes, fake_host, scene):
+    """The pending plan checkpoint is why the card offers Resume: the Run rule's `question_pending` cancelled it."""
+    _plan_asked_then_restarted(scene)
+    _rescan(sv, routes, fake_host, scene)
+    card = next(a for a in _queue(sv, routes, fake_host) if a["type"] == "question")
+    assert [d["decision"] for d in card["decisions"]] == ["resume"]
+    status, receipt = _submit(sv, routes, fake_host, card, payload={"decision": "resume"}, wire_text="/aidlc --resume")
+    assert status == 200, receipt
+    record = get(sv, card["action_id"])
+    assert record.status == "Delivering" and record.wire_text == "/aidlc --resume"
+
+
+def test_a_plan_asked_again_refuses_the_old_resume_without_retiring_the_card(sv, routes, fake_host, scene, monkeypatch):
+    """Under the lease AI-DLC may have asked again in this session: the card is refreshed, not cancelled."""
+    _plan_asked_then_restarted(scene)
+    _rescan(sv, routes, fake_host, scene)
+    card = next(a for a in _queue(sv, routes, fake_host) if a["type"] == "question")
+    switch = sv.engine.switch_cursor_sync
+
+    def switch_then_reask(*args, **kwargs):
+        result = switch(*args, **kwargs)
+        with _shard(scene.root).open("a") as file:
+            file.write(F.audit_block("DECISION_RECORDED", "2026-09-04T12:00:05Z", Stage=STAGE,
+                                     Checkpoint="Code Generation Plan Approval", Session="s-2"))
+        return result
+
+    monkeypatch.setattr(sv.engine, "switch_cursor_sync", switch_then_reask)
+    status, body = _submit(sv, routes, fake_host, card, payload={"decision": "resume"}, wire_text="/aidlc --resume")
+    assert status == 409 and body["code"] == "action_stale", body
+    assert body["details"]["fields"] == ["plan_session"]
+    record = get(sv, card["action_id"])
+    assert record.status == "Queued" and record.delivery_id is None
+    assert not sv.scheduler.live()
