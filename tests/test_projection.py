@@ -379,6 +379,23 @@ def test_evidence_snapshot_carries_the_full_card_shape(projection, gate_snap):
     assert body["presence_baseline"] is None and body["presence"] is None and body["cursor_readback"] is None
 
 
+
+@pytest.mark.parametrize("review,lead", [
+    ("", "build-and-test-summary.md"),
+    ("\n## Review\n\n**Verdict**: READY\n", "build-instructions.md"),
+])
+def test_an_unreviewed_gate_opens_on_the_stage_summary(projection, snap_of, repo_builder, review, lead):
+    """No reviewer judged build-and-test, so its account of the run leads, not the first file it declares."""
+    stage, record = "build-and-test", "construction/build-and-test"
+    root = build(repo_builder, "build-gate", audit=F.gate_open_audit(stage), state=F.state_text(
+        marks={stage: "?"}, fields={**RUNNING, "Current Stage": stage, "Lifecycle Phase": "CONSTRUCTION"}),
+        artifacts={f"{record}/build-instructions.md": "# Build\n" + review,
+                   f"{record}/build-and-test-summary.md": "# Summary\n\nAll tests passed.\n",
+                   f"{record}/test-results.md": "# Results\n"})
+    names = [a["name"] for a in projection.evidence(snap_of(root), stage=stage).to_json()["artifacts"]]
+    assert names[0] == lead and sorted(names) == ["build-and-test-summary.md", "build-instructions.md",
+                                                  "test-results.md"]
+
 def test_evidence_never_claims_an_acceptance_criterion_is_met(projection, gate_snap):
     assert all(row["met"] is None for row in projection.evidence(gate_snap).to_json()["acceptance_criteria"])
 

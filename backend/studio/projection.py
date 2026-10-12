@@ -657,12 +657,16 @@ class Projection:
         artifacts, artifacts_capped = _capped(
             lambda: tuple(self._reader.stage_artifacts(root, artifact_dir_rel, node)), ()
         )
-        primary = self._primary_artifact(artifacts, node)
-        if primary is not None and artifacts[0] is not primary:
-            # The artifact the stage is judged on leads, because a Gate opens on the first one: in name order
-            # `requirements-analysis-questions.md` sorts before `requirements.md`, and the Gate showed the questions.
-            artifacts = (primary, *(a for a in artifacts if a is not primary))
         review, review_capped = _capped(lambda: self._review_of(root, artifacts, node), None)
+        primary = self._primary_artifact(artifacts, node)
+        judged = review_capped or (review is not None and (review[0] is not None or bool(review[1])))
+        # A Gate opens on the first artifact, so the one the stage is judged on leads: in name order
+        # `requirements-analysis-questions.md` sorts before `requirements.md`, and the Gate showed the questions.
+        # Where no reviewer judged it, the stage's own account of what it did (`code-summary`,
+        # `build-and-test-summary`) leads instead of the first file it declares (`build-instructions`).
+        lead = primary if judged else (self._summary_artifact(artifacts, node) or primary)
+        if lead is not None and artifacts[0] is not lead:
+            artifacts = (lead, *(a for a in artifacts if a is not lead))
         if questions is None and slug:
             questions = _capped(lambda: self._reader.read_questions(root, stage_dir_rel, slug), None)[0]
         criteria: tuple[str, ...] = ()
@@ -712,6 +716,13 @@ class Projection:
                 if candidate in by_name:
                     return by_name[candidate]
         return next((a for a in artifacts if a.kind == "artifact"), None)
+
+    @staticmethod
+    def _summary_artifact(artifacts: Sequence[ArtifactMeta], node: StageNode | None) -> ArtifactMeta | None:
+        """The summary product a stage declares and wrote (`code-summary`, `build-and-test-summary`), if any."""
+        by_name = {a.name: a for a in artifacts}
+        names = [f"{name}.md" for name in (node.produces if node is not None else ()) if name.endswith("summary")]
+        return next((by_name[name] for name in names if name in by_name), None)
 
     # -- captured / evidence ------------------------------------------------ #
 
