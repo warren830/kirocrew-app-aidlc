@@ -227,7 +227,9 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
           onClick={() => setPending(intent.paused ? 'unpause' : 'pause')}
         >
           <Icon name={intent.paused ? 'play' : 'pause'} size={13} />
-          {intent.paused ? t('intents.action.unpause') : t('intents.action.pause')}
+          {/* "after current turn" only when one is running: an intent that never ran has no turn to wait for. */}
+          {intent.paused ? t('intents.action.unpause')
+            : intent.session?.running ? t('intents.action.pause') : t('intents.action.pauseIdle')}
         </button>
 
         <button

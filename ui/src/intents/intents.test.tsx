@@ -115,7 +115,7 @@ describe('the intents inventory', () => {
     expect(api.reportDelivery).toHaveBeenCalledWith('a_9', expect.objectContaining({ delivery_id: 'd_9', outcome: 'delivered' }))
     expect(onQueued).not.toHaveBeenCalled()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Pause after current turn' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Pause' }))
     expect(screen.getByText('2 waiting decisions will refuse to send while this intent is paused.')).toBeInTheDocument()
     expect(api.pause).not.toHaveBeenCalled()
     await userEvent.click(screen.getByRole('button', { name: 'Confirm' }))

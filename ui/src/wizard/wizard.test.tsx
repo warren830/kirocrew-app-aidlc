@@ -345,7 +345,7 @@ async function continueToCreate() {
   const create = await screen.findByRole('button', { name: /Create the intent, paused/ })
   await waitFor(() => expect(create).toBeEnabled())
   await userEvent.click(create)
-  await waitFor(() => expect(screen.getByText('Intent created and left paused')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText('Intent created; nothing has run')).toBeInTheDocument())
 }
 
 beforeEach(() => {
@@ -615,7 +615,7 @@ describe('the new intent wizard', () => {
     await waitFor(() => expect(create).toBeEnabled())
     await userEvent.click(create)
 
-    await waitFor(() => expect(screen.getByText('Intent created and left paused')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Intent created; nothing has run')).toBeInTheDocument())
     const post = apiCalls.filter((call) => call.method === 'POST' && call.path === `${BASE}/repos/r_1/intents`)
     expect(post).toHaveLength(1)
     const body = post[0]?.body as { confirm_plan_digest: string; objective: string; label: string | null; space: string }
@@ -631,8 +631,8 @@ describe('the new intent wizard', () => {
     expect(apiCalls.some((call) => call.path.startsWith('/api/chat'))).toBe(false)
 
     // The next act is the user's, and it is named.
-    expect(screen.getByText(/you start it with Run to next checkpoint/)).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Open Intents to run it' }))
+    expect(screen.getByText(/bind a conversation to it, and start it there/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Open Intents to bind a conversation and start it' }))
     expect(navigated[navigated.length - 1]).toEqual({
       view: 'intents',
       repo: 'r_1',
@@ -682,7 +682,7 @@ describe('async scope previews', () => {
     const create = screen.getByRole('button', { name: /Create the intent, paused/ })
     await waitFor(() => expect(create).toBeEnabled())
     await userEvent.click(create)
-    await screen.findByText('Intent created and left paused')
+    await screen.findByText('Intent created; nothing has run')
     expect(creates()).toHaveLength(1)
     expect(creates()[0]?.body).toMatchObject({
       scope: 'bugfix', depth: 'Minimal', test_strategy: 'Standard', review_cap: 'advisory',
@@ -803,7 +803,7 @@ describe('async scope previews', () => {
       await act(async () => pending.resolve(answerFor(request)))
       await waitFor(() => expect(create).toBeEnabled())
       await userEvent.click(create)
-      await screen.findByText('Intent created and left paused')
+      await screen.findByText('Intent created; nothing has run')
       expect(creates()[0]?.body).toMatchObject({
         test_strategy: 'Standard',
         confirm_plan_digest: planDigest(answerFor(request).plan, { ...EMPTY_WIZARD, objective: OBJECTIVE }),

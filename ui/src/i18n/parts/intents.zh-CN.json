@@ -97,6 +97,7 @@
   "intents.action.run": "运行到下一个检查点",
   "intents.action.resume": "继续",
   "intents.action.pause": "当前回合结束后暂停",
+  "intents.action.pauseIdle": "暂停",
   "intents.action.unpause": "重新允许派发",
   "intents.action.openAction": "打开决策",
   "intents.action.details": "工作流地图",

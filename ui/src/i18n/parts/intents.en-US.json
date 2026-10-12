@@ -97,6 +97,7 @@
   "intents.action.run": "Run to next checkpoint",
   "intents.action.resume": "Resume",
   "intents.action.pause": "Pause after current turn",
+  "intents.action.pauseIdle": "Pause",
   "intents.action.unpause": "Allow dispatch again",
   "intents.action.openAction": "Open decision",
   "intents.action.details": "Workflow Map",
