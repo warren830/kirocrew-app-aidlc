@@ -657,6 +657,11 @@ class Projection:
         artifacts, artifacts_capped = _capped(
             lambda: tuple(self._reader.stage_artifacts(root, artifact_dir_rel, node)), ()
         )
+        primary = self._primary_artifact(artifacts, node)
+        if primary is not None and artifacts[0] is not primary:
+            # The artifact the stage is judged on leads, because a Gate opens on the first one: in name order
+            # `requirements-analysis-questions.md` sorts before `requirements.md`, and the Gate showed the questions.
+            artifacts = (primary, *(a for a in artifacts if a is not primary))
         review, review_capped = _capped(lambda: self._review_of(root, artifacts, node), None)
         if questions is None and slug:
             questions = _capped(lambda: self._reader.read_questions(root, stage_dir_rel, slug), None)[0]

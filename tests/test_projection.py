@@ -370,7 +370,8 @@ def test_evidence_snapshot_carries_the_full_card_shape(projection, gate_snap):
     assert body["audit"]["complete"] is True and body["audit"]["boundary_event"]["type"] == "STAGE_AWAITING_APPROVAL"
     assert body["directive"] == {"stage": GATE_STAGE, "unit": None, "units": [], "matches_state": True,
                                  "version": 1, "kind": None, "state_sha256": gate_snap.state_sha256}
-    assert [a["name"] for a in body["artifacts"]] == [f"{GATE_STAGE}-questions.md", "requirements.md"]
+    # the artifact the Gate approves comes first: the Gate template opens on artifacts[0]
+    assert [a["name"] for a in body["artifacts"]] == ["requirements.md", f"{GATE_STAGE}-questions.md"]
     assert body["findings"][0]["code"] == "completed_count_mismatch" and body["session"]["slot_key"] == "slot-1"
     assert body["questions"]["mode"] == "structured"  # a supported persisted group supplies its controls
     # the three reconciler-owned keys are present and null, so the wire shape never changes later

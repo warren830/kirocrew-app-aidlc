@@ -69,6 +69,19 @@
     "acceptance_criteria": [],
     "artifacts": [
      {
+      "artifact_id": "d3f56b59a91441192a23c73f32593009e5d8e1cd",
+      "kind": "artifact",
+      "mtime": "<volatile>",
+      "name": "requirements.md",
+      "phase": "inception",
+      "relpath": "aidlc/spaces/default/intents/260901-ledger-export/inception/requirements-analysis/requirements.md",
+      "renderable": true,
+      "sha256": "3079e62f8868434d549763d67ec0af72e89a93a9a9ab65b4d6f3590e51960cae",
+      "size": 1075,
+      "stage": "requirements-analysis",
+      "unit": null
+     },
+     {
       "artifact_id": "e36cef0c0ff887278bade0b8f31b0b1bd2281866",
       "kind": "memory",
       "mtime": "<volatile>",
@@ -91,19 +104,6 @@
       "renderable": true,
       "sha256": "93bced32300db1187327053c93b7beb1e7a244ccea2effcaa87b193061c0f26e",
       "size": 2005,
-      "stage": "requirements-analysis",
-      "unit": null
-     },
-     {
-      "artifact_id": "d3f56b59a91441192a23c73f32593009e5d8e1cd",
-      "kind": "artifact",
-      "mtime": "<volatile>",
-      "name": "requirements.md",
-      "phase": "inception",
-      "relpath": "aidlc/spaces/default/intents/260901-ledger-export/inception/requirements-analysis/requirements.md",
-      "renderable": true,
-      "sha256": "3079e62f8868434d549763d67ec0af72e89a93a9a9ab65b4d6f3590e51960cae",
-      "size": 1075,
       "stage": "requirements-analysis",
       "unit": null
      }
