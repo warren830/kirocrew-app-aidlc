@@ -1287,7 +1287,7 @@ def test_a_malformed_intent_dir_is_refused_rather_than_served_as_empty(projectio
 CONTRACT_DECISIONS = {
     "gate": ("approve", "request_changes", "accept_as_is"),
     "question": ("answers", "confirm_summary", "accept_assumptions", "convert_assumptions", "approve_plan",
-                 "request_plan_changes"),
+                 "request_plan_changes", "resume"),
     "missing_input": ("provide_input", "pick_intent"),
     "recovery": ("rebind_session", "mark_not_delivered", "acknowledge"),
     "delivery_uncertain": ("reconcile", "mark_not_delivered", "resubmit"),

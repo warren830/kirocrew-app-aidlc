@@ -1169,7 +1169,7 @@ Card derivation (one seed per live boundary; `dedupe_key` per §0.1):
 |---|---|---|---|---|
 | `gate` | a row is `[?]` (that row's stage) | row slug | blocking | state_hash, boundary_token, stage_attempt, evidence_digest, is_active |
 | `revision` | a row is `[R]` | row slug | info | same; informational, `decisions=[]` |
-| `question` | current stage's questions file has `pending_count > 0` OR `pending_checkpoint` is set (blank summary confirmation / blank plan approval; review P09), OR host reports `needs_input` for the bound slot | current stage | blocking | + question_digest, evidence_digest, is_active. `decisions` depend on what is pending: Q tags → `answers`; `summary_confirmation` → `confirm_summary`; `assumption_confirmation` → `accept_assumptions`, `convert_assumptions` (A36); `plan_approval` → `approve_plan`, `request_plan_changes` |
+| `question` | current stage's questions file has `pending_count > 0` OR `pending_checkpoint` is set (blank summary confirmation / blank plan approval; review P09), OR host reports `needs_input` for the bound slot | current stage | blocking | + question_digest, evidence_digest, is_active. `decisions` depend on what is pending: Q tags → `answers`; `summary_confirmation` → `confirm_summary`; `assumption_confirmation` → `accept_assumptions`, `convert_assumptions` (A36); `plan_approval` → `approve_plan`, `request_plan_changes`, or only `resume` while the plan was asked in a session the conversation has since replaced |
 | `missing_input` | no state and records exist but cursor null/dangling (intent pick → studio-only `pick_intent`, admin lane), or `Scope` empty (→ human-lane `provide_input kind=scope`) | none | blocking | state_hash may be null |
 | `recovery` | any blocking finding except `delivery_uncertain_action`/`lease_conflict` (incl. `interrupted_session`); or session lost mid-stage (bound slot gone and row `[-]`) | current stage | critical | |
 | `delivery_uncertain` | an action is `ReconciliationRequired` (the card IS that action, re-typed for the queue: `queue_type`) | that action's stage | critical | |
@@ -1550,7 +1550,7 @@ DECISIONS: dict[str, tuple[str, ...]] = {   # action type → allowed decision k
     "gate":              ("approve", "request_changes", "accept_as_is"),   # accept_as_is is OFFERED (card.decisions) only when
                                                                            # captured.stage_attempt >= ACCEPT_AS_IS_MIN_ATTEMPT (review P24)
     "question":          ("answers", "confirm_summary", "accept_assumptions", "convert_assumptions",
-                          "approve_plan", "request_plan_changes"),   # offered per pending checkpoint (§1.8; A36)
+                          "approve_plan", "request_plan_changes", "resume"),   # offered per pending checkpoint (§1.8; A36); resume: a plan asked in a replaced session
     "missing_input":     ("provide_input", "pick_intent"),
     "recovery":          ("rebind_session", "mark_not_delivered", "acknowledge"),
     "delivery_uncertain":("reconcile", "mark_not_delivered", "resubmit"),

@@ -33,6 +33,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"action.question.consequence.advances_turn": "Your answers are sent as one message, and the conversation continues from them.",
 	"action.question.consequence.assumption_confirmation": "Your reply accepts the listed assumptions or turns them into follow-up questions before the stage continues.",
 	"action.question.consequence.plan_approval": "Your reply approves the recorded plan or requests changes before implementation continues.",
+	"action.question.consequence.plan_session_stale": "AI-DLC asked for this approval in an earlier session of the conversation, which has since restarted, so it cannot record a reply to it any more. Resume the workflow: AI-DLC asks for the approval again in this session, and a new card lets you answer it.",
 	"action.question.consequence.summary_confirmation": "Your reply confirms the recorded summary or requests changes before the stage continues.",
 	"action.question.headline": "{stage} cannot continue until you answer its open questions. {pending} still pending.",
 	"action.question.plan_approval.headline": "{stage} is waiting for you to approve its plan.",
@@ -2371,6 +2372,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"action.question.consequence.advances_turn": "你的回答会作为一条消息发送，会话将据此继续。",
 	"action.question.consequence.assumption_confirmation": "你的回复会接受列出的假设，或者把它们转成追问，然后再继续此阶段。",
 	"action.question.consequence.plan_approval": "你的回复会批准已记录的计划或要求修改，然后再继续实施。",
+	"action.question.consequence.plan_session_stale": "AI-DLC 是在会话之前的一个 session 里请求这次审批的，会话之后已重新开始，所以它已无法记录对那次请求的回复。请恢复工作流：AI-DLC 会在当前 session 里重新请求审批，届时会出现一张新卡片让你作答。",
 	"action.question.consequence.summary_confirmation": "你的回复会确认已记录的汇总或要求修改，然后再继续此阶段。",
 	"action.question.headline": "{stage} 需要你回答其待解问题后才能继续。仍有 {pending} 个待回答。",
 	"action.question.plan_approval.headline": "{stage} 正在等待你批准计划。",
@@ -10606,7 +10608,7 @@ function ea({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 			_?.origin?.kind === "audit" ? /* @__PURE__ */ m(_i, {
 				icon: "doc",
 				children: f("template.questions.auditSource")
-			}) : _ && !w ? /* @__PURE__ */ m(_i, {
+			}) : _ && !w && P ? /* @__PURE__ */ m(_i, {
 				icon: "doc",
 				children: f("template.questions.fileSource")
 			}) : null,
