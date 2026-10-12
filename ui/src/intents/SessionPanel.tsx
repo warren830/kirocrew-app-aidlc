@@ -10,18 +10,21 @@
  * verifies and records what the UI created, with the owner's own cookie, under the second declared
  * prefix `/api/chat`. That is why the four steps live in a view:
  *
- *   1. `POST   /api/chat/slots {"name": <canonical>, "agent": "aidlc"}`   (host)
+ *   0. `GET/POST /api/chat/folders`: the repository folder and the intent's sub-folder (host; best effort)
+ *   1. `POST   /api/chat/slots {"name": <canonical>, "folder_id": …}`     (host; born in the folder)
  *   2. `PATCH  /api/chat/slots/{key}/title {"title": "<repo label> / <intent slug>"}` (host)
- *   3. `POST   /api/chat/slots/{key}/project {"project": <canonical_path>}` (host; 403 when sensitive)
- *   4. `POST   …/{intent}/session {"slot_key": key}`                       (Studio; verifies 1-3)
- *   5. `PATCH  /api/chat/slots/{key}/folder {"folder_id": …}`              (host; sidebar placement)
+ *   3. `POST   /api/chat/slots/{key}/project {"project": <canonical_path>}` (host; only when not inherited)
+ *   4. `POST   /api/chat/slots/{key}/agent {"agent": "aidlc"}`            (host)
+ *   5. `POST   …/{intent}/session {"slot_key": key}`                       (Studio; verifies 1-4)
+ *   6. `PATCH  /api/chat/slots/{key}/folder {"folder_id": …}`              (host; only if birth ignored it)
  *
  * The primary button then starts the workflow: it names the text it sends (`/aidlc`), queues the run and
  * sends it through the Action Center's own two-phase submit (`StartRun.tsx`), so "create, bind and start"
  * is one click without a second, unseen send path. "Create and bind only" leaves the intent idle.
  *
- * Step 5 files the conversation under the repository's sidebar folder — the one whose `project_dir` is
- * this repository, created when there is none — in a sub-folder per intent. These calls run with the
+ * The conversation is filed under the repository's sidebar folder — the one whose `project_dir` is this
+ * repository, created when there is none — in a sub-folder per intent, and it is created there, so it
+ * starts with the repository as its project (see `sidebarFolder` for why that matters). These calls run with the
  * owner's cookie, so the folders are the person's own and may nest under a folder the person made; an
  * app-owned folder could not (the host refuses an app nesting under a folder it does not own). Placement
  * is not part of the binding: a refusal here leaves the intent bound and says so.
@@ -129,15 +132,21 @@ export function intentFolder(folders: ChatFolder[], parentId: string, intentDir:
 }
 
 /**
- * Step 5: find or make the repository folder, then the intent's sub-folder, then file the slot there.
+ * Find or make the repository folder, then the intent's sub-folder: where the conversation is filed.
+ *
+ * Resolved BEFORE the slot is created, so the slot is born in it and inherits the repository as its project.
+ * A slot born outside it starts in the workspace directory, and pointing it at the repository afterwards arms
+ * KiroCrew's deferred session reset. A new slot has no session for that reset to spend before its first turn,
+ * so it fired at the end of the first long turn and the next decision went to a fresh session that had lost
+ * the whole conversation.
  *
  * When the host answers `folder_not_owned` — these calls were attributed to the app rather than to the
  * person, and an app may not nest under a folder it does not own — the conversation still goes into the
  * repository folder itself, which any caller may file its own sessions into.
  */
-async function fileConversation(
-  api: StudioApi, repo: RepoRecord, intent: IntentSummary, slotKey: string,
-): Promise<string> {
+async function sidebarFolder(
+  api: StudioApi, repo: RepoRecord, intent: IntentSummary,
+): Promise<{ id: string; label: string }> {
   const folders = await api.listFolders()
   const parent = repoFolder(folders, repo.canonical_path)
     ?? await api.createFolder({ name: repo.label, project_dir: repo.canonical_path })
@@ -149,12 +158,14 @@ async function fileConversation(
       })
     } catch (caught) {
       if (!(caught instanceof StudioApiError) || caught.code !== 'folder_not_owned') throw caught
-      await api.setSlotFolder(slotKey, parent.id)
-      return parent.name
+      return { id: parent.id, label: parent.name }
     }
   }
-  await api.setSlotFolder(slotKey, child.id)
-  return `${parent.name} / ${child.name}`
+  return { id: child.id, label: `${parent.name} / ${child.name}` }
+}
+
+function asApiError(caught: unknown): StudioApiError {
+  return caught instanceof StudioApiError ? caught : new StudioApiError('internal_error', String(caught), {}, 0)
 }
 
 /** What the panel needs to show about a live binding, from `SessionRef` or from a `BindingView`. */
@@ -250,7 +261,16 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
     let step = 1
     setAt(step)
     try {
-      const created = await api.createSlot(wanted)
+      // Placement is not part of the binding: a folder the host will not make leaves the slot unfiled and
+      // pointed at the repository the old way, and step 6 says why.
+      let folder: { id: string; label: string } | null = null
+      let folderFailure: StudioApiError | null = null
+      try {
+        folder = await sidebarFolder(api, repo, intent)
+      } catch (caught) {
+        folderFailure = asApiError(caught)
+      }
+      const created = await api.createSlot(wanted, folder?.id)
       // The host answers with the slot it made; its own `key` is what every later call must address,
       // even if it normalised the name we asked for.
       const answered = created['key']
@@ -260,7 +280,12 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
       await api.setSlotTitle(key, `${repo.label} / ${intent.slug || intent.intent_dir}`)
       step = 3
       setAt(step)
-      await api.setSlotProject(key, repo.canonical_path)
+      // Born in the repository's folder, the slot already has the repository as its project; setting it
+      // again is skipped rather than trusted to be a no-op on the host.
+      const born = created['project']
+      if (typeof born !== 'string' || !born || !samePath(born, repo.canonical_path)) {
+        await api.setSlotProject(key, repo.canonical_path)
+      }
       step = 4
       setAt(step)
       // Only now: the repository's own agent resolves once the slot's project is the repository.
@@ -273,12 +298,16 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
       onChanged(t('intents.session.done.bound', { slot: answer.binding.slot_key ?? key }))
       step = 6
       setAt(step)
-      try {
-        setFiled(await fileConversation(api, repo, intent, answer.binding.slot_key ?? key))
-      } catch (caught) {
-        setFolderError(
-          caught instanceof StudioApiError ? caught : new StudioApiError('internal_error', String(caught), {}, 0),
-        )
+      if (folder === null) {
+        setFolderError(folderFailure)
+      } else {
+        try {
+          // A host that ignored `folder_id` at birth still files it here.
+          if (created['folder_id'] !== folder.id) await api.setSlotFolder(answer.binding.slot_key ?? key, folder.id)
+          setFiled(folder.label)
+        } catch (caught) {
+          setFolderError(asApiError(caught))
+        }
       }
       setAt(0)
       if (andRun) await run.start(intent, kind)

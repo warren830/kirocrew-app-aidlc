@@ -422,13 +422,17 @@ function bindRoutes(folders: ChatFolder[], extra: Record<string, (body: unknown)
   })
 }
 
-/** Born on the host default, pointed at the repo, and only then switched to the repo's own aidlc agent. */
-const BEFORE_FOLDER = [
-  { method: 'POST', path: `${CHAT}/slots`, body: { name: SLOT } },
+/**
+ * Born in the intent's folder, pointed at the repo (the stub host inherits nothing, so the project is still
+ * set), only then switched to the repo's own aidlc agent, bound, and filed (the stub ignored `folder_id`).
+ */
+const slotCalls = (folderId: string) => [
+  { method: 'POST', path: `${CHAT}/slots`, body: { name: SLOT, folder_id: folderId } },
   { method: 'PATCH', path: `${CHAT}/slots/${SLOT}/title`, body: { title: 'checkout-web / guest-checkout' } },
   { method: 'POST', path: `${CHAT}/slots/${SLOT}/project`, body: { project: '/work/checkout-web' } },
   { method: 'POST', path: `${CHAT}/slots/${SLOT}/agent`, body: { agent: 'aidlc', agent_kind: 'template' } },
   { method: 'POST', path: `${INTENT_PATH}/session`, body: { slot_key: SLOT } },
+  { method: 'PATCH', path: `${CHAT}/slots/${SLOT}/folder`, body: { folder_id: folderId } },
 ]
 
 describe('the canonical conversation panel', () => {
@@ -447,13 +451,12 @@ describe('the canonical conversation panel', () => {
       await screen.findByText('Filed in the sidebar under Checkout / 250901-guest-checkout.'),
     ).toBeInTheDocument()
     expect(apiCalls).toEqual([
-      ...BEFORE_FOLDER,
       { method: 'GET', path: `${CHAT}/folders`, body: undefined },
       {
         method: 'POST', path: `${CHAT}/folders`,
         body: { name: '250901-guest-checkout', parent_id: 'f_repo', project_dir: '/work/checkout-web' },
       },
-      { method: 'PATCH', path: `${CHAT}/slots/${SLOT}/folder`, body: { folder_id: 'f_new1' } },
+      ...slotCalls('f_new1'),
     ])
     // The bound state is shown from the answer, not from a refetch the caller may not have made yet.
     expect(screen.getByText(SLOT)).toBeInTheDocument()
@@ -542,10 +545,29 @@ describe('the canonical conversation panel', () => {
     expect(
       await screen.findByText('Filed in the sidebar under Checkout / 250901-guest-checkout.'),
     ).toBeInTheDocument()
-    expect(apiCalls.slice(BEFORE_FOLDER.length)).toEqual([
-      { method: 'GET', path: `${CHAT}/folders`, body: undefined },
-      { method: 'PATCH', path: `${CHAT}/slots/${SLOT}/folder`, body: { folder_id: 'f_intent' } },
-    ])
+    expect(apiCalls).toEqual([{ method: 'GET', path: `${CHAT}/folders`, body: undefined }, ...slotCalls('f_intent')])
+  })
+
+  it('creates the conversation in its folder, so a slot born with the repository is not pointed at it again', async () => {
+    // Pointing a slot at a new project arms KiroCrew's deferred session reset, which a new slot cannot spend
+    // before its first turn; it fired after that turn and the next decision lost the whole conversation.
+    bindRoutes([
+      folder({ id: 'f_repo', name: 'Checkout', project_dir: '/work/checkout-web' }),
+      folder({ id: 'f_intent', name: '250901-guest-checkout', parent_id: 'f_repo', project_dir: '/work/checkout-web' }),
+    ], {
+      [`POST ${CHAT}/slots`]: () => ({ key: SLOT, agent: 'default', project: '/work/checkout-web/', folder_id: 'f_intent' }),
+    })
+    mount(UNBOUND)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create and bind the conversation' }))
+
+    expect(
+      await screen.findByText('Filed in the sidebar under Checkout / 250901-guest-checkout.'),
+    ).toBeInTheDocument()
+    const paths = apiCalls.map((call) => `${call.method} ${call.path}`)
+    expect(paths).not.toContain(`POST ${CHAT}/slots/${SLOT}/project`)
+    expect(paths).not.toContain(`PATCH ${CHAT}/slots/${SLOT}/folder`)
+    expect(paths).toContain(`POST ${CHAT}/slots/${SLOT}/agent`)
   })
 
   it('makes the repository folder and the intent folder when the sidebar has none for this repo', async () => {
@@ -557,14 +579,14 @@ describe('the canonical conversation panel', () => {
     expect(
       await screen.findByText('Filed in the sidebar under checkout-web / 250901-guest-checkout.'),
     ).toBeInTheDocument()
-    expect(apiCalls.slice(BEFORE_FOLDER.length)).toEqual([
+    expect(apiCalls).toEqual([
       { method: 'GET', path: `${CHAT}/folders`, body: undefined },
       { method: 'POST', path: `${CHAT}/folders`, body: { name: 'checkout-web', project_dir: '/work/checkout-web' } },
       {
         method: 'POST', path: `${CHAT}/folders`,
         body: { name: '250901-guest-checkout', parent_id: 'f_new1', project_dir: '/work/checkout-web' },
       },
-      { method: 'PATCH', path: `${CHAT}/slots/${SLOT}/folder`, body: { folder_id: 'f_new2' } },
+      ...slotCalls('f_new2'),
     ])
   })
 

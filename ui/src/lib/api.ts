@@ -255,7 +255,7 @@ export interface StudioApi extends WorkspaceApi {
    * named at birth as a crew member, and a repository's own agent (`aidlc` lives in its `.kiro/agents/`)
    * cannot resolve before the slot has that repository as its project. `setSlotAgent` switches it after.
    */
-  createSlot(slotKey: string): Promise<Record<string, unknown>>
+  createSlot(slotKey: string, folderId?: string): Promise<Record<string, unknown>>
   setSlotTitle(slotKey: string, title: string): Promise<Record<string, unknown>>
   setSlotProject(slotKey: string, project: string): Promise<Record<string, unknown>>
   /** As a provider template (`agent_kind`), so a crew member of the same name never takes the slot. Older hosts ignore the field. */
@@ -407,7 +407,8 @@ export function useStudioApi(): StudioApi {
           throw decodeError(error)
         }
       },
-      createSlot: (slotKey) => chatPost(api, `${CHAT_BASE}/slots`, { name: slotKey }),
+      createSlot: (slotKey, folderId) =>
+        chatPost(api, `${CHAT_BASE}/slots`, folderId ? { name: slotKey, folder_id: folderId } : { name: slotKey }),
       // `PATCH`, not `POST`: the host's title route is a patch (`kc:routes/sessions.py:32`).
       setSlotTitle: async (slotKey, title) => {
         try {
