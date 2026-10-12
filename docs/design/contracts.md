@@ -3258,7 +3258,7 @@ name (`config manifest enable disable update uninstall open dev token migrate-cl
     "review":  {"verdict": str|null, "findings": [ReviewFinding], "reviewer": str|null, "review_class": str|null, "iteration": int|null} | null,
     "acceptance_criteria": [{"text": str, "met": bool|null, "why_key": str|null}],
     "findings": [Finding],                                     // consistency findings for the intent
-    "session": {"slot_key": str, "session_key": str, "running": bool, "stop_state": str, "last_turn_ts": str|null, "queue_depth": int, "busy_reasons": [str]} | null,
+    "session": {"slot_key": str, "session_key": str, "running": bool, "stop_state": str, "last_turn_ts": str|null, "queue_depth": int, "busy_reasons": [str], "options": [str]} | null,   # options: the last reply's [OPTIONS: …], [] while a turn runs
     "questions": QuestionsView | null,                         // question cards only
     "git": GitObservation | null,
     "markers": {"human_turn_at": iso|null, "engine_touch_at": iso|null, "turn_counter": int|null, "goal_stop_present": bool, "recovery": {...}|null},

@@ -2009,6 +2009,7 @@
   "template.gate.noBlockers": "no open blockers",
   "template.gate.noFindings": "The reviewer recorded no findings for this stage.",
   "template.gate.noReview": "No reviewer ran for this stage, so there are no findings to quote.",
+  "template.gate.otherChoices": "AI-DLC's last message also offered {choices}. Studio cannot send that choice from this card; to choose it, reply in the Conversation tab.",
   "template.gate.reviewPasses": "Review passes",
   "template.gate.reviewPassesSub": "Each revision re-ran the reviewer.",
   "template.gate.reviewer": "reviewer findings",

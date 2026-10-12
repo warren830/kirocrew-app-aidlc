@@ -2009,6 +2009,7 @@
   "template.gate.noBlockers": "没有未解决的阻塞项",
   "template.gate.noFindings": "评审没有为该阶段记录任何发现。",
   "template.gate.noReview": "该阶段没有评审执行过，因此没有可引用的发现。",
+  "template.gate.otherChoices": "AI-DLC 在上一条消息里还提供了：{choices}。Studio 无法从这张卡片发送这个选项；如需选择，请在“会话”标签页里回复。",
   "template.gate.reviewPasses": "评审轮次",
   "template.gate.reviewPassesSub": "每次修订都会重新执行评审。",
   "template.gate.reviewer": "评审发现",

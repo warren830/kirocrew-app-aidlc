@@ -225,11 +225,31 @@ export function Pane({
  * `action.<type>.consequence.<variant>`), so they go through `ref()` with a fallback: a key this
  * build's catalogue lacks must not leave the most important sentence on the page blank.
  */
+/** The offered choice each gate decision sends, lowercased, to tell which of AI-DLC's offered ones it covers. */
+const GATE_SENDS: Partial<Record<DecisionSpec['decision'], string>> = {
+  approve: 'approve', request_changes: 'request changes', accept_as_is: 'accept as-is',
+}
+
+/**
+ * The choices a gate prompt offered that the card cannot send, such as requirements' "Add User Stories".
+ * Read from the conversation's last reply (`evidence.session.options`), so only an open gate names them:
+ * a card with two buttons for a prompt with three choices would read as the whole decision.
+ */
+export function otherGateChoices(card: ActionCard): string[] {
+  if (card.type !== 'gate' || card.decisions.length === 0) return []
+  const sent = new Set(card.decisions.map((spec) => GATE_SENDS[spec.decision]).filter(Boolean))
+  return (card.evidence.session?.options ?? []).filter((option) => {
+    const label = option.trim().toLowerCase()
+    return label !== '' && label !== 'other' && !sent.has(label)
+  })
+}
+
 export function DecisionBrief({ card }: { card: ActionCard }) {
   const i18n = useI18n()
   const { t } = i18n
   const lede = ref(i18n, card.headline, 'template.common.headlineFallback')
   const consequence = card.consequence ? ref(i18n, card.consequence, 'template.common.consequenceFallback') : null
+  const other = otherGateChoices(card)
   if (isClosedAction(card)) {
     return (
       <Block title={t('template.common.closedTitle')} icon="doc">
@@ -260,6 +280,11 @@ export function DecisionBrief({ card }: { card: ActionCard }) {
       <Brief {...(card.severity === 'critical' ? { tone: 'danger' as const } : {})}>
         <p>{lede}</p>
         {consequence ? <Consequence label={t('template.common.nextConsequence')}>{consequence}</Consequence> : null}
+        {other.length > 0 ? (
+          <p className="studio-muted" role="note">
+            {t('template.gate.otherChoices', { choices: other.join(t('shell.format.listJoin')) })}
+          </p>
+        ) : null}
       </Brief>
     </Block>
   )

@@ -23,6 +23,7 @@
   "template.gate.criteria": "Stage acceptance criteria — {met} of {total} met",
   "template.gate.criteriaUnknown": "Stage acceptance criteria — {total} listed, none evaluated by Studio",
   "template.gate.compare": "Artifact and reviewer",
+  "template.gate.otherChoices": "AI-DLC's last message also offered {choices}. Studio cannot send that choice from this card; to choose it, reply in the Conversation tab.",
   "template.gate.codeChanges": "Code this stage wrote",
   "template.gate.reviewer": "reviewer findings",
   "template.gate.noBlockers": "no open blockers",

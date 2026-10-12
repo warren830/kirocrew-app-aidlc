@@ -81,6 +81,7 @@ class SlotStub:
     session_key: str = "dashboard:aidlc-studio-r_000000000001-260904-gate-demo"
     busy_reasons: tuple[str, ...] = ()
     session_live: bool | None = True
+    options: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -395,6 +396,16 @@ def test_an_unreviewed_gate_opens_on_the_stage_summary(projection, snap_of, repo
     names = [a["name"] for a in projection.evidence(snap_of(root), stage=stage).to_json()["artifacts"]]
     assert names[0] == lead and sorted(names) == ["build-and-test-summary.md", "build-instructions.md",
                                                   "test-results.md"]
+
+
+def test_evidence_names_the_choices_the_last_reply_offered_only_while_no_turn_runs(projection, gate_snap):
+    """A gate prompt can offer more than the card sends (requirements' Add User Stories); the card must say so."""
+    offered = ("Approve", "Request Changes", "Add User Stories")
+    binding = BindingStub(slot_key="slot-1", session_key="dashboard:slot-1")
+    idle = projection.evidence(gate_snap, binding=binding, slot=SlotStub(options=offered)).to_json()
+    assert idle["session"]["options"] == list(offered)
+    busy = projection.evidence(gate_snap, binding=binding, slot=SlotStub(options=offered, running=True)).to_json()
+    assert busy["session"]["options"] == [], "a running turn has not offered anything yet"
 
 def test_evidence_never_claims_an_acceptance_criterion_is_met(projection, gate_snap):
     assert all(row["met"] is None for row in projection.evidence(gate_snap).to_json()["acceptance_criteria"])

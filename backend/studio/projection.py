@@ -833,6 +833,9 @@ class Projection:
             "last_turn_ts": _attr(slot, "last_turn_ts") or None,
             "queue_depth": int(_attr(slot, "queue_depth", 0) or 0),
             "busy_reasons": list(_attr(slot, "busy_reasons", ()) or ()),
+            # The choices the conversation's last reply offered (its `[OPTIONS: …]`), while no turn runs: a card
+            # names the ones it cannot send instead of hiding them.
+            "options": [] if _attr(slot, "running", False) else [str(o) for o in (_attr(slot, "options", ()) or ())],
         }
 
     def questions_view(

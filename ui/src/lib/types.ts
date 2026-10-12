@@ -206,7 +206,7 @@ export interface ActionEvidence {
   review: { verdict: string | null; findings: ReviewFinding[]; reviewer: string | null; review_class: string | null; iteration: number | null } | null
   acceptance_criteria: { text: string; met: boolean | null; why_key: string | null }[]
   findings: Finding[]
-  session: { slot_key: string; session_key: string; running: boolean; stop_state: string; last_turn_ts: string | null; queue_depth: number; busy_reasons: BusyReason[] } | null
+  session: { slot_key: string; session_key: string; running: boolean; stop_state: string; last_turn_ts: string | null; queue_depth: number; busy_reasons: BusyReason[]; options?: string[] } | null
   questions: QuestionsView | null; git: GitObservation | null; markers: Pick<MarkersView, 'human_turn_at' | 'engine_touch_at' | 'turn_counter' | 'goal_stop_present' | 'recovery'>
   presence_baseline: PresenceBaseline | null; presence: PresenceCheck | null; cursor_readback: CursorReadback | null
 }

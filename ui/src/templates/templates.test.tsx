@@ -449,6 +449,27 @@ describe('gate template', () => {
     expect(apiCalls.some((call) => call.path.includes('/changes'))).toBe(false)
   })
 
+  it('names a choice the gate prompt offered that the card cannot send', () => {
+    setApiRoutes({})
+    const base = card()
+    const session = { slot_key: 'slot-1', session_key: 'dashboard:slot-1', running: false, stop_state: 'idle',
+      last_turn_ts: null, queue_depth: 0, busy_reasons: [], options: ['Approve', 'Request Changes', 'Add User Stories'] }
+    mount(GateTemplate, card({ decisions: [spec('approve'), spec('request_changes', ['feedback'])],
+      evidence: { ...base.evidence, session } }))
+    expect(screen.getByRole('note')).toHaveTextContent(
+      en.t('template.gate.otherChoices', { choices: 'Add User Stories' }))
+  })
+
+  it('names nothing extra when the card sends every offered choice', () => {
+    setApiRoutes({})
+    const base = card()
+    const session = { slot_key: 'slot-1', session_key: 'dashboard:slot-1', running: false, stop_state: 'idle',
+      last_turn_ts: null, queue_depth: 0, busy_reasons: [], options: ['Approve', 'Request Changes', 'Other'] }
+    mount(GateTemplate, card({ decisions: [spec('approve'), spec('request_changes', ['feedback'])],
+      evidence: { ...base.evidence, session } }))
+    expect(screen.queryByText(/also offered/)).toBeNull()
+  })
+
   it('says a gate produced no artifact instead of showing an empty pane', () => {
     setApiRoutes({})
     mount(GateTemplate, card())
