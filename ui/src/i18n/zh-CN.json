@@ -788,7 +788,7 @@
   "estimate.credits.value": "不可用",
   "estimate.credits.why": "现有 Kiro 信号无法观测 — 既不是零，也不做推断",
   "estimate.dominant.item": "{slug} — 约占估算回合数的 {pct}%",
-  "estimate.dominant.locked": "AI-DLC 不允许关闭这个阶段：{reason}",
+  "estimate.dominant.locked": "{reason}",
   "estimate.dominant.lost": "关掉它就放弃了 {artifacts}。",
   "estimate.dominant.lostNone": "它没有声明产物，关掉它不会放弃任何产物。",
   "estimate.dominant.none": "没有哪一个阶段主导这次估算。",

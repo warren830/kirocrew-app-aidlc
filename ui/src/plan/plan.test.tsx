@@ -154,8 +154,10 @@ describe('the estimate panel', () => {
   it('names the dominant stages and what removing them would give up', () => {
     mount(<EstimatePanel plan={makePlan()} />)
     expect(screen.getByText('code-generation — about 40% of the estimated turns')).toBeInTheDocument()
-    // It is locked, so the panel says so instead of implying a choice the engine would refuse.
-    expect(screen.getByText(/AI-DLC will not let this stage be turned off/)).toBeInTheDocument()
+    // It is locked, so the panel gives the engine's reason instead of implying a choice it would refuse;
+    // the reason is a whole sentence, so no lead-in repeats it.
+    expect(screen.getByText(/cannot be turned off|its plan is fixed/)).toBeInTheDocument()
+    expect(screen.queryByText(/will not let this stage be turned off/)).toBeNull()
     expect(screen.getByText('ideation-brief is off, so ideation.md will not exist.')).toBeInTheDocument()
   })
 

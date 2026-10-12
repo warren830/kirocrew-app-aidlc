@@ -36,7 +36,7 @@
   "estimate.dominant.perUnit_other": "counted across {n} units of work",
   "estimate.dominant.lost": "Turning it off gives up {artifacts}.",
   "estimate.dominant.lostNone": "It declares no artifact, so turning it off gives up no product.",
-  "estimate.dominant.locked": "AI-DLC will not let this stage be turned off: {reason}",
+  "estimate.dominant.locked": "{reason}",
   "estimate.dominant.none": "No single stage dominates this estimate.",
   "estimate.coverage.title": "Coverage you have already given up",
   "estimate.coverage.item": "{slug} is off, so {artifacts} will not exist.",

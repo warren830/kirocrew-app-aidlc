@@ -788,7 +788,7 @@
   "estimate.credits.value": "Unavailable",
   "estimate.credits.why": "not observable from the available Kiro signals — not zero, not inferred",
   "estimate.dominant.item": "{slug} — about {pct}% of the estimated turns",
-  "estimate.dominant.locked": "AI-DLC will not let this stage be turned off: {reason}",
+  "estimate.dominant.locked": "{reason}",
   "estimate.dominant.lost": "Turning it off gives up {artifacts}.",
   "estimate.dominant.lostNone": "It declares no artifact, so turning it off gives up no product.",
   "estimate.dominant.none": "No single stage dominates this estimate.",

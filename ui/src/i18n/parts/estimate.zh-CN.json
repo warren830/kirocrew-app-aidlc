@@ -36,7 +36,7 @@
   "estimate.dominant.perUnit_other": "按 {n} 个工作单元累计",
   "estimate.dominant.lost": "关掉它就放弃了 {artifacts}。",
   "estimate.dominant.lostNone": "它没有声明产物，关掉它不会放弃任何产物。",
-  "estimate.dominant.locked": "AI-DLC 不允许关闭这个阶段：{reason}",
+  "estimate.dominant.locked": "{reason}",
   "estimate.dominant.none": "没有哪一个阶段主导这次估算。",
   "estimate.coverage.title": "你已经放弃的覆盖范围",
   "estimate.coverage.item": "{slug} 已关闭，因此不会有 {artifacts}。",
