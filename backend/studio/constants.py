@@ -366,7 +366,9 @@ BLANK_ANSWER_RE = re.compile(r"^\[Answer\]:[ \t]*_*[ \t]*$", re.MULTILINE)
 #: A blank tag that still owes an answer, bare or as a list item. The engine's Stop hook (``hasPendingQuestion``)
 #: matches the tag anywhere on a line; quoted and indented copies stay excluded here on purpose: they are examples.
 PENDING_ANSWER_TAG_RE = re.compile(r"^(?:[-*+][ \t]+)?\[Answer\]:[ \t]*_*[ \t]*$")
-QUESTION_HEADING_RE = re.compile(r"^## Q(\d+)[.:]?\s*(.*)$", re.MULTILINE)
+#: ``## Q1. …`` in every file before 2.10; a 2.10 conductor also writes ``## Question 1: …`` (the protocol fixes the
+#: answer tags and options, not the heading), and either may separate the title with a dash.
+QUESTION_HEADING_RE = re.compile(r"^## Q(?:uestion)?[ \t]*(\d+)(?:[.:]|[ \t]+[—–-])?\s*(.*)$", re.MULTILINE)
 #: ``- A. Some option`` / ``A. Some option`` / ``- X. Other (please specify)``.
 OPTION_LINE_RE = re.compile(r"^(?:- )?([A-Z])\.[ \t]+(.*)$", re.MULTILINE)
 OTHER_OPTION_LETTER = "X"
