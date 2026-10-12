@@ -636,6 +636,8 @@ export function RepoCard({
                 key={action}
                 type="button"
                 className="studio-btn"
+                // The Repos page finds the button again by this when focus returns from a cancelled flow.
+                data-repo-action={action}
                 {...(action === 'install' || action === 'upgrade' || action === 'recover'
                   ? { 'data-variant': 'primary' }
                   : action === 'remove'

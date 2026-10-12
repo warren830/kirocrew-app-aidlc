@@ -228,6 +228,8 @@ export function WizardView({ route, go }: WizardViewProps) {
   const repos = reposResource.data?.repos ?? []
 
   const [step, setStep] = useState<WizardStep>('work')
+  /** Whether the user has left Work, by Continue or the step list: from then on it shows every error. */
+  const [leftWork, setLeftWork] = useState(false)
   const [state, setState] = useState<WizardState>(() => ({ ...EMPTY_WIZARD, repo: route.repo }))
   const [preview, setPreview] = useState<{ key: string; repo: string; plan: EffectivePlan } | null>(null)
   const [previewError, setPreviewError] = useState<StudioApiError | null>(null)
@@ -567,6 +569,7 @@ export function WizardView({ route, go }: WizardViewProps) {
               setCreated(null)
               setPreview(null)
               setStep('work')
+              setLeftWork(false)
               syncedScope.current = ''
               pickedFields.current = {}
               setState({ ...EMPTY_WIZARD, repo: state.repo })
@@ -582,6 +585,10 @@ export function WizardView({ route, go }: WizardViewProps) {
   }
 
   const index = WIZARD_STEPS.indexOf(step)
+  const goToStep = (next: WizardStep) => {
+    if (next !== 'work') setLeftWork(true)
+    setStep(next)
+  }
   const bunMissing = health.data ? health.data.tools.bun.found === false : false
   // Where the probe looked, so the work step can name it instead of guessing: the health block
   // carries the searched locations precisely because a PATH-only answer is not the whole truth (A28).
@@ -603,7 +610,7 @@ export function WizardView({ route, go }: WizardViewProps) {
                 data-state={position < index ? 'done' : position === index ? 'now' : 'todo'}
                 {...(position === index ? { 'aria-current': 'step' as const } : {})}
                 disabled={creating}
-                onClick={() => setStep(name)}
+                onClick={() => goToStep(name)}
               >
                 <span className="studio-wiz-step-n studio-mono" aria-hidden="true">
                   {position < index ? <Icon name="check" size={11} strokeWidth={2} /> : position + 1}
@@ -653,6 +660,7 @@ export function WizardView({ route, go }: WizardViewProps) {
             intentCount={inventory.data?.intents.length ?? null}
             onPatch={patch}
             onOpenRepos={() => go({ view: 'repos' })}
+            revealErrors={leftWork}
           />
         ) : null}
 
@@ -719,7 +727,7 @@ export function WizardView({ route, go }: WizardViewProps) {
               type="button"
               className="studio-btn studio-btn-primary"
               disabled={(step === 'work' && !workComplete) || (step === 'preset' && !presetComplete)}
-              onClick={() => setStep(WIZARD_STEPS[Math.min(WIZARD_STEPS.length - 1, index + 1)] as WizardStep)}
+              onClick={() => goToStep(WIZARD_STEPS[Math.min(WIZARD_STEPS.length - 1, index + 1)] as WizardStep)}
             >
               {t('wizard.nav.continue')}
             </button>

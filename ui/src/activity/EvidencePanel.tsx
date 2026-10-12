@@ -12,11 +12,12 @@
  *     merged intent timeline was never sent one (§2.6). Showing the same empty box for both would leave
  *     the user thinking AI-DLC recorded nothing.
  *  3. **Non-modal.** The drawer sits beside the timeline and does not trap focus: the reader is comparing
- *     a row against its evidence, so both have to stay reachable. Escape closes it, and focus moves to the
- *     close control on open so a keyboard user is not left behind in the list.
+ *     a row against its evidence, so both have to stay reachable. Escape closes it, focus moves to the
+ *     close control on open so a keyboard user is not left behind in the list, and closing hands focus
+ *     back to the row's Evidence button so they do not lose their place in it either.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useI18n } from '../i18n'
 import { at as formatAt } from '../lib/format'
@@ -46,7 +47,11 @@ function valueText(value: unknown): string {
 export function EvidencePanel({ entry, onClose, onOpenAction }: EvidencePanelProps) {
   const i18n = useI18n()
   const { t } = i18n
+  const panelRef = useRef<HTMLElement | null>(null)
   const closeRef = useRef<HTMLButtonElement | null>(null)
+  /** The Evidence button that opened the drawer on this entry, when that is known. */
+  const returnTo = useRef<HTMLElement | null>(null)
+  const returnOnUnmount = useRef(false)
   const [copied, setCopied] = useState(false)
   const provenance = provenanceOf(entry)
   const audit = entry.refs.audit
@@ -54,16 +59,35 @@ export function EvidencePanel({ entry, onClose, onOpenAction }: EvidencePanelPro
   const hasLocation = Boolean(audit || entry.refs.git || actionId || entry.refs.session_key)
 
   useEffect(() => {
+    // Re-read for every entry, because another row's Evidence button re-targets the open drawer. Focus
+    // still in the drawer (WebKit does not focus a clicked button) says nothing about which row it was.
+    const opener = document.activeElement
+    returnTo.current = opener instanceof HTMLElement && opener !== document.body
+      && !panelRef.current?.contains(opener) ? opener : null
     closeRef.current?.focus()
   }, [entry])
 
+  // Focus goes back once the drawer is gone, so the button is scrolled to in the layout without it.
+  useEffect(() => () => {
+    if (returnOnUnmount.current && returnTo.current?.isConnected) returnTo.current.focus()
+  }, [])
+
+  const close = useCallback(() => {
+    // Only when focus was in the drawer or already lost: Escape closes it from anywhere on the page, and
+    // a reader typing in a filter keeps their place there. A scope change that drops the drawer does not
+    // come through here at all.
+    const active = document.activeElement
+    returnOnUnmount.current = !active || active === document.body || Boolean(panelRef.current?.contains(active))
+    onClose()
+  }, [onClose])
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') close()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [close])
 
   useEffect(() => {
     setCopied(false)
@@ -88,7 +112,7 @@ export function EvidencePanel({ entry, onClose, onOpenAction }: EvidencePanelPro
     audit?.event || (typeof entry.params['event'] === 'string' ? entry.params['event'] : '')
 
   return (
-    <aside className="studio-evdrawer" aria-label={t('activity.evidence.title')}>
+    <aside ref={panelRef} className="studio-evdrawer" aria-label={t('activity.evidence.title')}>
       <header className="studio-evdrawer-head">
         <h2>
           <Icon name="lock" size={15} /> {t('activity.evidence.title')}
@@ -97,7 +121,7 @@ export function EvidencePanel({ entry, onClose, onOpenAction }: EvidencePanelPro
           type="button"
           ref={closeRef}
           className="studio-icon-btn"
-          onClick={onClose}
+          onClick={close}
           aria-label={t('common.close')}
         >
           <Icon name="close" size={15} />

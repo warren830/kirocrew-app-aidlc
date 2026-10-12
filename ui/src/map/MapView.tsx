@@ -615,7 +615,9 @@ function StageTable({ phases, intentLabel, selectedStage, onSelect }: StageTable
                   <td className="studio-mono">{stage.review_class ?? t('common.none')}</td>
                   <td className="studio-mono">{duration(i18n, stage.elapsed_secs)}</td>
                   <td className="studio-mono">{artifactCountLabel(i18n, stage.artifacts.length)}</td>
-                  <td className="studio-wrap-any">
+                  {/* Not `studio-wrap-any`: in a table that lets the column shrink below its longest word
+                      and split it ("Conditi|onal"). The table scrolls sideways instead. */}
+                  <td>
                     {[
                       stage.is_current ? t('map.chip.current') : '',
                       stage.execution === 'CONDITIONAL' ? t('map.chip.conditional') : '',

@@ -15,6 +15,8 @@
  * The observed signals are read-only facts from `RepoRecord`/`/health` — never edited, never inferred.
  */
 
+import { useState } from 'react'
+
 import { Chip } from '../shell/Chip'
 import { Icon } from '../shell/Icon'
 import { useI18n } from '../i18n'
@@ -38,15 +40,33 @@ export interface StepWorkProps {
   intentCount: number | null
   onPatch: (patch: Partial<WizardState>) => void
   onOpenRepos: () => void
+  /**
+   * True once the user has moved on from this step. Until then a field's error waits for that field to
+   * be blurred; coming back to an incomplete step should say at once what is missing.
+   */
+  revealErrors?: boolean
 }
 
 export function StepWork({
   state, repos, repo, blocked, spaces, activeSpace, derivedLabel, labelValid, bunMissing, bunSearched,
-  graphStageCount, intentCount, onPatch, onOpenRepos,
+  graphStageCount, intentCount, onPatch, onOpenRepos, revealErrors = false,
 }: StepWorkProps) {
   const i18n = useI18n()
   const { t } = i18n
   const spaceList = spaces.length ? spaces : activeSpace ? [activeSpace] : []
+
+  // A pristine form that opens on "an objective is required" tells the user off before they have typed.
+  const [blurred, setBlurred] = useState({ objective: false, label: false })
+  const blur = (field: 'objective' | 'label') =>
+    setBlurred((was) => (was[field] ? was : { ...was, [field]: true }))
+  const objectiveMissing = !state.objective.trim()
+  const objectiveError = objectiveMissing && (revealErrors || blurred.objective)
+  // A typed label is judged when it is left. An empty one is only wrong when a real objective slugifies to
+  // nothing, which is worth saying as soon as the objective is left; with no objective yet, the
+  // objective's own error is the one to show.
+  const labelError = !labelValid && (state.label.trim()
+    ? revealErrors || blurred.label
+    : !objectiveMissing && (revealErrors || blurred.label || blurred.objective))
 
   return (
     <div className="studio-wiz-fields">
@@ -114,11 +134,13 @@ export function StepWork({
           type="text"
           value={state.objective}
           placeholder={t('wizard.work.objectivePlaceholder')}
+          aria-invalid={objectiveError ? 'true' : 'false'}
           aria-describedby="wizard-objective-help"
           onChange={(event) => onPatch({ objective: event.target.value })}
+          onBlur={() => blur('objective')}
         />
         <p className="studio-help" id="wizard-objective-help">
-          {state.objective.trim() ? '' : t('wizard.work.objectiveRequired')}
+          {objectiveError ? t('wizard.work.objectiveRequired') : ''}
         </p>
       </div>
 
@@ -141,18 +163,21 @@ export function StepWork({
           type="text"
           value={state.label}
           placeholder={t('wizard.work.labelPlaceholder')}
-          aria-invalid={labelValid ? 'false' : 'true'}
+          aria-invalid={labelError ? 'true' : 'false'}
           aria-describedby="wizard-label-state"
           onChange={(event) => onPatch({ label: event.target.value })}
+          onBlur={() => blur('label')}
         />
         <p className="studio-help" id="wizard-label-state">
           {state.label.trim()
-            ? labelValid
-              ? ''
-              : t('wizard.work.labelInvalid')
+            ? labelError
+              ? t('wizard.work.labelInvalid')
+              : ''
             : derivedLabel
               ? t('wizard.work.labelDerived', { label: derivedLabel })
-              : t('wizard.work.labelUndeducible')}
+              : labelError
+                ? t('wizard.work.labelUndeducible')
+                : ''}
         </p>
       </div>
 

@@ -206,6 +206,55 @@ describe('Evidence drawer', () => {
     const drawer = screen.getByRole('complementary', { name: 'Evidence drawer' })
     expect(within(drawer).getByText(/Studio rows carry no audit block/)).toBeInTheDocument()
   })
+
+  // Focus left on <body> sends a keyboard reader back to the top of what may be a long timeline.
+  it.each(['the Close button', 'Escape'])('returns focus to the Evidence button that opened it (%s)', async (how) => {
+    activityRoutes([AIDLC_ROW, STUDIO_ROW])
+    renderActivity()
+    await waitFor(() => expect(screen.getByText('Gate approved.')).toBeInTheDocument())
+
+    const opener = within(rowFor('Gate approved.')).getByRole('button', { name: /Evidence for/ })
+    await userEvent.click(opener)
+    const close = within(screen.getByRole('complementary', { name: 'Evidence drawer' })).getByRole('button', { name: 'Close' })
+    expect(document.activeElement).toBe(close)
+
+    if (how === 'Escape') await userEvent.keyboard('{Escape}')
+    else await userEvent.click(close)
+    expect(screen.queryByRole('complementary', { name: 'Evidence drawer' })).not.toBeInTheDocument()
+    expect(document.activeElement).toBe(opener)
+  })
+
+  it('returns focus to the row the drawer was last pointed at', async () => {
+    activityRoutes([AIDLC_ROW, STUDIO_ROW])
+    renderActivity()
+    await waitFor(() => expect(screen.getByText('Gate approved.')).toBeInTheDocument())
+
+    await userEvent.click(within(rowFor('Gate approved.')).getByRole('button', { name: /Evidence for/ }))
+    const second = within(rowFor('Action created and queued for your decision.')).getByRole('button', { name: /Evidence for/ })
+    await userEvent.click(second)
+    await userEvent.keyboard('{Escape}')
+    expect(document.activeElement).toBe(second)
+  })
+
+  it('leaves focus in a filter when the drawer closes from outside it', async () => {
+    activityRoutes([AIDLC_ROW])
+    renderActivity()
+    await waitFor(() => expect(screen.getByText('Gate approved.')).toBeInTheDocument())
+    const stage = screen.getByLabelText('Stage')
+
+    // Escape closes the drawer from anywhere on the page…
+    await userEvent.click(within(rowFor('Gate approved.')).getByRole('button', { name: /Evidence for/ }))
+    await userEvent.click(stage)
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('complementary', { name: 'Evidence drawer' })).not.toBeInTheDocument()
+    expect(document.activeElement).toBe(stage)
+
+    // …and a filter change drops it; neither pulls the reader out of the field they are typing in.
+    await userEvent.click(within(rowFor('Gate approved.')).getByRole('button', { name: /Evidence for/ }))
+    await userEvent.type(stage, 'f')
+    expect(screen.queryByRole('complementary', { name: 'Evidence drawer' })).not.toBeInTheDocument()
+    expect(document.activeElement).toBe(stage)
+  })
 })
 
 describe('Activity filters', () => {
