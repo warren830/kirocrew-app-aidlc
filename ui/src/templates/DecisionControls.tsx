@@ -21,7 +21,7 @@
 import type { ReactNode } from 'react'
 
 import { useI18n, type I18n } from '../i18n'
-import { ref } from '../lib/format'
+import { findingCopy, ref } from '../lib/format'
 import { isClosedAction } from '../lib/actionQueue'
 import type { ActionCard, DecisionSpec, Question } from '../lib/types'
 import { answerText, MAX_ANSWER_CHARS, MAX_FEEDBACK_CHARS } from '../actions/useSubmit'
@@ -298,9 +298,10 @@ export function AcceptanceCriteria({ card }: { card: ActionCard }) {
 /**
  * Consistency findings: what disagrees, how badly, and from which file.
  *
- * `message_key` and the evidence refs are the backend's; the refs are paths and audit coordinates, so
- * they are monospaced and verbatim rather than summarised into a sentence that drops the one that
- * mattered.
+ * The title and body are the `findings` part's words for the code; a code this build has no copy for
+ * keeps the generic sentence and shows the code, the only specific thing left to name. The evidence refs
+ * are the backend's paths and audit coordinates, so they are monospaced and verbatim rather than
+ * summarised into a sentence that drops the one that mattered.
  */
 export function ConsistencyFindings({ card, title }: { card: ActionCard; title: string }) {
   const i18n = useI18n()
@@ -310,32 +311,39 @@ export function ConsistencyFindings({ card, title }: { card: ActionCard; title: 
   return (
     <Block title={title} icon="warn">
       <div className="studio-col">
-        {findings.map((finding, i) => (
-          <div key={`${finding.code}-${i}`} className="studio-finding" data-severity={finding.severity}>
-            <div className="studio-finding-head">
-              <Chip
-                tone={finding.severity === 'blocking' ? 'danger' : finding.severity === 'warn' ? 'warn' : 'neutral'}
-                icon={finding.severity === 'info' ? 'info' : 'warn'}
-              >
-                {t(`enum.findingSeverity.${finding.severity}`)}
-              </Chip>
-              <span className="studio-mono studio-muted studio-grow studio-trunc">{finding.code}</span>
+        {findings.map((finding, i) => {
+          const copy = findingCopy(i18n, finding)
+          return (
+            <div
+              key={`${finding.code}-${i}`}
+              className="studio-finding"
+              data-severity={finding.severity}
+              data-code={finding.code}
+            >
+              <div className="studio-finding-head">
+                <Chip
+                  tone={finding.severity === 'blocking' ? 'danger' : finding.severity === 'warn' ? 'warn' : 'neutral'}
+                  icon={finding.severity === 'info' ? 'info' : 'warn'}
+                >
+                  {t(`enum.findingSeverity.${finding.severity}`)}
+                </Chip>
+                {copy ? null : <span className="studio-mono studio-muted studio-grow studio-trunc">{finding.code}</span>}
+              </div>
+              <p className="studio-finding-title">{copy ? copy.title : t('template.common.findingFallback')}</p>
+              {copy?.body ? <p className="studio-finding-text">{copy.body}</p> : null}
+              {finding.evidence.length > 0 ? (
+                <ul className="studio-list studio-mono">
+                  {finding.evidence.map((entry, j) => (
+                    <li key={j} className="studio-wrap-any">
+                      {entry.kind}: {entry.ref}
+                      {entry.detail ? ` — ${entry.detail}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
-            <p className="studio-finding-title">
-              {ref(i18n, { key: `finding.${finding.code}`, params: finding.params }, 'template.common.findingFallback')}
-            </p>
-            {finding.evidence.length > 0 ? (
-              <ul className="studio-list studio-mono">
-                {finding.evidence.map((entry, j) => (
-                  <li key={j} className="studio-wrap-any">
-                    {entry.kind}: {entry.ref}
-                    {entry.detail ? ` — ${entry.detail}` : ''}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
-        ))}
+          )
+        })}
       </div>
     </Block>
   )

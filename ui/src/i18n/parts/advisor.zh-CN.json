@@ -2,7 +2,7 @@
   "advisor.title": "AI Advisor",
   "advisor.titleDraft": "AI Advisor — 仅为草稿",
   "advisor.notRun": "Advisor 尚未运行",
-  "advisor.notRunCopy": "Advisor 只在被要求时才运行——你在这里要求，或者该仓库已在设置里获得“提前起草”授权，每张卡片自动请求一次。它使用独立的只读会话，不能写文件、不能推动工作流，也绝不会产生人类发言证据。",
+  "advisor.notRunCopy": "Advisor 只在被要求时才运行——你在这里要求，或者该仓库已在设置里获得“提前起草”授权，每张卡片自动请求一次。它使用独立的只读会话，不能写文件、不能推动工作流，AI-DLC 也绝不会把它做的任何事当作你的回复。",
   "advisor.disabled": "Advisor 在设置中已关闭，因此这里无法生成任何草稿。",
   "advisor.running": "正在读取证据以生成{kind}…",
   "advisor.draftNotDecision": "草稿，不是决策",
@@ -45,5 +45,5 @@
   "advisor.kind.question_explain": "解释",
   "advisor.kind.diagnose": "诊断",
   "advisor.kind.plan_draft": "计划建议",
-  "advisor.disclaimer": "Advisor 的活动只记录在 Studio 的活动记录中。它绝不会写入 AI-DLC 审计轨迹，也无法产生 HUMAN_TURN。"
+  "advisor.disclaimer": "Advisor 的活动只记录在 Studio 的活动记录中。它绝不会写入 AI-DLC 审计轨迹，AI-DLC 也绝不会把它当作你的回复。"
 }

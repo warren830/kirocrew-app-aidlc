@@ -10,12 +10,15 @@ from __future__ import annotations
 import builtins
 import json
 from dataclasses import dataclass, field, make_dataclass, replace
+from pathlib import Path
 from typing import Any, Sequence
 
 import fixtures as F
 import pytest
 
 LEDGER = "260901-ledger-export"
+#: The two catalogs the bundle imports, merged from the parts by ``scripts/build_i18n.py``.
+I18N = Path(__file__).resolve().parent.parent / "ui" / "src" / "i18n"
 
 
 def _view(name: str, *fields: Any):
@@ -307,6 +310,18 @@ def test_severity_agrees_with_the_registry_preflight_table(cons, studio):
     assert shared, "the two tables must overlap on at least legacy_layout"
     for code in shared:
         assert preflight[code] == cons.FINDING_SEVERITIES[code], code
+
+
+@pytest.mark.parametrize("locale", ["en-US", "zh-CN"])
+def test_every_finding_code_has_a_title_and_a_body_in_both_catalogs(cons, studio, locale):
+    """Nothing else binds these tables to ``ui/src/i18n``: a code without copy reads "Finding <code>" on the
+    repository page and a generic sentence on a card, which says nothing about what disagrees or what to do."""
+    catalog = json.loads((I18N / f"{locale}.json").read_text("utf-8"))
+    codes = dict.fromkeys((*cons.FINDING_CODES, *studio.repo_registry.PREFLIGHT_WARNING_SEVERITY))
+    assert "mixed_harness_versions" in codes, "the preflight-only codes must be covered too"
+    missing = [key for code in codes for key in (f"finding.{code}.title", f"finding.{code}.body")
+               if not str(catalog.get(key, "")).strip()]
+    assert missing == []
 
 
 def test_finding_json_shape_and_message_key(ev):

@@ -5,7 +5,7 @@
   "repos.action.doctor": "Run AI-DLC doctor",
   "repos.action.doctorDone": "AI-DLC doctor finished. Exit code {code}.",
   "repos.action.doctorFailed": "AI-DLC doctor reported a problem. Exit code {code}.",
-  "repos.action.doctorNote": "Doctor is AI-DLC's own health check. It appends HEALTH_CHECKED and GUARDRAIL_LOADED rows to the repository's audit trail, so Studio runs it only when you ask for it.",
+  "repos.action.doctorNote": "Doctor is AI-DLC's own health check. If this repository already has an AI-DLC audit trail, doctor adds two entries to it (“Workspace health checked” and “Guardrails loaded”), and it may clear a lock left by an AI-DLC process that is no longer running. Because it writes, Studio runs it only when you ask: here, or after each install or upgrade if “Run doctor after install” is on in Settings.",
   "repos.action.doctorRunning": "Running doctor…",
   "repos.doctor.result": "Doctor result",
   "repos.doctor.output": "Check output",

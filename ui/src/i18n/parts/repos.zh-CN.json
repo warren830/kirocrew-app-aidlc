@@ -5,7 +5,7 @@
   "repos.action.doctor": "运行 AI-DLC doctor",
   "repos.action.doctorDone": "AI-DLC doctor 已完成。退出码 {code}。",
   "repos.action.doctorFailed": "AI-DLC doctor 报告了问题。退出码 {code}。",
-  "repos.action.doctorNote": "doctor 是 AI-DLC 自己的健康检查。它会向仓库的审计记录追加 HEALTH_CHECKED 与 GUARDRAIL_LOADED 两行，因此 Studio 只在你明确要求时才运行它。",
+  "repos.action.doctorNote": "doctor 是 AI-DLC 自己的健康检查。如果该仓库已有 AI-DLC 审计记录，doctor 会在其中追加两条记录（“已检查工作区健康状况”和“已加载护栏”），还可能清除已不再运行的 AI-DLC 进程遗留的锁。由于它会写入内容，Studio 只在你要求时运行它：在这里手动运行，或在“设置”中开启“安装后运行 doctor”后，于每次安装或升级后运行。",
   "repos.action.doctorRunning": "正在运行 doctor…",
   "repos.doctor.result": "Doctor 检查结果",
   "repos.doctor.output": "检查输出",

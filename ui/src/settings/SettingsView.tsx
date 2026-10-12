@@ -89,22 +89,27 @@ export function SettingsSection({ title, children }: { title: string; children: 
  * "Unavailable — <reason>", from the capability the server reported.
  *
  * The reason is always shown. A control that is simply greyed out teaches the user that Studio is broken;
- * naming the reason (host seam missing, host not attached) is the difference between a bug and a
- * documented limit.
+ * naming the reason (KiroCrew lacks the feature, Slack is not set up) is the difference between a bug and
+ * a documented limit. The reason arrives as a code and is always shown as a sentence, never as the code:
+ * a host reason that names a symbol (`missing:<symbol>`, `unusable:<symbol>`) reads by its prefix, and a
+ * code this build has no sentence for says only that Studio does not recognise it.
  */
 export function UnavailableChip({ capability }: { capability: Capability | undefined }) {
   const { t, has } = useI18n()
   const raw = capability?.reason ?? null
-  const reason = raw && has(`settings.reason.${raw}`) ? t(`settings.reason.${raw}`) : null
   return (
     <Chip tone="warn" icon="warn">
-      {reason
-        ? t('settings.unavailableWhy', { reason })
-        : raw
-          ? t('settings.unavailableWhy', { reason: t('settings.reason.other', { raw }) })
-          : t('settings.unavailable')}
+      {raw ? t('settings.unavailableWhy', { reason: t(reasonKey(has, raw)) }) : t('settings.unavailable')}
     </Chip>
   )
+}
+
+function reasonKey(has: (key: string) => boolean, raw: string): string {
+  const exact = `settings.reason.${raw}`
+  if (has(exact)) return exact
+  const colon = raw.indexOf(':')
+  const prefix = colon > 0 ? `settings.reason.${raw.slice(0, colon)}` : null
+  return prefix && has(prefix) ? prefix : 'settings.reason.other'
 }
 
 /**

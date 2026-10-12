@@ -16,7 +16,7 @@ import type { ReactNode } from 'react'
 
 import { useI18n, type I18n } from '../i18n'
 import type { StudioApiError } from '../lib/api'
-import { bytes as fmtBytes, plural, refParams, unavailable } from '../lib/format'
+import { bytes as fmtBytes, findingCopy, plural, unavailable, type FindingCopy } from '../lib/format'
 import { Chip, type ChipTone } from '../shell/Chip'
 import { Icon, type IconName } from '../shell/Icon'
 import type { Finding, FindingSeverity, HarnessDir, PreflightReport } from '../lib/types'
@@ -113,17 +113,14 @@ export function ErrorNote({ error, reassure }: { error: StudioApiError; reassure
 }
 
 /**
- * A backend `Finding`'s message.
+ * A backend `Finding` in words.
  *
- * `message_key` is a `finding.<code>` reference the backend chose; no area owns that namespace yet, so
- * a missing key falls back to naming the code. Showing the raw key (what `t()` does by default) would
- * put `finding.mixed_harness_versions` in front of a user as if it were a sentence.
+ * The `findings` part owns `finding.<code>.title` / `.body`: what disagrees, what it means and what to do.
+ * A code this build has no copy for falls back to naming the code. Showing the raw key (what `t()` does by
+ * default) would put `finding.mixed_harness_versions.title` in front of a user as if it were a sentence.
  */
-export function findingText(i18n: I18n, finding: Finding): string {
-  if (i18n.has(finding.message_key)) {
-    return i18n.t(finding.message_key, refParams(i18n, { key: finding.message_key, params: finding.params }))
-  }
-  return i18n.t('repos.finding.fallback', { code: finding.code })
+export function findingText(i18n: I18n, finding: Finding): FindingCopy {
+  return findingCopy(i18n, finding) ?? { title: i18n.t('repos.finding.fallback', { code: finding.code }), body: null }
 }
 
 const FINDING_TONE: Record<FindingSeverity, ChipTone> = {
@@ -132,35 +129,44 @@ const FINDING_TONE: Record<FindingSeverity, ChipTone> = {
   info: 'info',
 }
 
-/** Findings as a list: severity is a left rule plus an icon plus the word, never colour alone. */
+/**
+ * Findings as a list: severity is a left rule plus an icon plus the word, never colour alone.
+ *
+ * The code is not printed beside a finding that has copy: the title says the same thing in words, and the
+ * fallback for an unknown code already names it. It stays on the row as `data-code` for a bug report.
+ */
 export function FindingList({ findings }: { findings: Finding[] }) {
   const i18n = useI18n()
   const { t } = i18n
   return (
     <ul className="studio-plain-list">
-      {findings.map((finding, index) => (
-        <li
-          className="studio-finding"
-          data-severity={finding.severity}
-          key={`${finding.code}-${index}`}
-        >
-          <div className="studio-row">
-            <Chip
-              tone={FINDING_TONE[finding.severity]}
-              icon={finding.severity === 'blocking' ? 'recovery' : finding.severity === 'warn' ? 'warn' : 'info'}
-            >
-              {t(`enum.findingSeverity.${finding.severity}`)}
-            </Chip>
-            <span className="studio-mono studio-muted">{finding.code}</span>
-          </div>
-          <p className="studio-finding-text">{findingText(i18n, finding)}</p>
-          {finding.evidence.length > 0 ? (
-            <p className="studio-subpath">
-              {finding.evidence.map((ref) => `${ref.kind}: ${ref.ref}`).join('  ·  ')}
-            </p>
-          ) : null}
-        </li>
-      ))}
+      {findings.map((finding, index) => {
+        const text = findingText(i18n, finding)
+        return (
+          <li
+            className="studio-finding"
+            data-severity={finding.severity}
+            data-code={finding.code}
+            key={`${finding.code}-${index}`}
+          >
+            <div className="studio-row">
+              <Chip
+                tone={FINDING_TONE[finding.severity]}
+                icon={finding.severity === 'blocking' ? 'recovery' : finding.severity === 'warn' ? 'warn' : 'info'}
+              >
+                {t(`enum.findingSeverity.${finding.severity}`)}
+              </Chip>
+              <strong className="studio-strong">{text.title}</strong>
+            </div>
+            {text.body ? <p className="studio-finding-text">{text.body}</p> : null}
+            {finding.evidence.length > 0 ? (
+              <p className="studio-subpath">
+                {finding.evidence.map((ref) => `${ref.kind}: ${ref.ref}`).join('  ·  ')}
+              </p>
+            ) : null}
+          </li>
+        )
+      })}
     </ul>
   )
 }
