@@ -10323,21 +10323,21 @@ function Qi(e, t) {
 	return !e || e.free_text !== t.free_text || e.option_letters.length !== t.option_letters.length ? !1 : e.option_letters.every((e, n) => e === t.option_letters[n]);
 }
 function $i({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, go: c }) {
-	let u = U(), { t: f } = u, g = Li(e, s, t?.drafts), _ = e.evidence.questions, v = _?.questions ?? [], y = Vn(_), b = _?.unsupported_pending_count ?? 0, x = y.length > 0 || b > 0, S = _?.mode === "degraded" || b > 0, w = _?.origin?.kind === "audit" && (_.origin.batch_size ?? 1) > 1, T = ["Queued", "NotDelivered"].includes(e.status), E = T && !S && !a, [D, O] = d(!1), k = _?.pending_checkpoint === "summary_confirmation" ? _.summary_confirmation : _?.pending_checkpoint === "assumption_confirmation" ? _.assumption_confirmation ?? null : _?.pending_checkpoint === "plan_approval" ? _.plan_approval : null, A = e.decisions.some((e) => e.decision === "request_plan_changes" || e.decision === "confirm_summary"), j = e.decisions.some((e) => e.decision === "confirm_summary"), M = (e, t, i) => r({ answers: {
+	let u = U(), { t: f } = u, g = Li(e, s, t?.drafts), _ = e.evidence.questions, v = _?.questions ?? [], y = Vn(_), b = _?.unsupported_pending_count ?? 0, x = y.length > 0 || b > 0, S = _?.mode === "degraded" || b > 0, w = _?.origin?.kind === "audit" && (_.origin.batch_size ?? 1) > 1, T = ["Queued", "NotDelivered"].includes(e.status), E = T && !S && !a, [D, O] = d(!1), k = _?.pending_checkpoint === "summary_confirmation" ? _.summary_confirmation : _?.pending_checkpoint === "assumption_confirmation" ? _.assumption_confirmation ?? null : _?.pending_checkpoint === "plan_approval" ? _.plan_approval : null, A = e.decisions.some((e) => e.decision === "request_plan_changes" || e.decision === "confirm_summary"), j = k?.present && k.kind === "plan_approval" && !k.context?.trim() ? e.evidence.artifacts.find((e) => e.kind === "artifact") ?? null : null, M = xn(e.repo.repo_id, e.intent.intent_key, j), N = v.length > 0 || b > 0 || !k?.present, P = e.decisions.some((e) => e.decision === "confirm_summary"), F = (e, t, i) => r({ answers: {
 		...n.answers,
 		[String(e)]: {
 			option_letters: t,
 			free_text: i
 		}
-	} }), N = (e, t) => {
+	} }), I = (e, t) => {
 		let r = n.answers[String(e.index)], i = r?.option_letters ?? [];
 		if (!e.multi_select) {
-			M(e.index, [t], r?.free_text ?? null);
+			F(e.index, [t], r?.free_text ?? null);
 			return;
 		}
 		let a = i.includes(t) ? i.filter((e) => e !== t) : [...i, t];
-		M(e.index, a, r?.free_text ?? null);
-	}, P = i((e, t) => {
+		F(e.index, a, r?.free_text ?? null);
+	}, L = i((e, t) => {
 		let r = { ...n.answers };
 		for (let n of e) {
 			let e = v.find((e) => e.index === n.question_index);
@@ -10348,7 +10348,7 @@ function $i({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 			a && (r[i] = a);
 		}
 		return r;
-	}, [n.answers, v]), F = (e) => r({ answers: P(e, !1) }), I = g.draft?.request.auto === !0 && g.draft.action_id === e.action_id ? Ii(g.draft) : null, L = I ? g.draft?.draft_id ?? null : null, R = l(() => {
+	}, [n.answers, v]), R = (e) => r({ answers: L(e, !1) }), z = g.draft?.request.auto === !0 && g.draft.action_id === e.action_id ? Ii(g.draft) : null, B = z ? g.draft?.draft_id ?? null : null, V = l(() => {
 		let r = n.advisorApplied;
 		if (!r) return [];
 		let i = g.draft?.draft_id === r ? g.draft : (t?.drafts ?? []).find((e) => e.draft_id === r);
@@ -10358,30 +10358,30 @@ function $i({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 		g.draft,
 		t?.drafts,
 		e.action_id
-	]), z = l(() => R.some((e) => {
+	]), H = l(() => V.some((e) => {
 		let t = v.find((t) => t.index === e.question_index);
 		if (!t) return !1;
 		let r = Zi(t, e);
 		return !!r && Qi(n.answers[String(t.index)], r);
 	}), [
-		R,
+		V,
 		n.answers,
 		v
 	]);
 	return o(() => {
-		if (!I || !L || !E || n.advisorApplied === L) return;
-		let e = P(I.suggested_answers, !0);
+		if (!z || !B || !E || n.advisorApplied === B) return;
+		let e = L(z.suggested_answers, !0);
 		Object.keys(e).length !== Object.keys(n.answers).length && r({
 			answers: e,
-			advisorApplied: L
+			advisorApplied: B
 		});
 	}, [
-		I,
-		L,
+		z,
+		B,
 		E,
 		n.advisorApplied,
 		n.answers,
-		P,
+		L,
 		r
 	]), /* @__PURE__ */ h("section", {
 		className: "studio-template",
@@ -10418,7 +10418,7 @@ function $i({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 					}), f("template.questions.openConversation")]
 				})]
 			}) : null,
-			/* @__PURE__ */ h(Z, {
+			N ? /* @__PURE__ */ h(Z, {
 				title: f("template.questions.group"),
 				icon: "question",
 				children: [
@@ -10443,7 +10443,7 @@ function $i({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 							}) : null
 						]
 					}),
-					z && E ? /* @__PURE__ */ h("div", {
+					H && E ? /* @__PURE__ */ h("div", {
 						className: "studio-advisor-apply",
 						role: "status",
 						children: [
@@ -10460,7 +10460,7 @@ function $i({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 								className: "studio-btn studio-btn-sm studio-btn-ghost",
 								onClick: () => {
 									let e = { ...n.answers };
-									for (let t of R) {
+									for (let t of V) {
 										let n = v.find((e) => e.index === t.question_index);
 										if (!n) continue;
 										let r = Zi(n, t), i = String(n.index);
@@ -10551,7 +10551,7 @@ function $i({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 									placeholder: f("template.questions.textPlaceholder"),
 									"aria-label": t.prompt,
 									disabled: !E,
-									onChange: (e) => M(t.index, [o.letter], e.target.value)
+									onChange: (e) => F(t.index, [o.letter], e.target.value)
 								}) : /* @__PURE__ */ h(p, { children: [t.options.map((e) => {
 									let n = i.includes(e.letter);
 									return /* @__PURE__ */ h("label", {
@@ -10564,7 +10564,7 @@ function $i({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 											value: e.letter,
 											checked: n,
 											disabled: !E,
-											onChange: () => N(t, e.letter)
+											onChange: () => I(t, e.letter)
 										}), /* @__PURE__ */ h("span", {
 											className: "studio-opt-body",
 											children: [
@@ -10590,7 +10590,7 @@ function $i({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 									placeholder: f("template.questions.otherPlaceholder"),
 									"aria-label": f("template.questions.otherLabel", { index: t.index }),
 									disabled: !E,
-									onChange: (e) => M(t.index, i, e.target.value)
+									onChange: (e) => F(t.index, i, e.target.value)
 								}) : null] })
 							]
 						}, t.index);
@@ -10600,7 +10600,7 @@ function $i({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 						children: f("template.questions.neverEdits", { path: _.relpath })
 					}) : null
 				]
-			}),
+			}) : null,
 			k?.present ? /* @__PURE__ */ h(Z, {
 				title: f(`template.questions.checkpoint.${k.kind}`),
 				icon: "gate",
@@ -10613,6 +10613,12 @@ function $i({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 						className: "msg-content studio-md",
 						children: /* @__PURE__ */ m(C, { content: k.context })
 					}) : null,
+					j ? /* @__PURE__ */ m(Sn, {
+						meta: j,
+						body: M.data,
+						loading: M.loading,
+						error: M.error
+					}) : null,
 					k.options.length > 0 ? /* @__PURE__ */ m("ul", {
 						className: "studio-optionlist studio-mono",
 						children: k.options.map((e, t) => /* @__PURE__ */ m("li", {
@@ -10623,7 +10629,7 @@ function $i({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 					k.answered ? /* @__PURE__ */ m(_i, {
 						icon: "check",
 						children: f("template.questions.checkpointAnswered", { answer: k.answer ?? f("common.unavailable") })
-					}) : j && E ? /* @__PURE__ */ m(ji, {
+					}) : P && E ? /* @__PURE__ */ m(ji, {
 						draft: n,
 						setDraft: (e) => {
 							O(!0), r(e);
@@ -10635,13 +10641,17 @@ function $i({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 						changesLabel: f("template.questions.summaryChanges"),
 						changesHint: f("template.questions.summaryChangesHint"),
 						chosen: D
+					}) : null,
+					!N && _ ? /* @__PURE__ */ m(_i, {
+						icon: "lock",
+						children: f("template.questions.neverEdits", { path: _.relpath })
 					}) : null
 				]
 			}) : null,
 			y.length > 0 && T ? /* @__PURE__ */ m(Ri, {
 				card: e,
 				advisor: g,
-				...E ? { onApplyAnswers: F } : {},
+				...E ? { onApplyAnswers: R } : {},
 				...A && E ? { onUseFeedback: (e) => r({ feedback: e }) } : {}
 			}) : null,
 			A && E ? /* @__PURE__ */ m(Z, {

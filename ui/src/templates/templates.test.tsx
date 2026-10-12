@@ -525,6 +525,31 @@ describe('questions template', () => {
     expect(screen.getAllByRole('radio')).toHaveLength(3)
   })
 
+  it('shows the plan a plan approval asks about, and no empty question group', async () => {
+    const plan = artifact({ artifact_id: 'art_plan', name: 'code-generation-plan.md', stage: 'code-generation' })
+    setApiRoutes({
+      [`GET ${BASE}/repos/r_1/intents/default~250901-guest/artifacts/art_plan`]: () => ({
+        artifact: plan, content: '# Code generation plan\n\nStep 1: write subtract.', encoding: 'utf-8',
+        truncated: false, review: null, toc: [], prior: { available: false, source: null, diff: null },
+      }),
+    })
+    const view = questionsView({
+      stage: 'code-generation', questions: [], pending_count: 0, pending_checkpoint: 'plan_approval',
+      plan_approval: { kind: 'plan_approval', present: true, answered: false, answer: null, options: [], context: null },
+    })
+    const value = card({
+      type: 'question',
+      headline: { key: 'action.question.headline', params: {} },
+      decisions: [spec('approve_plan', [])],
+      primary: { decision: 'approve_plan', label_key: 'decision.approve_plan.label' },
+      evidence: { ...card().evidence, questions: view, artifacts: [plan] },
+    })
+    mount(QuestionsTemplate, value)
+    expect(await screen.findByRole('region', { name: 'Artifact code-generation-plan.md, read-only' })).toBeInTheDocument()
+    expect(screen.queryByText(en.t('template.questions.group'))).toBeNull()
+    expect(screen.queryByText(en.t('template.questions.none'))).toBeNull()
+  })
+
   it('renders the ordered group with its prompts and option labels verbatim', () => {
     setApiRoutes({})
     mount(QuestionsTemplate, questionCard())

@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MarkdownRenderer } from '@kirocrew/app-sdk/ui'
 
+import { ArtifactViewer, useArtifactBody } from '../artifacts/ArtifactViewer'
 import { useI18n } from '../i18n'
 import { pendingQuestions } from '../actions/useSubmit'
 import type { DraftResult, Question } from '../lib/types'
@@ -113,6 +114,14 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
   const offersChanges = card.decisions.some(
     (spec) => spec.decision === 'request_plan_changes' || spec.decision === 'confirm_summary',
   )
+  // A plan approval asks about the plan, which lives in the stage's produced artifact (it leads the list),
+  // not in the checkpoint: shown here, the person approves what they have read.
+  const planArtifact = checkpoint?.present && checkpoint.kind === 'plan_approval' && !checkpoint.context?.trim()
+    ? (card.evidence.artifacts.find((meta) => meta.kind === 'artifact') ?? null)
+    : null
+  const planBody = useArtifactBody(card.repo.repo_id, card.intent.intent_key, planArtifact)
+  // A card that is only a checkpoint has no question group to show: "0 of 0 unanswered" was noise.
+  const showGroup = questions.length > 0 || unsupportedPending > 0 || !checkpoint?.present
   const offersSummaryChoice = card.decisions.some((spec) => spec.decision === 'confirm_summary')
 
   const setAnswer = (index: number, letters: string[], freeText: string | null) =>
@@ -266,6 +275,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
         </Block>
       ) : null}
 
+      {showGroup ? (
       <Block title={t('template.questions.group')} icon="question">
         <div className="studio-qmetas">
           <Chip tone={hasPending ? 'accent' : 'ok'} icon={hasPending ? 'question' : 'check'}>
@@ -421,6 +431,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
           <Consequence icon="lock">{t('template.questions.neverEdits', { path: view.relpath })}</Consequence>
         ) : null}
       </Block>
+      ) : null}
 
       {checkpoint?.present ? (
         <Block title={t(`template.questions.checkpoint.${checkpoint.kind}`)} icon="gate">
@@ -431,6 +442,9 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
             <div className="msg-content studio-md">
               <MarkdownRenderer content={checkpoint.context} />
             </div>
+          ) : null}
+          {planArtifact ? (
+            <ArtifactViewer meta={planArtifact} body={planBody.data} loading={planBody.loading} error={planBody.error} />
           ) : null}
           {checkpoint.options.length > 0 ? (
             // The checkpoint's own options, as written in the file. The bytes Studio would send are shown
@@ -462,6 +476,9 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
               changesHint={t('template.questions.summaryChangesHint')}
               chosen={choiceTouched}
             />
+          ) : null}
+          {!showGroup && view ? (
+            <Consequence icon="lock">{t('template.questions.neverEdits', { path: view.relpath })}</Consequence>
           ) : null}
         </Block>
       ) : null}
