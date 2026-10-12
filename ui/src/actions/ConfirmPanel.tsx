@@ -59,10 +59,13 @@ export interface ConfirmPanelProps {
   onSend: () => void
   onCancel: () => void
   onOpenBlockingAction?: (actionId: string) => void
+  /** Opens the intent's conversation panel, offered when the send is blocked for want of a bound session. */
+  onOpenSession?: () => void
 }
 
 export function ConfirmPanel({
   card, pending, submit, busy, refreshing, acknowledged, onAcknowledge, onSend, onCancel, onOpenBlockingAction,
+  onOpenSession,
 }: ConfirmPanelProps) {
   const { t } = useI18n()
   const heading = useRef<HTMLParagraphElement | null>(null)
@@ -137,8 +140,8 @@ export function ConfirmPanel({
       <p className="studio-route studio-muted">
         <Icon name="info" size={13} />
         {sendsWire
-          ? t('confirm.routing', {
-              session: card.evidence.session?.session_key ?? t('common.unavailable'),
+          ? t(card.evidence.session?.session_key ? 'confirm.routing' : 'confirm.routingUnbound', {
+              session: card.evidence.session?.session_key ?? '',
               repo: card.repo.label || card.repo.repo_id,
               intent: card.intent.slug || card.intent.intent_dir,
             })
@@ -150,6 +153,9 @@ export function ConfirmPanel({
           <Icon name="warn" size={13} />
           {t(blocked)}
         </p>
+      ) : null}
+      {blocked === 'confirm.blocked.sessionUnbound' && onOpenSession ? (
+        <Btn type="button" onClick={onOpenSession}>{t('confirm.openSession')}</Btn>
       ) : null}
       {ownerAction && onOpenBlockingAction ? (
         <Btn type="button" onClick={() => onOpenBlockingAction(ownerAction)}>

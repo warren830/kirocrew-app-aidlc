@@ -103,6 +103,23 @@ describe('a decision whose intent has no canonical conversation', () => {
     expect(within(panel).getByRole('button', { name: new RegExp(en.t('confirm.send')) })).toBeDisabled()
   })
 
+  it('says where the send would go in a whole sentence and links to binding a conversation', async () => {
+    const card = unbound()
+    const go = vi.fn()
+    setApiRoutes({ [`GET ${API_BASE}/actions/${card.action_id}`]: () => ({ action: card, transitions: [], drafts: [] }) })
+    mount(card, go)
+    await userEvent.click(await screen.findByRole('button', { name: new RegExp(en.t('decision.approve.label')) }))
+    const panel = confirmation()
+
+    expect(within(panel).queryByText(new RegExp(en.t('common.unavailable')))).toBeNull()
+    expect(within(panel).getByText(/once one is bound/)).toBeInTheDocument()
+    await userEvent.click(within(panel).getByRole('button', { name: en.t('confirm.openSession') }))
+    expect(go).toHaveBeenCalledWith({
+      ...EMPTY_ROUTE, view: 'intents', repo: card.repo.repo_id, intent: card.intent.intent_key, tab: 'conversation',
+    })
+    expect(apiCalls.filter((c) => c.method !== 'GET')).toHaveLength(0)
+  })
+
   it('offers the send once a matching conversation is bound', async () => {
     const card = actionCard()
     setApiRoutes({ [`GET ${API_BASE}/actions/${card.action_id}`]: () => ({ action: card, transitions: [], drafts: [] }) })

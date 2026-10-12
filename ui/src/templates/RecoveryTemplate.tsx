@@ -86,6 +86,7 @@ export function RecoveryTemplate({ card, detail, api, go }: TemplateProps) {
             <p>{t('template.recovery.sessionRepair')}</p>
             <button type="button" className="studio-btn" onClick={() => go({
               ...EMPTY_ROUTE, view: 'intents', repo: card.repo.repo_id, intent: card.intent.intent_key,
+              tab: 'conversation',
             })}>
               {t('template.recovery.manageConversation')}
             </button>

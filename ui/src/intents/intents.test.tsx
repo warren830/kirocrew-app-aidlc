@@ -317,6 +317,36 @@ describe('the intents inventory', () => {
   })
 })
 
+describe('a link to an intent\'s conversation', () => {
+  it('opens that intent\'s conversation panel and then drops the tab from the route', async () => {
+    const unbound = { ...INTENT, session: null } as IntentSummary
+    setApiRoutes({
+      ...shellRoutes([]),
+      [`GET ${API_BASE}/repos*`]: () => ({
+        repos: [{
+          repo_id: INTENT.repo_id, label: INTENT.repo_label, canonical_path: '/work/checkout-web',
+          availability: 'available', counts: { intents: 1 },
+        }],
+        totals: { repos: 1, unavailable: 0, open_actions: 0 },
+      }),
+      [`GET ${API_BASE}/repos/${INTENT.repo_id}/intents`]: () => ({
+        intents: [unbound], spaces: ['default'], active_space: 'default',
+      }),
+      ['GET /api/chat/slots']: () => [],
+    })
+    window.history.replaceState(null, '', buildRoute({
+      view: 'intents', repo: INTENT.repo_id, intent: INTENT.intent_key, tab: 'conversation',
+    }))
+    render(<I18nProvider><StudioApp /></I18nProvider>)
+
+    expect(await screen.findByRole('button', { name: 'Create and bind the conversation' })).toBeInTheDocument()
+    await waitFor(() => expect(parseRoute(window.location.search, window.location.hash)).toMatchObject({
+      view: 'intents', repo: INTENT.repo_id, intent: '', tab: 'decision',
+    }))
+    expect(apiCalls.every((call) => call.method === 'GET')).toBe(true)
+  })
+})
+
 // --------------------------------------------------------------------------- //
 // the canonical conversation
 // --------------------------------------------------------------------------- //

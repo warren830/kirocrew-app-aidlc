@@ -623,6 +623,9 @@ export function DetailShell({
           onOpenBlockingAction={(action) => go({
             ...EMPTY_ROUTE, view: 'actions', repo: card.repo.repo_id, action,
           })}
+          onOpenSession={() => go({
+            ...EMPTY_ROUTE, view: 'intents', repo: card.repo.repo_id, intent: card.intent.intent_key, tab: 'conversation',
+          })}
         />
       ) : null}
 

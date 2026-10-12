@@ -428,7 +428,9 @@ var D = Object.defineProperty, O = (e, t) => {
 	"confirm.labelSends": "Button: {label} → sends: {wire}",
 	"confirm.mismatch": "KiroCrew recorded different text from what this page displayed. What was actually sent is below.",
 	"confirm.noWireText": "nothing yet",
+	"confirm.openSession": "Bind a conversation",
 	"confirm.routing": "Injected as a real user turn into canonical session {session} for {repo}/{intent}. The Kiro userPromptSubmit hook mints the protected HUMAN_TURN; the AI-DLC engine commits the transition. Studio does not call report, edit aidlc-state.md, or set any bypass variable.",
+	"confirm.routingUnbound": "Injected as a real user turn into the canonical session for {repo}/{intent} — once one is bound. The Kiro userPromptSubmit hook mints the protected HUMAN_TURN; the AI-DLC engine commits the transition. Studio does not call report, edit aidlc-state.md, or set any bypass variable.",
 	"confirm.send": "Yes, send this exact text",
 	"confirm.studioOnly": "{label} changes only what Studio records. Nothing is sent to the conversation.",
 	"confirm.studioOnlyHint": "This sends no message. Studio records your choice and keeps reading the files on disk.",
@@ -2683,7 +2685,9 @@ var D = Object.defineProperty, O = (e, t) => {
 	"confirm.labelSends": "按钮：{label} → 发送：{wire}",
 	"confirm.mismatch": "KiroCrew 记录的文本与本页显示的不一致。下面是实际发送的内容。",
 	"confirm.noWireText": "暂无内容",
+	"confirm.openSession": "去绑定会话",
 	"confirm.routing": "将作为真实的用户回合注入到 {repo}/{intent} 的规范会话 {session}。Kiro 的 userPromptSubmit 钩子会生成受保护的 HUMAN_TURN；由 AI-DLC 引擎提交状态迁移。Studio 不会调用 report、不会修改 aidlc-state.md，也不会设置任何绕过开关。",
+	"confirm.routingUnbound": "会作为真实的用户回合注入到 {repo}/{intent} 的规范会话（需要先绑定会话）。Kiro 的 userPromptSubmit 钩子会生成受保护的 HUMAN_TURN；由 AI-DLC 引擎提交状态迁移。Studio 不会调用 report、不会修改 aidlc-state.md，也不会设置任何绕过开关。",
 	"confirm.send": "确认，发送这段原文",
 	"confirm.studioOnly": "{label} 只会改变 Studio 自己的记录，不会向会话发送任何内容。",
 	"confirm.studioOnlyHint": "这不会发送消息。Studio 会记录你的选择，并继续读取磁盘上的文件。",
@@ -7336,11 +7340,11 @@ function qn(e) {
 //#endregion
 //#region src/actions/ConfirmPanel.tsx
 var Jn = "studio-confirm-panel";
-function Yn({ card: e, pending: t, submit: n, busy: r, refreshing: i, acknowledged: a, onAcknowledge: s, onSend: c, onCancel: l, onOpenBlockingAction: d }) {
-	let { t: f } = U(), g = u(null), _ = t.spec.decision, v = f(`decision.${_}.label`), y = _ === "resubmit" || _ === "mark_not_delivered", x = t.payload !== null, S = t.spec.lane, C = n.refusal?.code === "repo_busy" ? n.refusal.details.owner : null, w = C && typeof C == "object" && "action_id" in C && typeof C.action_id == "string" ? C.action_id : null;
+function Yn({ card: e, pending: t, submit: n, busy: r, refreshing: i, acknowledged: a, onAcknowledge: s, onSend: c, onCancel: l, onOpenBlockingAction: d, onOpenSession: f }) {
+	let { t: g } = U(), _ = u(null), v = t.spec.decision, y = g(`decision.${v}.label`), x = v === "resubmit" || v === "mark_not_delivered", S = t.payload !== null, C = t.spec.lane, w = n.refusal?.code === "repo_busy" ? n.refusal.details.owner : null, T = w && typeof w == "object" && "action_id" in w && typeof w.action_id == "string" ? w.action_id : null;
 	o(() => {
-		g.current?.focus();
-	}, [_]), o(() => {
+		_.current?.focus();
+	}, [v]), o(() => {
 		let e = (e) => {
 			e.key === "Escape" && Fn(n.stage) && !r && (e.stopPropagation(), l());
 		};
@@ -7350,70 +7354,75 @@ function Yn({ card: e, pending: t, submit: n, busy: r, refreshing: i, acknowledg
 		l,
 		n.stage
 	]);
-	let T = i ? "confirm.blocked.refreshing" : t.blockedKey ? t.blockedKey : x && t.wire === null ? "confirm.blocked.noWireText" : y && !a ? "confirm.blocked.acknowledge" : null, E = n.stage === "settled" && n.actionId === e.action_id, D = n.receipt?.wire_text ?? null, O = E && x && D !== null && D !== t.wire;
+	let E = i ? "confirm.blocked.refreshing" : t.blockedKey ? t.blockedKey : S && t.wire === null ? "confirm.blocked.noWireText" : x && !a ? "confirm.blocked.acknowledge" : null, D = n.stage === "settled" && n.actionId === e.action_id, O = n.receipt?.wire_text ?? null, k = D && S && O !== null && O !== t.wire;
 	return /* @__PURE__ */ h("section", {
 		className: "studio-confirm",
 		id: Jn,
 		role: "group",
-		"aria-label": f("confirm.label"),
+		"aria-label": g("confirm.label"),
 		children: [
 			/* @__PURE__ */ h("p", {
 				className: "studio-ch",
-				ref: g,
+				ref: _,
 				tabIndex: -1,
 				children: [/* @__PURE__ */ m(Y, {
 					name: "send",
 					size: 14
-				}), f(`confirm.title.${_}`)]
+				}), g(`confirm.title.${v}`)]
 			}),
-			x ? /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ m("p", {
+			S ? /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ m("p", {
 				className: "studio-confirm-label",
-				children: f("confirm.labelSends", {
-					label: v,
-					wire: t.wire ?? f("confirm.noWireText")
+				children: g("confirm.labelSends", {
+					label: y,
+					wire: t.wire ?? g("confirm.noWireText")
 				})
 			}), t.wire === null ? null : /* @__PURE__ */ m("pre", {
 				className: "studio-sendtext studio-wrap-any",
 				children: t.wire
 			})] }) : /* @__PURE__ */ m("p", {
 				className: "studio-confirm-label",
-				children: f(S === "host_control" ? "confirm.hostControl" : "confirm.studioOnly", { label: v })
+				children: g(C === "host_control" ? "confirm.hostControl" : "confirm.studioOnly", { label: y })
 			}),
 			/* @__PURE__ */ h("p", {
 				className: "studio-route studio-muted",
 				children: [/* @__PURE__ */ m(Y, {
 					name: "info",
 					size: 13
-				}), x ? f("confirm.routing", {
-					session: e.evidence.session?.session_key ?? f("common.unavailable"),
+				}), S ? g(e.evidence.session?.session_key ? "confirm.routing" : "confirm.routingUnbound", {
+					session: e.evidence.session?.session_key ?? "",
 					repo: e.repo.label || e.repo.repo_id,
 					intent: e.intent.slug || e.intent.intent_dir
-				}) : f(`confirm.consequence.${_}`)]
+				}) : g(`confirm.consequence.${v}`)]
 			}),
-			T ? /* @__PURE__ */ h("p", {
+			E ? /* @__PURE__ */ h("p", {
 				className: "studio-route",
 				"data-tone": "danger",
 				role: "status",
 				children: [/* @__PURE__ */ m(Y, {
 					name: "warn",
 					size: 13
-				}), f(T)]
+				}), g(E)]
 			}) : null,
-			w && d ? /* @__PURE__ */ m(b, {
+			E === "confirm.blocked.sessionUnbound" && f ? /* @__PURE__ */ m(b, {
 				type: "button",
-				onClick: () => d(w),
-				children: f("detail.repoBusy.openOwner")
+				onClick: f,
+				children: g("confirm.openSession")
 			}) : null,
-			y ? /* @__PURE__ */ h("label", {
+			T && d ? /* @__PURE__ */ m(b, {
+				type: "button",
+				onClick: () => d(T),
+				children: g("detail.repoBusy.openOwner")
+			}) : null,
+			x ? /* @__PURE__ */ h("label", {
 				className: "studio-ack",
 				children: [/* @__PURE__ */ m("input", {
 					type: "checkbox",
 					checked: a,
 					disabled: !Fn(n.stage) || r,
 					onChange: (e) => s(e.currentTarget.checked)
-				}), /* @__PURE__ */ m("span", { children: f(`confirm.acknowledge.${_}`) })]
+				}), /* @__PURE__ */ m("span", { children: g(`confirm.acknowledge.${v}`) })]
 			}) : null,
-			O ? /* @__PURE__ */ h("div", {
+			k ? /* @__PURE__ */ h("div", {
 				className: "studio-banner",
 				"data-tone": "danger",
 				role: "alert",
@@ -7422,9 +7431,9 @@ function Yn({ card: e, pending: t, submit: n, busy: r, refreshing: i, acknowledg
 					size: 15
 				}), /* @__PURE__ */ h("div", {
 					className: "studio-grow",
-					children: [/* @__PURE__ */ m("p", { children: f("confirm.mismatch") }), /* @__PURE__ */ m("pre", {
+					children: [/* @__PURE__ */ m("p", { children: g("confirm.mismatch") }), /* @__PURE__ */ m("pre", {
 						className: "studio-sendtext studio-wrap-any",
-						children: D
+						children: O
 					})]
 				})]
 			}) : null,
@@ -7434,22 +7443,22 @@ function Yn({ card: e, pending: t, submit: n, busy: r, refreshing: i, acknowledg
 					/* @__PURE__ */ h(b, {
 						primary: !0,
 						type: "button",
-						disabled: T !== null || r || !Fn(n.stage),
+						disabled: E !== null || r || !Fn(n.stage),
 						onClick: c,
 						children: [/* @__PURE__ */ m(Y, {
 							name: "check",
 							size: 14
-						}), f(x ? "confirm.send" : "confirm.apply")]
+						}), g(S ? "confirm.send" : "confirm.apply")]
 					}),
 					/* @__PURE__ */ m(b, {
 						type: "button",
 						disabled: r,
 						onClick: l,
-						children: f("common.cancel")
+						children: g("common.cancel")
 					}),
 					/* @__PURE__ */ m("span", {
 						className: "studio-hint studio-muted",
-						children: f(x ? "confirm.atMostOnce" : S === "host_control" ? "confirm.hostControlHint" : "confirm.studioOnlyHint")
+						children: g(S ? "confirm.atMostOnce" : C === "host_control" ? "confirm.hostControlHint" : "confirm.studioOnlyHint")
 					})
 				]
 			})
@@ -8499,6 +8508,13 @@ function zr({ actionId: e, queueCard: t, api: n, route: r, go: a, groupedAnswers
 					view: "actions",
 					repo: O.repo.repo_id,
 					action: e
+				}),
+				onOpenSession: () => a({
+					...Ct,
+					view: "intents",
+					repo: O.repo.repo_id,
+					intent: O.intent.intent_key,
+					tab: "conversation"
 				})
 			}) : null,
 			/* @__PURE__ */ m(Qn, {
@@ -10616,7 +10632,8 @@ function Ki({ card: e, detail: t, api: n, go: r }) {
 						...Ct,
 						view: "intents",
 						repo: e.repo.repo_id,
-						intent: e.intent.intent_key
+						intent: e.intent.intent_key,
+						tab: "conversation"
 					}),
 					children: a("template.recovery.manageConversation")
 				})] })]
@@ -13904,7 +13921,22 @@ function So({ route: e, go: t }) {
 		t,
 		P,
 		r
-	]), I = x ? T.find((e) => e.repo_id === x.repo_id) : void 0, L = x ? A.find((e) => e.repo_id === x.repo_id && e.intent_key === x.intent_key) ?? x : null;
+	]);
+	o(() => {
+		if (e.tab !== "conversation" || !e.intent) return;
+		let n = A.find((t) => t.repo_id === e.repo && t.intent_key === e.intent);
+		n && (v(null), b(null), w(null), S(n), t({
+			tab: "decision",
+			intent: ""
+		}, { replace: !0 }));
+	}, [
+		e.tab,
+		e.intent,
+		e.repo,
+		A,
+		t
+	]);
+	let I = x ? T.find((e) => e.repo_id === x.repo_id) : void 0, L = x ? A.find((e) => e.repo_id === x.repo_id && e.intent_key === x.intent_key) ?? x : null;
 	return /* @__PURE__ */ m("div", {
 		className: "studio-scroll",
 		children: /* @__PURE__ */ h("div", {

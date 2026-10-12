@@ -199,6 +199,19 @@ export function IntentsView({ route, go }: IntentsViewProps) {
     [api, go, refresh, t],
   )
 
+  // A card's "bind a conversation" link lands here with the intent and `tab=conversation`: open that
+  // intent's panel once its row is loaded, then drop the tab so a refresh does not reopen it.
+  useEffect(() => {
+    if (route.tab !== 'conversation' || !route.intent) return
+    const target = intents.find((intent) => intent.repo_id === route.repo && intent.intent_key === route.intent)
+    if (!target) return
+    setNotice(null)
+    setRecomposing(null)
+    setEditingSettings(null)
+    setBinding(target)
+    go({ tab: 'decision', intent: '' }, { replace: true })
+  }, [route.tab, route.intent, route.repo, intents, go])
+
   // The panel is opened from a row, so the row's repository has to be found again: the slot's project
   // must equal `canonical_path`, and `IntentSummary` carries only the label. The row itself is re-read
   // from the current inventory, so a refresh behind the open panel updates it instead of pinning the
