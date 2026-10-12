@@ -287,7 +287,9 @@ Exact bytes (pretty-printed, 2 spaces, trailing newline, key order fixed):
 
 - Location `<record>/<phase>/<stage>/<stage>-questions.md`; per-unit:
   `construction/<unit>/code-generation/code-generation-questions.md` (real, DevDelta).
-- Question headings `## Q1. …` (Chinese text in all real files); options either `A. …` (poc intent-capture) or
+- Question headings `## Q1. …` (Chinese text in all real files before 2.10); a 2.10 conductor wrote
+  `## Question 1: Farewell wording` (`question-fallback/question-n-headings.md`, 2026-10-12: the protocol fixes the
+  tags and options, not the heading), with a preamble that quotes `` `[Answer]:` `` mid-line; options either `A. …` (poc intent-capture) or
   `- A. …` (poc requirements-analysis, devlake) — both occur; escape option `X. Other (please specify)`,
   `X. Other (please name the roles and cadence)`, or fullwidth `X. Other（请说明）`.
 - Answer tag variants seen: `[Answer]: A`, `[Answer]: A, B. 主要使用者是…` (letters then prose), `[Answer]: D. 三项都完成…`,

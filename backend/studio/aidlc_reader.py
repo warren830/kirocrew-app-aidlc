@@ -215,7 +215,7 @@ _VERDICT_RE = re.compile(
 )
 _REVIEW_HEADING_RE = re.compile(r"^##\s+Review\s*$", re.IGNORECASE)
 _H2_RE = re.compile(r"^##(?!#)\s*(.*?)\s*$")
-_QUESTION_H3_RE = re.compile(r"^### Q(\d+)(?:[.:]|[ \t]+[—–-])?[ \t]+(.*)$")
+_QUESTION_H3_RE = re.compile(r"^### Q(?:uestion)?[ \t]*(\d+)(?:[.:]|[ \t]+[—–-])?[ \t]+(.*)$")
 _QUESTION_SECTION_END_RE = re.compile(r"^#{1,6}(?:[ \t]+|$)")
 _QUESTION_CODE_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 _QUESTION_MULTI_SELECT_RE = re.compile(

@@ -921,6 +921,34 @@ def test_questions_file_parses_every_real_fixture(R, tree, intent, stage_rel):
     assert parsed.pending_count == sum(1 for question in parsed.questions if not question.answered)
 
 
+def _parse(R, text):
+    return R.parse_questions_file(text, "x-questions.md", "0" * 64)
+
+
+def test_question_n_headings_parse_like_q_n_headings(R):
+    """A real 2.10 file titled ``## Question 1: …``: unparsed, its four tags read as unsupported and the card degraded."""
+    text = (Path(__file__).parent / "fixtures" / "question-fallback" / "question-n-headings.md").read_text("utf-8")
+    qf = _parse(R, text)
+    assert [(q.index, q.prompt) for q in qf.questions] == [
+        (1, "Farewell wording"), (2, "Type hints and docstring"), (3, "Empty or non-text names"),
+        (4, "How the first test is set up")]
+    assert [[o.letter for o in q.options] for q in qf.questions] == [
+        ["A", "B", "C", "D", "X"], ["A", "B", "C", "X"], ["A", "B", "C", "D", "X"], ["A", "B", "C", "X"]]
+    assert (qf.pending_count, qf.unsupported_pending_count) == (4, 0)
+
+
+@pytest.mark.parametrize("heading", ["## Question 3 - Scope", "## Question 3 — Scope", "### Question 3: Scope",
+                                     "### Q3 — Scope", "## Q3. Scope"])
+def test_question_headings_accept_every_separator(R, heading):
+    qf = _parse(R, f"{heading}\n\nA. One\nX. Other (please specify)\n\n[Answer]:\n")
+    assert [(q.index, q.prompt) for q in qf.questions] == [(3, "Scope")] and qf.unsupported_pending_count == 0
+
+
+def test_headings_that_only_start_like_a_question_stay_sections(R):
+    qf = _parse(R, "## Question Answered\n\n[Answer]:\n\n## Quick start 1\n\n[Answer]:\n")
+    assert qf.questions == () and qf.unsupported_pending_count == 2
+
+
 def test_questions_dash_and_bare_option_forms(R):
     """``- A. …`` (devlake, requirements-analysis) and ``A. …`` (intent-capture) both occur."""
     dashed = R.parse_questions_file(
