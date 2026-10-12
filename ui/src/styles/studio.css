@@ -1323,7 +1323,8 @@ button.studio-chip:hover { border-color: var(--border-hover); }
 /* ---------- repo list and card ---------- */
 
 .studio-repotbl td, .studio-repotbl th { vertical-align: top; }
-.studio-rowhead { font-weight: 400; text-align: left; background: transparent; text-transform: none; letter-spacing: normal; font-size: 13px; padding: 11px 13px; border-top: 1px solid var(--border); }
+/* Qualified by the table: `.studio-tbl th` (more specific) otherwise upper-cases a repository's path. */
+.studio-tbl th.studio-rowhead, .studio-rowhead { color: inherit; font-weight: 400; text-align: left; background: transparent; text-transform: none; letter-spacing: normal; font-size: 13px; padding: 11px 13px; border-top: 1px solid var(--border); }
 .studio-repotbl tbody tr[data-attention='true'] { background: var(--warn-subtle); }
 
 .studio-cardlist { display: flex; flex-direction: column; gap: 12px; }
@@ -1572,7 +1573,9 @@ button.studio-chip:hover { border-color: var(--border-hover); }
 .studio-dtitle { margin: 8px 0 10px; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-strong); }
 .studio-dfacts { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
 
-.studio-tabs { display: flex; align-items: stretch; gap: 18px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+/* Never shrinks: in the detail's flex column a long Decision body squeezed the strip to a few pixels
+   and the body covered the tabs. */
+.studio-tabs { display: flex; flex: 0 0 auto; align-items: stretch; gap: 18px; border-bottom: 1px solid var(--border); overflow-x: auto; }
 .studio-tab {
   display: inline-flex;
   align-items: center;
@@ -2423,4 +2426,14 @@ button.studio-chip:hover { border-color: var(--border-hover); }
 .studio-translist .studio-mono { font-size: 11px; }
 .studio-conv-note { margin: 0 0 8px; font-size: 12px; max-width: 62ch; }
 /* Bounded: the transcript scrolls inside the decision pane rather than pushing the action bar away. */
-.studio-conv { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; max-height: 520px; }
+/* A definite height, not a max: the host's transcript fills its parent (`h-full`) and scrolls inside
+   it, so a box that only caps its height grows with the transcript and nothing ever scrolls. */
+.studio-conv {
+  display: flex;
+  flex-direction: column;
+  height: min(520px, 70vh);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.studio-conv > * { flex: 1 1 auto; min-height: 0; }
