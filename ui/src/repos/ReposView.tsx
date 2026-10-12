@@ -83,6 +83,21 @@ interface FlowState {
 }
 const NO_FLOW: FlowState = { kind: 'none', repoId: '' }
 
+/**
+ * Where focus goes when a confirmation opens: its first field, else its heading.
+ *
+ * Never its confirm button: a confirmation that opens with its primary action focused can be completed by
+ * the keystroke that opened it (the Action Center's ConfirmPanel makes the same choice).
+ */
+function flowFocusTarget(region: HTMLElement): HTMLElement | null {
+  const field = region.querySelector<HTMLElement>('input:not(:disabled), select:not(:disabled), textarea:not(:disabled)')
+  if (field) return field
+  const heading = region.querySelector<HTMLElement>('h2, h3')
+  // Focusable from script only: -1 adds no tab stop.
+  if (heading) heading.tabIndex = -1
+  return heading
+}
+
 export function ReposView({ route, go }: ViewProps) {
   const i18n = useI18n()
   const { t } = i18n
@@ -129,6 +144,42 @@ export function ReposView({ route, go }: ViewProps) {
         ? flowState.kind
         : 'none'
   const closeFlow = useCallback(() => setFlowState(NO_FLOW), [])
+
+  // A confirmation renders above the card, and the button that opens it usually sits in Maintenance at
+  // the card's foot, a screen or more below: opened in place, the click looks like it did nothing. So
+  // opening one moves focus into it (which scrolls it into view), and Cancel hands focus back.
+  const flowRegion = useRef<HTMLDivElement | null>(null)
+  const flowOpener = useRef<HTMLElement | null>(null)
+  const returnFocusTo = useRef<HTMLElement | null>(null)
+  const openFlow = useCallback((kind: Flow, repoId: string) => {
+    flowOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setFlowState({ kind, repoId })
+  }, [])
+  // Only Cancel returns focus. A flow that ends by moving on (a started transaction, an archived or
+  // removed repository) closes with `closeFlow`, and pulling focus back down would hide where it went.
+  const cancelFlow = useCallback(() => {
+    returnFocusTo.current = flowOpener.current
+    setFlowState(NO_FLOW)
+  }, [])
+
+  useEffect(() => {
+    if (flow === 'none') {
+      const opener = returnFocusTo.current
+      returnFocusTo.current = null
+      // Install's own button is not rendered while its preview is open, so the one to return to is the
+      // button that replaced it.
+      const action = opener?.dataset['repoAction']
+      const target = opener?.isConnected
+        ? opener
+        : action ? document.querySelector<HTMLElement>(`[data-repo-action="${action}"]`) : null
+      target?.focus()
+      return
+    }
+    // The add dialog is modal and manages its own focus.
+    if (flow !== 'add' && flowRegion.current) flowFocusTarget(flowRegion.current)?.focus()
+    // `flowState` as well as `flow`: pressing the button of a confirmation that is already open, and has
+    // been scrolled away from, has to bring it back too.
+  }, [flow, flowState])
 
   // Selecting another repository drops the previous one's in-flight button and its last refusal, which
   // otherwise read as belonging to the repository now on screen.
@@ -178,25 +229,25 @@ export function ReposView({ route, go }: ViewProps) {
         case 'cleanup':
         case 'rollback':
           go({ repo: repoId, tx: '' })
-          setFlowState({ kind: action, repoId })
+          openFlow(action, repoId)
           return
         case 'rebind':
           go({ repo: repoId })
           setRebindPath('')
-          setFlowState({ kind: 'rebind', repoId })
+          openFlow('rebind', repoId)
           return
         case 'remove':
           go({ repo: repoId })
-          setFlowState({ kind: 'remove', repoId })
+          openFlow('remove', repoId)
           return
         case 'rename':
           go({ repo: repoId })
           setRepoLabel(list.find((repo) => repo.repo_id === repoId)?.label ?? selected?.label ?? '')
-          setFlowState({ kind: 'rename', repoId })
+          openFlow('rename', repoId)
           return
         case 'archive':
           go({ repo: repoId })
-          setFlowState({ kind: 'archive', repoId })
+          openFlow('archive', repoId)
           return
         case 'unarchive':
           setBusy('unarchive')
@@ -235,7 +286,7 @@ export function ReposView({ route, go }: ViewProps) {
         }
       }
     },
-    [api, go, refresh, fail, t, i18n, list, selected],
+    [api, go, refresh, fail, t, i18n, list, selected, openFlow],
   )
 
   const saveMetadata = async () => {
@@ -369,119 +420,122 @@ export function ReposView({ route, go }: ViewProps) {
               />
             ) : null}
 
-            {flow === 'install' ? (
-              <InstallPreview
-                api={api}
-                repoId={selected.repo_id}
-                bundledVersion={selected.install.bundled_engine_version}
-                onStarted={onStarted}
-                onClose={closeFlow}
-              />
-            ) : null}
-            {flow === 'upgrade' ? (
-              <UpgradePreview
-                api={api}
-                repoId={selected.repo_id}
-                install={selected.install}
-                onStarted={onStarted}
-                onClose={closeFlow}
-              />
-            ) : null}
-            {flow === 'uninstall' ? (
-              <PreviewFlow api={api} repoId={selected.repo_id} kind="uninstall"
-                onStarted={onStarted} onClose={closeFlow} />
-            ) : null}
-            {flow === 'cleanup' ? (
-              <MaintenancePanel key={selected.repo_id} api={api} repoId={selected.repo_id}
-                onClose={closeFlow} onChanged={refresh} />
-            ) : null}
-            {flow === 'rollback' ? (
-              <PreviewFlow api={api} repoId={selected.repo_id} kind="rollback"
-                targetVersion={selected.install.rollback_target?.engine_version}
-                onStarted={onStarted} onClose={closeFlow} />
-            ) : null}
-            {flow === 'recover' ? (
-              <RecoveryPanel
-                api={api}
-                repoId={selected.repo_id}
-                repoLabel={selected.label}
-                failedDir={recoveryEvidencePath(transactions)}
-                onStarted={onStarted}
-                onClose={closeFlow}
-              />
-            ) : null}
+            {/* One region for whichever confirmation is open, so opening one knows where to put focus. */}
+            <div ref={flowRegion}>
+              {flow === 'install' ? (
+                <InstallPreview
+                  api={api}
+                  repoId={selected.repo_id}
+                  bundledVersion={selected.install.bundled_engine_version}
+                  onStarted={onStarted}
+                  onClose={cancelFlow}
+                />
+              ) : null}
+              {flow === 'upgrade' ? (
+                <UpgradePreview
+                  api={api}
+                  repoId={selected.repo_id}
+                  install={selected.install}
+                  onStarted={onStarted}
+                  onClose={cancelFlow}
+                />
+              ) : null}
+              {flow === 'uninstall' ? (
+                <PreviewFlow api={api} repoId={selected.repo_id} kind="uninstall"
+                  onStarted={onStarted} onClose={cancelFlow} />
+              ) : null}
+              {flow === 'cleanup' ? (
+                <MaintenancePanel key={selected.repo_id} api={api} repoId={selected.repo_id}
+                  onClose={cancelFlow} onChanged={refresh} />
+              ) : null}
+              {flow === 'rollback' ? (
+                <PreviewFlow api={api} repoId={selected.repo_id} kind="rollback"
+                  targetVersion={selected.install.rollback_target?.engine_version}
+                  onStarted={onStarted} onClose={cancelFlow} />
+              ) : null}
+              {flow === 'recover' ? (
+                <RecoveryPanel
+                  api={api}
+                  repoId={selected.repo_id}
+                  repoLabel={selected.label}
+                  failedDir={recoveryEvidencePath(transactions)}
+                  onStarted={onStarted}
+                  onClose={cancelFlow}
+                />
+              ) : null}
 
-            {flow === 'rebind' ? (
-              <Block title={t('repos.rebind.title', { label: selected.label })} icon="link">
-                <Note>{t('repos.rebind.body')}</Note>
-                <div className="studio-field">
-                  <label htmlFor="studio-rebind-path">{t('repos.add.pathLabel')}</label>
-                  <input
-                    id="studio-rebind-path"
-                    className="studio-input studio-mono"
-                    type="text"
-                    spellCheck={false}
-                    autoComplete="off"
-                    value={rebindPath}
-                    onChange={(event) => setRebindPath(event.target.value)}
-                  />
-                </div>
-                <div className="studio-repo-actions">
-                  <button type="button" className="studio-btn" onClick={closeFlow}>
-                    {t('install.cancel')}
-                  </button>
-                  <button
-                    type="button"
-                    className="studio-btn"
-                    data-variant="primary"
-                    disabled={busy !== null || rebindPath.trim() === ''}
-                    onClick={() => void confirmRebind()}
-                  >
-                    {t('repos.rebind.confirm')}
-                  </button>
-                </div>
-              </Block>
-            ) : null}
-
-            {flow === 'remove' ? (
-              <Block title={t('repos.remove.title', { label: selected.label })} icon="close">
-                <Note>{t('repos.remove.body')}</Note>
-                <div className="studio-repo-actions">
-                  <button type="button" className="studio-btn" onClick={closeFlow}>
-                    {t('install.cancel')}
-                  </button>
-                  <button
-                    type="button"
-                    className="studio-btn"
-                    data-variant="danger"
-                    disabled={busy !== null}
-                    onClick={() => void confirmRemove()}
-                  >
-                    {t('repos.remove.confirm')}
-                  </button>
-                </div>
-              </Block>
-            ) : null}
-
-            {flow === 'rename' || flow === 'archive' ? (
-              <Block title={t(flow === 'rename' ? 'repos.action.rename' : 'repos.action.archive')} icon="repo">
-                {flow === 'rename' ? (
+              {flow === 'rebind' ? (
+                <Block title={t('repos.rebind.title', { label: selected.label })} icon="link">
+                  <Note>{t('repos.rebind.body')}</Note>
                   <div className="studio-field">
-                    <label htmlFor="studio-repo-label">{t('repos.metadata.label')}</label>
-                    <input id="studio-repo-label" className="studio-input" value={repoLabel}
-                      onChange={(event) => setRepoLabel(event.target.value)} />
+                    <label htmlFor="studio-rebind-path">{t('repos.add.pathLabel')}</label>
+                    <input
+                      id="studio-rebind-path"
+                      className="studio-input studio-mono"
+                      type="text"
+                      spellCheck={false}
+                      autoComplete="off"
+                      value={rebindPath}
+                      onChange={(event) => setRebindPath(event.target.value)}
+                    />
                   </div>
-                ) : <Note>{t('repos.metadata.archiveBody')}</Note>}
-                <div className="studio-repo-actions">
-                  <button type="button" className="studio-btn" onClick={closeFlow}>{t('install.cancel')}</button>
-                  <button type="button" className="studio-btn" data-variant="primary"
-                    disabled={busy !== null || (flow === 'rename' && !repoLabel.trim())}
-                    onClick={() => void saveMetadata()}>
-                    {t(flow === 'rename' ? 'repos.metadata.save' : 'repos.action.archive')}
-                  </button>
-                </div>
-              </Block>
-            ) : null}
+                  <div className="studio-repo-actions">
+                    <button type="button" className="studio-btn" onClick={cancelFlow}>
+                      {t('install.cancel')}
+                    </button>
+                    <button
+                      type="button"
+                      className="studio-btn"
+                      data-variant="primary"
+                      disabled={busy !== null || rebindPath.trim() === ''}
+                      onClick={() => void confirmRebind()}
+                    >
+                      {t('repos.rebind.confirm')}
+                    </button>
+                  </div>
+                </Block>
+              ) : null}
+
+              {flow === 'remove' ? (
+                <Block title={t('repos.remove.title', { label: selected.label })} icon="close">
+                  <Note>{t('repos.remove.body')}</Note>
+                  <div className="studio-repo-actions">
+                    <button type="button" className="studio-btn" onClick={cancelFlow}>
+                      {t('install.cancel')}
+                    </button>
+                    <button
+                      type="button"
+                      className="studio-btn"
+                      data-variant="danger"
+                      disabled={busy !== null}
+                      onClick={() => void confirmRemove()}
+                    >
+                      {t('repos.remove.confirm')}
+                    </button>
+                  </div>
+                </Block>
+              ) : null}
+
+              {flow === 'rename' || flow === 'archive' ? (
+                <Block title={t(flow === 'rename' ? 'repos.action.rename' : 'repos.action.archive')} icon="repo">
+                  {flow === 'rename' ? (
+                    <div className="studio-field">
+                      <label htmlFor="studio-repo-label">{t('repos.metadata.label')}</label>
+                      <input id="studio-repo-label" className="studio-input" value={repoLabel}
+                        onChange={(event) => setRepoLabel(event.target.value)} />
+                    </div>
+                  ) : <Note>{t('repos.metadata.archiveBody')}</Note>}
+                  <div className="studio-repo-actions">
+                    <button type="button" className="studio-btn" onClick={cancelFlow}>{t('install.cancel')}</button>
+                    <button type="button" className="studio-btn" data-variant="primary"
+                      disabled={busy !== null || (flow === 'rename' && !repoLabel.trim())}
+                      onClick={() => void saveMetadata()}>
+                      {t(flow === 'rename' ? 'repos.metadata.save' : 'repos.action.archive')}
+                    </button>
+                  </div>
+                </Block>
+              ) : null}
+            </div>
 
             <RepoCard
               repo={selected}

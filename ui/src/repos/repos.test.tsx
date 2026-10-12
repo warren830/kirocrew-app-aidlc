@@ -837,6 +837,19 @@ describe('the install preview', () => {
     expect(apiCalls.some((call) => call.method === 'POST' && call.path === `${BASE}/repos/r_new/transactions`)).toBe(false)
   })
 
+  it('moves focus to the preview, and Cancel hands it to the Install button that comes back', async () => {
+    installRoutes()
+    mount('?view=repos&repo=r_new')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Install AI-DLC' }))
+    const preview = await screen.findByRole('region', { name: 'Install preview' })
+    expect(document.activeElement).toBe(within(preview).getByRole('heading', { name: 'Install preview' }))
+
+    await userEvent.click(within(preview).getByRole('button', { name: 'Cancel' }))
+    // The entry is not rendered while its preview is open, so focus goes to the button that replaced it.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Install AI-DLC' }))
+  })
+
   it('names every managed path with its ownership kind, and offers no force control', async () => {
     installRoutes()
     mount('?view=repos&repo=r_new')
@@ -1299,5 +1312,62 @@ describe('install recovery required', () => {
     expect(within(drawer).getAllByText(/failed/).length).toBeGreaterThan(0)
     expect(within(drawer).getByText('restore_backups: permission denied')).toBeInTheDocument()
     expect(within(drawer).getAllByText('Install recovery required').length).toBeGreaterThan(0)
+  })
+})
+
+describe('a confirmation opened from Maintenance', () => {
+  // Maintenance sits at the foot of a long card and its confirmations render above the card, so a click
+  // there looked like it did nothing. What is pinned is where focus goes: into the confirmation (its
+  // field, else its heading, never its confirm button) and back to the opening button on Cancel.
+  function mountDetail() {
+    const record = repo()
+    setApiRoutes({
+      ...shellRoutes(),
+      [`GET ${BASE}/repos`]: () => ({ repos: [record], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
+      [`GET ${BASE}/repos/r_1`]: () => ({ repo: record, intents: [], transactions: [] }),
+      [`GET ${BASE}/repos/r_1/git`]: () => ({ git: record.git, owned_dirty: [], unrelated_dirty: 0 }),
+      [`POST ${BASE}/repos/r_1/transactions/preview`]: () => ({ plan: plan({ kind: 'uninstall' }), plan_digest: 'digest-u' }),
+      [`POST ${BASE}/repos/r_1/maintenance/preview`]: () => ({
+        repo_id: 'r_1', entries: [], entry_ids: [], plan_digest: 'digest-m', can_cleanup: false, blocked: [],
+        totals: {
+          entries: 0, eligible_entries: 0, protected_entries: 0, selected_entries: 0,
+          eligible_bytes: 0, selected_bytes: 0, selected_files: 0, unknown_sizes: 0,
+        },
+      }),
+    })
+    mount('?view=repos&repo=r_1')
+  }
+
+  it('puts focus in the label field for Rename, and Cancel returns it to the button', async () => {
+    mountDetail()
+    const rename = await screen.findByRole('button', { name: 'Rename repository' })
+    await userEvent.click(rename)
+    expect(document.activeElement).toBe(screen.getByLabelText('Repository label'))
+    // Pressed again while the form is open, it brings the form back rather than doing nothing.
+    await userEvent.click(rename)
+    expect(document.activeElement).toBe(screen.getByLabelText('Repository label'))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByLabelText('Repository label')).not.toBeInTheDocument()
+    expect(document.activeElement).toBe(rename)
+  })
+
+  it.each([
+    { button: 'Unregister', heading: 'Unregister checkout-web?', close: 'Cancel' },
+    { button: 'Archive repository', heading: 'Archive repository', close: 'Cancel' },
+    { button: 'Uninstall harness', heading: 'Uninstall AI-DLC harness', close: 'Cancel' },
+    { button: 'Clean up transaction files', heading: 'Clean up transaction files', close: 'Close' },
+  ])('puts focus on the "$heading" heading, and $close returns it to $button', async ({ button, heading, close }) => {
+    mountDetail()
+    const opener = await screen.findByRole('button', { name: button })
+    await userEvent.click(opener)
+    const title = await screen.findByRole('heading', { name: heading })
+    expect(document.activeElement).toBe(title)
+
+    const dismiss = within(title.closest('section')!).getByRole('button', { name: close })
+    await waitFor(() => expect(dismiss).toBeEnabled())
+    await userEvent.click(dismiss)
+    expect(screen.queryByRole('heading', { name: heading })).not.toBeInTheDocument()
+    expect(document.activeElement).toBe(opener)
   })
 })

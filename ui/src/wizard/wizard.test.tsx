@@ -422,17 +422,66 @@ describe('the new intent wizard', () => {
     expect(next).toBeDisabled()
     await userEvent.selectOptions(screen.getByLabelText('Repository'), 'r_1')
     expect(next).toBeDisabled()
-    // A Chinese objective slugifies to nothing, so the label becomes the field that must be filled.
+    // A Chinese objective slugifies to nothing, so the label becomes the field that must be filled; that
+    // is said once the objective is left, and a typed label is judged once it is left.
     await userEvent.type(screen.getByLabelText('Objective'), '让未登录的顾客完成购买')
+    await userEvent.tab()
     expect(screen.getByText('The objective produces no label AI-DLC can use, so type one.')).toBeInTheDocument()
     expect(next).toBeDisabled()
     await userEvent.type(screen.getByLabelText('Label'), 'guest checkout')
+    await userEvent.tab()
     expect(
       screen.getByText('At most three lowercase words joined by hyphens, for example guest-checkout.'),
     ).toBeInTheDocument()
     await userEvent.clear(screen.getByLabelText('Label'))
     await userEvent.type(screen.getByLabelText('Label'), 'guest-checkout')
     await waitFor(() => expect(next).toBeEnabled())
+  })
+
+  it('opens Work with no errors, and says what is wrong with a field once it is left', async () => {
+    mount()
+    const objective = await screen.findByLabelText('Objective')
+    const label = screen.getByLabelText('Label')
+    const invalid = 'At most three lowercase words joined by hyphens, for example guest-checkout.'
+    expect(screen.queryByText(/An objective is required/)).not.toBeInTheDocument()
+    expect(screen.queryByText('The objective produces no label AI-DLC can use, so type one.')).not.toBeInTheDocument()
+    expect(objective).toHaveAttribute('aria-invalid', 'false')
+    expect(label).toHaveAttribute('aria-invalid', 'false')
+
+    await userEvent.click(objective)
+    await userEvent.tab()
+    expect(screen.getByText(/An objective is required/)).toBeInTheDocument()
+    expect(objective).toHaveAttribute('aria-invalid', 'true')
+    // With no objective yet, the empty label has nothing of its own to be wrong about.
+    expect(label).toHaveAttribute('aria-invalid', 'false')
+
+    await userEvent.type(label, 'guest checkout')
+    expect(screen.queryByText(invalid)).not.toBeInTheDocument()
+    expect(label).toHaveAttribute('aria-invalid', 'false')
+    await userEvent.tab()
+    expect(screen.getByText(invalid)).toBeInTheDocument()
+    expect(label).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('shows Work errors without waiting for a blur once the user has continued past it', async () => {
+    mount()
+    await toPreset()
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }))
+    const objective = await screen.findByLabelText('Objective')
+    await userEvent.clear(objective)
+    expect(document.activeElement).toBe(objective)
+    expect(screen.getByText(/An objective is required/)).toBeInTheDocument()
+    expect(objective).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('shows Work errors when the user comes back to it from the step list', async () => {
+    mount()
+    const stepper = await screen.findByRole('list', { name: 'New intent steps' })
+    await userEvent.click(within(stepper).getByRole('button', { name: 'Step 4, Review' }))
+    expect(screen.getByText('The Work step is incomplete.')).toBeInTheDocument()
+    await userEvent.click(within(stepper).getByRole('button', { name: 'Step 1, Work' }))
+    expect(screen.getByText(/An objective is required/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Objective')).toHaveAttribute('aria-invalid', 'true')
   })
 
   it('offers the scopes the repository actually defines, read from the engine refusal', async () => {
