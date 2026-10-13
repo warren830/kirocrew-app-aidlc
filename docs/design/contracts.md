@@ -2232,24 +2232,24 @@ stages with `phase != initialization`; `exact.artifacts` = Σ `len(produces)` ov
 effective review class = min(stage `review_class` or "advisory" when a reviewer exists else "none", scope
 `review_cap`, request `review_cap`) with rank none < advisory < adversarial.
 
-Rule bands (turns per stage, Standard depth; `estimates.py::RULE_BANDS`):
+Rule bands (conversation turns per stage, Standard depth; `estimates.py::RULE_BANDS`; recalibrated 2026-10-13 against the click runs, where a stage took its gate plus at most one round of questions or a plan approval):
 
 | stage_class | classification rule | turns low–high |
 |---|---|---|
-| `initialization` | phase initialization | 1–2 |
-| `ideation_inline` | phase ideation | 3–6 |
-| `inception_inline` | phase inception, mode inline | 4–8 |
-| `inception_pipeline` | reverse-engineering | 6–12 |
-| `inception_mob` | mode mob / subagent (user-stories, practices-discovery) | 5–9 |
-| `construction_per_unit` | for_each unit-of-work except code-generation | 6–12 × units |
-| `code_generation` | code-generation | 10–20 × units |
-| `build_and_test` | build-and-test | 6–14 |
-| `ci_pipeline` | ci-pipeline | 4–8 |
-| `operation` | phase operation | 4–8 |
+| `initialization` | phase initialization | 0–1 |
+| `ideation_inline` | phase ideation | 1–3 |
+| `inception_inline` | phase inception, mode inline | 1–3 |
+| `inception_pipeline` | reverse-engineering | 1–2 |
+| `inception_mob` | mode mob / subagent (user-stories, practices-discovery) | 2–4 |
+| `construction_per_unit` | for_each unit-of-work except code-generation | 1–3 × units |
+| `code_generation` | code-generation | 2–4 × units |
+| `build_and_test` | build-and-test | 1–3 |
+| `ci_pipeline` | ci-pipeline | 1–3 |
+| `operation` | phase operation | 1–3 |
 
 Multipliers: depth Minimal ×0.7, Standard ×1.0, Comprehensive ×1.4; review class advisory +30 %, adversarial +60 % of
-the stage band; `summary_confirmation == required` +1 turn. Active seconds per turn 90–300. `elapsed_secs` = active ×3
-to ×8 (`source: "assumption"`, `confidence: low`). Every turn and active-time band is `rule_band` / `low`. `credits` is
+the stage band; `summary_confirmation == required` +1 turn. Active seconds per turn 180–720. `elapsed_secs` = active ×1
+to ×6 (`source: "assumption"`, `confidence: low`). Every turn and active-time band is `rule_band` / `low`. `credits` is
 always `null` with `credits_status: "unavailable"` (FR-EST-005). `dominant` lists stages sorted by `turns.high`
 descending with `share_pct` of the total high estimate.
 

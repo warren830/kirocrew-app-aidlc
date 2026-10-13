@@ -6,8 +6,8 @@
    "estimate": {
     "active_secs": {
      "confidence": "low",
-     "high": 23700,
-     "low": 3600,
+     "high": 17280,
+     "low": 1980,
      "source": "rule_band",
      "unit": "secs"
     },
@@ -17,89 +17,89 @@
     "credits_status": "unavailable",
     "dominant": [
      {
-      "share_pct": 33,
+      "share_pct": 25,
       "slug": "code-generation",
       "turns": {
        "confidence": "low",
-       "high": 26,
-       "low": 13,
+       "high": 6,
+       "low": 3,
        "source": "rule_band",
        "unit": "turns"
       }
      },
      {
-      "share_pct": 18,
-      "slug": "build-and-test",
-      "turns": {
-       "confidence": "low",
-       "high": 14,
-       "low": 6,
-       "source": "rule_band",
-       "unit": "turns"
-      }
-     },
-     {
-      "share_pct": 15,
-      "slug": "requirements-analysis",
-      "turns": {
-       "confidence": "low",
-       "high": 12,
-       "low": 7,
-       "source": "rule_band",
-       "unit": "turns"
-      }
-     },
-     {
-      "share_pct": 15,
-      "slug": "reverse-engineering",
-      "turns": {
-       "confidence": "low",
-       "high": 12,
-       "low": 6,
-       "source": "rule_band",
-       "unit": "turns"
-      }
-     },
-     {
-      "share_pct": 11,
+      "share_pct": 21,
       "slug": "intent-capture",
       "turns": {
        "confidence": "low",
-       "high": 9,
-       "low": 5,
+       "high": 5,
+       "low": 3,
        "source": "rule_band",
        "unit": "turns"
       }
      },
      {
-      "share_pct": 3,
+      "share_pct": 21,
+      "slug": "requirements-analysis",
+      "turns": {
+       "confidence": "low",
+       "high": 5,
+       "low": 3,
+       "source": "rule_band",
+       "unit": "turns"
+      }
+     },
+     {
+      "share_pct": 12,
+      "slug": "build-and-test",
+      "turns": {
+       "confidence": "low",
+       "high": 3,
+       "low": 1,
+       "source": "rule_band",
+       "unit": "turns"
+      }
+     },
+     {
+      "share_pct": 8,
+      "slug": "reverse-engineering",
+      "turns": {
+       "confidence": "low",
+       "high": 2,
+       "low": 1,
+       "source": "rule_band",
+       "unit": "turns"
+      }
+     },
+     {
+      "share_pct": 4,
       "slug": "state-init",
       "turns": {
        "confidence": "low",
-       "high": 2,
-       "low": 1,
+       "high": 1,
+       "low": 0,
        "source": "rule_band",
        "unit": "turns"
       }
      },
      {
-      "share_pct": 3,
+      "share_pct": 4,
       "slug": "workspace-detection",
       "turns": {
        "confidence": "low",
-       "high": 2,
-       "low": 1,
+       "high": 1,
+       "low": 0,
        "source": "rule_band",
        "unit": "turns"
       }
      },
      {
-      "share_pct": 3,
+      "share_pct": 4,
       "slug": "workspace-scaffold",
       "turns": {
        "confidence": "low",
-       "high": 2,
-       "low": 1,
+       "high": 1,
+       "low": 0,
        "source": "rule_band",
        "unit": "turns"
       }
@@ -107,8 +107,8 @@
     ],
     "elapsed_secs": {
      "confidence": "low",
-     "high": 189600,
-     "low": 10800,
+     "high": 103680,
+     "low": 1980,
      "source": "assumption",
      "unit": "secs"
     },
@@ -116,8 +116,8 @@
     "source": "rule_band",
     "turns": {
      "confidence": "low",
-     "high": 79,
-     "low": 40,
+     "high": 24,
+     "low": 11,
      "source": "rule_band",
      "unit": "turns"
     }

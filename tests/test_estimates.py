@@ -75,24 +75,24 @@ def test_classify_stage_table(E, P, slug, phase, mode, per_unit, expected):
 
 def test_every_class_has_a_band(E):
     assert set(E.STAGE_CLASSES) == set(E.RULE_BANDS)
-    assert E.RULE_BANDS["code_generation"] == (10, 20)
-    assert E.RULE_BANDS["initialization"] == (1, 2)
+    assert E.RULE_BANDS["code_generation"] == (2, 4)
+    assert E.RULE_BANDS["initialization"] == (0, 1)
 
 
 # ---- rule bands ---- #
 
 
 @pytest.mark.parametrize("stage_class, slug, phase, mode, per_unit, golden", [
-    ("initialization", "state-init", "initialization", "inline", False, (1, 2)),
-    ("ideation_inline", "intent-capture", "ideation", "inline", False, (3, 6)),
-    ("inception_inline", "requirements-analysis", "inception", "inline", False, (4, 8)),
-    ("inception_pipeline", "reverse-engineering", "inception", "pipeline", False, (6, 12)),
-    ("inception_mob", "user-stories", "inception", "mob", False, (5, 9)),
-    ("construction_per_unit", "functional-design", "construction", "inline", True, (6, 12)),
-    ("code_generation", "code-generation", "construction", "subagent", True, (10, 20)),
-    ("build_and_test", "build-and-test", "construction", "inline", False, (6, 14)),
-    ("ci_pipeline", "ci-pipeline", "construction", "inline", False, (4, 8)),
-    ("operation", "observability-setup", "operation", "inline", False, (4, 8)),
+    ("initialization", "state-init", "initialization", "inline", False, (0, 1)),
+    ("ideation_inline", "intent-capture", "ideation", "inline", False, (1, 3)),
+    ("inception_inline", "requirements-analysis", "inception", "inline", False, (1, 3)),
+    ("inception_pipeline", "reverse-engineering", "inception", "pipeline", False, (1, 2)),
+    ("inception_mob", "user-stories", "inception", "mob", False, (2, 4)),
+    ("construction_per_unit", "functional-design", "construction", "inline", True, (1, 3)),
+    ("code_generation", "code-generation", "construction", "subagent", True, (2, 4)),
+    ("build_and_test", "build-and-test", "construction", "inline", False, (1, 3)),
+    ("ci_pipeline", "ci-pipeline", "construction", "inline", False, (1, 3)),
+    ("operation", "observability-setup", "operation", "inline", False, (1, 3)),
 ])
 def test_rule_band_golden_at_standard_depth(E, P, stage_class, slug, phase, mode, per_unit, golden, svc):
     """Standard depth, no review, one unit: the band must be §1.15's table verbatim."""
@@ -103,14 +103,14 @@ def test_rule_band_golden_at_standard_depth(E, P, stage_class, slug, phase, mode
     assert est.turns.confidence == E.CONFIDENCE_LOW
 
 
-@pytest.mark.parametrize("depth, expected", [("Minimal", (7, 14)), ("Standard", (10, 20)), ("Comprehensive", (14, 28))])
+@pytest.mark.parametrize("depth, expected", [("Minimal", (2, 3)), ("Standard", (2, 4)), ("Comprehensive", (3, 6))])
 def test_depth_multiplier(P, svc, depth, expected):
     code = stage(P, "code-generation", phase="construction", mode="subagent", per_unit=True)
     assert band(estimate(svc, code, depth=depth, scope="poc")) == expected
 
 
 @pytest.mark.parametrize("review_class, expected", [
-    ("none", (10, 20)), ("advisory", (13, 26)), ("adversarial", (16, 32))])
+    ("none", (2, 4)), ("advisory", (3, 6)), ("adversarial", (4, 7))])
 def test_review_uplift_is_a_share_of_the_band(P, svc, review_class, expected):
     code = stage(P, "code-generation", phase="construction", per_unit=True, review_class=review_class)
     assert band(estimate(svc, code)) == expected
@@ -125,9 +125,9 @@ def test_summary_confirmation_costs_one_turn(P, svc):
 def test_per_unit_classes_scale_with_units(P, svc):
     stages = (stage(P, "code-generation", phase="construction", per_unit=True),
               stage(P, "build-and-test", phase="construction"))
-    # code-generation triples (10-20 → 30-60); build-and-test does not (6-14).
-    assert band(estimate(svc, *stages, units=1)) == (16, 34)
-    assert band(estimate(svc, *stages, units=3)) == (36, 74)
+    # code-generation triples (2-4 → 6-12); build-and-test does not (1-3).
+    assert band(estimate(svc, *stages, units=1)) == (3, 7)
+    assert band(estimate(svc, *stages, units=3)) == (7, 15)
 
 
 def test_units_none_prices_one_unit(P, svc):
@@ -140,11 +140,11 @@ def test_units_none_prices_one_unit(P, svc):
 
 def test_active_and_elapsed_are_derived_from_turns(E, P, svc):
     est = estimate(svc, stage(P, "ci-pipeline", phase="construction"))
-    assert band(est) == (4, 8)
-    assert (est.active_secs.low, est.active_secs.high) == (4 * 90, 8 * 300)
+    assert band(est) == (1, 3)
+    assert (est.active_secs.low, est.active_secs.high) == (1 * 180, 3 * 720)
     assert est.active_secs.unit == E.UNIT_SECS
     assert est.elapsed_secs is not None
-    assert (est.elapsed_secs.low, est.elapsed_secs.high) == (4 * 90 * 3, 8 * 300 * 8)
+    assert (est.elapsed_secs.low, est.elapsed_secs.high) == (1 * 180 * 1, 3 * 720 * 6)
     # Wall-clock time is nobody's measurement: it is labelled as the assumption it is.
     assert (est.elapsed_secs.source, est.elapsed_secs.confidence) == (E.SOURCE_ASSUMPTION, E.CONFIDENCE_LOW)
 
@@ -169,8 +169,8 @@ def test_dominant_is_sorted_by_high_with_shares(P, svc):
                    stage(P, "code-generation", phase="construction", per_unit=True),
                    stage(P, "build-and-test", phase="construction"))
     assert [d.slug for d in est.dominant] == ["code-generation", "build-and-test", "state-init"]
-    assert est.turns.high == 20 + 14 + 2
-    assert est.dominant[0].share_pct == round(20 * 100 / 36)
+    assert est.turns.high == 4 + 3 + 1
+    assert est.dominant[0].share_pct == round(4 * 100 / 8)
     assert sum(d.turns.high for d in est.dominant) == est.turns.high
 
 
@@ -186,7 +186,7 @@ def test_coverage_lost_names_the_artifacts_a_disabled_stage_would_have_written(P
 def test_every_estimate_is_a_rule_band_with_no_samples(E, P, svc):
     est = estimate(svc, stage(P, "code-generation", phase="construction", per_unit=True), depth="Minimal", scope="poc")
     assert (est.source, est.confidence, est.samples) == (E.SOURCE_RULE_BAND, E.CONFIDENCE_LOW, 0)
-    assert band(est) == (7, 14)
+    assert band(est) == (2, 3)
     assert all(d.turns.source == E.SOURCE_RULE_BAND for d in est.dominant)
 
 

@@ -18,11 +18,13 @@ SOURCE_RULE_BAND, SOURCE_ASSUMPTION = "rule_band", "assumption"
 CONFIDENCE_LOW = "low"
 CREDITS_STATUS = "unavailable"
 
-#: Turn bands per stage class at ``Standard`` depth (§1.15 table, verbatim).
+#: Conversation turns per stage class at ``Standard`` depth (§1.15 table, verbatim). Recalibrated 2026-10-13 against
+#: the click runs on AI-DLC 2.10/2.11: a stage takes its gate and at most a round of questions or a plan approval
+#: (express ran 7 stages in 7 turns, bugfix 9 in about as many); the initialization stages ride the first turn.
 RULE_BANDS: dict[str, tuple[int, int]] = {
-    "initialization": (1, 2), "ideation_inline": (3, 6), "inception_inline": (4, 8),
-    "inception_pipeline": (6, 12), "inception_mob": (5, 9), "construction_per_unit": (6, 12),
-    "code_generation": (10, 20), "build_and_test": (6, 14), "ci_pipeline": (4, 8), "operation": (4, 8),
+    "initialization": (0, 1), "ideation_inline": (1, 3), "inception_inline": (1, 3),
+    "inception_pipeline": (1, 2), "inception_mob": (2, 4), "construction_per_unit": (1, 3),
+    "code_generation": (2, 4), "build_and_test": (1, 3), "ci_pipeline": (1, 3), "operation": (1, 3),
 }
 STAGE_CLASSES = tuple(RULE_BANDS)
 PER_UNIT_CLASSES = frozenset({"construction_per_unit", "code_generation"})
@@ -32,8 +34,9 @@ DEFAULT_DEPTH = "Standard"
 REVIEW_UPLIFT: dict[str, float] = {"none": 0.0, "advisory": 0.3, "adversarial": 0.6}
 SUMMARY_CONFIRMATION_REQUIRED = "required"
 SUMMARY_CONFIRMATION_TURNS = 1
-SECS_PER_TURN_LOW, SECS_PER_TURN_HIGH = 90, 300
-ELAPSED_FACTOR_LOW, ELAPSED_FACTOR_HIGH = 3, 8
+#: One turn ran 3 to 10 minutes in those runs; elapsed time adds the person's own pace at each gate.
+SECS_PER_TURN_LOW, SECS_PER_TURN_HIGH = 180, 720
+ELAPSED_FACTOR_LOW, ELAPSED_FACTOR_HIGH = 1, 6
 
 
 @dataclass(frozen=True, slots=True)
