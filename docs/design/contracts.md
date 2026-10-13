@@ -880,6 +880,18 @@ def parse_review_section(artifact_text: str) -> tuple[str | None, list[ReviewFin
     # WHICH artifact is read is the graph's call: StageNode.review_artifact when the node declares one, else the first
     # `produces` entry that exists on disk. 2.7.1 permits the appendix in `review_artifact` only, so on the four stages
     # where the two disagree, reading produces[0] attaches one stage's verdict to another stage's file.
+def latest_review_completion(events: Sequence[AuditEvent], stage: str, unit: str | None) -> AuditEvent | None
+    # 2.11+: the newest REVIEW_COMPLETED of (stage, unit) that answers a REVIEW_REQUESTED (same Unit, Iteration and
+    # Request Id; each request answered once; a `Workflow` row is an isolated --single run and is skipped). Not floored
+    # by the attempt, like AI-DLC's own `pairedReviewCompletions`.
+def parse_review_record(data: bytes, completion: AuditEvent) -> tuple[str | None, list[ReviewFinding]] | None
+    # 2.11+: the record the row's `Review Record` names (`.aidlc-engine/reviews/<stage>/stage|units/<unit>/<attempt>/
+    # <n>.json` under the intent record). None unless sha256 matches `Review Record Digest` and stage, unit, iteration,
+    # reviewer and verdict match the row. Each finding is its row (id | severity | location | finding |
+    # required_action | status, verbatim); level "resolved" for status Resolved, else "unknown".
+    # The stage's review is the record when the newest answered completion names one; a missing or unverifiable
+    # record keeps the row's verdict with findings_parsed=False. A completion naming no record (2.10 and earlier)
+    # leaves the artifact's "## Review" as the review.
 
 @dataclass(frozen=True, slots=True)
 class StageFileMeta:   # from .kiro/aidlc-common/stages/<phase>/<slug>.md frontmatter

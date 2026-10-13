@@ -1659,6 +1659,95 @@ def parse_review_section(artifact_text: str) -> tuple[str | None, ReviewFindings
     return (verdict, ReviewFindings(findings, findings_parsed=bool(findings) or unplaced_rows == 0))
 
 
+#: Where 2.11 keeps each verdict, `<dir>/<stage>/stage/<attempt>/<n>.json` or `<dir>/<stage>/units/<unit>/…`
+#: under the intent record. Audit rows written before the relocation keep naming `.aidlc-reviews/`.
+_REVIEW_RECORD_DIRS = (".aidlc-engine/reviews", ".aidlc-reviews")
+_REVIEW_RECORD_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+_REVIEW_ATTEMPT_RE = re.compile(r"^[0-9a-f]{16}$")
+_REVIEW_ITERATION_RE = re.compile(r"^[1-9][0-9]*$")
+#: A record finding's fields, in the column order of the table AI-DLC prints in its readable copy.
+_REVIEW_RECORD_FINDING_KEYS = ("id", "severity", "location", "finding", "required_action", "status")
+
+
+def is_review_record_path(path: str) -> bool:
+    """AI-DLC's own shape check (`isReviewRecordRelativePath`): a row naming anything else names no record."""
+    prefix = next((d for d in _REVIEW_RECORD_DIRS if path.startswith(f"{d}/")), None)
+    if prefix is None:
+        return False
+    parts = path[len(prefix) + 1:].split("/")
+    leaf = parts[-1]
+    if not (len(parts) in (4, 5) and _REVIEW_RECORD_SEGMENT_RE.match(parts[0]) and leaf.endswith(".json")
+            and _REVIEW_ITERATION_RE.match(leaf[:-5]) and _REVIEW_ATTEMPT_RE.match(parts[-2])):
+        return False
+    return (len(parts) == 4 and parts[1] == "stage") or (
+        len(parts) == 5 and parts[1] == "units" and bool(_REVIEW_RECORD_SEGMENT_RE.match(parts[2])))
+
+
+def latest_review_completion(events: Sequence[AuditEvent], stage: str, unit: str | None) -> AuditEvent | None:
+    """The newest ``REVIEW_COMPLETED`` of one stage scope that answers a ``REVIEW_REQUESTED``.
+
+    Paired the way AI-DLC 2.11 pairs them (`pairedReviewCompletions`): same stage, Unit and iteration, bound by the
+    request id, each request answered once. Not floored by the attempt, as AI-DLC's own reader is not: across a
+    rejection the previous review stays the one shown until the next replaces it. A ``Workflow`` row is an
+    isolated ``--single`` run reviewing for its own gate, not the stage's.
+    """
+    pending: set[tuple[str, str, str]] = set()
+    latest: AuditEvent | None = None
+    for event in events:
+        fields = event.fields
+        if event.event not in C.REVIEW_EVENTS or fields.get("Stage") != stage or fields.get("Workflow"):
+            continue
+        iteration = fields.get("Iteration") or ""
+        if not _REVIEW_ITERATION_RE.match(iteration):
+            continue
+        key = (fields.get("Unit") or "", iteration, fields.get("Request Id") or "")
+        if event.event == "REVIEW_REQUESTED":
+            pending.add(key)
+        elif key in pending:
+            pending.discard(key)
+            if key[0] == (unit or ""):
+                latest = event
+    return latest
+
+
+def parse_review_record(data: bytes, completion: AuditEvent) -> tuple[str | None, ReviewFindings] | None:
+    """``(verdict, findings)`` from the 2.11 review record ``completion`` names; ``None`` when these bytes are not it.
+
+    The two checks AI-DLC's own reader makes (`readReviewRecord`, `reviewRecordMatchesCompletion`): the digest the
+    row pinned binds the bytes, and the scope fields bind the content, so a record edited afterwards, or another
+    scope's record, is not this review. Each finding is its table row, cells joined in the readable copy's order
+    and kept verbatim; only a finding AI-DLC marked ``Resolved`` gets a level, since a severity is not a level.
+    """
+    fields = completion.fields
+    if f"sha256:{hashlib.sha256(data).hexdigest()}" != fields.get("Review Record Digest"):
+        return None
+    record = _json_loads(data)
+    if not isinstance(record, dict):
+        return None
+    verdict, iteration, reviewer = record.get("verdict"), record.get("iteration"), record.get("reviewer")
+    if not (isinstance(verdict, str) and verdict == fields.get("Verdict")
+            and isinstance(iteration, int) and not isinstance(iteration, bool)
+            and str(iteration) == fields.get("Iteration")
+            and isinstance(reviewer, str) and reviewer == fields.get("Reviewer")
+            and record.get("stage") == fields.get("Stage")
+            and (record.get("unit") or "") == (fields.get("Unit") or "")):
+        return None
+    rows = record.get("findings")
+    findings: list[ReviewFinding] = []
+    parsed = isinstance(rows, list)
+    for row in rows if isinstance(rows, list) else ():
+        cells = [row.get(key) for key in _REVIEW_RECORD_FINDING_KEYS] if isinstance(row, dict) else []
+        title = " | ".join(cell.strip() for cell in cells if isinstance(cell, str) and cell.strip())
+        if not title:
+            parsed = False
+            continue
+        quoted = _QUOTED_RE.search(title)
+        findings.append(ReviewFinding(
+            level="resolved" if row.get("status") == "Resolved" else "unknown", title=title,
+            quote=quoted.group(1) if quoted else None, anchor=None, reviewer=reviewer, iteration=iteration))
+    return (verdict.upper(), ReviewFindings(findings, findings_parsed=parsed))
+
+
 @dataclass(frozen=True, slots=True)
 class StageFileMeta(WireRecord):
     slug: str
@@ -2193,6 +2282,22 @@ class AidlcReader:
 
     def read_artifact(self, repo: Path, relpath: str) -> Snapshot | None:
         return stable_read(repo, relpath, C.MAX_ARTIFACT_RENDER_BYTES)
+
+    def read_review_record(
+        self, repo: Path, space: str, intent_dir: str, completion: AuditEvent
+    ) -> tuple[str | None, ReviewFindings]:
+        """The review a 2.11 ``REVIEW_COMPLETED`` row names, read from beside the intent record.
+
+        A record that is absent (AI-DLC's block keeps ``.aidlc-engine/`` out of git, so a fresh clone has none) or
+        is not that review still leaves the row's verdict, with findings Studio could not list: a reviewer ran.
+        """
+        fallback = ((completion.fields.get("Verdict") or "").upper() or None, ReviewFindings(findings_parsed=False))
+        path = completion.fields.get("Review Record") or ""
+        if not is_review_record_path(path):
+            return fallback
+        snap = stable_read(repo, f"{self.record_rel(space, intent_dir)}/{path}", C.MAX_JSON_BYTES)
+        review = parse_review_record(snap.bytes, completion) if snap is not None else None
+        return review if review is not None else fallback
 
     def stage_artifacts(
         self, repo: Path, snap_stage_dir_rel: str, node: StageNode | None

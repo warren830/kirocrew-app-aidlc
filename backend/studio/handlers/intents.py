@@ -168,8 +168,9 @@ async def get_changes(services: Any, request: web.Request) -> web.Response:
 
 
 async def get_review(services: Any, request: web.Request) -> web.Response:
-    """The verdict inside the artifact says what the reviewer concluded; only AI-DLC's own ``REVIEW_*`` audit
-    rows say when it was asked and how many iterations it took, so both are served."""
+    """The verdict (2.11's review record, or the artifact's ``## Review`` before it) says what the reviewer
+    concluded; only AI-DLC's own ``REVIEW_*`` audit rows say when it was asked and how many iterations it took, so
+    both are served."""
     _repo, snap = await repo_and_snapshot(services, request)
     verdict, findings = snap.review if snap.review is not None else (None, [])
     node = snap.node(snap.stage)
@@ -182,7 +183,7 @@ async def get_review(services: Any, request: web.Request) -> web.Response:
              "reviewer": event.fields.get("Reviewer") or event.fields.get("Agent"),
              "iteration": _int_or_none(event.fields.get("Iteration")),
              "verdict": event.fields.get("Verdict") or event.fields.get("Result"),
-             "fingerprint": event.fields.get("Fingerprint")}
+             "fingerprint": event.fields.get("Fingerprint") or event.fields.get("Artifact Fingerprint")}
             for event in snap.audit.events if event.event in C.REVIEW_EVENTS
         ],
         "review_class": C.attr(node, "review_class") if node is not None else None,

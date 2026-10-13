@@ -45,6 +45,7 @@ from .aidlc_reader import (
     file_questions_support_forms,
     latest_event,
     match_intent_row,
+    latest_review_completion,
     parse_review_section,
     stage_attempt,
 )
@@ -602,7 +603,7 @@ class Projection:
             questions = None
 
         current = self._read_stage_evidence(
-            root, engine_dir, space, intent_dir, state, graph, stage, unit, questions
+            root, engine_dir, space, intent_dir, state, graph, stage, unit, questions, audit.events
         )
         # Every other open boundary gets the same read, so a gate card never shows another stage's evidence.
         # Usually empty: an intent normally has one open boundary, and it is the current stage.
@@ -610,7 +611,7 @@ class Projection:
         for boundary in (state.stages if state is not None else ()):
             if boundary.mark in ("?", "R", "r") and boundary.slug != stage and boundary.slug not in others:
                 others[boundary.slug] = self._read_stage_evidence(
-                    root, engine_dir, space, intent_dir, state, graph, boundary.slug, None, None
+                    root, engine_dir, space, intent_dir, state, graph, boundary.slug, None, None, audit.events
                 )
         return IntentSnapshot(
             repo_id=repo.repo_id, space=space, intent_dir=intent_dir, intent_key=intent_key_for(space, intent_dir),
@@ -641,6 +642,7 @@ class Projection:
     def _read_stage_evidence(
         self, root: Path, engine_dir: str, space: str, intent_dir: str, state: "StateFile | None",
         graph: Sequence[StageNode], slug: str | None, unit: str | None, questions: "QuestionsFile | None",
+        events: Sequence[AuditEvent] = (),
     ) -> StageEvidence:
         """One stage directory's artifacts, verdict, questions and criteria.
 
@@ -659,7 +661,9 @@ class Projection:
         artifacts, artifacts_capped = _capped(
             lambda: tuple(self._reader.stage_artifacts(root, artifact_dir_rel, node)), ()
         )
-        review, review_capped = _capped(lambda: self._review_of(root, artifacts, node), None)
+        review, review_capped = _capped(
+            lambda: self._review_of(root, artifacts, node, space=space, intent_dir=intent_dir, slug=slug, unit=unit,
+                                    events=events), None)
         primary = self._primary_artifact(artifacts, node)
         judged = review_capped or (review is not None and (review[0] is not None or bool(review[1])))
         # A Gate opens on the first artifact, so the one the stage is judged on leads: in name order
@@ -695,9 +699,15 @@ class Projection:
         return self._reader.stage_dir(space, intent_dir, phase, stage, unit)
 
     def _review_of(
-        self, root: Path, artifacts: Sequence[ArtifactMeta], node: StageNode | None
+        self, root: Path, artifacts: Sequence[ArtifactMeta], node: StageNode | None, *, space: str = C.DEFAULT_SPACE,
+        intent_dir: str = "", slug: str | None = None, unit: str | None = None, events: Sequence[AuditEvent] = (),
     ) -> tuple[str | None, list[ReviewFinding]] | None:
-        """The parsed `## Review` of the stage's primary artifact: a verdict lives inside the artifact it judges."""
+        """The stage's review: the record AI-DLC 2.11's newest answered `REVIEW_COMPLETED` names, else the parsed
+        `## Review` of the stage's primary artifact, where every earlier engine wrote the verdict (and where a row
+        from before review records, naming none, leaves it)."""
+        completion = latest_review_completion(events, slug, unit) if slug else None
+        if completion is not None and completion.fields.get("Review Record"):
+            return self._reader.read_review_record(root, space, intent_dir, completion)
         primary = self._primary_artifact(artifacts, node)
         snap = self._reader.read_artifact(root, primary.relpath) if primary is not None else None
         return parse_review_section(snap.text) if snap is not None else None

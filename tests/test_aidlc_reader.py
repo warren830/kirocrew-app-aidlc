@@ -1135,6 +1135,89 @@ def test_a_review_table_studio_cannot_place_is_never_proof_that_there_are_no_blo
     assert none_listed == [] and none_listed.findings_parsed is True
 
 
+#: Two findings as 2.11's record keeps them: one still open, one AI-DLC marked resolved.
+RECORD_FINDINGS = (
+    {"id": "R-01", "severity": "Minor", "location": "textstats.py > word_count",
+     "finding": "`split(' ')` counts empty strings", "required_action": "Use `str.split()`", "status": "New"},
+    {"id": "R-02", "severity": "Major", "location": "test_textstats.py", "finding": "No test for tabs",
+     "required_action": "Add one", "status": "Resolved"},
+)
+
+
+def test_a_review_record_is_the_review_its_completion_row_names(R):
+    """2.11 moved the verdict out of the artifact into a record the audit row pins by digest."""
+    path, text = F.review_record("code-generation", findings=RECORD_FINDINGS)
+    completion = R.latest_review_completion(events_of(R, F.review_audit("code-generation", (path, text))),
+                                            "code-generation", None)
+    assert completion is not None and completion.fields["Review Record"] == path
+    verdict, findings = R.parse_review_record(text.encode(), completion)
+    assert verdict == "READY" and findings.findings_parsed is True
+    # each finding is its table row, verbatim; a severity is not a level, AI-DLC's own Resolved is
+    assert [f.title for f in findings] == [
+        "R-01 | Minor | textstats.py > word_count | `split(' ')` counts empty strings | Use `str.split()` | New",
+        "R-02 | Major | test_textstats.py | No test for tabs | Add one | Resolved"]
+    assert [f.level for f in findings] == ["unknown", "resolved"] and findings[0].quote == "split(' ')"
+    assert all(f.reviewer == "aidlc-architecture-reviewer-agent" and f.iteration == 1 for f in findings)
+    # bytes edited after the row pinned them are not the review, and neither is another scope's record
+    assert R.parse_review_record(text.replace("Minor", "Major").encode(), completion) is None
+    other_path, other = F.review_record("requirements-analysis", findings=RECORD_FINDINGS)
+    forged = events_of(R, F.review_audit("code-generation", (other_path, other)))
+    assert R.parse_review_record(other.encode(), R.latest_review_completion(forged, "code-generation", None)) is None
+
+
+def test_only_a_completion_that_answers_a_request_is_a_review(R):
+    """AI-DLC pairs each completion with the request it answers; an unanswered row names no review."""
+    record = F.review_record("code-generation")
+    pair = F.review_audit("code-generation", record)
+    completed = pair[pair.index("\n## ", 1):]
+    assert R.latest_review_completion(events_of(R, completed), "code-generation", None) is None
+    other_request = F.review_audit("code-generation", record, request_id="review:" + "0" * 32)
+    mismatched = other_request[:other_request.index("\n## ", 1)] + completed
+    assert R.latest_review_completion(events_of(R, mismatched), "code-generation", None) is None
+    single = pair.replace("**Iteration**", "**Workflow**: single\n**Iteration**")
+    assert R.latest_review_completion(events_of(R, single), "code-generation", None) is None
+    # a Unit's review is that Unit's, and the newer of two answered pairs is the one shown
+    unit = F.review_audit("code-generation", F.review_record("code-generation", unit="api"), unit="api")
+    assert R.latest_review_completion(events_of(R, unit), "code-generation", None) is None
+    assert R.latest_review_completion(events_of(R, unit), "code-generation", "api") is not None
+    second = F.review_audit("code-generation", F.review_record("code-generation", iteration=2), iteration=2,
+                            ts="2026-09-04T10:00:00Z", verdict="NOT-READY")
+    latest = R.latest_review_completion(events_of(R, pair, second), "code-generation", None)
+    assert latest is not None and latest.fields["Verdict"] == "NOT-READY"
+
+
+@pytest.mark.parametrize("path,ok", [
+    (".aidlc-engine/reviews/code-generation/stage/11d5af9134c10ab1/1.json", True),
+    (".aidlc-engine/reviews/code-generation/units/api/11d5af9134c10ab1/12.json", True),
+    (".aidlc-reviews/code-generation/stage/11d5af9134c10ab1/1.json", True),
+    (".aidlc-engine/reviews/code-generation/stage/11d5af9134c10ab1/0.json", False),
+    (".aidlc-engine/reviews/code-generation/stage/11d5af91/1.json", False),
+    (".aidlc-engine/reviews/../../aidlc-state.md", False),
+    (".aidlc-engine/reviews/code-generation/units/../11d5af9134c10ab1/1.json", False),
+    ("construction/code-generation/reviews/review-01.md", False),
+    (".aidlc-engine/reviews/x.json", False),
+])
+def test_a_review_record_path_has_the_shape_ai_dlc_writes(R, path, ok):
+    assert R.is_review_record_path(path) is ok
+
+
+def test_a_missing_or_unverifiable_record_still_says_a_reviewer_ran(R, reader, repo_builder):
+    """AI-DLC keeps `.aidlc-engine/` out of git, so a fresh clone has the row and not the record."""
+    path, text = F.review_record("code-generation", verdict="NOT-READY", findings=RECORD_FINDINGS)
+    audit = F.audit_text(F.gate_open_audit("code-generation"), F.review_audit("code-generation", (path, text),
+                                                                                verdict="NOT-READY"))
+    root = repo_builder.with_engine("payload").with_intent(X, state=GATE_STATE, audit=audit).build()
+    completion = R.latest_review_completion(reader.read_audit(root, "default", X).events, "code-generation", None)
+    verdict, findings = reader.read_review_record(root, "default", X, completion)
+    assert verdict == "NOT-READY" and findings == [] and findings.findings_parsed is False
+    (root / REC / path).parent.mkdir(parents=True)
+    (root / REC / path).write_text(text)
+    verdict, findings = reader.read_review_record(root, "default", X, completion)
+    assert verdict == "NOT-READY" and len(findings) == 2 and findings.findings_parsed is True
+    (root / REC / path).write_text(text.replace("No test", "A test"))
+    assert reader.read_review_record(root, "default", X, completion)[1].findings_parsed is False
+
+
 # --- breadcrumb, markers, derived JSON ---
 def test_recovery_breadcrumb_has_no_leading_dash(R):
     assert R.parse_recovery_breadcrumb(

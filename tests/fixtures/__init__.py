@@ -17,7 +17,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Iterable, Mapping, Sequence
 
 FIXTURES = Path(__file__).resolve().parent
 
@@ -285,6 +285,40 @@ def error_burst_audit(*, ts: str = "2026-09-04T09:00:00Z", count: int = 3,
             )
             for i in range(count)
         ]
+    )
+
+
+#: The request id a 2.11 review pair shares; the completion answers the request that carries it.
+REVIEW_REQUEST_ID = "review:" + "f3" * 16
+
+
+def review_record(stage: str, *, verdict: str = "READY", reviewer: str = "aidlc-architecture-reviewer-agent",
+                  iteration: int = 1, unit: str | None = None, findings: Sequence[Mapping[str, str]] = (),
+                  attempt: str = "11d5af9134c10ab1", request_id: str = REVIEW_REQUEST_ID) -> tuple[str, str]:
+    """A 2.11 review record: ``(its path under the intent record, its exact JSON text)``, keyed as 2.11 writes it."""
+    scope = f"units/{unit}" if unit else "stage"
+    record = {
+        "version": 1, "stage": stage, "unit": unit, "workflow": None, "attempt": attempt, "iteration": iteration,
+        "reviewer": reviewer, "verdict": verdict, "request_id": request_id, "request_challenge": None,
+        "artifact_fingerprint": "sha256:" + "5d" * 32, "source_fingerprint": None, "unit_source_fingerprint": None,
+        "findings": [dict(row) for row in findings], "body": f"## Review\n\n**Verdict:** {verdict}\n",
+        "recorded_at": "2026-10-13T09:30:24Z",
+    }
+    return f".aidlc-engine/reviews/{stage}/{scope}/{attempt}/{iteration}.json", json.dumps(record, indent=2) + "\n"
+
+
+def review_audit(stage: str, record: tuple[str, str] | None, *, ts: str = "2026-09-04T09:00:01Z",
+                 verdict: str = "READY", reviewer: str = "aidlc-architecture-reviewer-agent", iteration: int = 1,
+                 unit: str | None = None, request_id: str = REVIEW_REQUEST_ID) -> str:
+    """The ``REVIEW_REQUESTED`` / ``REVIEW_COMPLETED`` pair around a verdict; ``record`` is what the completion names
+    (2.11), or ``None`` for a row from before review records."""
+    scope = {"Unit": unit} if unit else {}
+    pinned = {} if record is None else {"Review_Record": record[0], "Review_Record_Digest": "sha256:" + sha256(record[1])}
+    return audit_text(
+        audit_block("REVIEW_REQUESTED", ts, Stage=stage, Reviewer=reviewer, Iteration=str(iteration),
+                    Request_Id=request_id, **scope),
+        audit_block("REVIEW_COMPLETED", _plus(ts, 1), Stage=stage, Reviewer=reviewer, Iteration=str(iteration),
+                    Verdict=verdict, Request_Id=request_id, **scope, **pinned),
     )
 
 

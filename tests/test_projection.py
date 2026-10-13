@@ -401,6 +401,46 @@ def test_an_unreviewed_gate_opens_on_the_stage_summary(projection, snap_of, repo
     assert (evidence["review"] is None) == (review == "")
 
 
+def test_a_2_11_gate_shows_the_review_record_its_audit_row_names(projection, snap_of, repo_builder):
+    """2.11 keeps the verdict in a record beside the intent, not in the artifact: reading only the artifact
+    told the human "No reviewer ran" on a gate the architecture reviewer had judged."""
+    stage, record = "code-generation", "construction/code-generation"
+    finding = {"id": "R-01", "severity": "Minor", "location": "test_textstats.py", "finding": "No test for tabs",
+               "required_action": "Add one", "status": "New"}
+    path, text = F.review_record(stage, findings=[finding])
+    files = {f"{record}/code-generation-plan.md": "# Plan\n", f"{record}/code-summary.md": "# Summary\n"}
+    state = F.state_text(marks={stage: "?"}, fields={**RUNNING, "Current Stage": stage,
+                                                     "Lifecycle Phase": "CONSTRUCTION"})
+    audit = F.audit_text(F.gate_open_audit(stage), F.review_audit(stage, (path, text), ts="2026-09-04T09:00:04Z"))
+    root = build(repo_builder, "record-gate", audit=audit, state=state, artifacts={**files, path: text})
+    evidence = projection.evidence(snap_of(root), stage=stage).to_json()
+    review = evidence["review"]
+    assert review is not None and review["verdict"] == "READY" and review["findings_parsed"] is True
+    assert [f["title"] for f in review["findings"]] == [
+        "R-01 | Minor | test_textstats.py | No test for tabs | Add one | New"]
+    assert review["reviewer"] == "aidlc-architecture-reviewer-agent" and review["iteration"] == 1
+    # the judged artifact leads, and the record is not listed as one of the stage's artifacts
+    assert [a["name"] for a in evidence["artifacts"]] == ["code-generation-plan.md", "code-summary.md"]
+    # a fresh clone has the row and not the record: a reviewer still ran, Studio just cannot list its findings
+    (root / "aidlc/spaces/default/intents" / GATE_DIR / path).unlink()
+    gone = projection.evidence(snap_of(root), stage=stage).to_json()["review"]
+    assert gone is not None and gone["verdict"] == "READY" and gone["findings"] == []
+    assert gone["findings_parsed"] is False
+
+
+def test_a_review_row_from_before_records_keeps_the_artifacts_verdict(projection, snap_of, repo_builder):
+    """A 2.10 completion names no record, so the `## Review` in the artifact stays the review."""
+    stage, record = "code-generation", "construction/code-generation"
+    state = F.state_text(marks={stage: "?"}, fields={**RUNNING, "Current Stage": stage,
+                                                     "Lifecycle Phase": "CONSTRUCTION"})
+    audit = F.audit_text(F.gate_open_audit(stage), F.review_audit(stage, None, verdict="NOT-READY"))
+    root = build(repo_builder, "legacy-gate", audit=audit, state=state, artifacts={
+        f"{record}/code-generation-plan.md": "# Plan\n\n## Review\n\n**Verdict**: NOT-READY\n\n### Blocker\n\n- gap\n"})
+    review = projection.evidence(snap_of(root), stage=stage).to_json()["review"]
+    assert review is not None and review["verdict"] == "NOT-READY"
+    assert [(f["level"], f["title"]) for f in review["findings"]] == [("blocker", "gap")]
+
+
 def test_evidence_names_the_choices_the_last_reply_offered_only_while_no_turn_runs(projection, gate_snap):
     """A gate prompt can offer more than the card sends (requirements' Add User Stories); the card must say so."""
     offered = ("Approve", "Request Changes", "Add User Stories")
