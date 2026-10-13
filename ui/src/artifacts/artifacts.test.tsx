@@ -193,6 +193,20 @@ describe('the diff', () => {
     expect(container.querySelector('[data-kind="add"]')).toHaveTextContent('+new line')
     expect(screen.getByText(/prior version derived from Git/i)).toBeInTheDocument()
   })
+
+  it('says a closed record compares today, and that the file changed after the record captured it', async () => {
+    installArtifact({
+      content: '# design',
+      artifact: meta({ sha256: 'cd'.repeat(32) }),
+      prior: { available: true, source: 'git', diff: '' },
+    })
+    mount(<ArtifactsTab repoId={REPO} intentKey={INTENT} artifacts={[meta()]} closed />)
+    expect(await screen.findByText(/Compared now: today's file against today's latest commit/)).toBeInTheDocument()
+    expect(screen.getByText(/Today's file matches the latest commit/)).toBeInTheDocument()
+    expect(screen.queryByText(/No change since the committed version/)).toBeNull()
+    expect(screen.getByText(/This file changed after this record captured it \(SHA-256 abababababab then, cdcdcdcdcdcd now\)/))
+      .toBeInTheDocument()
+  })
 })
 
 describe('reviewer findings', () => {

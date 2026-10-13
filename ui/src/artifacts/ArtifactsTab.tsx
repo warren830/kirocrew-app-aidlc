@@ -57,6 +57,8 @@ export interface ArtifactsTabProps {
   onOpenAnchor?: (anchor: string) => void
   /** Blocks the owning template adds to this tab (install drift table, recovery evidence grid). */
   children?: ReactNode
+  /** The owning card is closed, so a diff read now is not the one its decision saw. */
+  closed?: boolean
 }
 
 export function ArtifactsTab({
@@ -74,6 +76,7 @@ export function ArtifactsTab({
   onOpenInEditor,
   onOpenAnchor,
   children,
+  closed = false,
 }: ArtifactsTabProps) {
   const { t, fmt } = useI18n()
   const api = useStudioApi()
@@ -173,7 +176,7 @@ export function ArtifactsTab({
               capabilities={capabilities}
               {...(onOpenInEditor ? { onOpenInEditor } : {})}
             >
-              {body.data ? <ArtifactDiff prior={body.data.prior} name={selected.name} /> : null}
+              {body.data ? <ArtifactDiff prior={body.data.prior} name={selected.name} readNow={closed} /> : null}
             </ArtifactViewer>
 
             {reviewFindings.length > 0 ? (

@@ -723,6 +723,24 @@ describe('questions template', () => {
     expect(screen.queryByText(en.t('template.questions.fileSource'))).toBeNull()
   })
 
+  it('tells a closed plan approval in the past tense', () => {
+    setApiRoutes({})
+    const view = questionsView({
+      // What the card stored when it opened: the plan approval was still pending then.
+      stage: 'code-generation', questions: [], pending_count: 0, pending_checkpoint: 'plan_approval',
+      plan_approval: { kind: 'plan_approval', present: true, answered: false, answer: null, options: ['- A. Approve Plan'], context: null },
+    })
+    mount(QuestionsTemplate, card({
+      type: 'question', status: 'ResolvedNoTransition',
+      headline: { key: 'action.question.headline', params: {} },
+      decisions: [spec('approve_plan', [])],
+      evidence: { ...card().evidence, questions: view, artifacts: [] },
+    }))
+    expect(screen.getByText(en.t('template.questions.checkpoint.plan_approval.bodyClosed'))).toBeInTheDocument()
+    expect(screen.queryByText(en.t('template.questions.checkpoint.plan_approval.body'))).toBeNull()
+    expect(screen.queryByText(/stays visible until/)).toBeNull()
+  })
+
   it('explains a plan asked in an earlier session and offers no change request it could not record', () => {
     setApiRoutes({})
     const view = questionsView({

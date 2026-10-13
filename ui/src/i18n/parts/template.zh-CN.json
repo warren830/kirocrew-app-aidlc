@@ -259,5 +259,9 @@
   "template.questions.closedUnsent": "这些是 AI-DLC 提出的问题。这张卡片在从它发出任何回答之前就已关闭。",
   "template.questions.closedUnsentChip": "未从此卡片发出回答",
   "template.gate.ungraded": "{n} 条发现，由评审者分级",
-  "template.gate.ungraded_one": "{n} 条发现，由评审者分级"
+  "template.gate.ungraded_one": "{n} 条发现，由评审者分级",
+  "template.questions.neverEditsClosed": "Studio 绝不会修改 {path} 或它的摘要值。",
+  "template.questions.checkpoint.summary_confirmation.bodyClosed": "引擎在继续之前，确认了它对该阶段的摘要是否正确。",
+  "template.questions.checkpoint.assumption_confirmation.bodyClosed": "引擎在这一步的产物里把这些保留为假设，并请你接受，或让它先追问确认。",
+  "template.questions.checkpoint.plan_approval.bodyClosed": "引擎在执行之前，请你批准了它编排出的计划。"
 }

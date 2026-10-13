@@ -259,5 +259,9 @@
   "template.questions.closedUnsent": "These are the questions AI-DLC asked. This card closed before any answer was sent from it.",
   "template.questions.closedUnsentChip": "No answer sent from this card",
   "template.gate.ungraded": "{n} findings, graded by the reviewer",
-  "template.gate.ungraded_one": "{n} finding, graded by the reviewer"
+  "template.gate.ungraded_one": "{n} finding, graded by the reviewer",
+  "template.questions.neverEditsClosed": "Studio never edits {path} or its digest.",
+  "template.questions.checkpoint.summary_confirmation.bodyClosed": "The engine asked whether its summary of this stage was correct before it moved on.",
+  "template.questions.checkpoint.assumption_confirmation.bodyClosed": "The engine kept these as assumptions in the stage's artifacts and asked you to accept them, or to have it ask follow-up questions first.",
+  "template.questions.checkpoint.plan_approval.bodyClosed": "The engine asked you to approve the plan it composed before it executed it."
 }

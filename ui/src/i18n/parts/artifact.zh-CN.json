@@ -43,5 +43,8 @@
   "artifact.toc.label": "该产物的章节",
   "artifact.tooLarge.body": "该文件为 {size}，超过本次读取允许的 {cap}。Studio 拒绝做部分读取，而不是把产物的一部分当成全部展示。",
   "artifact.tooLarge.title": "该文件过大，无法渲染",
-  "artifact.truncated": "Studio 只读取了该文件的一部分。其余内容仍在磁盘上，没有传到浏览器。"
+  "artifact.truncated": "Studio 只读取了该文件的一部分。其余内容仍在磁盘上，没有传到浏览器。",
+  "artifact.diff.readNow": "这是现在的比较：拿今天的文件对比今天的最新提交，而不是这条记录当时决定的版本。",
+  "artifact.diff.unchangedNow": "今天的文件与最新提交一致。",
+  "artifact.changedSinceCapture": "这条记录捕获之后，该文件又被改过（当时 SHA-256 {then}，现在 {now}）。下面显示的是文件现在的内容。"
 }

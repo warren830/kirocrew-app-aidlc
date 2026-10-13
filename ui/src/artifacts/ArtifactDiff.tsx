@@ -54,9 +54,11 @@ export interface ArtifactDiffProps {
   prior: { available: boolean; source: 'git' | null; diff: string | null }
   /** The file this diff is about — named in the group label so a screen reader knows which pane it is in. */
   name: string
+  /** A closed record: the comparison is made now, against today's HEAD, not when the record was decided. */
+  readNow?: boolean
 }
 
-export function ArtifactDiff({ prior, name }: ArtifactDiffProps) {
+export function ArtifactDiff({ prior, name, readNow = false }: ArtifactDiffProps) {
   const { t } = useI18n()
 
   if (!prior.available) return null
@@ -71,6 +73,7 @@ export function ArtifactDiff({ prior, name }: ArtifactDiffProps) {
           {prior.source === 'git' ? t('artifact.diff.fromGit') : t('artifact.diff.fromUnknown')}
         </Chip>
       </div>
+      {readNow ? <p className="studio-muted studio-diff-note">{t('artifact.diff.readNow')}</p> : null}
 
       {prior.diff === null ? (
         <p className="studio-muted studio-diff-note">
@@ -78,7 +81,7 @@ export function ArtifactDiff({ prior, name }: ArtifactDiffProps) {
         </p>
       ) : parseDiff(prior.diff).length === 0 ? (
         <p className="studio-muted studio-diff-note">
-          <Icon name="check" size={13} /> {t('artifact.diff.unchanged')}
+          <Icon name="check" size={13} /> {t(readNow ? 'artifact.diff.unchangedNow' : 'artifact.diff.unchanged')}
         </p>
       ) : (
         <DiffLines diff={prior.diff} />

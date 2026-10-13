@@ -43,5 +43,8 @@
   "artifact.toc.label": "Sections of this artifact",
   "artifact.tooLarge.body": "The file is {size}, over the {cap} this read allows. Studio refuses a partial read rather than showing part of an artifact as if it were all of it.",
   "artifact.tooLarge.title": "This file is too large to render",
-  "artifact.truncated": "Studio read only part of this file. The rest is on disk and was not sent to the browser."
+  "artifact.truncated": "Studio read only part of this file. The rest is on disk and was not sent to the browser.",
+  "artifact.diff.readNow": "Compared now: today's file against today's latest commit, not the version this record decided on.",
+  "artifact.diff.unchangedNow": "Today's file matches the latest commit.",
+  "artifact.changedSinceCapture": "This file changed after this record captured it (SHA-256 {then} then, {now} now). The text below is the file as it is now."
 }

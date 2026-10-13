@@ -466,14 +466,14 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
           })}
 
         {view ? (
-          <Consequence icon="lock">{t('template.questions.neverEdits', { path: view.relpath })}</Consequence>
+          <Consequence icon="lock">{t(answerable ? 'template.questions.neverEdits' : 'template.questions.neverEditsClosed', { path: view.relpath })}</Consequence>
         ) : null}
       </Block>
       ) : null}
 
       {checkpoint?.present ? (
         <Block title={t(`template.questions.checkpoint.${checkpoint.kind}`)} icon="gate">
-          <p className="studio-q-prompt">{t(`template.questions.checkpoint.${checkpoint.kind}.body`)}</p>
+          <p className="studio-q-prompt">{t(`template.questions.checkpoint.${checkpoint.kind}.${answerable ? 'body' : 'bodyClosed'}`)}</p>
           {checkpoint.context?.trim() ? (
             // What is being accepted, in the engine's words: the human cannot choose without reading it.
             // The same sanitising renderer as a question's context.
@@ -516,7 +516,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
             />
           ) : null}
           {!showGroup && view ? (
-            <Consequence icon="lock">{t('template.questions.neverEdits', { path: view.relpath })}</Consequence>
+            <Consequence icon="lock">{t(answerable ? 'template.questions.neverEdits' : 'template.questions.neverEditsClosed', { path: view.relpath })}</Consequence>
           ) : null}
         </Block>
       ) : null}

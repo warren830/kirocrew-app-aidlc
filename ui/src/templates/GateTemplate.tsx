@@ -23,6 +23,7 @@ import { ArtifactDiff } from '../artifacts/ArtifactDiff'
 import { ArtifactViewer, useArtifactBody } from '../artifacts/ArtifactViewer'
 import { SourceChanges, hasWrittenSource } from '../artifacts/SourceChanges'
 import { FindingList } from '../artifacts/FindingList'
+import { isClosedAction } from '../lib/actionQueue'
 import { bytes, at as formatAt } from '../lib/format'
 import { Chip } from '../shell/Chip'
 import { Icon } from '../shell/Icon'
@@ -114,7 +115,7 @@ export function GateTemplate({ card, detail, draft, setDraft, refreshing, api, r
                 ) : null
               }
             >
-              {body.data?.prior ? <ArtifactDiff prior={body.data.prior} name={selected.name} /> : null}
+              {body.data?.prior ? <ArtifactDiff prior={body.data.prior} name={selected.name} readNow={isClosedAction(card)} /> : null}
             </ArtifactViewer>
           ) : (
             // A gate with no produced artifact is itself evidence, not an empty panel.

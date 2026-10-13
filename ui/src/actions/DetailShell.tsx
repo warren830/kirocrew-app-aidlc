@@ -32,7 +32,7 @@ import { Icon } from '../shell/Icon'
 import { useI18n, type I18n } from '../i18n'
 import { StudioApiError, type StudioApi } from '../lib/api'
 import { at } from '../lib/format'
-import { isRepositoryUnavailable } from '../lib/actionQueue'
+import { isClosedAction, isRepositoryUnavailable } from '../lib/actionQueue'
 import { DEFAULT_TAB, EMPTY_ROUTE, type Navigate, type StudioRoute, type Tab } from '../lib/route'
 import { useResource } from '../lib/useResource'
 import type {
@@ -590,6 +590,7 @@ export function DetailShell({
               onSelectArtifact={(artifactId) => go({ artifact: artifactId })}
               anchor={route.anchor}
               onOpenAnchor={openAnchor}
+              closed={isClosedAction(card)}
             />
           ) : activeTab === 'review' ? (
             <ReviewTab

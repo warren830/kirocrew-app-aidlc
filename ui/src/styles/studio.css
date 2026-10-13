@@ -786,8 +786,9 @@ button.studio-chip:hover { border-color: var(--border-hover); }
    column shrink below its longest word, which splits every word in it. The host's tables scroll instead. */
 .studio-md { min-width: 0; overflow-wrap: break-word; }
 /* The host sets `word-break: break-all` on inline code, which splits `calc.py` at whichever letter reaches
-   the end of the line. Two classes so this wins whichever stylesheet loads last. */
-.studio .studio-md :not(pre) > code { word-break: normal; }
+   the end of the line. Two classes so this wins whichever stylesheet loads last. Spaces are kept, because
+   `'hello  world'` with two spaces is not the same string as with one. */
+.studio .studio-md :not(pre) > code { word-break: normal; white-space: pre-wrap; }
 /* Inline code in AI-DLC's question and option text. */
 .studio-icode {
   font-family: var(--font-mono, ui-monospace, monospace);
@@ -795,6 +796,7 @@ button.studio-chip:hover { border-color: var(--border-hover); }
   padding: 0 3px;
   border-radius: 3px;
   background: var(--bg-accent);
+  white-space: pre-wrap;
 }
 .studio-plain {
   margin: 0;

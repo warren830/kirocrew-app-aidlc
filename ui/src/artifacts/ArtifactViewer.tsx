@@ -181,6 +181,9 @@ export function ArtifactViewer({
   }, [anchor, content, reduced])
 
   const toc = useMemo(() => (body?.toc ?? []).filter((entry) => entry.text.trim() !== ''), [body?.toc])
+  // `meta` can be what a card captured; the body is always read now.
+  const nowSha = body?.artifact?.sha256 ?? null
+  const drifted = !!meta.sha256 && !!nowSha && nowSha !== meta.sha256
 
   const openInEditor = () => onOpenInEditor?.(meta.relpath)
   // The host's MarkdownRenderer is `memo`; a new closure on every render would defeat it on a file
@@ -245,6 +248,12 @@ export function ArtifactViewer({
       ) : null}
 
       <div className="studio-pane-body" ref={bodyRef}>
+        {drifted ? (
+          <p className="studio-notrendered-t" role="status">
+            <Icon name="warn" size={13} />{' '}
+            {t('artifact.changedSinceCapture', { then: (meta.sha256 ?? '').slice(0, 12), now: (nowSha ?? '').slice(0, 12) })}
+          </p>
+        ) : null}
         {body?.truncated ? (
           // The contract allows a truncated body; showing part of an artifact as if it were all of it
           // is exactly the failure the size cap exists to prevent.
