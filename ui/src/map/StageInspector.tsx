@@ -355,7 +355,12 @@ function ReviewSummary({ review }: { review: ReviewResponse }) {
   const i18n = useI18n()
   const { t } = i18n
   const counts = new Map<ReviewFinding['level'], number>()
-  for (const finding of review.findings) counts.set(finding.level, (counts.get(finding.level) ?? 0) + 1)
+  // A 2.11 record grades its findings itself: count them by the reviewer's own severity, verbatim, not as unclassified.
+  const graded = new Map<string, number>()
+  for (const finding of review.findings) {
+    if (finding.level === 'unknown' && finding.severity) graded.set(finding.severity, (graded.get(finding.severity) ?? 0) + 1)
+    else counts.set(finding.level, (counts.get(finding.level) ?? 0) + 1)
+  }
   const blockers = review.findings.filter((finding) => finding.level === 'blocker')
   const shown = blockers.slice(0, 3)
 
@@ -383,6 +388,11 @@ function ReviewSummary({ review }: { review: ReviewResponse }) {
             icon={level === 'blocker' ? 'warn' : level === 'advisory' ? 'info' : level === 'resolved' ? 'check' : 'info'}
           >
             {`${t(`map.review.level.${level}`)} ${i18n.fmt.number(counts.get(level) ?? 0)}`}
+          </Chip>
+        ))}
+        {[...graded.entries()].map(([severity, n]) => (
+          <Chip key={`severity:${severity}`} icon="info" title={t('review.severityTitle')}>
+            {`${severity} ${i18n.fmt.number(n)}`}
           </Chip>
         ))}
       </div>

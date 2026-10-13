@@ -429,6 +429,19 @@ describe('the workflow map', () => {
     expect(within(inspector).getByText("None of the record's last 2 audit events names this stage.")).toBeInTheDocument()
   })
 
+  it('counts a review record\'s findings by the reviewer\'s own severity', async () => {
+    const graded = (id: string, severity: string) => ({ level: 'unknown', title: `finding ${id}`, quote: null, anchor: null,
+      reviewer: 'aidlc-product-lead-agent', iteration: 1, finding_id: id, severity, status: 'New' })
+    installRoutes({ review: reviewResponse({ verdict: 'READY',
+      findings: [graded('R-01', 'Major'), graded('R-02', 'Minor'), graded('R-03', 'Minor')] }) })
+    mount({ cards: [] })
+    await userEvent.click(await screen.findByRole('button', { name: /requirements-analysis/ }))
+    const inspector = screen.getByRole('complementary', { name: 'Stage inspector' })
+    expect(await within(inspector).findByText('Major 1')).toBeInTheDocument()
+    expect(within(inspector).getByText('Minor 2')).toBeInTheDocument()
+    expect(within(inspector).queryByText(/Unclassified/)).toBeNull()
+  })
+
   it('says the run reviews nothing when the scope turns a stage\'s review off', async () => {
     const map = mapFixture()
     installRoutes({ map: { ...map, nodes: map.nodes.map((node) =>
