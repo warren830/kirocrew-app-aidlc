@@ -7,7 +7,7 @@
   "queue.filterLabel": "筛选队列",
   "queue.filterPlaceholder": "按仓库、意图、阶段筛选",
   "queue.group.attention": "熔断、失败与安装冲突",
-  "queue.group.blocking": "阻塞中的 Gate 与提问",
+  "queue.group.blocking": "阻塞中的关卡与提问",
   "queue.group.info": "预算停止与暂停",
   "queue.group.oldest": "最久等待优先",
   "queue.group.recovery": "需要恢复处理，以及投递结果不确定",

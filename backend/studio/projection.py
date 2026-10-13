@@ -129,6 +129,8 @@ RECOVERY_EXCLUDED_FINDINGS: frozenset[str] = frozenset({"delivery_uncertain_acti
 #: Action types that represent a turn Studio asked for, as opposed to a boundary it observed. Only
 #: these make an intent `Queued` (review P08).
 COMMAND_ACTION_TYPES: frozenset[str] = frozenset({"run", "resume", "prepare_commit", "force_stop"})
+#: A question card in these is a reply AI-DLC has received or may be recording.
+_ANSWER_IN_FLIGHT_STATUSES: frozenset[str] = frozenset({"Delivering", "Delivered", "ReconciliationRequired"})
 
 #: Statuses that re-type a card as `delivery_uncertain` in the queue (§2.11).
 UNCERTAIN_STATUSES: frozenset[str] = frozenset({"ReconciliationRequired"})
@@ -1062,7 +1064,15 @@ class Projection:
                 ))
 
         questions, needs_input = snap.questions, bool(_attr(slot, "needs_input", False))
-        if questions is not None and (questions.pending_count or questions.pending_checkpoint or needs_input):
+        # A reply already on the wire for this stage's questions: AI-DLC records the answers one by one, and each
+        # half-written file read as a new pending group flashed a card into the queue for seconds. Whatever is still
+        # pending once that turn settles gets its card on the next scan.
+        answering = any(
+            str(_attr(action, "type", "")) == "question" and str(_attr(action, "stage", "") or "") == (snap.stage or "")
+            and str(_attr(action, "status", "")) in _ANSWER_IN_FLIGHT_STATUSES for action in live_actions
+        )
+        if questions is not None and not answering and (
+                questions.pending_count or questions.pending_checkpoint or needs_input):
             # The decisions follow what is pending, not the card type: blank Q tags are `answers`, a blank
             # checkpoint its own pair. Unsupported follow-ups keep the card but offer nothing: they carry no Q ids,
             # and a checkpoint confirmation must not skip them.

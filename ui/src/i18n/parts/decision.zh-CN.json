@@ -25,7 +25,7 @@
   "decision.a11y.bar": "决策操作",
   "decision.bar.submitted": "已作为 {id} 提交。{status} — 只有 AI-DLC 状态发生变化后，该事项才会消失。",
   "decision.bar.showQueue": "回到队列",
-  "decision.bar.advisorGate": "咨询 Advisor",
+  "decision.bar.advisorGate": "咨询顾问",
   "decision.bar.advisorQuestions": "起草全部答案",
   "decision.bar.advisorDiagnose": "用 AI 诊断",
   "decision.blocked.feedback": "要求修改需要写明需要改什么。",

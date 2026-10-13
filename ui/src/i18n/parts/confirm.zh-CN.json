@@ -11,7 +11,7 @@
   "confirm.blocked.inputRequired": "请填写该阶段缺少的输入。",
   "confirm.blocked.noWireText": "目前还没有可发送的内容。",
   "confirm.blocked.refreshing": "作为证据的文件正在变化，因此现在不能基于它提交任何内容。",
-  "confirm.blocked.sessionUnbound": "决定会作为真实的用户回合发送到该意图的对话，而该意图尚未绑定任何对话。请在 KiroCrew 中为该仓库打开一个使用 aidlc agent 的对话，并把它绑定到该意图；在此之前 Studio 没有可以发送的目标。",
+  "confirm.blocked.sessionUnbound": "决定会作为真实的用户回合发送到该意图的对话，而该意图尚未绑定任何对话。请在 KiroCrew 中为该仓库打开一个使用 aidlc agent的对话，并把它绑定到该意图；在此之前 Studio 没有可以发送的目标。",
   "confirm.openSession": "去绑定会话",
   "confirm.consequence.acknowledge": "Studio 会在自己的记录中关闭该事件。AI-DLC 的文件不会被改动；如果证据仍然矛盾，条目会再次出现。",
   "confirm.consequence.force_stop": "将请求 KiroCrew 停止该会话中正在运行的回合。不会写入 AI-DLC 的任何文件，也不会向会话追加消息。",

@@ -546,31 +546,7 @@
     "rules_subdir": "steering",
     "stage_count": 33
    },
-   "findings": [
-    {
-     "code": "directive_state_digest_mismatch",
-     "evidence": [
-      {
-       "detail": "state_sha256 7eca6ee6738b",
-       "kind": "file",
-       "ref": "aidlc/spaces/default/intents/260828-kiro-impact-poc/.aidlc-active-directive.json"
-      },
-      {
-       "detail": "sha256 d8b5d758da32",
-       "kind": "file",
-       "ref": "aidlc/spaces/default/intents/260828-kiro-impact-poc/aidlc-state.md"
-      }
-     ],
-     "message_key": "finding.directive_state_digest_mismatch",
-     "params": {
-      "directive_state_sha256": "7eca6ee6738be0aa5d88937fec442cbe09210ccd8818e977caeb4e96b854ce71",
-      "stage": "build-and-test",
-      "state_sha256": "d8b5d758da32c9dac128204fa7acc20d4695f6d1ec243274fdb840ffa64c28b1",
-      "unit": null
-     },
-     "severity": "info"
-    }
-   ],
+   "findings": [],
    "git": {
     "ahead": null,
     "available": true,

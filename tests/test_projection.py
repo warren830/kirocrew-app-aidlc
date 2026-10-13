@@ -731,6 +731,17 @@ def test_an_engine_held_plan_approval_is_answered_from_any_session(projection, s
     assert question.consequence_variant == "plan_approval"
 
 
+@pytest.mark.parametrize("status,held", [("Delivering", True), ("Delivered", True), ("ReconciliationRequired", True),
+                                          ("Queued", False), ("ResolvedNoTransition", False)])
+def test_no_new_question_card_while_a_reply_to_the_stage_is_in_flight(projection, snap_of, question_repo, status, held):
+    """AI-DLC records a group's answers one by one; a half-written file must not flash a fresh card into the queue."""
+    from types import SimpleNamespace
+    snap = snap_of(question_repo)
+    sent = SimpleNamespace(type="question", stage=snap.stage, status=status, action_id="a_sent", unit=None)
+    seeds = _seeds(projection, snap, live_actions=[sent])
+    assert ("question" in [seed.type for seed in seeds]) is not held
+
+
 def test_blank_question_group_yields_one_atomic_card(projection, snap_of, question_repo):
     """FR-Q-002/D13: one group is one card, never one card per question."""
     snap = snap_of(question_repo)

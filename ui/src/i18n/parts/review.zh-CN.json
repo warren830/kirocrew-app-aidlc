@@ -6,7 +6,7 @@
   "review.contract.classSub": "由该阶段配置决定",
   "review.contract.none": "未声明",
   "review.contract.reviewer": "评审者",
-  "review.contract.reviewerSub": "只做评审的 agent，不能撰写工件。",
+  "review.contract.reviewerSub": "只做评审的智能体，不能撰写工件。",
   "review.contract.revisions": "修订次数",
   "review.contract.revisionsSub": "每次修订都会重新运行评审。",
   "review.empty.body": "该阶段或者没有声明评审者，或者评审尚未运行。只有当阶段评审块中确实写有发现时，Studio 才会显示它们。",
