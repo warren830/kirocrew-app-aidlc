@@ -33,7 +33,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"action.question.consequence.advances_turn": "Your answers are sent as one message, and the conversation continues from them.",
 	"action.question.consequence.assumption_confirmation": "Your reply accepts the listed assumptions or turns them into follow-up questions before the stage continues.",
 	"action.question.consequence.plan_approval": "Your reply approves the recorded plan or requests changes before implementation continues.",
-	"action.question.consequence.plan_session_stale": "AI-DLC records a reply to this approval only in the conversation session that asked for it, and that session has ended (the host ends a session that sits idle and starts a new one for the next message). A reply sent now would be refused. Resume the workflow: AI-DLC asks for the approval again in the new session, and a new card lets you answer it.",
+	"action.question.consequence.plan_session_stale": "AI-DLC records a reply to this approval only in the conversation session that asked for it, and that session has ended (KiroCrew ends a session that sits idle and starts a new one for the next message). A reply sent now would be refused. Resume the workflow: AI-DLC asks for the approval again in the new session, and a new card lets you answer it.",
 	"action.question.consequence.summary_confirmation": "Your reply confirms the recorded summary or requests changes before the stage continues.",
 	"action.question.headline": "{stage} cannot continue until you answer its open questions. {pending} still pending.",
 	"action.question.plan_approval.headline": "{stage} is waiting for you to approve its plan.",
@@ -1880,8 +1880,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"settings.queue.repo": "Repository",
 	"settings.queue.title": "Queue organization",
 	"settings.queue.type": "Action type",
-	"settings.reason.host_capability_unavailable": "the host reports it unavailable",
-	"settings.reason.host_capability_unknown": "the host does not report this capability",
+	"settings.reason.host_capability_unavailable": "KiroCrew reports it unavailable",
+	"settings.reason.host_capability_unknown": "KiroCrew does not report this capability",
 	"settings.reason.host_not_attached": "Studio is not attached to the dashboard",
 	"settings.reason.host_seam_unavailable": "KiroCrew does not provide a way to do this",
 	"settings.reason.missing": "this version of KiroCrew does not provide what Studio needs for it",
@@ -2151,7 +2151,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"template.recovery.confirmedBody": "The message reached the conversation. The AI-DLC audit, turn marker and cursor still need to establish how the workflow handled it. The same message will not be resent.",
 	"template.recovery.confirmedTitle": "Workflow reconciliation",
 	"template.recovery.contradiction": "The contradiction",
-	"template.recovery.contradictionBody": "Studio asked the host to deliver your decision and never got an answer it can trust. Approving twice would advance the stage twice, so nothing is retried on its own.",
+	"template.recovery.contradictionBody": "Studio asked KiroCrew to deliver your decision and never got an answer it can trust. Approving twice would advance the stage twice, so nothing is retried on its own.",
 	"template.recovery.contradictionChecks": "{row} {disk} {boot}",
 	"template.recovery.cursorMismatch": "The active intent differs: {fields}",
 	"template.recovery.cursorOk": "The active intent is the one this decision belongs to.",
@@ -2170,8 +2170,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"template.recovery.markerSub": "Last human turn {at} · presence {presence}",
 	"template.recovery.no": "no",
 	"template.recovery.outcome.confirmed": "the conversation received the message",
-	"template.recovery.outcome.delivered": "the host accepted it",
-	"template.recovery.outcome.not_delivered": "the host refused it",
+	"template.recovery.outcome.delivered": "KiroCrew accepted it",
+	"template.recovery.outcome.not_delivered": "KiroCrew refused it",
 	"template.recovery.outcome.uncertain": "the send was never confirmed",
 	"template.recovery.presenceFailed": "not as expected",
 	"template.recovery.presenceOk": "as expected",
@@ -2406,7 +2406,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"action.question.consequence.advances_turn": "你的回答会作为一条消息发送，会话将据此继续。",
 	"action.question.consequence.assumption_confirmation": "你的回复会接受列出的假设，或者把它们转成追问，然后再继续此阶段。",
 	"action.question.consequence.plan_approval": "你的回复会批准已记录的计划或要求修改，然后再继续实施。",
-	"action.question.consequence.plan_session_stale": "AI-DLC 只在发起这次审批请求的那个会话 session 里记录回复，而那个 session 已经结束（会话闲置一段时间后，宿主会结束它，并为下一条消息开启新的 session）。现在发送回复会被拒绝。请恢复工作流：AI-DLC 会在新的 session 里重新请求审批，届时会出现一张新卡片让你作答。",
+	"action.question.consequence.plan_session_stale": "AI-DLC 只在发起这次审批请求的那个会话 session 里记录回复，而那个 session 已经结束（会话闲置一段时间后，KiroCrew 会结束它，并为下一条消息开启新的 session）。现在发送回复会被拒绝。请恢复工作流：AI-DLC 会在新的 session 里重新请求审批，届时会出现一张新卡片让你作答。",
 	"action.question.consequence.summary_confirmation": "你的回复会确认已记录的汇总或要求修改，然后再继续此阶段。",
 	"action.question.headline": "{stage} 需要你回答其待解问题后才能继续。仍有 {pending} 个待回答。",
 	"action.question.plan_approval.headline": "{stage} 正在等待你批准计划。",
@@ -4253,8 +4253,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"settings.queue.repo": "仓库",
 	"settings.queue.title": "队列组织方式",
 	"settings.queue.type": "操作类型",
-	"settings.reason.host_capability_unavailable": "宿主报告其不可用",
-	"settings.reason.host_capability_unknown": "宿主没有报告此能力",
+	"settings.reason.host_capability_unavailable": "KiroCrew 报告其不可用",
+	"settings.reason.host_capability_unknown": "KiroCrew 没有报告此能力",
 	"settings.reason.host_not_attached": "Studio 尚未接入仪表盘",
 	"settings.reason.host_seam_unavailable": "KiroCrew 不提供这项功能",
 	"settings.reason.missing": "当前版本的 KiroCrew 没有提供 Studio 所需的功能",
@@ -4524,7 +4524,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"template.recovery.confirmedBody": "消息已送达会话。仍需通过 AI-DLC 审计、轮次标记和游标确认工作流如何处理了这条消息。同一条消息不会被重新发送。",
 	"template.recovery.confirmedTitle": "工作流核对",
 	"template.recovery.contradiction": "矛盾之处",
-	"template.recovery.contradictionBody": "Studio 请求宿主投递你的决策，但没有拿到可信的答复。重复批准会让该阶段推进两次，因此系统不会自行重试。",
+	"template.recovery.contradictionBody": "Studio 请求 KiroCrew 投递你的决策，但没有拿到可信的答复。重复批准会让该阶段推进两次，因此系统不会自行重试。",
 	"template.recovery.contradictionChecks": "{row} {disk} {boot}",
 	"template.recovery.cursorMismatch": "当前活动 intent 不一致：{fields}",
 	"template.recovery.cursorOk": "当前活动 intent 正是这项决策所属的 intent。",
@@ -4543,8 +4543,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"template.recovery.markerSub": "最后一次人类发言 {at} · 在场证据 {presence}",
 	"template.recovery.no": "否",
 	"template.recovery.outcome.confirmed": "会话已收到消息",
-	"template.recovery.outcome.delivered": "宿主已接受",
-	"template.recovery.outcome.not_delivered": "宿主已拒绝",
+	"template.recovery.outcome.delivered": "KiroCrew 已接受",
+	"template.recovery.outcome.not_delivered": "KiroCrew 已拒绝",
 	"template.recovery.outcome.uncertain": "发送始终未被确认",
 	"template.recovery.presenceFailed": "与预期不一致",
 	"template.recovery.presenceOk": "与预期一致",
@@ -5233,7 +5233,7 @@ function Ie(e, t, n) {
 		let n = Array.isArray(t.params.codes) ? t.params.codes.filter((e) => typeof e == "string" && e.trim().length > 0) : [], i = n.length > 0 ? n : typeof t.params.reason == "string" && t.params.reason.trim() ? [t.params.reason] : [];
 		r.reason = i.length > 0 ? i.map((t) => {
 			let n = `action.reason.${t}`;
-			return e.has(n) ? e.t(n, r) : t;
+			return e.has(n) ? e.t(n, r) : e.has(`finding.${t}.title`) ? e.t(`finding.${t}.title`) : t;
 		}).join(e.t("shell.format.listJoin")) : e.t("action.reason.recovery_details");
 	}
 	return e.has(t.key) ? e.t(t.key, r) : n ? e.t(n, r) : t.key;

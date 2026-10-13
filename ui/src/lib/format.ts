@@ -134,7 +134,9 @@ export function ref(i18n: I18n, value: I18nRef | null | undefined, fallbackKey?:
     params.reason = reasons.length > 0
       ? reasons.map((reason) => {
           const key = `action.reason.${reason}`
-          return i18n.has(key) ? i18n.t(key, params) : reason
+          if (i18n.has(key)) return i18n.t(key, params)
+          // Most blocking codes are findings, whose titles say the cause in words: never print the code.
+          return i18n.has(`finding.${reason}.title`) ? i18n.t(`finding.${reason}.title`) : reason
         }).join(i18n.t('shell.format.listJoin'))
       : i18n.t('action.reason.recovery_details')
   }

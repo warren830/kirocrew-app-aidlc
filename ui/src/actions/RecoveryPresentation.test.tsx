@@ -158,7 +158,11 @@ describe('recovery notices explain the actual cause and lifecycle', () => {
     const message = { key: 'action.recovery.headline', params: { codes: ['session_lost_mid_stage'] } }
     expect(ref(en, message)).toBe('This intent needs recovery: the bound conversation could not be found.')
     expect(ref(zh, message)).toContain('绑定的会话已不存在')
-    expect(ref(en, { ...message, params: { codes: ['gate_without_audit_row'] } })).toContain('gate_without_audit_row')
+    // A finding code reads as its finding's title; only a code this build has no copy for stays a code.
+    const finding = ref(en, { ...message, params: { codes: ['gate_without_audit_row'] } })
+    expect(finding).toContain(en.t('finding.gate_without_audit_row.title'))
+    expect(finding).not.toContain('gate_without_audit_row')
+    expect(ref(en, { ...message, params: { codes: ['brand_new_code'] } })).toContain('brand_new_code')
   })
 
   it('offers conversation management for a missing binding target', async () => {

@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { makeI18n } from '../i18n'
-import { bytes, count, duration, plural, range, ratio, refParams, waiting } from './format'
+import { bytes, count, duration, plural, range, ratio, ref, refParams, waiting } from './format'
 import type { Range } from './types'
 
 const en = makeI18n('en-US')
@@ -82,6 +82,17 @@ describe('backend-supplied params', () => {
   it('joins with the locale\'s own separator', () => {
     const params = refParams(zh, { key: 'k', params: { codes: ['a', 'b'] } })
     expect(params['codes']).toBe('a、b')
+  })
+})
+
+describe('a recovery headline', () => {
+  it('names each blocking cause in words, never as its code', () => {
+    const headline = ref(en, { key: 'action.recovery.headline', params: { codes: ['cursor_moved', 'wrong_slot'] } })
+    expect(headline).toBe(en.t('action.recovery.headline', {
+      reason: `${en.t('finding.cursor_moved.title')}, ${en.t('finding.wrong_slot.title')}` }))
+    expect(headline).not.toMatch(/cursor_moved|wrong_slot/)
+    expect(ref(zh, { key: 'action.recovery.headline', params: { codes: ['lease_conflict'] } }))
+      .toContain(zh.t('finding.lease_conflict.title'))
   })
 })
 
