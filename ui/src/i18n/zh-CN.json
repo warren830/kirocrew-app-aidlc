@@ -1150,6 +1150,7 @@
   "intents.action.pause": "当前回合结束后暂停",
   "intents.action.pauseIdle": "暂停",
   "intents.action.prepareCommit": "准备提交",
+  "intents.action.prepareCommitClean": "这个意图写的代码都已提交。你仍可以请它的会话提交其他改动。",
   "intents.action.prepareCommitHint": "请该意图的对话提交工作流所做的改动，但不推送。发送前你会先确认请求原文。",
   "intents.action.recompose": "调整计划",
   "intents.action.restore": "恢复",

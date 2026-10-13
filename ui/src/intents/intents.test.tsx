@@ -234,6 +234,30 @@ describe('the intents inventory', () => {
       intent: done.intent_key, action: 'a_commit' })
   })
 
+  it('leads with Prepare commit only while code the intent wrote is uncommitted', async () => {
+    const done = { ...INTENT, disk: { ...INTENT.disk, status: 'Completed' } }
+    const en = makeI18n('en-US')
+    const button = async (dirty: { relpath: string; status: string; intent_dir: string }[]) => {
+      const api = { repoGit: vi.fn(async () => ({ git: {}, owned_dirty: [], unrelated_dirty: 0, intent_dirty: dirty })),
+                    prepareCommit: vi.fn() } as unknown as StudioApi
+      const view = render(
+        <I18nProvider>
+          <IntentActions api={api} intent={done} onGo={() => {}} onQueued={() => {}} onChanged={() => {}}
+            onRecompose={() => {}} onSession={() => {}} />
+        </I18nProvider>,
+      )
+      await waitFor(() => expect(api.repoGit).toHaveBeenCalled())
+      const found = screen.getByRole('button', { name: en.t('intents.action.prepareCommit') })
+      return { found, view }
+    }
+    const dirty = await button([{ relpath: 'calc.py', status: 'M', intent_dir: done.intent_dir }])
+    await waitFor(() => expect(dirty.found.className).toContain('studio-btn-primary'))
+    dirty.view.unmount()
+    const clean = await button([{ relpath: 'other.py', status: 'M', intent_dir: '260101-another' }])
+    await waitFor(() => expect(clean.found).toHaveAttribute('title', en.t('intents.action.prepareCommitClean')))
+    expect(clean.found.className).not.toContain('studio-btn-primary')
+  })
+
   it('points at the Action Center when the run could not be sent', async () => {
     const runnable = { ...INTENT, operational_state: 'Idle' as const,
       counts: { ...INTENT.counts, awaiting_approval: 0 } }

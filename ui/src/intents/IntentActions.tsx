@@ -23,7 +23,8 @@ import { Icon } from '../shell/Icon'
 import { useI18n } from '../i18n'
 import { StudioApiError, type StudioApi } from '../lib/api'
 import { plural } from '../lib/format'
-import type { IntentSummary } from '../lib/types'
+import type { IntentSummary, RepoGitResponse } from '../lib/types'
+import { useResource } from '../lib/useResource'
 import { StartStatus, startBlockedReason, startText, useStartRun, type StartKind } from './StartRun'
 import { ApprovalWaitNotice } from './ApprovalWait'
 
@@ -153,6 +154,15 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
   }, [api, intent, onGo, fail])
 
   const starting = pending === 'run' || pending === 'resume'
+  // Prepare commit leads only while code this intent wrote is still uncommitted: on a committed intent, a primary
+  // "Prepare commit" read as unfinished work. The same reading as the repository's Git panel, shared per repository.
+  const offerCommit = completed && !intent.archived
+  const git = useResource<RepoGitResponse>(
+    offerCommit ? `repo-git:${intent.repo_id}` : null,
+    useCallback((signal) => api.repoGit(intent.repo_id, { signal }), [api, intent.repo_id]),
+    { interval: 0, revalidateOn: ['repo.updated', 'intent.updated', 'reset'] },
+  )
+  const uncommitted = git.data ? git.data.intent_dirty.some((row) => row.intent_dir === intent.intent_dir) : null
   const pauseFirst = pending === 'archive' && archiveNeedsPause
 
   /** The backend's archive refusals say why in `details.reason`; the generic code text does not. */
@@ -168,12 +178,13 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
   return (
     <div className="studio-col studio-intent-actions" role="group" aria-label={t('intents.action.a11y', { intent: intent.intent_dir })}>
       <div className="studio-row studio-wrap">
-        {completed && !intent.archived ? (
+        {offerCommit ? (
           <button
             type="button"
-            className={`studio-btn studio-btn-sm${bound ? ' studio-btn-primary' : ''}`}
+            className={`studio-btn studio-btn-sm${bound && uncommitted !== false ? ' studio-btn-primary' : ''}`}
             disabled={busy || !bound}
-            title={bound ? t('intents.action.prepareCommitHint') : t('intents.run.disabledUnbound')}
+            title={!bound ? t('intents.run.disabledUnbound')
+              : uncommitted === false ? t('intents.action.prepareCommitClean') : t('intents.action.prepareCommitHint')}
             onClick={() => void prepareCommit()}
           >
             <Icon name="git" size={13} />

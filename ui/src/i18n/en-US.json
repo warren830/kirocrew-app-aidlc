@@ -1150,6 +1150,7 @@
   "intents.action.pause": "Pause after current turn",
   "intents.action.pauseIdle": "Pause",
   "intents.action.prepareCommit": "Prepare commit",
+  "intents.action.prepareCommitClean": "Nothing this intent wrote is waiting for a commit. You can still ask its conversation to commit other changes.",
   "intents.action.prepareCommitHint": "Ask this intent's conversation to commit the changes the workflow made, without pushing. You confirm the exact request first.",
   "intents.action.recompose": "Change the plan",
   "intents.action.restore": "Restore",
