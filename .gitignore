@@ -10,3 +10,4 @@ ui/node_modules/
 !.env.example
 .coverage
 .coverage.*
+*.tsbuildinfo
