@@ -18,7 +18,7 @@
  */
 
 import { useI18n } from '../i18n'
-import type { ArtifactMeta, ReviewFinding } from '../lib/types'
+import type { ActionEvidence, ArtifactMeta, ReviewFinding } from '../lib/types'
 import { ArtifactDiff } from '../artifacts/ArtifactDiff'
 import { ArtifactViewer, useArtifactBody } from '../artifacts/ArtifactViewer'
 import { SourceChanges, hasSourceManifest } from '../artifacts/SourceChanges'
@@ -59,11 +59,22 @@ export function headingAnchor(raw: string): string {
   return slug ? `h-${slug}` : ''
 }
 
+/**
+ * The review a reviewer actually wrote, or `null`. A card stored before Studio stopped sending an empty review for a
+ * stage with no `## Review` still holds one (no verdict, no finding, findings read), and that is no reviewer, not
+ * "no open blockers"; a review Studio could not read or enumerate stays, since it is not proof of no review.
+ */
+export function ranReview(review: ActionEvidence['review']): ActionEvidence['review'] {
+  if (!review) return null
+  const empty = review.verdict === null && review.findings.length === 0 && review.findings_parsed !== false && !review.unreadable
+  return empty ? null : review
+}
+
 export function GateTemplate({ card, detail, draft, setDraft, refreshing, api, route, go }: TemplateProps) {
   const i18n = useI18n()
   const { t } = i18n
   const advisor = useAdvisor(card, api, detail?.drafts)
-  const review = card.evidence.review
+  const review = ranReview(card.evidence.review)
   const artifacts = card.evidence.artifacts
   const findings: readonly ReviewFinding[] = review?.findings ?? []
   const openBlockers = findings.filter((finding) => finding.level === 'blocker').length
@@ -126,7 +137,7 @@ export function GateTemplate({ card, detail, draft, setDraft, refreshing, api, r
                 )
               ) : null
             }
-            footer={<span>{t('review.quotedVerbatim')}</span>}
+            footer={review ? <span>{t('review.quotedVerbatim')}</span> : null}
           >
             {review ? (
               <>

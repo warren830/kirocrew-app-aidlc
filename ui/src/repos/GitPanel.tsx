@@ -112,6 +112,21 @@ export function GitPanel({ api, repoId, enabled }: GitPanelProps) {
               {(git.data.owned_uncommitted ?? 0) > 0 ? (
                 <Note>{plural(i18n, 'repos.git.ownedUncommitted', git.data.owned_uncommitted ?? 0)}</Note>
               ) : null}
+              {(git.data.intent_dirty ?? []).length > 0 ? (
+                <>
+                  {/* An intent's code waiting for a commit: named with the intent, so the next step is visible. */}
+                  <h4 className="studio-subhead">{t('repos.git.intentDirty.title')}</h4>
+                  <ul className="studio-plain-list">
+                    {git.data.intent_dirty.map((row) => (
+                      <li className="studio-wrap-any" key={row.relpath}>
+                        <span className="studio-mono">{row.relpath}</span>{' '}
+                        <span className="studio-muted">{t('repos.git.intentDirty.by', { intent: row.intent_dir })}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Note>{t('repos.git.intentDirty.body')}</Note>
+                </>
+              ) : null}
               {git.data.unrelated_dirty > 0 ? (
                 <Note>{plural(i18n, 'repos.git.unrelatedDirty', git.data.unrelated_dirty)}</Note>
               ) : null}

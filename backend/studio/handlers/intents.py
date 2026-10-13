@@ -287,6 +287,23 @@ async def run(services: Any, request: web.Request) -> web.Response:
                    status=201)
 
 
+async def prepare_commit(services: Any, request: web.Request) -> web.Response:
+    """Create the card that asks the conversation to commit what the finished workflow wrote, never to push (201).
+
+    Offered once AI-DLC records the workflow complete: before that the next human step is a stage, and a commit
+    request mid-workflow would race the stage still writing code. Sending is ``submit``'s, as for ``run``.
+    """
+    await read_json(request)
+    repo, snap = await repo_and_snapshot(services, request)
+    if not (snap.state is not None and (snap.state.status or "").strip().lower() == "completed"):
+        raise StudioError("invalid_decision", "a commit is prepared once AI-DLC records the workflow complete",
+                          details={"intent_key": snap.intent_key,
+                                   "status": snap.state.status if snap.state is not None else None})
+    rec = await services.actions.create_command("prepare_commit", repo, snap.space, snap.intent_dir, snap=snap)
+    return json_ok({"ok": True, "action_id": rec.action_id, "status": rec.status, "action": await card_of(services, rec)},
+                   status=201)
+
+
 async def pause(services: Any, request: web.Request) -> web.Response:
     """``{"paused": bool}``. ``blocked_actions`` lists the live cards ``submit`` will now refuse with
     ``intent_paused`` (C29), so the UI greys them out instead of letting a click earn a 409."""

@@ -1578,7 +1578,10 @@ def _repo_id_of(card: Any) -> str:
 def plan_session_stale(snap: IntentSnapshot, slot: Any | None) -> bool:
     """Is the session that asked this Plan Approval gone, so that AI-DLC cannot record a reply to it? Either the
     conversation already moved to another session, or the host dropped the idle one and the next message opens a
-    new session (``slot.session_live``)."""
+    new session (``slot.session_live``). Never for 2.11's engine-held question, which any chat may answer."""
+    plan = _attr(_attr(snap, "questions"), "plan_approval")
+    if _attr(plan, "engine_held", None):
+        return False
     return plan_asked_in_an_earlier_session(snap) or _attr(slot, "session_live", None) is False
 
 
@@ -1589,7 +1592,7 @@ def plan_asked_in_an_earlier_session(snap: IntentSnapshot) -> bool:
     unit = snap.unit or None
     events = list(snap.audit.events)
     asked = [event for event in events if event.event == "DECISION_RECORDED"
-             and event.fields.get("Checkpoint") == C.PLAN_APPROVAL_AUDIT_CHECKPOINT
+             and event.fields.get("Checkpoint") in C.PLAN_APPROVAL_AUDIT_CHECKPOINTS
              and (event.fields.get("Unit") or None) == unit and event.fields.get("Session")]
     if not asked:
         return False

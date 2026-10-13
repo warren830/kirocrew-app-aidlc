@@ -83,8 +83,8 @@ class FakeActions:
 
 
 def action_record(**over: Any) -> SimpleNamespace:
-    return SimpleNamespace(**{"action_id": ACTION, "type": "gate", "repo_id": REPO, "space": "default",
-                              "intent_dir": INTENT, "stage": STAGE, "unit": None, "evidence": {},
+    return SimpleNamespace(**{"action_id": ACTION, "type": "gate", "status": "Queued", "repo_id": REPO,
+                              "space": "default", "intent_dir": INTENT, "stage": STAGE, "unit": None, "evidence": {},
                               "retry_fingerprint": None, **over})
 
 
@@ -440,10 +440,17 @@ def test_a_declined_spawn_fails_the_draft_and_refuses(wiring, A, E):
     ("gate", {"locale": "de-DE"}, "unsupported_locale", {}),
     ("question", {"kind": "question_draft", "question_index": 99}, "invalid_decision", {"question_index": 99}),
     (None, {}, "action_not_found", {}),
+    # A sent or closed card has no decision left to draft for (only a diagnosis still helps one in flight).
+    ("gate:StateChanged", {"kind": "request_changes_draft"}, "action_not_submittable", {"status": "StateChanged"}),
+    ("gate:Delivered", {"kind": "gate_analysis"}, "action_not_submittable", {"status": "Delivered"}),
+    ("question:ResolvedNoTransition", {"kind": "question_draft"}, "action_not_submittable",
+     {"status": "ResolvedNoTransition"}),
+    ("failure:Cancelled", {"kind": "diagnose"}, "action_not_submittable", {"status": "Cancelled"}),
 ])
 def test_a_request_the_card_cannot_take_is_refused_before_anything_is_stored(wiring, A, E, card_type, over, code,
                                                                              details):
-    wiring.actions.rec = action_record(type=card_type) if card_type else None
+    card_type, _, status = (card_type or "").partition(":")
+    wiring.actions.rec = action_record(type=card_type, **({"status": status} if status else {})) if card_type else None
     with pytest.raises(E.StudioError) as excinfo:
         request_draft(wiring, A, **over)
     assert excinfo.value.code == code

@@ -24,6 +24,7 @@ from ..errors import StudioError
 # The installer's own version rule ("unparseable is not older" decides whether an upgrade is offered).
 from ..installer import payload_refresh_available, version_tuple
 from ..leases import lease_view
+from ..source_changes import intent_written_paths
 from .common import (
     body_choice, intent_view, json_ok, query_bool, read_json, repo_or_404, summarize_intent, without_archived,
 )
@@ -80,8 +81,19 @@ async def repo_git(services: Any, request: web.Request) -> web.Response:
     drifted = ({entry.path for entry in await asyncio.to_thread(services.installer.drift, repo, receipt)}
                if receipt is not None else set())
     owned_dirty = [path for path in split["owned_dirty"] if path in drifted]
+    # A dirty file an intent's source manifest lists is that intent's code waiting for a commit, not unrelated
+    # work: named with its intent (an untracked directory when it holds one). The rest stays a count.
+    written = await asyncio.to_thread(intent_written_paths, services.reader, root)
+    intent_dirty = []
+    for row in split.get("unrelated_changes") or ():
+        rel = row["relpath"]
+        owner = written.get(rel) or (next((written[p] for p in sorted(written) if p.startswith(rel)), None)
+                                     if rel.endswith("/") else None)
+        if owner is not None:
+            intent_dirty.append({"relpath": rel, "status": row["status"], "intent_dir": owner})
     return json_ok({"git": observation.to_json(), "owned_dirty": owned_dirty,
-                    "unrelated_dirty": int(split["unrelated_dirty"]),
+                    "unrelated_dirty": int(split["unrelated_dirty"]) - len(intent_dirty),
+                    "intent_dirty": intent_dirty[:C.MAX_SOURCE_CHANGE_FILES],
                     "owned_uncommitted": len(split["owned_dirty"]) - len(owned_dirty)
                     + len(split.get("owned_untracked_dirs") or ())})
 

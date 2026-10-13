@@ -26,7 +26,7 @@ ACTION_CARD_KEYS = {
     "severity", "priority_group", "repo", "space", "intent", "stage", "headline", "consequence",
     "waiting_since", "created_at", "updated_at", "primary", "decisions", "captured", "evidence",
     "delivery", "resolution", "acknowledged_evidence_sha256", "failure", "install", "budget",
-    "advisor", "deep_link", "dedupe_key", "human_text_present",
+    "advisor", "deep_link", "dedupe_key", "human_text_present", "submitted_answers",
 }
 EVIDENCE_KEYS = {
     "state", "audit", "directive", "artifacts", "review", "acceptance_criteria", "findings",

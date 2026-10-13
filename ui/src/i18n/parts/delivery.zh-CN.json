@@ -15,7 +15,7 @@
   "delivery.queuedInSlot": "在会话队列中等待",
   "delivery.reportFailed": "KiroCrew 已收到该消息，但 Studio 未能记录结果。它会从磁盘对账；消息绝不会被再发一次。",
   "delivery.sentAt": "发送于 {at}",
-  "delivery.sentText": "发送到规范会话的原文",
+  "delivery.sentText": "发送到该意图对话的原文",
   "delivery.state.done": "已完成",
   "delivery.state.failed": "在此中断",
   "delivery.state.future": "尚未开始",
@@ -29,6 +29,16 @@
   "delivery.step.unchanged": "状态未变更",
   "delivery.uncertain": "投递结果不确定——没有重放任何内容",
   "delivery.uncertainBody": "Studio 无法证明会话是否收到了这条消息，因此它会持续观察磁盘上的 AI-DLC 文件，并且不会再次发送。请在下方选择如何处理。",
-  "delivery.watchingDisk": "Studio 依据磁盘状态判断，而不是 HTTP 回执",
-  "delivery.state.cancelled": "已取消"
+  "delivery.watchingDisk": "Studio 依据 AI-DLC 的文件判断结果，仅有 KiroCrew 回执不算数",
+  "delivery.state.cancelled": "已取消",
+  "delivery.step.recorded": "答复已记录",
+  "delivery.recorded.question_answered": "AI-DLC 已记录你的回答。",
+  "delivery.recorded.answers_recorded": "AI-DLC 已记录你的各项回答。",
+  "delivery.recorded.summary_confirmed": "AI-DLC 已记录你对摘要的确认。",
+  "delivery.recorded.assumptions_recorded": "AI-DLC 已记录你对这些假设的选择。",
+  "delivery.recorded.plan_approved": "AI-DLC 已记录计划批准。",
+  "delivery.recorded.plan_changes_requested": "AI-DLC 已记录你要求的计划修改。",
+  "delivery.recorded.plan_asked_again": "AI-DLC 已在新会话中重新请求批准计划。",
+  "delivery.step.turnEnded": "回合已结束",
+  "delivery.recorded.turn_ended": "对话已完成这次请求。可在“仓库 → Git”查看是否已生成提交。"
 }

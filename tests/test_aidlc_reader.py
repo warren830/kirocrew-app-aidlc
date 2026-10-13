@@ -676,6 +676,52 @@ def test_questions_plan_approval_pending(pq):
     assert parsed.pending_count == 0  # checkpoints are counted separately
 
 
+#: 2.11's engine-held Plan Approval, as ``publishPlanApprovalAsk`` writes it (``aidlc-plan-approval-ask.ts``).
+ENGINE_PLAN_QUESTIONS = """# Code Generation Plan Approval
+
+AI-DLC writes this file when it asks you to approve the plan. To answer here
+instead of in chat, write your answer after `[Answer]:` and say done.
+
+## Plan Approval
+
+Approve the code plan?
+
+- Adds divide(a, b) to ops.py
+- Adds tests in test_ops.py
+
+Full plan: aidlc/spaces/default/intents/261013-divide/construction/code-generation/code-generation-plan.md
+Test instructions: aidlc/spaces/default/intents/261013-divide/construction/code-generation/unit-test-instructions.md
+
+[Approval Fingerprint]: sha256:v3:{fp}
+[Planned Source]: {src}
+
+- A. Approve Plan
+- B. Request Changes
+- C. I'll edit the files
+
+[Answer]:{answer}
+""".replace("{fp}", "9" * 64).replace("{src}", "8" * 64)
+
+
+def test_questions_engine_held_plan_approval_is_lettered_and_not_session_bound(pq, R):
+    parsed = pq(ENGINE_PLAN_QUESTIONS.replace("{answer}", ""))
+    plan = parsed.plan_approval
+    assert parsed.pending_checkpoint == "plan_approval" and parsed.questions == ()
+    assert plan.options == ("A. Approve Plan", "B. Request Changes", "C. I'll edit the files")
+    assert plan.engine_held is True and plan.answered is False
+    assert plan.to_json()["engine_held"] is True
+    answered = pq(ENGINE_PLAN_QUESTIONS.replace("{answer}", " A. Approve Plan")).plan_approval
+    assert answered.answered is True and answered.answer == "A. Approve Plan"
+    assert R.plan_approval_choice(answered.answer) == "Approve Plan"
+    assert R.plan_approval_choice("B. Request Changes") == "Request Changes"
+    assert R.plan_approval_choice("Approve Plan") == "Approve Plan"  # 2.10 records the bare choice
+
+
+def test_questions_session_bound_plan_approval_carries_no_engine_flag(pq):
+    plan = pq(F.real_questions(*DEV_CG)).plan_approval
+    assert plan.engine_held is None and "engine_held" not in plan.to_json()
+
+
 def test_questions_summary_wins_when_both_checkpoints_are_pending(pq):
     parsed = pq("# Q\n\n## Consolidated Summary Confirmation\n\n- Looks correct\n- Request changes\n\n[Answer]:\n\n"
                 "## Plan Approval\n\n- Approve Plan\n- Request Changes\n\n[Answer]:\n")

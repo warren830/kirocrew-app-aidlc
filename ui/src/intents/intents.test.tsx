@@ -212,6 +212,28 @@ describe('the intents inventory', () => {
     expect(screen.getByRole('button', { name: 'Archive' })).toBeEnabled()
   })
 
+  it('offers Prepare commit once the workflow is complete, and opens its card for confirmation', async () => {
+    const done = { ...INTENT, disk: { ...INTENT.disk, status: 'Completed' } }
+    const card = actionCard({ action_id: 'a_commit', type: 'prepare_commit' })
+    const api = {
+      prepareCommit: vi.fn(async () => ({ ok: true as const, action_id: 'a_commit', status: 'Queued' as const, action: card })),
+    } as unknown as StudioApi
+    const onGo = vi.fn()
+    render(
+      <I18nProvider>
+        <IntentActions api={api} intent={done} onGo={onGo} onQueued={() => {}} onChanged={() => {}}
+          onRecompose={() => {}} onSession={() => {}} />
+      </I18nProvider>,
+    )
+    const en = makeI18n('en-US')
+    expect(screen.queryByRole('button', { name: en.t('intents.action.run') })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: en.t('intents.action.prepareCommit') }))
+    expect(api.prepareCommit).toHaveBeenCalledWith(done.repo_id, done.intent_key)
+    // Nothing is sent from here: the card opens where its confirmation shows the exact request.
+    expect(onGo).toHaveBeenCalledWith({ view: 'actions', repo: done.repo_id, space: done.space,
+      intent: done.intent_key, action: 'a_commit' })
+  })
+
   it('points at the Action Center when the run could not be sent', async () => {
     const runnable = { ...INTENT, operational_state: 'Idle' as const,
       counts: { ...INTENT.counts, awaiting_approval: 0 } }
@@ -266,13 +288,13 @@ describe('the intents inventory', () => {
     expect(button).toHaveAttribute('title', 'Create and bind the conversation first.')
   })
 
-  it.each(['approval', 'question', 'running', 'completed'])('does not offer another Run during %s', async (kind) => {
+  // A completed workflow shows Prepare commit in Run's place (tested below), so it offers no Run at all.
+  it.each(['approval', 'question', 'running'])('does not offer another Run during %s', async (kind) => {
     const value: IntentSummary = { ...INTENT, operational_state: 'Idle',
       counts: { ...INTENT.counts, awaiting_approval: 0 } }
     if (kind === 'approval') value.counts.awaiting_approval = 1
     if (kind === 'question') value.operational_state = 'WaitingForYou'
     if (kind === 'running') value.session = { ...INTENT.session!, running: true }
-    if (kind === 'completed') value.disk = { ...INTENT.disk, status: 'Completed' }
     const api = { run: vi.fn() } as unknown as StudioApi
     render(<I18nProvider><IntentActions api={api} intent={value} onGo={() => {}}
       onQueued={() => {}} onChanged={() => {}} onRecompose={() => {}} onSession={() => {}} /></I18nProvider>)

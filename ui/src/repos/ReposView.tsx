@@ -21,7 +21,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { useI18n } from '../i18n'
 import { SpaceControls } from '../intents/SpaceControls'
 import { StudioApiError } from '../lib/api'
-import { EMPTY_ROUTE } from '../lib/route'
+import { EMPTY_ROUTE, type RoutePatch } from '../lib/route'
 import type { RepoDetailResponse, RepoRecord, ReposResponse } from '../lib/types'
 import { useResource } from '../lib/useResource'
 import { Icon } from '../shell/Icon'
@@ -209,18 +209,22 @@ export function ReposView({ route, go }: ViewProps) {
     async (repoId: string, action: RepoAction) => {
       setError(null)
       setNotice(null)
+      // Another repository's page drops what was scoped to the one before, as the back link does: an intent
+      // left in the route would sit in the breadcrumb under a repository it does not belong to.
+      const toRepo = (patch: RoutePatch) => go(patch.repo !== undefined && patch.repo !== route.repo
+        ? { action: '', intent: '', space: '', stage: '', unit: '', artifact: '', ...patch } : patch)
       switch (action) {
         case 'open':
-          go({ repo: repoId, tx: '' })
+          toRepo({ repo: repoId, tx: '' })
           return
         case 'queue':
-          go({ view: 'actions', repo: repoId })
+          toRepo({ view: 'actions', repo: repoId })
           return
         case 'intents':
-          go({ view: 'intents', repo: repoId })
+          toRepo({ view: 'intents', repo: repoId })
           return
         case 'new-intent':
-          go({ ...EMPTY_ROUTE, view: 'new-intent', repo: repoId })
+          toRepo({ ...EMPTY_ROUTE, view: 'new-intent', repo: repoId })
           return
         case 'install':
         case 'upgrade':
@@ -228,25 +232,25 @@ export function ReposView({ route, go }: ViewProps) {
         case 'uninstall':
         case 'cleanup':
         case 'rollback':
-          go({ repo: repoId, tx: '' })
+          toRepo({ repo: repoId, tx: '' })
           openFlow(action, repoId)
           return
         case 'rebind':
-          go({ repo: repoId })
+          toRepo({ repo: repoId })
           setRebindPath('')
           openFlow('rebind', repoId)
           return
         case 'remove':
-          go({ repo: repoId })
+          toRepo({ repo: repoId })
           openFlow('remove', repoId)
           return
         case 'rename':
-          go({ repo: repoId })
+          toRepo({ repo: repoId })
           setRepoLabel(list.find((repo) => repo.repo_id === repoId)?.label ?? selected?.label ?? '')
           openFlow('rename', repoId)
           return
         case 'archive':
-          go({ repo: repoId })
+          toRepo({ repo: repoId })
           openFlow('archive', repoId)
           return
         case 'unarchive':
@@ -286,7 +290,7 @@ export function ReposView({ route, go }: ViewProps) {
         }
       }
     },
-    [api, go, refresh, fail, t, i18n, list, selected, openFlow],
+    [api, go, route.repo, refresh, fail, t, i18n, list, selected, openFlow],
   )
 
   const saveMetadata = async () => {

@@ -687,6 +687,22 @@ describe('doctor feedback at the maintenance controls', () => {
     expect(window.location.search).not.toMatch(/intent=|stage=/)
   })
 
+  it('drops the previous repository\'s intent when another repository\'s details open', async () => {
+    const record = repo()
+    setApiRoutes({
+      ...shellRoutes(),
+      [`GET ${BASE}/repos`]: () => ({ repos: [record], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
+      [`GET ${BASE}/repos/r_1`]: () => ({ repo: record, intents: [], transactions: [] }),
+      [`GET ${BASE}/repos/r_1/git`]: () => ({ git: record.git, owned_dirty: [], unrelated_dirty: 0 }),
+    })
+    // The intent and stage belong to another repository (r_9), left in the route by the Intents view.
+    mount('?view=repos&intent=default~261012-subtract&stage=code-generation')
+    await userEvent.click(await screen.findByRole('button', { name: 'Details' }))
+    await waitFor(() => expect(window.location.search).toMatch(/repo=r_1/))
+    expect(window.location.search).not.toMatch(/intent=|stage=/)
+    expect(document.querySelector('.studio-crumb')).not.toHaveTextContent('261012-subtract')
+  })
+
   it('does not show a late result after leaving the repository', async () => {
     let finish!: (value: unknown) => void
     doctorRoutes(() => new Promise((resolve) => { finish = resolve }))
@@ -1046,6 +1062,7 @@ describe('the upgrade preview', () => {
         git: drifted['git'],
         owned_dirty: ['.kiro/steering/aidlc.md'],
         unrelated_dirty: 4,
+        intent_dirty: [{ relpath: 'ops.py', status: '.M', intent_dir: '261012-divide' }],
       }),
     })
     mount('?view=repos&repo=r_1')
@@ -1053,7 +1070,11 @@ describe('the upgrade preview', () => {
     expect(await screen.findByText('Receipt-owned files with local changes')).toBeInTheDocument()
     expect(screen.getByText('.kiro/steering/aidlc.md')).toBeInTheDocument()
     // FR-GIT-004: unrelated work in progress must not read as something that blocks an upgrade.
-    expect(screen.getByText(/4 unrelated files have local changes, which do not block an upgrade/)).toBeInTheDocument()
+    expect(screen.getByText(/4 other files have local changes, which do not block an upgrade/)).toBeInTheDocument()
+    // An intent's code waiting for a commit is named with its intent, not counted as unrelated.
+    expect(screen.getByText('Code an intent wrote, not committed yet')).toBeInTheDocument()
+    expect(screen.getByText('ops.py')).toBeInTheDocument()
+    expect(screen.getByText('— 261012-divide')).toBeInTheDocument()
     expect(screen.getByText(/never commits, pushes, checks out/)).toBeInTheDocument()
   })
 })

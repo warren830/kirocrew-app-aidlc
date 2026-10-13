@@ -15,7 +15,7 @@
   "delivery.queuedInSlot": "Waiting in the conversation's queue",
   "delivery.reportFailed": "KiroCrew has the message but Studio could not record the outcome. It will reconcile from disk; the message is never sent a second time.",
   "delivery.sentAt": "sent {at}",
-  "delivery.sentText": "Text sent to the canonical session",
+  "delivery.sentText": "Text sent to the intent's conversation",
   "delivery.state.done": "done",
   "delivery.state.failed": "stopped here",
   "delivery.state.future": "not started",
@@ -30,5 +30,15 @@
   "delivery.step.unchanged": "No state change",
   "delivery.uncertain": "Delivery uncertain — nothing was replayed",
   "delivery.uncertainBody": "Studio cannot prove whether the conversation received this message, so it is watching the AI-DLC files on disk and will not send it again. Choose what to do below.",
-  "delivery.watchingDisk": "Studio is watching disk state, not the HTTP receipt"
+  "delivery.watchingDisk": "Studio reads AI-DLC's files for the outcome; a KiroCrew receipt alone does not count",
+  "delivery.step.recorded": "Reply recorded",
+  "delivery.recorded.question_answered": "AI-DLC recorded your answer.",
+  "delivery.recorded.answers_recorded": "AI-DLC recorded your answers.",
+  "delivery.recorded.summary_confirmed": "AI-DLC recorded your summary confirmation.",
+  "delivery.recorded.assumptions_recorded": "AI-DLC recorded your choice about the assumptions.",
+  "delivery.recorded.plan_approved": "AI-DLC recorded the plan approval.",
+  "delivery.recorded.plan_changes_requested": "AI-DLC recorded your requested plan changes.",
+  "delivery.recorded.plan_asked_again": "AI-DLC asked for plan approval again in the new session.",
+  "delivery.step.turnEnded": "Turn finished",
+  "delivery.recorded.turn_ended": "The conversation finished the request. Repos → Git shows whether a commit was made."
 }

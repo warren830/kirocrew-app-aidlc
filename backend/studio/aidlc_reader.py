@@ -892,13 +892,16 @@ class Checkpoint(WireRecord):
     ``context`` (the text before the options) is kept only for the assumptions being accepted (review P09).
     """
 
-    _wire_keys = ("kind", "present", "answered", "answer", "options", "context?")
+    _wire_keys = ("kind", "present", "answered", "answer", "options", "context?", "engine_held?")
     kind: str
     present: bool
     answered: bool
     answer: str | None
     options: tuple[str, ...]
     context: str | None = None
+    #: ``True`` for 2.11's engine-held Plan Approval (lettered choices): it answers from any chat, so it is never
+    #: tied to the session that asked. ``None`` for every other block (and for 2.10's, which is session-bound).
+    engine_held: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1196,6 +1199,12 @@ def audit_question_answer(
     return None
 
 
+def plan_approval_choice(answer: str | None) -> str:
+    """A Plan Approval answer as the choice it names: 2.11 records the lettered choice (``A. Approve Plan``), 2.10
+    the bare one, and both mean ``Approve Plan``."""
+    return C.PLAN_ANSWER_LETTER_RE.sub("", (answer or "").strip(), count=1)
+
+
 def _closed_question_receipts(
     found: QuestionsFile, pending: QuestionsFile, audit: AuditBundle, data: bytes | None,
 ) -> list[AuditEvent] | None:
@@ -1236,7 +1245,9 @@ def _closed_question_receipts(
     ):
         if checkpoint is None:
             continue
-        if not checkpoint.answered or checkpoint.answer != answer:
+        recorded = plan_approval_choice(checkpoint.answer) if event_name == "PLAN_APPROVAL_RECORDED" \
+            else checkpoint.answer
+        if not checkpoint.answered or recorded != answer:
             return None
         # Pick the frontier before checking its binding: a newer malformed receipt supersedes an
         # older valid one, and same-second receipts in different shards cannot be ordered.
@@ -1249,7 +1260,7 @@ def _closed_question_receipts(
         receipt = latest[0]
         checkpoint_names = {heading}
         if event_name == "PLAN_APPROVAL_RECORDED":
-            checkpoint_names.add(C.PLAN_APPROVAL_AUDIT_CHECKPOINT)
+            checkpoint_names.update(C.PLAN_APPROVAL_AUDIT_CHECKPOINTS)
         if (
             receipt.fields.get("Questions File") != found.relpath
             or receipt.fields.get("Checkpoint") not in checkpoint_names
@@ -1508,9 +1519,13 @@ def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile:
                 for line in body[1:limit]
                 if C.CHECKPOINT_OPTION_RE.match(line)
             )
+        lettered = tuple(
+            line[2:].strip() for line in body[1:limit] if C.PLAN_APPROVAL_OPTION_RE.match(line)
+        ) if checkpoint_kind == "plan_approval" else ()
         # A re-opened checkpoint is appended below the old one, so the last block is the live one.
         checkpoints[checkpoint_kind] = Checkpoint(kind=checkpoint_kind, present=True, answered=answered,
-                                                  answer=answer, options=labels, context=context)
+                                                  answer=answer, options=lettered or labels, context=context,
+                                                  engine_held=True if lettered else None)
 
     summary = checkpoints.get("summary_confirmation")
     assumptions = checkpoints.get("assumption_confirmation")

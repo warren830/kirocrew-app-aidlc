@@ -66,6 +66,15 @@ export function advisorKindsFor(type: ActionType): readonly AdvisorKind[] {
 }
 
 /**
+ * Whether the Advisor still has a decision to help with, as `advisor.py` refuses it: a draft answer or change
+ * request only while the card waits on the person, a diagnosis until the card is closed.
+ */
+export function advisorOpen(card: Pick<ActionCard, 'type' | 'status'>): boolean {
+  if (['StateChanged', 'ResolvedNoTransition', 'Cancelled'].includes(card.status)) return false
+  return advisorKindsFor(card.type).includes('diagnose') || ['Queued', 'NotDelivered'].includes(card.status)
+}
+
+/**
  * The result a surface is allowed to act on, or `null`.
  *
  * `neutrality.ok === false` means the evidence moved while the Advisor was reading (`advisor.py`
@@ -173,7 +182,7 @@ export interface AdvisorBlockProps {
 export function AdvisorBlock({ card, advisor, onUseFeedback, onApplyAnswers }: AdvisorBlockProps) {
   const { t, has } = useI18n()
   const kinds = advisorKindsFor(card.type)
-  if (kinds.length === 0) return null
+  if (kinds.length === 0 || !advisorOpen(card)) return null
 
   const { draft, pending, error, request } = advisor
   const result = draft?.status === 'ready' ? draft.result : null

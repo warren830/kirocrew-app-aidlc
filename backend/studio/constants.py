@@ -382,11 +382,21 @@ SUMMARY_CONFIRMATION_HEADING = "Consolidated Summary Confirmation"
 PLAN_APPROVAL_HEADING = "Plan Approval"
 #: The engine's audit name for the same checkpoint differs from the Markdown heading.
 PLAN_APPROVAL_AUDIT_CHECKPOINT = "Code Generation Plan Approval"
+#: Every ``Checkpoint`` an audit row names Plan Approval by: 2.10's, and 2.11's engine-held question.
+PLAN_APPROVAL_AUDIT_CHECKPOINTS = (PLAN_APPROVAL_AUDIT_CHECKPOINT, "plan-approval")
+#: 2.11 asks Plan Approval from the engine and writes its choices lettered (``- A. Approve Plan``); the answer it
+#: records is the lettered choice (``[Answer]: A. Approve Plan``). 2.10 never lettered them.
+PLAN_APPROVAL_OPTION_RE = re.compile(
+    r"^- ([A-C])\.[ \t]+(Approve Plan|Approve all|Request Changes|I'll edit the files)\s*$", re.MULTILINE
+)
+PLAN_ANSWER_LETTER_RE = re.compile(r"^[A-Z]\.[ \t]+")
 #: The ``Details`` of the plan-approval ``QUESTION_ANSWERED`` row 2.10 writes for a Request Changes choice.
 PLAN_REQUEST_CHANGES_CHOICE = "Request Changes"
 #: What a code stage lists as written (``writes[].path``) in its record; a gate on it shows those files' change.
 SOURCE_MANIFEST_NAME = "source-manifest.json"
 MAX_SOURCE_CHANGE_FILES = 50
+#: Source manifests read to name which intent wrote a dirty file on the repository's Git panel.
+MAX_SOURCE_MANIFESTS = 200
 MAX_SOURCE_CHANGE_DIFF_BYTES = 64 * 1024
 #: The whole ``…/changes`` response: past it, the remaining files list their counts without a diff.
 MAX_SOURCE_CHANGES_DIFF_BYTES = 512 * 1024

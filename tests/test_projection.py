@@ -713,6 +713,24 @@ def test_a_plan_whose_session_the_host_dropped_is_resumed_not_approved(projectio
     assert question.decisions == decisions
     assert question.consequence_variant == ("plan_session_stale" if live is False else "plan_approval")
 
+#: 2.11's engine-held Plan Approval: lettered choices, asked with no session-bound challenge.
+ENGINE_PLAN_TEXT = ("# Code Generation Plan Approval\n\n## Plan Approval\n\nApprove the code plan?\n\n"
+                    "- A. Approve Plan\n- B. Request Changes\n- C. I'll edit the files\n\n[Answer]:\n")
+
+
+@pytest.mark.parametrize("live", [True, None, False])
+def test_an_engine_held_plan_approval_is_answered_from_any_session(projection, snap_of, repo_builder, live):
+    """2.11 records a Plan Approval reply from whichever chat it arrives in, so neither a replaced nor a dropped
+    session turns the card into a Resume."""
+    restarted = (_plan_asked("s-1") + F.audit_block("SESSION_STARTED", "2026-09-04T12:00:00Z", Session="s-2")
+                 + F.audit_block("HUMAN_TURN", "2026-09-04T12:00:02Z", Session="s-2"))
+    snap = snap_of(build(repo_builder, "plan_approval", state=F.state_text(marks={GATE_STAGE: "-"}, fields=RUNNING),
+                         audit=STARTED_AUDIT + restarted, questions={QUESTIONS_REL: ENGINE_PLAN_TEXT}))
+    question = _by_type(_seeds(projection, snap, slot=SlotStub(session_live=live)))["question"]
+    assert question.decisions == ("approve_plan", "request_plan_changes")
+    assert question.consequence_variant == "plan_approval"
+
+
 def test_blank_question_group_yields_one_atomic_card(projection, snap_of, question_repo):
     """FR-Q-002/D13: one group is one card, never one card per question."""
     snap = snap_of(question_repo)

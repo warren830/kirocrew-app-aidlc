@@ -126,8 +126,8 @@
   "repos.git.title": "Git 观测",
   "repos.git.unavailable": "Git 观测未启用",
   "repos.git.notRead": "尚未读取 Git",
-  "repos.git.unrelatedDirty_one": "有 {n} 个无关文件存在本地改动，它不会阻止升级。",
-  "repos.git.unrelatedDirty_other": "有 {n} 个无关文件存在本地改动，它们不会阻止升级。",
+  "repos.git.unrelatedDirty_one": "另有 {n} 个文件存在本地改动，它不会阻止升级。",
+  "repos.git.unrelatedDirty_other": "另有 {n} 个文件存在本地改动，它们不会阻止升级。",
   "repos.git.upstream": "跟踪 {upstream}",
   "repos.lede": "这里的每个仓库都由你主动添加。可浏览目录或填写路径，Studio 不会自动注册仓库。",
   "repos.maintenance.note": "维护工作出现在这里和通知中，不会进入阻塞式工作流队列。",
@@ -184,5 +184,8 @@
   "repos.remove.confirm": "取消注册",
   "repos.remove.title": "取消注册 {label}？",
   "repos.title": "仓库",
-  "repos.totals": "已注册 {repos} 个 · 不可用 {unavailable} 个 · 等待你处理 {open} 项"
+  "repos.totals": "已注册 {repos} 个 · 不可用 {unavailable} 个 · 等待你处理 {open} 项",
+  "repos.git.intentDirty.title": "意图写入但尚未提交的代码",
+  "repos.git.intentDirty.by": "— {intent}",
+  "repos.git.intentDirty.body": "这些文件列在某个意图的源文件清单中，不会阻止升级；已完成的意图可在“意图”页使用“准备提交”。"
 }

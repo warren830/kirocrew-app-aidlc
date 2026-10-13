@@ -159,6 +159,7 @@
    },
    "status": "Queued",
    "status_generation": 0,
+   "submitted_answers": null,
    "type": "failure",
    "updated_at": "2026-09-04T10:00:00Z",
    "waiting_since": "<volatile>"

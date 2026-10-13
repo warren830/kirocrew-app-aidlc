@@ -112,7 +112,7 @@ export function StepWork({
         <label htmlFor="wizard-space">{t('wizard.work.space')}</label>
         <p className="studio-help">{t('wizard.work.spaceHelp')}</p>
         {spaceList.length === 0 ? (
-          <p className="studio-muted">{t('wizard.work.spaceUnknown')}</p>
+          <p className="studio-muted">{t(repo ? 'wizard.work.spaceUnknown' : 'wizard.work.spaceNoRepo')}</p>
         ) : (
           <select id="wizard-space" value={activeSpace} disabled onChange={() => undefined}>
             {spaceList.map((space) => (

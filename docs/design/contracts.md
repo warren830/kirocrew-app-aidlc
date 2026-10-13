@@ -3033,7 +3033,7 @@ is about Studio's own harness: with `own_engine_version` null both are False and
 | `POST /repos/{repo_id}/install/recovery` [owner] | `{"plan_digest"}` | 202 `{"ok", "transaction_id", "status"}` | `install_conflict`, `repo_busy`, `state_version_migration_unconfirmed` |
 | `GET /repos/{repo_id}/transactions/{transaction_id}` | — | `{"transaction": TransactionResult}` | `transaction_not_found` |
 | `GET /repos/{repo_id}/receipts` | — | `{"receipts": [Receipt (files included for current only)]}` | |
-| `GET /repos/{repo_id}/git` | — | `{"git": GitObservation, "owned_dirty": [str], "unrelated_dirty": int}` | |
+| `GET /repos/{repo_id}/git` | — | `{"git": GitObservation, "owned_dirty": [str], "unrelated_dirty": int, "owned_uncommitted": int, "intent_dirty": [{"relpath", "status", "intent_dir"}]}` — `intent_dirty`: dirty paths an intent's `source-manifest.json` lists (≤ 50), not counted in `unrelated_dirty` | |
 | `POST /repos/{repo_id}/doctor` [owner] | `{"confirm": true}` | `{"ok": true, "result": EngineResult}` | `invalid_decision` (confirm missing), `repo_busy`, `bun_missing` — labelled in the UI as audit-appending (A12) |
 
 Transactions run in the background after the 202; progress via `transaction.updated` events and the `GET
@@ -3078,7 +3078,7 @@ Transactions run in the background after the 202; progress via `transaction.upda
 | `POST …/{intent}/resume` [owner] | `{}` | 201 same as run (type `resume`) | same; requires `disk.parked_at` else `invalid_decision` |
 | `POST …/{intent}/pause` [owner] | `{"paused": bool}` | `{"ok": true, "binding": BindingView, "blocked_actions": [action_id]}` — the live human-lane cards that `submit` will now refuse with `intent_paused` (review P11) | |
 | `POST …/{intent}/force-stop` [owner] | `{"confirm": true}` | 201 `SubmitReceipt` with `lane: "host_control"`, `status: "Delivering"`, `wire_text: null`, `lease_generation: null`, `host: {"method": "POST", "path": "/api/chat/slots/<slot>/stop", "body": {}}` (review P16) | `invalid_decision`, `session_unbound` |
-| `POST …/{intent}/prepare-commit` [owner] | `{}` | 201 as run (type `prepare_commit`) | as run |
+| `POST …/{intent}/prepare-commit` [owner] | `{}` | 201 as run (type `prepare_commit`) | as run, and `invalid_decision` until AI-DLC records the workflow complete |
 | `POST …/{intent}/session/bind` [owner] | `{"slot_key": str}` | `{"ok": true, "binding": BindingView, "slot": SlotView}` | `slot_mismatch`, `slot_busy`, `host_unavailable` |
 | `POST …/{intent}/session/unbind` [owner] | `{}` | `{"ok": true, "binding"}` | `action_not_submittable` (live action) |
 | `POST …/{intent}/session/takeover/preview` [owner] | `{}` | `{"candidates": [{"slot": SlotView, "reason": str}], "current": BindingView}` | `host_unavailable` |
@@ -3287,7 +3287,7 @@ name (`config manifest enable disable update uninstall open dev token migrate-cl
   "human_text_present": bool                                   // human_text itself is never in the card
 }
 ```
-`QuestionsView`: `{"relpath": str, "sha256": str, "stage": str, "unit": str|null, "questions": [{"index": int, "prompt": str, "options": [{"letter": str, "text": str}], "answer": str|null, "answered": bool, "required": true}], "summary_confirmation": {"present": bool, "answered": bool, "answer": str|null}, "pending_count": int, "mode": "degraded"|"structured", "host_card": HostQuestionCard|null}`.
+`QuestionsView`: `{"relpath": str, "sha256": str, "stage": str, "unit": str|null, "questions": [{"index": int, "prompt": str, "options": [{"letter": str, "text": str}], "answer": str|null, "answered": bool, "required": true}], "summary_confirmation": {"present": bool, "answered": bool, "answer": str|null}, "plan_approval": {… as summary_confirmation, "engine_held"?: true} — `engine_held` marks 2.11's engine-asked Plan Approval (lettered choices, `[Answer]: A. Approve Plan`), which any chat may answer, so it is never Resume-only, "pending_count": int, "mode": "degraded"|"structured", "host_card": HostQuestionCard|null}`.
 `ReviewFinding`: `{"level": "blocker"|"advisory"|"resolved"|"unknown", "title": str, "quote": str|null, "anchor": str|null, "reviewer": str|null, "iteration": int|null}`.
 `Finding`: `{"code": str, "severity": FINDING_SEVERITY, "message_key": str, "params": {}, "evidence": [{"kind","ref","detail"}]}`.
 

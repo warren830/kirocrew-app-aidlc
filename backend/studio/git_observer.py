@@ -396,11 +396,11 @@ class GitObserver:
         run = self._run(repo, _STATUS_ARGV, stdout_cap=C.MAX_SUBPROCESS_STDOUT)
         if not run.ok:
             return {"owned_dirty": [], "unrelated_dirty": 0, "owned_changes": [], "owned_untracked_dirs": [],
-                    "available": False, "reason": run.failure_reason(), "truncated": False}
+                    "unrelated_changes": [], "available": False, "reason": run.failure_reason(), "truncated": False}
         whole_tree = "." in owned  # a caller that names the repository root owns everything in it
         changes: list[dict[str, str]] = []
         install_dirs: list[str] = []
-        unrelated = 0
+        unrelated: list[dict[str, str]] = []
         for path, status in _parse_status(run.text())[1]:
             if whole_tree or any(path == root or path.startswith(root + "/") for root in owned):
                 changes.append({"relpath": path, "status": status})
@@ -409,13 +409,16 @@ class GitObserver:
                 # Studio's own output not committed yet, not the user's work.
                 install_dirs.append(path)
             else:
-                unrelated += 1
+                unrelated.append({"relpath": path, "status": status})
         changes.sort(key=lambda row: row["relpath"])
+        unrelated.sort(key=lambda row: row["relpath"])
         return {
             "owned_dirty": [row["relpath"] for row in changes],
-            "unrelated_dirty": unrelated,
+            "unrelated_dirty": len(unrelated),
             "owned_changes": changes,
             "owned_untracked_dirs": sorted(install_dirs),
+            # For the caller to name the ones an intent wrote; the person's own work is only ever counted.
+            "unrelated_changes": unrelated,
             "available": True,
             "reason": None,
             "truncated": run.truncated,

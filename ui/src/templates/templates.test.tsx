@@ -119,6 +119,7 @@ function card(over: Partial<ActionCard> = {}): ActionCard {
     dedupe_key: null,
     human_text_present: false,
     acknowledged_evidence_sha256: 'sha-ack',
+    submitted_answers: null,
     ...over,
   }
 }
@@ -376,6 +377,25 @@ describe('gate template', () => {
     expect(document.querySelectorAll('.studio-crit > li[data-met="null"]').length).toBe(2)
   })
 
+  it('reads a stored empty review as no reviewer, with no verbatim footer', () => {
+    setApiRoutes({})
+    // A card stored before Studio stopped sending an empty review for a stage without `## Review`.
+    mount(GateTemplate, card({ status: 'StateChanged', evidence: { ...card().evidence,
+      review: { verdict: null, findings: [], reviewer: null, review_class: null, iteration: null, findings_parsed: true } } }))
+    expect(screen.getByText(en.t('template.gate.noReview'))).toBeInTheDocument()
+    expect(screen.queryByText(en.t('template.gate.noBlockers'))).toBeNull()
+    expect(screen.queryByText(en.t('template.gate.noFindings'))).toBeNull()
+    expect(screen.queryByText(en.t('review.quotedVerbatim'))).toBeNull()
+  })
+
+  it('keeps a review Studio could not enumerate, since that is not proof no reviewer ran', () => {
+    setApiRoutes({})
+    mount(GateTemplate, card({ evidence: { ...card().evidence,
+      review: { verdict: null, findings: [], reviewer: null, review_class: 'advisory', iteration: null, findings_parsed: false } } }))
+    expect(screen.queryByText(en.t('template.gate.noReview'))).toBeNull()
+    expect(screen.getByText(en.t('review.quotedVerbatim'))).toBeInTheDocument()
+  })
+
   it('quotes reviewer findings verbatim and offers the artifact anchor', async () => {
     setApiRoutes({
       [`GET ${BASE}/repos/r_1/intents/default~250901-guest/artifacts/art_1`]: () => ({
@@ -512,6 +532,33 @@ describe('questions template', () => {
     'Keep the existing `agentbridge` API compatible.',
     'Include the current brownfield clients in verification.',
   ].join('\n')
+
+  it('marks the answers a sent card carried, instead of an empty form', () => {
+    setApiRoutes({})
+    const view = questionsView({ questions: [
+      question({ index: 1, options: [
+        { letter: 'A', text: 'True division', is_other: false },
+        { letter: 'B', text: 'Floor division', is_other: false },
+      ] }),
+      question({ index: 2, options: [
+        { letter: 'A', text: 'Like multiply', is_other: false },
+        { letter: 'X', text: 'Other (please specify)', is_other: true },
+      ] }),
+    ] })
+    mount(QuestionsTemplate, { ...questionCard(view), status: 'ResolvedNoTransition', submitted_answers: [
+      { index: 1, option_letters: ['A'], free_text: null },
+      { index: 2, option_letters: ['X'], free_text: 'Raise with a message' },
+    ] })
+    expect(screen.getByText(en.t('template.questions.sentSource'))).toBeInTheDocument()
+    expect(screen.getByText(en.t('template.questions.sentCount', { n: 2 }))).toBeInTheDocument()
+    expect(screen.queryByText(en.t('template.questions.pending', { n: 2, total: 2 }))).toBeNull()
+    expect(screen.queryByText(en.t('template.questions.fileSource'))).toBeNull()
+    expect(screen.getByRole('radio', { name: /True division/ })).toBeChecked()
+    expect(screen.getByRole('radio', { name: /Floor division/ })).not.toBeChecked()
+    expect(screen.getByRole('radio', { name: /Other/ })).toBeChecked()
+    expect(screen.getByDisplayValue('Raise with a message')).toBeDisabled()
+    expect(screen.getAllByText(en.t('template.questions.sentOne'))).toHaveLength(2)
+  })
 
   it('shows numbered question context before its options and sends only the selected labels', async () => {
     setApiRoutes({})
