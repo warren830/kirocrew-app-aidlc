@@ -371,6 +371,11 @@ class ConsistencyEngine:
         directive = _attr(snap, "directive")
         if directive is None or _attr(directive, "matches_state", True):
             return []
+        state = _attr(snap, "state")
+        if (str(_attr(state, "status", "") or "")).strip().lower() == "completed":
+            # A finished workflow never writes the note again, so "normal right after a state update" would stay on
+            # every card for good: there is no running stage left for the note to be about.
+            return []
         actual = _attr(_attr(snap, "state_snap"), "sha256")
         marker = _attr(directive, "marker_name") or DIRECTIVE_FILENAME
         return [self._finding(

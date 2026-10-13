@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import builtins
 import json
+import re
 from dataclasses import dataclass, field, make_dataclass, replace
 from pathlib import Path
 from typing import Any, Sequence
@@ -408,8 +409,9 @@ def _directive_of(tree, intent_dir: str, state_text: str) -> Any:
 
 
 def test_directive_state_digest_mismatch(ev):
-    """The real poc directive is stale; the real remediation directive matches its state."""
-    stale_state = F.real_state(F.DEVDELTA, F.DEVDELTA_POC)
+    """The real poc directive is stale; the real remediation directive matches its state. The poc finished, so
+    it is read as still running here: a finished workflow carries no such note (below)."""
+    stale_state = F.real_state(F.DEVDELTA, F.DEVDELTA_POC).replace("**Status**: Completed", "**Status**: Running", 1)
     stale = _directive_of(F.DEVDELTA, F.DEVDELTA_POC, stale_state)
     assert stale.matches_state is False
     finding = _one(ev(stale_state, intent_dir=F.DEVDELTA_POC, directive=stale), "directive_state_digest_mismatch")
@@ -420,6 +422,15 @@ def test_directive_state_digest_mismatch(ev):
     assert fresh.matches_state is True
     assert "directive_state_digest_mismatch" not in _codes(ev(fresh_state, intent_dir=F.DEVDELTA_REMEDIATION,
                                                               directive=fresh))
+
+
+def test_a_finished_workflow_carries_no_stale_directive_note(ev):
+    """AI-DLC never rewrites the note after the workflow completes, so the finding would sit on every card."""
+    done = F.real_state(F.DEVDELTA, F.DEVDELTA_POC)
+    assert "**Status**: Completed" in done
+    stale = _directive_of(F.DEVDELTA, F.DEVDELTA_POC, done)
+    assert stale.matches_state is False
+    assert "directive_state_digest_mismatch" not in _codes(ev(done, intent_dir=F.DEVDELTA_POC, directive=stale))
 
 
 def test_phase_stage_disagreement(ev, make_facts, gate_state):
