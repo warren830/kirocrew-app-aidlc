@@ -198,9 +198,11 @@ describe('the intents inventory', () => {
 
   it('offers no pause or rescope once the workflow is complete', () => {
     const done = { ...INTENT, disk: { ...INTENT.disk, status: 'Completed' } }
+    // A completed intent reads the repository's Git to choose its lead action.
+    const api = { repoGit: vi.fn(async () => ({ git: {}, owned_dirty: [], unrelated_dirty: 0, intent_dirty: [] })) } as unknown as StudioApi
     render(
       <I18nProvider>
-        <IntentActions api={{} as StudioApi} intent={done} onGo={() => {}} onQueued={() => {}} onChanged={() => {}}
+        <IntentActions api={api} intent={done} onGo={() => {}} onQueued={() => {}} onChanged={() => {}}
           onRecompose={() => {}} onSession={() => {}} onSettings={() => {}} />
       </I18nProvider>,
     )
@@ -216,6 +218,7 @@ describe('the intents inventory', () => {
     const done = { ...INTENT, disk: { ...INTENT.disk, status: 'Completed' } }
     const card = actionCard({ action_id: 'a_commit', type: 'prepare_commit' })
     const api = {
+      repoGit: vi.fn(async () => ({ git: {}, owned_dirty: [], unrelated_dirty: 0, intent_dirty: [] })),
       prepareCommit: vi.fn(async () => ({ ok: true as const, action_id: 'a_commit', status: 'Queued' as const, action: card })),
     } as unknown as StudioApi
     const onGo = vi.fn()
