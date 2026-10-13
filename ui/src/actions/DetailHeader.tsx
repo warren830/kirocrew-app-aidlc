@@ -22,7 +22,7 @@ import { isClosedAction, isRepositoryUnavailable } from '../lib/actionQueue'
 import { DEFAULT_SPACE } from '../lib/route'
 import type { ActionCard } from '../lib/types'
 import { statusLabel, statusTone } from './DeliveryStrip'
-import { isRefreshing, SEVERITY_TONE, stageText, typeIconOf, typeLabelOf } from './QueueRow'
+import { isRefreshing, SEVERITY_TONE, isIntentWide, stageText, typeIconOf, typeLabelOf } from './QueueRow'
 
 export interface DetailHeaderProps {
   card: ActionCard
@@ -89,7 +89,7 @@ export function DetailHeader({ card, onOpenCurrent }: DetailHeaderProps) {
         <Crumb>{card.repo.label || card.repo.repo_id}</Crumb>
         {card.space && card.space !== DEFAULT_SPACE ? <Crumb>{card.space}</Crumb> : null}
         <Crumb>{card.intent.slug || card.intent.intent_dir}</Crumb>
-        {card.stage ? <Crumb>{stageText(card, t('common.unavailable'))}</Crumb> : null}
+        {card.stage && !isIntentWide(card) ? <Crumb>{stageText(card, t('common.unavailable'))}</Crumb> : null}
         <Btn className="studio-anchor-link" onClick={() => void copy()} title={t('detail.deepLinkTitle')}>
           <Icon name={copied ? 'check' : 'link'} size={13} />
           {copied ? t('detail.copied') : t('detail.deepLink')}

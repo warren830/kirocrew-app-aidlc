@@ -26,4 +26,17 @@ describe('the decision header', () => {
     expect(row).not.toHaveTextContent(/waiting/)
     expect(row).toHaveTextContent(/sent /)
   })
+
+  it('leaves the stage out of a commit request\'s breadcrumb: it is about the whole intent', () => {
+    const stage = { slug: 'deployment-execution', number: '4.3', name: null, phase: 'operation', unit: null }
+    render(<I18nProvider><DetailHeader card={actionCard({ type: 'prepare_commit', queue_type: 'prepare_commit', stage } as never)} /></I18nProvider>)
+    const crumbs = screen.getByRole('navigation', { name: 'Where this decision sits' })
+    expect(crumbs).not.toHaveTextContent('deployment-execution')
+  })
+
+  it('keeps the stage in a gate\'s breadcrumb', () => {
+    const stage = { slug: 'code-generation', number: '3.5', name: null, phase: 'construction', unit: null }
+    render(<I18nProvider><DetailHeader card={actionCard({ type: 'gate', stage } as never)} /></I18nProvider>)
+    expect(screen.getByRole('navigation', { name: 'Where this decision sits' })).toHaveTextContent('3.5 code-generation')
+  })
 })

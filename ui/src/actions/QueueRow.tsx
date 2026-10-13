@@ -71,6 +71,14 @@ export function isRefreshing(card: ActionCard): boolean {
   return card.captured.stable === false || card.evidence.state?.stable === false
 }
 
+/**
+ * A card about the intent as a whole. A commit request carries the stage the state file named when it was
+ * made (often the last, skipped one), and printing it beside the request reads as a stage operation.
+ */
+export function isIntentWide(card: Pick<ActionCard, 'type'>): boolean {
+  return card.type === 'prepare_commit'
+}
+
 /** `2.3 functional-design`, or just the slug, or the unavailable string. */
 export function stageText(card: ActionCard, unavailableText: string): string {
   const stage = card.stage
@@ -126,7 +134,8 @@ function Row({ card, selected, tabbable, now, onSelect }: QueueRowProps) {
   const severityLabel = t(`enum.severity.${card.severity}`)
   const unavailable = isRepositoryUnavailable(card)
   const wait = unavailable ? t('detail.repoUnavailable.saved') : waiting(i18n, card.waiting_since, now)
-  const stage = stageText(card, t('common.unavailable'))
+  const wide = isIntentWide(card)
+  const stage = wide ? t('queue.stage.wholeIntent') : stageText(card, t('common.unavailable'))
   const intent = intentText(card)
   const repo = repoText(card)
   // The headline is AI-DLC's own description of the boundary. When the catalogue has no entry for the
@@ -170,7 +179,7 @@ function Row({ card, selected, tabbable, now, onSelect }: QueueRowProps) {
 
         <span className="studio-qmeta studio-mono">
           <span className="studio-qwait" data-severity={card.severity}>{wait}</span>
-          <MetaPart>{stage}</MetaPart>
+          {wide ? null : <MetaPart>{stage}</MetaPart>}
           <MetaPart verbatim>{intent}</MetaPart>
         </span>
 

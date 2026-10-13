@@ -24,5 +24,6 @@
   "queue.organizeLabel": "队列排序方式",
   "queue.refreshing": "正在重读",
   "queue.title": "等你决定",
-  "queue.type.planApproval": "计划批准"
+  "queue.type.planApproval": "计划批准",
+  "queue.stage.wholeIntent": "整个意图"
 }
