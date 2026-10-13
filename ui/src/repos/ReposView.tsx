@@ -126,6 +126,14 @@ export function ReposView({ route, go }: ViewProps) {
     { revalidateOn: ['repo.updated', 'repo.removed', 'transaction.updated', 'intent.updated', 'reset'] },
   )
 
+  // The list never runs Git: it shows the reading a repository page last made. Re-read it whenever this page
+  // makes one, or "All repositories" keeps saying "Git not read yet" until the next poll.
+  const observedAt = detail.data?.repo.git?.observed_at ?? null
+  const refreshList = repos.refresh
+  useEffect(() => {
+    if (observedAt) void refreshList()
+  }, [observedAt, refreshList])
+
   const listing = showArchived ? allRepos.data : repos.data
   const list = listing?.repos ?? []
   // The detail read is authoritative (it is freshly observed, with Git and intents); the list entry is

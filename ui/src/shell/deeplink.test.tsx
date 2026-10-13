@@ -78,8 +78,9 @@ describe('a deep link', () => {
     expect(review).toHaveAttribute('aria-selected', 'true')
     expect(await screen.findByText('Decline path is unspecified')).toBeInTheDocument()
 
-    // stage=functional-design: the scope breadcrumb names it verbatim (an AI-DLC slug is never translated).
-    expect(screen.getByText('functional-design')).toBeInTheDocument()
+    // stage=functional-design: the scope breadcrumb names it verbatim (an AI-DLC slug is never translated),
+    // and so does the Review tab's stage chip.
+    expect(screen.getAllByText('functional-design').length).toBeGreaterThanOrEqual(2)
 
     // And the URL is untouched: a reload that rewrote it would break the second reload.
     expect(window.location.search).toBe('?view=actions&repo=r_1&action=a_7&tab=review&stage=functional-design')
