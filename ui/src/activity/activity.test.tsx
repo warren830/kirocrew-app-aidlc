@@ -167,6 +167,19 @@ describe('Timeline provenance', () => {
     expect(screen.queryByText('Gate approved.')).toBeNull()
   })
 
+  it('names whose event a row is by repository label and intent, not by session key', async () => {
+    activityRoutes([
+      entry({ id: 21, refs: { repo: { repo_id: 'r_1', label: 'checkout-web', space: 'default', intent_dir: '260904-gate-demo' },
+                              session_key: 'dashboard:aidlc-studio-r_1-260904-gate-demo' } }),
+      entry({ id: 22, at: '2026-09-05T10:01:00+00:00', refs: { repo: { repo_id: 'r_9', label: null } } }),
+    ])
+    renderActivity()
+
+    expect(await screen.findByText('checkout-web / 260904-gate-demo')).toBeInTheDocument()
+    expect(screen.getByText('unregistered repository')).toBeInTheDocument()
+    expect(screen.queryByText(/session dashboard:/)).toBeNull()
+  })
+
   it('states the provenance rule on the page itself', async () => {
     activityRoutes([STUDIO_ROW])
     renderActivity()

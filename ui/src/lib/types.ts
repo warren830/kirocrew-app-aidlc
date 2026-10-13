@@ -274,7 +274,8 @@ export interface EngineResult { verb_key: string; argv: string[]; exit_code: num
 export interface IntentCreateResult { repo_id: string; space: string; intent_dir: string; intent_key: string; uuid: string | null; slug: string; transaction_id: string; engine: EngineResult | null; verified: boolean; summary: IntentSummary | null }
 
 // ---- activity / events / advisor / settings ----
-export interface TimelineRefs { action_id?: string; session_key?: string; audit?: { shard: string; pos: number | null; event: string }; git?: { sha: string } }
+/** `repo.label` is null once the repository is unregistered; `intent_dir` only on a row about one intent. */
+export interface TimelineRefs { repo?: { repo_id: string; label: string | null; space?: string; intent_dir?: string }; action_id?: string; session_key?: string; audit?: { shard: string; pos: number | null; event: string }; git?: { sha: string } }
 export interface TimelineEntry { id: number | null; at: string; source: Source; kind: string; message_key: string; params: Record<string, unknown>; severity: Severity; refs: TimelineRefs; raw: string | null }
 export interface ActivityResponse { items: TimelineEntry[]; next_cursor: string | null }
 /** Every type `EVENT_TYPES` may publish. `hello` is a per-connection greeting, not a ring row. */

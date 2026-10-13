@@ -93,6 +93,12 @@ export interface TimelineRowProps {
   onOpenAction?: (actionId: string) => void
 }
 
+
+/** `checkout-web / 260904-gate-demo`: the repository by its label (or a word for an unregistered one), then the intent. */
+export function scopeText(repo: NonNullable<TimelineEntry['refs']['repo']>, gone: string): string {
+  return [repo.label ?? gone, repo.intent_dir].filter(Boolean).join(' / ')
+}
+
 export function TimelineRow({ entry, selected, onOpenEvidence, onOpenAction }: TimelineRowProps) {
   const i18n = useI18n()
   const { t } = i18n
@@ -144,7 +150,10 @@ export function TimelineRow({ entry, selected, onOpenEvidence, onOpenAction }: T
               {t('activity.row.commit', { sha: entry.refs.git.sha.slice(0, 8) })}
             </Chip>
           ) : null}
-          {entry.refs.session_key ? (
+          {/* Whose event it is, by name; the session key stays in the evidence drawer. */}
+          {entry.refs.repo ? (
+            <Chip icon="repo">{scopeText(entry.refs.repo, t('activity.row.repoGone'))}</Chip>
+          ) : entry.refs.session_key ? (
             <Chip mono icon="link">{t('activity.row.session', { session: entry.refs.session_key })}</Chip>
           ) : null}
         </div>

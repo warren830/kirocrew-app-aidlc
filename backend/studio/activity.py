@@ -120,6 +120,11 @@ def studio_refs(row: ActivityRow) -> dict[str, Any]:
     Only present keys appear: the Evidence drawer renders a link per key, and a ``null`` would be an empty one.
     """
     refs: dict[str, Any] = {}
+    if row.repo_id:
+        # Which repository and intent the row is about: the label is filled per page (`handlers.events`), and stays
+        # null once the repository is unregistered.
+        refs["repo"] = {"repo_id": row.repo_id, "label": None,
+                        **({"space": row.space or C.DEFAULT_SPACE, "intent_dir": row.intent_dir} if row.intent_dir else {})}
     if row.action_id:
         refs["action_id"] = row.action_id
     if row.session_key:

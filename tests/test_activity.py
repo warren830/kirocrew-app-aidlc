@@ -329,6 +329,7 @@ def test_timeline_entry_json_matches_the_wire_shape(A, R, proj):
     studio_entry = next(e for e in entries if e.source == "studio")
     assert studio_entry.id == 1 and studio_entry.raw is None
     assert studio_entry.refs == {
+        "repo": {"repo_id": REPO, "label": None, "space": "default", "intent_dir": INTENT},
         "action_id": "a_0000000000000001", "session_key": "dashboard:slot-1",
         "audit": {"shard": SHARD, "pos": 7, "event": "GATE_APPROVED"}, "git": {"sha": "9f8e7d6"},
     }

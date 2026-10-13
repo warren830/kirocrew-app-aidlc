@@ -86,7 +86,7 @@ export function IntentRow({ intent, layout, actions }: IntentRowProps) {
   const identity = (
     <>
       <span className="studio-strong studio-mono studio-wrap-any">{intent.intent_dir}</span>
-      {intent.title ? <span className="studio-row-sub">{intent.title}</span> : null}
+      {intent.title ? <span className="studio-row-sub studio-verbatim">{intent.title}</span> : null}
       <span className="studio-sr">{rowSummary(i18n, intent)}</span>
       <span className="studio-row studio-wrap studio-row-chips">
         {intent.space !== 'default' ? <Chip mono>{intent.space}</Chip> : null}

@@ -60,17 +60,29 @@ async def activity(services: Any, request: web.Request) -> web.Response:
         repo = await repo_or_404(services, q.repo_id)
         snap = await asyncio.to_thread(services.projection.snapshot, repo, q.space or C.DEFAULT_SPACE, q.intent_dir)
         entries = await services.activity.timeline(snap, limit=q.limit, sources=[q.source] if q.source else None)
-        return json_ok({"items": [entry.to_json() for entry in entries], "next_cursor": None})
+        return json_ok({"items": await _named(services, [entry.to_json() for entry in entries]), "next_cursor": None})
 
     rows, next_cursor = await services.activity.query(q)
-    items = [TimelineEntry.of_row(row).to_json() for row in rows]
-    # Unregistering a repository deletes its actions and keeps its Activity rows, so a row may name an action that
-    # is gone: such a row offers no link to a card that can no longer open.
-    named = sorted({item["refs"]["action_id"] for item in items if "action_id" in item["refs"]})
-    if named:
-        live = await asyncio.to_thread(services.storage.select, "actions", {"action_id": named})
-        kept = {str(row.get("action_id")) for row in live}
-        for item in items:
-            if item["refs"].get("action_id") not in (None, *kept):
-                item["refs"].pop("action_id")
-    return json_ok({"items": items, "next_cursor": next_cursor})
+    return json_ok({"items": await _named(services, [TimelineEntry.of_row(row).to_json() for row in rows]),
+                    "next_cursor": next_cursor})
+
+
+async def _named(services: Any, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Name each row's repository, and drop links to actions that are gone.
+
+    Unregistering a repository deletes its actions and keeps its Activity rows: such a row then names no
+    repository label, and offers no link to a card that can no longer open.
+    """
+    repo_ids = sorted({item["refs"]["repo"]["repo_id"] for item in items if "repo" in item["refs"]})
+    action_ids = sorted({item["refs"]["action_id"] for item in items if "action_id" in item["refs"]})
+    repos = await asyncio.to_thread(services.storage.select, "repos", {"id": repo_ids}) if repo_ids else []
+    actions = await asyncio.to_thread(services.storage.select, "actions", {"action_id": action_ids}) if action_ids else []
+    labels = {str(row.get("id")): row.get("label") for row in repos}
+    live = {str(row.get("action_id")) for row in actions}
+    for item in items:
+        refs = item["refs"]
+        if "repo" in refs:
+            refs["repo"]["label"] = labels.get(refs["repo"]["repo_id"])
+        if "action_id" in refs and refs["action_id"] not in live:
+            refs.pop("action_id")
+    return items

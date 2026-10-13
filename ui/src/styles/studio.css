@@ -381,6 +381,9 @@
 .studio-spread { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .studio-grow { flex: 1 1 auto; min-width: 0; }
 .studio-trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A person's own words keep their spacing: collapsed, "hello  world" claims a different bug. */
+.studio-verbatim { white-space: pre-wrap; }
+.studio-trunc.studio-verbatim { white-space: pre; }
 .studio-wrap-any { overflow-wrap: anywhere; }
 .studio-muted { color: var(--muted); }
 .studio-sr {

@@ -159,7 +159,7 @@ function Row({ card, selected, tabbable, now, onSelect }: QueueRowProps) {
         <span className="studio-qmeta studio-mono">
           <span className="studio-qwait" data-severity={card.severity}>{wait}</span>
           <MetaPart>{stage}</MetaPart>
-          <MetaPart>{intent}</MetaPart>
+          <MetaPart verbatim>{intent}</MetaPart>
         </span>
 
         <span className="studio-qnext">
@@ -171,11 +171,11 @@ function Row({ card, selected, tabbable, now, onSelect }: QueueRowProps) {
   )
 }
 
-function MetaPart({ children }: { children: ReactNode }) {
+function MetaPart({ children, verbatim = false }: { children: ReactNode; verbatim?: boolean }) {
   return (
     <>
       <span aria-hidden="true" className="studio-qdot">·</span>
-      <span className="studio-trunc">{children}</span>
+      <span className={verbatim ? 'studio-trunc studio-verbatim' : 'studio-trunc'}>{children}</span>
     </>
   )
 }

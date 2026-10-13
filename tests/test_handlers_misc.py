@@ -412,6 +412,8 @@ def test_activity_returns_studio_rows_as_timeline_entries(sv, ocall, gate_repo):
     assert item["kind"] == "repo.added"
     assert item["message_key"] == "activity.repo.added"
     assert item["raw"] is None
+    # the row names its repository by label, so an "All repos" timeline says whose event it is
+    assert item["refs"]["repo"] == {"repo_id": repo.repo_id, "label": "demo"}
 
 
 def test_an_activity_row_offers_no_link_to_an_action_that_is_gone(sv, ocall, gate_repo):
@@ -423,6 +425,9 @@ def test_an_activity_row_offers_no_link_to_an_action_that_is_gone(sv, ocall, gat
     assert status == 200
     row = next(item for item in body["items"] if item["kind"] == "action.submitted")
     assert "action_id" not in row["refs"]
+    sv.repos.remove(repo.repo_id)
+    gone = next(item for item in ocall("GET", "/activity")[1]["items"] if item["kind"] == "action.submitted")
+    assert gone["refs"]["repo"] == {"repo_id": repo.repo_id, "label": None}, "an unregistered repository has no label"
 
 
 def test_activity_merges_the_audit_trail_for_one_intent(sv, ocall, gate_repo):

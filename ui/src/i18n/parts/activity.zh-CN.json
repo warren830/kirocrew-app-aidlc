@@ -17,7 +17,7 @@
   "activity.page.pageNumber": "第 {n} 页",
   "activity.page.provenance": "Studio 派生的事件标注为 Studio，绝不会被呈现为原始的 AI-DLC 审计事件。",
   "activity.page.redaction": "证据抽屉会展示原始审计块与文件位置。诊断导出默认会脱敏凭据、受保护路径与提示正文。",
-  "activity.page.mergedNote": "当前范围是单一仓库与单一 intent，因此该 intent 的 AI-DLC 审计事件会实时投影在 Studio 自身记录旁边。来源筛选由服务端执行，其余筛选在浏览器内对已读取的 {n} 条事件执行。",
+  "activity.page.mergedNote": "当前范围是一个仓库里的一个意图，所以这里把该意图的 AI-DLC 审计事件和 Studio 自己的记录排在一起。筛选作用于最近读取的 {n} 条事件。",
   "activity.page.studioOnlyNote": "此处仅为 Studio 自身的记录。在范围栏中选定一个仓库和一个 intent，即可同时读取该 intent 的 AI-DLC 审计事件。",
   "activity.page.sourceNeedsScope": "AI-DLC 审计事件来自某个 intent 的审计分片。请在范围栏中选定仓库与 intent。",
   "activity.filter.title": "筛选",
@@ -257,5 +257,6 @@
   "audit.ARTIFACT_REUSED": "AI-DLC 决定是否复用之前的产出物。",
   "audit.RECOVERY_COMPLETED": "对话被压缩后，已答复恢复提示。",
   "activity.page.countPage_one": "本页 {n} 条事件；“更早”可查看更多",
-  "activity.page.countPage_other": "本页 {n} 条事件；“更早”可查看更多"
+  "activity.page.countPage_other": "本页 {n} 条事件；“更早”可查看更多",
+  "activity.row.repoGone": "已取消注册的仓库"
 }

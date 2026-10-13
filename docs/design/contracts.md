@@ -2328,7 +2328,9 @@ class ActivityQuery:
 class TimelineEntry:
     at: str; source: str; kind: str; message_key: str; params: dict
     severity: str                    # SEVERITY (critical|blocking|attention|info) — the same enum Activity rows use (review P26.5)
-    refs: dict                       # {"action_id"?, "session_key"?, "audit"?: {shard, pos, event}, "git"?: {sha}}
+    refs: dict                       # {"repo"?: {repo_id, label, space?, intent_dir?}, "action_id"?, "session_key"?,
+                                     #  "audit"?: {shard, pos, event}, "git"?: {sha}}; `/activity` fills repo.label (null once
+                                     #  unregistered) and drops action_id when that action no longer exists
     raw: str | None                  # verbatim audit block (source aidlc) for the Evidence drawer
     id: int | None                   # the activity row id; None for a projected AI-DLC row
     @classmethod
@@ -3515,7 +3517,7 @@ export interface EffectivePlan { request: PlanRequest; scope_meta: Record<string
 export interface RecomposeProposal { intent_key: string; current_stage: string | null; skip: string[]; add: string[]; plan: EffectivePlan; argv_preview: string[]; allowed: boolean; refusals: PlanIssue[] }
 
 // ---- activity / events / advisor / settings ----
-export interface TimelineEntry { id: number | null; at: string; source: Source; kind: string; message_key: string; params: Record<string, unknown>; severity: Severity; refs: { action_id?: string; session_key?: string; audit?: { shard: string; pos: number; event: string }; git?: { sha: string } }; raw: string | null }
+export interface TimelineEntry { id: number | null; at: string; source: Source; kind: string; message_key: string; params: Record<string, unknown>; severity: Severity; refs: { repo?: { repo_id: string; label: string | null; space?: string; intent_dir?: string }; action_id?: string; session_key?: string; audit?: { shard: string; pos: number; event: string }; git?: { sha: string } }; raw: string | null }
 export interface StudioEvent { seq: number; at: string; type: 'action.created' | 'action.updated' | 'repo.updated' | 'repo.removed' | 'intent.updated' | 'transaction.updated' | 'lease.updated' | 'activity.appended' | 'advisor.updated' | 'settings.updated' | 'health.updated' | 'migration.updated' | 'reset' | 'hello'; payload: Record<string, unknown> }
 export interface DraftResult { verdict: string | null; summary: string; suggested_answers: { question_index: number; answer: string; option_letters: string[] }[]; evidence: string[]; assumptions: string[]; alternatives: string[]; confidence: 'low' | 'medium' | 'high'; needs_your_decision: string[]; drafted_feedback: string | null }
 export interface AdvisorDraft { draft_id: string; action_id: string; kind: 'gate_analysis' | 'question_draft' | 'question_explain' | 'request_changes_draft' | 'diagnose' | 'plan_draft'; status: 'queued' | 'running' | 'ready' | 'failed' | 'expired'; request: { action_id: string; kind: string; question_index: number | null; locale: string; auto: boolean }; result: DraftResult | null; error: string | null; created_at: string; updated_at: string; expires_at: string; neutrality: Record<string, unknown> | null; plan_proposal?: PlanProposal | null }
