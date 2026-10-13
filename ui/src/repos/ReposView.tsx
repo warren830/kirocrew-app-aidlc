@@ -403,7 +403,10 @@ export function ReposView({ route, go }: ViewProps) {
         {route.repo && selected ? (
           <>
             <div className="studio-repo-actions">
-              <button type="button" className="studio-btn" onClick={() => go({ repo: '', tx: '' })}>
+              {/* Back to every repository drops what was scoped to this one, as the scope selector does: an
+                  intent left in the route would stay in the breadcrumb with no repository before it. */}
+              <button type="button" className="studio-btn" onClick={() => go({
+                repo: '', tx: '', action: '', intent: '', space: '', stage: '', unit: '', artifact: '' })}>
                 <Icon name="back" size={14} />
                 {t('repos.detail.back')}
               </button>

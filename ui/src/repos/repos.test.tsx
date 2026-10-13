@@ -678,6 +678,15 @@ describe('doctor feedback at the maintenance controls', () => {
     expect(feedback.querySelector('script')).toBeNull()
   })
 
+  it('leaves no intent in the breadcrumb after going back to every repository', async () => {
+    doctorRoutes(() => ({ ok: true, result }))
+    mount('?view=repos&repo=r_1&intent=default~260904-gate-demo&stage=code-generation')
+    await userEvent.click(await screen.findByRole('button', { name: 'All repositories' }))
+    await waitFor(() => expect(document.querySelector('.studio-crumb')).toHaveTextContent(
+      'Registered repositories only — registration is always explicit'))
+    expect(window.location.search).not.toMatch(/intent=|stage=/)
+  })
+
   it('does not show a late result after leaving the repository', async () => {
     let finish!: (value: unknown) => void
     doctorRoutes(() => new Promise((resolve) => { finish = resolve }))

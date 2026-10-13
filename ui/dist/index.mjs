@@ -20995,7 +20995,13 @@ function Vl({ route: e, go: t }) {
 							className: "studio-btn",
 							onClick: () => t({
 								repo: "",
-								tx: ""
+								tx: "",
+								action: "",
+								intent: "",
+								space: "",
+								stage: "",
+								unit: "",
+								artifact: ""
 							}),
 							children: [/* @__PURE__ */ m(X, {
 								name: "back",
