@@ -439,6 +439,24 @@ def test_run_takes_only_the_two_commands_a_human_starts(api, repo, slot):
     assert body["details"] == {"key": "type", "choices": ["run", "resume"]}
 
 
+def test_prepare_commit_waits_for_the_workflow_to_be_complete(api, repo, slot, runnable_demo):
+    status, body = api("POST", base(repo, "/prepare-commit"), {})
+    assert (status, body["code"]) == (400, "invalid_decision") and body["details"]["status"] == "Running"
+
+
+def test_prepare_commit_creates_its_card_once_the_workflow_is_complete(api, fake_host, repo, slot, demo,
+                                                                       runnable_demo):
+    state = demo / "aidlc" / "spaces" / "default" / "intents" / INTENT / "aidlc-state.md"
+    state.write_text(state.read_text().replace("**Status**: Running", "**Status**: Completed"))
+    status, body = api("POST", base(repo, "/prepare-commit"), {})
+    assert status == 201, body
+    action = body["action"]
+    assert (action["type"], action["status"], action["risk_class"]) == ("prepare_commit", "Queued", "human_lane")
+    assert [d["decision"] for d in action["decisions"]] == ["prepare_commit"]
+    # Creating sends nothing; the confirmation and submit do.
+    assert fake_host.get_slot(slot).messages == [] and action["delivery"]["delivery_id"] is None
+
+
 def test_pause_reports_the_cards_it_just_blocked(api, repo, slot, runnable_demo):
     created = api("POST", base(repo, "/run"), {})[1]
     status, body = api("POST", base(repo, "/pause"), {"paused": True})

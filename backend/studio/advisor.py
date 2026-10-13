@@ -510,6 +510,12 @@ class AdvisorBroker:
             raise StudioError("invalid_decision", "unknown advisor kind", details={"kind": req.kind})
         spawn = await self._admit(req.locale, action_id=req.action_id)
         rec = await self._actions.get(req.action_id)
+        status = str(getattr(rec, "status", "") or "")
+        if status in C.TERMINAL_ACTION_STATUS or (req.kind != "diagnose" and status not in ("Queued", "NotDelivered")):
+            # A draft answer or change request for a card already sent or closed is advice about a decision that
+            # can no longer be made here; a diagnosis still helps a card stuck in flight or failed.
+            raise StudioError("action_not_submittable", "the Advisor drafts only for a card still waiting on you",
+                              details={"action_id": req.action_id, "status": status})
         allowed = ADVISOR_KINDS_BY_TYPE.get(str(getattr(rec, "type", "")), ())
         if req.kind not in allowed:
             raise StudioError(

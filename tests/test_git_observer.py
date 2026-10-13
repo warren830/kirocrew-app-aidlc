@@ -516,6 +516,9 @@ def test_dirty_split_keeps_receipt_owned_drift_apart_from_the_users_work(obs, sc
     split = obs.dirty_split(work, [".kiro", "AGENTS.md"])
     assert split["owned_dirty"] == [".kiro/agents/extra.json", ".kiro/tools/aidlc-utility.ts"]
     assert split["unrelated_dirty"] == 2, "the user's own work in progress never blocks an upgrade"
+    # Kept for the caller to name an intent's own code; the route still only counts the person's work.
+    assert split["unrelated_changes"] == [{"relpath": "README.md", "status": ".M"},
+                                          {"relpath": "src/app.py", "status": ".M"}]
     assert split["owned_changes"] == [{"relpath": ".kiro/agents/extra.json", "status": "?"},
                                       {"relpath": ".kiro/tools/aidlc-utility.ts", "status": "M."}]
     assert split["available"] is True and split["reason"] is None
@@ -533,8 +536,9 @@ def test_an_untracked_install_directory_is_studios_output_not_the_users_work(obs
 def test_dirty_split_does_not_claim_a_clean_tree_when_git_failed(G, obs, scripted, work):
     scripted.plan({"status": {"exit": 128, "stderr": "fatal: not a git repository\n"}})
     assert obs.dirty_split(work, [".kiro"]) == {"owned_dirty": [], "unrelated_dirty": 0, "owned_changes": [],
-                                                "owned_untracked_dirs": [], "available": False,
-                                                "reason": G.REASON_NOT_A_REPO, "truncated": False}
+                                                "owned_untracked_dirs": [], "unrelated_changes": [],
+                                                "available": False, "reason": G.REASON_NOT_A_REPO,
+                                                "truncated": False}
 
 
 def test_dirty_split_and_common_dir_over_the_real_repository(observer, gate_repo):

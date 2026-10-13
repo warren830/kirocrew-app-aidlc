@@ -721,6 +721,9 @@ async def test_a_single_pending_question_is_answered_with_the_option_label(world
     rec = await world.broker.get(card.action_id)
     assert rec.status == "Delivering"
     assert rec.human_text is None, "picking an option is not prose"
+    # The sent card names its answers as chosen: its question group was captured before the reply.
+    sent = await world.broker.card(rec, snapshot(world))
+    assert sent["submitted_answers"] == [{"index": 1, "option_letters": ["B"], "free_text": None}]
 
 
 @aio
@@ -1690,7 +1693,8 @@ async def test_the_card_is_the_shape_the_ui_type_pins(world, A, C):
         "priority_group", "repo", "space", "intent", "stage", "headline", "consequence", "waiting_since",
         "created_at", "updated_at", "primary", "decisions", "captured", "evidence", "delivery", "resolution",
         "failure", "install", "budget", "advisor", "deep_link", "dedupe_key", "human_text_present",
-        "acknowledged_evidence_sha256"}
+        "acknowledged_evidence_sha256", "submitted_answers"}
+    assert card["submitted_answers"] is None  # only a sent question card carries its answers
     assert (card["queue_type"], card["severity"], card["priority_group"]) == ("gate", "blocking", 2)
     assert card["repo"] == {"repo_id": REPO_ID, "label": "demo", "canonical_path": str(world.root),
                             "availability": "available", "availability_detail": None, "archived": False}

@@ -203,6 +203,7 @@ export function actionCard(over: Partial<ActionCard> = {}): ActionCard {
     dedupe_key: null,
     human_text_present: false,
     acknowledged_evidence_sha256: 'sha-ack',
+    submitted_answers: null,
     ...over,
   }
 }

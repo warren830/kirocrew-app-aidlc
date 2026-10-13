@@ -41,8 +41,8 @@
   "intents.noActivity": "no activity yet",
   "intents.session": "session bound",
   "intents.noSession": "no conversation bound",
-  "intents.session.title": "Canonical conversation — {intent}",
-  "intents.session.a11y": "Canonical conversation for {intent}",
+  "intents.session.title": "Conversation — {intent}",
+  "intents.session.a11y": "Conversation for {intent}",
   "intents.session.lede": "Studio delivers a decision by writing it as your own turn in one KiroCrew conversation bound to this intent: agent {agent}, project this repository. Until one is bound, every decision here is refused.",
   "intents.session.boundLede": "Decisions for this intent are written as your own turn in this conversation. Studio still shows you the exact text before anything is sent.",
   "intents.session.fact.repo": "Repository",
@@ -161,5 +161,7 @@
   "intents.approval.waiting": "The conversation is waiting for you to approve a tool call.",
   "intents.approval.waitingFor": "{label} is waiting for you to approve a tool call.",
   "intents.approval.where": "Allow, trust or reject it in the conversation.",
-  "intents.approval.open": "Open the conversation"
+  "intents.approval.open": "Open the conversation",
+  "intents.action.prepareCommit": "Prepare commit",
+  "intents.action.prepareCommitHint": "Ask this intent's conversation to commit the changes the workflow made, without pushing. You confirm the exact request first."
 }

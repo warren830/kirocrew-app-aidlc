@@ -30,6 +30,8 @@ const STEP_KEYS = ['delivery.step.queued', 'delivery.step.delivered', 'delivery.
 
 /** Statuses where nothing has been handed to the host yet. */
 const BEFORE_SEND: readonly ActionStatus[] = ['Queued', 'Cancelled']
+/** Statuses the outcome is settled in: nothing more is being read from disk. */
+const SETTLED_STATUSES: readonly ActionStatus[] = ['StateChanged', 'ResolvedNoTransition', 'Failed', 'Cancelled']
 /** Statuses where Studio cannot prove what happened. */
 export const UNCERTAIN_STATUSES: readonly ActionStatus[] = ['ReconciliationRequired']
 
@@ -107,6 +109,20 @@ function triState(i18n: I18n, value: boolean | null): string {
   return i18n.t(value ? 'delivery.fact.yes' : 'delivery.fact.no')
 }
 
+/**
+ * Replies whose effect AI-DLC records outside `aidlc-state.md`: an answer, a confirmation, a plan approval. The state
+ * file not moving is then the expected outcome, so the last step reads as the reply recorded, never "No state
+ * change" beside an Activity row saying the plan was approved.
+ */
+const RECORDED_REASONS: readonly string[] = [
+  'question_answered', 'answers_recorded', 'summary_confirmed', 'assumptions_recorded', 'plan_approved',
+  'plan_changes_requested', 'plan_asked_again', 'turn_ended',
+]
+
+export function recordedReply(card: Pick<ActionCard, 'status' | 'resolution'>): boolean {
+  return card.status === 'ResolvedNoTransition' && RECORDED_REASONS.includes(card.resolution.reason ?? '')
+}
+
 export interface DeliveryStripProps {
   card: ActionCard
 }
@@ -120,7 +136,8 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
   const confirmedPending = needsReconciliation && delivery.delivery_confirmed === true
   // Receipt completes only the send step. Reconciliation still has to establish what AI-DLC did.
   const { index, failed } = confirmedPending ? { index: 2, failed: false } : stepIndex(status)
-  const noTransition = status === 'ResolvedNoTransition'
+  const recorded = recordedReply(card)
+  const noTransition = status === 'ResolvedNoTransition' && !recorded
   // A follow-up question can consume the receipt without a new gate opening.
   const atNewGate = card.resolution.reason === 'answer_not_verified_at_gate'
   const answerNotVerified = noTransition && (atNewGate || card.resolution.reason === 'answer_not_verified')
@@ -138,7 +155,9 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
         {STEP_KEYS.map((key, position) => {
           const state = noTransition && position === 3
             ? 'unchanged'
-            : status === 'Cancelled' && position === 0
+            : recorded && position === 3
+              ? 'done'
+              : status === 'Cancelled' && position === 0
               ? 'cancelled'
               : stateOf(position, index, failed)
           return (
@@ -151,7 +170,10 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
                   : planAskedAgain ? 'delivery.planAskedAgainReview'
                   : answerNotVerified ? unverifiedLabel : 'delivery.step.unchanged')
                   : state === 'cancelled' ? 'enum.actionStatus.Cancelled'
-                  : confirmedPending && position === 2 ? 'delivery.step.reconciliation' : key,
+                  : confirmedPending && position === 2 ? 'delivery.step.reconciliation'
+                  : recorded && position === 3
+                    ? (card.resolution.reason === 'turn_ended' ? 'delivery.step.turnEnded' : 'delivery.step.recorded')
+                    : key,
               )}</span>
               {/* The step's own state in words: the bullet's colour and glyph carry it visually, and a
                   screen reader gets it here instead of "list item, Sent". */}
@@ -167,7 +189,11 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
         </Chip>
         {delivery.queued_at ? <Chip icon="clock">{t('delivery.queuedInSlot')}</Chip> : null}
         {noTransition ? <Chip icon="info">{t(remainingLabel)}</Chip> : null}
-        {sent && !needsReconciliation ? (
+        {recorded ? (
+          <Chip tone="ok" icon="check">{t(`delivery.recorded.${card.resolution.reason}`)}</Chip>
+        ) : null}
+        {/* Only while the outcome is still being read: on a closed card it explained nothing. */}
+        {sent && !needsReconciliation && !SETTLED_STATUSES.includes(status) ? (
           <Chip tone={noTransition ? 'neutral' : 'ok'} icon={noTransition ? 'info' : 'check'}>
             {t('delivery.watchingDisk')}
           </Chip>

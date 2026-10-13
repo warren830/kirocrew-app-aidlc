@@ -134,6 +134,24 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
   const completed = intent.disk.status === 'Completed'
   const completedReason = completed ? t('intents.action.completedNoop') : null
 
+  /**
+   * A finished workflow's next step is the commit AI-DLC left to the person. The card opens in the Action Center,
+   * whose confirmation shows the exact request ("… Do not push.") before anything is sent.
+   */
+  const prepareCommit = useCallback(async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const created = await api.prepareCommit(intent.repo_id, intent.intent_key)
+      onGo({ view: 'actions', repo: intent.repo_id, space: intent.space, intent: intent.intent_key,
+        action: created.action_id })
+    } catch (caught) {
+      fail(caught)
+    } finally {
+      setBusy(false)
+    }
+  }, [api, intent, onGo, fail])
+
   const starting = pending === 'run' || pending === 'resume'
   const pauseFirst = pending === 'archive' && archiveNeedsPause
 
@@ -150,7 +168,18 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
   return (
     <div className="studio-col studio-intent-actions" role="group" aria-label={t('intents.action.a11y', { intent: intent.intent_dir })}>
       <div className="studio-row studio-wrap">
-        {parked ? (
+        {completed && !intent.archived ? (
+          <button
+            type="button"
+            className={`studio-btn studio-btn-sm${bound ? ' studio-btn-primary' : ''}`}
+            disabled={busy || !bound}
+            title={bound ? t('intents.action.prepareCommitHint') : t('intents.run.disabledUnbound')}
+            onClick={() => void prepareCommit()}
+          >
+            <Icon name="git" size={13} />
+            {t('intents.action.prepareCommit')}
+          </button>
+        ) : parked ? (
           <button
             type="button"
             className="studio-btn studio-btn-sm"

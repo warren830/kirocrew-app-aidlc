@@ -314,7 +314,10 @@
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--bg-accent);
+  /* A `<pre>` keeps its line breaks but must still wrap: the exact text is read, never scrolled sideways. */
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
 /* Evidence that is being re-read cannot authorise a decision, and must look like it. */

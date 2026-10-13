@@ -17,7 +17,7 @@ from . import constants as C
 from . import security
 from .errors import StudioError
 
-__all__ = ["read_changes"]
+__all__ = ["intent_written_paths", "read_changes"]
 
 #: Context lines around each hunk, as ``git diff`` prints by default.
 _CONTEXT_LINES = 3
@@ -41,6 +41,25 @@ def read_changes(reader: Any, git: Any, repo: Path, manifest_relpath: str) -> di
         files.append(change)
     return {"available": available, "reason": None if available else head.reason, "files": files,
             "truncated": len(paths) > C.MAX_SOURCE_CHANGE_FILES, "manifest_readable": readable}
+
+
+def intent_written_paths(reader: Any, repo: Path) -> dict[str, str]:
+    """Each repository path an intent's ``source-manifest.json`` says it wrote, mapped to that intent's directory
+    (the first manifest naming it, in path order), so the Git panel can say a dirty file is an intent's code rather
+    than the person's own unrelated work. Bounded by ``MAX_SOURCE_MANIFESTS``; every read goes through ``reader``."""
+    spaces = repo / "aidlc" / "spaces"
+    if not spaces.is_dir() or spaces.is_symlink():
+        return {}
+    found = sorted(spaces.glob(f"*/intents/*/**/{C.SOURCE_MANIFEST_NAME}"))[:C.MAX_SOURCE_MANIFESTS]
+    out: dict[str, str] = {}
+    for manifest in found:
+        rel = manifest.relative_to(repo).as_posix()
+        parts = rel.split("/")  # aidlc/spaces/<space>/intents/<intent>/…/source-manifest.json
+        if len(parts) < 7:
+            continue
+        for path in _manifest_paths(reader, repo, rel)[0]:
+            out.setdefault(path, parts[4])
+    return out
 
 
 def _manifest_paths(reader: Any, repo: Path, relpath: str) -> tuple[list[str], bool]:

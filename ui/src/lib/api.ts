@@ -244,6 +244,8 @@ export interface StudioApi extends WorkspaceApi {
   recompose(repoId: string, intentKey: string, body: { skip: string[]; add: string[]; proposal_digest: string }): Promise<RecomposeResponse>
   /** Queue the command card (`run`, or `resume` for a parked intent); the send is the Action Center's submit. */
   run(repoId: string, intentKey: string, type: 'run' | 'resume'): Promise<CommandResponse>
+  /** `POST …/prepare-commit`: the card asking the conversation to commit a finished workflow's changes. */
+  prepareCommit(repoId: string, intentKey: string): Promise<CommandResponse>
   pause(repoId: string, intentKey: string, paused: boolean): Promise<PauseResponse>
   forceStop(repoId: string, intentKey: string): Promise<SubmitReceipt>
   /** Bind, move (a takeover, when already bound elsewhere) or, with `null`, forget the intent's slot. */
@@ -386,6 +388,7 @@ export function useStudioApi(): StudioApi {
         post(intentPath(repoId, intentKey, '/recompose/preview'), body),
       recompose: (repoId, intentKey, body) => post(intentPath(repoId, intentKey, '/recompose'), body),
       run: (repoId, intentKey, type) => post(intentPath(repoId, intentKey, '/run'), { type }),
+      prepareCommit: (repoId, intentKey) => post(intentPath(repoId, intentKey, '/prepare-commit'), {}),
       pause: (repoId, intentKey, paused) => post(intentPath(repoId, intentKey, '/pause'), { paused }),
       forceStop: (repoId, intentKey) =>
         post(intentPath(repoId, intentKey, '/force-stop'), { confirm: true }),

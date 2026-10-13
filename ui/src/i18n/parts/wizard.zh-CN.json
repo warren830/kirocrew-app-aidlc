@@ -139,5 +139,13 @@
   "wizard.error.preview": "无法计算计划。",
   "wizard.error.create": "意图没有被创建。",
   "wizard.error.retry": "重试",
-  "wizard.creating": "正在创建意图…"
+  "wizard.creating": "正在创建意图…",
+  "wizard.nav.needRepo": "请先选择一个仓库。",
+  "wizard.nav.needUsableRepo": "这个仓库无法承载新意图，原因见上方说明。",
+  "wizard.nav.needObjective": "请先描述要做的工作。",
+  "wizard.nav.needLabel": "请先修正意图标签。",
+  "wizard.nav.needInventory": "Studio 读不到这个仓库的意图，请到“仓库”页检查。",
+  "wizard.nav.needSpace": "Studio 正在读取这个仓库的当前空间。",
+  "wizard.nav.needScope": "请先选择一个范围。",
+  "wizard.work.spaceNoRepo": "请先选择仓库；意图会放进该仓库的当前空间。"
 }

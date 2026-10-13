@@ -203,7 +203,7 @@ export interface ActionEvidence {
   state: { relpath: string; sha256: string; size: number; mtime_ns: number; current_stage: string | null; status: string | null; lifecycle_phase: string | null; revision_count: number; stable: boolean } | null
   audit: { shards: { relpath: string; size: number; truncated: boolean }[]; last_event: { type: string; ts: string } | null; boundary_event: { type: string; ts: string; stage: string | null; shard: string; pos: number } | null; complete: boolean }
   directive: DirectiveEvidence | null; artifacts: ArtifactMeta[]
-  review: { verdict: string | null; findings: ReviewFinding[]; reviewer: string | null; review_class: string | null; iteration: number | null } | null
+  review: { verdict: string | null; findings: ReviewFinding[]; reviewer: string | null; review_class: string | null; iteration: number | null; findings_parsed?: boolean; unreadable?: boolean } | null
   acceptance_criteria: { text: string; met: boolean | null; why_key: string | null }[]
   findings: Finding[]
   session: { slot_key: string; session_key: string; running: boolean; stop_state: string; last_turn_ts: string | null; queue_depth: number; busy_reasons: BusyReason[]; options?: string[] } | null
@@ -228,6 +228,8 @@ export interface ActionCard {
   failure: FailureInfo | null; install: InstallInfo | null; budget: { turns_used: number; turn_cap: number; window: string; credits_status: 'unavailable' } | null
   advisor: { latest_draft_id: string | null; status: string | null }
   deep_link: string; dedupe_key: string | null; human_text_present: boolean; acknowledged_evidence_sha256: string | null
+  /** A sent question card's answers as chosen, else `null`: its question group was captured before the reply. */
+  submitted_answers: AnswerInput[] | null
 }
 export interface ActionGroup { key: string; label_key: string; action_ids: string[] }
 /** A bound conversation parked on a host tool approval (architecture A31). Answered in the chat, not here. */
@@ -334,7 +336,7 @@ export interface SourceChangesResponse {
 }
 export interface ArtifactResponse { artifact: ArtifactMeta; content: string | null; encoding: 'utf-8' | 'binary'; truncated: boolean; review: { verdict: string | null; findings: ReviewFinding[] } | null; toc: { level: number; text: string; anchor: string }[]; prior: { available: boolean; source: 'git' | null; diff: string | null } }
 export interface ReviewResponse { stage: string | null; verdict: string | null; findings: ReviewFinding[]; receipts: { event: string; ts: string; reviewer: string | null; iteration: number | null; verdict: string | null; fingerprint: string | null }[]; review_class: string | null; reviewer: string | null; revisions: number }
-export interface RepoGitResponse { git: GitObservation; owned_dirty: string[]; unrelated_dirty: number; owned_uncommitted?: number }
+export interface RepoGitResponse { git: GitObservation; owned_dirty: string[]; unrelated_dirty: number; owned_uncommitted?: number; intent_dirty: { relpath: string; status: string; intent_dir: string }[] }
 export interface BindingResponse { ok: true; binding: BindingView }
 /** `slot` is `null` once unbound, and when the host has no such slot. */
 export interface BindResponse { ok: true; binding: BindingView; slot: SlotView | null }

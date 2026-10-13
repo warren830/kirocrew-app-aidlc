@@ -495,6 +495,12 @@ export function WizardView({ route, go }: WizardViewProps) {
   const workComplete = Boolean(repo) && !blocked && state.objective.trim().length > 0 && labelValid
     && Boolean(activeSpace) && !inventory.error
   const presetComplete = state.scope.trim().length > 0
+  // Why Continue is off, said beside it: a disabled button with no reason reads as the wizard being stuck.
+  const continueBlocked = step === 'work'
+    ? (!repo ? 'wizard.nav.needRepo' : blocked ? 'wizard.nav.needUsableRepo'
+      : !state.objective.trim() ? 'wizard.nav.needObjective' : !labelValid ? 'wizard.nav.needLabel'
+      : inventory.error ? 'wizard.nav.needInventory' : !activeSpace ? 'wizard.nav.needSpace' : null)
+    : step === 'preset' && !presetComplete ? 'wizard.nav.needScope' : null
 
   const create = useCallback(async () => {
     if (!currentPlan?.valid || !repo || !workComplete || !presetComplete || previewing || creating) return
@@ -745,6 +751,9 @@ export function WizardView({ route, go }: WizardViewProps) {
               {t('wizard.nav.continue')}
             </button>
           )}
+          {step !== 'review' && continueBlocked ? (
+            <span className="studio-muted" role="status">{t(continueBlocked)}</span>
+          ) : null}
           <span className="studio-muted studio-wiz-count">{t('wizard.step.of', { n: index + 1 })}</span>
           {previewing ? (
             <span className="studio-muted" role="status">

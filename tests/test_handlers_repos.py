@@ -313,7 +313,7 @@ def test_an_unknown_transaction_is_a_404(api, demo):
 def test_repo_git_reports_the_observation_and_the_owned_dirty_split(api, demo):
     """FR-GIT-004: owned files are named, the user's own work only counted (``fake_git`` answers its defaults)."""
     status, body = api("GET", f"/repos/{demo.repo_id}/git")
-    assert status == 200 and set(body) == {"git", "owned_dirty", "unrelated_dirty", "owned_uncommitted"}
+    assert status == 200 and set(body) == {"git", "owned_dirty", "unrelated_dirty", "owned_uncommitted", "intent_dirty"}
     assert body["git"]["branch"] == "main"
     assert body["owned_dirty"] == []  # no receipt yet, so Studio owns nothing: an unrelated dirty file is never named
     assert isinstance(body["unrelated_dirty"], int)
@@ -330,8 +330,27 @@ def test_repo_git_still_answers_once_a_receipt_exists(sv, api, demo):
         "status": "current"})
     status, body = api("GET", f"/repos/{demo.repo_id}/git")
     assert status == 200, body
-    assert set(body) == {"git", "owned_dirty", "unrelated_dirty", "owned_uncommitted"}
+    assert set(body) == {"git", "owned_dirty", "unrelated_dirty", "owned_uncommitted", "intent_dirty"}
     assert isinstance(body["owned_dirty"], list)
+
+
+def test_a_dirty_file_an_intent_wrote_is_named_with_its_intent_and_the_rest_only_counted(
+        sv, api, demo, gate_repo, monkeypatch):
+    """A finished workflow's code waits for a commit; calling it "unrelated" hid the next step (FR-GIT-004 still
+    keeps the person's own work a count)."""
+    record = Path(gate_repo) / "aidlc" / "spaces" / "default" / "intents" / "261012-divide"
+    manifest = record / "construction" / "code-generation" / "source-manifest.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text('{"writes": [{"path": "ops.py"}, {"path": "tests/test_ops.py"}]}\n')
+    monkeypatch.setattr(type(sv.git), "dirty_split", lambda self, root, owned: {
+        "owned_dirty": [], "unrelated_dirty": 3, "owned_changes": [], "owned_untracked_dirs": [],
+        "unrelated_changes": [{"relpath": "notes.txt", "status": "?"}, {"relpath": "ops.py", "status": ".M"},
+                              {"relpath": "tests/", "status": "?"}],
+        "available": True, "reason": None, "truncated": False})
+    body = api("GET", f"/repos/{demo.repo_id}/git")[1]
+    assert body["intent_dirty"] == [{"relpath": "ops.py", "status": ".M", "intent_dir": "261012-divide"},
+                                    {"relpath": "tests/", "status": "?", "intent_dir": "261012-divide"}]
+    assert body["unrelated_dirty"] == 1  # notes.txt: never named
 
 
 def test_an_owned_file_git_calls_changed_is_a_local_change_only_when_its_bytes_left_the_receipt(

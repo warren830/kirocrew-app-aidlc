@@ -1497,6 +1497,7 @@ class HumanActionBroker:
             "human_text_present": bool(rec.human_text),
             "acknowledged_evidence_sha256": _digest({"delivery": delivery, "audit": evidence.get("audit"),
                                                      "presence": evidence.get("presence")}),
+            "submitted_answers": _submitted_answers(rec),
         }
 
     def _offered_decisions(self, rec: ActionRecord, meta: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -1789,6 +1790,20 @@ def _authoritative_4xx(http_status: Any, receipt: Mapping[str, Any] | None) -> b
 def _template_for(decision: str) -> str | None:
     """The wire-text template a card shows for a decision (§2.11 ``wire_text_template``)."""
     return WIRE_TEXT_TEMPLATES.get(decision, WIRE_TEXT_TEMPLATES.get(_DEFAULT_TEMPLATE.get(decision, "")))
+
+
+def _submitted_answers(rec: ActionRecord) -> list[dict[str, Any]] | None:
+    """The answers a sent question card carried, as chosen (the file's letters and the person's text), or ``None``.
+
+    A closed card's question group is the one Studio captured before the reply, still unanswered there; without
+    these it read "4 of 4 unanswered" with no option marked. The wire text stays the record of what was sent.
+    """
+    answers = (rec.payload or {}).get("answers")
+    if rec.status in SUBMITTABLE_STATUSES or rec.type != "question" or not isinstance(answers, list):
+        return None
+    return [{"index": a.get("index"), "option_letters": [str(x) for x in a.get("option_letters") or []],
+             "free_text": a.get("free_text") if isinstance(a.get("free_text"), str) else None}
+            for a in answers if isinstance(a, Mapping) and isinstance(a.get("index"), int)]
 
 
 def _failure_json(rec: ActionRecord) -> dict[str, Any] | None:

@@ -116,6 +116,11 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
   const sameTurn = view?.origin?.kind === 'audit' && (view.origin.batch_size ?? 1) > 1
   const answerable = ['Queued', 'NotDelivered'].includes(card.status)
   const editable = answerable && !degraded && !refreshing
+  // A sent card's group is the one captured before the reply: its own answers are what was chosen, not the
+  // (empty) form, so a closed card no longer reads "4 of 4 unanswered" with nothing marked.
+  const sent = answerable ? null : card.submitted_answers
+  const chosen = (index: number) =>
+    sent ? sent.find((answer) => answer.index === index) : draft.answers[String(index)]
   // Nothing is preselected: `summaryChoice` has a stored default because the payload builder needs one,
   // so the control shows a selection only after the user has made it.
   const [choiceTouched, setChoiceTouched] = useState(false)
@@ -272,7 +277,9 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
   return (
     <section className="studio-template" data-type={card.type} aria-label={templateLabel(i18n, card)}>
       <DecisionBrief card={card} />
-      {view?.origin?.kind === 'audit' ? (
+      {sent ? (
+        <Consequence icon="check">{t('template.questions.sentSource')}</Consequence>
+      ) : view?.origin?.kind === 'audit' ? (
         <Consequence icon="doc">{t('template.questions.auditSource')}</Consequence>
       ) : view && !degraded && showGroup ? (
         // About the question group: a card that is only a checkpoint (a plan approval) has no questions.
@@ -295,11 +302,15 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
       {showGroup ? (
       <Block title={t('template.questions.group')} icon="question">
         <div className="studio-qmetas">
-          <Chip tone={hasPending ? 'accent' : 'ok'} icon={hasPending ? 'question' : 'check'}>
-            {unsupportedPending > 0
-              ? t('template.questions.unsupportedPending', { n: unsupportedPending })
-              : t('template.questions.pending', { n: unchosen, total: questions.length })}
-          </Chip>
+          {sent ? (
+            <Chip tone="ok" icon="check">{t('template.questions.sentCount', { n: sent.length })}</Chip>
+          ) : (
+            <Chip tone={hasPending ? 'accent' : 'ok'} icon={hasPending ? 'question' : 'check'}>
+              {unsupportedPending > 0
+                ? t('template.questions.unsupportedPending', { n: unsupportedPending })
+                : t('template.questions.pending', { n: unchosen, total: questions.length })}
+            </Chip>
+          )}
           {view ? <Chip mono>{view.stage}</Chip> : null}
           {view?.unit ? <Chip mono>{view.unit}</Chip> : null}
         </div>
@@ -324,7 +335,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
           <p className="studio-muted">{t('template.questions.none')}</p>
         ) : null}
         {questions.map((question) => {
-            const stored = draft.answers[String(question.index)]
+            const stored = chosen(question.index)
             const letters = stored?.option_letters ?? []
             const freeText = stored?.free_text ?? ''
             const other = question.options.find((option) => option.is_other)
@@ -352,6 +363,10 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
                   {question.answered ? (
                     <Chip tone="ok" icon="check">
                       {t('template.questions.answered')}
+                    </Chip>
+                  ) : sent && stored ? (
+                    <Chip tone="ok" icon="send">
+                      {t('template.questions.sentOne')}
                     </Chip>
                   ) : complete && editable ? (
                     <Chip tone="aim" icon="check">

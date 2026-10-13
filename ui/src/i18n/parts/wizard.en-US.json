@@ -139,5 +139,13 @@
   "wizard.error.preview": "The plan could not be computed.",
   "wizard.error.create": "The intent was not created.",
   "wizard.error.retry": "Try again",
-  "wizard.creating": "Creating the intent…"
+  "wizard.creating": "Creating the intent…",
+  "wizard.nav.needRepo": "Choose a repository to continue.",
+  "wizard.nav.needUsableRepo": "This repository cannot host a new intent; see the note above.",
+  "wizard.nav.needObjective": "Describe the work to continue.",
+  "wizard.nav.needLabel": "Fix the intent label to continue.",
+  "wizard.nav.needInventory": "Studio could not read this repository's intents; open Repos to check it.",
+  "wizard.nav.needSpace": "Studio is still reading this repository's active space.",
+  "wizard.nav.needScope": "Choose a scope to continue.",
+  "wizard.work.spaceNoRepo": "Choose a repository first; the intent goes into its active space."
 }

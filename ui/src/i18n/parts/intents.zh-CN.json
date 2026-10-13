@@ -41,8 +41,8 @@
   "intents.noActivity": "尚无活动",
   "intents.session": "已绑定会话",
   "intents.noSession": "未绑定会话",
-  "intents.session.title": "规范会话 — {intent}",
-  "intents.session.a11y": "{intent} 的规范会话",
+  "intents.session.title": "对话 — {intent}",
+  "intents.session.a11y": "{intent} 的对话",
   "intents.session.lede": "Studio 是把决策作为你本人的发言写入这个意图所绑定的那一个 KiroCrew 会话来投递的：代理 {agent}，项目为本仓库。在绑定之前，这里的每个决策都会被拒绝。",
   "intents.session.boundLede": "这个意图的决策会作为你本人的发言写入该会话。发送之前，Studio 仍会先把原文给你看。",
   "intents.session.fact.repo": "仓库",
@@ -161,5 +161,7 @@
   "intents.approval.waiting": "会话在等你批准一个工具调用。",
   "intents.approval.waitingFor": "{label} 在等你批准一个工具调用。",
   "intents.approval.where": "在会话里选择允许、信任或拒绝。",
-  "intents.approval.open": "打开会话"
+  "intents.approval.open": "打开会话",
+  "intents.action.prepareCommit": "准备提交",
+  "intents.action.prepareCommitHint": "请该意图的对话提交工作流所做的改动，但不推送。发送前你会先确认请求原文。"
 }

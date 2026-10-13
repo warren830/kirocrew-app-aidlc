@@ -227,6 +227,7 @@
     },
     "status": "Queued",
     "status_generation": 0,
+    "submitted_answers": null,
     "type": "recovery",
     "updated_at": "2026-09-04T10:00:00Z",
     "waiting_since": "<volatile>"
@@ -462,6 +463,7 @@
     },
     "status": "Queued",
     "status_generation": 0,
+    "submitted_answers": null,
     "type": "gate",
     "updated_at": "2026-09-04T10:00:00Z",
     "waiting_since": "<volatile>"
@@ -812,6 +814,7 @@
     },
     "status": "Queued",
     "status_generation": 0,
+    "submitted_answers": null,
     "type": "question",
     "updated_at": "2026-09-04T10:00:00Z",
     "waiting_since": "<volatile>"

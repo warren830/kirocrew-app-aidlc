@@ -387,6 +387,8 @@ PLAN_REQUEST_CHANGES_CHOICE = "Request Changes"
 #: What a code stage lists as written (``writes[].path``) in its record; a gate on it shows those files' change.
 SOURCE_MANIFEST_NAME = "source-manifest.json"
 MAX_SOURCE_CHANGE_FILES = 50
+#: Source manifests read to name which intent wrote a dirty file on the repository's Git panel.
+MAX_SOURCE_MANIFESTS = 200
 MAX_SOURCE_CHANGE_DIFF_BYTES = 64 * 1024
 #: The whole ``…/changes`` response: past it, the remaining files list their counts without a diff.
 MAX_SOURCE_CHANGES_DIFF_BYTES = 512 * 1024

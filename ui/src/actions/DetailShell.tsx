@@ -29,7 +29,7 @@ import {
 import { ChatEmbed } from '@kirocrew/app-sdk'
 
 import { Icon } from '../shell/Icon'
-import { useI18n } from '../i18n'
+import { useI18n, type I18n } from '../i18n'
 import { StudioApiError, type StudioApi } from '../lib/api'
 import { at } from '../lib/format'
 import { isRepositoryUnavailable } from '../lib/actionQueue'
@@ -683,6 +683,20 @@ function RefusalDetails({ refusal, onOpenAction }: { refusal: StudioApiError; on
  * compare-and-swap was refused. Both are useful; conflating them would present Studio's records as
  * AI-DLC's own events (FR-ADV-009).
  */
+/**
+ * Why Studio moved the card, in words. The machine word stays in the row's tooltip, beside its generation, so a
+ * support conversation can still quote both; a reason without copy is shown as that word.
+ */
+export function transitionReason(i18n: I18n, reason: string): string {
+  const { t, has } = i18n
+  const [code, decision] = reason.split(':', 2)
+  if (code === 'submitted' && decision) {
+    return t('detail.transitions.why.submitted', {
+      decision: has(`decision.${decision}.label`) ? t(`decision.${decision}.label`) : decision })
+  }
+  return has(`detail.transitions.why.${reason}`) ? t(`detail.transitions.why.${reason}`) : reason
+}
+
 function TransitionList({ createdAt, transitions }: { createdAt: string; transitions: ActionTransition[] }) {
   const i18n = useI18n()
   const { t } = i18n
@@ -704,18 +718,16 @@ function TransitionList({ createdAt, transitions }: { createdAt: string; transit
       <ol className="studio-translist">
         {created}
         {transitions.map((row, index) => (
-          <li key={`${row.at}-${index}`}>
+          <li key={`${row.at}-${index}`} title={[row.reason, t('detail.transitions.generation', {
+            n: i18n.fmt.number(row.generation) })].filter(Boolean).join(' · ')}>
             <span className="studio-mono studio-muted">{at(i18n, row.at)}</span>
             <span className="studio-grow">
               {t('detail.transitions.row', {
                 from: row.from_status ? t(`enum.actionStatus.${row.from_status}`) : t('detail.transitions.initial'),
                 to: statusLabel(i18n, row.to_status, row.reason),
               })}
-              {/* The reason is Studio's own machine-readable word for the edge; shown verbatim so a
-                  support conversation can quote it. */}
-              {row.reason ? <span className="studio-mono studio-muted"> · {row.reason}</span> : null}
+              {row.reason ? <span className="studio-muted"> · {transitionReason(i18n, row.reason)}</span> : null}
             </span>
-            <span className="studio-mono studio-muted">{t('detail.transitions.generation', { n: i18n.fmt.number(row.generation) })}</span>
           </li>
         ))}
       </ol>

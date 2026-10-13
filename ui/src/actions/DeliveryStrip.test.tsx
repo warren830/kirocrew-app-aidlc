@@ -168,3 +168,34 @@ describe('delivery outcomes describe observed progress', () => {
     expect(strip.querySelector('[data-state="now"]')).toBeNull()
   })
 })
+
+describe('a reply AI-DLC records outside the state file', () => {
+  it('reads as recorded, not as no state change', () => {
+    const i18n = makeI18n('en-US')
+    document.documentElement.lang = 'en-US'
+    const base = actionCard()
+    render(<I18nProvider><DeliveryStrip card={actionCard({
+      status: 'ResolvedNoTransition', resolution: { ...base.resolution, kind: 'no_transition', reason: 'plan_approved' },
+      delivery: { ...base.delivery, wire_text: 'Approve Plan', delivered_at: '2026-10-12T23:45:00Z' },
+    })} /></I18nProvider>)
+    const strip = screen.getByRole('region', { name: i18n.t('delivery.label') })
+    expect(strip).toHaveTextContent(i18n.t('delivery.recorded.plan_approved'))
+    expect(strip).toHaveTextContent(i18n.t('delivery.step.recorded'))
+    expect(strip).not.toHaveTextContent(i18n.t('delivery.noTransition'))
+    expect(strip).not.toHaveTextContent(i18n.t('delivery.step.unchanged'))
+    // A settled card is no longer being read from disk.
+    expect(strip).not.toHaveTextContent(i18n.t('delivery.watchingDisk'))
+    expect([...strip.querySelectorAll('.studio-dstep')].map((step) => step.getAttribute('data-state')))
+      .toEqual(['done', 'done', 'done', 'done'])
+  })
+
+  it('still says no state change when the turn ended without moving anything', () => {
+    const i18n = makeI18n('en-US')
+    const base = actionCard()
+    render(<I18nProvider><DeliveryStrip card={actionCard({
+      status: 'ResolvedNoTransition', resolution: { ...base.resolution, kind: 'no_transition', reason: 'turn_ended_without_movement' },
+    })} /></I18nProvider>)
+    const strip = screen.getByRole('region', { name: i18n.t('delivery.label') })
+    expect(strip).toHaveTextContent(i18n.t('delivery.step.unchanged'))
+  })
+})
