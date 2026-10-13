@@ -209,29 +209,29 @@ export function SettingsView({ go }: SettingsViewProps) {
 
   const [applied, setApplied] = useState<SettingsResponse | null>(null)
   const [busy, setBusy] = useState(false)
-  const [notice, setNotice] = useState<string | null>(null)
+  // A key while it is Studio's own words: saving the interface language must show "Saved." in the new language,
+  // which a string translated at save time cannot.
+  const [notice, setNotice] = useState<{ key: string } | { text: string } | null>(null)
 
   const current = newer(applied, settings.data)
 
   const save = useCallback(
     (patch: DeepPartial<SettingsValues>) => {
       setBusy(true)
-      setNotice(t('settings.page.saving'))
+      setNotice({ key: 'settings.page.saving' })
       void api
         .putSettings(patch)
         .then((response) => {
           setApplied(response)
-          setNotice(t('settings.page.saved'))
+          setNotice({ key: 'settings.page.saved' })
         })
         .catch((caught: unknown) => {
           const error = decodeError(caught)
           const message = i18n.has(`errors.${error.code}`) ? t(`errors.${error.code}`) : error.message
           const key = typeof error.details['key'] === 'string' ? error.details['key'] : null
-          setNotice(
-            key
-              ? t('settings.page.saveFailedKey', { key, message })
-              : t('settings.page.saveFailed', { message }),
-          )
+          setNotice({
+            text: key ? t('settings.page.saveFailedKey', { key, message }) : t('settings.page.saveFailed', { message }),
+          })
           // The value on screen is now wrong: re-read rather than leave the optimistic control lying.
           void refresh()
         })
@@ -256,7 +256,7 @@ export function SettingsView({ go }: SettingsViewProps) {
         {/* Polite: a save result is status. It is one region for the whole page so a screen reader hears
             one sentence per change rather than one per section. */}
         <p className="studio-settings-status" role="status" aria-live="polite" aria-label={t('settings.page.status')}>
-          {notice ?? ''}
+          {notice === null ? '' : 'key' in notice ? t(notice.key) : notice.text}
         </p>
 
         {settings.error && !current ? (

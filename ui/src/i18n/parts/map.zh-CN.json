@@ -64,7 +64,7 @@
   "map.a11y.tableCaption": "{intent} 当前可见的阶段，按阶段顺序排列：分组、编号、阶段、状态、智能体、关卡、评审、耗时、文件与备注。",
   "map.status.executing": "正在执行 {number} {slug}",
   "map.status.idle": "当前没有阶段在执行",
-  "map.status.progress": "已记录完成 {done} / {total} 个阶段",
+  "map.status.progress": "已记录完成或跳过 {done} / {total} 个阶段",
   "map.col.phase": "分组",
   "map.col.number": "编号",
   "map.col.stage": "阶段",

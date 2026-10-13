@@ -236,7 +236,7 @@ describe('the workflow map', () => {
     expect(canvas.querySelectorAll('.studio-stage')).toHaveLength(7)
     expect(canvas.querySelector('[data-stage="market-research"]')).toBeNull()
     expect(canvas.querySelector('[data-stage="reverse-engineering"]')).toBeNull()
-    expect(screen.getByText('2 of 7 stages recorded as done')).toBeInTheDocument()
+    expect(screen.getByText('2 of 7 stages recorded as done or skipped')).toBeInTheDocument()
     expect(screen.getByText('6 Gates · exact')).toBeInTheDocument()
   })
 
@@ -250,7 +250,7 @@ describe('the workflow map', () => {
     const excluded = screen.getByRole('button', { name: /Stage 2.1 reverse-engineering/ })
     expect(excluded).not.toHaveAccessibleName(/\bGate\b/)
     expect(excluded).not.toHaveTextContent('Gate')
-    expect(screen.getByText('2 of 7 stages recorded as done')).toBeInTheDocument()
+    expect(screen.getByText('2 of 7 stages recorded as done or skipped')).toBeInTheDocument()
     // The lane holding the unselected stage counts it as not selected, never as "0 skipped".
     const inception = canvas.querySelector('[data-lane="inception"] .studio-lane-sub')
     expect(inception).toHaveTextContent(/not selected/)
@@ -515,7 +515,7 @@ describe('the workflow map', () => {
     mount()
     expect(await screen.findByText('No stages are selected in this plan. Show all stages to inspect the full workflow.'))
       .toBeInTheDocument()
-    expect(screen.getByText('0 of 0 stages recorded as done')).toBeInTheDocument()
+    expect(screen.getByText('0 of 0 stages recorded as done or skipped')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Show all stages' }))
     expect(screen.getByRole('list', { name: 'Workflow map swimlanes' }).querySelectorAll('.studio-stage'))
       .toHaveLength(9)
@@ -554,7 +554,7 @@ describe('the workflow map', () => {
     mount()
     const skipped = await screen.findByRole('button', { name: /Stage 2.4 user-stories/ })
     expect(skipped).toHaveAttribute('data-state', 'skipped')
-    expect(screen.getByText('3 of 7 stages recorded as done')).toBeInTheDocument()
+    expect(screen.getByText('3 of 7 stages recorded as done or skipped')).toBeInTheDocument()
   })
 
   it('says so, assertively, when the map cannot be read — and offers a retry', async () => {

@@ -55,8 +55,8 @@ describe('the intents inventory', () => {
         <IntentList intents={[express]} failures={[]} narrow={false} renderActions={() => null} />
       </I18nProvider>,
     )
-    expect(screen.getByText('3 of 7 planned stages')).toBeInTheDocument()
-    expect(screen.queryByText('11 of 33 stages')).toBeNull()
+    expect(screen.getByText('3 of 7 planned stages done or skipped')).toBeInTheDocument()
+    expect(screen.queryByText('11 of 33 stages done or skipped')).toBeNull()
   })
 
   it('renders a row with its state and stage, and no keep-moving column', () => {
@@ -68,7 +68,7 @@ describe('the intents inventory', () => {
     expect(screen.getByText('250901-guest-checkout')).toBeInTheDocument()
     expect(screen.getByText('Waiting for you')).toBeInTheDocument()
     expect(screen.getByText('2.3 functional-design')).toBeInTheDocument()
-    expect(screen.getByText('11 of 33 stages')).toBeInTheDocument()
+    expect(screen.getByText('11 of 33 stages done or skipped')).toBeInTheDocument()
     expect(screen.getByText('2 decisions waiting')).toBeInTheDocument()
     expect(screen.queryByText('Keep moving')).not.toBeInTheDocument()
     expect(screen.getAllByRole('columnheader')).toHaveLength(5)

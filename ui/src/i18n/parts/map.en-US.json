@@ -64,7 +64,7 @@
   "map.a11y.tableCaption": "Visible stages of {intent}, in phase order: phase, number, stage, state, agent, Gate, review, elapsed time, files and notes.",
   "map.status.executing": "Executing {number} {slug}",
   "map.status.idle": "No stage is executing",
-  "map.status.progress": "{done} of {total} stages recorded as done",
+  "map.status.progress": "{done} of {total} stages recorded as done or skipped",
   "map.col.phase": "Phase",
   "map.col.number": "No.",
   "map.col.stage": "Stage",
