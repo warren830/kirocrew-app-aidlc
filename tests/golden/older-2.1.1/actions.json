@@ -338,14 +338,7 @@
       "unit": null,
       "unsupported_pending_count": 0
      },
-     "review": {
-      "findings": [],
-      "findings_parsed": true,
-      "iteration": null,
-      "review_class": null,
-      "reviewer": null,
-      "verdict": null
-     },
+     "review": null,
      "session": null,
      "state": {
       "current_stage": "feasibility",
@@ -753,14 +746,7 @@
       "unit": null,
       "unsupported_pending_count": 0
      },
-     "review": {
-      "findings": [],
-      "findings_parsed": true,
-      "iteration": null,
-      "review_class": null,
-      "reviewer": null,
-      "verdict": null
-     },
+     "review": null,
      "session": null,
      "state": {
       "current_stage": "feasibility",

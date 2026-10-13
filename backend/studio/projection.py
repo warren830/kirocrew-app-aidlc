@@ -793,8 +793,11 @@ class Projection:
         node = snap.node(target)
         review_class = _run_review_class(snap, node)
         review_json: dict | None = None
-        if bundle.review is not None:
-            verdict, found = bundle.review
+        verdict, found = bundle.review if bundle.review is not None else (None, [])
+        parsed = bool(getattr(found, "findings_parsed", True))
+        if bundle.review is not None and (verdict is not None or found or not parsed):
+            # No `## Review` in the judged artifact is no review: an empty one would read "no open blockers" on a
+            # stage no reviewer ran for (an express scope runs none).
             review_json = {
                 "verdict": verdict,
                 "findings": [f.to_json() for f in found],
@@ -804,7 +807,7 @@ class Projection:
                 "iteration": next((f.iteration for f in found if f.iteration is not None), None),
                 # False when the findings were in a shape Studio could not enumerate: an empty list then means
                 # "could not tell", which the card must not present as "no open blockers" (§2.11).
-                "findings_parsed": bool(getattr(found, "findings_parsed", True)),
+                "findings_parsed": parsed,
             }
         elif bundle.review_unreadable:  # a verdict over the render cap is not "no reviewer"
             review_json = {"verdict": None, "findings": [], "reviewer": None, "review_class": review_class,

@@ -259,14 +259,7 @@
        "unit": null,
        "unsupported_pending_count": 0
       },
-      "review": {
-       "findings": [],
-       "findings_parsed": true,
-       "iteration": null,
-       "review_class": "advisory",
-       "reviewer": "aidlc-product-lead-agent",
-       "verdict": null
-      },
+      "review": null,
       "session": null,
       "state": {
        "current_stage": "requirements-analysis",

@@ -393,9 +393,12 @@ def test_an_unreviewed_gate_opens_on_the_stage_summary(projection, snap_of, repo
         artifacts={f"{record}/build-instructions.md": "# Build\n" + review,
                    f"{record}/build-and-test-summary.md": "# Summary\n\nAll tests passed.\n",
                    f"{record}/test-results.md": "# Results\n"})
-    names = [a["name"] for a in projection.evidence(snap_of(root), stage=stage).to_json()["artifacts"]]
+    evidence = projection.evidence(snap_of(root), stage=stage).to_json()
+    names = [a["name"] for a in evidence["artifacts"]]
     assert names[0] == lead and sorted(names) == ["build-and-test-summary.md", "build-instructions.md",
                                                   "test-results.md"]
+    # No `## Review` is no review, not an empty one that would read "no open blockers".
+    assert (evidence["review"] is None) == (review == "")
 
 
 def test_evidence_names_the_choices_the_last_reply_offered_only_while_no_turn_runs(projection, gate_snap):
