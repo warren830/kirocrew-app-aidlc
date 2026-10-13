@@ -252,5 +252,7 @@
   "template.questions.fileSource": "Choose an answer for each question below. Studio reads these options from the saved question file and sends your confirmed answers together to the bound conversation.",
   "template.questions.sentSource": "These are the questions AI-DLC asked, with the answers you sent marked. The exact text sent is under the delivery steps.",
   "template.questions.sentCount": "Answers sent: {n}",
-  "template.questions.sentOne": "sent"
+  "template.questions.sentOne": "sent",
+  "template.command.dispatched": "What was dispatched",
+  "template.command.stageSubCommit": "The stage AI-DLC last recorded. A commit request does not move it."
 }

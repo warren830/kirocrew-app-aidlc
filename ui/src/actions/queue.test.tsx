@@ -251,7 +251,7 @@ describe('the action queue', () => {
     expect(screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent)).toEqual([
       'Recovery required and delivery uncertain1',
       'Blocking Gates and questions2',
-      'Budget stops and pauses1',
+      'Requests, budget stops and pauses1',
     ])
     expect(screen.getByText('4 of 4')).toBeInTheDocument()
     // Equal priority sorts oldest first (FR-ACT-004): the question waited longer than the gate.

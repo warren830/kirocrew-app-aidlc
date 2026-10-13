@@ -252,5 +252,7 @@
   "template.questions.fileSource": "请在下方逐题选择。选项来自已保存的题单，确认后会整组发送到已绑定的会话。",
   "template.questions.sentSource": "以下是 AI-DLC 提出的问题，已标出你发送的答案。实际发送的原文见投递步骤下方。",
   "template.questions.sentCount": "已发送 {n} 个答案",
-  "template.questions.sentOne": "已发送"
+  "template.questions.sentOne": "已发送",
+  "template.command.dispatched": "已派发的内容",
+  "template.command.stageSubCommit": "AI-DLC 最后记录的阶段。提交请求不会改变它。"
 }

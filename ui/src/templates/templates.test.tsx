@@ -1582,6 +1582,19 @@ describe('advisor block', () => {
     expect(screen.queryByText('The decline path is not covered by the design.')).toBeNull()
   })
 
+  it('words a sent command card as a record, and a commit request as not moving the stage', () => {
+    setApiRoutes({})
+    const commit = { type: 'prepare_commit' as const, decisions: [spec('prepare_commit')],
+                     headline: { key: 'action.prepare_commit.headline', params: {} } }
+    const { unmount } = mount(DecisionTemplate, card(commit))
+    expect(screen.getByText(en.t('template.command.dispatch'))).toBeInTheDocument()
+    expect(screen.getByText(en.t('template.command.stageSubCommit'))).toBeInTheDocument()
+    unmount()
+    mount(DecisionTemplate, card({ ...commit, status: 'Answered' }))
+    expect(screen.getByText(en.t('template.command.dispatched'))).toBeInTheDocument()
+    expect(screen.queryByText(en.t('template.command.dispatch'))).toBeNull()
+  })
+
   it('offers no Advisor at all for a command card the backend refuses to analyse', () => {
     setApiRoutes({})
     mount(DecisionTemplate, card({ type: 'run', decisions: [spec('run')], headline: { key: 'action.run.headline', params: {} } }))

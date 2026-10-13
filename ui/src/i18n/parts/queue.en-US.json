@@ -8,7 +8,7 @@
   "queue.filterPlaceholder": "Filter by repo, intent, stage",
   "queue.group.attention": "Circuit breakers, failures, and install conflicts",
   "queue.group.blocking": "Blocking Gates and questions",
-  "queue.group.info": "Budget stops and pauses",
+  "queue.group.info": "Requests, budget stops and pauses",
   "queue.group.oldest": "Oldest first",
   "queue.group.recovery": "Recovery required and delivery uncertain",
   "queue.group.repo": "Repository",

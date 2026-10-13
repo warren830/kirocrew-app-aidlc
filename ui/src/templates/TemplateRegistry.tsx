@@ -85,32 +85,32 @@ export function CommandTemplate({ card }: TemplateProps) {
   const i18n = useI18n()
   const { t } = i18n
   const session = card.evidence.session
+  // A sent or closed card is a record of a dispatch, not a preview of one.
+  const sent = !['Queued', 'NotDelivered'].includes(card.status)
   return (
     <section className="studio-template" data-type={card.type} aria-label={templateLabel(i18n, card)}>
       <DecisionBrief card={card} />
-      <Block title={t('template.command.dispatch')} icon="play">
+      <Block title={t(sent ? 'template.command.dispatched' : 'template.command.dispatch')} icon="play">
         <EvidenceGrid>
           <Ev
             src={t('template.command.session')}
             icon="activity"
             value={session?.slot_key ?? t('template.command.noSession')}
-            sub={
-              session
-                ? t('template.command.sessionSub', {
-                    state: session.running
-                      ? t('template.recovery.sessionRunning')
-                      : t('template.recovery.sessionIdle'),
-                    turn: session.last_turn_ts ? at(i18n, session.last_turn_ts) : t('common.unavailable'),
-                  })
-                : t('template.command.noSessionSub')
-            }
+            sub={(() => {
+              if (!session) return t('template.command.noSessionSub')
+              const state = session.running ? t('template.recovery.sessionRunning') : t('template.recovery.sessionIdle')
+              // The host does not always report a last turn; "last turn Unavailable" read as a fault.
+              return session.last_turn_ts
+                ? t('template.command.sessionSub', { state, turn: at(i18n, session.last_turn_ts) })
+                : state
+            })()}
             conflict={!session}
           />
           <Ev
             src={t('template.command.stage')}
             icon="gate"
             value={card.stage?.slug ?? t('common.none')}
-            sub={t('template.command.stageSub')}
+            sub={t(card.type === 'prepare_commit' ? 'template.command.stageSubCommit' : 'template.command.stageSub')}
           />
         </EvidenceGrid>
         <div className="studio-row studio-qmetas">
