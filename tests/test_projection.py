@@ -1292,9 +1292,9 @@ def test_summary_title_drops_every_template_placeholder(projection, snap_of, rep
     assert summary.scope == "review-major-remediation" and summary.registry_status == "in-flight"
 
 
-def test_summary_title_is_capped(projection, gate_snap, proj_mod):
+def test_summary_title_is_capped_and_says_it_was_cut(projection, gate_snap, proj_mod):
     title = projection.summarize(gate_snap).title
-    assert title and len(title) == proj_mod.MAX_TITLE_CHARS
+    assert title and len(title) <= proj_mod.MAX_TITLE_CHARS and title.endswith("…")
 
 
 def test_intent_detail_is_a_superset_of_the_summary(projection, gate_snap, C):

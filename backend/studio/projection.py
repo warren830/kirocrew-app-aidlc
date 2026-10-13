@@ -1389,7 +1389,10 @@ class Projection:
     @staticmethod
     def _title(snap: IntentSnapshot) -> str | None:
         value = (snap.state.project.get("Project") or "").strip() if snap.state is not None else ""
-        return value[:MAX_TITLE_CHARS] if value and value not in PROJECT_PLACEHOLDERS else None
+        if not value or value in PROJECT_PLACEHOLDERS:
+            return None
+        # A cut title says so: "… Words are separated by any" read as the whole objective.
+        return value if len(value) <= MAX_TITLE_CHARS else value[:MAX_TITLE_CHARS - 1].rstrip() + "…"
 
     @staticmethod
     def _disk(snap: IntentSnapshot) -> DiskState:
