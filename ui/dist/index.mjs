@@ -5029,8 +5029,8 @@ function M(e) {
 	} catch {}
 	return j;
 }
-var N = M(import.meta.url), P = ["en-US", "zh-CN"], F = "en-US", I = "mc-lang", L = `${N}:locale`, R = `${N}:organize`, z = `${N}:locale-changed`, ee = "(max-width: 767px)";
-function B(e) {
+var N = M(import.meta.url), P = ["en-US", "zh-CN"], F = "en-US", I = "mc-lang", L = `${N}:locale`, R = `${N}:organize`, z = `${N}:locale-changed`, B = "(max-width: 767px)";
+function V(e) {
 	return (t) => {
 		if (typeof MutationObserver > "u") return () => {};
 		let n = new MutationObserver(t);
@@ -5040,12 +5040,12 @@ function B(e) {
 		}), () => n.disconnect();
 	};
 }
-function V() {
+function H() {
 	let e = document.documentElement, t = e.dataset.mode;
 	return t === "dark" || t === "light" ? t : (e.dataset.theme ?? "dark").includes("dark") ? "dark" : "light";
 }
-function H() {
-	return f(B(["data-mode", "data-theme"]), V, () => "dark");
+function ee() {
+	return f(V(["data-mode", "data-theme"]), H, () => "dark");
 }
 function U(e) {
 	if (!e) return null;
@@ -5068,7 +5068,7 @@ function ne() {
 }
 function W() {
 	let e = i((e) => {
-		let t = B(["lang"])(e);
+		let t = V(["lang"])(e);
 		return window.addEventListener("storage", e), window.addEventListener(z, e), () => {
 			t(), window.removeEventListener("storage", e), window.removeEventListener(z, e);
 		};
@@ -5084,10 +5084,10 @@ function re(e) {
 function ie() {
 	let e = i((e) => {
 		if (typeof window.matchMedia != "function") return () => {};
-		let t = window.matchMedia(ee);
+		let t = window.matchMedia(B);
 		return t.addEventListener("change", e), () => t.removeEventListener("change", e);
 	}, []);
-	return f(e, () => typeof window.matchMedia == "function" && window.matchMedia(ee).matches, () => !1);
+	return f(e, () => typeof window.matchMedia == "function" && window.matchMedia(B).matches, () => !1);
 }
 function ae() {
 	let e = i((e) => {
@@ -7208,11 +7208,11 @@ function Pn({ repoId: e, intentKey: t, artifacts: n, stage: r, unit: a, kind: o,
 		revalidateOn: ["intent.updated", "reset"]
 	}), k = D ? n : O.data?.artifacts ?? [], A = D ? !1 : O.data?.truncated ?? !1, j = c ? s ?? "" : T || (s ?? ""), M = k.find((e) => e.artifact_id === j) ?? null, N = M ?? k[0] ?? null, P = j !== "" && M === null && k.length > 0, F = (e) => {
 		c ? c(e) : E(e);
-	}, I = Sn(e, t, N), L = Nn(f) ? f : void 0, R = Nn(f) ? void 0 : f, z = u ?? I.data?.review?.findings ?? [], ee = z.filter((e) => e.level === "blocker").length, B = O.error, V = l(() => /* @__PURE__ */ m(X, {
+	}, I = Sn(e, t, N), L = Nn(f) ? f : void 0, R = Nn(f) ? void 0 : f, z = u ?? I.data?.review?.findings ?? [], B = z.filter((e) => e.level === "blocker").length, V = O.error, H = l(() => /* @__PURE__ */ m(X, {
 		name: "doc",
 		size: 18
 	}), []);
-	return !D && O.loading ? /* @__PURE__ */ m(x, { rows: 5 }) : B ? /* @__PURE__ */ h("p", {
+	return !D && O.loading ? /* @__PURE__ */ m(x, { rows: 5 }) : V ? /* @__PURE__ */ h("p", {
 		className: "studio-artifact-error",
 		role: "status",
 		children: [
@@ -7221,10 +7221,10 @@ function Pn({ repoId: e, intentKey: t, artifacts: n, stage: r, unit: a, kind: o,
 				size: 13
 			}),
 			" ",
-			B.known ? b(`errors.${B.code}`) : B.message
+			V.known ? b(`errors.${V.code}`) : V.message
 		]
 	}) : k.length === 0 ? /* @__PURE__ */ m(S, {
-		icon: V,
+		icon: H,
 		title: b("artifact.empty.title"),
 		subtitle: b("artifact.empty.body")
 	}) : /* @__PURE__ */ h("div", {
@@ -7290,10 +7290,10 @@ function Pn({ repoId: e, intentKey: t, artifacts: n, stage: r, unit: a, kind: o,
 										className: "studio-pane-nm studio-grow",
 										children: b("review.pane.title")
 									}),
-									ee > 0 ? /* @__PURE__ */ m(Z, {
+									B > 0 ? /* @__PURE__ */ m(Z, {
 										tone: "danger",
 										icon: "warn",
-										children: b("review.openBlockers", { n: C.number(ee) })
+										children: b("review.openBlockers", { n: C.number(B) })
 									}) : null
 								]
 							}),
@@ -9053,7 +9053,7 @@ function ii({ actionId: e, queueCard: t, api: n, route: r, go: a, groupedAnswers
 				clientWireText: L.wire
 			});
 		}
-	}, ee = E.refusal, B = E.stage === "stale";
+	}, B = E.refusal, V = E.stage === "stale";
 	return /* @__PURE__ */ h("section", {
 		className: "studio-detail",
 		"aria-label": u("detail.label"),
@@ -9081,23 +9081,23 @@ function ii({ actionId: e, queueCard: t, api: n, route: r, go: a, groupedAnswers
 				children: /* @__PURE__ */ h("div", {
 					className: "studio-reading",
 					children: [
-						ee ? /* @__PURE__ */ h("div", {
+						B ? /* @__PURE__ */ h("div", {
 							className: "studio-banner",
 							"data-tone": "danger",
-							role: B ? "alert" : "status",
+							role: V ? "alert" : "status",
 							children: [/* @__PURE__ */ m(X, {
 								name: "warn",
 								size: 15
 							}), /* @__PURE__ */ h("div", {
 								className: "studio-grow",
 								children: [
-									/* @__PURE__ */ m("p", { children: u(`errors.${ee.code}`) }),
+									/* @__PURE__ */ m("p", { children: u(`errors.${B.code}`) }),
 									/* @__PURE__ */ m("p", {
 										className: "studio-muted",
-										children: B ? u("detail.staleRefused") : O.delivery.delivered_at || O.delivery.transcript_row ? u("detail.additionalAttemptBlocked") : u("detail.nothingSent")
+										children: V ? u("detail.staleRefused") : O.delivery.delivered_at || O.delivery.transcript_row ? u("detail.additionalAttemptBlocked") : u("detail.nothingSent")
 									}),
 									/* @__PURE__ */ m(ai, {
-										refusal: ee,
+										refusal: B,
 										onOpenAction: (e) => a({
 											...Dt,
 											view: "actions",
@@ -11198,7 +11198,7 @@ function ba({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 			option_letters: t,
 			free_text: i
 		}
-	} }), ee = (e, t) => {
+	} }), B = (e, t) => {
 		let r = n.answers[String(e.index)], i = r?.option_letters ?? [];
 		if (!e.multi_select) {
 			z(e.index, [t], r?.free_text ?? null);
@@ -11206,7 +11206,7 @@ function ba({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 		}
 		let a = i.includes(t) ? i.filter((e) => e !== t) : [...i, t];
 		z(e.index, a, r?.free_text ?? null);
-	}, B = i((e, t) => {
+	}, V = i((e, t) => {
 		let r = { ...n.answers };
 		for (let n of e) {
 			let e = v.find((e) => e.index === n.question_index);
@@ -11217,7 +11217,7 @@ function ba({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 			a && (r[i] = a);
 		}
 		return r;
-	}, [n.answers, v]), V = (e) => r({ answers: B(e, !1) }), H = g.draft?.request.auto === !0 && g.draft.action_id === e.action_id ? Yi(g.draft) : null, U = H ? g.draft?.draft_id ?? null : null, te = l(() => {
+	}, [n.answers, v]), H = (e) => r({ answers: V(e, !1) }), ee = g.draft?.request.auto === !0 && g.draft.action_id === e.action_id ? Yi(g.draft) : null, U = ee ? g.draft?.draft_id ?? null : null, te = l(() => {
 		let r = n.advisorApplied;
 		if (!r) return [];
 		let i = g.draft?.draft_id === r ? g.draft : (t?.drafts ?? []).find((e) => e.draft_id === r);
@@ -11238,19 +11238,19 @@ function ba({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 		v
 	]);
 	return o(() => {
-		if (!H || !U || !D || n.advisorApplied === U) return;
-		let e = B(H.suggested_answers, !0);
+		if (!ee || !U || !D || n.advisorApplied === U) return;
+		let e = V(ee.suggested_answers, !0);
 		Object.keys(e).length !== Object.keys(n.answers).length && r({
 			answers: e,
 			advisorApplied: U
 		});
 	}, [
-		H,
+		ee,
 		U,
 		D,
 		n.advisorApplied,
 		n.answers,
-		B,
+		V,
 		r
 	]), /* @__PURE__ */ h("section", {
 		className: "studio-template",
@@ -11447,7 +11447,7 @@ function ba({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 											value: e.letter,
 											checked: n,
 											disabled: !D,
-											onChange: () => ee(t, e.letter)
+											onChange: () => B(t, e.letter)
 										}), /* @__PURE__ */ h("span", {
 											className: "studio-opt-body",
 											children: [
@@ -11534,7 +11534,7 @@ function ba({ card: e, detail: t, draft: n, setDraft: r, refreshing: a, api: s, 
 			y.length > 0 && E ? /* @__PURE__ */ m(Zi, {
 				card: e,
 				advisor: g,
-				...D ? { onApplyAnswers: V } : {},
+				...D ? { onApplyAnswers: H } : {},
 				...P && D ? { onUseFeedback: (e) => r({ feedback: e }) } : {}
 			}) : null,
 			P && D ? /* @__PURE__ */ m(Q, {
@@ -13787,7 +13787,7 @@ function So({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 			"intent.updated",
 			"reset"
 		]
-	}), z = R.data ? R.data.intent_dirty.some((e) => e.intent_dir === t.intent_dir) : null, ee = g === "archive" && T, B = (e) => e.code === "action_not_submittable" && e.details.operation === "archive" ? e.details.reason === "in_flight" ? p("intents.archive.inFlight") : J(f, "intents.archive.pauseFirst", Math.max(1, t.open_actions)) : e.known ? p(`errors.${e.code}`) : e.message;
+	}), z = R.data ? R.data.intent_dirty.some((e) => e.intent_dir === t.intent_dir) : null, B = g === "archive" && T, V = (e) => e.code === "action_not_submittable" && e.details.operation === "archive" ? e.details.reason === "in_flight" ? p("intents.archive.inFlight") : J(f, "intents.archive.pauseFirst", Math.max(1, t.open_actions)) : e.known ? p(`errors.${e.code}`) : e.message;
 	return /* @__PURE__ */ h("div", {
 		className: "studio-col studio-intent-actions",
 		role: "group",
@@ -13926,7 +13926,7 @@ function So({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 					size: 13
 				}), /* @__PURE__ */ m("span", {
 					className: "studio-grow",
-					children: B(b)
+					children: V(b)
 				})]
 			}) : null,
 			/* @__PURE__ */ m(bo, { run: C }),
@@ -13943,9 +13943,9 @@ function So({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 					e.key === "Escape" && _(null);
 				},
 				children: [
-					/* @__PURE__ */ m("h3", { children: p(ee ? "intents.confirm.archive.pauseFirst.title" : `intents.confirm.${g}.title`) }),
-					/* @__PURE__ */ m("p", { children: ee ? J(f, "intents.confirm.archive.pauseFirst.body", t.open_actions) : p(`intents.confirm.${g}.body`, { text: I ? go(g) : "" }) }),
-					g === "archive" && !ee && t.open_actions > 0 ? /* @__PURE__ */ h("p", {
+					/* @__PURE__ */ m("h3", { children: p(B ? "intents.confirm.archive.pauseFirst.title" : `intents.confirm.${g}.title`) }),
+					/* @__PURE__ */ m("p", { children: B ? J(f, "intents.confirm.archive.pauseFirst.body", t.open_actions) : p(`intents.confirm.${g}.body`, { text: I ? go(g) : "" }) }),
+					g === "archive" && !B && t.open_actions > 0 ? /* @__PURE__ */ h("p", {
 						className: "studio-consequence",
 						children: [/* @__PURE__ */ m(X, {
 							name: "info",
@@ -13968,7 +13968,7 @@ function So({ api: e, intent: t, onGo: n, onQueued: r, onChanged: a, onRecompose
 							ref: S,
 							disabled: v,
 							onClick: () => void D(),
-							children: I ? p("intents.start.send", { text: go(g) }) : p(ee ? "intents.confirm.archive.pauseFirst.go" : "intents.confirm.go")
+							children: I ? p("intents.start.send", { text: go(g) }) : p(B ? "intents.confirm.archive.pauseFirst.go" : "intents.confirm.go")
 						}), /* @__PURE__ */ m("button", {
 							type: "button",
 							className: "studio-btn studio-btn-sm",
@@ -14359,22 +14359,22 @@ function Ko(e) {
 	};
 }
 function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
-	let o = G(), { t: s } = o, [c, l] = d(null), [u, f] = d(0), [g, _] = d(0), [v, b] = d(null), [x, S] = d(null), [C, w] = d(null), [T, E] = d(null), [D, O] = d(null), [k, A] = d(null), j = Ko(n.session), M = !!k?.value && j?.slotKey === k.value.slotKey, N = k && !M ? k.value : j, P = Ro(n.repo_id, n.intent_dir), F = yo(e, () => a()), I = y(), L = Y(j && !k ? `session-title:${j.slotKey}` : null, i((t) => e.listSlots({ signal: t }), [e]), { interval: 0 }), R = N && (N.title || L.data?.find((e) => e.key === N.slotKey)?.title) || null, z = _o(n), ee = F.state.stage === "settled" && F.state.attempt?.outcome === "delivered", B = vo(N && !M ? {
+	let o = G(), { t: s } = o, [c, l] = d(null), [u, f] = d(0), [g, _] = d(0), [v, b] = d(null), [x, S] = d(null), [C, w] = d(null), [T, E] = d(null), [D, O] = d(null), [k, A] = d(null), j = Ko(n.session), M = !!k?.value && j?.slotKey === k.value.slotKey, N = k && !M ? k.value : j, P = Ro(n.repo_id, n.intent_dir), F = yo(e, () => a()), I = y(), L = N && (N.title || (k?.value?.slotKey === N.slotKey ? k.value.title : null)) || null, R = Y(N && !L ? `session-title:${N.slotKey}` : null, i((t) => e.listSlots({ signal: t }), [e]), { interval: 0 }), z = N && (L || R.data?.find((e) => e.key === N.slotKey)?.title) || null, B = _o(n), V = F.state.stage === "settled" && F.state.attempt?.outcome === "delivered", H = vo(N && !M ? {
 		...n,
 		session: null
-	} : n, s) ?? (N?.running || ee ? s("intents.run.disabledRunning") : null), V = (e) => s(Fo[e - 1] ?? Fo[0]), H = i((e, t) => {
+	} : n, s) ?? (N?.running || V ? s("intents.run.disabledRunning") : null), ee = (e) => s(Fo[e - 1] ?? Fo[0]), U = i((e, t) => {
 		_(t), b(e instanceof K ? e : new K("internal_error", String(e), {}, 0));
-	}, []), U = i((e, t) => {
+	}, []), te = i((e, t, n) => {
 		A({ value: e.slot_key ? {
 			slotKey: e.slot_key,
 			sessionKey: e.session_key ?? t?.session_key ?? "",
 			running: t?.running ?? !1,
-			title: t?.title || null
+			title: t?.title || n || null
 		} : null });
-	}, []), te = i((e) => {
+	}, []), ne = i((e) => {
 		l(e), b(null), _(0), S(null), w(null);
-	}, []), ne = i(async (r) => {
-		te("create");
+	}, []), W = i(async (r) => {
+		ne("create");
 		let i = 1;
 		f(i);
 		try {
@@ -14385,19 +14385,21 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 				c = Go(e);
 			}
 			let l = await e.createSlot(P, o?.id), u = l.key, d = typeof u == "string" && u ? u : P;
-			i = 2, f(i), await e.setSlotTitle(d, `${t.label} / ${n.slug || n.intent_dir}`), i = 3, f(i);
-			let p = l.project;
-			(typeof p != "string" || !p || !Bo(p, t.canonical_path)) && await e.setSlotProject(d, t.canonical_path), i = 4, f(i), await e.setSlotAgent(d, Po), i = 5, f(i);
-			let m = await e.setSession(n.repo_id, n.intent_key, d);
-			if (U(m.binding, m.slot), E(null), a(s("intents.session.done.bound", { slot: m.binding.slot_key ?? d })), i = 6, f(i), o === null) w(c);
+			i = 2, f(i);
+			let p = `${t.label} / ${n.slug || n.intent_dir}`;
+			await e.setSlotTitle(d, p), i = 3, f(i);
+			let m = l.project;
+			(typeof m != "string" || !m || !Bo(m, t.canonical_path)) && await e.setSlotProject(d, t.canonical_path), i = 4, f(i), await e.setSlotAgent(d, Po), i = 5, f(i);
+			let h = await e.setSession(n.repo_id, n.intent_key, d);
+			if (te(h.binding, h.slot, p), E(null), a(s("intents.session.done.bound", { slot: h.binding.slot_key ?? d })), i = 6, f(i), o === null) w(c);
 			else try {
-				l.folder_id !== o.id && await e.setSlotFolder(m.binding.slot_key ?? d, o.id), S(o.label);
+				l.folder_id !== o.id && await e.setSlotFolder(h.binding.slot_key ?? d, o.id), S(o.label);
 			} catch (e) {
 				w(Go(e));
 			}
-			f(0), r && await F.start(n, z);
+			f(0), r && await F.start(n, B);
 		} catch (e) {
-			H(e, i);
+			U(e, i);
 		} finally {
 			l(null), f(0);
 		}
@@ -14406,84 +14408,70 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 		P,
 		t,
 		n,
-		U,
+		te,
 		a,
 		s,
-		H,
-		te,
+		U,
+		ne,
 		F,
-		z
-	]), W = i(async () => {
-		te("list");
+		B
+	]), re = i(async () => {
+		ne("list");
 		try {
 			E(await e.listSlots());
 		} catch (e) {
-			H(e, 0);
+			U(e, 0);
 		} finally {
 			l(null);
 		}
 	}, [
 		e,
-		H,
-		te
-	]), re = i(async (t) => {
-		te("adopt");
+		U,
+		ne
+	]), ie = i(async (t) => {
+		ne("adopt");
 		try {
 			let r = await e.setSession(n.repo_id, n.intent_key, t);
-			U(r.binding, r.slot), E(null), a(s("intents.session.done.bound", { slot: r.binding.slot_key ?? t }));
+			te(r.binding, r.slot, T?.find((e) => e.key === t)?.title), E(null), a(s("intents.session.done.bound", { slot: r.binding.slot_key ?? t }));
 		} catch (e) {
-			H(e, Lo);
+			U(e, Lo);
 		} finally {
 			l(null);
 		}
 	}, [
 		e,
 		n,
-		U,
+		te,
 		a,
 		s,
-		H,
-		te
-	]), ie = i(async () => {
-		te("unbind");
+		U,
+		ne,
+		T
+	]), ae = i(async () => {
+		ne("unbind");
 		try {
 			let t = await e.setSession(n.repo_id, n.intent_key, null);
-			U(t.binding), O(null), a(s("intents.session.done.unbound"));
+			te(t.binding), O(null), a(s("intents.session.done.unbound"));
 		} catch (e) {
-			H(e, 0);
+			U(e, 0);
 		} finally {
 			l(null);
 		}
 	}, [
 		e,
 		n,
-		U,
+		te,
 		a,
 		s,
-		H,
-		te
-	]), ae = i(async () => {
-		te("candidates");
+		U,
+		ne
+	]), oe = i(async () => {
+		ne("candidates");
 		try {
 			let t = await e.takeoverPreview(n.repo_id, n.intent_key);
 			O(t.candidates);
 		} catch (e) {
-			H(e, 0);
-		} finally {
-			l(null);
-		}
-	}, [
-		e,
-		n,
-		H,
-		te
-	]), oe = i(async (t) => {
-		te("move");
-		try {
-			let r = await e.setSession(n.repo_id, n.intent_key, t);
-			U(r.binding, r.slot), O(null), a(s("intents.session.done.moved", { slot: r.binding.slot_key ?? t }));
-		} catch (e) {
-			H(e, 0);
+			U(e, 0);
 		} finally {
 			l(null);
 		}
@@ -14491,11 +14479,27 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 		e,
 		n,
 		U,
+		ne
+	]), se = i(async (t) => {
+		ne("move");
+		try {
+			let r = await e.setSession(n.repo_id, n.intent_key, t);
+			te(r.binding, r.slot, D?.find((e) => e.slot.key === t)?.slot.title), O(null), a(s("intents.session.done.moved", { slot: r.binding.slot_key ?? t }));
+		} catch (e) {
+			U(e, 0);
+		} finally {
+			l(null);
+		}
+	}, [
+		e,
+		n,
+		te,
 		a,
 		s,
-		H,
-		te
-	]), se = T ? Vo(T, t.canonical_path) : null, ce = v && v.known ? s(`errors.${v.code}`) : null;
+		U,
+		ne,
+		D
+	]), ce = T ? Vo(T, t.canonical_path) : null, le = v && v.known ? s(`errors.${v.code}`) : null;
 	return /* @__PURE__ */ h("section", {
 		className: "studio-panel",
 		"aria-label": s("intents.session.a11y", { intent: n.intent_dir }),
@@ -14524,7 +14528,7 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 					{
 						key: "title",
 						label: s("intents.session.fact.title"),
-						value: R
+						value: z
 					},
 					{
 						key: "slot",
@@ -14548,24 +14552,24 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 						key: "state",
 						label: s("intents.session.fact.state"),
 						value: /* @__PURE__ */ m(Z, {
-							icon: N.running || ee ? "play" : "clock",
-							tone: N.running || ee ? "ok" : "neutral",
-							children: N.running || ee ? s("intents.session.running") : s("intents.session.idle")
+							icon: N.running || V ? "play" : "clock",
+							tone: N.running || V ? "ok" : "neutral",
+							children: N.running || V ? s("intents.session.running") : s("intents.session.idle")
 						})
 					}
 				] }),
 				/* @__PURE__ */ h("div", {
 					className: "studio-row studio-wrap",
 					children: [
-						B === null ? /* @__PURE__ */ h("button", {
+						H === null ? /* @__PURE__ */ h("button", {
 							type: "button",
 							className: "studio-btn studio-btn-primary",
 							disabled: c !== null || F.busy,
-							onClick: () => void F.start(n, z),
+							onClick: () => void F.start(n, B),
 							children: [/* @__PURE__ */ m(X, {
 								name: "play",
 								size: 13
-							}), s("intents.start.go", { text: go(z) })]
+							}), s("intents.start.go", { text: go(B) })]
 						}) : null,
 						/* @__PURE__ */ h("button", {
 							type: "button",
@@ -14580,7 +14584,7 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 							type: "button",
 							className: "studio-btn",
 							disabled: c !== null,
-							onClick: () => void ie(),
+							onClick: () => void ae(),
 							children: [/* @__PURE__ */ m(X, {
 								name: "close",
 								size: 13
@@ -14590,7 +14594,7 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 							type: "button",
 							className: "studio-btn",
 							disabled: c !== null,
-							onClick: () => void ae(),
+							onClick: () => void oe(),
 							children: [/* @__PURE__ */ m(X, {
 								name: "refresh",
 								size: 13
@@ -14631,20 +14635,20 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 				}
 			] }), /* @__PURE__ */ h("div", {
 				className: "studio-row studio-wrap",
-				children: [B === null ? /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ h("button", {
+				children: [H === null ? /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ h("button", {
 					type: "button",
 					className: "studio-btn studio-btn-primary",
 					disabled: c !== null || F.busy,
-					onClick: () => void ne(!0),
+					onClick: () => void W(!0),
 					children: [/* @__PURE__ */ m(X, {
 						name: "play",
 						size: 13
-					}), s("intents.session.createAndRun", { text: go(z) })]
+					}), s("intents.session.createAndRun", { text: go(B) })]
 				}), /* @__PURE__ */ h("button", {
 					type: "button",
 					className: "studio-btn",
 					disabled: c !== null || F.busy,
-					onClick: () => void ne(!1),
+					onClick: () => void W(!1),
 					children: [/* @__PURE__ */ m(X, {
 						name: "plus",
 						size: 13
@@ -14653,7 +14657,7 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 					type: "button",
 					className: "studio-btn studio-btn-primary",
 					disabled: c !== null,
-					onClick: () => void ne(!1),
+					onClick: () => void W(!1),
 					children: [/* @__PURE__ */ m(X, {
 						name: "plus",
 						size: 13
@@ -14662,7 +14666,7 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 					type: "button",
 					className: "studio-btn",
 					disabled: c !== null,
-					onClick: () => void W(),
+					onClick: () => void re(),
 					children: [/* @__PURE__ */ m(X, {
 						name: "link",
 						size: 13
@@ -14675,7 +14679,7 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 				children: s("intents.session.busy", {
 					step: u,
 					total: Io,
-					what: V(u)
+					what: ee(u)
 				})
 			}) : c === null ? null : /* @__PURE__ */ m("p", {
 				className: "studio-muted",
@@ -14715,11 +14719,11 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 					children: [g > 0 ? `${s("intents.session.failedAt", {
 						step: g,
 						total: Io,
-						what: V(g)
-					})} ` : "", ce ?? v.message]
+						what: ee(g)
+					})} ` : "", le ?? v.message]
 				})]
 			}) : null,
-			v && ce && v.message && v.message !== ce ? /* @__PURE__ */ h("p", {
+			v && le && v.message && v.message !== le ? /* @__PURE__ */ h("p", {
 				className: "studio-failure-detail",
 				role: "status",
 				children: [
@@ -14738,7 +14742,7 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 					})
 				]
 			}) : null,
-			se ? /* @__PURE__ */ h("section", {
+			ce ? /* @__PURE__ */ h("section", {
 				className: "studio-block",
 				children: [
 					/* @__PURE__ */ h("h3", { children: [/* @__PURE__ */ m(X, {
@@ -14749,7 +14753,7 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 						className: "studio-muted",
 						children: s("intents.session.adoptLede", { agent: Po })
 					}),
-					se.length === 0 ? /* @__PURE__ */ h("p", {
+					ce.length === 0 ? /* @__PURE__ */ h("p", {
 						className: "studio-consequence",
 						children: [/* @__PURE__ */ m(X, {
 							name: "info",
@@ -14757,7 +14761,7 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 						}), /* @__PURE__ */ m("span", { children: s("intents.session.adoptNone", { agent: Po }) })]
 					}) : /* @__PURE__ */ m("ul", {
 						className: "studio-choicelist",
-						children: se.map((e) => /* @__PURE__ */ h("li", { children: [/* @__PURE__ */ h("span", {
+						children: ce.map((e) => /* @__PURE__ */ h("li", { children: [/* @__PURE__ */ h("span", {
 							className: "studio-choice-body studio-grow",
 							children: [
 								/* @__PURE__ */ m("span", {
@@ -14777,7 +14781,7 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 							type: "button",
 							className: "studio-btn studio-btn-sm",
 							disabled: c !== null,
-							onClick: () => void re(e.key),
+							onClick: () => void ie(e.key),
 							children: s("intents.session.adoptGo")
 						})] }, e.key))
 					})
@@ -14822,7 +14826,7 @@ function qo({ api: e, repo: t, intent: n, onClose: r, onChanged: a }) {
 							type: "button",
 							className: "studio-btn studio-btn-sm",
 							disabled: c !== null,
-							onClick: () => void oe(e.slot.key),
+							onClick: () => void se(e.slot.key),
 							children: s("intents.session.moveGo")
 						})] }, e.slot.key))
 					})
@@ -16239,7 +16243,7 @@ function Gs({ api: e, route: t, go: n, cards: r }) {
 		e,
 		D,
 		O
-	]), { interval: 0 }), F = l(() => M.data ? rs(M.data.map_inputs) : null, [M.data]), I = N.data?.intent ?? null, L = l(() => F ? [...F.phases].sort((e, t) => (zs.get(e.phase) ?? qt.length) - (zs.get(t.phase) ?? qt.length)) : [], [F]), R = l(() => L.flatMap((e) => e.stages), [L]), z = l(() => R.filter((e) => e.in_scope), [R]), ee = l(() => {
+	]), { interval: 0 }), F = l(() => M.data ? rs(M.data.map_inputs) : null, [M.data]), I = N.data?.intent ?? null, L = l(() => F ? [...F.phases].sort((e, t) => (zs.get(e.phase) ?? qt.length) - (zs.get(t.phase) ?? qt.length)) : [], [F]), R = l(() => L.flatMap((e) => e.stages), [L]), z = l(() => R.filter((e) => e.in_scope), [R]), B = l(() => {
 		let e = new Set((j ? R : z).map((e) => e.slug));
 		return L.map((t) => {
 			let n = t.stages.filter((t) => e.has(t.slug)).map((t) => ({
@@ -16265,14 +16269,14 @@ function Gs({ api: e, route: t, go: n, cards: r }) {
 		R,
 		z,
 		j
-	]), B = l(() => ee.flatMap((e) => e.stages), [ee]), V = l(() => B.find((e) => e.slug === t.stage) ?? null, [B, t.stage]), H = !j && R.some((e) => e.slug === t.stage && !e.in_scope), U = l(() => V && t.unit ? V.units.find((e) => e.unit === t.unit) ?? null : null, [V, t.unit]), te = l(() => {
+	]), V = l(() => B.flatMap((e) => e.stages), [B]), H = l(() => V.find((e) => e.slug === t.stage) ?? null, [V, t.stage]), ee = !j && R.some((e) => e.slug === t.stage && !e.in_scope), U = l(() => H && t.unit ? H.units.find((e) => e.unit === t.unit) ?? null : null, [H, t.unit]), te = l(() => {
 		let e = /* @__PURE__ */ new Map();
-		if (!V) return e;
-		let { upstream: t, downstream: n } = As(V, z);
+		if (!H) return e;
+		let { upstream: t, downstream: n } = As(H, z);
 		for (let n of t) e.set(n, "upstream");
 		for (let t of n) e.has(t) || e.set(t, "downstream");
 		return e;
-	}, [V, z]), ne = l(() => r.filter((e) => e.intent.intent_key === O), [r, O]), W = l(() => V ? ne.find((e) => e.stage?.slug === V.slug) ?? null : null, [ne, V]), re = l(() => ne.find((e) => Rs.has(e.queue_type)) ?? null, [ne]), ie = l(() => I ? V ? I.audit_tail.filter((e) => Ks(e, V.slug)).slice(-12).reverse() : [] : null, [I, V]), ae = i((e) => {
+	}, [H, z]), ne = l(() => r.filter((e) => e.intent.intent_key === O), [r, O]), W = l(() => H ? ne.find((e) => e.stage?.slug === H.slug) ?? null : null, [ne, H]), re = l(() => ne.find((e) => Rs.has(e.queue_type)) ?? null, [ne]), ie = l(() => I ? H ? I.audit_tail.filter((e) => Ks(e, H.slug)).slice(-12).reverse() : [] : null, [I, H]), ae = i((e) => {
 		n({
 			stage: t.stage === e && !t.unit ? "" : e,
 			unit: ""
@@ -16367,10 +16371,10 @@ function Gs({ api: e, route: t, go: n, cards: r }) {
 	}).replace(/\s+/g, " ").trim() : o("map.status.idle"), me = I?.slug || O, he = I?.repo_label || D, ge = {
 		repoLabel: he,
 		intentLabel: me
-	}, _e = B.some((e) => e.per_unit && e.units.length > 0), ve = I?.archived ? "archived" : I?.paused ? "paused" : null, K = /* @__PURE__ */ m(js, {
-		stage: V,
+	}, _e = V.some((e) => e.per_unit && e.units.length > 0), ve = I?.archived ? "archived" : I?.paused ? "paused" : null, K = /* @__PURE__ */ m(js, {
+		stage: H,
 		unit: U,
-		phaseLabel: V ? Ws(a, V.phase) : "",
+		phaseLabel: H ? Ws(a, H.phase) : "",
 		repoLabel: he,
 		intentLabel: me,
 		review: P.data ?? null,
@@ -16509,7 +16513,7 @@ function Gs({ api: e, route: t, go: n, cards: r }) {
 				error: M.error,
 				onRetry: () => void M.refresh()
 			}) : null,
-			H ? /* @__PURE__ */ m("p", {
+			ee ? /* @__PURE__ */ m("p", {
 				className: "studio-consequence",
 				role: "status",
 				children: o("map.hiddenSelection")
@@ -16518,16 +16522,16 @@ function Gs({ api: e, route: t, go: n, cards: r }) {
 				className: "studio-map-main",
 				children: [/* @__PURE__ */ h("div", {
 					className: "studio-map-scroll",
-					children: [ee.length === 0 ? /* @__PURE__ */ m("p", {
+					children: [B.length === 0 ? /* @__PURE__ */ m("p", {
 						className: "studio-muted",
 						role: "status",
 						children: o("map.empty.plan")
 					}) : _ ? /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ m(Js, {
-						phases: ee,
+						phases: B,
 						intentLabel: me,
 						selectedStage: t.stage,
 						onSelect: ae
-					}), C && V ? /* @__PURE__ */ m("div", {
+					}), C && H ? /* @__PURE__ */ m("div", {
 						className: "studio-map-sheet",
 						role: "complementary",
 						"aria-label": o("map.inspector.title"),
@@ -16536,7 +16540,7 @@ function Gs({ api: e, route: t, go: n, cards: r }) {
 						className: "studio-consequence",
 						children: o("map.accordion.note")
 					}), /* @__PURE__ */ m(Ts, {
-						phases: ee,
+						phases: B,
 						density: s,
 						showUnits: f,
 						selectedStage: t.stage,
@@ -16556,7 +16560,7 @@ function Gs({ api: e, route: t, go: n, cards: r }) {
 							className: "studio-lanes",
 							role: "list",
 							"aria-label": o("map.a11y.canvas"),
-							children: ee.map((e) => /* @__PURE__ */ m(Es, {
+							children: B.map((e) => /* @__PURE__ */ m(Es, {
 								phase: e,
 								phaseLabel: Ws(a, e.phase),
 								density: s,
@@ -16568,11 +16572,11 @@ function Gs({ api: e, route: t, go: n, cards: r }) {
 								onSelectStage: ae,
 								onSelectUnit: oe
 							}, e.phase))
-						}), s === "dependencies" && V ? /* @__PURE__ */ m(hs, {
+						}), s === "dependencies" && H ? /* @__PURE__ */ m(hs, {
 							canvas: T,
-							from: V.slug,
+							from: H.slug,
 							relations: te,
-							token: `${s}:${f}:${V.slug}:${B.length}`
+							token: `${s}:${f}:${H.slug}:${V.length}`
 						}) : null]
 					}), /* @__PURE__ */ m("p", {
 						className: "studio-consequence",
@@ -16588,13 +16592,13 @@ function Gs({ api: e, route: t, go: n, cards: r }) {
 				className: "studio-sr",
 				role: "status",
 				"aria-live": "polite",
-				children: V ? U ? o("map.a11y.unitSelected", {
+				children: H ? U ? o("map.a11y.unitSelected", {
 					unit: U.unit,
-					number: V.number,
-					slug: V.slug
+					number: H.number,
+					slug: H.slug
 				}) : o("map.a11y.selected", {
-					number: V.number,
-					slug: V.slug
+					number: H.number,
+					slug: H.slug
 				}) : ""
 			})
 		]
@@ -16969,11 +16973,11 @@ function lc({ api: e, repoId: t, space: n, locale: r, objective: a, context: s, 
 		repoId: t,
 		draftId: y,
 		body: L
-	}) : "", z = k?.key === R ? k.plan : null, ee = u(L);
-	ee.current = L;
-	let B = u(0);
+	}) : "", z = k?.key === R ? k.plan : null, B = u(L);
+	B.current = L;
+	let V = u(0);
 	o(() => {
-		let n = ee.current, r = B.current += 1;
+		let n = B.current, r = V.current += 1;
 		if (A((e) => e ? {
 			...e,
 			key: ""
@@ -16984,20 +16988,20 @@ function lc({ api: e, repoId: t, space: n, locale: r, objective: a, context: s, 
 		M(!0);
 		let i = setTimeout(() => {
 			e.planPreview(t, n).then((e) => {
-				r === B.current && (A({
+				r === V.current && (A({
 					key: R,
 					repoId: t,
 					draftId: y,
 					plan: e.plan
 				}), P(null));
 			}).catch((e) => {
-				r === B.current && (A(null), P(be(e).code));
+				r === V.current && (A(null), P(be(e).code));
 			}).finally(() => {
-				r === B.current && M(!1);
+				r === V.current && M(!1);
 			});
 		}, rc);
 		return () => {
-			clearTimeout(i), r === B.current && (B.current += 1);
+			clearTimeout(i), r === V.current && (V.current += 1);
 		};
 	}, [
 		e,
@@ -17005,7 +17009,7 @@ function lc({ api: e, repoId: t, space: n, locale: r, objective: a, context: s, 
 		y,
 		R
 	]);
-	let V = O ? O.base_scope ?? O.scope : null, H = p !== null && p.repoId === t ? p : null;
+	let H = O ? O.base_scope ?? O.scope : null, ee = p !== null && p.repoId === t ? p : null;
 	return {
 		draft: C,
 		proposal: O,
@@ -17015,7 +17019,7 @@ function lc({ api: e, repoId: t, space: n, locale: r, objective: a, context: s, 
 		shadowError: N,
 		pending: h,
 		error: _,
-		stale: H ? H.objective === a.trim() ? H.scope !== f.scope && V !== f.scope ? "scope" : null : "objective" : null,
+		stale: ee ? ee.objective === a.trim() ? ee.scope !== f.scope && H !== f.scope ? "scope" : null : "objective" : null,
 		ask: E,
 		dismiss: D
 	};
@@ -17999,7 +18003,7 @@ function Fc({ route: e, go: t }) {
 	let n = G(), { t: r } = n, { api: a, repos: s, health: c, settings: f } = Au(), p = f.data ? f.data.settings.advisor.enabled && f.data.capabilities.advisor.available : null, g = s.data?.repos ?? [], [_, v] = d("work"), [y, b] = d(!1), [x, S] = d(() => ({
 		...Sc,
 		repo: e.repo
-	})), [C, w] = d(null), [T, E] = d(null), [D, O] = d(!1), [k, A] = d(!1), [j, M] = d(null), [N, P] = d(null), [F, I] = d(null), [L, R] = d(!1), [z, ee] = d([]), [B, V] = d(null), [H, U] = d({}), [te, ne] = d(0), W = g.find((e) => e.repo_id === x.repo) ?? null, re = W ? Pc(W) : null, ie = Y(W && !re ? `wizard-spaces:${W.repo_id}` : null, i((e) => a.intents(x.repo, {}, { signal: e }), [a, x.repo]), {
+	})), [C, w] = d(null), [T, E] = d(null), [D, O] = d(!1), [k, A] = d(!1), [j, M] = d(null), [N, P] = d(null), [F, I] = d(null), [L, R] = d(!1), [z, B] = d([]), [V, H] = d(null), [ee, U] = d({}), [te, ne] = d(0), W = g.find((e) => e.repo_id === x.repo) ?? null, re = W ? Pc(W) : null, ie = Y(W && !re ? `wizard-spaces:${W.repo_id}` : null, i((e) => a.intents(x.repo, {}, { signal: e }), [a, x.repo]), {
 		interval: 0,
 		revalidateOn: [
 			"intent.updated",
@@ -18047,7 +18051,7 @@ function Fc({ route: e, go: t }) {
 					plan: n.plan
 				}), E(null);
 				let i = jc(n.plan);
-				i.length && ee(i);
+				i.length && B(i);
 			}).catch((t) => {
 				e === ce.current && E(t instanceof K ? t : new K("internal_error", String(t), {}, 0));
 			}).finally(() => {
@@ -18087,7 +18091,7 @@ function Fc({ route: e, go: t }) {
 		projectType: x.projectType,
 		current: _e
 	}), { dismiss: ye } = ve, be = i((e) => {
-		M(null), e.repo !== void 0 && (le.current = "", ue.current = {}, V(null), U({}), ne(0));
+		M(null), e.repo !== void 0 && (le.current = "", ue.current = {}, H(null), U({}), ne(0));
 		for (let t of [
 			"depth",
 			"testStrategy",
@@ -18123,7 +18127,7 @@ function Fc({ route: e, go: t }) {
 		let e = ve.effective, t = ve.draft, n = ve.shadow;
 		if (!e || !t || !n || ve.shadowBusy || ve.stale !== null) return;
 		let r = new Set(n.issues.flatMap((e) => kc(e))), i = new Set(Object.keys(e.overrides).filter((t) => r.has(t) && e.overrides[t] !== x.overrides[t])), a = Object.fromEntries(Object.entries(e.overrides).filter(([e]) => !i.has(e)));
-		ne(i.size), le.current = e.scope, V((e) => ({
+		ne(i.size), le.current = e.scope, H((e) => ({
 			draftId: t.draft_id,
 			before: e?.before ?? {
 				scope: x.scope,
@@ -18141,9 +18145,9 @@ function Fc({ route: e, go: t }) {
 			overrides: a
 		}));
 	}, we = () => {
-		if (!B) return;
-		let { before: e } = B;
-		le.current = e.scope, V(null), U({}), ne(0), M(null), S((t) => ({
+		if (!V) return;
+		let { before: e } = V;
+		le.current = e.scope, H(null), U({}), ne(0), M(null), S((t) => ({
 			...t,
 			...e
 		}));
@@ -18155,7 +18159,7 @@ function Fc({ route: e, go: t }) {
 					...Dc(x, ae, !0),
 					confirm_plan_digest: Te
 				}, t = await a.createIntent(W.repo_id, e);
-				P(t), ye(), V(null), U({}), ne(0);
+				P(t), ye(), H(null), U({}), ne(0);
 			} catch (e) {
 				let t = e instanceof K ? e : new K("internal_error", String(e), {}, 0);
 				M(t), t.details.intent_created === !0 && typeof t.details.intent_key == "string" && typeof t.details.space == "string" && typeof t.details.intent_dir == "string" && (I({
@@ -18371,7 +18375,7 @@ function Fc({ route: e, go: t }) {
 						advisor: ve,
 						available: p,
 						canAsk: !!W && !re && x.objective.trim().length > 0,
-						appliedDraftId: B?.draftId ?? null,
+						appliedDraftId: V?.draftId ?? null,
 						dropped: te,
 						onUse: Ce,
 						onClear: we
@@ -18380,14 +18384,14 @@ function Fc({ route: e, go: t }) {
 				_ === "plan" ? /* @__PURE__ */ m(fc, {
 					plan: pe,
 					busy: D,
-					origins: H,
+					origins: ee,
 					onToggle: Se
 				}) : null,
 				_ === "review" ? /* @__PURE__ */ m(_c, {
 					plan: pe,
 					digest: Te,
 					repo: W,
-					origins: H,
+					origins: ee,
 					busy: D,
 					creating: k,
 					workComplete: ke,
@@ -21306,7 +21310,7 @@ function tu({ route: e, go: t }) {
 	o(() => {
 		F && I();
 	}, [F, I]);
-	let L = k ? N.data : s.data, R = L?.repos ?? [], z = P.data?.repo ?? R.find((t) => t.repo_id === e.repo) ?? null, ee = P.data?.transactions ?? [], B = S?.repoId === z?.repo_id ? S?.feedback : null, V = !c || l.kind === "none" ? "none" : l.kind === "add" || l.repoId === e.repo ? l.kind : "none", H = i(() => f($l), []), U = u(null), te = u(null), ne = u(null), W = i((e, t) => {
+	let L = k ? N.data : s.data, R = L?.repos ?? [], z = P.data?.repo ?? R.find((t) => t.repo_id === e.repo) ?? null, B = P.data?.transactions ?? [], V = S?.repoId === z?.repo_id ? S?.feedback : null, H = !c || l.kind === "none" ? "none" : l.kind === "add" || l.repoId === e.repo ? l.kind : "none", ee = i(() => f($l), []), U = u(null), te = u(null), ne = u(null), W = i((e, t) => {
 		te.current = document.activeElement instanceof HTMLElement ? document.activeElement : null, f({
 			kind: e,
 			repoId: t
@@ -21315,15 +21319,15 @@ function tu({ route: e, go: t }) {
 		ne.current = te.current, f($l);
 	}, []);
 	o(() => {
-		if (V === "none") {
+		if (H === "none") {
 			let e = ne.current;
 			ne.current = null;
 			let t = e?.dataset.repoAction;
 			(e?.isConnected ? e : t ? document.querySelector(`[data-repo-action="${t}"]`) : null)?.focus();
 			return;
 		}
-		V !== "add" && U.current && eu(U.current)?.focus();
-	}, [V, l]), o(() => (_(null), y(null), x(null), M(""), C(null), w.current += 1, () => {
+		H !== "add" && U.current && eu(U.current)?.focus();
+	}, [H, l]), o(() => (_(null), y(null), x(null), M(""), C(null), w.current += 1, () => {
 		w.current += 1;
 	}), [e.repo]);
 	let ie = i(() => {
@@ -21458,10 +21462,10 @@ function tu({ route: e, go: t }) {
 		z,
 		W
 	]), se = async () => {
-		if (!(!z || V !== "rename" && V !== "archive")) {
-			_(V);
+		if (!(!z || H !== "rename" && H !== "archive")) {
+			_(H);
 			try {
-				await a.updateRepoMetadata(z.repo_id, V === "rename" ? { label: D.trim() } : { archived: !0 }), H(), ie(), V === "archive" && t({
+				await a.updateRepoMetadata(z.repo_id, H === "rename" ? { label: D.trim() } : { archived: !0 }), ee(), ie(), H === "archive" && t({
 					repo: "",
 					tx: ""
 				});
@@ -21480,7 +21484,7 @@ function tu({ route: e, go: t }) {
 		}
 		_("rebind");
 		try {
-			await a.rebindRepo(z.repo_id, e), H(), ie();
+			await a.rebindRepo(z.repo_id, e), ee(), ie();
 		} catch (e) {
 			ae(e);
 		} finally {
@@ -21492,13 +21496,13 @@ function tu({ route: e, go: t }) {
 		T,
 		ie,
 		ae,
-		H,
+		ee,
 		r
 	]), le = i(async () => {
 		if (z) {
 			_("remove");
 			try {
-				await a.removeRepo(z.repo_id), H(), t({
+				await a.removeRepo(z.repo_id), ee(), t({
 					repo: "",
 					tx: ""
 				}), s.refresh();
@@ -21514,11 +21518,11 @@ function tu({ route: e, go: t }) {
 		t,
 		s,
 		ae,
-		H
+		ee
 	]), ue = i((e) => {
-		H(), t({ tx: e }), ie();
+		ee(), t({ tx: e }), ie();
 	}, [
-		H,
+		ee,
 		t,
 		ie
 	]);
@@ -21626,34 +21630,34 @@ function tu({ route: e, go: t }) {
 					/* @__PURE__ */ h("div", {
 						ref: U,
 						children: [
-							V === "install" ? /* @__PURE__ */ m(xl, {
+							H === "install" ? /* @__PURE__ */ m(xl, {
 								api: a,
 								repoId: z.repo_id,
 								bundledVersion: z.install.bundled_engine_version,
 								onStarted: ue,
 								onClose: re
 							}) : null,
-							V === "upgrade" ? /* @__PURE__ */ m(Xl, {
+							H === "upgrade" ? /* @__PURE__ */ m(Xl, {
 								api: a,
 								repoId: z.repo_id,
 								install: z.install,
 								onStarted: ue,
 								onClose: re
 							}) : null,
-							V === "uninstall" ? /* @__PURE__ */ m(bl, {
+							H === "uninstall" ? /* @__PURE__ */ m(bl, {
 								api: a,
 								repoId: z.repo_id,
 								kind: "uninstall",
 								onStarted: ue,
 								onClose: re
 							}) : null,
-							V === "cleanup" ? /* @__PURE__ */ m(Yl, {
+							H === "cleanup" ? /* @__PURE__ */ m(Yl, {
 								api: a,
 								repoId: z.repo_id,
 								onClose: re,
 								onChanged: ie
 							}, z.repo_id) : null,
-							V === "rollback" ? /* @__PURE__ */ m(bl, {
+							H === "rollback" ? /* @__PURE__ */ m(bl, {
 								api: a,
 								repoId: z.repo_id,
 								kind: "rollback",
@@ -21661,15 +21665,15 @@ function tu({ route: e, go: t }) {
 								onStarted: ue,
 								onClose: re
 							}) : null,
-							V === "recover" ? /* @__PURE__ */ m(wl, {
+							H === "recover" ? /* @__PURE__ */ m(wl, {
 								api: a,
 								repoId: z.repo_id,
 								repoLabel: z.label,
-								failedDir: Sl(ee),
+								failedDir: Sl(B),
 								onStarted: ue,
 								onClose: re
 							}) : null,
-							V === "rebind" ? /* @__PURE__ */ h(Bc, {
+							H === "rebind" ? /* @__PURE__ */ h(Bc, {
 								title: r("repos.rebind.title", { label: z.label }),
 								icon: "link",
 								children: [
@@ -21707,7 +21711,7 @@ function tu({ route: e, go: t }) {
 									})
 								]
 							}) : null,
-							V === "remove" ? /* @__PURE__ */ h(Bc, {
+							H === "remove" ? /* @__PURE__ */ h(Bc, {
 								title: r("repos.remove.title", { label: z.label }),
 								icon: "close",
 								children: [/* @__PURE__ */ m($, { children: r("repos.remove.body") }), /* @__PURE__ */ h("div", {
@@ -21727,10 +21731,10 @@ function tu({ route: e, go: t }) {
 									})]
 								})]
 							}) : null,
-							V === "rename" || V === "archive" ? /* @__PURE__ */ h(Bc, {
-								title: r(V === "rename" ? "repos.action.rename" : "repos.action.archive"),
+							H === "rename" || H === "archive" ? /* @__PURE__ */ h(Bc, {
+								title: r(H === "rename" ? "repos.action.rename" : "repos.action.archive"),
 								icon: "repo",
-								children: [V === "rename" ? /* @__PURE__ */ h("div", {
+								children: [H === "rename" ? /* @__PURE__ */ h("div", {
 									className: "studio-field",
 									children: [/* @__PURE__ */ m("label", {
 										htmlFor: "studio-repo-label",
@@ -21752,9 +21756,9 @@ function tu({ route: e, go: t }) {
 										type: "button",
 										className: "studio-btn",
 										"data-variant": "primary",
-										disabled: g !== null || V === "rename" && !D.trim(),
+										disabled: g !== null || H === "rename" && !D.trim(),
 										onClick: () => void se(),
-										children: r(V === "rename" ? "repos.metadata.save" : "repos.action.archive")
+										children: r(H === "rename" ? "repos.metadata.save" : "repos.action.archive")
 									})]
 								})]
 							}) : null
@@ -21764,10 +21768,10 @@ function tu({ route: e, go: t }) {
 						repo: z,
 						detailed: !0,
 						desktop: c,
-						installPreviewOpen: V === "install",
-						busy: g ?? (B?.status === "running" ? "doctor" : null),
-						maintenanceFeedback: B ? /* @__PURE__ */ m(Qc, { feedback: B }) : null,
-						transactions: ee,
+						installPreviewOpen: H === "install",
+						busy: g ?? (V?.status === "running" ? "doctor" : null),
+						maintenanceFeedback: V ? /* @__PURE__ */ m(Qc, { feedback: V }) : null,
+						transactions: B,
 						intents: P.data?.intents ?? [],
 						onAction: (e) => void oe(z.repo_id, e),
 						onOpenTransaction: (e) => t({ tx: e }),
@@ -21808,18 +21812,18 @@ function tu({ route: e, go: t }) {
 				}),
 				/* @__PURE__ */ m($, { children: r("repos.footer") })
 			]
-		}), V === "add" && c ? /* @__PURE__ */ m(Zc, {
+		}), H === "add" && c ? /* @__PURE__ */ m(Zc, {
 			api: a,
 			repos: R,
-			onClose: H,
+			onClose: ee,
 			onRegistered: (e) => {
-				H(), x(r("repos.registered", { label: e.label })), s.refresh(), t({
+				ee(), x(r("repos.registered", { label: e.label })), s.refresh(), t({
 					repo: e.repo_id,
 					tx: ""
 				});
 			},
 			onOpenRepo: (e) => {
-				H(), t({
+				ee(), t({
 					repo: e,
 					tx: ""
 				});
@@ -22757,7 +22761,7 @@ function ju() {
 	});
 }
 function Mu({ api: e }) {
-	let t = G(), { t: n } = t, r = H(), [a, s] = Ft(), c = Ke(), u = v(), [f, p] = d(null), [g, _] = d(!1), y = Y(`actions:${a.repo}:${a.intent}`, i((t) => e.actions({
+	let t = G(), { t: n } = t, r = ee(), [a, s] = Ft(), c = Ke(), u = v(), [f, p] = d(null), [g, _] = d(!1), y = Y(`actions:${a.repo}:${a.intent}`, i((t) => e.actions({
 		repo: a.repo || void 0,
 		intent: a.intent || void 0
 	}, { signal: t }), [
