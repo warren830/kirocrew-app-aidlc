@@ -154,7 +154,8 @@ export function IntentsView({ route, go }: IntentsViewProps) {
 
   const data = inventory.data
   const intents = data?.intents ?? []
-  const total = allRepos.reduce((sum, repo) => sum + repo.counts.intents, 0)
+  // Of the repositories in scope: "1 of 2" counted every repository's intents while the bar showed one.
+  const total = targets.reduce((sum, repo) => sum + repo.counts.intents, 0)
   const states = useMemo(
     () => INTENT_STATES.filter((state) => intents.some((intent) => intent.operational_state === state)),
     [intents],

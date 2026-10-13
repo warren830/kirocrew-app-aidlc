@@ -255,5 +255,7 @@
   "audit.UNIT_STARTED": "Work on a unit started.",
   "audit.UNIT_COMPLETED": "A unit's work finished, with its required files on disk.",
   "audit.ARTIFACT_REUSED": "AI-DLC decided whether to reuse earlier artifacts.",
-  "audit.RECOVERY_COMPLETED": "The person answered the recovery prompt after the conversation was compacted."
+  "audit.RECOVERY_COMPLETED": "The person answered the recovery prompt after the conversation was compacted.",
+  "activity.page.countPage_one": "{n} event on this page; Older shows more",
+  "activity.page.countPage_other": "{n} events on this page; Older shows more"
 }

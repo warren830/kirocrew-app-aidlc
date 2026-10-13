@@ -131,6 +131,8 @@
   "activity.lease.reclaimed": "已回收孤立租约。",
   "activity.lease.released": "已释放仓库执行租约。",
   "activity.notification.sent": "已发送通知。",
+  "activity.page.countPage_one": "本页 {n} 条事件；“更早”可查看更多",
+  "activity.page.countPage_other": "本页 {n} 条事件；“更早”可查看更多",
   "activity.page.count_one": "{n} 条事件",
   "activity.page.count_other": "{n} 条事件",
   "activity.page.empty.body": "放宽时间范围，或选择“全部来源”。活动只记录已经发生的事，从不做预测。",

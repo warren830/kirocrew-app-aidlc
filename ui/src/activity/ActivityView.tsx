@@ -299,6 +299,8 @@ export function ActivityView({ route, go }: ActivityViewProps) {
                   shown: i18n.fmt.number(visible.length),
                   loaded: i18n.fmt.number(loaded.length),
                 })
+              // One page of a longer history is not the whole count: "200 events" read as all there were.
+              : nextCursor ? plural(i18n, 'activity.page.countPage', visible.length)
               : plural(i18n, 'activity.page.count', visible.length)}
         </p>
 

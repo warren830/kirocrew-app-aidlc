@@ -131,6 +131,8 @@
   "activity.lease.reclaimed": "Orphaned lease reclaimed.",
   "activity.lease.released": "Repository execution lease released.",
   "activity.notification.sent": "Notification sent.",
+  "activity.page.countPage_one": "{n} event on this page; Older shows more",
+  "activity.page.countPage_other": "{n} events on this page; Older shows more",
   "activity.page.count_one": "{n} event",
   "activity.page.count_other": "{n} events",
   "activity.page.empty.body": "Widen the time range, or choose All sources. Activity records what has already happened; it never predicts.",

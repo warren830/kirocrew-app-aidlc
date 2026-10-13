@@ -135,7 +135,10 @@ function Crumb({ children }: { children: React.ReactNode }) {
   return (
     <>
       <span aria-hidden="true" className="studio-dsep">/</span>
-      <span className="studio-drumb studio-trunc">{children}</span>
+      {/* The whole text in the tooltip, for the rare crumb still longer than its cap. */}
+      <span className="studio-drumb studio-trunc" title={typeof children === 'string' ? children : undefined}>
+        {children}
+      </span>
     </>
   )
 }

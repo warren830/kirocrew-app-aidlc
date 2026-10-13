@@ -1598,7 +1598,8 @@ button.studio-chip:hover { border-color: var(--border-hover); }
   font-size: 11.5px;
   color: var(--muted);
 }
-.studio-drumb { display: inline-flex; align-items: center; gap: 5px; max-width: 22ch; }
+/* Wide enough for a stage name ("2.3 requirements-analysis"); the row wraps before a crumb is cut. */
+.studio-drumb { display: inline-flex; align-items: center; gap: 5px; max-width: 48ch; }
 .studio-dsep { opacity: 0.45; }
 .studio-anchor-link {
   margin-left: 6px;

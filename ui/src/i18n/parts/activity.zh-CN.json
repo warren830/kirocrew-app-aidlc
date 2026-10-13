@@ -255,5 +255,7 @@
   "audit.UNIT_STARTED": "某个单元的工作已开始。",
   "audit.UNIT_COMPLETED": "某个单元的工作已完成，所需文件均已落盘。",
   "audit.ARTIFACT_REUSED": "AI-DLC 决定是否复用之前的产出物。",
-  "audit.RECOVERY_COMPLETED": "对话被压缩后，已答复恢复提示。"
+  "audit.RECOVERY_COMPLETED": "对话被压缩后，已答复恢复提示。",
+  "activity.page.countPage_one": "本页 {n} 条事件；“更早”可查看更多",
+  "activity.page.countPage_other": "本页 {n} 条事件；“更早”可查看更多"
 }
