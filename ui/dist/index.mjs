@@ -715,7 +715,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"detail.transitions.why.marked_not_delivered": "you marked it as not delivered",
 	"detail.transitions.why.not_delivered_proven": "the message never reached the conversation",
 	"detail.transitions.why.not_delivered_unproven": "Studio could not prove the message was not delivered",
-	"detail.transitions.why.plan_approved": "AI-DLC recorded the plan approval",
+	"detail.transitions.why.plan_approved": "AI-DLC recorded the plan approval; Studio confirmed it from disk when the turn ended",
 	"detail.transitions.why.plan_asked_again": "AI-DLC asked for plan approval again",
 	"detail.transitions.why.plan_changes_requested": "AI-DLC recorded the requested plan changes",
 	"detail.transitions.why.plan_reply_not_recorded": "AI-DLC did not record the plan reply",
@@ -3235,7 +3235,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"detail.transitions.why.marked_not_delivered": "你将其标记为未送达",
 	"detail.transitions.why.not_delivered_proven": "消息没有送达会话",
 	"detail.transitions.why.not_delivered_unproven": "Studio 无法证明消息没有送达",
-	"detail.transitions.why.plan_approved": "AI-DLC 已记录计划批准",
+	"detail.transitions.why.plan_approved": "AI-DLC 已记录计划批准；回合结束时 Studio 从磁盘确认了这一点",
 	"detail.transitions.why.plan_asked_again": "AI-DLC 已重新请求批准计划",
 	"detail.transitions.why.plan_changes_requested": "AI-DLC 已记录要求的计划修改",
 	"detail.transitions.why.plan_reply_not_recorded": "AI-DLC 未记录对计划的答复",
@@ -16220,9 +16220,9 @@ function Fs({ title: e, names: t, empty: n, muted: r = [], mutedNote: i }) {
 	});
 }
 function Is({ review: e }) {
-	let t = W(), { t: n } = t, r = /* @__PURE__ */ new Map();
-	for (let t of e.findings) r.set(t.level, (r.get(t.level) ?? 0) + 1);
-	let i = e.findings.filter((e) => e.level === "blocker"), a = i.slice(0, 3);
+	let t = W(), { t: n } = t, r = /* @__PURE__ */ new Map(), i = /* @__PURE__ */ new Map();
+	for (let t of e.findings) t.level === "unknown" && t.severity ? i.set(t.severity, (i.get(t.severity) ?? 0) + 1) : r.set(t.level, (r.get(t.level) ?? 0) + 1);
+	let a = e.findings.filter((e) => e.level === "blocker"), o = a.slice(0, 3);
 	return e.findings.length === 0 && !e.verdict ? /* @__PURE__ */ m("p", {
 		className: "studio-muted",
 		children: n("map.inspector.reviewEmpty")
@@ -16244,21 +16244,26 @@ function Is({ review: e }) {
 					tone: e === "blocker" ? "danger" : e === "advisory" ? "warn" : e === "resolved" ? "ok" : "neutral",
 					icon: e === "blocker" ? "warn" : e === "advisory" ? "info" : e === "resolved" ? "check" : "info",
 					children: `${n(`map.review.level.${e}`)} ${t.fmt.number(r.get(e) ?? 0)}`
-				}, e))
+				}, e)),
+				[...i.entries()].map(([e, r]) => /* @__PURE__ */ m(Z, {
+					icon: "info",
+					title: n("review.severityTitle"),
+					children: `${e} ${t.fmt.number(r)}`
+				}, `severity:${e}`))
 			]
-		}), a.length > 0 ? /* @__PURE__ */ h("ul", {
+		}), o.length > 0 ? /* @__PURE__ */ h("ul", {
 			className: "studio-finding-list",
 			role: "list",
-			children: [a.map((e, t) => /* @__PURE__ */ m("li", {
+			children: [o.map((e, t) => /* @__PURE__ */ m("li", {
 				className: "studio-finding",
 				"data-severity": "blocking",
 				children: /* @__PURE__ */ m("span", {
 					className: "studio-wrap-any",
 					children: e.title
 				})
-			}, `${e.title}:${t}`)), i.length > a.length ? /* @__PURE__ */ m("li", {
+			}, `${e.title}:${t}`)), a.length > o.length ? /* @__PURE__ */ m("li", {
 				className: "studio-muted",
-				children: n("map.review.more", { n: t.fmt.number(i.length - a.length) })
+				children: n("map.review.more", { n: t.fmt.number(a.length - o.length) })
 			}) : null]
 		}) : null]
 	});
