@@ -22,7 +22,7 @@ import { isClosedAction, isRepositoryUnavailable } from '../lib/actionQueue'
 import { DEFAULT_SPACE } from '../lib/route'
 import type { ActionCard } from '../lib/types'
 import { statusLabel, statusTone } from './DeliveryStrip'
-import { isRefreshing, SEVERITY_TONE, stageText, typeIconOf } from './QueueRow'
+import { isRefreshing, SEVERITY_TONE, stageText, typeIconOf, typeLabelOf } from './QueueRow'
 
 export interface DetailHeaderProps {
   card: ActionCard
@@ -68,7 +68,7 @@ export function DetailHeader({ card, onOpenCurrent }: DetailHeaderProps) {
     timer.current = setTimeout(() => setCopied(false), 2200)
   }, [card.deep_link])
 
-  const typeLabel = t(`enum.actionType.${card.queue_type}`)
+  const typeLabel = typeLabelOf(i18n, card)
   const closed = isClosedAction(card)
   const unavailable = isRepositoryUnavailable(card)
   const headline = unavailable && !closed ? t('detail.repoUnavailable.title') : closed

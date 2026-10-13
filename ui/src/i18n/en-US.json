@@ -1587,6 +1587,7 @@
   "queue.organizeLabel": "Queue organization",
   "queue.refreshing": "Refreshing",
   "queue.title": "Needs you",
+  "queue.type.planApproval": "Plan approval",
   "repos.a11y.blocked": "Install recovery required in {repo}. AI-DLC execution is blocked in this repository until it clears.",
   "repos.a11y.repoRow": "{label}, {path}, {install}, {availability}, {intents}, {queue}",
   "repos.action.archive": "Archive repository",

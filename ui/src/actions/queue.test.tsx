@@ -13,9 +13,10 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { apiCalls, setApiRoutes, type RouteHandler } from '../test/stubs/app-sdk'
-import { I18nProvider } from '../i18n'
+import { I18nProvider, makeI18n } from '../i18n'
 import { STUDIO_ORGANIZE_KEY } from '../lib/host'
 import { StudioApp } from '../shell/StudioApp'
+import { actionCard } from '../test/fixtures'
 import type { ActionCard, ActionType, Severity } from '../lib/types'
 
 const BASE = '/api/apps/aidlc-studio'
@@ -435,5 +436,17 @@ describe('the decision pane', () => {
     // The control is reachable and explains itself rather than being silently inert.
     expect(reject).toBeDisabled()
     expect(reject).toHaveAttribute('title', 'Requesting changes needs a note saying what to change.')
+  })
+})
+
+
+describe('a card\'s kind in words', () => {
+  it('names a plan approval as one, not as a question', async () => {
+    const { typeLabelOf } = await import('./QueueRow')
+    const en = makeI18n('en-US')
+    const plan = actionCard({ type: 'question', queue_type: 'question',
+      decisions: [{ decision: 'approve_plan', label_key: 'decision.approve_plan.label', fields: [], wire_text: null }] as never })
+    expect(typeLabelOf(en, plan)).toBe('Plan approval')
+    expect(typeLabelOf(en, actionCard({ type: 'question', queue_type: 'question', decisions: [] }))).toBe('Question')
   })
 })

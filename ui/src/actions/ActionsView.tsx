@@ -30,7 +30,7 @@ import { ArtifactView } from '../map/ArtifactView'
 import { DetailShell } from './DetailShell'
 import { QueueFilters, useOrganize } from './QueueFilters'
 import { QueueList } from './QueueList'
-import { intentText, repoText, stageText } from './QueueRow'
+import { intentText, repoText, stageText, typeLabelOf } from './QueueRow'
 import { ApprovalWaitNotice } from '../intents/ApprovalWait'
 
 /** Every word a search should be able to find a row by. */
@@ -66,7 +66,7 @@ export function ActionsView({ route, go }: ViewProps) {
     const needle = query.trim().toLowerCase()
     const matching = needle
       ? cards.filter((card) => {
-          const typeLabel = t(`enum.actionType.${card.queue_type}`)
+          const typeLabel = typeLabelOf(i18n, card)
           const headline = i18n.has(card.headline.key) ? t(card.headline.key, {}) : typeLabel
           return haystack(card, typeLabel, headline).includes(needle)
         })

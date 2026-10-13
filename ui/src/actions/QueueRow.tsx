@@ -86,6 +86,18 @@ export function repoText(card: ActionCard): string {
   return card.space && card.space !== DEFAULT_SPACE ? `${label} · ${card.space}` : label
 }
 
+/**
+ * The card's kind in words. A plan approval is a question card on the wire (it answers the code-generation
+ * plan's checkpoint), but it asks for an approval, and "Question · Answered" over "AI-DLC recorded the plan
+ * approval" read as two different things.
+ */
+export function typeLabelOf(i18n: { t: (key: string) => string }, card: Pick<ActionCard, 'queue_type' | 'type' | 'decisions'>): string {
+  if (card.type === 'question' && card.decisions.some((spec) => spec.decision === 'approve_plan')) {
+    return i18n.t('queue.type.planApproval')
+  }
+  return i18n.t(`enum.actionType.${card.queue_type}`)
+}
+
 export function intentText(card: ActionCard): string {
   return card.intent.title || card.intent.slug || card.intent.intent_dir
 }
@@ -110,7 +122,7 @@ function Row({ card, selected, tabbable, now, onSelect }: QueueRowProps) {
   const i18n = useI18n()
   const { t } = i18n
   const refreshing = isRefreshing(card)
-  const typeLabel = t(`enum.actionType.${card.queue_type}`)
+  const typeLabel = typeLabelOf(i18n, card)
   const severityLabel = t(`enum.severity.${card.severity}`)
   const unavailable = isRepositoryUnavailable(card)
   const wait = unavailable ? t('detail.repoUnavailable.saved') : waiting(i18n, card.waiting_since, now)

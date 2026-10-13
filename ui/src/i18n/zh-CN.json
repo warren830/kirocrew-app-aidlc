@@ -1587,6 +1587,7 @@
   "queue.organizeLabel": "队列排序方式",
   "queue.refreshing": "正在重读",
   "queue.title": "等你决定",
+  "queue.type.planApproval": "计划批准",
   "repos.a11y.blocked": "{repo} 需要安装恢复。在恢复完成之前，该仓库中的 AI-DLC 执行被阻止。",
   "repos.a11y.repoRow": "{label}，{path}，{install}，{availability}，{intents}，{queue}",
   "repos.action.archive": "归档仓库",

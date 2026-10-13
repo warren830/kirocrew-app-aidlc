@@ -23,5 +23,6 @@
   "queue.organize.type": "Type",
   "queue.organizeLabel": "Queue organization",
   "queue.refreshing": "Refreshing",
-  "queue.title": "Needs you"
+  "queue.title": "Needs you",
+  "queue.type.planApproval": "Plan approval"
 }
