@@ -257,8 +257,9 @@ gateway authentication itself; no API token needs to be copied into this reposit
    version, state versions, conflicts, permissions.
 3. **Install AI-DLC** if the repository has none. You see every managed path and every conflict before
    anything is written. Files the framework owns are recorded with their digests in a receipt; your
-   `AGENTS.md`, `.gitignore` and `.kiro/settings/*.json` are merge targets where Studio owns only its own
-   fragment and leaves everything else — including secrets — untouched.
+   `.kiro/settings/*.json` are merge targets where Studio owns only its own fragment and leaves
+   everything else — including secrets — untouched. Studio writes no `AGENTS.md` or `.gitignore`: AI-DLC
+   adds its own marked part to each at its next session (see [Bundled AI-DLC](#bundled-ai-dlc)).
 4. **New intent** walks Work → Preset → Plan → Review. Creation also compiles the runtime graph; it never starts a workflow turn. If compilation fails after creation, retry it on the existing intent from the wizard without creating a duplicate.
 5. **Run to next checkpoint** takes the intent to its first human boundary, which then appears in the
    Action Center.
@@ -328,12 +329,21 @@ lifecycle progress.
 
 ## Bundled AI-DLC
 
-`payload/aidlc-kiro/` holds the AI-DLC Workflows Kiro CLI distribution, version **2.10.0**, with
-one Studio-maintained local patch documented in `THIRD_PARTY_NOTICES.md`, under the MIT No Attribution
-licence (`payload/AIDLC-LICENSE`). Every file is inventoried with its
-SHA-256 in `payload/manifest.json`, which is also what the installer verifies before and after writing.
-Studio's own version and the bundled AI-DLC version are shown separately in Settings. See
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+`payload/aidlc-kiro/` holds the AI-DLC Workflows Kiro CLI distribution, version **2.11.0** (the
+copy-runtime release asset built from `release/2.11` at `6a378b53`, the `v2.11.0` tag), under the MIT
+No Attribution licence (`payload/AIDLC-LICENSE`). One Studio-maintained local patch, to the requirement
+traceability sensor, is kept; the KiroCrew-reply adapter and testing-posture patches carried with 2.10.0
+are retired, because 2.11 reads a KiroCrew reply in the person's own words itself. Both are documented in
+`THIRD_PARTY_NOTICES.md`. Every file is inventoried with its SHA-256 in `payload/manifest.json`, which is
+also what the installer verifies before and after writing. Studio's own version and the bundled AI-DLC
+version are shown separately in Settings. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+2.11's copy runtime ships no `AGENTS.md` or `.gitignore`, so a fresh install writes neither; AI-DLC adds
+its own marked block to each at the next session. Upgrading a repository installed from 2.10 takes
+Studio's `AGENTS.md` block and the `.gitignore` lines it added back out, exactly as uninstall would and
+only while they are unmodified; anything you edited stays, is listed in the upgrade preview, and is no
+longer Studio's. The 2.10 model default Studio wrote to `.kiro/settings/cli.json`
+(`chat.modelDefaults` for `claude-opus-4.8`) is inert under 2.11 and is left in place, unowned.
 
 ## Permissions this app requests
 
@@ -371,10 +381,10 @@ never submits anything. It analyses an evidence package Studio passes to it and 
 cd ui && npm run check      # tsc --noEmit && vitest run && vite build
 
 # regenerate the bundled payload inventory after changing payload/aidlc-kiro/
-python3 scripts/build_payload_manifest.py --version 2.10.0 \
-  --source-ref "v2.10.0 @ 2a883858 + Studio requirement-traceability and KiroCrew-reply compatibility patches" \
-  --source-commit 2a883858f5483bce3b48f43b8f6d3ca2c042d6ae \
-  --dist-path "aidlc-copy-runtime-2.10.0.tar.gz:runtime/kiro" --state-versions 8
+python3 scripts/build_payload_manifest.py --version 2.11.0 \
+  --source-ref "release/2.11 @ 6a378b53 (= v2.11.0) + Studio requirement-traceability patch" \
+  --source-commit 6a378b53c0a4fe0641ed7d8de8dfff94264d5b6a \
+  --dist-path "aidlc-copy-runtime-2.11.0.tar.gz:runtime/kiro" --state-versions 8
 ```
 
 Keep `--source-commit` pinned to the upstream base and describe local patches in `--source-ref`
