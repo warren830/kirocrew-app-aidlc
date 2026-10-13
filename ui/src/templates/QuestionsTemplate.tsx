@@ -29,6 +29,7 @@ import { MarkdownRenderer } from '@kirocrew/app-sdk/ui'
 import { ArtifactViewer, useArtifactBody } from '../artifacts/ArtifactViewer'
 import { useI18n } from '../i18n'
 import { pendingQuestions } from '../actions/useSubmit'
+import { withInlineCode } from '../lib/inlineCode'
 import type { DraftResult, Question } from '../lib/types'
 import { Chip } from '../shell/Chip'
 import { Icon } from '../shell/Icon'
@@ -84,16 +85,6 @@ function sameAnswer(stored: AnswerDraft | undefined, filled: AnswerDraft): boole
   if (!stored || stored.free_text !== filled.free_text) return false
   if (stored.option_letters.length !== filled.option_letters.length) return false
   return stored.option_letters.every((letter, i) => letter === filled.option_letters[i])
-}
-
-/**
- * The engine's text with its backtick spans set as code. Nothing else is interpreted: options are the
- * engine's own words (FR-Q-001), and only the backticks were showing up as literal characters.
- */
-export function withInlineCode(text: string): ReactNode {
-  const parts = text.split(/`([^`\n]+)`/)
-  if (parts.length === 1) return text
-  return parts.map((part, index) => (index % 2 ? <code key={index} className="studio-icode">{part}</code> : part))
 }
 
 export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, api, go }: TemplateProps) {

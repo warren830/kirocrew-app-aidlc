@@ -23,6 +23,7 @@ import { useEffect, useMemo, useRef } from 'react'
 
 import { useI18n } from '../i18n'
 import { usePrefersReducedMotion } from '../lib/host'
+import { withInlineCode } from '../lib/inlineCode'
 import type { ReviewFinding } from '../lib/types'
 import { Chip, type ChipTone } from '../shell/Chip'
 import { Icon, type IconName } from '../shell/Icon'
@@ -171,8 +172,8 @@ function FindingItem({
           </button>
         ) : null}
       </div>
-      {/* Reviewer text, verbatim. */}
-      <p className="studio-finding-title">{finding.title}</p>
+      {/* Reviewer text, verbatim; its backtick spans are set as code, nothing else is interpreted. */}
+      <p className="studio-finding-title">{withInlineCode(finding.title)}</p>
       {finding.quote ? <p className="studio-finding-quote">{finding.quote}</p> : null}
       {finding.location ? (
         <p className="studio-finding-field">
@@ -182,7 +183,7 @@ function FindingItem({
       ) : null}
       {finding.required_action ? (
         <p className="studio-finding-field">
-          <span className="studio-muted">{t('review.finding.action')}</span> {finding.required_action}
+          <span className="studio-muted">{t('review.finding.action')}</span> {withInlineCode(finding.required_action)}
         </p>
       ) : null}
       {!finding.anchor && !finding.location && anchorable ? (

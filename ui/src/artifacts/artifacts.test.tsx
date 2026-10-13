@@ -259,6 +259,13 @@ describe('reviewer findings', () => {
     // The reviewer named a location, so the list must not say it recorded none.
     expect(screen.queryByText(/recorded no section/i)).toBeNull()
   })
+
+  it('sets a finding\'s backtick spans as code and keeps every other character', () => {
+    const { container } = mount(<FindingList findings={[finding({ title: 'NFR2 sends tests into `test_textstats.py` twice' })]} />)
+    const code = container.querySelector('.studio-finding-title code')
+    expect(code?.textContent).toBe('test_textstats.py')
+    expect(container.querySelector('.studio-finding-title')?.textContent).toBe('NFR2 sends tests into test_textstats.py twice')
+  })
 })
 
 describe('the review tab', () => {
