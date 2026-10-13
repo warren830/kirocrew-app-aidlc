@@ -58,5 +58,6 @@
   "install.step.remove_files": "移除自有引擎文件",
   "install.step.remove_fragments": "移除自有片段",
   "install.step.post_uninstall_validate": "验证移除结果与保留文件",
-  "install.step.commit_uninstall": "记录已完成的卸载"
+  "install.step.commit_uninstall": "记录已完成的卸载",
+  "install.reason.aidlc_block_absent": "保留：AI-DLC 还没有在这个文件里写入它自己的部分。它会在创建下一个意图时写入；在那之前，Studio 的这些内容能让 AI-DLC 的本机文件不进入 Git，并引导其他智能体使用 AI-DLC。升级之后它们归你所有，Studio 不再管理。"
 }

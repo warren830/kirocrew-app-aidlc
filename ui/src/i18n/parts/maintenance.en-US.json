@@ -58,5 +58,6 @@
   "install.step.confirm_uninstall": "Confirm the reviewed uninstall",
   "install.step.remove_fragments": "Remove owned fragments",
   "install.step.post_uninstall_validate": "Verify removed content and preserved files",
-  "install.step.commit_uninstall": "Record the completed uninstall"
+  "install.step.commit_uninstall": "Record the completed uninstall",
+  "install.reason.aidlc_block_absent": "Kept: AI-DLC has not written its own part of this file yet. It does when the next intent is created; until then Studio's lines keep AI-DLC's machine-local files out of Git and point other agents at AI-DLC. After this upgrade they are yours, and Studio no longer manages them."
 }

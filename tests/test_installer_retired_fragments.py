@@ -1,8 +1,9 @@
 """An upgrade to a payload that stops merging into a file takes Studio's part out of it exactly as uninstall would,
 and keeps anything Studio cannot prove is still its own.
 
-AI-DLC 2.11's copy runtime ships no ``AGENTS.md`` or ``.gitignore``: the engine adds its own marked block to each at
-the next session (``addRootBlocks``), so a repository installed from 2.10 must not keep Studio's 2.10 copy beside it.
+AI-DLC 2.11's copy runtime ships no ``AGENTS.md`` or ``.gitignore``: the engine adds its own marked block to each when
+the next intent is created (``addRootBlocks``), so a repository installed from 2.10 must not keep Studio's 2.10 copy
+beside it. Until that block exists, Studio's part is what keeps AI-DLC's machine-local files out of Git, so it stays.
 """
 
 from __future__ import annotations
@@ -22,8 +23,18 @@ from test_installer_uninstall import register, strip_uninstall_metadata, uninsta
 
 AGENTS, IGNORE = "AGENTS.md", ".gitignore"
 FENCE_START, FENCE_END = "<!-- aidlc-studio:managed:start -->", "<!-- aidlc-studio:managed:end -->"
-HOUSE_AGENTS = b"# House rules\n\nAsk before deploying.\n"
-HOUSE_IGNORE = b"node_modules\n*.log\n"
+#: AI-DLC's own parts, as ``addRootBlocks`` writes them once an intent is created under 2.11.
+AIDLC_AGENTS = b"<!-- BEGIN AI-DLC:agents -->\nUse the aidlc agent.\n<!-- END AI-DLC:agents -->\n"
+AIDLC_IGNORE = b"# BEGIN AI-DLC:gitignore\naidlc/active-space\n# END AI-DLC:gitignore\n"
+HOUSE_AGENTS = b"# House rules\n\nAsk before deploying.\n\n" + AIDLC_AGENTS
+HOUSE_IGNORE = b"node_modules\n*.log\n" + AIDLC_IGNORE
+
+
+def aidlc_wrote_its_parts(root: Path) -> None:
+    """What 2.11 does at the next intent creation: its own block after whatever the file already holds."""
+    for path, block in ((AGENTS, AIDLC_AGENTS), (IGNORE, AIDLC_IGNORE)):
+        target = root / path
+        target.write_bytes((target.read_bytes() if target.exists() else b"") + b"\n" + block)
 
 
 @pytest.fixture(scope="session")
@@ -57,20 +68,38 @@ def test_the_211_shaped_payload_merges_neither_file(up):
     assert up.installer.manifest.merge_targets[CLI]["managedKeys"] == ["chat.defaultAgent"]
 
 
-def test_upgrade_removes_the_files_studio_created(studio, h, up, repo_builder):
+def test_upgrade_keeps_studios_part_until_aidlc_writes_its_own(studio, h, up, repo_builder):
+    """2.11 adds its part only when the next intent is created: retiring Studio's first left the clone id, turn counter
+    and sessions unignored in the meantime (round-3 evaluation). Kept, and no longer Studio's to manage."""
+    root, repo = install(studio, h, repo_builder)
+    before = {path: (root / path).read_bytes() for path in (AGENTS, IGNORE)}
+    plan = up.installer.preview(repo, "upgrade")
+    for path in (AGENTS, IGNORE):
+        kept = entry_of(plan, path)
+        assert (kept.action, kept.reason, kept.blocking) == ("retire_blocked", "aidlc_block_absent", False)
+    committed(up, repo, "upgrade")
+    assert {path: (root / path).read_bytes() for path in (AGENTS, IGNORE)} == before
+    receipt = up.installer.current_receipt(repo.repo_id)
+    assert receipt.engine_version == "2.11.0" and not {AGENTS, IGNORE} & set(receipt.by_path())
+    assert up.installer.drift(reload_repo(studio, up.store), receipt) == ()
+
+
+def test_upgrade_takes_studios_part_out_once_aidlc_wrote_its_own(studio, h, up, repo_builder):
     root, repo = install(studio, h, repo_builder)
     assert FENCE_START in (root / AGENTS).read_text()
+    aidlc_wrote_its_parts(root)
     plan = up.installer.preview(repo, "upgrade")
     for path, key in ((AGENTS, "AGENTS.md:aidlc-studio:managed"), (IGNORE, ".gitignore:lines")):
         retire = entry_of(plan, path)
         assert (retire.action, retire.ownership, retire.fragment_key) == ("retire", "merge", key)
-        assert retire.blocking is False and retire.payload_sha256 is None
+        assert retire.blocking is False and retire.payload_sha256 is not None  # AI-DLC's part stays: rewritten
         assert retire.live_sha256 == tree(root)[path] and retire.diff
     assert f"-{FENCE_START}" in entry_of(plan, AGENTS).diff
     assert "-.aidlc-hooks-health/" in entry_of(plan, IGNORE).diff
     assert plan.blocking is False and plan.counts["retire"] == 2 and plan.counts["retire_blocked"] == 0
     committed(up, repo, "upgrade")
-    assert not (root / AGENTS).exists() and not (root / IGNORE).exists()
+    assert FENCE_START not in (root / AGENTS).read_text() and AIDLC_AGENTS in (root / AGENTS).read_bytes()
+    assert b".aidlc-hooks-health/" not in (root / IGNORE).read_bytes() and AIDLC_IGNORE in (root / IGNORE).read_bytes()
     receipt = up.installer.current_receipt(repo.repo_id)
     assert receipt.engine_version == "2.11.0"
     assert not {AGENTS, IGNORE} & set(receipt.by_path())
@@ -224,7 +253,8 @@ def test_a_narrower_cli_json_leaves_the_old_model_entry_and_uninstall_still_work
     left = json.loads((root / CLI).read_text())
     assert "chat.defaultAgent" not in left
     assert left["chat.modelDefaults"] == model  # the inert 2.10 default for claude-opus-4.8, left in place
-    assert not (root / AGENTS).exists() and not (root / IGNORE).exists()
+    # kept by the upgrade until AI-DLC writes its own part, and no longer Studio's to remove
+    assert FENCE_START in (root / AGENTS).read_text() and (root / IGNORE).exists()
 
 
 def test_drift_reads_a_210_receipt_by_its_own_definitions(studio, h, up, repo_builder):
@@ -238,7 +268,7 @@ def test_drift_reads_a_210_receipt_by_its_own_definitions(studio, h, up, repo_bu
 
 def test_upgrade_removes_only_the_ignore_lines_studio_added(studio, h, up, repo_builder):
     """A line the project already had stays, and so does a duplicate the user added after the install."""
-    before = b"node_modules\n.aidlc-hooks-health/\n"
+    before = b"node_modules\n.aidlc-hooks-health/\n" + AIDLC_IGNORE
     root, repo = install(studio, h, repo_builder, ignore=before)
     meta = h.installer.current_receipt(repo.repo_id).by_path()[IGNORE].uninstall
     assert meta["lines"] == ["aidlc/.aidlc-turn-counter", "aidlc/.aidlc-clone-id"]
@@ -278,6 +308,8 @@ def test_upgrade_keeps_what_a_legacy_receipt_cannot_prove(studio, h, up, repo_bu
 def test_a_later_step_failing_after_the_retire_restores_the_bytes(studio, h, up, repo_builder, users_files, marker):
     root, repo = install(studio, h, repo_builder, **({"agents": HOUSE_AGENTS, "ignore": HOUSE_IGNORE}
                                                      if users_files else {}))
+    if not users_files:
+        aidlc_wrote_its_parts(root)
     installed = {path: (root / path).read_bytes() for path in (AGENTS, IGNORE)}
     receipt = h.installer.current_receipt(repo.repo_id)
     up.fault.at(marker)

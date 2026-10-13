@@ -339,10 +339,12 @@ also what the installer verifies before and after writing. Studio's own version 
 version are shown separately in Settings. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 2.11's copy runtime ships no `AGENTS.md` or `.gitignore`, so a fresh install writes neither; AI-DLC adds
-its own marked block to each at the next session. Upgrading a repository installed from 2.10 takes
-Studio's `AGENTS.md` block and the `.gitignore` lines it added back out, exactly as uninstall would and
-only while they are unmodified; anything you edited stays, is listed in the upgrade preview, and is no
-longer Studio's. The 2.10 model default Studio wrote to `.kiro/settings/cli.json`
+its own marked block to each when the next intent is created. Upgrading a repository installed from 2.10
+takes Studio's `AGENTS.md` block and the `.gitignore` lines it added back out, exactly as uninstall would,
+once AI-DLC's own block is in the file and only while Studio's part is unmodified. Until AI-DLC has written
+its block, Studio's part stays, because its `.gitignore` lines are what keep AI-DLC's machine-local files
+(clone id, turn counter, sessions) out of Git. Anything kept is listed in the upgrade preview with the
+reason, and is no longer Studio's. The 2.10 model default Studio wrote to `.kiro/settings/cli.json`
 (`chat.modelDefaults` for `claude-opus-4.8`) is inert under 2.11 and is left in place, unowned.
 
 ## Permissions this app requests

@@ -731,6 +731,14 @@ def _live_bytes(path: Path) -> tuple[bytes | None, bool]:
         return None, True
 
 
+def _aidlc_block_present(path: str, live: bytes) -> bool:
+    """Whether AI-DLC's own marked part (``addRootBlocks``) is already in a root file: ``<!-- BEGIN AI-DLC:…`` in
+    Markdown, ``# BEGIN AI-DLC:…`` elsewhere, as ``managedBlockMarkers`` writes them."""
+    text = live.decode("utf-8", "replace")
+    marker = "<!-- BEGIN AI-DLC:" if path.endswith(".md") else "# BEGIN AI-DLC:"
+    return any(line.strip().startswith(marker) for line in text.splitlines())
+
+
 def _digest_of(data: bytes | None) -> str | None:
     return security.sha256_bytes(data) if data is not None else None
 
@@ -1306,7 +1314,7 @@ class Installer:
 
     def _retire_fragment_entry(self, root: Path, rf: ReceiptFile) -> PreviewEntry | None:
         """Studio's part of a file the payload stopped merging into (2.11 leaves ``AGENTS.md`` and ``.gitignore``
-        to AI-DLC, which adds its own marked block at the next session), taken out exactly as uninstall would take
+        to AI-DLC, which adds its own marked block when the next intent is created), taken out exactly as uninstall would take
         it out: ``live_sha256`` is the whole file the plan was made against, ``payload_sha256`` what retiring it
         leaves (``None``: the file Studio created goes). ``None`` when Studio's part is already gone."""
         def keep(reason: str, live: bytes | None = None) -> PreviewEntry:
@@ -1327,6 +1335,12 @@ class Installer:
             return None
         if reason is not None:
             return keep(reason, live)
+        if not _aidlc_block_present(rf.path, live):
+            # 2.11 writes its own part only when the next intent is created. Until then Studio's lines are what keeps
+            # AI-DLC's machine-local files (clone id, turn counter, sessions) out of Git, and Studio's block what points
+            # other agents at AI-DLC: retiring them first left that gap (round-3 evaluation). Kept, and no longer
+            # Studio's to manage, so they never become drift.
+            return keep("aidlc_block_absent", live)
         return _entry(rf.path, rf.ownership, "retire", live=_digest_of(live), payload=_digest_of(after),
                       receipt=rf.canonical_digest, size=len(live), key=rf.fragment_key,
                       diff=_unified_diff(f"{rf.path} [{rf.fragment_key}]", live, after or b""))

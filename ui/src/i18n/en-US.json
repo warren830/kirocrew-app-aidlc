@@ -1041,6 +1041,7 @@
   "install.preview.title.rollback": "Roll back the AI-DLC engine",
   "install.preview.title.uninstall": "Uninstall AI-DLC harness",
   "install.preview.title.upgrade": "Upgrade preview",
+  "install.reason.aidlc_block_absent": "Kept: AI-DLC has not written its own part of this file yet. It does when the next intent is created; until then Studio's lines keep AI-DLC's machine-local files out of Git and point other agents at AI-DLC. After this upgrade they are yours, and Studio no longer manages them.",
   "install.reason.already_absent": "This file is already absent.",
   "install.reason.backup_digest_mismatch": "The backup does not match its receipt.",
   "install.reason.backup_missing": "The required old-version backup is missing.",
