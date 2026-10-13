@@ -422,7 +422,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"changes.none": "This stage's source manifest lists no written files.",
 	"changes.noneTraced": "This stage's traceability names no workspace file.",
 	"changes.readNow": "Read now: today's files against today's latest commit, not the code this card decided on. Once that code is committed, it reads as unchanged here.",
-	"changes.readNowBase": "Read now: today's files against the commit this card opened on. A file changed again after the decision shows that change too.",
+	"changes.readNowBase": "Read now: today's files against the commit that was HEAD when this card was decided. A file changed again since then shows that change too.",
 	"changes.showDiff": "Show diff",
 	"changes.status.added": "New file",
 	"changes.status.binary": "Binary",
@@ -435,7 +435,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"changes.status.unchangedBase": "Same as {sha}",
 	"changes.status.unknown": "Unknown",
 	"changes.summary": "{n} files written: +{added} −{removed} lines against the last commit.",
-	"changes.summaryBase": "{n} files written: +{added} −{removed} lines against {sha}, the commit HEAD was when this card opened.",
+	"changes.summaryBase": "{n} files written: +{added} −{removed} lines against {sha}, the latest commit when this card was decided.",
 	"changes.truncated": "The diff is longer than Studio shows; open the file in the repository to read all of it.",
 	"changes.unreadable": "The files this stage wrote could not be read right now.",
 	"changes.why.binary": "{change}. A binary file has no line diff to show.",
@@ -443,7 +443,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"changes.why.secret": "A secret file (such as .env); Studio never shows its content.",
 	"changes.why.too_large": "Too large to compare here.",
 	"changes.why.unchanged": "The working tree matches the last commit, so this change is already committed (or the stage left the file as it was).",
-	"changes.why.unchangedBase": "Today's file matches {sha}, the commit this card opened on, so the stage left it as it was or the change was undone.",
+	"changes.why.unchangedBase": "Today's file matches {sha}, the commit that was HEAD when this card was decided: the stage left it as it was, or the change was undone.",
 	"changes.why.unknown": "Git could not say how this file changed.",
 	"common.cancel": "Cancel",
 	"common.close": "Close",
@@ -2942,7 +2942,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"changes.none": "本阶段的 source manifest 没有列出任何写入的文件。",
 	"changes.noneTraced": "本阶段的 traceability 没有指向任何工作区文件。",
 	"changes.readNow": "这是现在读取的结果：拿今天的文件对比今天的最新提交，而不是这张卡片当时决定的代码。那份代码提交之后，这里会显示为没有变化。",
-	"changes.readNowBase": "这是现在读取的结果：拿今天的文件对比这张卡片打开时的提交。决定之后文件若又被改过，那次改动也会显示在这里。",
+	"changes.readNowBase": "这是现在读取的结果：拿今天的文件对比这张卡片做出决定时的 HEAD 提交。之后文件若又被改过，那次改动也会显示在这里。",
 	"changes.showDiff": "查看差异",
 	"changes.status.added": "新文件",
 	"changes.status.binary": "二进制",
@@ -2955,7 +2955,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"changes.status.unchangedBase": "与 {sha} 相同",
 	"changes.status.unknown": "未知",
 	"changes.summary": "共写入 {n} 个文件：相对上一次提交 +{added} −{removed} 行。",
-	"changes.summaryBase": "写入 {n} 个文件：相对 {sha}（这张卡片打开时的 HEAD）+{added} −{removed} 行。",
+	"changes.summaryBase": "写入 {n} 个文件：相对 {sha}（这张卡片做出决定时的最新提交）+{added} −{removed} 行。",
 	"changes.truncated": "差异比这里显示的更长；请在仓库中打开文件查看全部内容。",
 	"changes.unreadable": "暂时无法读取本阶段写入的文件。",
 	"changes.why.binary": "{change}。二进制文件没有可显示的逐行差异。",
@@ -2963,7 +2963,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"changes.why.secret": "这是机密文件（例如 .env），Studio 从不显示其内容。",
 	"changes.why.too_large": "文件过大，无法在这里比较。",
 	"changes.why.unchanged": "工作区与上一次提交一致：这次修改已经提交（或本阶段没有改动这个文件）。",
-	"changes.why.unchangedBase": "今天的文件与 {sha}（这张卡片打开时的提交）一致：要么这一阶段没有改它，要么改动已被撤回。",
+	"changes.why.unchangedBase": "今天的文件与 {sha}（这张卡片做出决定时的 HEAD 提交）一致：要么这一阶段没有改它，要么改动已被撤回。",
 	"changes.why.unknown": "Git 无法判断这个文件是如何变化的。",
 	"common.cancel": "取消",
 	"common.close": "关闭",
@@ -10624,19 +10624,21 @@ function oa(e) {
 	return t.includes("source-manifest.json") ? !0 : e.stage?.slug === aa && !e.stage.unit && t.includes("traceability.json");
 }
 function sa(e, t) {
-	let n = Ce(), { repo_id: r } = e.repo, { intent_key: a } = e.intent, o = e.stage?.slug ?? "", s = e.stage?.unit ?? "", c = ft(e) ? e.evidence.git?.head ?? "" : "", l = i((e) => n.changes(r, a, {
+	let n = Ce(), { repo_id: r } = e.repo, { intent_key: a } = e.intent, o = e.stage?.slug ?? "", s = e.stage?.unit ?? "", c = ft(e), l = c ? e.evidence.git?.head ?? "" : "", u = c && !l ? e.delivery.delivering_at ?? e.resolution.resolved_at ?? e.created_at : "", d = i((e) => n.changes(r, a, {
 		stage: o,
 		...s ? { unit: s } : {},
-		...c ? { base: c } : {}
+		...l ? { base: l } : {},
+		...u ? { at: u } : {}
 	}, { signal: e }), [
 		n,
 		r,
 		a,
 		o,
 		s,
-		c
+		l,
+		u
 	]);
-	return Y(`changes:${r}:${a}:${o}:${s}:${c}`, l, {
+	return Y(`changes:${r}:${a}:${o}:${s}:${l}:${u}`, d, {
 		enabled: t && o !== "",
 		interval: 0,
 		revalidateOn: ["intent.updated", "reset"]
