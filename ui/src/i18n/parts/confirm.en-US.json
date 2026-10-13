@@ -84,5 +84,8 @@
   "decision.retry_now.label": "Retry now",
   "decision.run.label": "Run to next checkpoint",
   "decision.run_now.label": "Run now",
-  "confirm.blocked.questionsUnavailable": "Answer this question group in the intent's conversation."
+  "confirm.blocked.questionsUnavailable": "Answer this question group in the intent's conversation.",
+  "confirm.retry.slot_busy": "Nothing was sent: the conversation was busy. Send again once its turn ends.",
+  "confirm.retry.session_busy": "Nothing was sent: the conversation was in a turn. Send again once it ends.",
+  "confirm.retry.repo_busy": "Nothing was sent: another operation held this repository. Send again once it finishes."
 }

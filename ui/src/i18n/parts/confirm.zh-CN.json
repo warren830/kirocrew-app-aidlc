@@ -84,5 +84,8 @@
   "decision.retry_now.label": "立即重试",
   "decision.run.label": "运行到下一个检查点",
   "decision.run_now.label": "立即运行",
-  "confirm.blocked.questionsUnavailable": "请在原会话中回答此题组。"
+  "confirm.blocked.questionsUnavailable": "请在原会话中回答此题组。",
+  "confirm.retry.slot_busy": "什么都没有发出：会话当时正忙。等它这一回合结束后再发送。",
+  "confirm.retry.session_busy": "什么都没有发出：会话当时正在进行一个回合。等它结束后再发送。",
+  "confirm.retry.repo_busy": "什么都没有发出：另一个操作当时占用着这个仓库。等它完成后再发送。"
 }

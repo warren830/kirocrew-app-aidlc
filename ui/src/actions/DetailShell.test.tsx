@@ -322,11 +322,28 @@ describe('a refusal the server did return', () => {
     const panel = await openApproval(card)
     await userEvent.click(within(panel).getByRole('button', { name: new RegExp(en.t('confirm.send')) }))
 
-    // The banner above the card body still says it (unchanged), and so does the confirmation: on a long
-    // gate those two places are screens apart, and only one of them is where the user is looking.
-    await waitFor(() => expect(within(confirmation()).getByText(en.t('errors.slot_busy'))).toBeInTheDocument())
-    expect(screen.getAllByText(en.t('errors.slot_busy')).length).toBeGreaterThan(1)
-    // And the same bytes against the same captured state are not offered again.
+    // The banner above the card body still says it (unchanged), and the confirmation says it where the user is
+    // looking: on a long gate those two places are screens apart. A busy conversation passes when its turn ends,
+    // so the send stays live; round 4 left a person with a dead button and Cancel as the only way out.
+    await waitFor(() => expect(within(confirmation()).getByText(en.t('confirm.retry.slot_busy'))).toBeInTheDocument())
+    expect(screen.getByText(en.t('errors.slot_busy'))).toBeInTheDocument()
+    expect(within(confirmation()).getByRole('button', { name: new RegExp(en.t('confirm.send')) })).toBeEnabled()
+    // Pressing it again is a second attempt, refused again here while the conversation stays busy.
+    await userEvent.click(within(confirmation()).getByRole('button', { name: new RegExp(en.t('confirm.send')) }))
+    await waitFor(() => expect(apiCalls.filter((call) => call.path.endsWith('/submit'))).toHaveLength(2))
+  })
+
+  it('does not offer the same bytes again after a refusal that will not pass', async () => {
+    const card = actionCard()
+    setApiRoutes({
+      [`GET ${API_BASE}/actions/${card.action_id}`]: () => ({ action: card, transitions: [], drafts: [] }),
+      [`POST ${API_BASE}/actions/${card.action_id}/submit`]: () => {
+        throw new StubApiError(400, { error: 'not a decision this card offers', code: 'invalid_decision' })
+      },
+    })
+    const panel = await openApproval(card)
+    await userEvent.click(within(panel).getByRole('button', { name: new RegExp(en.t('confirm.send')) }))
+    await waitFor(() => expect(within(confirmation()).getByText(en.t('errors.invalid_decision'))).toBeInTheDocument())
     expect(within(confirmation()).getByRole('button', { name: new RegExp(en.t('confirm.send')) })).toBeDisabled()
   })
 })

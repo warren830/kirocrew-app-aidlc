@@ -45,6 +45,8 @@ export interface PendingDecision {
   wire: string | null
   /** i18n key explaining why `wire` is null, or why this cannot be sent. */
   blockedKey: string | null
+  /** i18n key of a line that does not block the send: the last attempt was refused for a reason that passes. */
+  noteKey?: string | null
 }
 
 export interface ConfirmPanelProps {
@@ -163,6 +165,11 @@ export function ConfirmPanel({
         <p className="studio-route" data-tone="danger" role="status">
           <Icon name="warn" size={13} />
           {t(blocked)}
+        </p>
+      ) : pending.noteKey ? (
+        <p className="studio-route" data-tone="warn" role="status">
+          <Icon name="info" size={13} />
+          {t(pending.noteKey)}
         </p>
       ) : null}
       {blocked === 'confirm.blocked.sessionUnbound' && onOpenSession ? (

@@ -268,6 +268,9 @@ export interface DetailShellProps {
   onQueueChanged: () => void
 }
 
+/** Refusals that pass with time: the conversation finishes its turn, the repository lease is released. */
+const PASSING_REFUSALS: ReadonlySet<string> = new Set(['slot_busy', 'session_busy', 'repo_busy'])
+
 export function DetailShell({
   actionId, queueCard, api, route, go, groupedAnswers, onQueueChanged,
 }: DetailShellProps) {
@@ -429,11 +432,17 @@ export function DetailShell({
     // refuses as `session_unbound`. A slot that is bound but gone or re-pointed (`slot_mismatch`) reads
     // identically to a healthy idle one in this card, so that one is left to the round trip.
     if (spec.lane !== 'studio_only' && !card.evidence.session?.slot_key) return 'confirm.blocked.sessionUnbound'
-    if (submit.stage === 'refused' && submit.actionId === card.action_id && submit.refusal) {
+    if (submit.stage === 'refused' && submit.actionId === card.action_id && submit.refusal
+      && !PASSING_REFUSALS.has(submit.refusal.code)) {
       return `errors.${submit.refusal.code}`
     }
     return null
   }
+  // A refusal about the moment, not the decision: nothing was sent, and the same send succeeds once the turn ends
+  // or the lease is free, so it is said beside the button and the button stays live.
+  const sendNoteFor = (): string | null =>
+    submit.stage === 'refused' && submit.actionId === card.action_id && submit.refusal
+      && PASSING_REFUSALS.has(submit.refusal.code) ? `confirm.retry.${submit.refusal.code}` : null
 
   /*
    * The confirmation, derived rather than frozen.
@@ -454,6 +463,7 @@ export function DetailShell({
           resolvePayload: chosen.lane === 'studio_only' ? resolvePayloadFor(chosen.decision, card) : null,
           wire: payload ? wireTextFor(payload, card.evidence.questions, groupedAnswers) : null,
           blockedKey: sendBlockedFor(chosen),
+          noteKey: sendNoteFor(),
         }
       })()
     : null
