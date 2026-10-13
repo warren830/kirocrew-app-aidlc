@@ -778,6 +778,7 @@ describe('the canonical conversation panel', () => {
 
   it('shows the bound conversation and unbinds it', async () => {
     setApiRoutes({
+      [`GET ${CHAT}/slots`]: () => [slot({ key: 's1', title: 'checkout-web / guest-checkout' })],
       [`POST ${INTENT_PATH}/session`]: () => ({ ok: true, binding: { slot_key: null, session_key: null }, slot: null }),
     })
     const onChanged = vi.fn()
@@ -786,13 +787,19 @@ describe('the canonical conversation panel', () => {
     expect(screen.getByText('s1')).toBeInTheDocument()
     expect(screen.getByText('ses_1')).toBeInTheDocument()
     expect(screen.getByText('Not running')).toBeInTheDocument()
+    // named by the title KiroCrew's sidebar shows, and opened through KiroCrew's own chat route
+    expect(await screen.findByText('checkout-web / guest-checkout')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Open in KiroCrew' }))
+    expect(navigations.at(-1)).toBe('/chat?sid=s1')
 
     await userEvent.click(screen.getByRole('button', { name: 'Unbind' }))
 
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Create and bind the conversation' })).toBeInTheDocument(),
     )
-    expect(apiCalls).toEqual([{ method: 'POST', path: `${INTENT_PATH}/session`, body: { slot_key: null } }])
+    expect(apiCalls.filter((call) => call.method !== 'GET')).toEqual([
+      { method: 'POST', path: `${INTENT_PATH}/session`, body: { slot_key: null } },
+    ])
     expect(onChanged).toHaveBeenCalledWith(
       'Unbound. Decisions for this intent will refuse to send until a conversation is bound.',
     )

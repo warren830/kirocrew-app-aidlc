@@ -414,6 +414,17 @@ def test_activity_returns_studio_rows_as_timeline_entries(sv, ocall, gate_repo):
     assert item["raw"] is None
 
 
+def test_an_activity_row_offers_no_link_to_an_action_that_is_gone(sv, ocall, gate_repo):
+    """Unregistering deletes a repository's actions and keeps its Activity rows: "Open action" was a dead end."""
+    repo = sv.repos.add(str(gate_repo), "demo")
+    asyncio.run(sv.activity.record(kind="action.submitted", severity="info", repo_id=repo.repo_id,
+                                   action_id="a_0000000000000009", params={}))
+    status, body = ocall("GET", "/activity")
+    assert status == 200
+    row = next(item for item in body["items"] if item["kind"] == "action.submitted")
+    assert "action_id" not in row["refs"]
+
+
 def test_activity_merges_the_audit_trail_for_one_intent(sv, ocall, gate_repo):
     repo = sv.repos.add(str(gate_repo), "demo")
     status, body = ocall("GET", "/activity", query={"repo": repo.repo_id, "intent": "260904-gate-demo"})

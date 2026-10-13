@@ -75,6 +75,7 @@ async def repo_git(services: Any, request: web.Request) -> web.Response:
     repo = await repo_or_404(services, request.match_info["repo_id"])
     root = Path(repo.canonical_path)
     observation = await asyncio.to_thread(services.git.observe, root)
+    await asyncio.to_thread(services.repos.remember_git, repo.repo_id, observation.to_json())
     receipt = await asyncio.to_thread(services.installer.current_receipt, repo.repo_id)
     owned = [f.path for f in receipt.files] if receipt is not None else []
     split = await asyncio.to_thread(services.git.dirty_split, root, owned)
@@ -381,6 +382,7 @@ async def _repo_json(services: Any, repo: Any, *, leases: Sequence[Any], fresh: 
     body["git"] = None
     if fresh and repo.availability == "available":
         body["git"] = (await asyncio.to_thread(services.git.observe, Path(repo.canonical_path))).to_json()
+        await asyncio.to_thread(services.repos.remember_git, repo.repo_id, body["git"])
     elif isinstance(cached_scan.get("git"), dict):
         body["git"] = cached_scan["git"]
     body["findings"] = [f.to_json() for f in (findings or ())]

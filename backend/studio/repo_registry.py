@@ -529,15 +529,25 @@ class RepoRegistry:
         took_ms = max(0, int((self._clock.monotonic() - started) * 1000))
         scan = RepoScan(repo_id=repo_id, availability=availability, install=health, intents=(), findings=(),
                         took_ms=took_ms, truncated=False, scanned_at=scanned_at)
+        # A scan reads no Git, so it keeps the last observation a repository page made rather than erasing it.
+        git = ((self._storage.get("repos", repo_id) or {}).get("scan_json") or {}).get("git")
         values: dict[str, Any] = {
             "availability": availability, "availability_detail": detail, "install_status": health.status,
             "installed_engine_version": health.engine_version, "engine_dir": health.engine_dir,
-            "receipt_version": health.receipt_id, "scan_json": scan.to_json(),
+            "receipt_version": health.receipt_id,
+            "scan_json": {**scan.to_json(), **({"git": git} if isinstance(git, dict) else {})},
         }
         if availability == "available":
             values["last_seen"] = scanned_at
         self._storage.update("repos", repo_id, values)
         return scan
+
+    def remember_git(self, repo_id: str, git: dict[str, Any]) -> None:
+        """Cache the Git observation a repository page just made, so the list (which never runs Git) can show it
+        with its own ``observed_at`` instead of "not read yet"."""
+        row = self._storage.get("repos", repo_id)
+        if row is not None:
+            self._storage.update("repos", repo_id, {"scan_json": {**(row.get("scan_json") or {}), "git": git}})
 
     def current_receipt_row(self, repo_id: str) -> dict[str, Any] | None:
         """The current receipt row, or ``None``. Storage read only — no file hashing."""

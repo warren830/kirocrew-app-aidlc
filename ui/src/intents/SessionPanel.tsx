@@ -46,6 +46,7 @@
  */
 
 import { useCallback, useState, type ReactNode } from 'react'
+import { useNavigate } from '@kirocrew/app-sdk'
 
 import { Chip } from '../shell/Chip'
 import { Icon } from '../shell/Icon'
@@ -55,6 +56,7 @@ import { unavailable } from '../lib/format'
 import type { BindingView, ChatFolder, HostSlot, IntentSummary, RepoRecord, SessionRef, SlotView } from '../lib/types'
 import { StartStatus, startBlockedReason, startKind, startText, useStartRun } from './StartRun'
 import { APP_NAME } from '../lib/app'
+import { useResource } from '../lib/useResource'
 
 /** The agent an AI-DLC conversation runs. `SessionBinder.bind` refuses every other one (§1.11). */
 const AIDLC_AGENT = 'aidlc'
@@ -84,6 +86,11 @@ const BIND_STEP = STEP_KEYS.indexOf('intents.session.step.bind') + 1
  */
 export function canonicalSlotKey(repoId: string, intentDir: string): string {
   return `${APP_NAME}-${repoId}-${intentDir}`
+}
+
+/** KiroCrew's own address for one conversation: the route its sidebar, search and artifact pages open. */
+export function conversationPath(slotKey: string): string {
+  return `/chat?sid=${encodeURIComponent(slotKey)}`
 }
 
 /** Normalised for comparison: the host reports realpaths, and a trailing slash is not a difference. */
@@ -173,6 +180,8 @@ interface Bound {
   slotKey: string
   sessionKey: string
   running: boolean
+  /** The title KiroCrew's sidebar shows, when the bind answer carried the slot. */
+  title?: string | null
 }
 
 function fromSession(session: SessionRef | null): Bound | null {
@@ -220,6 +229,17 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
   const bound = confirmed && !caughtUp ? confirmed.value : row
   const wanted = canonicalSlotKey(intent.repo_id, intent.intent_dir)
   const run = useStartRun(api, () => onChanged())
+  const navigate = useNavigate()
+  // The title the person sees in KiroCrew's sidebar names the conversation; its keys are only identifiers. A bind
+  // answer carries it; a panel opened on an intent that was already bound asks the host once.
+  const hostSlots = useResource<HostSlot[]>(
+    row && !confirmed ? `session-title:${row.slotKey}` : null,
+    useCallback((signal) => api.listSlots({ signal }), [api]),
+    { interval: 0 },
+  )
+  const boundTitle = bound
+    ? bound.title || hostSlots.data?.find((slot) => slot.key === bound.slotKey)?.title || null
+    : null
   const kind = startKind(intent)
   // A start this panel just delivered is running even before the row says so.
   const started = run.state.stage === 'settled' && run.state.attempt?.outcome === 'delivered'
@@ -242,6 +262,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
             slotKey: binding.slot_key,
             sessionKey: binding.session_key ?? slot?.session_key ?? '',
             running: slot?.running ?? false,
+            title: slot?.title || null,
           }
         : null,
     })
@@ -414,6 +435,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
         <>
           <Facts
             rows={[
+              { key: 'title', label: t('intents.session.fact.title'), value: boundTitle },
               { key: 'slot', label: t('intents.session.fact.slot'), value: bound.slotKey, mono: true },
               { key: 'session', label: t('intents.session.fact.session'), value: bound.sessionKey, mono: true },
               { key: 'project', label: t('intents.session.fact.project'), value: repo.canonical_path, mono: true },
@@ -441,6 +463,10 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
                 {t('intents.start.go', { text: startText(kind) })}
               </button>
             ) : null}
+            <button type="button" className="studio-btn" onClick={() => navigate(conversationPath(bound.slotKey))}>
+              <Icon name="external" size={13} />
+              {t('intents.session.open')}
+            </button>
             <button type="button" className="studio-btn" disabled={busy !== null} onClick={() => void unbind()}>
               <Icon name="close" size={13} />
               {t('intents.session.unbind')}

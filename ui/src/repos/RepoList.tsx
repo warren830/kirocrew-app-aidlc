@@ -81,7 +81,7 @@ export function RepoList({ repos, desktop, onAction }: RepoListProps) {
               <td className="studio-mono">{i18n.fmt.number(repo.counts.intents)}</td>
               <td className="studio-mono">{i18n.fmt.number(repo.counts.open_actions)}</td>
               <td>
-                <GitSummaryChips git={repo.git} />
+                <GitSummaryChips git={repo.git} dated />
               </td>
               <td>
                 <div className="studio-repo-actions">

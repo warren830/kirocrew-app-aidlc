@@ -368,6 +368,7 @@ def test_the_flow_is_visible_in_the_activity_timeline(sv, routes, fake_host, sce
     for item in body["items"]:
         assert item["message_key"], item
         assert isinstance(item["params"], dict)
+    assert any("action_id" in item["refs"] for item in body["items"]), "a live action's rows link to its card"
     status, body = _get(sv, routes, fake_host, "/activity", repo=scene.repo_id, intent=INTENT, limit="200")
     assert status == 200
     sources = {item["source"] for item in body["items"]}

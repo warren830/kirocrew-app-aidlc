@@ -25,13 +25,14 @@ import { Block, ErrorNote, Note } from './PreflightReport'
  * The one-line form used in the repo table and on the card header.
  *
  * Exported because the table needs exactly this and nothing more: a branch, a clean/dirty word, and the
- * ahead/behind pair when Git could be asked safely.
+ * ahead/behind pair when Git could be asked safely. `dated` adds when it was observed: the table never runs
+ * Git, so what it shows is the last observation a repository page made, and it must say how old that is.
  */
-export function GitSummaryChips({ git }: { git: GitObservation | null }) {
+export function GitSummaryChips({ git, dated = false }: { git: GitObservation | null; dated?: boolean }) {
   const i18n = useI18n()
   const { t } = i18n
 
-  // Not read is not off: the repository list carries an observation only once a scan has made one.
+  // Not read is not off: the repository list carries an observation only once a repository page has made one.
   if (!git) return <Chip icon="git">{t('repos.git.notRead')}</Chip>
   if (!git.available) {
     return (
@@ -50,6 +51,9 @@ export function GitSummaryChips({ git }: { git: GitObservation | null }) {
       </Chip>
       {git.ahead === null ? null : <Chip mono>{plural(i18n, 'repos.git.ahead', git.ahead)}</Chip>}
       {git.behind === null ? null : <Chip mono>{plural(i18n, 'repos.git.behind', git.behind)}</Chip>}
+      {dated ? (
+        <span className="studio-muted">{t('repos.git.observedAt', { when: fmtSince(i18n, git.observed_at) })}</span>
+      ) : null}
     </span>
   )
 }

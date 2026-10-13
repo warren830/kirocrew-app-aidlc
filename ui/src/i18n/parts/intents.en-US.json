@@ -49,7 +49,7 @@
   "intents.session.fact.project": "Project",
   "intents.session.fact.agent": "Agent",
   "intents.session.fact.willCreate": "Conversation to create",
-  "intents.session.fact.slot": "Conversation",
+  "intents.session.fact.slot": "Conversation key",
   "intents.session.fact.session": "Session",
   "intents.session.fact.state": "Right now",
   "intents.session.running": "A turn is running",
@@ -163,5 +163,7 @@
   "intents.approval.where": "Allow, trust or reject it in the conversation.",
   "intents.approval.open": "Open the conversation",
   "intents.action.prepareCommit": "Prepare commit",
-  "intents.action.prepareCommitHint": "Ask this intent's conversation to commit the changes the workflow made, without pushing. You confirm the exact request first."
+  "intents.action.prepareCommitHint": "Ask this intent's conversation to commit the changes the workflow made, without pushing. You confirm the exact request first.",
+  "intents.session.fact.title": "Conversation",
+  "intents.session.open": "Open in KiroCrew"
 }

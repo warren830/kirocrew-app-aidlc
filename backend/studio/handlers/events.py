@@ -63,4 +63,14 @@ async def activity(services: Any, request: web.Request) -> web.Response:
         return json_ok({"items": [entry.to_json() for entry in entries], "next_cursor": None})
 
     rows, next_cursor = await services.activity.query(q)
-    return json_ok({"items": [TimelineEntry.of_row(row).to_json() for row in rows], "next_cursor": next_cursor})
+    items = [TimelineEntry.of_row(row).to_json() for row in rows]
+    # Unregistering a repository deletes its actions and keeps its Activity rows, so a row may name an action that
+    # is gone: such a row offers no link to a card that can no longer open.
+    named = sorted({item["refs"]["action_id"] for item in items if "action_id" in item["refs"]})
+    if named:
+        live = await asyncio.to_thread(services.storage.select, "actions", {"action_id": named})
+        kept = {str(row.get("action_id")) for row in live}
+        for item in items:
+            if item["refs"].get("action_id") not in (None, *kept):
+                item["refs"].pop("action_id")
+    return json_ok({"items": items, "next_cursor": next_cursor})

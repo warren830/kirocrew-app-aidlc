@@ -49,8 +49,8 @@
   "intents.session.fact.project": "项目",
   "intents.session.fact.agent": "代理",
   "intents.session.fact.willCreate": "将创建的会话",
-  "intents.session.fact.slot": "会话",
-  "intents.session.fact.session": "会话标识",
+  "intents.session.fact.slot": "会话键（slot）",
+  "intents.session.fact.session": "会话标识（session）",
   "intents.session.fact.state": "当前",
   "intents.session.running": "正在进行一个回合",
   "intents.session.idle": "未在运行",
@@ -163,5 +163,7 @@
   "intents.approval.where": "在会话里选择允许、信任或拒绝。",
   "intents.approval.open": "打开会话",
   "intents.action.prepareCommit": "准备提交",
-  "intents.action.prepareCommitHint": "请该意图的对话提交工作流所做的改动，但不推送。发送前你会先确认请求原文。"
+  "intents.action.prepareCommitHint": "请该意图的对话提交工作流所做的改动，但不推送。发送前你会先确认请求原文。",
+  "intents.session.fact.title": "会话",
+  "intents.session.open": "在 KiroCrew 中打开"
 }

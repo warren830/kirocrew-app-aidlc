@@ -110,13 +110,17 @@ def test_a_registered_repo_carries_the_full_record(api, demo, gate_repo):
     assert body["totals"] == {"repos": 1, "unavailable": 0, "open_actions": 0}
 
 
-def test_the_list_does_not_observe_git_and_the_detail_does(api, demo):
+def test_the_list_does_not_observe_git_and_the_detail_does(api, demo, sv):
     """A 64-repository list must not be 64 subprocesses; the page a user opens on purpose may be."""
     assert api("GET", "/repos")[1]["repos"][0]["git"] is None
     detail = api("GET", f"/repos/{demo.repo_id}")[1]
     assert detail["repo"]["git"]["available"] in (True, False)
     assert set(detail) == {"repo", "intents", "transactions"}
     assert detail["intents"][0]["intent_key"] == INTENT and detail["transactions"] == []
+    # the list then shows that observation, dated, instead of "not read yet", and a rescan keeps it
+    assert api("GET", "/repos")[1]["repos"][0]["git"] == detail["repo"]["git"]
+    sv.repos.rescan(demo.repo_id)
+    assert api("GET", "/repos")[1]["repos"][0]["git"]["observed_at"] == detail["repo"]["git"]["observed_at"]
 
 
 def test_archived_repositories_are_hidden_unless_asked_for(sv, api, demo):

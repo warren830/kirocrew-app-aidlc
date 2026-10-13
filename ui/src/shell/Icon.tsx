@@ -31,8 +31,9 @@ export const ICON_NAMES = {
   map: 'LayoutGrid',
   activity: 'Activity',
   settings: 'Settings',
-  // `LockKeyhole` rather than `Lock`, so a Gate never looks like a lease or a receipt.
-  gate: 'LockKeyhole',
+  // `ShieldCheck`, the visual spec's other choice: beside the plan matrix's real `lock`, a `LockKeyhole`
+  // padlock on every gated stage read as "every stage is locked".
+  gate: 'ShieldCheck',
   question: 'CircleQuestionMark',
   missingInput: 'FileQuestionMark',
   recovery: 'TriangleAlert',
