@@ -42,7 +42,7 @@
   "settings.density.compact": "紧凑",
   "settings.density.comfortable": "宽松",
   "settings.queue.title": "队列组织方式",
-  "settings.queue.desc": "操作中心如何排列等待中的事项。“优先级”会把恢复与投递不确定排在最前。",
+  "settings.queue.desc": "待办中心如何排列等待中的事项。“优先级”会把恢复与投递不确定排在最前。",
   "settings.queue.label": "队列排序方式",
   "settings.queue.priority": "优先级",
   "settings.queue.repo": "仓库",

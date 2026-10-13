@@ -1,6 +1,6 @@
 {
   "queue.count": "{visible} / {total}",
-  "queue.empty.action": "查看工作流图",
+  "queue.empty.action": "查看流程图",
   "queue.empty.actionIntents": "查看每个意图的进展",
   "queue.empty.body": "已登记的意图都在运行、已完成，或者在等待与决定无关的事。下一个需要人参与的节点会出现在这里。",
   "queue.empty.title": "没有需要你判断的事",

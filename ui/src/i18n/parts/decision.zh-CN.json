@@ -1,7 +1,7 @@
 {
   "decision.approve.hint": "把你的批准发送到该意图的对话，引擎据此通过这道关卡。",
-  "decision.request_changes.hint": "把你的说明发送到该意图的对话。Studio 不会改动产出物。",
-  "decision.accept_as_is.hint": "在发现尚未解决的情况下接受产出物。只有引擎主动给出该选项时才会出现。",
+  "decision.request_changes.hint": "把你的说明发送到该意图的对话。Studio 不会改动产物。",
+  "decision.accept_as_is.hint": "在发现尚未解决的情况下接受产物。只有引擎主动给出该选项时才会出现。",
   "decision.approve_plan.hint": "批准引擎编排出的计划，允许它执行。",
   "decision.request_plan_changes.hint": "把你对计划的说明发送到该意图的对话。",
   "decision.confirm_summary.hint": "确认引擎对该阶段的摘要。",
@@ -41,5 +41,5 @@
   "decision.nav.preview": "运行升级预览",
   "decision.nav.settings": "打开预算设置",
   "decision.nav.conversation": "打开会话",
-  "decision.nav.intents": "到「Intents」页面选择"
+  "decision.nav.intents": "到「意图」页面选择"
 }
