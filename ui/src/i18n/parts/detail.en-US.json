@@ -89,5 +89,7 @@
   "detail.transitions.why.session_rebound": "the intent was moved to another conversation",
   "detail.transitions.why.kept_paused": "you kept the intent paused",
   "detail.transitions.why.human_presence_anomaly": "someone else replied in the conversation",
-  "detail.transitions.why.cursor_moved": "AI-DLC's active intent changed"
+  "detail.transitions.why.cursor_moved": "AI-DLC's active intent changed",
+  "detail.transitions.why.commit_made": "the conversation made a commit",
+  "detail.transitions.why.turn_ended_no_commit": "the turn ended without a new commit"
 }

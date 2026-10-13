@@ -189,6 +189,27 @@ describe('a reply AI-DLC records outside the state file', () => {
       .toEqual(['done', 'done', 'done', 'done'])
   })
 
+  it('names the commit a commit request made, and says when it made none', () => {
+    const i18n = makeI18n('en-US')
+    const base = actionCard()
+    const commit = { sha: '3223c4e5ee61', at: '2026-10-13T10:53:16Z', subject: 'Fix word_count whitespace splitting' }
+    const { unmount } = render(<I18nProvider><DeliveryStrip card={actionCard({
+      type: 'prepare_commit', status: 'ResolvedNoTransition',
+      resolution: { ...base.resolution, kind: 'no_transition', reason: 'commit_made',
+                    evidence: { presence: null, is_active: null, commit } },
+    })} /></I18nProvider>)
+    const strip = screen.getByRole('region', { name: i18n.t('delivery.label') })
+    expect(strip).toHaveTextContent('The conversation made commit 3223c4e: Fix word_count whitespace splitting.')
+    expect(strip).toHaveTextContent(i18n.t('delivery.step.turnEnded'))
+    unmount()
+    render(<I18nProvider><DeliveryStrip card={actionCard({
+      type: 'prepare_commit', status: 'ResolvedNoTransition',
+      resolution: { ...base.resolution, kind: 'no_transition', reason: 'turn_ended_no_commit' },
+    })} /></I18nProvider>)
+    expect(screen.getByRole('region', { name: i18n.t('delivery.label') }))
+      .toHaveTextContent(i18n.t('delivery.recorded.turn_ended_no_commit'))
+  })
+
   it('still says no state change when the turn ended without moving anything', () => {
     const i18n = makeI18n('en-US')
     const base = actionCard()

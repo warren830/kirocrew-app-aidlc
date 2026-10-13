@@ -759,6 +759,20 @@ def test_a_turn_that_ended_without_movement_resolves_no_transition(svc, scene, f
     assert status_of(svc, action_id) == "ResolvedNoTransition"
 
 
+@pytest.mark.parametrize("at,reason", [("2099-01-01T00:00:00Z", "commit_made"),
+                                       ("2000-01-01T00:00:00Z", "turn_ended_no_commit"), (None, "turn_ended_no_commit")])
+def test_prepare_commit_says_whether_the_conversation_made_a_commit(svc, scene, fake_host, studio, monkeypatch, C,
+                                                                    at, reason):
+    """AI-DLC records no commit: the newest Git commit, made after the request went out, is the evidence."""
+    commits = [] if at is None else [studio.git_observer.GitCommit("3223c4e5ee61", at, "Fix word_count")]
+    monkeypatch.setattr(svc, "git", type("Git", (), {"recent_commits": lambda self, repo, paths, limit=10: commits})())
+    action_id = ended_turn(svc, scene, fake_host, C.WIRE_PREPARE_COMMIT, action_type="prepare_commit",
+                           decision="prepare_commit")
+    rec = asyncio.run(svc.actions.get(action_id))
+    assert rec.status == "ResolvedNoTransition" and rec.resolution["reason"] == reason
+    assert (rec.resolution["evidence"]["commit"] or {}).get("sha") == ("3223c4e5ee61" if reason == "commit_made" else None)
+
+
 def _force_stop(scene) -> str:
     return scene.make(status="Delivered", action_type="force_stop", decision="force_stop", risk_class="host_control",
                       stage=None, wire_text=None, presence=False)

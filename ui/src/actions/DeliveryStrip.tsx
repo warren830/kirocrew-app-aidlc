@@ -116,8 +116,16 @@ function triState(i18n: I18n, value: boolean | null): string {
  */
 const RECORDED_REASONS: readonly string[] = [
   'question_answered', 'answers_recorded', 'summary_confirmed', 'assumptions_recorded', 'plan_approved',
-  'plan_changes_requested', 'plan_asked_again', 'turn_ended',
+  'plan_changes_requested', 'plan_asked_again', 'turn_ended', 'commit_made', 'turn_ended_no_commit',
 ]
+/** A request whose outcome is the turn itself (a commit request): its last step is the turn finishing. */
+const TURN_REASONS: readonly string[] = ['turn_ended', 'commit_made', 'turn_ended_no_commit']
+
+/** The commit a commit request's turn made, as Git read it when the turn ended: the short sha and its subject. */
+function commitParams(card: Pick<ActionCard, 'resolution'>): { sha: string; subject: string } | undefined {
+  const commit = card.resolution.evidence?.commit
+  return commit ? { sha: commit.sha.slice(0, 7), subject: commit.subject } : undefined
+}
 
 export function recordedReply(card: Pick<ActionCard, 'status' | 'resolution'>): boolean {
   return card.status === 'ResolvedNoTransition' && RECORDED_REASONS.includes(card.resolution.reason ?? '')
@@ -172,7 +180,7 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
                   : state === 'cancelled' ? 'enum.actionStatus.Cancelled'
                   : confirmedPending && position === 2 ? 'delivery.step.reconciliation'
                   : recorded && position === 3
-                    ? (card.resolution.reason === 'turn_ended' ? 'delivery.step.turnEnded' : 'delivery.step.recorded')
+                    ? (TURN_REASONS.includes(card.resolution.reason ?? '') ? 'delivery.step.turnEnded' : 'delivery.step.recorded')
                     : key,
               )}</span>
               {/* The step's own state in words: the bullet's colour and glyph carry it visually, and a
@@ -190,7 +198,7 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
         {delivery.queued_at ? <Chip icon="clock">{t('delivery.queuedInSlot')}</Chip> : null}
         {noTransition ? <Chip icon="info">{t(remainingLabel)}</Chip> : null}
         {recorded ? (
-          <Chip tone="ok" icon="check">{t(`delivery.recorded.${card.resolution.reason}`)}</Chip>
+          <Chip tone="ok" icon="check">{t(`delivery.recorded.${card.resolution.reason}`, commitParams(card))}</Chip>
         ) : null}
         {/* Only while the outcome is still being read: on a closed card it explained nothing. */}
         {sent && !needsReconciliation && !SETTLED_STATUSES.includes(status) ? (

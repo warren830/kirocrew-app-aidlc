@@ -1048,7 +1048,12 @@ class Reconciler:
             return Resolution("no_transition", "turn_ended_without_movement", seen)
 
         if action_type == "prepare_commit":
-            return Resolution(*_TURN_OUTCOME[bool(ended)], seen)
+            if not ended:
+                return Resolution(*_TURN_OUTCOME[False], seen)
+            # AI-DLC records no commit, so Git is the only evidence the conversation made one: the newest commit, when
+            # it is newer than the request. "The turn ended" alone told the person to go and look.
+            seen["commit"] = self._commit_since(rec, snap)
+            return Resolution("no_transition", "commit_made" if seen["commit"] else "turn_ended_no_commit", seen)
 
         if action_type == "force_stop":
             if slot is None:
@@ -1060,6 +1065,20 @@ class Reconciler:
                 "pending", "stop_in_progress", seen)
 
         return Resolution("pending", "no_contract_row", seen)
+
+    def _commit_since(self, rec: Any, snap: Any) -> dict[str, Any] | None:
+        """``{sha, at, subject}`` of the repository's newest commit when it was made after ``rec`` went out, else
+        ``None`` (no Git, no commit, or an older one). One ``git log -1``, read only at the end of the turn."""
+        sent = _attr(rec, "delivering_at") or _attr(rec, "delivered_at")
+        git, root = getattr(self._s, "git", None), _attr(snap, "canonical_path")
+        if not sent or git is None or not root:
+            return None
+        try:
+            commits = git.recent_commits(Path(root), [], 1)
+        except Exception:  # noqa: BLE001 - FR-GIT-005: a Git failure is a missing fact, never a failed resolution
+            return None
+        newest = commits[0] if commits else None
+        return newest.to_json() if newest is not None and str(newest.at) >= str(sent) else None
 
     def _question_row(self, rec: Any, snap: Any, decision: str, stage: Any, ended: bool,
                       seen: dict[str, Any]) -> Resolution:

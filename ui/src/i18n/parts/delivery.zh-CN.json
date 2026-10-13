@@ -40,5 +40,7 @@
   "delivery.recorded.plan_changes_requested": "AI-DLC 已记录你要求的计划修改。",
   "delivery.recorded.plan_asked_again": "AI-DLC 已在新会话中重新请求批准计划。",
   "delivery.step.turnEnded": "回合已结束",
-  "delivery.recorded.turn_ended": "对话已完成这次请求。可在“仓库 → Git”查看是否已生成提交。"
+  "delivery.recorded.turn_ended": "对话已完成这次请求。可在“仓库 → Git”查看是否已生成提交。",
+  "delivery.recorded.commit_made": "会话已提交 {sha}：{subject}。",
+  "delivery.recorded.turn_ended_no_commit": "会话完成了请求，但没有新的提交。原因见它的回复。"
 }

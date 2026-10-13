@@ -89,5 +89,7 @@
   "detail.transitions.why.session_rebound": "该意图已改绑到另一个会话",
   "detail.transitions.why.kept_paused": "你让该意图保持暂停",
   "detail.transitions.why.human_presence_anomaly": "有其他人在会话里回复了",
-  "detail.transitions.why.cursor_moved": "AI-DLC 的活动意图变了"
+  "detail.transitions.why.cursor_moved": "AI-DLC 的活动意图变了",
+  "detail.transitions.why.commit_made": "会话做了一次提交",
+  "detail.transitions.why.turn_ended_no_commit": "这一轮结束了，没有新的提交"
 }
