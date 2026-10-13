@@ -161,13 +161,46 @@ def _is_text(data: bytes | None) -> bool:
     return True
 
 
+def _unified_lines(a: list[str], b: list[str], fromfile: str, tofile: str, n: int):
+    """`difflib.unified_diff`, without its "junk" heuristic.
+
+    From 200 lines on, `SequenceMatcher` by default treats lines that recur often (blank lines, a repeated
+    ``def test_...`` shape) as junk and matches around them, so a 200-line test file read "+132 −6" where git, and
+    this, say "+131 −5". The card's counts are read against ``git diff``'s, so they are computed the same way.
+    """
+    started = False
+    for group in difflib.SequenceMatcher(None, a, b, autojunk=False).get_grouped_opcodes(n):
+        if not started:
+            started = True
+            yield f"--- {fromfile}\n"
+            yield f"+++ {tofile}\n"
+        first, last = group[0], group[-1]
+        yield f"@@ -{_range(first[1], last[2])} +{_range(first[3], last[4])} @@\n"
+        for tag, i1, i2, j1, j2 in group:
+            if tag == "equal":
+                yield from (" " + line for line in a[i1:i2])
+                continue
+            if tag in ("replace", "delete"):
+                yield from ("-" + line for line in a[i1:i2])
+            if tag in ("replace", "insert"):
+                yield from ("+" + line for line in b[j1:j2])
+
+
+def _range(start: int, stop: int) -> str:
+    """A hunk range as unified diff writes it: ``3``, ``3,4``, or ``2,0`` for the empty range after line 2."""
+    length = stop - start
+    if length == 1:
+        return str(start + 1)
+    return f"{start + 1 if length else start},{length}"
+
+
 def _unified(path: str, old: bytes | None, new: bytes | None) -> tuple[str, bool]:
     """``git diff``'s shape (``/dev/null`` for the missing side), capped per file, with secrets redacted."""
-    lines = difflib.unified_diff(
+    lines = _unified_lines(
         (old or b"").decode("utf-8").splitlines(keepends=True),
         (new or b"").decode("utf-8").splitlines(keepends=True),
-        fromfile=f"a/{path}" if old is not None else "/dev/null",
-        tofile=f"b/{path}" if new is not None else "/dev/null", n=_CONTEXT_LINES,
+        f"a/{path}" if old is not None else "/dev/null",
+        f"b/{path}" if new is not None else "/dev/null", _CONTEXT_LINES,
     )
     out: list[str] = []
     size = 0

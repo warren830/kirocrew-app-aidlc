@@ -87,6 +87,25 @@ def test_each_written_file_is_diffed_against_head(read, tmp_path, git_bin):
     assert rows["add"]["status"] == "modified", "a path is never a bare git token, so no write-verb refusal"
 
 
+def test_a_long_file_is_counted_as_git_counts_it(read, tmp_path, git_bin):
+    """From 200 lines on, difflib's default junk heuristic matched around blank lines and miscounted by one."""
+    def case(i: int) -> str:
+        return f"    def test_case_{i}(self):\n        self.assertEqual(f({i}), {i})\n\n"
+    head = "import unittest\n\n\nclass T(unittest.TestCase):\n"
+    repo = _repo(tmp_path, git_bin)
+    (repo / "test_f.py").write_text('"""Tests for f.\n\nOne per row.\n"""\n' + head + "".join(map(case, range(6))))
+    _git(repo, git_bin, "add", "-A")
+    _git(repo, git_bin, "commit", "-qm", "tests")
+    (repo / "test_f.py").write_text('"""Tests for f and g.\n\nRows and subtests.\n"""\n' + head
+                                    + "".join(map(case, range(6))) + "\nclass U(unittest.TestCase):\n"
+                                    + "".join(map(case, range(6, 70))))
+    _manifest(repo, ["test_f.py"])
+    row = _by_path(read(repo))["test_f.py"]
+    numstat = subprocess.run([git_bin, "diff", "--numstat", "--", "test_f.py"], cwd=repo, check=True,
+                             capture_output=True, text=True).stdout.split()
+    assert (row["additions"], row["deletions"]) == (int(numstat[0]), int(numstat[1])) == (196, 2)
+
+
 def test_what_is_not_shown_says_why(read, tmp_path, git_bin):
     repo = _repo(tmp_path, git_bin)
     (repo / ".env").write_text("API_KEY=do-not-show\n")
