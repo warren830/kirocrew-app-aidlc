@@ -639,6 +639,16 @@ class Projection:
         row = state.row(stage) if (state is not None and stage) else None
         return row.phase if row is not None else None
 
+    def stage_review(self, snap: IntentSnapshot, slug: str, unit: str | None) -> Any:
+        """Another stage's review, read on demand the way the current stage's is: the Map inspector asks about any
+        stage, and only the current one's review travels in the snapshot."""
+        if slug == snap.stage and unit == snap.unit:
+            return snap.review
+        evidence = self._read_stage_evidence(
+            Path(snap.canonical_path), snap.engine_dir or C.STUDIO_HARNESS_DIR, snap.space, snap.intent_dir, snap.state,
+            snap.graph, slug, unit, None, snap.audit.events)
+        return evidence.review
+
     def _read_stage_evidence(
         self, root: Path, engine_dir: str, space: str, intent_dir: str, state: "StateFile | None",
         graph: Sequence[StageNode], slug: str | None, unit: str | None, questions: "QuestionsFile | None",

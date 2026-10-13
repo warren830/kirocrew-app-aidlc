@@ -346,11 +346,20 @@ class GitObserver:
         run = self._run(repo, ("show", "--no-textconv", spec), stdout_cap=C.MAX_ARTIFACT_RENDER_BYTES)
         return run.stdout if run.ok and not run.truncated else None
 
-    def head_blob(self, repo: Path, relpath: str) -> tuple[str, bytes | None]:
-        """One path's bytes at HEAD, for a caller that knows HEAD exists: ``("present", bytes)``, ``("absent",
-        None)`` when HEAD has no such file, ``("too_large", None)`` over ``MAX_ARTIFACT_RENDER_BYTES`` (probed first,
-        so the blob is never in memory), ``("unknown", None)`` when git could not read one it has."""
-        spec = f"HEAD:{self._safe_rel(repo, relpath, allow_tree=False)}"
+    def is_commit(self, repo: Path, rev: str) -> bool:
+        """Whether ``rev``, a full commit id, names a commit this repository still has."""
+        if not C.COMMIT_ID_RE.match(rev):
+            return False
+        return self._run(repo, ("cat-file", "-e", f"{rev}^{{commit}}"), stdout_cap=C.MAX_TEXT_PREVIEW_BYTES).ok
+
+    def head_blob(self, repo: Path, relpath: str, rev: str = "HEAD") -> tuple[str, bytes | None]:
+        """One path's bytes at HEAD (or at ``rev``, a full commit id), for a caller that knows it exists:
+        ``("present", bytes)``, ``("absent", None)`` when it has no such file, ``("too_large", None)`` over
+        ``MAX_ARTIFACT_RENDER_BYTES`` (probed first, so the blob is never in memory), ``("unknown", None)`` when git
+        could not read one it has."""
+        if rev != "HEAD" and not C.COMMIT_ID_RE.match(rev):
+            raise ValueError("rev must be HEAD or a full commit id")
+        spec = f"{rev}:{self._safe_rel(repo, relpath, allow_tree=False)}"
         size = self._run(repo, ("cat-file", "-s", spec), stdout_cap=C.MAX_TEXT_PREVIEW_BYTES)
         text = size.text().strip() if size.ok else ""
         if not text.isdigit():

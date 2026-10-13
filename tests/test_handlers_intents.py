@@ -175,7 +175,10 @@ def test_changes_needs_a_stage_and_says_when_it_listed_no_writes(api, repo):
     assert refusal(api("GET", base(repo, "/changes"))) == (400, "bad_param")
     status, body = api("GET", base(repo, "/changes"), stage=STAGE)
     assert status == 200 and body["manifest"] is None and body["files"] == [] and body["listed_by"] is None
-    assert (body["stage"], body["unit"]) == (STAGE, None)
+    assert (body["stage"], body["unit"]) == (STAGE, None) and body["base"] is None
+    # a base is a full commit id, nothing else: never a ref or a revision expression git would resolve
+    for bad in ("HEAD~1", "main", "abc123", "-p", "0" * 39):
+        assert refusal(api("GET", base(repo, "/changes"), stage=STAGE, base=bad)) == (400, "bad_param")
 
 
 def test_zero_unit_code_generation_lists_its_files_from_traceability(api, repo):
@@ -293,6 +296,12 @@ def test_review_reports_the_verdict_the_findings_and_the_audit_receipts(api, rep
     assert set(body) == {"stage", "verdict", "findings", "receipts", "review_class", "reviewer", "revisions"}
     assert (body["stage"], body["verdict"], body["reviewer"]) == (STAGE, "READY", "reviewer-agent")
     assert isinstance(body["receipts"], list)
+    # the Map inspector asks about any stage: one with no review says so instead of borrowing the current one's
+    status, other = api("GET", base(repo, "/review"), stage="code-generation")
+    assert status == 200 and (other["stage"], other["verdict"], other["findings"]) == ("code-generation", None, [])
+    status, same = api("GET", base(repo, "/review"), stage=STAGE)
+    assert status == 200 and (same["verdict"], same["findings"]) == (body["verdict"], body["findings"])
+    assert refusal(api("GET", base(repo, "/review"), stage="../etc")) == (400, "bad_param")
 
 
 # --- plan and composition ---
@@ -471,6 +480,10 @@ def test_prepare_commit_creates_its_card_once_the_workflow_is_complete(api, fake
     assert [d["decision"] for d in action["decisions"]] == ["prepare_commit"]
     # Creating sends nothing; the confirmation and submit do.
     assert fake_host.get_slot(slot).messages == [] and action["delivery"]["delivery_id"] is None
+    # its Activity rows name no stage: a commit request is about the whole intent
+    status, timeline = api("GET", "/activity")
+    rows = [item for item in timeline["items"] if item["refs"].get("action_id") == action["action_id"]]
+    assert status == 200 and rows and all("stage" not in item["params"] for item in rows)
 
 
 def test_pause_reports_the_cards_it_just_blocked(api, repo, slot, runnable_demo):

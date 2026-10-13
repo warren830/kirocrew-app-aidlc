@@ -151,9 +151,11 @@ async def get_changes(services: Any, request: web.Request) -> web.Response:
     code-generation gate asks the human to approve, beside the plan its reviewer judged. 2.11 writes no manifest for
     zero-Unit work, so zero-Unit code generation is read from its ``traceability.json`` targets, and ``listed_by``
     says which file named them. ``manifest`` is ``null`` when the stage wrote no manifest (no code stage, zero-Unit
-    work, or not reached yet)."""
+    work, or not reached yet). ``base``, a full commit id, compares with that commit instead of HEAD (a closed card's
+    captured HEAD); the answer's ``base`` is the commit used, ``null`` for HEAD."""
     stage = query_str(request, "stage", pattern=C.STAGE_SLUG_RE)
     unit = query_str(request, "unit", pattern=C.UNIT_NAME_RE)
+    base = query_str(request, "base", pattern=C.COMMIT_ID_RE)
     if stage is None:
         raise StudioError("bad_param", "stage is required", details={"param": "stage"})
     repo, snap = await repo_and_snapshot(services, request)
@@ -166,21 +168,26 @@ async def get_changes(services: Any, request: web.Request) -> web.Response:
                             "listed_by": None if listing is None else "manifest" if manifest else "traceability"}
     if listing is None:
         return json_ok({**body, "available": True, "reason": None, "files": [], "truncated": False,
-                        "manifest_readable": False})
+                        "manifest_readable": False, "base": None})
     changes = await asyncio.to_thread(read_changes, services.reader, services.git, Path(repo.canonical_path),
-                                      listing.relpath)
+                                      listing.relpath, base)
     return json_ok({**body, **changes})
 
 
 async def get_review(services: Any, request: web.Request) -> web.Response:
     """The verdict (2.11's review record, or the artifact's ``## Review`` before it) says what the reviewer
     concluded; only AI-DLC's own ``REVIEW_*`` audit rows say when it was asked and how many iterations it took, so
-    both are served."""
+    both are served. The current stage's, or ``stage`` (and ``unit``)'s when the query names one."""
+    stage = query_str(request, "stage", pattern=C.STAGE_SLUG_RE)
+    unit = query_str(request, "unit", pattern=C.UNIT_NAME_RE)
     _repo, snap = await repo_and_snapshot(services, request)
-    verdict, findings = snap.review if snap.review is not None else (None, [])
-    node = snap.node(snap.stage)
+    # ``stage`` asks about another stage than the current one (the Map inspector); receipts stay the intent's.
+    review = snap.review if stage is None else await asyncio.to_thread(services.projection.stage_review, snap, stage,
+                                                                         unit)
+    verdict, findings = review if review is not None else (None, [])
+    node = snap.node(stage or snap.stage)
     return json_ok({
-        "stage": snap.stage,
+        "stage": stage or snap.stage,
         "verdict": verdict,
         "findings": [f.to_json() for f in findings],
         "receipts": [

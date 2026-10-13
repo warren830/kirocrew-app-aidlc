@@ -55,9 +55,9 @@ def _manifest(repo: Path, paths: list[str]) -> None:
 
 @pytest.fixture
 def read(studio, git_bin, clock):
-    def run(repo: Path, *, git: str | None = git_bin):
+    def run(repo: Path, *, git: str | None = git_bin, base: str | None = None):
         return studio.source_changes.read_changes(studio.aidlc_reader.AidlcReader(clock),
-                                                  studio.git_observer.GitObserver(git, clock), repo, MANIFEST)
+                                                  studio.git_observer.GitObserver(git, clock), repo, MANIFEST, base)
     return run
 
 
@@ -104,6 +104,25 @@ def test_a_long_file_is_counted_as_git_counts_it(read, tmp_path, git_bin):
     numstat = subprocess.run([git_bin, "diff", "--numstat", "--", "test_f.py"], cwd=repo, check=True,
                              capture_output=True, text=True).stdout.split()
     assert (row["additions"], row["deletions"]) == (int(numstat[0]), int(numstat[1])) == (196, 2)
+
+
+def test_a_closed_card_compares_with_the_head_it_captured(read, tmp_path, git_bin):
+    """Once the approved code is committed, today's HEAD says "unchanged"; the HEAD the card captured does not."""
+    repo = _repo(tmp_path, git_bin)
+    captured = subprocess.run([git_bin, "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True,
+                              text=True).stdout.strip()
+    (repo / "calc.py").write_text("def add(a, b):\n    return a + b\n\n\ndef subtract(a, b):\n    return a - b\n")
+    _manifest(repo, ["calc.py"])
+    _git(repo, git_bin, "add", "-A")
+    _git(repo, git_bin, "commit", "-qm", "the approved change")
+    now = read(repo)
+    assert now["base"] is None and _by_path(now)["calc.py"]["status"] == "unchanged"
+    then = read(repo, base=captured)
+    calc = _by_path(then)["calc.py"]
+    assert then["base"] == captured and (calc["status"], calc["additions"], calc["deletions"]) == ("modified", 4, 0)
+    # a commit the repository does not have is not a comparison: HEAD is used, and the answer says so
+    gone = read(repo, base="0" * 40)
+    assert gone["base"] is None and _by_path(gone)["calc.py"]["status"] == "unchanged"
 
 
 def test_what_is_not_shown_says_why(read, tmp_path, git_bin):

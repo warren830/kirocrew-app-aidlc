@@ -438,6 +438,8 @@ INTENT_DIR_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 SPACE_RE = INTENT_DIR_RE
 UNIT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 STAGE_SLUG_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+#: A full commit id as `git status --porcelain=v2` prints it (SHA-1, or SHA-256 in a sha256 repository).
+COMMIT_ID_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 ENGINE_VERSION_RE = re.compile(r'AIDLC_VERSION\s*=\s*"([0-9][0-9.]*?)"')
 ENGINE_STATE_VERSION_RE = re.compile(r'CURRENT_STATE_VERSION\s*=\s*"(\d+)"')
 STATE_VERSION_FIELD = "State Version"

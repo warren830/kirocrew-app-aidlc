@@ -25,25 +25,31 @@ __all__ = ["intent_written_paths", "read_changes"]
 _CONTEXT_LINES = 3
 
 
-def read_changes(reader: Any, git: Any, repo: Path, manifest_relpath: str) -> dict[str, Any]:
-    """``{"available", "reason", "files", "truncated", "manifest_readable"}`` for one listing: a source manifest,
-    or a zero-Unit stage's ``traceability.json``. ``available`` is git's: without it nothing can be compared, so
-    each listed path says ``unknown`` rather than "added"."""
+def read_changes(reader: Any, git: Any, repo: Path, manifest_relpath: str, base: str | None = None) -> dict[str, Any]:
+    """``{"available", "reason", "files", "truncated", "manifest_readable", "base"}`` for one listing: a source
+    manifest, or a zero-Unit stage's ``traceability.json``. ``available`` is git's: without it nothing can be
+    compared, so each listed path says ``unknown`` rather than "added".
+
+    Each file is compared with HEAD, or with ``base`` when it is a commit the repository has: a closed card asks for
+    the HEAD it captured, since once the approved code is committed, a comparison with today's HEAD reads as no
+    change at all. ``base`` in the answer is the commit used, ``None`` for HEAD.
+    """
     paths, readable = _listed_paths(reader, repo, manifest_relpath)
     head = git.observe(repo)
     available = bool(head.available)
+    rev = base if available and base is not None and git.is_commit(repo, base) else None
     files: list[dict[str, Any]] = []
     budget = C.MAX_SOURCE_CHANGES_DIFF_BYTES
     for path in paths[:C.MAX_SOURCE_CHANGE_FILES]:
-        change = _change(reader, git, repo, path, has_head=available and head.head is not None) if available \
-            else _row(path, "unknown")
+        change = _change(reader, git, repo, path, has_head=available and (rev is not None or head.head is not None),
+                         rev=rev) if available else _row(path, "unknown")
         diff = change.get("diff")
         if diff is not None and len(diff) > budget:  # the whole response stays bounded, not only each file
             change.update(diff=None, truncated=True)
         budget -= len(change.get("diff") or "")
         files.append(change)
     return {"available": available, "reason": None if available else head.reason, "files": files,
-            "truncated": len(paths) > C.MAX_SOURCE_CHANGE_FILES, "manifest_readable": readable}
+            "truncated": len(paths) > C.MAX_SOURCE_CHANGE_FILES, "manifest_readable": readable, "base": rev}
 
 
 def intent_written_paths(reader: Any, repo: Path) -> dict[str, str]:
@@ -116,7 +122,7 @@ def _row(path: str, status: str, **extra: Any) -> dict[str, Any]:
             **extra}
 
 
-def _change(reader: Any, git: Any, repo: Path, path: str, *, has_head: bool) -> dict[str, Any]:
+def _change(reader: Any, git: Any, repo: Path, path: str, *, has_head: bool, rev: str | None = None) -> dict[str, Any]:
     """One written path: ``added``, ``modified``, ``deleted``, ``unchanged`` (HEAD already holds it), or why it is
     not shown (``outside``, ``secret``, ``too_large``, ``binary``, ``unknown``)."""
     try:
@@ -129,7 +135,8 @@ def _change(reader: Any, git: Any, repo: Path, path: str, *, has_head: bool) -> 
         current = reader.read_artifact(repo, path)
     except StudioError as exc:
         return _row(path, "too_large" if exc.code == "too_large" else "unknown")
-    old_state, old = git.head_blob(repo, path) if has_head else ("absent", None)
+    old_state, old = (git.head_blob(repo, path, rev) if rev else git.head_blob(repo, path)) if has_head \
+        else ("absent", None)
     if old_state == "too_large":
         return _row(path, "too_large")
     if old_state == "unknown":

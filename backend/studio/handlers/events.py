@@ -71,7 +71,8 @@ async def _named(services: Any, items: list[dict[str, Any]]) -> list[dict[str, A
     """Name each row's repository, and drop links to actions that are gone.
 
     Unregistering a repository deletes its actions and keeps its Activity rows: such a row then names no
-    repository label, and offers no link to a card that can no longer open.
+    repository label, and offers no link to a card that can no longer open. A row about a commit request names no
+    stage: the request is about the whole intent, and the stage it recorded is wherever the state file pointed.
     """
     repo_ids = sorted({item["refs"]["repo"]["repo_id"] for item in items if "repo" in item["refs"]})
     action_ids = sorted({item["refs"]["action_id"] for item in items if "action_id" in item["refs"]})
@@ -79,10 +80,13 @@ async def _named(services: Any, items: list[dict[str, Any]]) -> list[dict[str, A
     actions = await asyncio.to_thread(services.storage.select, "actions", {"action_id": action_ids}) if action_ids else []
     labels = {str(row.get("id")): row.get("label") for row in repos}
     live = {str(row.get("action_id")) for row in actions}
+    intent_wide = {str(row.get("action_id")) for row in actions if row.get("type") == "prepare_commit"}
     for item in items:
         refs = item["refs"]
         if "repo" in refs:
             refs["repo"]["label"] = labels.get(refs["repo"]["repo_id"])
+        if refs.get("action_id") in intent_wide:
+            item["params"].pop("stage", None)
         if "action_id" in refs and refs["action_id"] not in live:
             refs.pop("action_id")
     return items
