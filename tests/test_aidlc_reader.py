@@ -1165,6 +1165,27 @@ def test_a_review_record_is_the_review_its_completion_row_names(R):
     assert R.parse_review_record(other.encode(), R.latest_review_completion(forged, "code-generation", None)) is None
 
 
+def test_a_record_finding_gets_back_the_backslashes_its_body_kept(R):
+    """2.11 drops every backslash when it copies the body's table into findings[], inside code spans too."""
+    body = ("## Review\n\n| Severity | Location | Finding | Required action |\n|---|---|---|---|\n"
+            "| Minor | requirements.md > FR3 | Rows (`None`, `b'a\\nb'`) and `x\\|y` pass | Add `'a\\rb'` |\n"
+            "| Minor | requirements.md > FR1 | `'p\\tq'` and `'ptq'` both appear | None |\n")
+    rows = [{"id": "R-01", "severity": "Minor", "location": "requirements.md > FR3",
+             "finding": "Rows (`None`, `b'anb'`) and `x|y` pass", "required_action": "Add `'arb'`", "status": "New"},
+            {"id": "R-02", "severity": "Minor", "location": "requirements.md > FR1",
+             "finding": "`'ptq'` and `'ptq'` both appear", "required_action": "None", "status": "New"}]
+    path, text = F.review_record("requirements-analysis", findings=rows, body=body)
+    completion = R.latest_review_completion(events_of(R, F.review_audit("requirements-analysis", (path, text))),
+                                            "requirements-analysis", None)
+    assert completion is not None
+    _verdict, findings = R.parse_review_record(text.encode(), completion)
+    first, second = findings
+    # the spans the body pins down come back; a table's escaped pipe is not the reviewer's backslash
+    assert first.title == "Rows (`None`, `b'a\\nb'`) and `x|y` pass" and first.required_action == "Add `'a\\rb'`"
+    # the body has both 'p\tq' and 'ptq', so which one the list meant is not known: it stays as written
+    assert second.title == "`'ptq'` and `'ptq'` both appear"
+
+
 def test_only_a_completion_that_answers_a_request_is_a_review(R):
     """AI-DLC pairs each completion with the request it answers; an unanswered row names no review."""
     record = F.review_record("code-generation")

@@ -294,14 +294,16 @@ REVIEW_REQUEST_ID = "review:" + "f3" * 16
 
 def review_record(stage: str, *, verdict: str = "READY", reviewer: str = "aidlc-architecture-reviewer-agent",
                   iteration: int = 1, unit: str | None = None, findings: Sequence[Mapping[str, str]] = (),
-                  attempt: str = "11d5af9134c10ab1", request_id: str = REVIEW_REQUEST_ID) -> tuple[str, str]:
+                  attempt: str = "11d5af9134c10ab1", request_id: str = REVIEW_REQUEST_ID,
+                  body: str | None = None) -> tuple[str, str]:
     """A 2.11 review record: ``(its path under the intent record, its exact JSON text)``, keyed as 2.11 writes it."""
     scope = f"units/{unit}" if unit else "stage"
     record = {
         "version": 1, "stage": stage, "unit": unit, "workflow": None, "attempt": attempt, "iteration": iteration,
         "reviewer": reviewer, "verdict": verdict, "request_id": request_id, "request_challenge": None,
         "artifact_fingerprint": "sha256:" + "5d" * 32, "source_fingerprint": None, "unit_source_fingerprint": None,
-        "findings": [dict(row) for row in findings], "body": f"## Review\n\n**Verdict:** {verdict}\n",
+        "findings": [dict(row) for row in findings],
+        "body": f"## Review\n\n**Verdict:** {verdict}\n" if body is None else body,
         "recorded_at": "2026-10-13T09:30:24Z",
     }
     return f".aidlc-engine/reviews/{stage}/{scope}/{attempt}/{iteration}.json", json.dumps(record, indent=2) + "\n"

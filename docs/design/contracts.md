@@ -892,7 +892,9 @@ def parse_review_record(data: bytes, completion: AuditEvent) -> tuple[str | None
     # <n>.json` under the intent record). None unless sha256 matches `Review Record Digest` and stage, unit, iteration,
     # reviewer and verdict match the row. Each finding keeps its fields (finding_id, severity, location,
     # required_action, status, verbatim) with the finding text as its title; level "resolved" for status Resolved,
-    # else "unknown" (a severity is the reviewer's own scale, not a Studio level).
+    # else "unknown" (a severity is the reviewer's own scale, not a Studio level). 2.11 drops every backslash when it
+    # copies the body's table into findings[], code spans included ('a\nb' -> 'anb'); a code span is restored from the
+    # body when exactly one backslash form there strips to it and no plain span already reads that way.
     # The stage's review is the record when the newest answered completion names one; a missing or unverifiable
     # record keeps the row's verdict with findings_parsed=False. A completion naming no record (2.10 and earlier)
     # leaves the artifact's "## Review" as the review.

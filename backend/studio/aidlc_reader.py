@@ -1686,6 +1686,36 @@ _REVIEW_ATTEMPT_RE = re.compile(r"^[0-9a-f]{16}$")
 _REVIEW_ITERATION_RE = re.compile(r"^[1-9][0-9]*$")
 #: A record finding's fields, in the column order of the table AI-DLC prints in its readable copy.
 _REVIEW_RECORD_FINDING_KEYS = ("id", "severity", "location", "finding", "required_action", "status")
+#: A markdown code span: inside one, a backslash is a literal character.
+_CODE_SPAN_RE = re.compile(r"`([^`\n]+)`")
+
+
+def _code_span_repairs(body: object) -> dict[str, str]:
+    """The record body's code spans that hold a backslash, by the form AI-DLC 2.11 writes into ``findings[]``.
+
+    2.11 fills a record's findings list from the body's table and drops every backslash on the way, inside code spans
+    too, so ``'a\\nb'`` arrives as ``'anb'``; the body keeps the reviewer's text. A span is repaired only when the body
+    pins it down: exactly one backslash form strips to it, and the body has no span that already reads that way. A
+    ``\\|`` is the table's escape for a pipe, which a code span inside a cell still needs, so it is not the reviewer's.
+    """
+    if not isinstance(body, str) or "\\" not in body:
+        return {}
+    escaped: dict[str, set[str]] = {}
+    plain: set[str] = set()
+    for span in _CODE_SPAN_RE.findall(body):
+        span = span.replace("\\|", "|")
+        if "\\" in span:
+            escaped.setdefault(span.replace("\\", ""), set()).add(span)
+        else:
+            plain.add(span)
+    return {stripped: next(iter(forms)) for stripped, forms in escaped.items()
+            if len(forms) == 1 and stripped not in plain}
+
+
+def _repair_code_spans(text: str, repairs: dict[str, str]) -> str:
+    if not repairs:
+        return text
+    return _CODE_SPAN_RE.sub(lambda match: f"`{repairs.get(match.group(1), match.group(1))}`", text)
 
 
 def is_review_record_path(path: str) -> bool:
@@ -1734,8 +1764,9 @@ def parse_review_record(data: bytes, completion: AuditEvent) -> tuple[str | None
 
     The two checks AI-DLC's own reader makes (`readReviewRecord`, `reviewRecordMatchesCompletion`): the digest the
     row pinned binds the bytes, and the scope fields bind the content, so a record edited afterwards, or another
-    scope's record, is not this review. Each finding is its table row, cells joined in the readable copy's order
-    and kept verbatim; only a finding AI-DLC marked ``Resolved`` gets a level, since a severity is not a level.
+    scope's record, is not this review. Each finding keeps its fields verbatim, but for the code spans
+    `_code_span_repairs` restores from the body; only a finding AI-DLC marked ``Resolved`` gets a level, since a
+    severity is not a level.
     """
     fields = completion.fields
     if f"sha256:{hashlib.sha256(data).hexdigest()}" != fields.get("Review Record Digest"):
@@ -1754,9 +1785,11 @@ def parse_review_record(data: bytes, completion: AuditEvent) -> tuple[str | None
     rows = record.get("findings")
     findings: list[ReviewFinding] = []
     parsed = isinstance(rows, list)
+    repairs = _code_span_repairs(record.get("body"))
     for row in rows if isinstance(rows, list) else ():
         cells = {key: row.get(key) for key in _REVIEW_RECORD_FINDING_KEYS} if isinstance(row, dict) else {}
-        text = {key: value.strip() for key, value in cells.items() if isinstance(value, str) and value.strip()}
+        text = {key: _repair_code_spans(value.strip(), repairs)
+                for key, value in cells.items() if isinstance(value, str) and value.strip()}
         title = text.get("finding") or " | ".join(text.values())
         if not title:
             parsed = False
