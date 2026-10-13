@@ -1,8 +1,10 @@
-"""The bundled engine records a KiroCrew dashboard reply as the choice the person sent.
+"""The bundled engine records a KiroCrew reply as the choice the person sent, in their own words.
 
-KiroCrew hands kiro-cli every dashboard turn inside its own context frame, and AI-DLC 2.10 records a Plan
-Approval (or a protected checkpoint question) only when the reply equals an offered choice. Unpatched, every
-reply Studio delivered was refused. These run the real payload hooks with bun, so they skip without it.
+KiroCrew hands kiro-cli every turn inside its own context frame. AI-DLC 2.11 reads the person's turn after the
+last `[CURRENT USER REQUEST]` header (`hostEnvelopeTurnText`), keeps their exact words, and records a choice
+only for an exact pick of an offered option; any other reply is the conversation's agent to read. Studio relies
+on both: its exact replies are recorded at once, and a change request with feedback reaches the agent verbatim.
+These run the real payload hooks with bun, so they skip without it.
 """
 
 import hashlib
@@ -84,49 +86,50 @@ def send(repo: Path, prompt: str) -> None:
     )
 
 
-def recorded(repo: Path, name: str = "response") -> str | None:
+def response(repo: Path, name: str = "response") -> dict | None:
     path = repo / RUNTIME_DIR / f"{name}-{SESSION}.json"
-    return json.loads(path.read_text())["choice"] if path.exists() else None
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+def recorded(repo: Path, name: str = "response") -> str | None:
+    return (response(repo, name) or {}).get("choice")
 
 
 @pytest.mark.parametrize(("prompt", "choice"), [
     (framed("Approve Plan"), "Approve Plan"),
     (framed("Approve Plan", dash="—"), "Approve Plan"),
     (framed("Request Changes"), "Request Changes"),
-    (framed("Request Changes: also test a negative result"), "Request Changes"),
-    (framed("Request Changes:\n\nSplit step 2 in two."), "Request Changes"),
     ("Approve Plan", "Approve Plan"),
-], ids=["approve", "em-dash-header", "request-changes", "request-changes-with-reason", "reason-on-next-line",
-        "unframed"])
+    # 2.11 reads every host frame, not only the dashboard's: KiroCrew scrubs the header from what it splices in.
+    (framed("Approve Plan", runtime="KiroCrew cron job"), "Approve Plan"),
+], ids=["approve", "em-dash-header", "request-changes", "unframed", "cron-frame"])
 def test_a_dashboard_reply_answers_the_plan_approval(repo, prompt, choice):
     plan_challenge(repo)
     send(repo, prompt)
     assert recorded(repo) == choice
 
 
-@pytest.mark.parametrize("prompt", [
-    framed("Approve Plan", runtime="KiroCrew cron job"),
-    framed("Approve Plan", runtime="KiroCrew subagent"),
-    framed("Approve Plan", runtime="Slack"),
-    framed("Approve Plan", runtime="KiroCrew cron job").replace(
-        "[CURRENT USER REQUEST", "\n[RUNTIME] KiroCrew dashboard\n[CURRENT USER REQUEST"),
-    framed("Approve Plan, and also add a docstring"),
-    framed("Request Changes:"),
-    framed("Approve Plan") + "\n\nApprove Plan",
-], ids=["cron", "subagent", "slack", "planted-runtime-line", "extra-words", "empty-reason", "repeated"])
-def test_nothing_but_a_dashboard_reply_of_exactly_one_choice_answers_it(repo, prompt):
+@pytest.mark.parametrize("reply", [
+    "Request Changes: also test a negative result",
+    "Request Changes:\n\nSplit step 2 in two.",
+    "Approve Plan, and also add a docstring",
+], ids=["request-changes-with-reason", "reason-on-next-line", "extra-words"])
+def test_a_reply_that_is_not_one_exact_choice_reaches_the_agent_in_the_persons_words(repo, reply):
+    """Studio's "Request Changes: <feedback>" is no exact pick: the hook keeps it verbatim and records no choice,
+    so neither an approval nor a change request is inferred from words the agent has not read."""
     plan_challenge(repo)
-    send(repo, prompt)
-    assert recorded(repo) is None
+    send(repo, framed(reply))
+    kept = response(repo)
+    assert kept is not None and kept.get("words") == reply and "choice" not in kept
 
 
 @pytest.mark.parametrize(("reply", "choice"), [
     ("Approve", "Approve"),
-    ("Request Changes: keep the old command", "Request Changes"),
-    ("1", None),
+    ("1", "Approve"),
+    ("Request Changes: keep the old command", None),
     ("Approve Plan", None),
-], ids=["approve", "request-changes-with-reason", "number", "other-label"])
-def test_a_protected_checkpoint_takes_the_same_dashboard_reply(repo, reply, choice):
+], ids=["approve", "number", "request-changes-with-reason", "other-label"])
+def test_a_protected_checkpoint_takes_one_exact_choice_by_label_or_number(repo, reply, choice):
     protected_question(repo)
     send(repo, framed(reply))
     assert recorded(repo, "protected-question-response") == choice

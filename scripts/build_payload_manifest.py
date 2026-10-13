@@ -38,6 +38,7 @@ import argparse
 import hashlib
 import json
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -117,7 +118,10 @@ def derive_managed_keys(rel: str, data: object) -> list[str]:
         # payload, so they never become managed. Derived rather than written out here
         # for the same reason as mcp.json — but a payload that starts shipping
         # ``documentExtractors`` would hand Studio a key humans edit, so a bump that
-        # changes this list is one to read before it ships.
+        # changes this list is one to read before it ships. 2.11 added ``kiroLayout``
+        # and ``hookActivation`` (advice text the hooks print): upstream's own refresh
+        # takes both from the new tree too (``HARNESS_IDENTITY_KEYS`` in
+        # ``aidlc-init.ts``), so they are identity, Studio's to write.
         return sorted(data) if isinstance(data, dict) else []
     raise SystemExit(f"no managed-key derivation for {rel}")
 
@@ -127,6 +131,82 @@ def classify(rel: str) -> str:
         if rel == prefix or rel.startswith(prefix):
             return kind
     raise SystemExit(f"unclassified payload path: {rel}")
+
+
+class ManifestError(ValueError):
+    """A payload this script refuses to describe: ``main`` prints it and exits 2, so it never ships."""
+
+
+#: Every path that can be a merge target, in the order ``mergeTargets`` lists them.
+MERGE_TARGET_PATHS: tuple[str, ...] = (*JSON_MERGE_TARGETS, "AGENTS.md", ".gitignore")
+
+
+def derive_merge_targets(contents: Mapping[str, bytes]) -> dict[str, dict]:
+    """``mergeTargets`` for the payload files given as ``{relative path: bytes}`` (paths absent from the mapping are
+    files the payload does not ship). Pure, so the installer tests build their miniature payloads by the same rules
+    as the shipped one rather than copying whatever today's payload happens to ship."""
+    merge_targets: dict[str, dict] = {}
+    # Managed JSON fragment keys: explicit for cli.json, derived from the payload file for mcp.json, scope-grid.json
+    # and harness.json, so a payload that starts shipping one more server or one more scope is receipted without
+    # editing this script.
+    for rel, keys in JSON_MERGE_TARGETS.items():
+        raw = contents.get(rel)
+        if raw is None:
+            continue
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except ValueError:
+            data = {}
+        if keys is None:
+            keys = derive_managed_keys(rel, data)
+            if not keys:
+                # The installer degrades a json-managed-keys target with an empty key
+                # list (``merge_keys_missing``), which would take the whole app down
+                # rather than one file. A payload that reshaped one of these files is a
+                # bump to look at by hand, so stop here instead of shipping it.
+                raise ManifestError(f"no managed keys derived for {rel}")
+        if rel == ".kiro/settings/cli.json":
+            # Only the keys the payload ships: 2.11 ships no model defaults (Kiro CLI setup asks for the session
+            # model and keeps its effort in the person's own settings), and a managed key the payload lacks would
+            # claim the user's value without ever writing one.
+            keys = [key for key in keys if isinstance(data, dict) and key in data]
+        merge_targets[rel] = {"strategy": "json-managed-keys", "managedKeys": keys}
+        if rel == ".kiro/settings/cli.json" and "chat.modelDefaults" in keys:
+            # Model IDs contain dots: keep them as literal map keys, never dotted managed paths.
+            # This exception applies only to model defaults, not to MCP servers or their env/secrets.
+            def unique(pairs):
+                obj = {}
+                for key, value in pairs:
+                    if key in obj:
+                        raise ValueError("duplicate JSON key")
+                    obj[key] = value
+                return obj
+
+            try:
+                strict = json.loads(raw.decode("utf-8"), object_pairs_hook=unique)
+                models = strict.get("chat.modelDefaults") if isinstance(strict, dict) else None
+                nested = strict.get("chat") if isinstance(strict, dict) else None
+                if (
+                    not isinstance(models, dict)
+                    or any(not key or not isinstance(value, dict) for key, value in models.items())
+                    or (isinstance(nested, dict) and "modelDefaults" in nested)
+                ):
+                    raise ValueError("expected unambiguous per-model objects")
+            except ValueError:
+                raise ManifestError(f"invalid model defaults in {rel}") from None
+            merge_targets[rel]["managedMapEntries"] = {"chat.modelDefaults": sorted(models)}
+    # 2.11's copy runtime leaves the project's own AGENTS.md and .gitignore out: AI-DLC adds its own marked block
+    # to each when the first chat starts or work is first created. A payload that ships them has them merged,
+    # never replaced.
+    if "AGENTS.md" in contents:
+        merge_targets["AGENTS.md"] = {
+            "strategy": "append-fenced-block",
+            "markerStart": "<!-- aidlc-studio:managed:start -->",
+            "markerEnd": "<!-- aidlc-studio:managed:end -->",
+        }
+    if ".gitignore" in contents:
+        merge_targets[".gitignore"] = {"strategy": "append-missing-lines"}
+    return merge_targets
 
 
 def sha256_file(path: Path) -> str:
@@ -178,59 +258,12 @@ def main(argv: list[str]) -> int:
     graph = json.loads(graph_path.read_text("utf-8")) if graph_path.is_file() else []
     stage_count = len(graph) if isinstance(graph, list) else None
 
-    # Managed JSON fragment keys: explicit for cli.json, derived from the payload file
-    # for mcp.json and scope-grid.json so a payload that starts shipping one more
-    # server or one more scope is receipted without editing this script.
-    merge_targets: dict[str, dict] = {}
-    for rel, keys in JSON_MERGE_TARGETS.items():
-        path = PAYLOAD_DIR / rel
-        if not path.is_file():
-            continue
-        if keys is None:
-            try:
-                data = json.loads(path.read_text("utf-8"))
-            except ValueError:
-                data = {}
-            keys = derive_managed_keys(rel, data)
-            if not keys:
-                # The installer degrades a json-managed-keys target with an empty key
-                # list (``merge_keys_missing``), which would take the whole app down
-                # rather than one file. A payload that reshaped one of these files is a
-                # bump to look at by hand, so stop here instead of shipping it.
-                print(f"no managed keys derived for {rel}", file=sys.stderr)
-                return 2
-        merge_targets[rel] = {"strategy": "json-managed-keys", "managedKeys": keys}
-        if rel == ".kiro/settings/cli.json":
-            # Model IDs contain dots: keep them as literal map keys, never dotted managed paths.
-            # This exception applies only to model defaults, not to MCP servers or their env/secrets.
-            def unique(pairs):
-                obj = {}
-                for key, value in pairs:
-                    if key in obj:
-                        raise ValueError("duplicate JSON key")
-                    obj[key] = value
-                return obj
-
-            try:
-                data = json.loads(path.read_text("utf-8"), object_pairs_hook=unique)
-                models = data.get("chat.modelDefaults") if isinstance(data, dict) else None
-                nested = data.get("chat") if isinstance(data, dict) else None
-                if (
-                    not isinstance(models, dict)
-                    or any(not key or not isinstance(value, dict) for key, value in models.items())
-                    or (isinstance(nested, dict) and "modelDefaults" in nested)
-                ):
-                    raise ValueError("expected unambiguous per-model objects")
-            except (ValueError, UnicodeDecodeError):
-                print(f"invalid model defaults in {rel}", file=sys.stderr)
-                return 2
-            merge_targets[rel]["managedMapEntries"] = {"chat.modelDefaults": sorted(models)}
-    merge_targets["AGENTS.md"] = {
-        "strategy": "append-fenced-block",
-        "markerStart": "<!-- aidlc-studio:managed:start -->",
-        "markerEnd": "<!-- aidlc-studio:managed:end -->",
-    }
-    merge_targets[".gitignore"] = {"strategy": "append-missing-lines"}
+    try:
+        merge_targets = derive_merge_targets(
+            {rel: (PAYLOAD_DIR / rel).read_bytes() for rel in MERGE_TARGET_PATHS if (PAYLOAD_DIR / rel).is_file()})
+    except ManifestError as exc:
+        print(exc, file=sys.stderr)
+        return 2
 
     manifest = {
         "schema": "aidlc-studio-payload/1",

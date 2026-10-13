@@ -1,8 +1,9 @@
 """Installer (§1.14): after a failure at any step the repository is exactly the previous installation with its
 receipt current, or it is ``recovery_required``; and Studio owns a fragment of a user's file, never the file.
 
-Most tests run against a miniature payload carrying the shipped manifest's ownership kinds and merge specs;
-the manifest-shaped tests run against the real payload.
+Most tests run against a miniature payload whose ownership kinds and merge specs come from the manifest builder's
+own rules (``scripts/build_payload_manifest.py``), so it keeps every kind of file even when a release stops shipping
+one; the manifest-shaped tests run against the real payload.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import asyncio
 import contextlib
 import functools
 import hashlib
+import importlib.util
 import inspect
 import json
 import shutil
@@ -24,10 +26,28 @@ import fixtures as F
 APP_ROOT = Path(__file__).resolve().parent.parent
 REAL_PAYLOAD = APP_ROOT / "payload"
 
+
+def _load_builder() -> Any:
+    spec = importlib.util.spec_from_file_location("studio_payload_manifest_builder",
+                                                  APP_ROOT / "scripts" / "build_payload_manifest.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+#: The script that writes ``payload/manifest.json``: its ``classify`` and ``derive_merge_targets`` describe the mini
+#: payloads exactly as they would describe a release shipping those files.
+BUILDER = _load_builder()
+
 TS = "2026-09-04T10:00:00Z"
 IDENTITY = "1:100"
 SKILL = ".kiro/skills/aidlc/SKILL.md"
 CLI = ".kiro/settings/cli.json"
+#: The mini payloads' cli.json. The real payload's keys, plus the per-model defaults the merge machinery is
+#: tested on: 2.11 ships none (Kiro CLI asks for the session model at setup), but a repository installed from
+#: 2.10 still holds Studio's managed entry, so the machinery that owns and retires it must keep working.
+MINI_CLI = {"chat.defaultAgent": "aidlc",
+            "chat.modelDefaults": {"claude-opus-4.8": {"output_config": {"effort": "xhigh"}}}}
 MCP = ".kiro/settings/mcp.json"
 MEMORY = "aidlc/spaces/default/memory/project.md"
 
@@ -106,7 +126,7 @@ class FaultInjector:
             raise self._exc(marker)
 
 
-#: One file per interesting case; the two settings files are copied from the real payload (``build_payload``).
+#: One file per interesting case; ``build_payload`` adds ``MINI_CLI`` and the real payload's mcp.json.
 MINI_FILES: dict[str, str] = {
     ".kiro/tools/aidlc-version.ts": 'export const AIDLC_VERSION = "2.6.2";\n',
     ".kiro/tools/aidlc-utility.ts": "// utility tool v1\n",
@@ -126,14 +146,28 @@ def _real_manifest_dict() -> dict:
     return json.loads((REAL_PAYLOAD / "manifest.json").read_text("utf-8"))
 
 
-@functools.lru_cache(maxsize=1)
-def _real_ownership() -> dict[str, str]:
-    return {row["path"]: row["ownership"] for row in _real_manifest_dict()["files"]}
-
-
 def _ownership(rel: str) -> str:
-    """The kind the SHIPPED manifest gives ``rel`` (``framework`` for a mini-only path), never a local table."""
-    return _real_ownership().get(rel, "framework")
+    """The kind the manifest builder gives ``rel``: never a local table, and never whether today's payload happens to
+    ship it (2.11 ships no ``AGENTS.md`` or ``.gitignore``, but the installer must still merge and retire them)."""
+    return BUILDER.classify(rel)
+
+
+def mini_contents(*, engine_version: str = "2.6.2", extra: Mapping[str, str] | None = None,
+                  drop: Sequence[str] = ()) -> dict[str, str]:
+    """The mini payload's files, ``{relative path: text}``."""
+    contents: dict[str, str] = dict(MINI_FILES)
+    contents[CLI] = json.dumps(MINI_CLI, indent=2) + "\n"
+    contents[MCP] = (REAL_PAYLOAD / "aidlc-kiro" / MCP).read_text("utf-8")
+    contents[".kiro/tools/aidlc-version.ts"] = f'export const AIDLC_VERSION = "{engine_version}";\n'
+    contents.update(extra or {})
+    for rel in drop:
+        contents.pop(rel, None)
+    return contents
+
+
+def mini_merge_targets(contents: Mapping[str, str]) -> dict[str, dict]:
+    """The merge specs the builder derives for ``contents``."""
+    return BUILDER.derive_merge_targets({rel: text.encode("utf-8") for rel, text in contents.items()})
 
 
 def build_payload(
@@ -149,13 +183,7 @@ def build_payload(
     files_dir = root / "aidlc-kiro"
     files_dir.mkdir(parents=True, exist_ok=True)
     real = _real_manifest_dict()
-    contents: dict[str, str] = dict(MINI_FILES)
-    for rel in (CLI, MCP):
-        contents[rel] = (REAL_PAYLOAD / "aidlc-kiro" / rel).read_text("utf-8")
-    contents[".kiro/tools/aidlc-version.ts"] = f'export const AIDLC_VERSION = "{engine_version}";\n'
-    contents.update(extra or {})
-    for rel in drop:
-        contents.pop(rel, None)
+    contents = mini_contents(engine_version=engine_version, extra=extra, drop=drop)
 
     rows = []
     digest_all = hashlib.sha256()
@@ -168,19 +196,8 @@ def build_payload(
         rows.append({"path": rel, "sha256": digest, "size": len(data), "ownership": _ownership(rel)})
         digest_all.update(f"{rel}\0{digest}\n".encode("utf-8"))
 
-    # The real specs minus targets this payload ships no file for; explicit targets reach the checks verbatim.
-    targets = dict(merge_targets) if merge_targets is not None else {
-        key: dict(value) for key, value in real["mergeTargets"].items() if key in contents
-    }
-    cli_spec = targets.get(CLI)
-    if merge_targets is None and cli_spec and "managedMapEntries" in cli_spec:
-        try:
-            cli = json.loads(contents[CLI])
-        except ValueError:
-            cli = None
-        models = cli.get("chat.modelDefaults") if isinstance(cli, dict) else None
-        if isinstance(models, dict):
-            cli_spec["managedMapEntries"] = {"chat.modelDefaults": sorted(models)}
+    # The builder's specs for exactly these files; explicit targets reach the checks verbatim.
+    targets = dict(merge_targets) if merge_targets is not None else mini_merge_targets(contents)
     manifest = {
         "schema": "aidlc-studio-payload/1",
         "harness": "kiro",
@@ -206,7 +223,7 @@ def payload_v1(tmp_path_factory) -> tuple[Path, Path]:
 
 def build_upgrade_payload(root: Path, *, change_model_defaults: bool = True) -> tuple[Path, Path]:
     """A later payload that rewrites, retires, adds and re-merges at once (and, by default, adds a model)."""
-    cli = json.loads((REAL_PAYLOAD / "aidlc-kiro" / CLI).read_text("utf-8"))
+    cli = json.loads(json.dumps(MINI_CLI))
     if change_model_defaults:
         cli["chat.modelDefaults"]["claude-opus-5"] = {"output_config": {"effort": "max"}}
     return build_payload(
@@ -452,7 +469,7 @@ def test_verify_payload_degrades_on_a_changed_payload_or_manifest(make_harness, 
 ])
 def test_verify_payload_degrades_on_bad_merge_targets(make_harness, tmp_path, targets, mismatch):
     if targets is None:
-        targets = {k: dict(v) for k, v in _real_manifest_dict()["mergeTargets"].items() if k != "AGENTS.md"}
+        targets = {k: v for k, v in mini_merge_targets(mini_contents()).items() if k != "AGENTS.md"}
     status = make_harness(build_payload(tmp_path / "p", merge_targets=targets)).installer.verify_payload()
     assert status.ok is False
     assert mismatch in status.mismatches
@@ -463,7 +480,7 @@ def test_verify_payload_degrades_on_bad_merge_targets(make_harness, tmp_path, ta
 def test_mini_payload_derives_model_entries_unless_metadata_is_explicit(make_harness, tmp_path, change,
                                                                         explicit_metadata):
     cached_manifest = json.loads(json.dumps(_real_manifest_dict()))
-    cli = payload_json(CLI)
+    cli = json.loads(json.dumps(MINI_CLI))
     models = cli["chat.modelDefaults"]
     if change == "add":
         models["fixture-model.1.2"] = {"output_config": {"effort": "high"}}
@@ -471,7 +488,7 @@ def test_mini_payload_derives_model_entries_unless_metadata_is_explicit(make_har
         models.pop(next(iter(models)))
     targets = None
     if explicit_metadata:
-        targets = json.loads(json.dumps(cached_manifest["mergeTargets"]))
+        targets = mini_merge_targets(mini_contents(extra={CLI: json.dumps(cli) + "\n"}))
         targets[CLI]["managedMapEntries"] = {"chat.modelDefaults": ["fixture-not-shipped.9"]}
     payload = build_payload(tmp_path / "mini", extra={CLI: json.dumps(cli) + "\n"}, merge_targets=targets)
     entries = json.loads(payload[1].read_text("utf-8"))["mergeTargets"][CLI]["managedMapEntries"]
@@ -515,14 +532,14 @@ def _canonical_sha(obj: Any) -> str:
     return hashlib.sha256(json.dumps(obj, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
-def test_fragment_keys_and_digests_are_golden(make_harness):
-    """§1.14's golden formulas, against the REAL manifest."""
+def test_fragment_keys_and_digests_are_golden(make_harness, payload_v1):
+    """§1.14's golden formulas, against the REAL manifest (and the mini payload for the files 2.11 stops shipping)."""
     h = make_harness((REAL_PAYLOAD / "aidlc-kiro", REAL_PAYLOAD / "manifest.json"))
     cli = h.installer._handler(CLI)
-    assert cli.fragment_key == "cli.json:chat.defaultAgent,chat.modelDefaults"
+    # 2.11 ships the agent alone: the session model is chosen at Kiro CLI setup.
+    assert cli.fragment_key == "cli.json:chat.defaultAgent"
     payload_cli = payload_json(CLI)
-    assert cli.payload_fragment().digest == _canonical_sha(
-        {k: payload_cli[k] for k in ("chat.defaultAgent", "chat.modelDefaults")})
+    assert cli.payload_fragment().digest == _canonical_sha({"chat.defaultAgent": payload_cli["chat.defaultAgent"]})
 
     mcp = h.installer._handler(MCP)
     assert mcp.fragment_key == (
@@ -532,14 +549,19 @@ def test_fragment_keys_and_digests_are_golden(make_harness):
     servers = payload_json(MCP)["mcpServers"]
     assert mcp.payload_fragment().digest == _canonical_sha({f"mcpServers.{n}": servers[n] for n in sorted(servers)})
 
-    agents = h.installer._handler("AGENTS.md")
+    # 2.11's copy runtime leaves the project's own AGENTS.md and .gitignore out: AI-DLC adds its own marked block to
+    # each when the first chat starts, so the shipped payload merges neither.
+    assert not {"AGENTS.md", ".gitignore"} & set(h.installer.manifest.merge_targets)
+
+    mini = make_harness(payload_v1)
+    agents = mini.installer._handler("AGENTS.md")
     assert agents.fragment_key == "AGENTS.md:aidlc-studio:managed"
-    body = (REAL_PAYLOAD / "aidlc-kiro/AGENTS.md").read_text("utf-8").strip("\n")
+    body = (payload_v1[0] / "AGENTS.md").read_text("utf-8").strip("\n")
     assert agents.payload_fragment().digest == hashlib.sha256(body.encode("utf-8")).hexdigest()
 
-    ignore = h.installer._handler(".gitignore")
+    ignore = mini.installer._handler(".gitignore")
     assert ignore.fragment_key == ".gitignore:lines"
-    lines = [line for line in (REAL_PAYLOAD / "aidlc-kiro/.gitignore").read_text("utf-8").splitlines() if line.strip()]
+    lines = [line for line in (payload_v1[0] / ".gitignore").read_text("utf-8").splitlines() if line.strip()]
     assert ignore.payload_fragment().digest == hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
 
 
@@ -643,7 +665,7 @@ def test_preview_shell_files_are_never_owned_or_overwritten(h, fresh):
 
 def test_preview_cli_json_user_keys_survive_and_matching_fragment_is_identical(h, fresh):
     root, repo = fresh
-    shipped = payload_json(CLI)
+    shipped = MINI_CLI
     write_json(root / CLI, {"toolSearch.enabled": True, "chat.defaultAgent": shipped["chat.defaultAgent"],
                             "chat.modelDefaults": shipped["chat.modelDefaults"], "toolSearch.minTokens": 50000})
     # The managed fragment already matches: nothing is written and the file is not reformatted.

@@ -1,32 +1,26 @@
 {
   "schema": "aidlc-studio-payload/1",
   "harness": "kiro",
-  "engineVersion": "2.10.0",
+  "engineVersion": "2.11.0",
   "source": {
     "repository": "https://github.com/awslabs/aidlc-workflows",
-    "ref": "v2.10.0 @ 2a883858 + Studio requirement-traceability and KiroCrew-reply compatibility patches",
-    "commit": "2a883858f5483bce3b48f43b8f6d3ca2c042d6ae",
-    "distPath": "aidlc-copy-runtime-2.10.0.tar.gz:runtime/kiro",
+    "ref": "release/2.11 @ 6a378b53 (= v2.11.0) + Studio requirement-traceability patch",
+    "commit": "6a378b53c0a4fe0641ed7d8de8dfff94264d5b6a",
+    "distPath": "aidlc-copy-runtime-2.11.0.tar.gz:runtime/kiro",
     "license": "MIT-0"
   },
   "compatibleStateVersions": [
     8
   ],
   "stageCount": 33,
-  "payloadDigest": "9cf8c10272dbe3b474b7126d4bba321ccc0197baaca299cc688de8264e6d1467",
-  "fileCount": 326,
+  "payloadDigest": "38c7a32cbbe91df0de553cf695968ab3ffa55049f3d1a40bbe89e0add99fc08d",
+  "fileCount": 336,
   "mergeTargets": {
     ".kiro/settings/cli.json": {
       "strategy": "json-managed-keys",
       "managedKeys": [
-        "chat.defaultAgent",
-        "chat.modelDefaults"
-      ],
-      "managedMapEntries": {
-        "chat.modelDefaults": [
-          "claude-opus-4.8"
-        ]
-      }
+        "chat.defaultAgent"
+      ]
     },
     ".kiro/settings/mcp.json": {
       "strategy": "json-managed-keys",
@@ -60,32 +54,20 @@
         "configNextStep",
         "distribution",
         "harnessDir",
+        "hookActivation",
+        "kiroLayout",
         "name",
         "productName",
         "rulesSubdir",
         "schemaVersion"
       ]
-    },
-    "AGENTS.md": {
-      "strategy": "append-fenced-block",
-      "markerStart": "<!-- aidlc-studio:managed:start -->",
-      "markerEnd": "<!-- aidlc-studio:managed:end -->"
-    },
-    ".gitignore": {
-      "strategy": "append-missing-lines"
     }
   },
   "files": [
     {
-      "path": ".gitignore",
-      "sha256": "af1b98a4b8c0e288aa8177655495b4a65220dbed2e149a67780aff1e8f379c9d",
-      "size": 3815,
-      "ownership": "merge"
-    },
-    {
       "path": ".kiro/agents/aidlc-architect-agent.json",
-      "sha256": "e3cae511ac6a3bd3760bf73ffa3f4bfd2dd90a2cfda5e845337d9f90fc8ad6dc",
-      "size": 2310,
+      "sha256": "4236fce44bff97a08181d4c987a49418756c3d223e5c0ab18422616c295a9667",
+      "size": 6607,
       "ownership": "framework-mutable"
     },
     {
@@ -96,20 +78,20 @@
     },
     {
       "path": ".kiro/agents/aidlc-architecture-reviewer-agent.json",
-      "sha256": "376690967eb8fcc951614fc816b78831c3d71b876363c9ce17ca867f70ec9caa",
-      "size": 2808,
+      "sha256": "87d21be8dae5c284445edbd7ee3f66fd9ac2d074536a0e4c5d3ab7f39b93f9a5",
+      "size": 7111,
       "ownership": "framework-mutable"
     },
     {
       "path": ".kiro/agents/aidlc-architecture-reviewer-agent.md",
-      "sha256": "815c9b57bf198febdfa126a4e41e378d5842aa252e510399d38af7b7b5443495",
-      "size": 14922,
+      "sha256": "a6efe87d760be173a3d272ccc22797f310ed7d798fdc96acc7a04289143994a6",
+      "size": 16772,
       "ownership": "framework-mutable"
     },
     {
       "path": ".kiro/agents/aidlc-aws-platform-agent.json",
-      "sha256": "376e6f4e6067e236e79ab9d36e31e3e373c5ad4d0d8dbdf4665b791aa6431296",
-      "size": 2312,
+      "sha256": "526379cf22a34147d22b5dc4031c3737ca8b2e8b8214a44796599a4d96159874",
+      "size": 6609,
       "ownership": "framework-mutable"
     },
     {
@@ -120,8 +102,8 @@
     },
     {
       "path": ".kiro/agents/aidlc-compliance-agent.json",
-      "sha256": "4b20b042832125d17ae100ce2e070edb4722b903a8fe70597c233f875b1fcb7d",
-      "size": 2286,
+      "sha256": "53d273d411cc5daddb8d00d73c477558de30d99c574a7baf96f3020b0d19ee1b",
+      "size": 6583,
       "ownership": "framework-mutable"
     },
     {
@@ -132,20 +114,20 @@
     },
     {
       "path": ".kiro/agents/aidlc-composer-agent.json",
-      "sha256": "351061bca6e740761dc75465ceaa8abfad309b631d618319cf4779eec021a98e",
-      "size": 2371,
+      "sha256": "bd8c8557e4c5ae4498287b59e1fcf1c6be0d4eef74270f08c4d12697c772a554",
+      "size": 6720,
       "ownership": "framework-mutable"
     },
     {
       "path": ".kiro/agents/aidlc-composer-agent.md",
-      "sha256": "2a20804da4534623733e69086885e25961f1f1c3e99daa4d97c94eca5e40bd71",
-      "size": 49913,
+      "sha256": "68bb9c5fdcaeccea36935c987dafce0f0432ffc806dffd5c5da225288c7dfa2f",
+      "size": 62331,
       "ownership": "framework-mutable"
     },
     {
       "path": ".kiro/agents/aidlc-delivery-agent.json",
-      "sha256": "807848d7f6673ffa320239b8c06be08892388bc983c821488a119e1c9aa2d707",
-      "size": 2288,
+      "sha256": "acfbc06ce08f138aa2b231fb93c33b8d358d49c770e4868252ef20592bb9f64c",
+      "size": 6585,
       "ownership": "framework-mutable"
     },
     {
@@ -156,8 +138,8 @@
     },
     {
       "path": ".kiro/agents/aidlc-design-agent.json",
-      "sha256": "7ed945220e90b34c51d78158950e8f6e48f72a8603a90dfea124e50b7f62d444",
-      "size": 2270,
+      "sha256": "e8338706a32f8f7f742813a7bc327b63c9d6387ba26ab5eda1532584d93cdabc",
+      "size": 6567,
       "ownership": "framework-mutable"
     },
     {
@@ -168,8 +150,8 @@
     },
     {
       "path": ".kiro/agents/aidlc-developer-agent.json",
-      "sha256": "fb38001f9df685f4d51c303a2548c4c29930127e00a254d310a0d3692bf39c77",
-      "size": 2360,
+      "sha256": "a7095bd2722a91974aa5736f4a0499f6696ec8187c4fc213511ae96cbd163112",
+      "size": 6694,
       "ownership": "framework-mutable"
     },
     {
@@ -180,8 +162,8 @@
     },
     {
       "path": ".kiro/agents/aidlc-devsecops-agent.json",
-      "sha256": "2af08131cbc0e7061c930773b8eb142ad16458e74496a0baa77d7bea522563bc",
-      "size": 2288,
+      "sha256": "cdc3c05d859a0a7923c4eaf224e8c39146e17858bf42caba240236a7e6e28306",
+      "size": 6585,
       "ownership": "framework-mutable"
     },
     {
@@ -192,8 +174,8 @@
     },
     {
       "path": ".kiro/agents/aidlc-operations-agent.json",
-      "sha256": "6d855a46844fa4e9c6947b85ff35636501bc06dd29454ed962fa18a6a8f7f898",
-      "size": 2297,
+      "sha256": "616b7240d6beeac8c5c3a33085d847e70d8ab7287924c1b8844b199d9e458f14",
+      "size": 6594,
       "ownership": "framework-mutable"
     },
     {
@@ -204,20 +186,20 @@
     },
     {
       "path": ".kiro/agents/aidlc-pipeline-deploy-agent.json",
-      "sha256": "bc4b3d507afd5d7677f17128bfa7539d8932ad746e70223a397dfc534f53cc40",
-      "size": 2311,
+      "sha256": "8376001d79412d0a0b43c203c630a07351fe9363f5cba93aff99a8e81fe5b766",
+      "size": 6608,
       "ownership": "framework-mutable"
     },
     {
       "path": ".kiro/agents/aidlc-pipeline-deploy-agent.md",
-      "sha256": "cc867c07eb8ae93263f4725bfbfa9d39c18ba2b1550a99fb0293b35e75b8df35",
-      "size": 6979,
+      "sha256": "ae9b20cc1baba899e8f2a4e2d73696b5631f93c8601ccf0da68a97d94613a3fa",
+      "size": 7031,
       "ownership": "framework-mutable"
     },
     {
       "path": ".kiro/agents/aidlc-product-agent.json",
-      "sha256": "d49cacce044d267590696a4a99c7661c9bb0be85cbea89831e4bc4d2825fb405",
-      "size": 2298,
+      "sha256": "053c2cf67de16e84451a6e61416dc04e565911101d8388a178feba8a3b66ec04",
+      "size": 6595,
       "ownership": "framework-mutable"
     },
     {
@@ -228,20 +210,20 @@
     },
     {
       "path": ".kiro/agents/aidlc-product-lead-agent.json",
-      "sha256": "33d501df19582384ffa777fe030aa329bebdf52c9a16ac33dd85f0ebb8125639",
-      "size": 2742,
+      "sha256": "f1795dd94ca0632b0ba5d9aedc5ac9983fb32983b355ec3ed2db70659a9bf030",
+      "size": 7045,
       "ownership": "framework-mutable"
     },
     {
       "path": ".kiro/agents/aidlc-product-lead-agent.md",
-      "sha256": "276d872ff02ffb4acb4573da2cfbac1d0d620d27f16748457a376082051959be",
-      "size": 11704,
+      "sha256": "2a60e46048ea33ccdc6500faf118f2f32654e2a2c885cd31a65285a3e732d016",
+      "size": 13872,
       "ownership": "framework-mutable"
     },
     {
       "path": ".kiro/agents/aidlc-quality-agent.json",
-      "sha256": "7af051196bd952f7dee760fe98d9e0c09dec24fe6f2c84e07087a74f51dc830f",
-      "size": 2275,
+      "sha256": "86fb3735e25d87822b5677c9c7260116e17ce4c637ee789570a245ce01f10012",
+      "size": 6572,
       "ownership": "framework-mutable"
     },
     {
@@ -252,74 +234,74 @@
     },
     {
       "path": ".kiro/agents/aidlc.json",
-      "sha256": "be6d0199a86893ac4f6ad41110a9db21044d9e6a1b5ac39cce0b1b37d0b10b3d",
-      "size": 5293,
+      "sha256": "428118089d039a5f2b470d9725661bfa28dd5899c521baf5a687d1126a3f061a",
+      "size": 10023,
       "ownership": "framework-mutable"
     },
     {
       "path": ".kiro/aidlc-common/conductor.md",
-      "sha256": "a266735ba1e48e41455b4281b808d3d6d550d20113f00657284e7a8b158cd9e0",
-      "size": 9267,
+      "sha256": "b3652f988cb6d38ca733d2f373b6f1ce861b8a36b25ecf34a545fdaa26a8eb2d",
+      "size": 10317,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/protocols/stage-definition.md",
-      "sha256": "a62a0b4d343b43e4238442455ad1fe46105c7392555ec55b70cafff279fae435",
-      "size": 16376,
+      "sha256": "1a1f5729351ba61819cde7f4a84486d785f9dd01819479228e29f0c2c6519c5c",
+      "size": 16507,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/protocols/stage-protocol-construction.md",
-      "sha256": "0d4769ad3162b97dabdf7b996b964e9c02a1033fda02d947d332d84ad4eb87f9",
-      "size": 83719,
+      "sha256": "54010b050cd1bf88b3a0a866a166570689f03fc46294acbfe240827e72fa7e7e",
+      "size": 70360,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/protocols/stage-protocol-ensemble.md",
-      "sha256": "97c5a4367ba16e997774ffc18dd1c43f9742538321b1f6be7c5249b246bfb2bc",
-      "size": 32365,
+      "sha256": "6741b2ec23beb7743e457dc5f66538e05eb63305d6e879547127f575e872dc6e",
+      "size": 18403,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/protocols/stage-protocol-governance.md",
-      "sha256": "b4f2571e490c170c796b4fc397425ede13d409f614c7a1a27d4a9e5ba83da09a",
-      "size": 1975,
+      "sha256": "db1fa36fe55723eef8270b235f71ee4e98ccb0db9670d255e16a476c20b02014",
+      "size": 2088,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/protocols/stage-protocol-learnings.md",
-      "sha256": "100bd2e916886292b8008476c4029fdc259fd36f1ec54bc6b7fd4a622b583339",
-      "size": 13302,
+      "sha256": "4c1d3ebfc88468280ccbe203b60f301062704a05c6f07963715f5cf1b31fe30d",
+      "size": 15358,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/protocols/stage-protocol-recovery.md",
-      "sha256": "f14f92f474afc344281e5a06118a96db547d857a879da494eb74a878c93b237f",
-      "size": 16399,
+      "sha256": "7f112013b456e0e831a557479fe1da77e830902256813f3f68c03e1175935981",
+      "size": 18126,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/protocols/stage-protocol-reviewer.md",
-      "sha256": "e1c4b3e0aaca13756f4d103636e25a68a199f3665c14ced711051384e50714aa",
-      "size": 40045,
+      "sha256": "6fffec9f88be9c1b7eb0325711adf839d8652f67ac0a98425c673746c738b2f9",
+      "size": 45242,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/protocols/stage-protocol-swarm.md",
-      "sha256": "b6783a300869a1ccd8fedb58f5ae0cff33e5bce09411c3484a7643748ba493ba",
-      "size": 76740,
+      "sha256": "1e6834e57df609c0d35c783f4cfb412dd9682310d3bc88fa6fc0382b86aa94f8",
+      "size": 26615,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/protocols/stage-protocol.md",
-      "sha256": "5fc275e9b61c0870323ae7a91f65572f749df6128cb5dad03dac9e78f97b0f54",
-      "size": 85615,
+      "sha256": "6614e5f7f98add768477ee54d6584e4aa2223bc69bf6b77d3bf584a3542ba0d4",
+      "size": 103781,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/stages/construction/build-and-test.md",
-      "sha256": "bb283f90b12804105a9fc586b07fb6fbeb92a44f20319b302ecdff2819d512bc",
-      "size": 14150,
+      "sha256": "684917623ae58728da0991af7d32dc4490f2677d0b4d7f5534e1c6974bff928b",
+      "size": 14287,
       "ownership": "framework"
     },
     {
@@ -330,26 +312,26 @@
     },
     {
       "path": ".kiro/aidlc-common/stages/construction/code-generation.md",
-      "sha256": "feb67a516dc249944056be664102ec017226527b4bf3e76fae58f5b92bd21b75",
-      "size": 29652,
+      "sha256": "d1ca5b5b7664b2a2775b50e56a195dab6d6cef6c8773a35150adeb10482b762c",
+      "size": 32143,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/stages/construction/functional-design.md",
-      "sha256": "4fa729ac52b7e7bda194d5b451ce46350f699d8feecef4b72ed62d9753330302",
-      "size": 9606,
+      "sha256": "b7995e402d728f123e12223529eea20e71d23f3a8ca06e5208dc22800aac6e46",
+      "size": 9859,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/stages/construction/infrastructure-design.md",
-      "sha256": "8f3b06bb59c5d59c697094dcbaa27645145f35a3e4f34884c013bb13c4a6a210",
-      "size": 10153,
+      "sha256": "c68c4d0149dcf0c343d0022459d7587f831fcd4ce11a0babf4bb5cf662104183",
+      "size": 10312,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/stages/construction/nfr-design.md",
-      "sha256": "f1f2c297fd5270eca13bc3ebddf5ed5958f49449529c44000e25b25a68c3d7f3",
-      "size": 9207,
+      "sha256": "280c109d06c1b6d565a35fdaafc0820704d96cea2c02bc81c801f75a5401465f",
+      "size": 9294,
       "ownership": "framework"
     },
     {
@@ -372,8 +354,8 @@
     },
     {
       "path": ".kiro/aidlc-common/stages/ideation/intent-capture.md",
-      "sha256": "f182de541878c13d15b3ce9de93d5618a23c086ef09ad928ec8cc1cb31e52442",
-      "size": 11749,
+      "sha256": "f5a915037034b661f59754e2aadfc5334ed4611e78fad56fba88cfe3a3f1816d",
+      "size": 13095,
       "ownership": "framework"
     },
     {
@@ -408,8 +390,8 @@
     },
     {
       "path": ".kiro/aidlc-common/stages/inception/delivery-planning.md",
-      "sha256": "92d9c37a7ca1a4b83ed5acc47922114933f3f7b19268c1d87462c4ab7071c462",
-      "size": 18198,
+      "sha256": "1ffecdd43a60f1163f5396ff1977db14c57d8a22b19f3c2ddabde5f27849ada1",
+      "size": 18285,
       "ownership": "framework"
     },
     {
@@ -420,8 +402,8 @@
     },
     {
       "path": ".kiro/aidlc-common/stages/inception/practices-discovery.md",
-      "sha256": "ba370f8112993fe8b1ffd883ad655593d9541837af76c1e23472441895e2388a",
-      "size": 12343,
+      "sha256": "74c9f30d003a289696e568bb0392cb6368a8c09271f4ff62fcc62f0997f8831a",
+      "size": 13065,
       "ownership": "framework"
     },
     {
@@ -432,44 +414,44 @@
     },
     {
       "path": ".kiro/aidlc-common/stages/inception/requirements-analysis.md",
-      "sha256": "457cdee8323d33d4e14e40701578702372510d680d51c262769702e21e3ab8a2",
-      "size": 12236,
+      "sha256": "2b4ebe4241156580a15ba275e1117b433bcc13d425c7064d719815d74350d33d",
+      "size": 14495,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/stages/inception/reverse-engineering.md",
-      "sha256": "59ecf8e135bc9f51c1d94411aae56aa5fb0751e76b303f51dc59db02d70d0260",
-      "size": 22149,
+      "sha256": "e921bf0b5be22cdce6c39a75e755f32aca81b1b5c029b45c277feec73b5e8d97",
+      "size": 27616,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/stages/inception/units-generation.md",
-      "sha256": "4b8d9a980960d2c10968e2123f85e05121ff1a0e8e1758d36f558f01db18a75c",
-      "size": 10262,
+      "sha256": "526f5a3f0ae05af0d876ee9ca180f7efd61f5c66970569386308acfe5de1016c",
+      "size": 10686,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/stages/inception/user-stories.md",
-      "sha256": "9b8d8560db051f28b42086fc46d9420b3b22677fb2dbd98b4d503358fee5701b",
-      "size": 9854,
+      "sha256": "835028ad6da94fda68fd183d84a51676682b195d187845585e9ece62528de485",
+      "size": 10421,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/stages/initialization/state-init.md",
-      "sha256": "a15b6834f9b48a4900d57a767d6574110db2853836aef1a1860569d9edbb80e1",
-      "size": 4271,
+      "sha256": "d3ea6a13cec7b459fa3ed8bd799d5204019ca0478741866eca9cc9b251237116",
+      "size": 4295,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/stages/initialization/workspace-detection.md",
-      "sha256": "cbe171ef81ac15be5fe3edc026448ea1113b3965c9ee916966a233ecb9de76e8",
-      "size": 6798,
+      "sha256": "5c27c62f0dbce495da7faae122a05dfd5ec2f827ef8d3bc8ad476429c6732a35",
+      "size": 8498,
       "ownership": "framework"
     },
     {
       "path": ".kiro/aidlc-common/stages/initialization/workspace-scaffold.md",
-      "sha256": "fd405319c3f856d2e2f8d9c438200cf6c27f752a8db74efb551c286a77fa2a61",
-      "size": 4858,
+      "sha256": "1f3f2fda9947a9a95702ca521e1b7c21f3368300198f1a622e843ee2c1724cef",
+      "size": 4871,
       "ownership": "framework"
     },
     {
@@ -516,32 +498,32 @@
     },
     {
       "path": ".kiro/hooks/aidlc-continue-workflow.ts",
-      "sha256": "48ef89cfab59931ffe955ad272347797348a08585b52b3bac1cc5a1ab047bb6d",
-      "size": 78850,
+      "sha256": "9b6e78e156993c9517cefa179a2936d8a1c2bb14f32dc0bb50b27e5d0fb8b128",
+      "size": 99058,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/aidlc-deliver-stage-rules.ts",
-      "sha256": "9a18b037e5b909e4b4c70cfbe888718094133cd378a7391b26a0515a9b0d92c7",
-      "size": 12538,
+      "sha256": "5807623c1cbd6f660ba6763d6b62c27aee6f68a791960d675c77eb74fcf40da1",
+      "size": 14278,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/aidlc-fold-usage.ts",
-      "sha256": "18f6734a98c58359af1a659d080fc6540f9bf8e1c9697ece0aaadf1d266311ea",
-      "size": 5525,
+      "sha256": "7b6b9bb81ac0975e37f894e7d734b27039f006f6ec00f681dc3f8c6659337141",
+      "size": 6708,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/aidlc-kiro-adapter.ts",
-      "sha256": "19ff561e4b7704c98abcd63ca1aee7eb7a88dfc93e48ee9f43deb279df561b77",
-      "size": 51927,
+      "sha256": "9dfde4e8ae3c9fcecfcd1cd101f7eb0be15168fa6075b5f23f7f86815485a484",
+      "size": 58039,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/aidlc-log-subagent.ts",
-      "sha256": "48c601f989bf047c44a1254634759aca5cc894711df293460ae7e9dea5569b0c",
-      "size": 2961,
+      "sha256": "81a610f47724d523d325f92afd34a0069f656d2e6d24bcbce8c85864ff3f12d6",
+      "size": 3464,
       "ownership": "framework"
     },
     {
@@ -552,14 +534,14 @@
     },
     {
       "path": ".kiro/hooks/aidlc-plan-approval-guard.ts",
-      "sha256": "bbc5ab64bd4c1b5a269938a20d921809aeac1e6528aa926f5824db24a274a819",
-      "size": 59539,
+      "sha256": "239432756bf78cd04aae946f747b0ee647f044dc12740ec155dee3f46ed8cd67",
+      "size": 113823,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/aidlc-rebuild-stage-graph.ts",
-      "sha256": "518ed5a611e01390b4cdd301feb8094deb94771fe834c066b749271ef22e0f6f",
-      "size": 12236,
+      "sha256": "2f592acd02cf1fcb3cba5d2e49522e4c2a1f29cf5a68d9b0d22804c9023366a0",
+      "size": 16144,
       "ownership": "framework"
     },
     {
@@ -570,80 +552,80 @@
     },
     {
       "path": ".kiro/hooks/aidlc-record-human-turn.ts",
-      "sha256": "ce4663c2a031af1b0e136d2f47087bf1513f0c04eb2f236ce226edc7e453a920",
-      "size": 12353,
+      "sha256": "ce9a41ac4884f9a576f5ffd1eadd5ec38db79a998a5320b7028010a40edfba94",
+      "size": 34232,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/aidlc-review-freeze.ts",
-      "sha256": "32ff5381b137327192c894099e5233c2043fbd8d3fc3c36e6d80840b539481e7",
-      "size": 16790,
+      "sha256": "a67fd4bdc972b211055a724a977762087fb42474fb982de51170e3178dfe64ee",
+      "size": 18087,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/aidlc-reviewer-scope.ts",
-      "sha256": "0de7fabf039e4e4cd726ac38645004747a136f81c49a7d3ed7d4094d30d1145a",
-      "size": 42837,
+      "sha256": "751c4b6b510e6e13f7d4570b47b5feb916d24e6c05be6a808717b77eacb7ebc4",
+      "size": 44585,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/aidlc-run-sensors.ts",
-      "sha256": "aba145f45de026e3756d1aca23c80c9f8429301069c2d081b9b635d8f26a8f2f",
-      "size": 12593,
+      "sha256": "f530c76bca9387a55058e5ef0e5eaf9fee1108ca52811a54d243c8e01fb7e1aa",
+      "size": 13326,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/aidlc-session-end.ts",
-      "sha256": "ee06d19ac35b0940a1f28d6f88340dc70266c1b859298b6a0f3750fc2f769fe8",
-      "size": 3369,
+      "sha256": "e9d7cc94ea426607d134a1e70ed43a9f90e2f0d53725e08896a0dc2b59a5e656",
+      "size": 4796,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/aidlc-session-start.ts",
-      "sha256": "dfb3ee11ca945ec51a228846d9c82b7a9444afdd59f3af889fa01a4a4f202c09",
-      "size": 19487,
+      "sha256": "ab8bfef99cd389c18f3311e37df3e888eb9ed11ff807315f7dc81f1154b57271",
+      "size": 29995,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/aidlc-state-transition-guard.ts",
-      "sha256": "7caf3cbff13fb47e1c89d3d562674cc367aae183e50a326a72fb591477f24e18",
-      "size": 34318,
+      "sha256": "f7aade5e8ccc8c181c188e32ff20db61f655e6bcfc514bf4eacda9b3bab6a74a",
+      "size": 44575,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/aidlc-statusline.ts",
-      "sha256": "97d2775c43e01a8559ffec7cf45bfe9e722122fd008b97ad2910e936f7eef0f4",
-      "size": 22634,
+      "sha256": "ade78ef241ecdd2fb4689f4ce290939e8dd6430a3e6efe61e758ed4a5199bc80",
+      "size": 28722,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/aidlc-sync-workflow-state.ts",
-      "sha256": "561a2647797ea27f5d6bf665a94fd0bfd55e9f7ddd4b2c5094026be64fb237a9",
-      "size": 5087,
+      "sha256": "09722d7b220a0a40dce238ca15c97de1371305ad7082cd807dfcd252ec2257f4",
+      "size": 6038,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/aidlc-validate-state.ts",
-      "sha256": "c7341f259c68a754ef03bbcd12b89f15b16322810298fccf7fc3fd28212dec4d",
-      "size": 3343,
+      "sha256": "ae274d3f55cb428b261949c7812b272a699129bf2e7d4b1cd1ad20af850b4768",
+      "size": 4293,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/aidlc-write-audit-log.ts",
-      "sha256": "626f0c22a59b46ff6e091fc1e65926d6155a484bf37467c77bf00734365145bc",
-      "size": 9299,
+      "sha256": "80c4314a921813d2e951f6f0ae8f6c693468722e20a7a3c9d14b9d447e892d68",
+      "size": 9901,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/review-freeze-command.ts",
-      "sha256": "078f867b03e84d2cf115792cdc9502f15f70aa7519ac6d542d0b381f7e66bfa6",
-      "size": 31822,
+      "sha256": "af02eae326c07c9bc103f08dbf0ea9653428103ccf916da8aa0ee8375fbddb50",
+      "size": 70594,
       "ownership": "framework"
     },
     {
       "path": ".kiro/hooks/runtime-integrity.ts",
-      "sha256": "40e4ca8cc35ddf5ba611d53460922c7ab2cdd1debd3fb82e364cf0db90e115fc",
-      "size": 51400,
+      "sha256": "bbbd57466374543f02bfca6455c9ba34797c023cd30eae5909909286e187202e",
+      "size": 67054,
       "ownership": "framework"
     },
     {
@@ -684,8 +666,8 @@
     },
     {
       "path": ".kiro/knowledge/aidlc-architecture-reviewer-agent/reviewing.md",
-      "sha256": "89927ec7a836ee9366d8ccb362e4dbc893fbd557f5eaa35b68a7461aa528a5cc",
-      "size": 7213,
+      "sha256": "5850675de22fcc28e3469a57726b093b7068e406b88dbc836b53641c60d8fc6b",
+      "size": 8115,
       "ownership": "framework"
     },
     {
@@ -720,8 +702,8 @@
     },
     {
       "path": ".kiro/knowledge/aidlc-composer-agent/composing.md",
-      "sha256": "48292e6026dfb10d8e9039f80690e96b3a7b064ac3fa36788e20b09aca0cf6d8",
-      "size": 6850,
+      "sha256": "86925431f331d5053a066e88db7229eed2e2466423d5429e918c3b00c98f66f2",
+      "size": 14592,
       "ownership": "framework"
     },
     {
@@ -780,14 +762,14 @@
     },
     {
       "path": ".kiro/knowledge/aidlc-developer-agent/code-analysis-guide.md",
-      "sha256": "9a277562315b9cd01e8f1bd99c432ffcae1a0467c6914cdcb7bca74f0a39e56f",
-      "size": 3958,
+      "sha256": "847a4ec97bd2645ce59c107f538f3a810c3ec20b33f47b2c447c1858df292fe9",
+      "size": 5361,
       "ownership": "framework"
     },
     {
       "path": ".kiro/knowledge/aidlc-developer-agent/code-generation-guide.md",
-      "sha256": "d893013765635c374eeffd3d901a380048a61c0be9538a1411a7173bdf28125c",
-      "size": 6548,
+      "sha256": "b6e43c73952a2174f47f147dc31c32448b8599b78da9e000d2b4e9aea4690475",
+      "size": 7114,
       "ownership": "framework"
     },
     {
@@ -804,8 +786,8 @@
     },
     {
       "path": ".kiro/knowledge/aidlc-developer-agent/re-artifacts.md",
-      "sha256": "19de8664c3465388be1f2d0b80bd605a78601e5f9da54e21fc44305020c11d9c",
-      "size": 5819,
+      "sha256": "aadd717239cb39ec758e2692a29a47c3313bea27b0ee3c039bf8258d5764acea",
+      "size": 8440,
       "ownership": "framework"
     },
     {
@@ -875,6 +857,12 @@
       "ownership": "framework"
     },
     {
+      "path": ".kiro/knowledge/aidlc-product-agent/corner-checklist.md",
+      "sha256": "256197a83075901c9996aeb36872337a8488a132d7ddb058da2f7bb721794faf",
+      "size": 12005,
+      "ownership": "framework"
+    },
+    {
       "path": ".kiro/knowledge/aidlc-product-agent/functional-design-guide.md",
       "sha256": "a71ba14528c4095f866425c807bcffec4fe285aeff312c40722c1922a1d5d591",
       "size": 5785,
@@ -906,8 +894,8 @@
     },
     {
       "path": ".kiro/knowledge/aidlc-product-agent/requirements-guide.md",
-      "sha256": "cda16cdaac57be8d2303062cacafce846fbb0e19d66273c683af0a70e9ec2173",
-      "size": 3628,
+      "sha256": "54b77ec72523fda6f4a1fcca5d36404fd67edef700425fa0bd6967f938a50e66",
+      "size": 3759,
       "ownership": "framework"
     },
     {
@@ -918,8 +906,8 @@
     },
     {
       "path": ".kiro/knowledge/aidlc-product-lead-agent/reviewing.md",
-      "sha256": "63d6f24454cb3ab5b3fb953bb0d35bf5e2772154c820ae51b8f3c8f927439113",
-      "size": 5416,
+      "sha256": "9aca40228a64887357c181f4898ae11d4926001e763576ae34c8fab9e18af730",
+      "size": 6636,
       "ownership": "framework"
     },
     {
@@ -942,8 +930,8 @@
     },
     {
       "path": ".kiro/knowledge/aidlc-quality-agent/testing-guide.md",
-      "sha256": "af45291ed21f530cd42469104ee85c0920305288a6f222c03e65582c631baecc",
-      "size": 5092,
+      "sha256": "9748adc58efe3ccfa674cbdba7ab719ab053d8082c41090e42dc7c28456af5d4",
+      "size": 7345,
       "ownership": "framework"
     },
     {
@@ -954,8 +942,8 @@
     },
     {
       "path": ".kiro/knowledge/aidlc-shared/audit-format.md",
-      "sha256": "15e82b6a3f038a619905d7a9941a28f9227cabb4d25b26539b79b13e1af9ab49",
-      "size": 59034,
+      "sha256": "37dca4631724be61025005bdf83aca515cc84514475c185c5e99af3574243775",
+      "size": 75787,
       "ownership": "framework"
     },
     {
@@ -984,8 +972,8 @@
     },
     {
       "path": ".kiro/knowledge/aidlc-shared/state-template.md",
-      "sha256": "dabb5d99964031d17ac12e847494c20797418a66cf84573b4a81b6404ef96c99",
-      "size": 7114,
+      "sha256": "8e788b028d3f49012a97a2fef304d011b79d5d523bbf33b06acf38d7c45d4aa1",
+      "size": 8043,
       "ownership": "framework"
     },
     {
@@ -1002,110 +990,110 @@
     },
     {
       "path": ".kiro/scopes/aidlc-bugfix.md",
-      "sha256": "a80915c2e233f61bbcabe75221b2ba6e74154d6a7f5a200d045419356f90d1a7",
-      "size": 1608,
+      "sha256": "96fac9e575ffd94c6fbf69d08d64e4bf6914f3b6c40d7804463df975a7f60b75",
+      "size": 2193,
       "ownership": "framework"
     },
     {
       "path": ".kiro/scopes/aidlc-classic.md",
-      "sha256": "e1a2c06e0d51a12ea91b28d9f3ae25a08b7c07202ffa5240a20618f755794606",
-      "size": 2886,
+      "sha256": "c80b65bc9d86c91a4ce090bf435055322c4465165c6e0f5e0f1ce3fbfaabc2ad",
+      "size": 3163,
       "ownership": "framework"
     },
     {
       "path": ".kiro/scopes/aidlc-enterprise.md",
-      "sha256": "a6484673c140170fa51d771ea6db4642c0aac434f05a227416b7fcd562b6596b",
-      "size": 1427,
+      "sha256": "04210660646c91c8bd606cf43d66a3985015dc3eb26a473ddfe0bc210a006e37",
+      "size": 1463,
       "ownership": "framework"
     },
     {
       "path": ".kiro/scopes/aidlc-express.md",
-      "sha256": "a8791d77cf2d425085890e75daf9afdd9d322fe1ad74e513d444a72fc175c37b",
-      "size": 1897,
+      "sha256": "296bcffd3eb227ea33450807c8721d87576c32529f213815d50343fbff75da8b",
+      "size": 2251,
       "ownership": "framework"
     },
     {
       "path": ".kiro/scopes/aidlc-feature.md",
-      "sha256": "aafb0a3672966cef62a76bc8f3f63f339f07c288972a1c44f8de9bf0ad5b337a",
-      "size": 1252,
+      "sha256": "b401441adae1ba06dd45f89ce57b7bce02574a7aaaed92ccaeadfa53bca7bd60",
+      "size": 1346,
       "ownership": "framework"
     },
     {
       "path": ".kiro/scopes/aidlc-infra.md",
-      "sha256": "0f7e953f7ea47e8b3f12b4b4850167cfbcb1e99c7787188c4d66ca7c97c4cb13",
-      "size": 1585,
+      "sha256": "d687ee85d8b724101b0a638b2e147b1356654b0fdf36b7501c24bc1841ecdd45",
+      "size": 1758,
       "ownership": "framework"
     },
     {
       "path": ".kiro/scopes/aidlc-mvp.md",
-      "sha256": "4e2e6a4b417a0c2f722da7115fc0abee8248ea6e6cf8254d232eac95a3431651",
-      "size": 1443,
+      "sha256": "2a94d5267446a32dab01c1f01778e71fcb0807da2a27854c7e0741eb0cc7d2fa",
+      "size": 1537,
       "ownership": "framework"
     },
     {
       "path": ".kiro/scopes/aidlc-poc.md",
-      "sha256": "94f48e2e684ab0df5958735ad685083474868898ceb19e2c6461919f1d01e09e",
-      "size": 1335,
+      "sha256": "cbd95ea0dbdf822381fbfa8939fbc3fa1d4bcba6c4621c20dc0e3090ce72db07",
+      "size": 1681,
       "ownership": "framework"
     },
     {
       "path": ".kiro/scopes/aidlc-refactor.md",
-      "sha256": "73304e143505da14e6996b1a34473e78c7b9a47ec4944aa12384dbee7df0a240",
-      "size": 1658,
+      "sha256": "64998bbaff629f73f8cca4b841a1d67461c36b2ab4e80ed64ddda3e88912dd83",
+      "size": 1772,
       "ownership": "framework"
     },
     {
       "path": ".kiro/scopes/aidlc-security-patch.md",
-      "sha256": "a589203121558c092da4510cc941e1fd3f49cd8ade0833fbc7d6b656fe08a2b8",
-      "size": 1774,
+      "sha256": "e6fe5589a345da9150c71f07192ea3fc9d761ab620f243c7e2a74c9a61751e33",
+      "size": 1947,
       "ownership": "framework"
     },
     {
       "path": ".kiro/scopes/aidlc-workshop.md",
-      "sha256": "4d461fa91b6c68bbfae33e1209f0f3888d7aa4ed2489690a33085f60be168e83",
-      "size": 1672,
+      "sha256": "0a40a53e0840925e6898179339f723777d25559013a5e14d92374f64ae0e0e8a",
+      "size": 1770,
       "ownership": "framework"
     },
     {
       "path": ".kiro/sensors/aidlc-claim-sources.md",
-      "sha256": "ad4c1fe0a04b960532fbed48e86c89bd291c690cc468e9b78843f4863e80ed51",
-      "size": 4219,
+      "sha256": "e3255e9a2977eb74b4252b9139f4c033a9afe085b333a6627bb8a66f84123be3",
+      "size": 6757,
       "ownership": "framework"
     },
     {
       "path": ".kiro/sensors/aidlc-linter.md",
-      "sha256": "d913643f6bda910fff80c43b45771ce410233aa9ea52a8341be9771987cbbc0e",
-      "size": 1314,
+      "sha256": "d9d4ba44cd305500f94ca3d100dcde5097afb2bd097247bfdd217c80ef3563e3",
+      "size": 1316,
       "ownership": "framework"
     },
     {
       "path": ".kiro/sensors/aidlc-required-sections.md",
-      "sha256": "ddadf72dddb7fd06cba55a1dbe97e69817030015b470f2d3c20a155fbd22de18",
-      "size": 3240,
+      "sha256": "6ea583b443e42236464dc0e0ddc8bc561dfeafeaf0f7812fbec6e7a48bb5a056",
+      "size": 3547,
       "ownership": "framework"
     },
     {
       "path": ".kiro/sensors/aidlc-traceability.md",
-      "sha256": "4ba0137adeede88843356830f1b39221dbe8b3f72c68033d69ae338bfa389f54",
-      "size": 1692,
+      "sha256": "2b9cb9f60b1499113ed87411186958232f7eca953e0198b63520caacc30ac5cf",
+      "size": 1694,
       "ownership": "framework"
     },
     {
       "path": ".kiro/sensors/aidlc-type-check.md",
-      "sha256": "5eca94cb359eebfa297f66db7b051a2f77ec099459843e15dedddde47d87edb9",
-      "size": 1301,
+      "sha256": "4204c407630e5c16422138d95973d1ac8f312483214726e96e42fa13e3a207a3",
+      "size": 1303,
       "ownership": "framework"
     },
     {
       "path": ".kiro/sensors/aidlc-upstream-coverage.md",
-      "sha256": "dbc8d1f66301963d625209185475d378b99e337d7f15fff32b37167e7c5ab5b2",
-      "size": 1654,
+      "sha256": "d4bff50c900a5849051780a6359f34f11d4bf029b48a9de9fcb41788e6af6232",
+      "size": 1663,
       "ownership": "framework"
     },
     {
       "path": ".kiro/settings/cli.json",
-      "sha256": "628ab1c5e1db411a051e5fc8475a83865bd658fce4f68dd9ff28a67debd1605e",
-      "size": 156,
+      "sha256": "befa6f54d38a4b9b52a35974d010f5f09b5c8d1cff24e9240f8f2b182d376075",
+      "size": 35,
       "ownership": "merge"
     },
     {
@@ -1116,44 +1104,50 @@
     },
     {
       "path": ".kiro/skills/aidlc/SKILL.md",
-      "sha256": "8b8c722a1f1723a64c44b14373c69985208024d5076cea4766b82896b8759f97",
-      "size": 73415,
+      "sha256": "35a2aee0492a9b2fd07af054ef4643892ec9005a8503d871a256d2ba296a4e7f",
+      "size": 93346,
+      "ownership": "framework"
+    },
+    {
+      "path": ".kiro/skills/aidlc/composer.md",
+      "sha256": "5447d0dac785b75b10dd5e2f9a5e4872cbad2aff98499e1acba0fc36c9cc8399",
+      "size": 12520,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc/question-rendering.md",
-      "sha256": "0cdc5cc8331a7a9b533c9aa0dd4980e4cd94b97cccc6ad4648b9db7210d8b00a",
-      "size": 11546,
+      "sha256": "6c9bacf8bc8d2802f2d317d9577765e3f6c47b8b86ade5ca71e18fbb30e28a5d",
+      "size": 14743,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-approval-handoff/SKILL.md",
-      "sha256": "d366b75e51281e1cb441612e9b34db9de8ef5d7cc03b94a6dbc5e9b63f2366f7",
-      "size": 2054,
+      "sha256": "e89518e67609630eaec7ee77ffeadaeb3fbbc690c29b21daef781025ff0e96b8",
+      "size": 2774,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-bugfix/SKILL.md",
-      "sha256": "d92da624a0b059564a1619ca416a584a7f4b17f26b83c46480b4ee74dda05d39",
-      "size": 4202,
+      "sha256": "5065c6e70028181e1e5a9b6b38ff4400d9ee9eecd9d6e1ebfe539601f037b1a2",
+      "size": 7499,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-build-and-test/SKILL.md",
-      "sha256": "1ee39e97f95fb98a894a0dd1db1d7c291484fa2d3ad2bf260562ff25ef7d3237",
-      "size": 2038,
+      "sha256": "ef3efb32e7ea54bedb1f9d30cf31fdbf75bda5b9ee03d2d93260732dcfe7de00",
+      "size": 2758,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-ci-pipeline/SKILL.md",
-      "sha256": "20d6058af9e42ec3423e8b9e5b2f5f4bdc161954675460300039fe93e5210415",
-      "size": 2008,
+      "sha256": "e60a57d0af0721089b909eb494950c733e0a68cc46585e64464489e48ab39022",
+      "size": 2728,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-code-generation/SKILL.md",
-      "sha256": "d51ea83d5883b39c6a09e43bf5b8487c5a0b45101c92597a654861725754d626",
-      "size": 2048,
+      "sha256": "f35be45eacdcc2ce8a1bbd198f6a1ecbb30aecbdd4efb7da51fbcec55fcc15c8",
+      "size": 2768,
       "ownership": "framework"
     },
     {
@@ -1164,128 +1158,128 @@
     },
     {
       "path": ".kiro/skills/aidlc-contract-design/SKILL.md",
-      "sha256": "c4cbfae890d54bb1fe1a595f58fb804c952e5509bea71e37397f8039f9bf1144",
-      "size": 2045,
+      "sha256": "78d9f28d75d1e08a778d61754f2263c91485810a6e816fa1ee13c4241e64a059",
+      "size": 2765,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-delivery-planning/SKILL.md",
-      "sha256": "933ff557f38adc8557cf53bb2833c7b0492d32a27b303ea1569bd6074e623a11",
-      "size": 2065,
+      "sha256": "e5e3dd2299f99f0eea54bb6ee2a9d5e3118127bcd5555bd4b4679e42b3606d8f",
+      "size": 2785,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-deployment-execution/SKILL.md",
-      "sha256": "df182a7c29bfe96d69df856f61b7ebc4391ed8295760710b7ac7778cbad4d3c0",
-      "size": 2095,
+      "sha256": "fa21c496d9930dace70bac04f70a85185346d39276a748ecaea06fd0c83c76aa",
+      "size": 2815,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-deployment-pipeline/SKILL.md",
-      "sha256": "e3c9d7a6448262912d0e84b5ae4ea6e60b5206318dd7fab40773370285d7cf04",
-      "size": 2085,
+      "sha256": "4d0aa10c4f29f35df8aa3f67262bbab19f50c8192e10fb4331653fb10401cbd5",
+      "size": 2805,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-domain-design/SKILL.md",
-      "sha256": "20c8923b1680306d9f10e8d8ad650fab22ea391b0ef05e1efa167d9691df428d",
-      "size": 2025,
+      "sha256": "96d53f17f5a6509e6e022140e4222930cd2f3cd612ab0068382df9c508ccfa82",
+      "size": 2745,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-environment-provisioning/SKILL.md",
-      "sha256": "7d8645872ae48c57580f79c40c755b31f4b9a01c860929d0e6fb9e6d71327a3b",
-      "size": 2135,
+      "sha256": "d0d22d1461913544e19e6f60b9629a076aee3d2a24d570167b4c923b46965b87",
+      "size": 2855,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-express/SKILL.md",
-      "sha256": "44fbbb2e7344d5c40a3e2d36a68369850724a191848bf2ca9ded2b7382e22f5a",
-      "size": 4259,
+      "sha256": "cb2ae29a425ea07113647e463f63f5125c5fa59c305f2a8fe8ae805af4d05b00",
+      "size": 7556,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-feasibility/SKILL.md",
-      "sha256": "3d39a74e1b535e91b4f10b30d8c92f2d155e923213603fad86854c2535d8ca1e",
-      "size": 2004,
+      "sha256": "8f797e3f09fd01fd3b67d9450e0d4548b6e9221ffc172424e3f4f0c0ffd70546",
+      "size": 2724,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-feature/SKILL.md",
-      "sha256": "de246bf4fbd9c8873ddc038628dc63b412373974d1353721aaaf688dc630b941",
-      "size": 4241,
+      "sha256": "db83006521a3476a325e1e9bba87f666a689e10a3ee01b4fdd84f0481b902df3",
+      "size": 7538,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-feedback-optimization/SKILL.md",
-      "sha256": "74a55bb6314f85fcbabb45924985362592df2eaeb69424d94f904d8e83a5d11c",
-      "size": 2105,
+      "sha256": "6ed20d1b67eee920cb9c3eae0dbf1eb0afe11a09aa91184b0ea1aad4abe4b3a4",
+      "size": 2825,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-functional-design/SKILL.md",
-      "sha256": "d949a904244bb21e5370b88ca630535185b84fd950c369bd46214c076cd6a7af",
-      "size": 2068,
+      "sha256": "b58b6efad891c56e9a89c343084a5897beaec800dbe6503ce8c230bdc0898295",
+      "size": 2788,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-incident-response/SKILL.md",
-      "sha256": "409c4ce6caae654b144cdd09aa11f50d1c23423006fcef3dda907bfdaa202281",
-      "size": 2065,
+      "sha256": "70a53d149133517e9082f734b71106faca9a01350f14aefaf599b3325a30e32f",
+      "size": 2785,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-infrastructure-design/SKILL.md",
-      "sha256": "43e456310cc897d4461e5ac0d514aaef5778a57a3c949cf0369913bfb83ede3f",
-      "size": 2108,
+      "sha256": "f6c9fd857a19fcd0028fbc4cd8de29b26a048c2743dea499133cc0a511ac0aa8",
+      "size": 2828,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-init/SKILL.md",
-      "sha256": "8fd47d7f38e0631f25273124a9126e16b277f57e9d0785997d40b6c90f52614e",
-      "size": 2535,
+      "sha256": "13672e33ca2bee17e14422568e1a23e337e047eb0361d9a2d6c8c05494416cc8",
+      "size": 3447,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-intent-capture/SKILL.md",
-      "sha256": "5ad3f0439718f4a5a0f5b58a32415c20ddf8285024e7ae22d0dc12905bcbc901",
-      "size": 2034,
+      "sha256": "ee3d0433420374e4b0d4f99e8c694b940a2e75bf31e4322a6d0e47013cbd0bc5",
+      "size": 2754,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-knowledge/SKILL.md",
-      "sha256": "2da0534f464488d07711e0d7f584694563194a6af3fc031cd5473302063ca527",
-      "size": 13772,
+      "sha256": "9357caec651c065bd48821fd33ed466e6eb2304246872e94c2f1d87543d1bdcd",
+      "size": 13902,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-market-research/SKILL.md",
-      "sha256": "600bfe0c309744d8cb9351e01743bc393ef3d87cb8aa1017540626cf17263410",
-      "size": 2044,
+      "sha256": "af40e70139f28b6148a3283bfc57ad035fa409ef1460973e5881187b0161f07b",
+      "size": 2764,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-mvp/SKILL.md",
-      "sha256": "7c5746f361768544ad466a0e8567cb6d51e8a57ddb04f6017a5190615a297026",
-      "size": 4187,
+      "sha256": "49822342b20eadd5d78a291ad32fc06eda91779dab055c76648a33edc713bdc4",
+      "size": 7484,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-nfr-design/SKILL.md",
-      "sha256": "63e5d0d5a33aed341ea548ce067c0d1c43677c2cb87a2d41e1deb6a3178cb77d",
-      "size": 1998,
+      "sha256": "82c77cb7520b1aa5c3aab9f12f0af542070f4e70a84a1319a17bdfabe1513681",
+      "size": 2718,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-nfr-requirements/SKILL.md",
-      "sha256": "22f51694328c2e9395798adb7a46af5c3dcc95f2dbcd4b8854168ab031f0a9f7",
-      "size": 2058,
+      "sha256": "a658b4eec375b5fe79905929d25b01b0587e911f63a1371075e4e67af7bb7ac7",
+      "size": 2778,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-observability-setup/SKILL.md",
-      "sha256": "986ba1d4f18630c0f0c81da5890f3c4eb7e354e5d1df388d139a0c042da83e81",
-      "size": 2085,
+      "sha256": "564e7f1bc6ba29d5b16fdfcd90a61b9865ad1490b972c3fa285042726c054478",
+      "size": 2805,
       "ownership": "framework"
     },
     {
@@ -1296,20 +1290,20 @@
     },
     {
       "path": ".kiro/skills/aidlc-performance-validation/SKILL.md",
-      "sha256": "1f584cd95153efc4305b6e6566195de8de4ca1bc8771027857d424117f1aa5bf",
-      "size": 2115,
+      "sha256": "17af87e66fae1f75608b1c23db19570ec80f2128cb0d191f1216e8ff24a9f34d",
+      "size": 2835,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-practices-discovery/SKILL.md",
-      "sha256": "378320c4573aab836232012bc9939c401d27947150f6fb1da1b2677a9c0c5ef4",
-      "size": 2085,
+      "sha256": "e9e33cb104af2cd1e2624edfedd38c6a94de6b82e20300933e931626e629c16a",
+      "size": 2805,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-refined-mockups/SKILL.md",
-      "sha256": "200b14a9730f8f844f432ece5ef64a11b4952cc087905820e8307ef67dacc16a",
-      "size": 2045,
+      "sha256": "9438d695b6a35264a880aef50a9f1e0fe3b700ca34a2882dc79dc887b674b8cd",
+      "size": 2765,
       "ownership": "framework"
     },
     {
@@ -1320,32 +1314,32 @@
     },
     {
       "path": ".kiro/skills/aidlc-requirements-analysis/SKILL.md",
-      "sha256": "be68cdc1731b96a317fa16fadb8f1810adf71623c95979e342a136b03a07d6b9",
-      "size": 2105,
+      "sha256": "957abccb10efe1630e7b507452aff92fcec5c5b4f76b772f064862e7d01e9d03",
+      "size": 2825,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-reverse-engineering/SKILL.md",
-      "sha256": "d4cb08ee69c4ec97c996ce35e3f2f4affeb5e4499b1b7e516494b894665c6e21",
-      "size": 2085,
+      "sha256": "bc8fb9c07b4389ad8280c46dc4db9c95efa890e7de79f04cc283c4e733bbe142",
+      "size": 2805,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-rough-mockups/SKILL.md",
-      "sha256": "086f7ce38211083b9d956c346ef6923e148affb58a460bbbce8d2381448f84a1",
-      "size": 2024,
+      "sha256": "eee4dfca9611d54ba94902bcfa79ed1de800b67175db248658308615a3cdab03",
+      "size": 2744,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-scope-definition/SKILL.md",
-      "sha256": "4e45767f9039cd9d61ff6faacc2999231e32afdf18c95763d993738c93032722",
-      "size": 2054,
+      "sha256": "a521b2893f26efb6f12c7948d9f78d9e22852f42b197b41b5e71b915e9dbcdd1",
+      "size": 2774,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-security-patch/SKILL.md",
-      "sha256": "1038abd40fb2ffff1f9d56a08df62e782a82829947896869ba0a1362e33e4cce",
-      "size": 4268,
+      "sha256": "9872c902812291cf51a175cf6b9b3ef47f6829e917f03106354f0915cc90ee98",
+      "size": 7565,
       "ownership": "framework"
     },
     {
@@ -1356,26 +1350,26 @@
     },
     {
       "path": ".kiro/skills/aidlc-team-formation/SKILL.md",
-      "sha256": "a673cbcaff4b161e62a5bdc4274805b2f681c6565e1ac541c0233eef92143062",
-      "size": 2034,
+      "sha256": "cd8eed9c1e406b6b66ba080afa354bcfb9088297ac94763198aa8ab25c91ac63",
+      "size": 2754,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-units-generation/SKILL.md",
-      "sha256": "244c60619cde0d1307c05217576a7681b8d91a627619407450c65a021f7ff5e3",
-      "size": 2055,
+      "sha256": "3b8bb1589a0b03af041832e85aff0d05d3e7e0afc2f5917f0b38851fa9a578a8",
+      "size": 2775,
       "ownership": "framework"
     },
     {
       "path": ".kiro/skills/aidlc-user-stories/SKILL.md",
-      "sha256": "bee8222308636fe1d0159f279bc3108d4114a00c6b2dfe034f8b2b801c81bc5c",
-      "size": 2015,
+      "sha256": "0f8588ac0f8c7916b0fade1f9cc0bdb5cb5426be52960863cf4b30c701492be0",
+      "size": 2735,
       "ownership": "framework"
     },
     {
       "path": ".kiro/steering/aidlc-onboarding.md",
-      "sha256": "3a91e5d2e5da0b0234cc62a1f6556b4651cfcb4261a6041ddb54ab7cb788ba0e",
-      "size": 11004,
+      "sha256": "bda41e102cbf03b9c0ab4f91d155186ac6dfc193989ddf1cf921ce9a8966b7ab",
+      "size": 14754,
       "ownership": "framework"
     },
     {
@@ -1392,32 +1386,32 @@
     },
     {
       "path": ".kiro/tools/aidlc-artifact-vocabulary.ts",
-      "sha256": "15934fa250d33bce29e8de773b60d683da651f2c6010a4d7d623f245d3b50d50",
-      "size": 715,
+      "sha256": "d23f5125e0dcf50b8353d6e888a675f6aeb05b9bbe462315611754552458d096",
+      "size": 1392,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-attest.ts",
-      "sha256": "730af76c591b828b77f7f1a57088c78c58334d0952b637b7243a45d2911cfa8d",
-      "size": 73200,
+      "sha256": "d97d5a0d69faac77ab2b18921f377dec59fa27d2015d57f7843c92219efadaf9",
+      "size": 73474,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-audit.ts",
-      "sha256": "ffeb239074b4718c385dc507184bf148f5f3fb97b460a2b89d1df550dada7260",
-      "size": 71259,
+      "sha256": "81a1b3d5e66bf01d737a42b1b55e78972842c97471ca9dbd78768ecf2ce6162d",
+      "size": 80310,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-bolt.ts",
-      "sha256": "aa2260795e1dcab8f8d904cbe0f25933520efcf072870eb7b147e34bff939515",
-      "size": 55373,
+      "sha256": "9259e8f623f9f14605f43547a07b2637bc5771fcf8039948661e7af7f4822c6d",
+      "size": 57863,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-channel.ts",
-      "sha256": "1a4ef4c7030702f5311a11161f4744945ce58ed009a7420f22aee5bc2fd70f87",
-      "size": 6532,
+      "sha256": "11bb26e8e08766a0fc98974fe21c7b85f97d2cbf58e4fcf71413a16105d28042",
+      "size": 7150,
       "ownership": "framework"
     },
     {
@@ -1428,50 +1422,50 @@
     },
     {
       "path": ".kiro/tools/aidlc-command.ts",
-      "sha256": "7296c92f32a3aa75933cd3f57090c4f9ce501576de408debbe4290fcc0f4efb6",
-      "size": 16547,
+      "sha256": "5365ec52260eceee613f127e5b35dfcde6b2f4aa71b38be0f1d8ae9b2ab8cd28",
+      "size": 19096,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-completions.ts",
-      "sha256": "77077194eeb6f9a8dbc340e129ad4b19bc43a10da2b2f86261edb755ed320522",
-      "size": 6593,
+      "sha256": "e1311302a88e8cf516c45346cb30174e3e0c44e96fddcc36d5e8062f7b5b5144",
+      "size": 11130,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-config-diagnostics.ts",
-      "sha256": "843a3b7fa6d192f89c54c89bbc96b4f257b2a87e5c05b1061fd44bb051fe201c",
-      "size": 101487,
+      "sha256": "cd7f2763fa3ce68b3acba986f313fa8c94ef270a2e6319a763018a6b0ea6c88d",
+      "size": 131675,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-construction-checkpoints.ts",
-      "sha256": "1d6fb9e1883eca07c4177eb238392e9398cad96f242d14bf35107744210cc9bf",
-      "size": 31130,
+      "sha256": "f0197407aa792b33430c7491095cf7c31c003307f88d35d1690ac42c5eb8ca7a",
+      "size": 72910,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-directive.ts",
-      "sha256": "6c5a734f2eaddb1eb2d5acfd3a7e97a52a39c9ee31969da6cf940a55249f9d0f",
-      "size": 78104,
+      "sha256": "b39e090a09e8487758d91e8bb2d4e4e4bd47b8ae1ba47e6c50c9926178d6b108",
+      "size": 106981,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-distribution.ts",
-      "sha256": "da07daebcfef9ac3a366dd997d17f4651c88fb13346a8a037faad635cd1f3a9f",
-      "size": 12003,
+      "sha256": "82507688fe5801ffc97e96524d59ff158d4b88f33f93bdfe6f8b809f929235b1",
+      "size": 65132,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-doctor-bundle.ts",
-      "sha256": "3f0613499ef7cc94bb978e3eee4861de0b4018c31b268951334601be7453dc25",
-      "size": 67388,
+      "sha256": "014177d8e81cab2e6114440c32e756e11eaf854d7dc0c340601fc5f43dc409f0",
+      "size": 75170,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-doctor.ts",
-      "sha256": "378363d058eb1fd80b4fa1308ab80b795ee56febb8b247980001355e7e038c77",
-      "size": 17899,
+      "sha256": "7367c677ae30e11afe63233702d47ccba4284b4d612f680daf65fce2496f5a43",
+      "size": 26230,
       "ownership": "framework"
     },
     {
@@ -1481,81 +1475,111 @@
       "ownership": "framework"
     },
     {
+      "path": ".kiro/tools/aidlc-gitignore.ts",
+      "sha256": "0d596522704f3fc57762f6b279bcc7f6ad03ee76987861da7915a1cf0fcd2f5a",
+      "size": 4799,
+      "ownership": "framework"
+    },
+    {
       "path": ".kiro/tools/aidlc-graph.ts",
-      "sha256": "c2fb7912ee190011f1d1ad904c49ccb7dbd78fea397d7be9916fb81e95d62da2",
-      "size": 147589,
+      "sha256": "07b1d0697300208d09616ffa2cb2fb7db019fb54f5fca107e83d32d3b2ac1a28",
+      "size": 169313,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-guard-fences.ts",
-      "sha256": "25ee89bf41e7cd4f1a91c0a65aa4013af1662cb99dac88f91d823807fac625e6",
-      "size": 1713,
+      "sha256": "aa19dc037b911e53aad3f9f0ac6b792cd13b0a670c02fda6c4bcd59d698e986c",
+      "size": 2691,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-guard-operation.ts",
-      "sha256": "9ec60bcce54cbe8e88b2f4355d783ae632c4477c34197c77230d3b824d5e8730",
-      "size": 12094,
+      "sha256": "9db65e58cf52a034f39b52f0c2f167d55e6d5d679293f2b5e2059c64e41b9ba6",
+      "size": 20239,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-guard-switch.ts",
-      "sha256": "7647c2b3dd80ad01f87d6195d387295d1bb60d548d63fa8da27ee7db5c213f90",
-      "size": 21726,
+      "sha256": "33c28a243ffea22b09e30d0f4d504481b28efa9e48f6accf8740f7eeeb2d8157",
+      "size": 67293,
+      "ownership": "framework"
+    },
+    {
+      "path": ".kiro/tools/aidlc-hook-front-gate.ts",
+      "sha256": "165e6f1a9005971e8528e13729be9007f430b0268fcbf74a1803e8d95ead1fb1",
+      "size": 8834,
+      "ownership": "framework"
+    },
+    {
+      "path": ".kiro/tools/aidlc-hook-trace.ts",
+      "sha256": "f2d591bda23bc3db5a27db72ece180dd1d46d14837708628579c723353347a75",
+      "size": 2601,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-includes.ts",
-      "sha256": "7d40834977687abf06fa9882097db35dfa3c06afd6681a70043d96267ef5b374",
-      "size": 14580,
+      "sha256": "ae5d3f8eaf96c0010348ce8d1a5396703f44526b50bc038b9ac28e7afee9a453",
+      "size": 28651,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-init.ts",
-      "sha256": "ce4ab4821d03572c8791c8b15e60cd28b22d9d0b874eb13bd949a5bf885b984f",
-      "size": 267620,
+      "sha256": "0bc4a4828e8d0223ab4b54ee3d5a74421b0b08fd513b38b673302f7e797e3204",
+      "size": 484966,
+      "ownership": "framework"
+    },
+    {
+      "path": ".kiro/tools/aidlc-inline-context.ts",
+      "sha256": "081aa8eb91a9bb55845a7804cf105db97b80b390bce08f633f5833b6a68de7f1",
+      "size": 14341,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-install-paths.ts",
-      "sha256": "dcfa7e45a64ec374625c47f6ce4b6cf4953755c62e821aa72fecd0ef0460f411",
-      "size": 20116,
+      "sha256": "ea68460a022669af40a5ad1eb8648d930a5a0ae02d1db7c594f19395fa1c788a",
+      "size": 26800,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-jump.ts",
-      "sha256": "c6539661a7ceee70cf5d57e7b0893b736e7f8f6499c5eee94f99cb938c40c574",
-      "size": 20850,
+      "sha256": "c2ab54171b1ffcb3d8e8e8c4488be58acfc2750267d67985446552382e598f77",
+      "size": 36598,
+      "ownership": "framework"
+    },
+    {
+      "path": ".kiro/tools/aidlc-kiro-session.ts",
+      "sha256": "8f07f70c0b582e375fc0a3ed1122c488a16b1565e05906563eea2116520b5e6e",
+      "size": 31994,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-knowledge.ts",
-      "sha256": "b8fd377a4be002875470bc19d22d2635e7c8296cfb5f98b3fb2bbd44014b1367",
-      "size": 202119,
+      "sha256": "dc1af104430709b4601371c24af56a178821c618c1a4840e0863eb65b0fec118",
+      "size": 201606,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-learnings.ts",
-      "sha256": "ae5ff83606645427350427544b04f07d9b6d35478b49099e4bfbcc187fce26fc",
-      "size": 51874,
+      "sha256": "861c532d1d3f9805dadaef1acb649a0ce1c9fb3ad5c2b18d8df43ad618012cd0",
+      "size": 54325,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-lib.ts",
-      "sha256": "cd9de01be3f1780dba0f150f450f79479a8b84cc47ccbe66d1c16630af4f28ac",
-      "size": 1223437,
+      "sha256": "8c3499e60e61ff0649d1629661e14541bd2296d83d66095a16b30273677f709d",
+      "size": 1620813,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-lifecycle.ts",
-      "sha256": "3dd25e489f966076a395e1261db4478461783113d6ec1a208655f013e2bdc23d",
-      "size": 71663,
+      "sha256": "963e91f7fa2900d7f2869f3f070e333480712005e0030ebae1d301c5ded4a834",
+      "size": 106016,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-log.ts",
-      "sha256": "66ee0babbbc01c9b5921614c87b1fd2b12c34e1449bb3f126854703536c583d7",
-      "size": 117382,
+      "sha256": "a750619ba52879183ed64c935e71db9b7ab867ec49bfcfab17d2624e50dc35ed",
+      "size": 177301,
       "ownership": "framework"
     },
     {
@@ -1566,20 +1590,26 @@
     },
     {
       "path": ".kiro/tools/aidlc-metrics.ts",
-      "sha256": "2ee5e74d0234d6d424b66c7bb0f3cad7c780a294f6aec87e7c7e05e75e4c3bef",
-      "size": 18782,
+      "sha256": "4cf5dc68080caaf6ab19151958e7ae08f44784b3cb0c4d8e6e5196a4a2d41bb0",
+      "size": 18935,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-model-policy.ts",
-      "sha256": "eb648212aa0d516bc51266a7b3586cec82b7c9b034405ee204d2ff805207e6f2",
-      "size": 28939,
+      "sha256": "48a3bc182321790d3059894b69dcbece8db0a153849dcb5dafb808cf5b0add23",
+      "size": 32820,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-orchestrate.ts",
-      "sha256": "1eaf45d0ed3368a23cf7f07083df00e4f15ad6d00f3568a6a36ae788fb59fe58",
-      "size": 435896,
+      "sha256": "c8d7bd195274ce2bfd96d02b00b199c779d4fd6dd2e31534b289a6b37774356f",
+      "size": 703402,
+      "ownership": "framework"
+    },
+    {
+      "path": ".kiro/tools/aidlc-plan-approval-ask.ts",
+      "sha256": "005ab4c70dfebb4d44467b85b42418fe53d1177dd7a26fadf81b3e6be34f5300",
+      "size": 89630,
       "ownership": "framework"
     },
     {
@@ -1596,14 +1626,14 @@
     },
     {
       "path": ".kiro/tools/aidlc-plugin-emit.ts",
-      "sha256": "c0db974c2d259318965925eccf46bd458f9a036b648ed83cd617eb839b01c1dd",
-      "size": 20156,
+      "sha256": "c9bd6d235648ba3db7eecc10628c362b25fb3642b46012d22c657cf20f31c8a6",
+      "size": 20601,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-plugin-test.ts",
-      "sha256": "06d3e944d2d0f83caabed415c10d381fe00a054a981f31999c47d84fc0aa4fc3",
-      "size": 24319,
+      "sha256": "1a84b09cd4c5e63bdb61ae5ec576a9d47ce4d5a6811331eb835d4654efb36f5b",
+      "size": 24411,
       "ownership": "framework"
     },
     {
@@ -1614,20 +1644,38 @@
     },
     {
       "path": ".kiro/tools/aidlc-plugin.ts",
-      "sha256": "78698e42d4c543bdf846b350b3296f200c37a7e2813fbe72cd398e055788463a",
-      "size": 51304,
+      "sha256": "2b710e81889a88183c08b0184184e338dcbe80f62709c490615d675d2b8cfa29",
+      "size": 57273,
+      "ownership": "framework"
+    },
+    {
+      "path": ".kiro/tools/aidlc-question-store.ts",
+      "sha256": "e0dce47cb929cffa3ee1e527dd424db045be98368940ef860ff5afc8f84f507b",
+      "size": 16580,
+      "ownership": "framework"
+    },
+    {
+      "path": ".kiro/tools/aidlc-recorded-switches.ts",
+      "sha256": "7aa4eae1d77db933283428ffbced9b28af60eaf1afbd7b06fe8e7dc529eb3524",
+      "size": 16039,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-release.ts",
-      "sha256": "7f44eab99031be046f9fb8da5284a0296f3e6147c5e583fef9b655f5c53cce8d",
-      "size": 31465,
+      "sha256": "76acef9eb4dc4918df61db3134d7d0842786f79c474b96b33e7971fc02c11354",
+      "size": 38406,
+      "ownership": "framework"
+    },
+    {
+      "path": ".kiro/tools/aidlc-reply-reader.ts",
+      "sha256": "f497d08f34e3785222a0fe54f36f503f2250002086ee1b1f4176e5a72a8b02a6",
+      "size": 6739,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-review-brief.ts",
-      "sha256": "931df19100039f58916030a3d130017256836ca6859a5e8bc79e1232c8609ab3",
-      "size": 33548,
+      "sha256": "48aa8e0905d700d90a105e0132c922bb73157aaa86042375c9bdbcf59e9ad68a",
+      "size": 79155,
       "ownership": "framework"
     },
     {
@@ -1637,57 +1685,69 @@
       "ownership": "framework"
     },
     {
+      "path": ".kiro/tools/aidlc-rules-held.ts",
+      "sha256": "a97b9c58fd30992dffbe3e3940702e7d2c70cff70133b4f38b860cfcfcf18890",
+      "size": 22231,
+      "ownership": "framework"
+    },
+    {
       "path": ".kiro/tools/aidlc-runner-gen.ts",
-      "sha256": "ec56070c8234b5dfa5b8204445164e3375b53077128bebe346c828d5bdc48704",
-      "size": 38063,
+      "sha256": "1dca7b3d13042f2c56e88133a62caaec1b749bbab427adc45e44e9cf34a35ed9",
+      "size": 41889,
+      "ownership": "framework"
+    },
+    {
+      "path": ".kiro/tools/aidlc-runtime-budget.ts",
+      "sha256": "de04a5edee866776837918e3b1dd1c87976879ee061547702b5f8f3af57632b0",
+      "size": 1080,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-runtime-paths.ts",
-      "sha256": "6c0271ed1a6439fddee813a7326d3947cec81227be98d927fc418722e3989cdf",
-      "size": 13502,
+      "sha256": "5ee7ecd37cc3a4774aafda31098082768641f34b0dfd693d978cb4b3c76c45af",
+      "size": 25660,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-runtime.ts",
-      "sha256": "5d3eeb4ee9a99405439a81156a1a0159d42d52b0224b68774f365752ea1d279e",
-      "size": 56658,
+      "sha256": "d2189dea750a1fbbcbdd03be37d79f54820adab6d484b7211a8e439554a749ce",
+      "size": 56621,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-sensor-claim-sources.ts",
-      "sha256": "b59f8c75f452cdc7e6e8c88299f16460f8b4d4f932a554eb10cd4bec13d045e3",
-      "size": 48167,
+      "sha256": "cdb2ebc8d3f0829597b2468f925d53e37143bd011f4b7dfc49f4561e61ee5325",
+      "size": 33049,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-sensor-linter.ts",
-      "sha256": "6f1a33cb762fa8d94025a715f60bb7d6f4e57efe6459df09ab321bbd53f80e99",
-      "size": 15163,
+      "sha256": "e01e196163384ea3ae6621ca6a7b7b44b69bc44ac151b2d1764c16cbfcacbce6",
+      "size": 15552,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-sensor-required-sections.ts",
-      "sha256": "623bd29555957f7ffdd9ebc3ae5b4fe96dd808b44cdb129d8a3dac93d73a729e",
-      "size": 10500,
+      "sha256": "6f713719a1764ca15eea0df1b760acc92d5e5e88e03e4abfced583dcded150e0",
+      "size": 11314,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-sensor-schema.ts",
-      "sha256": "972a42f459abcf2804c36ae7ee75e76553415b89ac4454f254aed37324071f7e",
-      "size": 8114,
+      "sha256": "ca08739adacae361478c2ccc39218ac4ad8e6e4c385df0a898e5db2cf6765c36",
+      "size": 11475,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-sensor-traceability.ts",
-      "sha256": "224c94814b360405369197124c567f69b12a8132ddb32aef378bf3dc8ae22b66",
-      "size": 31682,
+      "sha256": "717fefb26199a4697838b20d888e4f796323f7304ce96e599cbf1578b2168dd4",
+      "size": 34654,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-sensor-type-check.ts",
-      "sha256": "e13a137c43ee9bb87c2c47985bb0f231ec68331d7085a506935a16613e1cabab",
-      "size": 12598,
+      "sha256": "2b957ea1948fa02fcfbf454474f5f47f77f2d38a3c0092a09a2a67d482a8aa40",
+      "size": 13050,
       "ownership": "framework"
     },
     {
@@ -1698,86 +1758,92 @@
     },
     {
       "path": ".kiro/tools/aidlc-sensor.ts",
-      "sha256": "e61c9f33eab6022c92ae10c02e9386c42581cb7d39ddba9651f22f04b348b449",
-      "size": 37369,
+      "sha256": "6cf5aa19d94c372f694683085514b513860b1c9b86a984b0ecee86eadeb87a2e",
+      "size": 42607,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-settings.ts",
-      "sha256": "f6d331238e39f6ba3d46367d65c4fd9937fb27478c6e9a40d2f73b3add0f0def",
-      "size": 23987,
+      "sha256": "35fcd736561e3c584839424675fa459f9e98ab7d5bebe697cddabaaac9bec433",
+      "size": 28628,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-stage-schema.ts",
-      "sha256": "377f1f3f5f8cb6314de345eda6c675009b890f989e3b3c4461f4d64dc0851a7b",
-      "size": 31566,
+      "sha256": "9d84bd9efed5734a65ed5fa0ff3707a111ae90fc3438a1e7eebeff6bfe597beb",
+      "size": 31573,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-state.ts",
-      "sha256": "0011fde3f28802579a47fa97f2f6024ba1dd9b97bea4661bf0153b6a46308fcf",
-      "size": 294557,
+      "sha256": "d55c37b04ca0a7bab41fb7fc431110a1171f715cc555d7e67c20912c4e8e78a8",
+      "size": 334299,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-steering.ts",
-      "sha256": "4362ccc0b4891082bb7e45059aa55944610cf978ba495bc31ec296eb67e52ba6",
-      "size": 4455,
+      "sha256": "6a447152574b98851204748d8bb68ea1b63c4790e261da0758d820785a034a0a",
+      "size": 5076,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-swarm-checkpoints.ts",
-      "sha256": "755078a1669a5d5a1bad3ad4302a53fd9e72a45f83773a8ac4eb269aad2bee6c",
-      "size": 18898,
+      "sha256": "4b1e4028a0f90aa8fcc5d596ef492f43752f6fe804680221a36ae189de8f6eae",
+      "size": 24734,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-swarm.ts",
-      "sha256": "f95b3d02ccd144c64cace0d35df58e76d6a9679d06411a90f437b6c3b592d60c",
-      "size": 131444,
+      "sha256": "17c321786c588a8589aa708f9a3c7a11261cf8fe53a7665de66c32156ad85189",
+      "size": 136411,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-testing-posture.ts",
-      "sha256": "c1b07fa7af39a3777a7206d0c4ef5ccd5ad322996790f45a6ebdb388f78fb749",
-      "size": 172896,
+      "sha256": "1d36943d9b29472d0ed62335d91c791a409075aba0858267431c7659a13568b7",
+      "size": 235778,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-tiers.ts",
-      "sha256": "6f5df21739e8f26041e4dd742e969731dffcef42c8a7012156528fced2198eb2",
-      "size": 14704,
+      "sha256": "4f5fb7bc83b6f2852859e7834191cb943d8cb36edf9da272b60856598dcec23b",
+      "size": 14861,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-transaction.ts",
-      "sha256": "7dbff843d92d8ad5584265e7c8993d2c42f655d7fd6c1ae24d73b58266991e06",
-      "size": 22265,
+      "sha256": "5ae02f22570cdb245352bb6ab25de8c9b15c421669d230804d0bf80bd08fe756",
+      "size": 37547,
+      "ownership": "framework"
+    },
+    {
+      "path": ".kiro/tools/aidlc-uninstall-plan.ts",
+      "sha256": "cafdd197d5c13f278cdc3c4e0a7ae92d75bfe68b1ff21e3190a1ed4a773f713e",
+      "size": 18185,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-unit.ts",
-      "sha256": "9dfe99a07d3fff5bd7402e3ca6b893c68d2bab56871527fe3608adb72199a99b",
-      "size": 116980,
+      "sha256": "85f93338de81a648f093c0a02f3000db1a95fe636b03e4cf8a73c2d786e50096",
+      "size": 118146,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-update.ts",
-      "sha256": "e67dab81d50c3a2fe2a296d055e899bd6afae597d7cc8da169eb613fabf476fb",
-      "size": 9613,
+      "sha256": "66118ab648db6de27cab6715bf93cb89538f03b14700f90ea9be1760a1750acb",
+      "size": 10823,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-usage.ts",
-      "sha256": "4312e47b456a8c5cbe4af84ac6d59a6d25e8b52a4cfc473c9f3108d929bff945",
-      "size": 70397,
+      "sha256": "1ce1518e8840a065cd6731d8ac532ef5fc0c73abe330db0a469f3bf4ac3adfcb",
+      "size": 75465,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-utility.ts",
-      "sha256": "8c001b2ea2f2f5b5611676dc716879c5d850425b5c350433d4d4ebb80ac242fc",
-      "size": 400172,
+      "sha256": "f70500d9f749463aed4981adc528fa71701d2f8c729ffe646905ab374c274188",
+      "size": 548923,
       "ownership": "framework"
     },
     {
@@ -1788,26 +1854,26 @@
     },
     {
       "path": ".kiro/tools/aidlc-validity.ts",
-      "sha256": "81d6941311e57a17621e6b4fe09953223334978edf12d67bb3319e84bb35c5ba",
-      "size": 23951,
+      "sha256": "cad16bf0513f6e19a7fba67998b5ef7afe9449636b58152cb388ed7ce2ad5e0a",
+      "size": 29098,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-version.ts",
-      "sha256": "5a3a2f771eae4e36c0ee5c10bc9fc8ba0d7221c4e193e820c0f583ffa9ee738f",
+      "sha256": "c9ca4327d8163a97fbddfc5017569b5920645f16cc04aa9b73d28c0fe544643f",
       "size": 258,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-windows-uninstall.ts",
-      "sha256": "025f4d168296825d17e2b47967853f16176603bad85a230859064600d1d00ab4",
-      "size": 14795,
+      "sha256": "9aa1e3407c3737888d4ff3f0dbbced0d8b4656b3cff85fcf22d87f545cd6a8bf",
+      "size": 57839,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-workspace-doctor.ts",
-      "sha256": "9ecbd85799ae8d8569be6219971969a8489939753cac8a0865398c90e3bedf3a",
-      "size": 7797,
+      "sha256": "601f0d37eb4e33ea4f6126063f71a6263d2d68713fad84cf8d1cfd42b1027ef2",
+      "size": 8010,
       "ownership": "framework"
     },
     {
@@ -1818,20 +1884,20 @@
     },
     {
       "path": ".kiro/tools/aidlc-workspace-sync.ts",
-      "sha256": "f70a18ee762046f72179cf1128b3894421b77755dcb000ad6bad1d2df6706f5b",
-      "size": 37784,
+      "sha256": "3d0ebeddeff74723870a3890c61f575010a757f55d66d3c32d85cc7a00a79ea2",
+      "size": 39015,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc-worktree.ts",
-      "sha256": "fe7bfba303be5c2b4e18ea0717f5b35d640ee1070f2725c019e5c4c1edc39ba4",
-      "size": 150542,
+      "sha256": "8eb789026f73ccd33e1bbd3ac76b00e8655b9fcc8336cee7fbfa7ba1bf3a4c7a",
+      "size": 163303,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/aidlc.ts",
-      "sha256": "6f5b3fc35752003767555ca7869256288ccd5bac502bda3a7f6999e57ff8ebd5",
-      "size": 101801,
+      "sha256": "9e57e88576d79967f4d4ef334bbd7f587fffc2150d50e99c9df44b04d53c8b0d",
+      "size": 122583,
       "ownership": "framework"
     },
     {
@@ -1842,19 +1908,19 @@
     },
     {
       "path": ".kiro/tools/data/aidlc-projection.json",
-      "sha256": "c5722b30355c26cfe2acc599f68f8ac6e33a9b6e70434736fc105e9ad2921276",
-      "size": 2244,
+      "sha256": "53e8fac19da01de919fe94aa23a5d35833b01500651187648fe0a1b1f0e63233",
+      "size": 2584,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/data/aidlc-settings.schema.json",
-      "sha256": "f850ca7faecba227899f901e6b42c00d794cce525b2dedb48351af96a343678e",
-      "size": 5598,
+      "sha256": "a515b7e38ecf5d5d10cd1ead68bb09b6873600bf16dd982197c51aa35882be0a",
+      "size": 5696,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/data/aidlc-stamp.json",
-      "sha256": "384b6ac5ab86798e50fed4df4fcab8dd2dd96fd17028944dbccc8567b8ce1602",
+      "sha256": "2a0bfd6b210d7441a7201f0a338369529e23b459344306056ffafe07735873bc",
       "size": 108,
       "ownership": "framework"
     },
@@ -1866,14 +1932,14 @@
     },
     {
       "path": ".kiro/tools/data/harness.json",
-      "sha256": "b6391420dfc9f5272abd100faa5b674e7712a3d03ddfaeb8bbeb648e7540ad73",
-      "size": 219,
+      "sha256": "26ba6ca841b73eb3a2216f16c964bd3177a18005b927b47ff40fac6fbd555f80",
+      "size": 1692,
       "ownership": "merge"
     },
     {
       "path": ".kiro/tools/data/memory-seed/org.md",
-      "sha256": "6668f09b1498f1235976967e8926aafa4332e2fcccfe347a8dbb6352e82b0a5c",
-      "size": 15198,
+      "sha256": "d478a2eb0ec6559803e6fe19e796fb65cdfd8d3ab53140fd5595f080714166d5",
+      "size": 15361,
       "ownership": "framework"
     },
     {
@@ -1902,14 +1968,14 @@
     },
     {
       "path": ".kiro/tools/data/memory-seed/project.md",
-      "sha256": "de978a55f5863046be53e94979b1d0adb59d1756665493f5325dc7728d85ebb1",
-      "size": 2215,
+      "sha256": "8c976cee0950a86f87be59fb0b6b7fb24f8177652fa8594068597602ada7722b",
+      "size": 2358,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/data/memory-seed/team.md",
-      "sha256": "c1b9d61287075355e504b1e9f451ef10fce68ae75c38ee136f84501cb0112767",
-      "size": 1592,
+      "sha256": "5d412ec7fda855bebb73ed45fcff10c64bcc4fea2075c00f3b5b861cafea647d",
+      "size": 1749,
       "ownership": "framework"
     },
     {
@@ -1920,8 +1986,8 @@
     },
     {
       "path": ".kiro/tools/data/model-rates.json",
-      "sha256": "05b7376b63f583b46e495f1bbb3666d85260c74058555664a05fb2a2ffa35bc5",
-      "size": 1720,
+      "sha256": "aac08ba32a07a104a1d0f583856e424283895a23a4247dbe87a885de83b5269b",
+      "size": 2481,
       "ownership": "framework"
     },
     {
@@ -1938,20 +2004,26 @@
     },
     {
       "path": ".kiro/tools/data/plugin-hooks-template/compose.ts",
-      "sha256": "34dd74fb0460aa5b48d9ed354c9b97060819c5c7fa873d2cbdc7c27bea9ccc86",
-      "size": 113794,
+      "sha256": "9105436aea015465fd533e591b33e12461b65b075fc08f0e5b3a32f81a518eac",
+      "size": 116483,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/data/plugin-targets.json",
-      "sha256": "62e091fa90c31ce9d160c36cd4930b860caec85c4b0bbf1f978dd084f4146bed",
-      "size": 1720,
+      "sha256": "187e3afda6eb26f0e2def262887d75113de2977680e1fb3273e059d14a1ad262",
+      "size": 1737,
+      "ownership": "framework"
+    },
+    {
+      "path": ".kiro/tools/data/root-blocks/agents",
+      "sha256": "6d3bf5865f1836575715ea93d0042b9d08bcab918cc9a17a142848fe44e88bc7",
+      "size": 7767,
       "ownership": "framework"
     },
     {
       "path": ".kiro/tools/data/root-blocks/gitignore",
-      "sha256": "af1b98a4b8c0e288aa8177655495b4a65220dbed2e149a67780aff1e8f379c9d",
-      "size": 3815,
+      "sha256": "28a69800dcac189aa2a976820db237b45bcf6dd7d7e6d4fae5c1603225b9957a",
+      "size": 759,
       "ownership": "framework"
     },
     {
@@ -1962,8 +2034,8 @@
     },
     {
       "path": ".kiro/tools/data/stage-graph.json",
-      "sha256": "90dae254c90a6d7095f9398b0f82ac360b24b4c2b2ff830552c7564030f1cffa",
-      "size": 90743,
+      "sha256": "141728e00658f6f69e68eda59305fe582a2b49c750fd6ed824902da0ebf15d53",
+      "size": 90703,
       "ownership": "framework"
     },
     {
@@ -1973,21 +2045,9 @@
       "ownership": "framework"
     },
     {
-      "path": "AGENTS.md",
-      "sha256": "6de1298dfa4c2b6916f66d372b844faf23481c8f258eedd595c1423dab8e106d",
-      "size": 7634,
-      "ownership": "merge"
-    },
-    {
-      "path": "aidlc/active-space",
-      "sha256": "01666ec060466c14b9fa06c613fbac449163f2a2017558fe16526209ab78c6b0",
-      "size": 8,
-      "ownership": "shell"
-    },
-    {
       "path": "aidlc/spaces/default/memory/org.md",
-      "sha256": "6668f09b1498f1235976967e8926aafa4332e2fcccfe347a8dbb6352e82b0a5c",
-      "size": 15198,
+      "sha256": "d478a2eb0ec6559803e6fe19e796fb65cdfd8d3ab53140fd5595f080714166d5",
+      "size": 15361,
       "ownership": "shell"
     },
     {
@@ -2012,18 +2072,6 @@
       "path": "aidlc/spaces/default/memory/phases/operation.md",
       "sha256": "2ca872806259b476e5fc10896d39b3461cae4a80e173e4a7af122eeb0c7e66b9",
       "size": 1320,
-      "ownership": "shell"
-    },
-    {
-      "path": "aidlc/spaces/default/memory/project.md",
-      "sha256": "de978a55f5863046be53e94979b1d0adb59d1756665493f5325dc7728d85ebb1",
-      "size": 2215,
-      "ownership": "shell"
-    },
-    {
-      "path": "aidlc/spaces/default/memory/team.md",
-      "sha256": "c1b9d61287075355e504b1e9f451ef10fce68ae75c38ee136f84501cb0112767",
-      "size": 1592,
       "ownership": "shell"
     },
     {

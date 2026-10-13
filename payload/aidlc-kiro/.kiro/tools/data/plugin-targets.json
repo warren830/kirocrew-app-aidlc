@@ -33,6 +33,7 @@
       ".aidlc",
       ".github",
       ".gitignore",
+      ".vscode",
       "AGENTS.md",
       "aidlc"
     ]

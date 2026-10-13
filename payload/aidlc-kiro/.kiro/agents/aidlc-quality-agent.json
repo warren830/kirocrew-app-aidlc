@@ -21,8 +21,49 @@
   "toolsSettings": {
     "execute_bash": {
       "allowedCommands": [
-        "bun (run )?[\"']?\\.kiro/tools/[A-Za-z0-9._-]+\\.ts[\"']?( .*)?",
-        "date -u( .*)?"
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? engine( .*)?",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? doctor",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? doctor --verbose",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? version",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? --doctor",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? --doctor --verbose",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? --version",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? status",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? --status",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config --help",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config --show",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config --show --json",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config models --show",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config models --show --json",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config models --help",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config runtime --show",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config runtime --show --json",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config runtime --help",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config providers --show",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config providers --show --json",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config providers --help",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config trust --show",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config trust --show --json",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config trust --help",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config flags --show",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config flags --show --json",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config flags --help",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config project --show",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config project --show --json",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config project --help",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config flags --clear-bypass AIDLC_SKIP_ARTIFACT_GUARD --yes",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config flags --clear-bypass AIDLC_SKIP_REVISION_BACKSTOP --yes",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config flags --clear-bypass AIDLC_SKIP_SUMMARY_CONFIRMATION_GUARD --yes",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config flags --clear-bypass AIDLC_SKIP_HUMAN_PRESENCE_GUARD --yes",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config flags --clear-bypass AIDLC_DISABLE_ENSEMBLE_EVIDENCE --yes",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config flags --clear-bypass AIDLC_DISABLE_PLAN_APPROVAL_GUARD --yes",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config flags --clear-bypass AIDLC_DISABLE_REVIEWER_SCOPE_HOOK --yes",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config flags --clear-bypass AIDLC_DISABLE_REVIEW_FREEZE_HOOK --yes",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config flags --clear-bypass AIDLC_DISABLE_USAGE_TRACKING --yes",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config flags --clear-bypass AIDLC_DISABLE_SENSORS --yes",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config flags --clear-bypass AIDLC_DISABLE_LEARNINGS --yes",
+        "bun (run )?[\"']?\\.kiro/tools/aidlc\\.ts[\"']? config flags --clear-bypass AIDLC_DISABLE_SUMMARY_CONFIRMATION --yes",
+        "bun (run )?[\"']?\\.kiro/tools/(aidlc-attest|aidlc-audit|aidlc-bolt|aidlc-completions|aidlc-graph|aidlc-jump|aidlc-knowledge|aidlc-learnings|aidlc-log|aidlc-orchestrate|aidlc-plugin|aidlc-review-brief|aidlc-runner-gen|aidlc-runtime|aidlc-sensor-claim-sources|aidlc-sensor-linter|aidlc-sensor-required-sections|aidlc-sensor-traceability|aidlc-sensor-type-check|aidlc-sensor-upstream-coverage|aidlc-sensor|aidlc-state|aidlc-swarm|aidlc-testing-posture|aidlc-unit|aidlc-utility|aidlc-validate|aidlc-workspace-sync|aidlc-worktree)\\.ts[\"']?( .*)?"
       ],
       "deniedCommands": [
         "([^\\s]*/)?rm( [^\\s]+)* -[A-Za-z]*[rR][A-Za-z]*( .*)?",
@@ -47,34 +88,34 @@
       {
         "matcher": "execute_bash",
         "command": "bun .kiro/tools/aidlc.ts engine adapter kiro state-transition-guard aidlc-quality-agent",
-        "timeout_ms": 15000
+        "timeout_ms": 1800000
       },
       {
         "matcher": "fs_write",
         "command": "bun .kiro/tools/aidlc.ts engine adapter kiro review-freeze",
-        "timeout_ms": 15000
+        "timeout_ms": 1800000
       },
       {
         "matcher": "execute_bash",
         "command": "bun .kiro/tools/aidlc.ts engine adapter kiro review-freeze",
-        "timeout_ms": 15000
+        "timeout_ms": 1800000
       },
       {
         "matcher": "fs_write",
         "command": "bun .kiro/tools/aidlc.ts engine adapter kiro plan-approval-guard",
-        "timeout_ms": 15000
+        "timeout_ms": 1800000
       },
       {
         "matcher": "execute_bash",
         "command": "bun .kiro/tools/aidlc.ts engine adapter kiro plan-approval-guard",
-        "timeout_ms": 15000
+        "timeout_ms": 1800000
       }
     ],
     "postToolUse": [
       {
         "matcher": "fs_write",
         "command": "bun .kiro/tools/aidlc.ts engine adapter kiro audit-and-sensors",
-        "timeout_ms": 120000
+        "timeout_ms": 3600000
       }
     ]
   }

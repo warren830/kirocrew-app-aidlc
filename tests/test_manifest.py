@@ -162,9 +162,11 @@ def test_the_scope_grid_is_a_merge_target_keyed_on_the_scopes_the_payload_ships(
 def test_the_harness_json_merge_target_manages_the_identity_keys_and_nothing_else(payload_manifest):
     """``/aidlc plugin select`` appends ``plugins``; the literal list makes a newly shipped key a bump to read first."""
     spec, shipped = merge_spec(payload_manifest, ".kiro/tools/data/harness.json")
-    # 2.10.0 added four distribution-descriptor keys; none is operator-edited, all are refreshed by the engine
-    assert spec["managedKeys"] == shipped == ["configNextStep", "distribution", "harnessDir", "name", "productName",
-                                              "rulesSubdir", "schemaVersion"]
+    # 2.10.0 added four distribution-descriptor keys and 2.11.0 two more (``hookActivation``, the advice the hooks
+    # print, and ``kiroLayout``); none is operator-edited, and upstream's own refresh takes every one of them from
+    # the new tree (``HARNESS_IDENTITY_KEYS`` in ``aidlc-init.ts``)
+    assert spec["managedKeys"] == shipped == ["configNextStep", "distribution", "harnessDir", "hookActivation",
+                                              "kiroLayout", "name", "productName", "rulesSubdir", "schemaVersion"]
     assert "plugins" not in spec["managedKeys"]
 
 

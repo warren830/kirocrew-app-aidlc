@@ -196,6 +196,10 @@
           "type": "integer",
           "minimum": 1
         },
+        "questionRetentionDays": {
+          "type": "integer",
+          "minimum": 1
+        },
         "bypasses": {
           "type": "array",
           "uniqueItems": true,

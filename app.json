@@ -92,7 +92,7 @@
   },
   "extra": {
     "bundledAidlc": {
-      "engineVersion": "2.10.0",
+      "engineVersion": "2.11.0",
       "harness": "kiro",
       "manifest": "payload/manifest.json",
       "license": "MIT-0",
