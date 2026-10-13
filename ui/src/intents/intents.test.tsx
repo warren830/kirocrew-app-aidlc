@@ -589,6 +589,11 @@ describe('the canonical conversation panel', () => {
       await screen.findByText('Filed in the sidebar under Checkout / 250901-guest-checkout.'),
     ).toBeInTheDocument()
     expect(apiCalls.map((call) => call.path)).not.toContain(`${INTENT_PATH}/run`)
+    // The panel names the conversation by the title it just set, not "Unavailable" until a re-read.
+    const titled = apiCalls.find((call) => call.path.endsWith('/title'))
+    const title = (titled?.body as { title?: string } | undefined)?.title
+    expect(title).toBeTruthy()
+    expect(screen.getByText(title as string)).toBeInTheDocument()
   })
 
   it('starts an already bound, idle intent from the panel', async () => {
@@ -835,7 +840,7 @@ describe('the canonical conversation panel', () => {
   it('moves a bound intent to a candidate the backend offered, with the backend\'s own reason', async () => {
     setApiRoutes({
       [`POST ${INTENT_PATH}/session/takeover/preview`]: () => ({
-        candidates: [{ slot: slot({ key: 'aidlc-hand-made' }), reason: 'project_match' }],
+        candidates: [{ slot: slot({ key: 'aidlc-hand-made', title: 'Guest checkout' }), reason: 'project_match' }],
         current: { slot_key: 's1' },
       }),
       [`POST ${INTENT_PATH}/session`]: () => ({
@@ -858,6 +863,8 @@ describe('the canonical conversation panel', () => {
       }),
     )
     expect(screen.getByText('ses_3')).toBeInTheDocument()
+    // The candidate came with its title, so the panel names the conversation without asking the host again.
+    expect(screen.getByText('Guest checkout')).toBeInTheDocument()
   })
 })
 

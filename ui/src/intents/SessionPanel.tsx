@@ -230,15 +230,19 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
   const wanted = canonicalSlotKey(intent.repo_id, intent.intent_dir)
   const run = useStartRun(api, () => onChanged())
   const navigate = useNavigate()
-  // The title the person sees in KiroCrew's sidebar names the conversation; its keys are only identifiers. A bind
-  // answer carries it; a panel opened on an intent that was already bound asks the host once.
+  // The title the person sees in KiroCrew's sidebar names the conversation; its keys are only identifiers. Create
+  // knows the title it set and a bind answer may carry one; they outlive the row catching up, which carries none.
+  // Otherwise the panel asks the host once.
+  const knownTitle = bound
+    ? bound.title || (confirmed?.value?.slotKey === bound.slotKey ? confirmed.value.title : null) || null
+    : null
   const hostSlots = useResource<HostSlot[]>(
-    row && !confirmed ? `session-title:${row.slotKey}` : null,
+    bound && !knownTitle ? `session-title:${bound.slotKey}` : null,
     useCallback((signal) => api.listSlots({ signal }), [api]),
     { interval: 0 },
   )
   const boundTitle = bound
-    ? bound.title || hostSlots.data?.find((slot) => slot.key === bound.slotKey)?.title || null
+    ? knownTitle || hostSlots.data?.find((slot) => slot.key === bound.slotKey)?.title || null
     : null
   const kind = startKind(intent)
   // A start this panel just delivered is running even before the row says so.
@@ -255,14 +259,14 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
     )
   }, [])
 
-  const remember = useCallback((binding: BindingView, slot?: SlotView | null) => {
+  const remember = useCallback((binding: BindingView, slot?: SlotView | null, setTitle?: string) => {
     setConfirmed({
       value: binding.slot_key
         ? {
             slotKey: binding.slot_key,
             sessionKey: binding.session_key ?? slot?.session_key ?? '',
             running: slot?.running ?? false,
-            title: slot?.title || null,
+            title: slot?.title || setTitle || null,
           }
         : null,
     })
@@ -298,7 +302,8 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
       const key = typeof answered === 'string' && answered ? answered : wanted
       step = 2
       setAt(step)
-      await api.setSlotTitle(key, `${repo.label} / ${intent.slug || intent.intent_dir}`)
+      const title = `${repo.label} / ${intent.slug || intent.intent_dir}`
+      await api.setSlotTitle(key, title)
       step = 3
       setAt(step)
       // Born in the repository's folder, the slot already has the repository as its project; setting it
@@ -314,7 +319,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
       step = 5
       setAt(step)
       const answer = await api.setSession(intent.repo_id, intent.intent_key, key)
-      remember(answer.binding, answer.slot)
+      remember(answer.binding, answer.slot, title)
       setSlots(null)
       onChanged(t('intents.session.done.bound', { slot: answer.binding.slot_key ?? key }))
       step = 6
@@ -356,7 +361,8 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
       start('adopt')
       try {
         const answer = await api.setSession(intent.repo_id, intent.intent_key, slotKey)
-        remember(answer.binding, answer.slot)
+        // The picker listed the slot with its title; the bind answer need not repeat it.
+        remember(answer.binding, answer.slot, slots?.find((slot) => slot.key === slotKey)?.title)
         setSlots(null)
         onChanged(t('intents.session.done.bound', { slot: answer.binding.slot_key ?? slotKey }))
       } catch (caught) {
@@ -366,7 +372,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
         setBusy(null)
       }
     },
-    [api, intent, remember, onChanged, t, fail, start],
+    [api, intent, remember, onChanged, t, fail, start, slots],
   )
 
   const unbind = useCallback(async () => {
@@ -400,7 +406,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
       start('move')
       try {
         const answer = await api.setSession(intent.repo_id, intent.intent_key, slotKey)
-        remember(answer.binding, answer.slot)
+        remember(answer.binding, answer.slot, candidates?.find((candidate) => candidate.slot.key === slotKey)?.slot.title)
         setCandidates(null)
         onChanged(t('intents.session.done.moved', { slot: answer.binding.slot_key ?? slotKey }))
       } catch (caught) {
@@ -409,7 +415,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
         setBusy(null)
       }
     },
-    [api, intent, remember, onChanged, t, fail, start],
+    [api, intent, remember, onChanged, t, fail, start, candidates],
   )
 
   const offers = slots ? adoptableSlots(slots, repo.canonical_path) : null
