@@ -462,6 +462,29 @@ describe('gate template', () => {
     expect(within(block).queryByText(en.t('changes.status.unchanged'))).toBeNull()
   })
 
+  it('shows zero-Unit code generation from its traceability, and says where the file list came from', async () => {
+    const intent = `${BASE}/repos/r_1/intents/default~250901-guest`
+    setApiRoutes({
+      [`GET ${intent}/artifacts/art_1`]: () => ({
+        artifact: artifact(), content: '# Plan\n', encoding: 'utf-8', truncated: false, review: null, toc: [],
+        prior: { available: false, source: null, diff: null },
+      }),
+      [`GET ${intent}/changes*`]: () => ({
+        stage: 'code-generation', unit: null, manifest: null, listed_by: 'traceability', available: true,
+        reason: null, truncated: false, manifest_readable: true,
+        files: [{ path: 'textstats.py', status: 'modified', additions: 1, deletions: 1, truncated: false,
+                  diff: '--- a/textstats.py\n+++ b/textstats.py\n@@ -1 +1 @@\n-a\n+b\n' }],
+      }),
+    })
+    const traced = artifact({ artifact_id: 'art_3', name: 'traceability.json', relpath: 'record/traceability.json' })
+    const base = card()
+    mount(GateTemplate, card({ stage: { ...base.stage!, slug: 'code-generation', unit: null },
+      evidence: { ...base.evidence, artifacts: [artifact(), traced] } }))
+    const block = await screen.findByRole('region', { name: en.t('changes.label', { stage: 'code-generation' }) })
+    expect(within(block).getByText('textstats.py')).toBeInTheDocument()
+    expect(within(block).getByText(en.t('changes.fromTraceability'), { exact: false })).toBeInTheDocument()
+  })
+
   it('asks for no code change on a stage without a source manifest', () => {
     setApiRoutes({})
     mount(GateTemplate, card())
@@ -1590,7 +1613,7 @@ describe('advisor block', () => {
     expect(screen.getByText(en.t('template.command.dispatch'))).toBeInTheDocument()
     expect(screen.getByText(en.t('template.command.stageSubCommit'))).toBeInTheDocument()
     unmount()
-    mount(DecisionTemplate, card({ ...commit, status: 'Answered' }))
+    mount(DecisionTemplate, card({ ...commit, status: 'ResolvedNoTransition' }))
     expect(screen.getByText(en.t('template.command.dispatched'))).toBeInTheDocument()
     expect(screen.queryByText(en.t('template.command.dispatch'))).toBeNull()
   })

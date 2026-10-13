@@ -1,5 +1,6 @@
 /**
- * The code a stage wrote, compared with HEAD (`GET …/changes`, read from the stage's `source-manifest.json`).
+ * The code a stage wrote, compared with HEAD (`GET …/changes`, read from the stage's `source-manifest.json`, or,
+ * for zero-Unit code generation, which AI-DLC 2.11 gives no manifest, from its `traceability.json` targets).
  *
  * A code-generation gate asks the human to approve code, while the artifact beside it is the plan its
  * reviewer judged. So the gate also lists every file the stage says it wrote, with its status, its line
@@ -22,10 +23,15 @@ import { DiffLines } from './ArtifactDiff'
 
 /** The record file a code stage lists its writes in. */
 export const SOURCE_MANIFEST = 'source-manifest.json'
+/** What zero-Unit code generation names its files in instead: 2.11 writes a manifest only for a Unit. */
+export const TRACEABILITY = 'traceability.json'
+const CODE_STAGE = 'code-generation'
 
-/** Does this card's stage record carry a source manifest, so that its code change can be shown? */
-export function hasSourceManifest(card: ActionCard): boolean {
-  return card.evidence.artifacts.some((meta) => meta.name === SOURCE_MANIFEST)
+/** Does this card's stage record name the files it wrote, so that its code change can be shown? */
+export function hasWrittenSource(card: ActionCard): boolean {
+  const names = card.evidence.artifacts.map((meta) => meta.name)
+  if (names.includes(SOURCE_MANIFEST)) return true
+  return card.stage?.slug === CODE_STAGE && !card.stage.unit && names.includes(TRACEABILITY)
 }
 
 export function useSourceChanges(card: ActionCard, enabled: boolean): Resource<SourceChangesResponse> {
@@ -107,8 +113,11 @@ export function SourceChanges({ card }: { card: ActionCard }) {
       </p>
     )
   }
+  const traced = data.listed_by === 'traceability'
   if (data.files.length === 0) {
-    return <p className="studio-muted">{data.manifest_readable ? t('changes.none') : t('changes.noManifest')}</p>
+    const key = traced ? (data.manifest_readable ? 'changes.noneTraced' : 'changes.noTraceability')
+      : (data.manifest_readable ? 'changes.none' : 'changes.noManifest')
+    return <p className="studio-muted">{t(key)}</p>
   }
   const added = data.files.reduce((sum, file) => sum + file.additions, 0)
   const removed = data.files.reduce((sum, file) => sum + file.deletions, 0)
@@ -119,6 +128,9 @@ export function SourceChanges({ card }: { card: ActionCard }) {
         {t('changes.summary', { n: fmt.number(data.files.length), added: fmt.number(added),
           removed: fmt.number(removed) })}
       </p>
+      {traced ? (
+        <p className="studio-muted studio-diff-note"><Icon name="info" size={13} /> {t('changes.fromTraceability')}</p>
+      ) : null}
       <ul className="studio-srcchange-list">
         {data.files.map((change) => <FileChange change={change} key={change.path} />)}
       </ul>

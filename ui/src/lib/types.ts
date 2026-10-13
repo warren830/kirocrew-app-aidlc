@@ -330,10 +330,13 @@ export interface SourceChange {
   /** A `binary` file's own change (`added`/`modified`/`deleted`), since its diff is not shown. */
   change?: 'added' | 'modified' | 'deleted'
 }
-/** `GET …/{intent}/changes?stage=&unit=`: `manifest` is `null` when the stage listed no writes. */
+/**
+ * `GET …/{intent}/changes?stage=&unit=`: `manifest` is `null` when the stage listed no writes. `listed_by` names the
+ * file that listed them: a source manifest, or zero-Unit code generation's traceability (2.11 writes no manifest).
+ */
 export interface SourceChangesResponse {
-  stage: string; unit: string | null; manifest: string | null; available: boolean; reason: string | null
-  files: SourceChange[]; truncated: boolean; manifest_readable: boolean
+  stage: string; unit: string | null; manifest: string | null; listed_by: 'manifest' | 'traceability' | null
+  available: boolean; reason: string | null; files: SourceChange[]; truncated: boolean; manifest_readable: boolean
 }
 export interface ArtifactResponse { artifact: ArtifactMeta; content: string | null; encoding: 'utf-8' | 'binary'; truncated: boolean; review: { verdict: string | null; findings: ReviewFinding[] } | null; toc: { level: number; text: string; anchor: string }[]; prior: { available: boolean; source: 'git' | null; diff: string | null } }
 export interface ReviewResponse { stage: string | null; verdict: string | null; findings: ReviewFinding[]; receipts: { event: string; ts: string; reviewer: string | null; iteration: number | null; verdict: string | null; fingerprint: string | null }[]; review_class: string | null; reviewer: string | null; revisions: number }

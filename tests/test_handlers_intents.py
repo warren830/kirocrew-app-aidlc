@@ -174,8 +174,24 @@ def test_changes_needs_a_stage_and_says_when_it_listed_no_writes(api, repo):
     """The code a gate approves comes from the stage's source manifest; a stage without one names none."""
     assert refusal(api("GET", base(repo, "/changes"))) == (400, "bad_param")
     status, body = api("GET", base(repo, "/changes"), stage=STAGE)
-    assert status == 200 and body["manifest"] is None and body["files"] == []
+    assert status == 200 and body["manifest"] is None and body["files"] == [] and body["listed_by"] is None
     assert (body["stage"], body["unit"]) == (STAGE, None)
+
+
+def test_zero_unit_code_generation_lists_its_files_from_traceability(api, repo):
+    """2.11 writes no source manifest without a Unit, and the code gate lost its code; traceability names it."""
+    root = Path(repo.canonical_path)
+    record = root / "aidlc/spaces/default/intents" / INTENT / "construction/code-generation"
+    record.mkdir(parents=True, exist_ok=True)
+    (root / "wordcount.py").write_text("def word_count(text):\n    return len(text.split())\n")
+    (record / "traceability.json").write_text(json.dumps({"stage": "code-generation", "coverage": [
+        {"id": "FR1", "status": "OK", "target": "wordcount.py"}]}))
+    status, body = api("GET", base(repo, "/changes"), stage="code-generation")
+    assert status == 200 and body["listed_by"] == "traceability" and body["manifest"] is None
+    assert [row["path"] for row in body["files"]] == ["wordcount.py"] and body["manifest_readable"] is True
+    # a Unit's code stage still needs its own manifest: traceability is the zero-Unit listing only
+    status, body = api("GET", base(repo, "/changes"), stage="code-generation", unit="api")
+    assert status == 200 and body["listed_by"] is None and body["files"] == []
 
 def test_one_artifact_carries_its_content_review_and_table_of_contents(sv, api, repo):
     status, body = api("GET", base(repo, f"/artifacts/{artifact(sv, repo, 'requirements.md').artifact_id}"))

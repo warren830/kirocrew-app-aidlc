@@ -1,9 +1,11 @@
 """The source files a stage says it wrote, each compared with HEAD.
 
 AI-DLC lists what a code stage wrote in its record's ``source-manifest.json`` (``writes[].path``, repository
-relative). A gate on that stage asks the human to approve code, so the card shows the change itself beside the plan
-the reviewer judged. Read-only: the working tree goes through the guarded reader artifacts use (inside the
-repository, regular files, never a secret file, capped) and HEAD through git, never a copy Studio keeps.
+relative). 2.11 writes one only for a Unit; zero-Unit code generation names its files as the ``OK`` targets of its
+``traceability.json`` instead. A gate on that stage asks the human to approve code, so the card shows the change
+itself beside the plan the reviewer judged. Read-only: the working tree goes through the guarded reader artifacts
+use (inside the repository, regular files, never a secret file, capped) and HEAD through git, never a copy Studio
+keeps.
 """
 
 from __future__ import annotations
@@ -24,9 +26,10 @@ _CONTEXT_LINES = 3
 
 
 def read_changes(reader: Any, git: Any, repo: Path, manifest_relpath: str) -> dict[str, Any]:
-    """``{"available", "reason", "files", "truncated", "manifest_readable"}`` for one manifest. ``available``
-    is git's: without it nothing can be compared, so each listed path says ``unknown`` rather than "added"."""
-    paths, readable = _manifest_paths(reader, repo, manifest_relpath)
+    """``{"available", "reason", "files", "truncated", "manifest_readable"}`` for one listing: a source manifest,
+    or a zero-Unit stage's ``traceability.json``. ``available`` is git's: without it nothing can be compared, so
+    each listed path says ``unknown`` rather than "added"."""
+    paths, readable = _listed_paths(reader, repo, manifest_relpath)
     head = git.observe(repo)
     available = bool(head.available)
     files: list[dict[str, Any]] = []
@@ -44,35 +47,61 @@ def read_changes(reader: Any, git: Any, repo: Path, manifest_relpath: str) -> di
 
 
 def intent_written_paths(reader: Any, repo: Path) -> dict[str, str]:
-    """Each repository path an intent's ``source-manifest.json`` says it wrote, mapped to that intent's directory
-    (the first manifest naming it, in path order), so the Git panel can say a dirty file is an intent's code rather
-    than the person's own unrelated work. Bounded by ``MAX_SOURCE_MANIFESTS``; every read goes through ``reader``."""
+    """Each repository path an intent says it wrote, mapped to that intent's directory (the first listing naming
+    it, in path order), so the Git panel can say a dirty file is an intent's code rather than the person's own
+    unrelated work. The listings are every ``source-manifest.json``, and the ``traceability.json`` of zero-Unit code
+    generation, which writes no manifest. Bounded by ``MAX_SOURCE_MANIFESTS``; every read goes through ``reader``."""
     spaces = repo / "aidlc" / "spaces"
     if not spaces.is_dir() or spaces.is_symlink():
         return {}
-    found = sorted(spaces.glob(f"*/intents/*/**/{C.SOURCE_MANIFEST_NAME}"))[:C.MAX_SOURCE_MANIFESTS]
+    found = sorted([*spaces.glob(f"*/intents/*/**/{C.SOURCE_MANIFEST_NAME}"),
+                    *spaces.glob(f"*/intents/*/construction/{C.CODE_STAGE}/{C.TRACEABILITY_NAME}")])
     out: dict[str, str] = {}
-    for manifest in found:
-        rel = manifest.relative_to(repo).as_posix()
-        parts = rel.split("/")  # aidlc/spaces/<space>/intents/<intent>/…/source-manifest.json
+    for listing in found[:C.MAX_SOURCE_MANIFESTS]:
+        rel = listing.relative_to(repo).as_posix()
+        parts = rel.split("/")  # aidlc/spaces/<space>/intents/<intent>/…/<listing>
         if len(parts) < 7:
             continue
-        for path in _manifest_paths(reader, repo, rel)[0]:
+        for path in _listed_paths(reader, repo, rel)[0]:
             out.setdefault(path, parts[4])
     return out
 
 
-def _manifest_paths(reader: Any, repo: Path, relpath: str) -> tuple[list[str], bool]:
+def _listed_paths(reader: Any, repo: Path, relpath: str) -> tuple[list[str], bool]:
+    """``(paths, readable)`` from a source manifest's ``writes``, or a traceability file's ``OK`` targets."""
+    data, readable = _json(reader, repo, relpath)
+    if relpath.endswith(f"/{C.TRACEABILITY_NAME}"):
+        return _traceability_paths(data) if readable else ([], False)
+    return _manifest_paths(data) if readable else ([], False)
+
+
+def _json(reader: Any, repo: Path, relpath: str) -> tuple[Any, bool]:
     try:
         snapshot = reader.read_artifact(repo, relpath)
     except StudioError:
-        return [], False
+        return None, False
     if snapshot is None:
-        return [], False
+        return None, False
     try:
-        data = json.loads(snapshot.bytes.decode("utf-8"))
+        return json.loads(snapshot.bytes.decode("utf-8")), True
     except (UnicodeDecodeError, json.JSONDecodeError):
-        return [], False
+        return None, False
+
+
+def _traceability_paths(data: Any) -> tuple[list[str], bool]:
+    """Each workspace file an ``OK`` coverage row targets. A target under ``aidlc/`` is a record document, not
+    code, and an absolute one is not a workspace path."""
+    rows = data.get("coverage") if isinstance(data, dict) else None
+    paths: list[str] = []
+    for row in rows if isinstance(rows, list) else ():
+        target = row.get("target") if isinstance(row, dict) else None
+        if (isinstance(target, str) and row.get("status") == "OK" and target.strip()
+                and not target.startswith(("aidlc/", "/")) and target not in paths):
+            paths.append(target)
+    return paths, isinstance(rows, list)
+
+
+def _manifest_paths(data: Any) -> tuple[list[str], bool]:
     writes = data.get("writes") if isinstance(data, dict) else None
     paths: list[str] = []
     for entry in writes if isinstance(writes, list) else ():

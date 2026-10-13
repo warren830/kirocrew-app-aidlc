@@ -394,6 +394,11 @@ PLAN_ANSWER_LETTER_RE = re.compile(r"^[A-Z]\.[ \t]+")
 PLAN_REQUEST_CHANGES_CHOICE = "Request Changes"
 #: What a code stage lists as written (``writes[].path``) in its record; a gate on it shows those files' change.
 SOURCE_MANIFEST_NAME = "source-manifest.json"
+#: 2.11 writes that manifest only for a Unit. Zero-Unit code generation binds the whole workspace instead, and its
+#: ``traceability.json`` names the files: every ``OK`` coverage target is "one existing workspace-relative
+#: implementation or test file".
+CODE_STAGE = "code-generation"
+TRACEABILITY_NAME = "traceability.json"
 MAX_SOURCE_CHANGE_FILES = 50
 #: Source manifests read to name which intent wrote a dirty file on the repository's Git panel.
 MAX_SOURCE_MANIFESTS = 200

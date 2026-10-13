@@ -26,5 +26,8 @@
   "changes.why.secret": "这是机密文件（例如 .env），Studio 从不显示其内容。",
   "changes.why.too_large": "文件过大，无法在这里比较。",
   "changes.why.unchanged": "工作区与上一次提交一致：这次修改已经提交（或本阶段没有改动这个文件）。",
-  "changes.why.unknown": "Git 无法判断这个文件是如何变化的。"
+  "changes.why.unknown": "Git 无法判断这个文件是如何变化的。",
+  "changes.fromTraceability": "没有 Unit 的工作，AI-DLC 不写源码清单，所以这里列出的是本阶段 traceability 指向的文件。改动了却没有对应任何需求的文件不会列出。",
+  "changes.noneTraced": "本阶段的 traceability 没有指向任何工作区文件。",
+  "changes.noTraceability": "无法读取本阶段的 traceability，Studio 因此说不出它写了哪些文件。"
 }

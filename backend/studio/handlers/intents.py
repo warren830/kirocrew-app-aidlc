@@ -148,8 +148,10 @@ async def get_artifact(services: Any, request: web.Request) -> web.Response:
 
 async def get_changes(services: Any, request: web.Request) -> web.Response:
     """The source files a stage lists in its ``source-manifest.json``, each diffed against HEAD: the code a
-    code-generation gate asks the human to approve, beside the plan its reviewer judged. ``manifest`` is ``null``
-    when the stage wrote no manifest (no code stage, or not reached yet)."""
+    code-generation gate asks the human to approve, beside the plan its reviewer judged. 2.11 writes no manifest for
+    zero-Unit work, so zero-Unit code generation is read from its ``traceability.json`` targets, and ``listed_by``
+    says which file named them. ``manifest`` is ``null`` when the stage wrote no manifest (no code stage, zero-Unit
+    work, or not reached yet)."""
     stage = query_str(request, "stage", pattern=C.STAGE_SLUG_RE)
     unit = query_str(request, "unit", pattern=C.UNIT_NAME_RE)
     if stage is None:
@@ -158,12 +160,15 @@ async def get_changes(services: Any, request: web.Request) -> web.Response:
     metas, _truncated = await asyncio.to_thread(services.projection.artifacts, snap)
     manifest = next((meta for meta in metas if meta.name == C.SOURCE_MANIFEST_NAME and meta.stage == stage
                      and (meta.unit or None) == unit), None)
-    body: dict[str, Any] = {"stage": stage, "unit": unit, "manifest": manifest.relpath if manifest else None}
-    if manifest is None:
+    listing = manifest or (next((meta for meta in metas if meta.name == C.TRACEABILITY_NAME and meta.stage == stage
+                                 and not meta.unit), None) if stage == C.CODE_STAGE and unit is None else None)
+    body: dict[str, Any] = {"stage": stage, "unit": unit, "manifest": manifest.relpath if manifest else None,
+                            "listed_by": None if listing is None else "manifest" if manifest else "traceability"}
+    if listing is None:
         return json_ok({**body, "available": True, "reason": None, "files": [], "truncated": False,
                         "manifest_readable": False})
     changes = await asyncio.to_thread(read_changes, services.reader, services.git, Path(repo.canonical_path),
-                                      manifest.relpath)
+                                      listing.relpath)
     return json_ok({**body, **changes})
 
 

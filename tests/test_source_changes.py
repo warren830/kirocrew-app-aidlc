@@ -130,3 +130,32 @@ def test_a_long_diff_is_cut_with_a_marker(read, studio, tmp_path, git_bin, monke
     monkeypatch.setattr(studio.constants, "MAX_SOURCE_CHANGE_DIFF_BYTES", 512)
     row = _by_path(read(repo))["big.py"]
     assert row["truncated"] is True and len(row["diff"]) <= 512
+
+
+TRACEABILITY = "aidlc/spaces/default/intents/i-1/construction/code-generation/traceability.json"
+
+
+def _traceability(repo: Path, rows: list) -> None:
+    target = repo / TRACEABILITY
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps({"stage": "code-generation", "upstream_ids": [], "coverage": rows}))
+
+
+def test_zero_unit_code_is_read_from_its_traceability_targets(studio, clock, tmp_path, git_bin):
+    """2.11 writes no source manifest without a Unit; its traceability's OK targets are the files it wrote."""
+    repo = _repo(tmp_path, git_bin)
+    (repo / "calc.py").write_text("def add(a, b):\n    return a + b + 0\n")
+    (repo / "test_calc.py").write_text("import unittest\n")
+    _traceability(repo, [
+        {"id": "FR1", "status": "OK", "target": "calc.py"}, {"id": "FR2", "status": "OK", "target": "calc.py"},
+        {"id": "NFR1", "status": "OK", "target": "test_calc.py"}, {"id": "FR3", "status": "GAP", "target": "x.py"},
+        {"id": "FR4", "status": "OK", "target": "aidlc/spaces/default/intents/i-1/inception/requirements.md"},
+        {"id": "FR5", "status": "OK", "target": "/etc/hosts"}, "not a row"])
+    reader = studio.aidlc_reader.AidlcReader(clock)
+    out = studio.source_changes.read_changes(reader, studio.git_observer.GitObserver(git_bin, clock), repo,
+                                             TRACEABILITY)
+    assert out["manifest_readable"] is True
+    assert [(row["path"], row["status"]) for row in out["files"]] == [("calc.py", "modified"),
+                                                                      ("test_calc.py", "added")]
+    # the Git panel names them as this intent's code too
+    assert studio.source_changes.intent_written_paths(reader, repo) == {"calc.py": "i-1", "test_calc.py": "i-1"}

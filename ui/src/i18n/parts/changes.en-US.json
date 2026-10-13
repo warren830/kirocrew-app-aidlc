@@ -26,5 +26,8 @@
   "changes.why.secret": "A secret file (such as .env); Studio never shows its content.",
   "changes.why.too_large": "Too large to compare here.",
   "changes.why.unchanged": "The working tree matches the last commit, so this change is already committed (or the stage left the file as it was).",
-  "changes.why.unknown": "Git could not say how this file changed."
+  "changes.why.unknown": "Git could not say how this file changed.",
+  "changes.fromTraceability": "AI-DLC writes no source manifest for work without Units, so these are the files this stage's traceability names. A file it changed without tracing a requirement to it is not listed.",
+  "changes.noneTraced": "This stage's traceability names no workspace file.",
+  "changes.noTraceability": "This stage's traceability could not be read, so Studio cannot say which files it wrote."
 }
