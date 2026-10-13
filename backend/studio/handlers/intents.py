@@ -184,7 +184,7 @@ async def get_review(services: Any, request: web.Request) -> web.Response:
         "verdict": verdict,
         "findings": [f.to_json() for f in findings],
         "receipts": [
-            {"event": event.event, "ts": event.timestamp,
+            {"event": event.event, "ts": event.timestamp, "stage": event.fields.get("Stage"),
              "reviewer": event.fields.get("Reviewer") or event.fields.get("Agent"),
              "iteration": _int_or_none(event.fields.get("Iteration")),
              "verdict": event.fields.get("Verdict") or event.fields.get("Result"),

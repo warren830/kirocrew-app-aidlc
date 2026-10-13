@@ -159,7 +159,11 @@ export function GateTemplate({ card, detail, draft, setDraft, refreshing, api, r
                 )}
               </>
             ) : (
-              <p className="studio-muted">{t('template.gate.noReview')}</p>
+              // A closed card shows what was stored when it was decided: no stored review is not proof that no
+              // reviewer ran, and a card stored before Studio read 2.11's review records has none.
+              <p className="studio-muted">
+                {t(['Queued', 'NotDelivered'].includes(card.status) ? 'template.gate.noReview' : 'template.gate.noReviewStored')}
+              </p>
             )}
           </Pane>
         </div>

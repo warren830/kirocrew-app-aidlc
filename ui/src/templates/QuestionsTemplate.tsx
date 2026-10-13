@@ -119,6 +119,8 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
   // A sent card's group is the one captured before the reply: its own answers are what was chosen, not the
   // (empty) form, so a closed card no longer reads "4 of 4 unanswered" with nothing marked.
   const sent = answerable ? null : card.submitted_answers
+  // Closed before anything was sent from it (the questions moved on, or the card was replaced): not a form.
+  const unsent = !answerable && !sent
   const chosen = (index: number) =>
     sent ? sent.find((answer) => answer.index === index) : draft.answers[String(index)]
   // Nothing is preselected: `summaryChoice` has a stored default because the payload builder needs one,
@@ -279,6 +281,8 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
       <DecisionBrief card={card} />
       {sent ? (
         <Consequence icon="check">{t('template.questions.sentSource')}</Consequence>
+      ) : unsent ? (
+        <Consequence icon="info">{t('template.questions.closedUnsent')}</Consequence>
       ) : view?.origin?.kind === 'audit' ? (
         <Consequence icon="doc">{t('template.questions.auditSource')}</Consequence>
       ) : view && !degraded && showGroup ? (
@@ -304,6 +308,8 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
         <div className="studio-qmetas">
           {sent ? (
             <Chip tone="ok" icon="check">{t('template.questions.sentCount', { n: sent.length })}</Chip>
+          ) : unsent ? (
+            <Chip>{t('template.questions.closedUnsentChip')}</Chip>
           ) : (
             <Chip tone={hasPending ? 'accent' : 'ok'} icon={hasPending ? 'question' : 'check'}>
               {unsupportedPending > 0

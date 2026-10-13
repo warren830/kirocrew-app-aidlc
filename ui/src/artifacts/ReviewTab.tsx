@@ -31,13 +31,15 @@ export interface ReviewTabProps {
   intentKey: string
   /** The action card's captured review block, when there is a card. */
   review?: ActionEvidence['review'] | null
+  /** The card's stage: its chip and its receipts. Without it, the intent's current stage and every receipt. */
+  stage?: string | null
   /** Route anchor: `f-<n>` highlights that finding. */
   anchor?: string
   /** Open the artifact at a finding's anchor — the caller switches the tab (visual spec §5.14). */
   onOpenAnchor?: (anchor: string) => void
 }
 
-export function ReviewTab({ repoId, intentKey, review, anchor, onOpenAnchor }: ReviewTabProps) {
+export function ReviewTab({ repoId, intentKey, review, stage: cardStage, anchor, onOpenAnchor }: ReviewTabProps) {
   const { t, fmt } = useI18n()
   const api = useStudioApi()
 
@@ -54,8 +56,9 @@ export function ReviewTab({ repoId, intentKey, review, anchor, onOpenAnchor }: R
   const reviewer = captured?.reviewer ?? live?.reviewer ?? null
   const reviewClass = captured?.review_class ?? live?.review_class ?? null
   const revisions = live?.revisions ?? null
-  const receipts = live?.receipts ?? []
-  const stage = live?.stage ?? null
+  // A card is about one stage: the intent's current stage, and another stage's receipts, are not its review.
+  const stage = cardStage ?? live?.stage ?? null
+  const receipts = (live?.receipts ?? []).filter((row) => !cardStage || !row.stage || row.stage === cardStage)
   const emptyIcon = useMemo(() => <Icon name="review" size={18} />, [])
 
   if (resource.loading && !captured) return <ContentSkeleton rows={5} />

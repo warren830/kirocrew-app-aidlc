@@ -82,5 +82,12 @@
   "detail.transitions.why.slot_absent": "the conversation is gone",
   "detail.transitions.why.host_error": "KiroCrew reported an error",
   "detail.transitions.why.intent_missing": "the intent's folder is gone",
-  "detail.transitions.why.turn_ended": "the turn ended"
+  "detail.transitions.why.turn_ended": "the turn ended",
+  "detail.transitions.why.boundary_superseded": "AI-DLC moved on before it was answered",
+  "detail.transitions.why.force_stop_committed": "Studio asked KiroCrew to stop the turn",
+  "detail.transitions.why.not_delivered_unproven": "Studio could not prove the message was not delivered",
+  "detail.transitions.why.session_rebound": "the intent was moved to another conversation",
+  "detail.transitions.why.kept_paused": "you kept the intent paused",
+  "detail.transitions.why.human_presence_anomaly": "someone else replied in the conversation",
+  "detail.transitions.why.cursor_moved": "AI-DLC's active intent changed"
 }

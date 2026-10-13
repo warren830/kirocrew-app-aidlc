@@ -283,6 +283,25 @@ describe('the review tab', () => {
     expect(screen.queryByText(/Name the retry budget/)).toBeNull()
   })
 
+  it('shows a card its own stage and only that stage\'s receipts', async () => {
+    installReview({
+      stage: 'deployment-execution',
+      receipts: [
+        { event: 'REVIEW_COMPLETED', ts: '2026-09-04T09:07:02Z', stage: 'requirements-analysis',
+          reviewer: 'aidlc-product-lead-agent', iteration: 1, verdict: 'READY', fingerprint: null },
+        { event: 'REVIEW_COMPLETED', ts: '2026-09-04T09:30:24Z', stage: 'code-generation',
+          reviewer: 'aidlc-architecture-reviewer-agent', iteration: 1, verdict: 'NOT-READY', fingerprint: null },
+      ],
+    })
+    mount(<ReviewTab repoId={REPO} intentKey={INTENT} stage="code-generation"
+      review={{ verdict: 'NOT-READY', findings: [], reviewer: 'aidlc-architecture-reviewer-agent',
+                review_class: 'advisory', iteration: 1 }} />)
+    expect(await screen.findByText('code-generation')).toBeInTheDocument()
+    expect(screen.queryByText('deployment-execution')).toBeNull()
+    expect(screen.queryByText('READY')).toBeNull()
+    expect(screen.getAllByText('NOT-READY').length).toBeGreaterThan(0)
+  })
+
   it('explains an empty review instead of showing an empty pane', async () => {
     installReview({ verdict: null, findings: [], receipts: [] })
     mount(<ReviewTab repoId={REPO} intentKey={INTENT} />)

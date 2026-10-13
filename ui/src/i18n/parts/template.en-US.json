@@ -254,5 +254,8 @@
   "template.questions.sentCount": "Answers sent: {n}",
   "template.questions.sentOne": "sent",
   "template.command.dispatched": "What was dispatched",
-  "template.command.stageSubCommit": "The stage AI-DLC last recorded. A commit request does not move it."
+  "template.command.stageSubCommit": "The stage AI-DLC last recorded. A commit request does not move it.",
+  "template.gate.noReviewStored": "No review was stored with this card when it was decided.",
+  "template.questions.closedUnsent": "These are the questions AI-DLC asked. This card closed before any answer was sent from it.",
+  "template.questions.closedUnsentChip": "No answer sent from this card"
 }

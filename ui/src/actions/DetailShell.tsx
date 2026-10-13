@@ -596,6 +596,7 @@ export function DetailShell({
               repoId={card.repo.repo_id}
               intentKey={card.intent.intent_key}
               review={card.evidence.review}
+              stage={card.stage?.slug ?? null}
               anchor={route.anchor}
               onOpenAnchor={openAnchor}
             />

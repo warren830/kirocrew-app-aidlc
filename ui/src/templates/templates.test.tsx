@@ -377,11 +377,16 @@ describe('gate template', () => {
     expect(document.querySelectorAll('.studio-crit > li[data-met="null"]').length).toBe(2)
   })
 
-  it('reads a stored empty review as no reviewer, with no verbatim footer', () => {
+  it('reads a stored empty review as no review stored, with no verbatim footer', () => {
     setApiRoutes({})
-    // A card stored before Studio stopped sending an empty review for a stage without `## Review`.
-    mount(GateTemplate, card({ status: 'StateChanged', evidence: { ...card().evidence,
+    // A card stored before Studio stopped sending an empty review for a stage without `## Review`. Closed, it can
+    // only say what it stored: a card stored before Studio read 2.11's review records has none either.
+    const { unmount } = mount(GateTemplate, card({ status: 'StateChanged', evidence: { ...card().evidence,
       review: { verdict: null, findings: [], reviewer: null, review_class: null, iteration: null, findings_parsed: true } } }))
+    expect(screen.getByText(en.t('template.gate.noReviewStored'))).toBeInTheDocument()
+    expect(screen.queryByText(en.t('template.gate.noReview'))).toBeNull()
+    unmount()
+    mount(GateTemplate, card({ evidence: { ...card().evidence, review: null } }))
     expect(screen.getByText(en.t('template.gate.noReview'))).toBeInTheDocument()
     expect(screen.queryByText(en.t('template.gate.noBlockers'))).toBeNull()
     expect(screen.queryByText(en.t('template.gate.noFindings'))).toBeNull()

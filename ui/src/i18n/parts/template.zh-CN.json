@@ -254,5 +254,8 @@
   "template.questions.sentCount": "已发送 {n} 个答案",
   "template.questions.sentOne": "已发送",
   "template.command.dispatched": "已派发的内容",
-  "template.command.stageSubCommit": "AI-DLC 最后记录的阶段。提交请求不会改变它。"
+  "template.command.stageSubCommit": "AI-DLC 最后记录的阶段。提交请求不会改变它。",
+  "template.gate.noReviewStored": "做出决定时，这张卡片没有保存评审。",
+  "template.questions.closedUnsent": "这些是 AI-DLC 提出的问题。这张卡片在从它发出任何回答之前就已关闭。",
+  "template.questions.closedUnsentChip": "未从此卡片发出回答"
 }
