@@ -128,5 +128,6 @@
   "map.artifactKind.other": "其他",
   "map.alert.recovery": "该意图需要先完成核对。在证据一致之前，请把这张图视为对磁盘的一次读取，而不是计划的状态。",
   "map.alert.openAction": "打开该事项",
-  "map.alert.unstable": "Studio 读取期间记录发生了变化。这张图只是一次快照，可能已经过时。"
+  "map.alert.unstable": "Studio 读取期间记录发生了变化。这张图只是一次快照，可能已经过时。",
+  "map.inspector.notProducedHere": "灰色的输入来自本次运行未包含的阶段。"
 }

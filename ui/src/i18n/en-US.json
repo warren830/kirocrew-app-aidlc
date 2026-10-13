@@ -1401,6 +1401,7 @@
   "map.inspector.downstream": "Downstream",
   "map.inspector.noOperation": "No eligible operation at this stage",
   "map.inspector.none": "None recorded",
+  "map.inspector.notProducedHere": "Greyed inputs come from stages this run does not include.",
   "map.inspector.notSelected": "This stage is not selected in the current plan.",
   "map.inspector.open": "Open the {type} in Action Center",
   "map.inspector.openArtifact": "Open {name}",

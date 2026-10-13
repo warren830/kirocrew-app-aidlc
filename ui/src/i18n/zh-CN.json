@@ -1401,6 +1401,7 @@
   "map.inspector.downstream": "下游",
   "map.inspector.noOperation": "该阶段没有可执行的操作",
   "map.inspector.none": "无记录",
+  "map.inspector.notProducedHere": "灰色的输入来自本次运行未包含的阶段。",
   "map.inspector.notSelected": "当前计划未选中这个阶段。",
   "map.inspector.open": "在 Action Center 中打开该 {type}",
   "map.inspector.openArtifact": "打开 {name}",

@@ -351,6 +351,7 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
       repoLabel={repoLabel}
       intentLabel={intentLabel}
       review={reviewRes.data ?? null}
+      planStages={planStages}
       audit={stageAudit}
       action={stageAction}
       blocked={blocked}

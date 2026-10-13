@@ -32,6 +32,9 @@ const AUDIT_HEADER_FIELDS = new Set(['Timestamp', 'Event'])
 
 const REVIEW_LEVELS: readonly ReviewFinding['level'][] = ['blocker', 'advisory', 'resolved', 'unknown']
 
+/** Longest audit value shown inline; the rest is in the field's tooltip. */
+const AUDIT_VALUE_MAX = 120
+
 export interface StageInspectorProps {
   stage: MapStage | null
   /** The selected unit's row, when the selection is a unit sub-card. */
@@ -40,6 +43,8 @@ export interface StageInspectorProps {
   repoLabel: string
   intentLabel: string
   review: ReviewResponse | null
+  /** The stages this run executes: what feeds the selected one, and which of its inputs nothing here produces. */
+  planStages?: MapStage[]
   /**
    * The record's recent audit events, already filtered to this stage — `null` when the intent read
    * failed, which must not be shown as "no events happened".
@@ -56,7 +61,7 @@ export interface StageInspectorProps {
 }
 
 export function StageInspector({
-  stage, unit, phaseLabel, repoLabel, intentLabel, review, audit, action, blocked,
+  stage, unit, phaseLabel, repoLabel, intentLabel, review, planStages = [], audit, action, blocked,
   onClear, onSelectStage, onOpenAction, onOpenArtifact,
 }: StageInspectorProps) {
   const i18n = useI18n()
@@ -75,6 +80,15 @@ export function StageInspector({
   const artifacts = unit ? unit.artifacts : stage.artifacts
   const notExecuting = stage.state === 'skipped' || stage.state === 'excluded' || !!stage.skipped_reason
   const reviewIsThisStage = !!review && review.stage === stage.slug
+  // The graph's own dependencies, plus the stages of this run whose outputs this one reads: express's
+  // code-generation depends on no stage in the graph, yet it reads the requirements this run writes.
+  const planned = planStages.filter((other) => other.slug !== stage.slug)
+  const upstream = [...new Set([
+    ...stage.depends_on,
+    ...planned.filter((other) => other.produces.some((name) => stage.consumes.includes(name))).map((other) => other.slug),
+  ])]
+  const producedHere = new Set(planned.flatMap((other) => other.produces))
+  const missingInputs = planStages.length > 0 ? stage.consumes.filter((name) => !producedHere.has(name)) : []
 
   return (
     <div className="studio-inspector-body">
@@ -138,7 +152,7 @@ export function StageInspector({
         <div className="studio-evgrid">
           <StageRefs
             title={t('map.inspector.upstream')}
-            slugs={stage.depends_on}
+            slugs={upstream}
             onSelect={onSelectStage}
             empty={t('map.inspector.none')}
           />
@@ -148,7 +162,8 @@ export function StageInspector({
             onSelect={onSelectStage}
             empty={t('map.inspector.none')}
           />
-          <NameList title={t('map.inspector.consumes')} names={stage.consumes} empty={t('map.inspector.none')} />
+          <NameList title={t('map.inspector.consumes')} names={stage.consumes} empty={t('map.inspector.none')}
+            muted={missingInputs} mutedNote={t('map.inspector.notProducedHere')} />
           <NameList title={t('map.inspector.produces')} names={stage.produces} empty={t('map.inspector.none')} />
         </div>
       </section>
@@ -193,7 +208,7 @@ export function StageInspector({
             // A reviewer with no class: the intent's scope or Review Override turns this stage's review off.
             : t(stage.reviewer ? 'map.inspector.reviewOff' : 'map.inspector.reviewNone')}
         </p>
-        {review && !reviewIsThisStage && review.stage ? (
+        {review && !reviewIsThisStage && review.stage && (review.verdict || review.findings.length > 0) ? (
           <p className="studio-muted">{t('map.inspector.reviewOtherStage', { stage: review.stage })}</p>
         ) : null}
         {reviewIsThisStage ? <ReviewSummary review={review} /> : null}
@@ -217,7 +232,11 @@ export function StageInspector({
                     .slice(0, 4)
                     .map(([name, value]) => (
                       <span key={name} className="studio-audit-field">
-                        <b className="studio-mono">{name}</b> <span className="studio-mono">{value}</span>
+                        <b className="studio-mono">{name}</b>{' '}
+                        {/* Verbatim, but a long value (a JSON validation basis) is cut, whole in its tooltip. */}
+                        <span className="studio-mono" title={value.length > AUDIT_VALUE_MAX ? value : undefined}>
+                          {value.length > AUDIT_VALUE_MAX ? `${value.slice(0, AUDIT_VALUE_MAX)}…` : value}
+                        </span>
                       </span>
                     ))}
                 </span>
@@ -283,7 +302,9 @@ function StageRefs({
   )
 }
 
-function NameList({ title, names, empty }: { title: string; names: string[]; empty: string }) {
+function NameList({ title, names, empty, muted = [], mutedNote }: {
+  title: string; names: string[]; empty: string; muted?: string[]; mutedNote?: string
+}) {
   return (
     <div className="studio-ev">
       <span className="studio-ev-src">{title}</span>
@@ -292,12 +313,14 @@ function NameList({ title, names, empty }: { title: string; names: string[]; emp
       ) : (
         <span className="studio-ev-val studio-mono studio-wrap-any">
           {names.map((name) => (
-            <span key={name} className="studio-ev-name">
+            <span key={name} className={`studio-ev-name${muted.includes(name) ? ' studio-muted' : ''}`}
+              {...(muted.includes(name) && mutedNote ? { title: mutedNote } : {})}>
               {name}
             </span>
           ))}
         </span>
       )}
+      {muted.length > 0 && mutedNote ? <span className="studio-muted">{mutedNote}</span> : null}
     </div>
   )
 }

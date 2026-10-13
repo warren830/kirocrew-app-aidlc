@@ -379,6 +379,20 @@ describe('the workflow map', () => {
     expect(navigations.at(-1)).toContain('view=actions')
   })
 
+  it('names the stages of this run that feed a stage, and greys the inputs nothing in it produces', async () => {
+    const map = mapFixture()
+    installRoutes({ map: { ...map, nodes: map.nodes.map((node) => node.slug === 'code-generation'
+      ? { ...node, consumes: ['requirements', 'components'], requires_stage: [] } : node) } })
+    mount({ cards: [] })
+    await userEvent.click(await screen.findByRole('button', { name: /code-generation/ }))
+    const inspector = screen.getByRole('complementary', { name: 'Stage inspector' })
+    // No graph dependency, but requirements-analysis in this run writes the requirements it reads.
+    expect(within(inspector).getByRole('button', { name: 'requirements-analysis' })).toBeInTheDocument()
+    expect(within(inspector).getByText('components')).toHaveClass('studio-muted')
+    expect(within(inspector).getByText('requirements')).not.toHaveClass('studio-muted')
+    expect(within(inspector).getByText('Greyed inputs come from stages this run does not include.')).toBeInTheDocument()
+  })
+
   it('says the run reviews nothing when the scope turns a stage\'s review off', async () => {
     const map = mapFixture()
     installRoutes({ map: { ...map, nodes: map.nodes.map((node) =>

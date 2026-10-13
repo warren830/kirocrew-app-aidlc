@@ -128,5 +128,6 @@
   "map.artifactKind.other": "Other",
   "map.alert.recovery": "Recovery is required for this intent. Until the evidence agrees, treat the map as a reading of disk, not as the plan's state.",
   "map.alert.openAction": "Open the action",
-  "map.alert.unstable": "The record changed while Studio was reading it. This map is one snapshot and may already be out of date."
+  "map.alert.unstable": "The record changed while Studio was reading it. This map is one snapshot and may already be out of date.",
+  "map.inspector.notProducedHere": "Greyed inputs come from stages this run does not include."
 }
