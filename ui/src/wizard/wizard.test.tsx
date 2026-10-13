@@ -659,6 +659,10 @@ describe('the new intent wizard', () => {
     expect(credits?.textContent).toContain('not zero, not inferred')
     expect(credits?.textContent).not.toMatch(/\b0\b/)
     expect(screen.getByText(/Plan fingerprint [0-9a-f]{64}/)).toBeInTheDocument()
+    // The step Create sits on names what it makes: the scope bar may be on another repository meanwhile.
+    const what = screen.getByRole('region', { name: 'What Create makes' })
+    expect(within(what).getByText('Let signed-out shoppers complete a purchase')).toBeInTheDocument()
+    expect(within(what).getByText('feature')).toBeInTheDocument()
 
     const create = screen.getByRole('button', { name: /Create the intent, paused/ })
     await waitFor(() => expect(create).toBeEnabled())

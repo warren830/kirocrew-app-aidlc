@@ -29,9 +29,11 @@ export interface StepReviewProps {
   workComplete: boolean
   presetComplete: boolean
   error: StudioApiError | null
+  /** What Create makes, said on the step Create sits on: the scope bar can name another repository meanwhile. */
+  work?: { objective: string; label: string; space: string; scope: string }
 }
 
-export function StepReview({ plan, digest, repo, origins, busy, creating, workComplete, presetComplete, error }: StepReviewProps) {
+export function StepReview({ plan, digest, repo, origins, busy, creating, workComplete, presetComplete, error, work }: StepReviewProps) {
   const i18n = useI18n()
   const { t } = i18n
   const blockingFindings = repo?.counts.blocking_findings ?? 0
@@ -62,6 +64,38 @@ export function StepReview({ plan, digest, repo, origins, busy, creating, workCo
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {work && repo ? (
+        <section className="studio-block" aria-label={t('wizard.review.what')}>
+          <h3>
+            <Icon name="intent" size={13} />
+            {t('wizard.review.what')}
+          </h3>
+          <dl className="studio-facts">
+            <div className="studio-fact">
+              <dt>{t('wizard.review.whatRepo')}</dt>
+              <dd>
+                <span className="studio-strong">{repo.label}</span>{' '}
+                <span className="studio-mono studio-muted studio-wrap-any">{repo.canonical_path}</span>
+              </dd>
+            </div>
+            <div className="studio-fact">
+              <dt>{t('wizard.review.whatIntent')}</dt>
+              <dd className="studio-mono studio-wrap-any">
+                {work.space && work.space !== 'default' ? `${work.space} / ${work.label}` : work.label}
+              </dd>
+            </div>
+            <div className="studio-fact">
+              <dt>{t('wizard.review.whatScope')}</dt>
+              <dd className="studio-mono">{work.scope || t('common.none')}</dd>
+            </div>
+            <div className="studio-fact">
+              <dt>{t('wizard.review.whatObjective')}</dt>
+              <dd className="studio-verbatim studio-wrap-any">{work.objective}</dd>
+            </div>
+          </dl>
+        </section>
       ) : null}
 
       {plan ? (

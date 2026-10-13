@@ -147,5 +147,10 @@
   "wizard.nav.needInventory": "Studio 读不到这个仓库的意图，请到“仓库”页检查。",
   "wizard.nav.needSpace": "Studio 正在读取这个仓库的当前空间。",
   "wizard.nav.needScope": "请先选择一个范围。",
-  "wizard.work.spaceNoRepo": "请先选择仓库；意图会放进该仓库的当前空间。"
+  "wizard.work.spaceNoRepo": "请先选择仓库；意图会放进该仓库的当前空间。",
+  "wizard.review.what": "创建的内容",
+  "wizard.review.whatRepo": "仓库",
+  "wizard.review.whatIntent": "意图名称",
+  "wizard.review.whatScope": "范围",
+  "wizard.review.whatObjective": "目标"
 }

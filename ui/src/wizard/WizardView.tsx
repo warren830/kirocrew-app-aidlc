@@ -719,6 +719,7 @@ export function WizardView({ route, go }: WizardViewProps) {
             workComplete={workComplete}
             presetComplete={presetComplete}
             error={createError}
+            work={{ objective: state.objective, label: effectiveLabel, space: activeSpace ?? '', scope: state.scope }}
           />
         ) : null}
 

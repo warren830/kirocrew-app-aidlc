@@ -147,5 +147,10 @@
   "wizard.nav.needInventory": "Studio could not read this repository's intents; open Repos to check it.",
   "wizard.nav.needSpace": "Studio is still reading this repository's active space.",
   "wizard.nav.needScope": "Choose a scope to continue.",
-  "wizard.work.spaceNoRepo": "Choose a repository first; the intent goes into its active space."
+  "wizard.work.spaceNoRepo": "Choose a repository first; the intent goes into its active space.",
+  "wizard.review.what": "What Create makes",
+  "wizard.review.whatRepo": "Repository",
+  "wizard.review.whatIntent": "Intent name",
+  "wizard.review.whatScope": "Scope",
+  "wizard.review.whatObjective": "Objective"
 }
