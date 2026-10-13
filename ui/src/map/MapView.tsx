@@ -43,7 +43,7 @@ import { DensityControl } from './DensityControl'
 import { DependencyOverlay } from './DependencyOverlay'
 import { PhaseAccordion } from './PhaseAccordion'
 import { PhaseLane } from './PhaseLane'
-import { StageInspector } from './StageInspector'
+import { StageInspector, relatedStages } from './StageInspector'
 import { artifactCountLabel, stageBadge, type Density, type Relation } from './StageCard'
 import { APP_NAME } from '../lib/app'
 
@@ -196,11 +196,13 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
   const relations = useMemo(() => {
     const found = new Map<string, Exclude<Relation, null>>()
     if (!selected) return found
-    for (const slug of selected.depends_on) found.set(slug, 'upstream')
-    // Upstream wins on a slug that is both: a cycle in the graph is drift, not a thing to paint twice.
-    for (const slug of selected.dependents) if (!found.has(slug)) found.set(slug, 'downstream')
+    // The inspector's lists, so the highlight and the text never disagree. Upstream wins on a slug that is
+    // both: a cycle in the graph is drift, not a thing to paint twice.
+    const { upstream, downstream } = relatedStages(selected, planStages)
+    for (const slug of upstream) found.set(slug, 'upstream')
+    for (const slug of downstream) if (!found.has(slug)) found.set(slug, 'downstream')
     return found
-  }, [selected])
+  }, [selected, planStages])
 
   const intentCards = useMemo(
     () => cards.filter((card) => card.intent.intent_key === intent),
@@ -353,6 +355,8 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
       review={reviewRes.data ?? null}
       planStages={planStages}
       audit={stageAudit}
+      auditWindow={detail?.audit_tail.length ?? 0}
+      summaryConfirmationRun={detail?.state_sections?.['Scope Configuration']?.['Summary Confirmation'] ?? null}
       action={stageAction}
       blocked={blocked}
       onClear={clearSelection}

@@ -50,6 +50,10 @@ export interface StageInspectorProps {
    * failed, which must not be shown as "no events happened".
    */
   audit: AuditEventView[] | null
+  /** How many of the record's last events `audit` was filtered from, so an empty list says what it searched. */
+  auditWindow?: number
+  /** The state file's `Summary Confirmation` setting for this run, verbatim ("off (from scope bugfix)"). */
+  summaryConfirmationRun?: string | null
   /** The live card whose stage is this one, if any. */
   action: ActionCard | null
   /** Intent-level refusal that outranks anything the stage itself permits. */
@@ -60,9 +64,27 @@ export interface StageInspectorProps {
   onOpenArtifact: (artifact: ArtifactMeta) => void
 }
 
+/**
+ * The graph's own dependencies, plus the stages of this run joined by what one writes and the other reads:
+ * express's code-generation depends on no stage in the graph, yet it reads the requirements this run
+ * writes. Both directions use the same rule, so A upstream of B always means B downstream of A.
+ */
+export function relatedStages(stage: MapStage, planStages: readonly MapStage[]): { upstream: string[]; downstream: string[] } {
+  const planned = planStages.filter((other) => other.slug !== stage.slug)
+  const upstream = [...new Set([
+    ...stage.depends_on,
+    ...planned.filter((other) => other.produces.some((name) => stage.consumes.includes(name))).map((other) => other.slug),
+  ])]
+  const downstream = [...new Set([
+    ...stage.dependents,
+    ...planned.filter((other) => other.consumes.some((name) => stage.produces.includes(name))).map((other) => other.slug),
+  ])].filter((slug) => !upstream.includes(slug))
+  return { upstream, downstream }
+}
+
 export function StageInspector({
-  stage, unit, phaseLabel, repoLabel, intentLabel, review, planStages = [], audit, action, blocked,
-  onClear, onSelectStage, onOpenAction, onOpenArtifact,
+  stage, unit, phaseLabel, repoLabel, intentLabel, review, planStages = [], audit, auditWindow = 0,
+  summaryConfirmationRun = null, action, blocked, onClear, onSelectStage, onOpenAction, onOpenArtifact,
 }: StageInspectorProps) {
   const i18n = useI18n()
   const { t } = i18n
@@ -80,13 +102,8 @@ export function StageInspector({
   const artifacts = unit ? unit.artifacts : stage.artifacts
   const notExecuting = stage.state === 'skipped' || stage.state === 'excluded' || !!stage.skipped_reason
   const reviewIsThisStage = !!review && review.stage === stage.slug
-  // The graph's own dependencies, plus the stages of this run whose outputs this one reads: express's
-  // code-generation depends on no stage in the graph, yet it reads the requirements this run writes.
+  const { upstream, downstream } = relatedStages(stage, planStages)
   const planned = planStages.filter((other) => other.slug !== stage.slug)
-  const upstream = [...new Set([
-    ...stage.depends_on,
-    ...planned.filter((other) => other.produces.some((name) => stage.consumes.includes(name))).map((other) => other.slug),
-  ])]
   const producedHere = new Set(planned.flatMap((other) => other.produces))
   const missingInputs = planStages.length > 0 ? stage.consumes.filter((name) => !producedHere.has(name)) : []
 
@@ -136,7 +153,10 @@ export function StageInspector({
 
       {stage.summary_confirmation ? (
         <p className="studio-muted studio-inspector-note">
-          {t('map.inspector.summaryConfirmation', { value: stage.summary_confirmation })}
+          {/* The graph says the stage has the step; the run's own setting says whether it asks. */}
+          {summaryConfirmationRun
+            ? t('map.inspector.summaryConfirmationRun', { value: summaryConfirmationRun })
+            : t('map.inspector.summaryConfirmation', { value: stage.summary_confirmation })}
         </p>
       ) : null}
 
@@ -158,7 +178,7 @@ export function StageInspector({
           />
           <StageRefs
             title={t('map.inspector.downstream')}
-            slugs={stage.dependents}
+            slugs={downstream}
             onSelect={onSelectStage}
             empty={t('map.inspector.none')}
           />
@@ -219,7 +239,9 @@ export function StageInspector({
         {audit === null ? (
           <p className="studio-muted">{t('common.unavailable')}</p>
         ) : audit.length === 0 ? (
-          <p className="studio-muted">{t('map.inspector.auditEmpty')}</p>
+          <p className="studio-muted">
+            {auditWindow > 0 ? t('map.inspector.auditEmptyOf', { n: auditWindow }) : t('map.inspector.auditEmpty')}
+          </p>
         ) : (
           <ul className="studio-audit-list" role="list">
             {audit.map((event) => (

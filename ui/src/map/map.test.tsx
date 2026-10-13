@@ -393,6 +393,24 @@ describe('the workflow map', () => {
     expect(within(inspector).getByText('Greyed inputs come from stages this run does not include.')).toBeInTheDocument()
   })
 
+  it('lists the stage that reads what this one writes as downstream, and says what this run confirms', async () => {
+    const map = mapFixture()
+    installRoutes({
+      map: { ...map, nodes: map.nodes.map((node) => node.slug === 'code-generation'
+        ? { ...node, consumes: ['requirements'], requires_stage: [] } : node) },
+      intent: intentDetail({ state_sections: { 'Scope Configuration': { 'Summary Confirmation': 'off (from scope bugfix)' } } }),
+    })
+    mount({ cards: [] })
+    await userEvent.click(await screen.findByRole('button', { name: /requirements-analysis/ }))
+    const inspector = screen.getByRole('complementary', { name: 'Stage inspector' })
+    // The mirror of code-generation's upstream: requirements-analysis writes the requirements it reads.
+    expect(within(inspector).getByRole('button', { name: 'code-generation' })).toBeInTheDocument()
+    expect(within(inspector).getByText('Summary confirmation this run: off (from scope bugfix)')).toBeInTheDocument()
+
+    await userEvent.click(within(inspector).getByRole('button', { name: 'code-generation' }))
+    expect(within(inspector).getByText("None of the record's last 2 audit events names this stage.")).toBeInTheDocument()
+  })
+
   it('says the run reviews nothing when the scope turns a stage\'s review off', async () => {
     const map = mapFixture()
     installRoutes({ map: { ...map, nodes: map.nodes.map((node) =>

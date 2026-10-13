@@ -113,7 +113,7 @@
   "map.inspector.reasonSkipped": "This stage is not executing in this plan.",
   "map.inspector.reasonAhead": "This stage is ahead of the cursor. The engine reaches it on its own.",
   "map.inspector.units": "Units",
-  "map.inspector.summaryConfirmation": "Summary confirmation: {value}",
+  "map.inspector.summaryConfirmation": "Summary confirmation in the workflow graph: {value}",
   "map.review.level.blocker": "Blocker",
   "map.review.level.advisory": "Advisory",
   "map.review.level.resolved": "Answered",
@@ -129,5 +129,8 @@
   "map.alert.recovery": "Recovery is required for this intent. Until the evidence agrees, treat the map as a reading of disk, not as the plan's state.",
   "map.alert.openAction": "Open the action",
   "map.alert.unstable": "The record changed while Studio was reading it. This map is one snapshot and may already be out of date.",
-  "map.inspector.notProducedHere": "Greyed inputs come from stages this run does not include."
+  "map.inspector.notProducedHere": "Greyed inputs come from stages this run does not include.",
+  "map.inspector.summaryConfirmationRun": "Summary confirmation this run: {value}",
+  "map.inspector.auditEmptyOf": "None of the record's last {n} audit events names this stage.",
+  "map.inspector.auditEmptyOf_one": "The record's last audit event does not name this stage."
 }

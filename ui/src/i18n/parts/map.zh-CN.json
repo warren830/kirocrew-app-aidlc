@@ -113,7 +113,7 @@
   "map.inspector.reasonSkipped": "在本次计划中该阶段不执行。",
   "map.inspector.reasonAhead": "该阶段位于游标之前方，引擎会自行推进到它。",
   "map.inspector.units": "单元",
-  "map.inspector.summaryConfirmation": "摘要确认：{value}",
+  "map.inspector.summaryConfirmation": "工作流图中的摘要确认：{value}",
   "map.review.level.blocker": "阻塞项",
   "map.review.level.advisory": "建议项",
   "map.review.level.resolved": "已回应",
@@ -129,5 +129,8 @@
   "map.alert.recovery": "该意图需要先完成核对。在证据一致之前，请把这张图视为对磁盘的一次读取，而不是计划的状态。",
   "map.alert.openAction": "打开该事项",
   "map.alert.unstable": "Studio 读取期间记录发生了变化。这张图只是一次快照，可能已经过时。",
-  "map.inspector.notProducedHere": "灰色的输入来自本次运行未包含的阶段。"
+  "map.inspector.notProducedHere": "灰色的输入来自本次运行未包含的阶段。",
+  "map.inspector.summaryConfirmationRun": "本次运行的摘要确认：{value}",
+  "map.inspector.auditEmptyOf": "记录最近的 {n} 条审计事件都没有提到该阶段。",
+  "map.inspector.auditEmptyOf_one": "记录最近的 1 条审计事件没有提到该阶段。"
 }
