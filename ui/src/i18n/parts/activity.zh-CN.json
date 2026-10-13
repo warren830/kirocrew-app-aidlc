@@ -239,5 +239,21 @@
   "audit.SOURCE_COMMITTED": "已针对已审查的工作记录一次源码提交。",
   "audit.VERIFICATION_COMMAND_RECORDED": "已记录一条验证命令。",
   "audit.WORKFLOW_ARCHIVED": "该意图已归档。",
-  "audit.WORKFLOW_UNARCHIVED": "该意图已从归档中恢复。"
+  "audit.WORKFLOW_UNARCHIVED": "该意图已从归档中恢复。",
+  "audit.PLAN_APPROVAL_SKIPPED": "代码生成未经计划批准就已开始，因为这项工作关闭了计划批准。",
+  "audit.PLAN_APPROVAL_BLOCKED": "代码计划尚未批准，AI-DLC 拒绝开始构建。",
+  "audit.QUESTION_REPLIED": "提问框返回了答复。",
+  "audit.QUESTION_UNANSWERED": "提问框没有得到答复。",
+  "audit.REQUEST_ROUTED": "这段话被记为一项单独的请求，而不是对当前问题的回答。",
+  "audit.SCOPE_DETECTED": "AI-DLC 根据工作描述建议了一个范围。",
+  "audit.SCOPE_SAVED": "这项工作的计划已保存为可复用的范围。",
+  "audit.WORKSPACE_RECLASSIFIED": "工作被重新归类为新项目或已有代码，并重新扫描了文件夹。",
+  "audit.PRACTICES_DISCOVERED": "实践发现阶段起草了团队实践，等待确认。",
+  "audit.PRACTICES_AFFIRMED": "团队已确认实践，并写入团队记忆。",
+  "audit.AUTONOMY_MODE_SET": "已设置构建阶段的自主模式。",
+  "audit.CONSTRUCTION_POLICY_SET": "构建阶段的设置已更改（迭代方式、检查点或执行方式）。",
+  "audit.UNIT_STARTED": "某个单元的工作已开始。",
+  "audit.UNIT_COMPLETED": "某个单元的工作已完成，所需文件均已落盘。",
+  "audit.ARTIFACT_REUSED": "AI-DLC 决定是否复用之前的产出物。",
+  "audit.RECOVERY_COMPLETED": "对话被压缩后，已答复恢复提示。"
 }

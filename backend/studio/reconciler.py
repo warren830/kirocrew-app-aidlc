@@ -46,7 +46,7 @@ from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 from . import constants as C
 from . import sessions as _sessions
 from .actions import ABSENCE_PROOF
-from .aidlc_reader import audit_question_accepts_text, audit_question_answer
+from .aidlc_reader import audit_question_accepts_text, audit_question_answer, plan_approval_choice
 from .consistency import RepoFacts
 from .errors import IllegalTransition, StaleGeneration, StudioError
 from .projection import run_unavailable_reason
@@ -1122,7 +1122,8 @@ class Reconciler:
             plan = _attr(questions, "plan_approval")
             seen["plan_answer"] = answer = str(_attr(plan, "answer", "") or "").strip()
             seen["plan_cleared"] = bool(_attr(plan, "present", False)) and not bool(_attr(plan, "answered", False))
-            if digest_changed and (answer.lower().startswith("request changes") or seen["plan_cleared"]):
+            if digest_changed and (plan_approval_choice(answer).lower().startswith("request changes")
+                                   or seen["plan_cleared"]):
                 return Resolution("no_transition", "plan_changes_requested", seen)
             # 2.10 records a Request Changes choice as a plan-approval QUESTION_ANSWERED, then may revise nothing
             # the questions file shows before asking again.
@@ -1174,7 +1175,8 @@ class Reconciler:
                            seen: dict[str, Any]) -> Resolution:
         plan = _attr(questions, "plan_approval")
         seen["plan_answer"] = answer = str(_attr(plan, "answer", "") or "")
-        if digest_changed and _attr(plan, "answered", False) and answer.startswith(C.WIRE_APPROVE_PLAN):
+        if digest_changed and _attr(plan, "answered", False) and plan_approval_choice(answer).startswith(
+                C.WIRE_APPROVE_PLAN):
             return Resolution("no_transition", "plan_approved", seen)
         # A later Learnings prompt can own `snap.questions` by now; the reader keeps the closed file and its
         # validated receipts from the same snapshot, matched on the plan's path, scope and dispatch boundary.
@@ -1209,7 +1211,7 @@ class Reconciler:
         relpath = (rec.evidence.get("questions") or {}).get("relpath")
         return [
             event for event in self._new_events(rec, snap, types, stage)
-            if (fields := _attr(event, "fields", {}) or {}).get("Checkpoint") == C.PLAN_APPROVAL_AUDIT_CHECKPOINT
+            if (fields := _attr(event, "fields", {}) or {}).get("Checkpoint") in C.PLAN_APPROVAL_AUDIT_CHECKPOINTS
             and (fields.get("Unit") or None) == unit and (not relpath or fields.get("Questions File") == relpath)
         ]
 

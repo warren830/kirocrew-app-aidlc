@@ -1,6 +1,7 @@
 """A queued Run must not outlive the work or displace a human checkpoint."""
 
 import asyncio
+import os
 from dataclasses import replace
 
 import fixtures as F
@@ -313,6 +314,54 @@ def _plan_asked_in_this_session(scene):
     with _shard(scene.root).open("a") as file:
         file.write(F.audit_block("DECISION_RECORDED", "2026-09-04T09:10:00Z", Stage=STAGE,
                                  Checkpoint="Code Generation Plan Approval", Session="s-1"))
+
+
+#: 2.11's engine-held Plan Approval as ``publishPlanApprovalAsk`` writes it: lettered, and asked with no
+#: session-bound challenge or ``DECISION_RECORDED`` row.
+ENGINE_PLAN_QUESTIONS = ("# Code Generation Plan Approval\n\n## Plan Approval\n\nApprove the code plan?\n\n"
+                         "- A. Approve Plan\n- B. Request Changes\n- C. I'll edit the files\n\n[Answer]:\n")
+
+
+def test_an_engine_held_plan_is_approved_from_a_new_session_and_settles_on_its_lettered_answer(
+        sv, routes, fake_host, scene):
+    """2.11 records the reply from any chat and writes the lettered choice: a dropped session still offers the
+    approval, and ``A. Approve Plan`` with a ``plan-approval`` receipt settles the card as approved."""
+    from test_e2e_gate import _finish_the_turn, _report
+
+    record = _record_dir(scene.root)
+    path = record / QUESTIONS_REL
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(ENGINE_PLAN_QUESTIONS)
+    fake_host.sessions.ended.add(f"dashboard:{scene.slot_key}")
+    _rescan(sv, routes, fake_host, scene)
+    card = next(a for a in _queue(sv, routes, fake_host) if a["type"] == "question")
+    assert [d["decision"] for d in card["decisions"]] == ["approve_plan", "request_plan_changes"]
+    status, receipt = _submit(sv, routes, fake_host, card, payload={"decision": "approve_plan"}, wire_text="Approve Plan")
+    assert status == 200, receipt
+    fake_host.sessions.ended.discard(f"dashboard:{scene.slot_key}")  # KiroCrew opens a fresh session for it
+    fake_host.get_slot(scene.slot_key).running = True
+    assert _report(sv, routes, fake_host, card["action_id"], receipt)[0] == 200
+    path.write_text(path.read_text().replace("[Answer]:", "[Answer]: A. Approve Plan"))
+    with _shard(scene.root).open("a") as file:
+        file.write(F.audit_text(
+            F.audit_block("HUMAN_TURN", "2026-09-04T10:00:20Z"),
+            F.audit_block("PLAN_APPROVAL_RECORDED", "2026-09-04T10:00:21Z", **{
+                "Stage": STAGE, "Details": "Approve Plan", "Checkpoint": "plan-approval", "Asked By": "engine",
+                "Questions File": str(path.relative_to(scene.root)), "Questions SHA-256": F.sha256(path.read_text()),
+            }),
+        ))
+    marker = record / ".aidlc-human-turn"
+    marker.write_text("2026-09-04T10:00:20Z\n")
+    os.utime(marker, ns=(2_000_000_000, 2_000_000_000))
+
+    async def settle():
+        await sv.reconciler.reconcile_now(card["action_id"])
+        _finish_the_turn(fake_host, scene.slot_key, wire_text="Approve Plan")
+        await sv.reconciler.reconcile_now(card["action_id"])
+        after = await sv.actions.get(card["action_id"])
+        assert (after.status, after.resolution["reason"]) == ("ResolvedNoTransition", "plan_approved")
+
+    asyncio.run(settle())
 
 
 def test_a_plan_whose_session_the_host_dropped_offers_resume_and_refuses_the_doomed_approve(

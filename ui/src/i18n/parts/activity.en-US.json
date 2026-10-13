@@ -239,5 +239,21 @@
   "audit.SOURCE_COMMITTED": "A source commit was recorded against reviewed work.",
   "audit.VERIFICATION_COMMAND_RECORDED": "A verification command was recorded.",
   "audit.WORKFLOW_ARCHIVED": "The intent was archived.",
-  "audit.WORKFLOW_UNARCHIVED": "The intent was restored from the archive."
+  "audit.WORKFLOW_UNARCHIVED": "The intent was restored from the archive.",
+  "audit.PLAN_APPROVAL_SKIPPED": "Code Generation started without asking for plan approval, because plan approval is off for this work.",
+  "audit.PLAN_APPROVAL_BLOCKED": "AI-DLC refused to build before the code plan was approved.",
+  "audit.QUESTION_REPLIED": "A question box came back with the person's answer.",
+  "audit.QUESTION_UNANSWERED": "A question box came back without an answer.",
+  "audit.REQUEST_ROUTED": "The person's words were kept as a separate request, not an answer to the open question.",
+  "audit.SCOPE_DETECTED": "AI-DLC suggested a scope from the description of the work.",
+  "audit.SCOPE_SAVED": "This work's plan was saved as a reusable scope.",
+  "audit.WORKSPACE_RECLASSIFIED": "The work was reclassified as a new project or existing code, and the folder was scanned again.",
+  "audit.PRACTICES_DISCOVERED": "Practices Discovery drafted the team's practices for affirmation.",
+  "audit.PRACTICES_AFFIRMED": "The team affirmed its practices; they were written to team memory.",
+  "audit.AUTONOMY_MODE_SET": "Construction autonomy was set.",
+  "audit.CONSTRUCTION_POLICY_SET": "A Construction setting changed (iteration, checkpoints or execution).",
+  "audit.UNIT_STARTED": "Work on a unit started.",
+  "audit.UNIT_COMPLETED": "A unit's work finished, with its required files on disk.",
+  "audit.ARTIFACT_REUSED": "AI-DLC decided whether to reuse earlier artifacts.",
+  "audit.RECOVERY_COMPLETED": "The person answered the recovery prompt after the conversation was compacted."
 }

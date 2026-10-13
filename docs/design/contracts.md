@@ -3287,7 +3287,7 @@ name (`config manifest enable disable update uninstall open dev token migrate-cl
   "human_text_present": bool                                   // human_text itself is never in the card
 }
 ```
-`QuestionsView`: `{"relpath": str, "sha256": str, "stage": str, "unit": str|null, "questions": [{"index": int, "prompt": str, "options": [{"letter": str, "text": str}], "answer": str|null, "answered": bool, "required": true}], "summary_confirmation": {"present": bool, "answered": bool, "answer": str|null}, "pending_count": int, "mode": "degraded"|"structured", "host_card": HostQuestionCard|null}`.
+`QuestionsView`: `{"relpath": str, "sha256": str, "stage": str, "unit": str|null, "questions": [{"index": int, "prompt": str, "options": [{"letter": str, "text": str}], "answer": str|null, "answered": bool, "required": true}], "summary_confirmation": {"present": bool, "answered": bool, "answer": str|null}, "plan_approval": {… as summary_confirmation, "engine_held"?: true} — `engine_held` marks 2.11's engine-asked Plan Approval (lettered choices, `[Answer]: A. Approve Plan`), which any chat may answer, so it is never Resume-only, "pending_count": int, "mode": "degraded"|"structured", "host_card": HostQuestionCard|null}`.
 `ReviewFinding`: `{"level": "blocker"|"advisory"|"resolved"|"unknown", "title": str, "quote": str|null, "anchor": str|null, "reviewer": str|null, "iteration": int|null}`.
 `Finding`: `{"code": str, "severity": FINDING_SEVERITY, "message_key": str, "params": {}, "evidence": [{"kind","ref","detail"}]}`.
 
