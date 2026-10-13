@@ -702,7 +702,7 @@
   "detail.transitions.why.marked_not_delivered": "你将其标记为未送达",
   "detail.transitions.why.not_delivered_proven": "消息没有送达会话",
   "detail.transitions.why.not_delivered_unproven": "Studio 无法证明消息没有送达",
-  "detail.transitions.why.plan_approved": "AI-DLC 已记录计划批准",
+  "detail.transitions.why.plan_approved": "AI-DLC 已记录计划批准；回合结束时 Studio 从磁盘确认了这一点",
   "detail.transitions.why.plan_asked_again": "AI-DLC 已重新请求批准计划",
   "detail.transitions.why.plan_changes_requested": "AI-DLC 已记录要求的计划修改",
   "detail.transitions.why.plan_reply_not_recorded": "AI-DLC 未记录对计划的答复",

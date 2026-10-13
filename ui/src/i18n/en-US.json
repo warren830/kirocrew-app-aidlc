@@ -702,7 +702,7 @@
   "detail.transitions.why.marked_not_delivered": "you marked it as not delivered",
   "detail.transitions.why.not_delivered_proven": "the message never reached the conversation",
   "detail.transitions.why.not_delivered_unproven": "Studio could not prove the message was not delivered",
-  "detail.transitions.why.plan_approved": "AI-DLC recorded the plan approval",
+  "detail.transitions.why.plan_approved": "AI-DLC recorded the plan approval; Studio confirmed it from disk when the turn ended",
   "detail.transitions.why.plan_asked_again": "AI-DLC asked for plan approval again",
   "detail.transitions.why.plan_changes_requested": "AI-DLC recorded the requested plan changes",
   "detail.transitions.why.plan_reply_not_recorded": "AI-DLC did not record the plan reply",

@@ -73,7 +73,7 @@
   "detail.transitions.why.answers_recorded": "AI-DLC 已记录各项回答",
   "detail.transitions.why.summary_confirmed": "AI-DLC 已记录摘要确认",
   "detail.transitions.why.assumptions_recorded": "AI-DLC 已记录对假设的选择",
-  "detail.transitions.why.plan_approved": "AI-DLC 已记录计划批准",
+  "detail.transitions.why.plan_approved": "AI-DLC 已记录计划批准；回合结束时 Studio 从磁盘确认了这一点",
   "detail.transitions.why.plan_changes_requested": "AI-DLC 已记录要求的计划修改",
   "detail.transitions.why.plan_asked_again": "AI-DLC 已重新请求批准计划",
   "detail.transitions.why.plan_reply_not_recorded": "AI-DLC 未记录对计划的答复",

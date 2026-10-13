@@ -73,7 +73,7 @@
   "detail.transitions.why.answers_recorded": "AI-DLC recorded the answers",
   "detail.transitions.why.summary_confirmed": "AI-DLC recorded the summary confirmation",
   "detail.transitions.why.assumptions_recorded": "AI-DLC recorded the choice about the assumptions",
-  "detail.transitions.why.plan_approved": "AI-DLC recorded the plan approval",
+  "detail.transitions.why.plan_approved": "AI-DLC recorded the plan approval; Studio confirmed it from disk when the turn ended",
   "detail.transitions.why.plan_changes_requested": "AI-DLC recorded the requested plan changes",
   "detail.transitions.why.plan_asked_again": "AI-DLC asked for plan approval again",
   "detail.transitions.why.plan_reply_not_recorded": "AI-DLC did not record the plan reply",
