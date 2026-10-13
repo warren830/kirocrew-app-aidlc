@@ -41,7 +41,9 @@ export function StepPlan({ plan, busy, origins, onToggle }: StepPlanProps) {
         <>
           <div className="studio-row studio-wrap studio-plan-summary">
             <Chip icon="check" tone={plan.valid ? 'accent' : 'warn'}>
-              {t('wizard.plan.summary', {
+              {/* Upper bounds where the run decides: see EstimatePanel. */}
+              {t(plan.stages.some((stage) => stage.enabled && stage.gate && stage.execution === 'CONDITIONAL')
+                ? 'wizard.plan.summaryConditional' : 'wizard.plan.summary', {
                 stages: i18n.fmt.number(plan.exact.stages),
                 gates: i18n.fmt.number(plan.exact.gates),
                 artifacts: i18n.fmt.number(plan.exact.artifacts),

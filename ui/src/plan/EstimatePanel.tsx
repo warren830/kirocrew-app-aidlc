@@ -3,9 +3,11 @@
  *
  * Four rules, each of which is a way this panel could lie and does not:
  *
- *  1. **Exact and estimated never share a row.** Counts come from the installed graph and are labelled
- *     exact; turns and durations are ranges and are labelled with their source and confidence. The
- *     mockup's two `.stat` rows exist for exactly this reason and are kept.
+ *  1. **Exact and estimated never share a row.** Counts come from the installed graph; turns and
+ *     durations are ranges and are labelled with their source and confidence. The mockup's two `.stat`
+ *     rows exist for exactly this reason and are kept. A graph count is still only an upper bound where
+ *     the run decides: AI-DLC skips a CONDITIONAL stage at runtime, and a stage at a lower depth or test
+ *     strategy writes fewer of the outputs it declares, so those counts say "up to".
  *  2. **Credits are Unavailable, never a number.** `credits` is always `null` with
  *     `credits_status: "unavailable"`, and rendering `0` would read as "this is free" (FR-EST-005).
  *  3. **An assumption says so.** `elapsed_secs` carries its own `source: "assumption"`, and
@@ -65,6 +67,8 @@ export function EstimatePanel({ plan }: EstimatePanelProps) {
   const artifactQualifier = units !== null && perUnitSelected
     ? plural(i18n, 'estimate.exact.artifactsAssumed', units)
     : t('estimate.exact.artifactsWhy')
+  const conditional = plan.stages.filter((stage) => stage.enabled && stage.execution === 'CONDITIONAL')
+  const conditionalGates = conditional.filter((stage) => stage.gate).length
 
   return (
     <>
@@ -78,13 +82,30 @@ export function EstimatePanel({ plan }: EstimatePanelProps) {
             icon="check"
             label={t('estimate.exact.stages')}
             value={count(i18n, exact.stages)}
-            qualifier={t('estimate.exact.ofGraph', {
-              selected: i18n.fmt.number(exact.stages),
-              known: count(i18n, plan.graph_stage_count),
-            })}
+            qualifier={conditional.length > 0
+              ? plural(i18n, 'estimate.exact.ofGraphConditional', conditional.length, {
+                  selected: i18n.fmt.number(exact.stages),
+                  known: count(i18n, plan.graph_stage_count),
+                })
+              : t('estimate.exact.ofGraph', {
+                  selected: i18n.fmt.number(exact.stages),
+                  known: count(i18n, plan.graph_stage_count),
+                })}
           />
-          <Stat icon="gate" label={t('estimate.exact.gates')} value={count(i18n, exact.gates)} qualifier={t('estimate.exact.gatesWhy')} />
-          <Stat icon="doc" label={t('estimate.exact.artifacts')} value={count(i18n, exact.artifacts)} qualifier={artifactQualifier} />
+          <Stat
+            icon="gate"
+            label={t('estimate.exact.gates')}
+            value={conditionalGates > 0 ? t('estimate.exact.upTo', { n: count(i18n, exact.gates) }) : count(i18n, exact.gates)}
+            qualifier={conditionalGates > 0
+              ? plural(i18n, 'estimate.exact.gatesConditional', conditionalGates)
+              : t('estimate.exact.gatesWhy')}
+          />
+          <Stat
+            icon="doc"
+            label={t('estimate.exact.artifacts')}
+            value={t('estimate.exact.upTo', { n: count(i18n, exact.artifacts) })}
+            qualifier={artifactQualifier}
+          />
           <Stat
             icon="review"
             label={t('estimate.exact.review')}

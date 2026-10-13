@@ -129,7 +129,7 @@ describe('the stage matrix', () => {
 describe('the estimate panel', () => {
   it('labels counts exact and ranges with their source and confidence', () => {
     mount(<EstimatePanel plan={makePlan()} />)
-    const exact = screen.getByLabelText('Exact counts')
+    const exact = screen.getByLabelText('Counts from the installed graph')
     expect(within(exact).getByText('5')).toBeInTheDocument()
     expect(within(exact).getByText('exact, 5 of 33 known stages')).toBeInTheDocument()
     expect(within(exact).getByText('1 none · 2 advisory · 2 adversarial')).toBeInTheDocument()
@@ -139,6 +139,20 @@ describe('the estimate panel', () => {
     // Turns and active time are both rule bands; there is no local history to cite.
     expect(within(estimates).getAllByText('range · rule-based band · low confidence')).toHaveLength(2)
     expect(within(estimates).getByText(/range · assumption · low confidence/)).toBeInTheDocument()
+  })
+
+  it('gives the Gates and artifacts a conditional stage may never produce as an upper bound', () => {
+    const base = makePlan()
+    const plan = { ...base, stages: base.stages.map((stage) => stage.enabled && stage.gate && stage.slug !== 'code-generation'
+      ? { ...stage, execution: 'CONDITIONAL' as const } : stage) }
+    const conditional = plan.stages.filter((stage) => stage.enabled && stage.execution === 'CONDITIONAL')
+    expect(conditional.length).toBeGreaterThan(0)
+    mount(<EstimatePanel plan={plan} />)
+    const counts = screen.getByLabelText('Counts from the installed graph')
+    expect(within(counts).getByText(`up to ${plan.exact.gates}`)).toBeInTheDocument()
+    expect(within(counts).getByText(`up to ${plan.exact.artifacts}`)).toBeInTheDocument()
+    expect(within(counts).getByText(/a stage AI-DLC skips opens none/)).toBeInTheDocument()
+    expect(within(counts).getByText(/AI-DLC decides at runtime whether to run the \d+ conditional/)).toBeInTheDocument()
   })
 
   it('shows credits as unavailable rather than as a number', () => {

@@ -112,7 +112,7 @@
   "wizard.advisor.stale.objective": "The objective changed after this proposal was drafted. Ask again for one that reads the new objective.",
   "wizard.advisor.stale.scope": "The scope changed after this proposal was drafted; its stage changes were computed against {scope}. Pick {scope} again or ask again.",
   "wizard.plan.lead": "Every known stage is listed, including the ones your preset excludes. Stages the engine will not let you change are disabled with the reason.",
-  "wizard.plan.summary": "{stages} stages, {gates} Gates, {artifacts} artifacts",
+  "wizard.plan.summary": "{stages} stages, {gates} Gates, up to {artifacts} artifacts",
   "wizard.review.exact": "Exact, from the installed graph",
   "wizard.review.estimates": "Estimated, with source and confidence",
   "wizard.review.products": "Products this plan will create",
@@ -152,5 +152,6 @@
   "wizard.review.whatRepo": "Repository",
   "wizard.review.whatIntent": "Intent name",
   "wizard.review.whatScope": "Scope",
-  "wizard.review.whatObjective": "Objective"
+  "wizard.review.whatObjective": "Objective",
+  "wizard.plan.summaryConditional": "{stages} stages, up to {gates} Gates, up to {artifacts} artifacts"
 }

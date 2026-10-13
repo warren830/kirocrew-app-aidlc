@@ -112,7 +112,7 @@
   "wizard.advisor.stale.objective": "这份建议起草之后目标已经改变。请重新询问，让顾问读取新的目标。",
   "wizard.advisor.stale.scope": "这份建议起草之后 scope 已经改变；它的 stage 改动是按 {scope} 计算的。请重新选择 {scope}，或重新询问。",
   "wizard.plan.lead": "这里列出每一个已知阶段，包括被预设排除的阶段。引擎不允许改动的阶段会被禁用，并说明原因。",
-  "wizard.plan.summary": "{stages} 个阶段、{gates} 个关卡、{artifacts} 个产物",
+  "wizard.plan.summary": "{stages} 个阶段、{gates} 个关卡、最多 {artifacts} 个产物",
   "wizard.review.exact": "精确值，来自已安装的阶段图",
   "wizard.review.estimates": "估算值，附来源与置信度",
   "wizard.review.products": "这个计划将产出的产物",
@@ -152,5 +152,6 @@
   "wizard.review.whatRepo": "仓库",
   "wizard.review.whatIntent": "意图名称",
   "wizard.review.whatScope": "范围",
-  "wizard.review.whatObjective": "目标"
+  "wizard.review.whatObjective": "目标",
+  "wizard.plan.summaryConditional": "{stages} 个阶段、最多 {gates} 个关卡、最多 {artifacts} 个产物"
 }

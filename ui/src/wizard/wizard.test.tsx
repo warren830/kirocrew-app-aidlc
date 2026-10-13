@@ -652,7 +652,7 @@ describe('the new intent wizard', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
 
     // Exact and estimated are labelled apart, and credits are a word.
-    expect(await screen.findByLabelText('Exact counts')).toBeInTheDocument()
+    expect(await screen.findByLabelText('Counts from the installed graph')).toBeInTheDocument()
     const estimates = screen.getByLabelText('Estimates with source and confidence')
     const credits = within(estimates).getByText('Credits').closest('.studio-stat')
     expect(credits?.textContent).toContain('Unavailable')
