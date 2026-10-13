@@ -53,6 +53,7 @@
   "install.reason.install_conflict": "The content differs from its receipt. Preserve your changes before trying again.",
   "install.reason.bad_path": "The path changed or contains a symbolic link.",
   "install.reason.unreadable_fragment": "Studio could not safely read this fragment.",
+  "install.reason.fragment_modified": "Studio's part of this file changed after it was installed, so it is kept as it is.",
   "install.step.remove_files": "Remove owned harness files",
   "install.step.confirm_uninstall": "Confirm the reviewed uninstall",
   "install.step.remove_fragments": "Remove owned fragments",

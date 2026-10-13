@@ -65,7 +65,7 @@
   "install.recovery.pathNote": "The failed candidate and its transaction record are kept outside the repository, at this path.",
   "install.recovery.start": "Preview the recovery",
   "install.recovery.title": "Install recovery required",
-  "install.retire.body": "A file the previous version owned is removed only when its bytes still match the receipt. A retired file you changed is kept and reported instead of deleted.",
+  "install.retire.body": "A file the previous version owned is removed only when its bytes still match the receipt. Studio's part of a file it merged into, such as its AGENTS.md block or .gitignore lines, is taken out the same way and the rest of the file is left as it is. Anything you changed is kept and reported instead of deleted.",
   "install.retire.title": "What would be retired",
   "install.stale.body": "Nothing was written. The preview has been re-read from disk; check it again before you confirm.",
   "install.stale.title": "The repository changed while you were reading",

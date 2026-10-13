@@ -52,6 +52,7 @@
   "install.reason.install_conflict": "内容与安装凭据不一致。请先保留你的改动，再重试。",
   "install.reason.bad_path": "路径已改变或包含符号链接。",
   "install.reason.unreadable_fragment": "Studio 无法安全读取此片段。",
+  "install.reason.fragment_modified": "此文件中 Studio 的部分在安装后被改动过，因此保持原样保留。",
   "install.step.confirm_rollback": "确认已预览的版本回退",
   "install.step.confirm_uninstall": "确认已预览的卸载",
   "install.step.remove_files": "移除自有 harness 文件",

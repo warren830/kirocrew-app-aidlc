@@ -1277,14 +1277,22 @@ class Installer:
                       size=pf.size, key=handler.fragment_key, diff=diff)
 
     def _retire_entries(self, root: Path, receipt: Receipt | None) -> list[PreviewEntry]:
-        """Receipt-owned files the payload no longer ships: retired only while byte-identical to the receipt; an
-        edited one is reported (``retire_blocked``) and left on disk, never deleted."""
+        """Receipt-owned content the payload no longer ships: a file retired only while byte-identical to the
+        receipt, a merged fragment only while it is exactly what Studio introduced (``_retire_fragment_entry``);
+        anything edited is reported (``retire_blocked``) and left on disk, never deleted."""
         if receipt is None:
             return []
         shipped = {pf.path for pf in self._manifest.files}
         out: list[PreviewEntry] = []
         for rf in receipt.files:
-            if rf.kind != "file" or rf.path in shipped or rf.ownership not in OWNED_KINDS:
+            if rf.path in shipped:
+                continue
+            if rf.kind == "fragment" and rf.ownership == "merge":
+                fragment = self._retire_fragment_entry(root, rf)
+                if fragment is not None:
+                    out.append(fragment)
+                continue
+            if rf.kind != "file" or rf.ownership not in OWNED_KINDS:
                 continue
             try:
                 live = _read_bytes(security.resolve_inside(root, rf.path))
@@ -1295,6 +1303,61 @@ class Installer:
                 out.append(_entry(rf.path, rf.ownership, "retire" if sha == rf.sha256 else "retire_blocked",
                                   live=sha, receipt=rf.sha256, size=len(live)))
         return out
+
+    def _retire_fragment_entry(self, root: Path, rf: ReceiptFile) -> PreviewEntry | None:
+        """Studio's part of a file the payload stopped merging into (2.11 leaves ``AGENTS.md`` and ``.gitignore``
+        to AI-DLC, which adds its own marked block at the next session), taken out exactly as uninstall would take
+        it out: ``live_sha256`` is the whole file the plan was made against, ``payload_sha256`` what retiring it
+        leaves (``None``: the file Studio created goes). ``None`` when Studio's part is already gone."""
+        def keep(reason: str, live: bytes | None = None) -> PreviewEntry:
+            return _entry(rf.path, rf.ownership, "retire_blocked", live=_digest_of(live), receipt=rf.canonical_digest,
+                          size=len(live) if live is not None else None, key=rf.fragment_key, reason=reason)
+
+        try:
+            target = self._safe_path(root, rf.path)
+        except StudioError:
+            return keep("bad_path")
+        live, unreadable = _live_bytes(target)
+        if unreadable or (live is None and target.exists()):
+            return keep("unreadable_fragment")
+        if live is None:
+            return None
+        after, reason = self._retired_fragment(rf, live)
+        if reason == "already_absent":
+            return None
+        if reason is not None:
+            return keep(reason, live)
+        return _entry(rf.path, rf.ownership, "retire", live=_digest_of(live), payload=_digest_of(after),
+                      receipt=rf.canonical_digest, size=len(live), key=rf.fragment_key,
+                      diff=_unified_diff(f"{rf.path} [{rf.fragment_key}]", live, after or b""))
+
+    def _retired_fragment(self, rf: ReceiptFile, live: bytes) -> tuple[bytes | None, str | None]:
+        """``(bytes, None)``: ``live`` without what Studio introduced (``None`` bytes when Studio created the file
+        and nothing else is left in it); ``(live, reason)`` to keep the file exactly as it is."""
+        try:
+            return self._remove_receipt_fragment(rf, live)
+        except UnicodeDecodeError:
+            return live, "unreadable_fragment"
+        except (StudioError, ValueError) as exc:
+            if self._fragment_absent(rf, live):
+                return live, "already_absent"
+            known = (exc.details or {}).get("reason") if isinstance(exc, StudioError) else None
+            return live, known if known == "legacy_fragment_ownership_unknown" else "fragment_modified"
+
+    def _fragment_absent(self, rf: ReceiptFile, live: bytes) -> bool:
+        """Whether nothing of Studio's part is left in ``live`` (taken out by hand, or by a transaction that died
+        before its receipt): there is then nothing to retire and nothing to report."""
+        try:
+            handler = self._receipt_handler(rf)
+        except StudioError:
+            return False
+        text = live.decode("utf-8", "replace")
+        if isinstance(handler, _FencedBlock):
+            return handler.marker_start not in text and handler.marker_end not in text
+        if isinstance(handler, _MissingLines):
+            present = set(text.splitlines())
+            return not any(line in present for line in (rf.uninstall or {}).get("lines") or [])
+        return False
 
     def _state_versions(self, root: Path) -> tuple[tuple[int, ...], tuple[str, ...]]:
         """Every ``State Version`` on disk and the records whose state is unreadable, for every kind (P-06)."""
@@ -1437,6 +1500,9 @@ class Installer:
             if last <= first:
                 raise StudioError("install_conflict", "reversed Studio block markers")
             last += live[last:last + 1] == b"\n"
+            # The blank line ``merged_bytes`` put between the project's text and the block goes with the block, so
+            # the project's own bytes come back as they were (and a rollback that re-appends the block restores them).
+            first -= live[:first].endswith(b"\n\n")
             after = live[:first] + live[last:]
         else:
             owned_lines = list(meta.get("lines") or [])
@@ -1546,6 +1612,10 @@ class Installer:
                                  saved: bytes) -> bytes:
         """The live merge target with the old receipt's fragment back from its verified backup, refusing to
         restore over content neither receipt covers."""
+        if current is None and live == saved:
+            # Still exactly what the upgrade found: a part it kept (``retire_blocked``, an edited block or legacy
+            # lines) or one already gone. Nothing moves, and the old receipt claims these bytes as it did before.
+            return saved
         handler = self._receipt_handler(target)
         saved.decode("utf-8")
         if isinstance(handler, _MissingLines):
@@ -1566,8 +1636,10 @@ class Installer:
         if live is not None:
             live.decode("utf-8")
         if current is None:  # a historical receipt confers no authority over a fragment the user has created since
-            if live is not None and handler.live_fragment(live).digest not in {None, target.canonical_digest}:
+            if (live is not None and handler.live_fragment(live).digest not in {None, target.canonical_digest}
+                    and not self._fragment_absent(target, live)):
                 raise StudioError("install_conflict", "unowned content occupies an old merge target")
+            # Absent (an upgrade retired it, ``_retire_fragment``): merged back the way the old install merged it.
             return handler.merged_bytes(live, receipt_digest=None)
         now = self._receipt_handler(current)
         if type(now) is not type(handler):
@@ -1821,7 +1893,19 @@ class Installer:
                 continue
             if rf.kind == "fragment":
                 spec = (rf.uninstall or {}).get("spec") or {}
-                handler = self._receipt_handler(rf) if "managedMapEntries" in spec else self._handler(rf.path)
+                current = self._manifest.merge_targets.get(rf.path)
+                # Read as the receipt recorded it whenever this payload merges the file differently or not at all:
+                # 2.11's narrower cli.json, or no AGENTS.md, would otherwise call an untouched fragment drifted.
+                try:
+                    if "managedMapEntries" in spec or current is None or (spec and spec != current):
+                        handler = self._receipt_handler(rf)
+                        if isinstance(handler, _MissingLines):
+                            handler.set_lines((rf.uninstall or {}).get("all_lines") or [])
+                    else:
+                        handler = self._handler(rf.path)
+                except StudioError:  # a legacy receipt with no definition Studio can read the fragment by
+                    out.append(_entry(rf.path, rf.ownership, "merge_conflict", receipt=expected, key=rf.fragment_key))
+                    continue
                 digest = handler.live_fragment(_read_bytes(target)).digest
                 if digest != rf.canonical_digest:
                     out.append(_entry(rf.path, rf.ownership, "merge_conflict", live=digest, receipt=expected,
@@ -2668,9 +2752,12 @@ class Installer:
         return {"backed_up": copied, "recorded": len(journal.backups), "backup_dir": str(backup)}
 
     def _write_files(self, journal: _Journal, plan: PreviewPlan, repo: "RepoRecord") -> dict:
-        """Write framework and shell files, each re-checked against the plan, then retire dropped files."""
+        """Write framework and shell files, each re-checked against the plan, then retire dropped files and
+        fragments."""
         root = Path(repo.canonical_path)
         written = retired = skipped = 0
+        receipt = self.current_receipt(repo.repo_id)
+        owned = receipt.by_path() if receipt else {}
         for entry in plan.entries:
             if entry.action not in ("create", "owned_identical", "engine_modified", "shell_create"):
                 continue
@@ -2690,9 +2777,15 @@ class Installer:
             journal.written[rel] = security.sha256_bytes(data)
             written += 1
         for entry in plan.entries:
-            if entry.action != "retire":
+            if entry.action != "retire" or entry.path in journal.retired:
                 continue
             self._raise_if_cancelled(journal.txid)
+            if entry.ownership == "merge":
+                if self._retire_fragment(journal, entry, root, owned.get(entry.path)):
+                    retired += 1
+                else:
+                    skipped += 1
+                continue
             target = security.resolve_inside(root, entry.path)
             live = _read_bytes(target)
             if live is None:
@@ -2704,6 +2797,26 @@ class Installer:
             journal.retired.append(entry.path)
             retired += 1
         return {"written": written, "retired": retired, "retire_skipped": skipped}
+
+    def _retire_fragment(self, journal: _Journal, entry: PreviewEntry, root: Path, rf: ReceiptFile | None) -> bool:
+        """Take Studio's part out of one file, only while the file is still the one the plan was made against;
+        Studio's own created file goes whole, a file holding anything else is rewritten, never unlinked."""
+        if rf is None or rf.kind != "fragment":
+            return False
+        target = self._safe_path(root, entry.path)
+        live, unreadable = _live_bytes(target)
+        if unreadable or live is None or _digest_of(live) != entry.live_sha256:
+            return False  # changed since the preview: left alone, and counted
+        after, reason = self._retired_fragment(rf, live)
+        if reason is not None or _digest_of(after) != entry.payload_sha256:
+            return False
+        if after is None:
+            target.unlink()
+        else:
+            _atomic_write(target, after)
+            journal.written[entry.path] = security.sha256_bytes(after)
+        journal.retired.append(entry.path)
+        return True
 
     def _merge_fragments(self, journal: _Journal, plan: PreviewPlan, repo: "RepoRecord") -> dict:
         """Rewrite each merge target from its backed-up before-bytes plus the staged fragment (so a retry cannot
@@ -2749,6 +2862,9 @@ class Installer:
                 handler = self._handler(entry.path, source=journal.staging_dir)
                 live = _read_bytes(security.resolve_inside(root, entry.path))
                 if handler.live_fragment(live).digest != handler.payload_fragment().digest:
+                    bad.append(entry.path)
+            elif entry.action == "retire" and entry.ownership == "merge" and entry.path in journal.retired:
+                if _digest_of(_read_bytes(security.resolve_inside(root, entry.path))) != entry.payload_sha256:
                     bad.append(entry.path)
         if bad:
             raise StudioError("install_conflict", "written files do not match the payload", details={"paths": bad[:10]})

@@ -65,7 +65,7 @@
   "install.recovery.pathNote": "失败的候选内容及其事务记录保存在仓库之外的这个路径下。",
   "install.recovery.start": "预览恢复操作",
   "install.recovery.title": "需要安装恢复",
-  "install.retire.body": "只有当字节仍与凭据一致时，旧版本拥有的文件才会被移除。被你改动过的待退役文件会被保留并报告，而不是删除。",
+  "install.retire.body": "只有当字节仍与凭据一致时，旧版本拥有的文件才会被移除。Studio 合并进文件的部分（例如它在 AGENTS.md 中的区块或 .gitignore 中的行）也按同样方式移除，文件其余内容保持不变。被你改动过的内容会被保留并报告，而不是删除。",
   "install.retire.title": "将被退役的内容",
   "install.stale.body": "没有写入任何内容。预览已从磁盘重新读取；确认之前请再核对一遍。",
   "install.stale.title": "在你阅读期间仓库发生了变化",
