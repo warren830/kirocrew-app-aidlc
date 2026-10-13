@@ -78,6 +78,8 @@ export function GateTemplate({ card, detail, draft, setDraft, refreshing, api, r
   const artifacts = card.evidence.artifacts
   const findings: readonly ReviewFinding[] = review?.findings ?? []
   const openBlockers = findings.filter((finding) => finding.level === 'blocker').length
+  // Findings Studio does not grade (a 2.11 record's Minor/Major, a table row) are not "no blockers".
+  const ungraded = findings.filter((finding) => finding.level === 'unknown').length
   const offersChanges = card.decisions.some(
     (spec) => spec.decision === 'request_changes' || spec.decision === 'request_plan_changes',
   )
@@ -130,11 +132,13 @@ export function GateTemplate({ card, detail, draft, setDraft, refreshing, api, r
                   <Chip tone="danger" icon="warn">
                     {t('review.openBlockers', { n: openBlockers })}
                   </Chip>
-                ) : (
+                ) : ungraded > 0 ? (
+                  <Chip icon="info">{t('template.gate.ungraded', { n: ungraded })}</Chip>
+                ) : review.verdict === null || review.verdict.toUpperCase() === 'READY' ? (
                   <Chip tone="ok" icon="check">
                     {t('template.gate.noBlockers')}
                   </Chip>
-                )
+                ) : null
               ) : null
             }
             footer={review ? <span>{t('review.quotedVerbatim')}</span> : null}

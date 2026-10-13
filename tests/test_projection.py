@@ -416,8 +416,8 @@ def test_a_2_11_gate_shows_the_review_record_its_audit_row_names(projection, sna
     evidence = projection.evidence(snap_of(root), stage=stage).to_json()
     review = evidence["review"]
     assert review is not None and review["verdict"] == "READY" and review["findings_parsed"] is True
-    assert [f["title"] for f in review["findings"]] == [
-        "R-01 | Minor | test_textstats.py | No test for tabs | Add one | New"]
+    assert [(f["finding_id"], f["severity"], f["title"], f["location"], f["required_action"], f["status"])
+            for f in review["findings"]] == [("R-01", "Minor", "No test for tabs", "test_textstats.py", "Add one", "New")]
     assert review["reviewer"] == "aidlc-architecture-reviewer-agent" and review["iteration"] == 1
     # the judged artifact leads, and the record is not listed as one of the stage's artifacts
     assert [a["name"] for a in evidence["artifacts"]] == ["code-generation-plan.md", "code-summary.md"]

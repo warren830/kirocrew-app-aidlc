@@ -393,6 +393,20 @@ describe('gate template', () => {
     expect(screen.queryByText(en.t('review.quotedVerbatim'))).toBeNull()
   })
 
+  it('calls neither ungraded findings nor a NOT-READY verdict "no open blockers"', () => {
+    setApiRoutes({})
+    const graded = finding({ level: 'unknown', severity: 'Minor', finding_id: 'R-01', anchor: null })
+    const review = { reviewer: 'aidlc-architecture-reviewer-agent', review_class: 'advisory', iteration: 1 }
+    const { unmount } = mount(GateTemplate, card({ evidence: { ...card().evidence,
+      review: { ...review, verdict: 'READY', findings: [graded] } } }))
+    expect(screen.getByText(en.t('template.gate.ungraded', { n: 1 }))).toBeInTheDocument()
+    expect(screen.queryByText(en.t('template.gate.noBlockers'))).toBeNull()
+    unmount()
+    mount(GateTemplate, card({ evidence: { ...card().evidence, review: { ...review, verdict: 'NOT-READY', findings: [] } } }))
+    expect(screen.getByText('NOT-READY')).toBeInTheDocument()
+    expect(screen.queryByText(en.t('template.gate.noBlockers'))).toBeNull()
+  })
+
   it('keeps a review Studio could not enumerate, since that is not proof no reviewer ran', () => {
     setApiRoutes({})
     mount(GateTemplate, card({ evidence: { ...card().evidence,

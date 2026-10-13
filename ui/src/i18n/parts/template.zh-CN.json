@@ -257,5 +257,7 @@
   "template.command.stageSubCommit": "AI-DLC 最后记录的阶段。提交请求不会改变它。",
   "template.gate.noReviewStored": "做出决定时，这张卡片没有保存评审。",
   "template.questions.closedUnsent": "这些是 AI-DLC 提出的问题。这张卡片在从它发出任何回答之前就已关闭。",
-  "template.questions.closedUnsentChip": "未从此卡片发出回答"
+  "template.questions.closedUnsentChip": "未从此卡片发出回答",
+  "template.gate.ungraded": "{n} 条发现，由评审者分级",
+  "template.gate.ungraded_one": "{n} 条发现，由评审者分级"
 }

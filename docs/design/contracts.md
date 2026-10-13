@@ -874,6 +874,9 @@ question_digest(bytes) = sha256(bytes)
 class ReviewFinding:
     level: str            # "blocker" | "advisory" | "resolved" | "unknown"
     title: str; quote: str | None; anchor: str | None; reviewer: str | None; iteration: int | None
+    finding_id: str | None; severity: str | None; location: str | None; required_action: str | None; status: str | None
+    # the five 2.11 review-record fields, verbatim (title is then the finding text, quote None); absent from the
+    # JSON of a finding read from a "## Review" section, whose whole row or bullet is the title
 def parse_review_section(artifact_text: str) -> tuple[str | None, list[ReviewFinding]]
     # returns (verdict "READY"|"NOT-READY"|None, findings) from the LAST "## Review" H2 section; bullets under
     # "Blocker"/"Advisory"/"Resolved" H3s (case-insensitive prefix match) map to levels; anything else "unknown".
@@ -887,8 +890,9 @@ def latest_review_completion(events: Sequence[AuditEvent], stage: str, unit: str
 def parse_review_record(data: bytes, completion: AuditEvent) -> tuple[str | None, list[ReviewFinding]] | None
     # 2.11+: the record the row's `Review Record` names (`.aidlc-engine/reviews/<stage>/stage|units/<unit>/<attempt>/
     # <n>.json` under the intent record). None unless sha256 matches `Review Record Digest` and stage, unit, iteration,
-    # reviewer and verdict match the row. Each finding is its row (id | severity | location | finding |
-    # required_action | status, verbatim); level "resolved" for status Resolved, else "unknown".
+    # reviewer and verdict match the row. Each finding keeps its fields (finding_id, severity, location,
+    # required_action, status, verbatim) with the finding text as its title; level "resolved" for status Resolved,
+    # else "unknown" (a severity is the reviewer's own scale, not a Studio level).
     # The stage's review is the record when the newest answered completion names one; a missing or unverifiable
     # record keeps the row's verdict with findings_parsed=False. A completion naming no record (2.10 and earlier)
     # leaves the artifact's "## Review" as the review.

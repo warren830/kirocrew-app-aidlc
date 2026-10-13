@@ -1152,11 +1152,11 @@ def test_a_review_record_is_the_review_its_completion_row_names(R):
     assert completion is not None and completion.fields["Review Record"] == path
     verdict, findings = R.parse_review_record(text.encode(), completion)
     assert verdict == "READY" and findings.findings_parsed is True
-    # each finding is its table row, verbatim; a severity is not a level, AI-DLC's own Resolved is
-    assert [f.title for f in findings] == [
-        "R-01 | Minor | textstats.py > word_count | `split(' ')` counts empty strings | Use `str.split()` | New",
-        "R-02 | Major | test_textstats.py | No test for tabs | Add one | Resolved"]
-    assert [f.level for f in findings] == ["unknown", "resolved"] and findings[0].quote == "split(' ')"
+    # each finding keeps its fields verbatim; a severity is not a level, AI-DLC's own Resolved is
+    assert [(f.finding_id, f.severity, f.title, f.location, f.required_action, f.status) for f in findings] == [
+        ("R-01", "Minor", "`split(' ')` counts empty strings", "textstats.py > word_count", "Use `str.split()`", "New"),
+        ("R-02", "Major", "No test for tabs", "test_textstats.py", "Add one", "Resolved")]
+    assert [f.level for f in findings] == ["unknown", "resolved"] and findings[0].quote is None
     assert all(f.reviewer == "aidlc-architecture-reviewer-agent" and f.iteration == 1 for f in findings)
     # bytes edited after the row pinned them are not the review, and neither is another scope's record
     assert R.parse_review_record(text.replace("Minor", "Major").encode(), completion) is None

@@ -44,5 +44,9 @@
   "review.receipt.note": "这些记录是 AI-DLC 自己的审计事件。Studio 只读取，从不写入。",
   "review.receipt.verdict": "结论",
   "review.stage": "阶段",
-  "review.verdict": "结论"
+  "review.verdict": "结论",
+  "review.severityTitle": "评审者自己写的严重程度，原样显示。Studio 不会把它换算成阻断或建议。",
+  "review.finding.location": "位置：",
+  "review.finding.action": "要求：",
+  "review.group.graded": "评审者已分级 — {n}"
 }

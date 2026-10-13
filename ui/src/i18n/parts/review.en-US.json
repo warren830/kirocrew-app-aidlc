@@ -44,5 +44,9 @@
   "review.receipt.note": "These rows are AI-DLC's own audit events. Studio reads them and never writes them.",
   "review.receipt.verdict": "Verdict",
   "review.stage": "Stage",
-  "review.verdict": "Verdict"
+  "review.verdict": "Verdict",
+  "review.severityTitle": "The reviewer's own severity, as written. Studio does not map it onto blocker or advisory.",
+  "review.finding.location": "Where:",
+  "review.finding.action": "Asks for:",
+  "review.group.graded": "Graded by the reviewer — {n}"
 }

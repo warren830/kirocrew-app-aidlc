@@ -224,6 +224,27 @@ describe('reviewer findings', () => {
     mount(<FindingList findings={[finding({ level: 'unknown' })]} grouped />)
     expect(screen.getByText(/Level not stated by the reviewer — 1/)).toBeInTheDocument()
   })
+
+  it('shows a 2.11 record finding as its fields, with the severity verbatim and not mapped', () => {
+    mount(
+      <FindingList
+        grouped
+        onOpenAnchor={vi.fn()}
+        findings={[finding({ level: 'unknown', title: 'NFR3 points at a file with no imports', quote: null, anchor: null,
+          finding_id: 'R-03', severity: 'Minor', location: 'traceability.json > coverage row NFR3',
+          required_action: 'Point the NFR3 row at test_textstats.py.', status: 'New' })]}
+      />,
+    )
+    expect(screen.getByText('R-03')).toBeInTheDocument()
+    expect(screen.getByText('Minor')).toBeInTheDocument()
+    expect(screen.queryByText('Level not stated')).toBeNull()
+    expect(screen.getByText('New')).toBeInTheDocument()
+    expect(screen.getByText('traceability.json > coverage row NFR3')).toBeInTheDocument()
+    expect(screen.getByText(/Point the NFR3 row at test_textstats.py/)).toBeInTheDocument()
+    expect(screen.getByText(/Graded by the reviewer — 1/)).toBeInTheDocument()
+    // The reviewer named a location, so the list must not say it recorded none.
+    expect(screen.queryByText(/recorded no section/i)).toBeNull()
+  })
 })
 
 describe('the review tab', () => {

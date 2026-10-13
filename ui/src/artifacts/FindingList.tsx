@@ -15,6 +15,8 @@
  *  3. **`unknown` is a level, not a bug.** The backend refuses to map Critical/Major/Minor onto Studio's
  *     blocking levels because that would invent authority. Those findings must therefore still be shown,
  *     grouped as "level not stated", or a blocker the reviewer wrote in a table would silently vanish.
+ *     A 2.11 review record does state its severity, id, location, required action and status as fields;
+ *     those are shown verbatim, still without mapping the severity onto a Studio level.
  */
 
 import { useEffect, useMemo, useRef } from 'react'
@@ -105,7 +107,8 @@ export function FindingList({ findings, grouped = false, onOpenAnchor, anchor, s
             <section className="studio-finding-group" key={level} aria-labelledby={`fg-${level}`}>
               <h4 id={`fg-${level}`}>
                 <Icon name={LEVEL_ICON[level]} size={13} />
-                {t(`review.group.${level}`, { n: fmt.number(items.length) })}
+                {t(level === 'unknown' && items.every((item) => item.finding.severity) ? 'review.group.graded'
+                  : `review.group.${level}`, { n: fmt.number(items.length) })}
               </h4>
               {items.map((item) => (
                 <FindingItem
@@ -146,12 +149,17 @@ function FindingItem({
   if (finding.reviewer) meta.push(finding.reviewer)
   if (finding.iteration !== null) meta.push(t('review.iteration', { n: fmt.number(finding.iteration) }))
 
+  // A record finding carries the reviewer's own severity: that word, verbatim, rather than "level not stated".
+  const graded = level === 'unknown' && finding.severity
+
   return (
     <article className="studio-finding" data-level={level} id={`f-${index}`}>
       <div className="studio-finding-head">
-        <Chip tone={LEVEL_TONE[level]} icon={LEVEL_ICON[level]}>
-          {t(`review.level.${level}`)}
+        {finding.finding_id ? <span className="studio-mono studio-strong">{finding.finding_id}</span> : null}
+        <Chip tone={LEVEL_TONE[level]} icon={LEVEL_ICON[level]} {...(graded ? { title: t('review.severityTitle') } : {})}>
+          {graded ? finding.severity : t(`review.level.${level}`)}
         </Chip>
+        {finding.status ? <Chip>{finding.status}</Chip> : null}
         {meta.length > 0 ? <span className="studio-finding-meta studio-mono">{meta.join(' · ')}</span> : null}
         {finding.anchor && onOpenAnchor ? (
           <button
@@ -166,7 +174,18 @@ function FindingItem({
       {/* Reviewer text, verbatim. */}
       <p className="studio-finding-title">{finding.title}</p>
       {finding.quote ? <p className="studio-finding-quote">{finding.quote}</p> : null}
-      {!finding.anchor && anchorable ? (
+      {finding.location ? (
+        <p className="studio-finding-field">
+          <span className="studio-muted">{t('review.finding.location')}</span>{' '}
+          <span className="studio-mono studio-wrap-any">{finding.location}</span>
+        </p>
+      ) : null}
+      {finding.required_action ? (
+        <p className="studio-finding-field">
+          <span className="studio-muted">{t('review.finding.action')}</span> {finding.required_action}
+        </p>
+      ) : null}
+      {!finding.anchor && !finding.location && anchorable ? (
         <p className="studio-finding-noanchor studio-muted">{t('review.noAnchor')}</p>
       ) : null}
     </article>

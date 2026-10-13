@@ -257,5 +257,7 @@
   "template.command.stageSubCommit": "The stage AI-DLC last recorded. A commit request does not move it.",
   "template.gate.noReviewStored": "No review was stored with this card when it was decided.",
   "template.questions.closedUnsent": "These are the questions AI-DLC asked. This card closed before any answer was sent from it.",
-  "template.questions.closedUnsentChip": "No answer sent from this card"
+  "template.questions.closedUnsentChip": "No answer sent from this card",
+  "template.gate.ungraded": "{n} findings, graded by the reviewer",
+  "template.gate.ungraded_one": "{n} finding, graded by the reviewer"
 }

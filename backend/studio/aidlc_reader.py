@@ -1568,6 +1568,25 @@ class ReviewFinding(WireRecord):
     anchor: str | None
     reviewer: str | None
     iteration: int | None
+    #: 2.11's review record keeps each finding as fields. Kept apart, verbatim, so a card can show them as the
+    #: reviewer wrote them; ``None`` for a finding read from a ``## Review`` section, whose row is the title.
+    finding_id: str | None = None
+    severity: str | None = None
+    location: str | None = None
+    required_action: str | None = None
+    status: str | None = None
+
+    def to_json(self) -> dict[str, Any]:
+        # The record fields appear only when the record supplied them, so a `## Review` finding keeps the exact
+        # shape (and evidence digest) it always had.
+        out = WireRecord.to_json(self)
+        for key in _RECORD_FINDING_FIELDS:
+            if out.get(key) is None:
+                out.pop(key, None)
+        return out
+
+
+_RECORD_FINDING_FIELDS = ("finding_id", "severity", "location", "required_action", "status")
 
 
 class ReviewFindings(list):
@@ -1736,15 +1755,17 @@ def parse_review_record(data: bytes, completion: AuditEvent) -> tuple[str | None
     findings: list[ReviewFinding] = []
     parsed = isinstance(rows, list)
     for row in rows if isinstance(rows, list) else ():
-        cells = [row.get(key) for key in _REVIEW_RECORD_FINDING_KEYS] if isinstance(row, dict) else []
-        title = " | ".join(cell.strip() for cell in cells if isinstance(cell, str) and cell.strip())
+        cells = {key: row.get(key) for key in _REVIEW_RECORD_FINDING_KEYS} if isinstance(row, dict) else {}
+        text = {key: value.strip() for key, value in cells.items() if isinstance(value, str) and value.strip()}
+        title = text.get("finding") or " | ".join(text.values())
         if not title:
             parsed = False
             continue
-        quoted = _QUOTED_RE.search(title)
+        # No quote: the first backtick span of a structured finding is a file name more often than the point.
         findings.append(ReviewFinding(
-            level="resolved" if row.get("status") == "Resolved" else "unknown", title=title,
-            quote=quoted.group(1) if quoted else None, anchor=None, reviewer=reviewer, iteration=iteration))
+            level="resolved" if text.get("status") == "Resolved" else "unknown", title=title, quote=None, anchor=None,
+            reviewer=reviewer, iteration=iteration, finding_id=text.get("id"), severity=text.get("severity"),
+            location=text.get("location"), required_action=text.get("required_action"), status=text.get("status")))
     return (verdict.upper(), ReviewFindings(findings, findings_parsed=parsed))
 
 
