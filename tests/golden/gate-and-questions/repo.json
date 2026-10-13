@@ -173,16 +173,16 @@
    },
    "git_common_dir_identity": "<ROOT0>/.git",
    "install": {
-    "bundled_engine_version": "2.10.0",
+    "bundled_engine_version": "2.11.0",
     "drift_count": 0,
     "engine_dir": ".kiro",
     "engine_state_version": 8,
-    "engine_version": "2.10.0",
+    "engine_version": "2.11.0",
     "harness_dirs": [
      {
       "dir": ".kiro",
       "engine_state_version": 8,
-      "engine_version": "2.10.0",
+      "engine_version": "2.11.0",
       "harness_name": "kiro",
       "has_utility": true,
       "rules_subdir": "steering",
@@ -190,7 +190,7 @@
      }
     ],
     "newer_installed": false,
-    "own_engine_version": "2.10.0",
+    "own_engine_version": "2.11.0",
     "receipt": null,
     "rollback_target": null,
     "stage_count": 33,
@@ -199,7 +199,7 @@
     "upgrade_available": false
    },
    "install_status": "installed",
-   "installed_engine_version": "2.10.0",
+   "installed_engine_version": "2.11.0",
    "label": "gate-and-questions",
    "last_seen": "<volatile>",
    "leases": {

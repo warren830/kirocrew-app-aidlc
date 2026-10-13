@@ -2,7 +2,7 @@
  "body": {
   "code": "same_version_installed",
   "details": {
-   "engine_version": "2.10.0"
+   "engine_version": "2.11.0"
   },
   "error": "the bundled engine is already installed"
  },

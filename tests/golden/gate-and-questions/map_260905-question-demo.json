@@ -51,7 +51,7 @@
    },
    "current_stage": "requirements-analysis",
    "directive_stage": null,
-   "graph_version": "2.10.0",
+   "graph_version": "2.11.0",
    "intent_key": "260905-question-demo",
    "nodes": [
     {

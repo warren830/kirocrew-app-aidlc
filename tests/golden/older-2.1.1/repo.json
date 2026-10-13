@@ -112,7 +112,7 @@
    },
    "git_common_dir_identity": "<ROOT0>/.git",
    "install": {
-    "bundled_engine_version": "2.10.0",
+    "bundled_engine_version": "2.11.0",
     "drift_count": 0,
     "engine_dir": ".kiro",
     "engine_state_version": null,
