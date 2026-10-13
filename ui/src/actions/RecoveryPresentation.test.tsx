@@ -91,7 +91,7 @@ describe('recovery notices explain the actual cause and lifecycle', () => {
     expect(screen.queryByText(i18n.t('template.recovery.bootRestarted'))).not.toBeInTheDocument()
     expect(screen.getByText(locale === 'en-US'
       ? 'Delivery is confirmed. This intent still needs workflow reconciliation. Answer acceptance has not been verified; nothing is replayed automatically.'
-      : '消息已确认送达。该 intent 的工作流仍需核对，回答是否被接受尚未验证；系统不会自动重放。')).toBeInTheDocument()
+      : '消息已确认送达。该意图的工作流仍需核对，回答是否被接受尚未验证；系统不会自动重放。')).toBeInTheDocument()
     const delivery = screen.getByText(i18n.t('template.recovery.src.delivery')).closest<HTMLDivElement>('.studio-ev')!
     expect(delivery).not.toHaveAttribute('data-conflict')
     expect(delivery).toHaveTextContent(locale === 'en-US'
