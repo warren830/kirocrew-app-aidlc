@@ -175,7 +175,8 @@ async def remove_repo(services: Any, request: web.Request) -> web.Response:
         raise StudioError("repo_busy", "this repository has a live lease; wait for it to finish",
                           details=lease_view(held))
     await asyncio.to_thread(services.repos.remove, repo.repo_id)
-    await services.activity.record(kind="repo.removed", severity="attention", repo_id=repo.repo_id,
+    # A deliberate act, not a problem: "Needs attention" on it read as something going wrong.
+    await services.activity.record(kind="repo.removed", severity="info", repo_id=repo.repo_id,
                                    params={"label": repo.label})
     await services.events.publish("repo.removed", {"repo_id": repo.repo_id})
     return json_ok({"ok": True, "removed": repo.repo_id})

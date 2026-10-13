@@ -172,11 +172,16 @@ describe('Timeline provenance', () => {
       entry({ id: 21, refs: { repo: { repo_id: 'r_1', label: 'checkout-web', space: 'default', intent_dir: '260904-gate-demo' },
                               session_key: 'dashboard:aidlc-studio-r_1-260904-gate-demo' } }),
       entry({ id: 22, at: '2026-09-05T10:01:00+00:00', refs: { repo: { repo_id: 'r_9', label: null } } }),
+      entry({ id: 23, at: '2026-09-05T10:02:00+00:00', kind: 'repo.removed', message_key: 'activity.repo.removed',
+              params: { label: 'old-shop' }, refs: { repo: { repo_id: 'r_8', label: null } } }),
     ])
     renderActivity()
 
     expect(await screen.findByText('checkout-web / 260904-gate-demo')).toBeInTheDocument()
     expect(screen.getByText('unregistered repository')).toBeInTheDocument()
+    // a row that recorded the name keeps it after the repository is gone
+    expect(screen.getByText('old-shop (unregistered repository)')).toBeInTheDocument()
+
     expect(screen.queryByText(/session dashboard:/)).toBeNull()
   })
 

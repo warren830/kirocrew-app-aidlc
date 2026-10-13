@@ -94,9 +94,13 @@ export interface TimelineRowProps {
 }
 
 
-/** `checkout-web / 260904-gate-demo`: the repository by its label (or a word for an unregistered one), then the intent. */
-export function scopeText(repo: NonNullable<TimelineEntry['refs']['repo']>, gone: string): string {
-  return [repo.label ?? gone, repo.intent_dir].filter(Boolean).join(' / ')
+/**
+ * `checkout-web / 260904-gate-demo`: the repository by its label, then the intent. An unregistered repository has no
+ * label any more; the name the row itself recorded (`params.label`) is used beside the word for it, when it has one.
+ */
+export function scopeText(repo: NonNullable<TimelineEntry['refs']['repo']>, gone: string, recorded?: unknown): string {
+  const name = repo.label ?? (typeof recorded === 'string' && recorded ? `${recorded} (${gone})` : gone)
+  return [name, repo.intent_dir].filter(Boolean).join(' / ')
 }
 
 export function TimelineRow({ entry, selected, onOpenEvidence, onOpenAction }: TimelineRowProps) {
@@ -152,7 +156,7 @@ export function TimelineRow({ entry, selected, onOpenEvidence, onOpenAction }: T
           ) : null}
           {/* Whose event it is, by name; the session key stays in the evidence drawer. */}
           {entry.refs.repo ? (
-            <Chip icon="repo">{scopeText(entry.refs.repo, t('activity.row.repoGone'))}</Chip>
+            <Chip icon="repo">{scopeText(entry.refs.repo, t('activity.row.repoGone'), entry.params['label'])}</Chip>
           ) : entry.refs.session_key ? (
             <Chip mono icon="link">{t('activity.row.session', { session: entry.refs.session_key })}</Chip>
           ) : null}
