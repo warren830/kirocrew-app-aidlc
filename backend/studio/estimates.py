@@ -150,8 +150,12 @@ def _stage_turns(stage: "PlanStage", stage_class: str, multiplier: float, units:
     if stage_class in PER_UNIT_CLASSES:
         base_low, base_high = base_low * units, base_high * units
     factor = multiplier + REVIEW_UPLIFT.get(stage.review_class or "none", 0.0)
-    # Ceiling, not rounding: an estimate that rounds work away reads as a promise it cannot keep.
-    low, high = math.ceil(base_low * factor), math.ceil(base_high * factor)
+    # Outward, never inward: the high end rounds up and the low end down, since a band that rounds work away, or
+    # starts above what a run took, reads as a promise it cannot keep (bugfix took 7 turns under a 10-24 band).
+    # A conditional stage may not run at all, so it adds nothing to the low end.
+    low, high = math.floor(base_low * factor), math.ceil(base_high * factor)
+    if getattr(stage, "execution", "") == "CONDITIONAL":
+        low = 0
     if (getattr(stage, "summary_confirmation", None) or "") == SUMMARY_CONFIRMATION_REQUIRED:
         low, high = low + SUMMARY_CONFIRMATION_TURNS, high + SUMMARY_CONFIRMATION_TURNS
     return Range(low, max(low, high), UNIT_TURNS, SOURCE_RULE_BAND, CONFIDENCE_LOW)

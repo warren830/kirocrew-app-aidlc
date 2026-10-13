@@ -33,10 +33,10 @@ def svc(E):
 
 def stage(P, slug: str, *, phase: str = "inception", mode: str = "inline", enabled: bool = True,
           in_grid: bool = True, per_unit: bool = False, review_class: str = "none",
-          summary_confirmation: str | None = None, produces: tuple[str, ...] = ()):
+          summary_confirmation: str | None = None, produces: tuple[str, ...] = (), execution: str = "ALWAYS"):
     """A ``PlanStage`` with only the fields the estimator reads spelled out."""
     return P.PlanStage(
-        slug=slug, number="2.1", name=slug, phase=phase, execution="CONDITIONAL", in_grid=in_grid, enabled=enabled,
+        slug=slug, number="2.1", name=slug, phase=phase, execution=execution, in_grid=in_grid, enabled=enabled,
         locked=False, lock_reason=None, gate=phase != "initialization", review_class=review_class, reviewer=None,
         per_unit=per_unit, produces=produces, consumes=(), depends_on=(), conditional_on=None, state=None, mode=mode,
         summary_confirmation=summary_confirmation)
@@ -103,17 +103,24 @@ def test_rule_band_golden_at_standard_depth(E, P, stage_class, slug, phase, mode
     assert est.turns.confidence == E.CONFIDENCE_LOW
 
 
-@pytest.mark.parametrize("depth, expected", [("Minimal", (2, 3)), ("Standard", (2, 4)), ("Comprehensive", (3, 6))])
+@pytest.mark.parametrize("depth, expected", [("Minimal", (1, 3)), ("Standard", (2, 4)), ("Comprehensive", (2, 6))])
 def test_depth_multiplier(P, svc, depth, expected):
     code = stage(P, "code-generation", phase="construction", mode="subagent", per_unit=True)
     assert band(estimate(svc, code, depth=depth, scope="poc")) == expected
 
 
 @pytest.mark.parametrize("review_class, expected", [
-    ("none", (2, 4)), ("advisory", (3, 6)), ("adversarial", (4, 7))])
+    ("none", (2, 4)), ("advisory", (2, 6)), ("adversarial", (3, 7))])
 def test_review_uplift_is_a_share_of_the_band(P, svc, review_class, expected):
     code = stage(P, "code-generation", phase="construction", per_unit=True, review_class=review_class)
     assert band(estimate(svc, code)) == expected
+
+
+def test_a_conditional_stage_adds_nothing_to_the_low_end(P, svc):
+    """It may not run: the bugfix run skipped both deployment stages, and took 7 turns under a 10-24 band."""
+    always = estimate(svc, stage(P, "deployment-pipeline", phase="operation"))
+    maybe = estimate(svc, stage(P, "deployment-pipeline", phase="operation", execution="CONDITIONAL"))
+    assert band(always) == (1, 3) and band(maybe) == (0, 3)
 
 
 def test_summary_confirmation_costs_one_turn(P, svc):
@@ -186,7 +193,7 @@ def test_coverage_lost_names_the_artifacts_a_disabled_stage_would_have_written(P
 def test_every_estimate_is_a_rule_band_with_no_samples(E, P, svc):
     est = estimate(svc, stage(P, "code-generation", phase="construction", per_unit=True), depth="Minimal", scope="poc")
     assert (est.source, est.confidence, est.samples) == (E.SOURCE_RULE_BAND, E.CONFIDENCE_LOW, 0)
-    assert band(est) == (2, 3)
+    assert band(est) == (1, 3)
     assert all(d.turns.source == E.SOURCE_RULE_BAND for d in est.dominant)
 
 
