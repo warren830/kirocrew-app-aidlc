@@ -9,11 +9,16 @@
  *
  * A file that is not shown says why (secret, binary, too large, outside the repository); none of those
  * may read as "unchanged", which is a claim about the file.
+ *
+ * A closed card compares with the HEAD it captured when it opened: once the approved code is committed, today's
+ * HEAD already holds it and every file would read "Same as the last commit". The files are still read now, and
+ * the copy says so.
  */
 
 import { useCallback, useState } from 'react'
 
 import { useI18n } from '../i18n'
+import { isClosedAction } from '../lib/actionQueue'
 import { useStudioApi } from '../lib/api'
 import type { ActionCard, SourceChange, SourceChangesResponse } from '../lib/types'
 import { useResource, type Resource } from '../lib/useResource'
@@ -40,11 +45,13 @@ export function useSourceChanges(card: ActionCard, enabled: boolean): Resource<S
   const { intent_key: intentKey } = card.intent
   const stage = card.stage?.slug ?? ''
   const unit = card.stage?.unit ?? ''
+  const base = isClosedAction(card) ? card.evidence.git?.head ?? '' : ''
   const fetcher = useCallback(
-    (signal: AbortSignal) => api.changes(repoId, intentKey, { stage, ...(unit ? { unit } : {}) }, { signal }),
-    [api, repoId, intentKey, stage, unit],
+    (signal: AbortSignal) =>
+      api.changes(repoId, intentKey, { stage, ...(unit ? { unit } : {}), ...(base ? { base } : {}) }, { signal }),
+    [api, repoId, intentKey, stage, unit, base],
   )
-  return useResource<SourceChangesResponse>(`changes:${repoId}:${intentKey}:${stage}:${unit}`, fetcher, {
+  return useResource<SourceChangesResponse>(`changes:${repoId}:${intentKey}:${stage}:${unit}:${base}`, fetcher, {
     enabled: enabled && stage !== '',
     interval: 0,
     revalidateOn: ['intent.updated', 'reset'],
@@ -53,8 +60,9 @@ export function useSourceChanges(card: ActionCard, enabled: boolean): Resource<S
 
 const SHOWN = new Set(['added', 'modified', 'deleted'])
 
-function FileChange({ change }: { change: SourceChange }) {
+function FileChange({ change, base }: { change: SourceChange; base: string | null }) {
   const { t, fmt } = useI18n()
+  const short = base ? base.slice(0, 7) : ''
   const [open, setOpen] = useState(change.status === 'modified' || change.status === 'deleted')
   const shown = SHOWN.has(change.status) && change.diff !== null
   const tone = change.status === 'added' ? 'ok' : change.status === 'deleted' ? 'danger'
@@ -64,7 +72,9 @@ function FileChange({ change }: { change: SourceChange }) {
     <li className="studio-srcchange" data-status={change.status}>
       <div className="studio-srcchange-head">
         <code className="studio-srcchange-path">{change.path}</code>
-        <Chip {...(tone ? { tone } : {})}>{t(`changes.status.${change.status}`)}</Chip>
+        <Chip {...(tone ? { tone } : {})}>
+          {base && change.status === 'unchanged' ? t('changes.status.unchangedBase', { sha: short }) : t(`changes.status.${change.status}`)}
+        </Chip>
         {shown ? (
           <span className="studio-mono studio-muted" aria-label={t('changes.counts', {
             added: fmt.number(change.additions), removed: fmt.number(change.deletions) })}>
@@ -78,11 +88,15 @@ function FileChange({ change }: { change: SourceChange }) {
           </button>
         ) : null}
       </div>
-      {change.status === 'added' ? <p className="studio-muted studio-diff-note">{t('changes.addedNote')}</p> : null}
+      {change.status === 'added' ? (
+        <p className="studio-muted studio-diff-note">{base ? t('changes.addedNoteBase', { sha: short }) : t('changes.addedNote')}</p>
+      ) : null}
       {!SHOWN.has(change.status) ? (
         <p className="studio-muted studio-diff-note">
           <Icon name={change.status === 'unchanged' ? 'check' : 'info'} size={13} />
-          {t(`changes.why.${change.status}`, { change: change.change ? t(`changes.status.${change.change}`) : '' })}
+          {base && change.status === 'unchanged'
+            ? t('changes.why.unchangedBase', { sha: short })
+            : t(`changes.why.${change.status}`, { change: change.change ? t(`changes.status.${change.change}`) : '' })}
         </p>
       ) : null}
       {shown && open ? <DiffLines diff={change.diff ?? ''} /> : null}
@@ -121,18 +135,27 @@ export function SourceChanges({ card }: { card: ActionCard }) {
   }
   const added = data.files.reduce((sum, file) => sum + file.additions, 0)
   const removed = data.files.reduce((sum, file) => sum + file.deletions, 0)
+  const base = data.base ?? null
+  const counts = { n: fmt.number(data.files.length), added: fmt.number(added), removed: fmt.number(removed) }
 
   return (
-    <section className="studio-srcchanges" aria-label={t('changes.label', { stage: card.stage?.slug ?? '' })}>
+    <section className="studio-srcchanges" aria-label={base
+      ? t('changes.labelBase', { stage: card.stage?.slug ?? '', sha: base.slice(0, 7) })
+      : t('changes.label', { stage: card.stage?.slug ?? '' })}>
       <p className="studio-muted">
-        {t('changes.summary', { n: fmt.number(data.files.length), added: fmt.number(added),
-          removed: fmt.number(removed) })}
+        {base ? t('changes.summaryBase', { ...counts, sha: base.slice(0, 7) }) : t('changes.summary', counts)}
       </p>
+      {isClosedAction(card) ? (
+        // Read now either way; without the captured commit it is today's HEAD, which may already hold the change.
+        <p className="studio-muted studio-diff-note">
+          <Icon name="info" size={13} /> {t(base ? 'changes.readNowBase' : 'changes.readNow')}
+        </p>
+      ) : null}
       {traced ? (
         <p className="studio-muted studio-diff-note"><Icon name="info" size={13} /> {t('changes.fromTraceability')}</p>
       ) : null}
       <ul className="studio-srcchange-list">
-        {data.files.map((change) => <FileChange change={change} key={change.path} />)}
+        {data.files.map((change) => <FileChange change={change} base={base} key={change.path} />)}
       </ul>
       {data.truncated ? <p className="studio-muted">{t('changes.moreFiles')}</p> : null}
     </section>

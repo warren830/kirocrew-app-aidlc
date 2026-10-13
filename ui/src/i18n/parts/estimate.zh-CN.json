@@ -47,5 +47,6 @@
   "estimate.exact.ofGraphConditional_one": "精确值，已知 {known} 个阶段中选了 {selected} 个；其中 {n} 个条件阶段是否运行，由 AI-DLC 在运行时决定",
   "estimate.exact.ofGraphConditional_other": "精确值，已知 {known} 个阶段中选了 {selected} 个；其中 {n} 个条件阶段是否运行，由 AI-DLC 在运行时决定",
   "estimate.exact.gatesConditional_one": "initialization 之外的每个已选阶段都有一个关卡，但其中 {n} 个是条件阶段，AI-DLC 跳过的阶段不会打开关卡",
-  "estimate.exact.gatesConditional_other": "initialization 之外的每个已选阶段都有一个关卡，但其中 {n} 个是条件阶段，AI-DLC 跳过的阶段不会打开关卡"
+  "estimate.exact.gatesConditional_other": "initialization 之外的每个已选阶段都有一个关卡，但其中 {n} 个是条件阶段，AI-DLC 跳过的阶段不会打开关卡",
+  "estimate.dominant.conditional": "条件阶段：是否运行由 AI-DLC 在运行时决定；跳过它的运行不会花这些回合。"
 }

@@ -113,7 +113,7 @@
   "map.inspector.reasonSkipped": "在本次计划中该阶段不执行。",
   "map.inspector.reasonAhead": "该阶段位于游标之前方，引擎会自行推进到它。",
   "map.inspector.units": "单元",
-  "map.inspector.summaryConfirmation": "工作流图中的摘要确认：{value}",
+  "map.inspector.summaryConfirmation": "流程图中的摘要确认：{value}",
   "map.review.level.blocker": "阻塞项",
   "map.review.level.advisory": "建议项",
   "map.review.level.resolved": "已回应",
@@ -132,5 +132,7 @@
   "map.inspector.notProducedHere": "灰色的输入来自本次运行未包含的阶段。",
   "map.inspector.summaryConfirmationRun": "本次运行的摘要确认：{value}",
   "map.inspector.auditEmptyOf": "记录最近的 {n} 条审计事件都没有提到该阶段。",
-  "map.inspector.auditEmptyOf_one": "记录最近的 1 条审计事件没有提到该阶段。"
+  "map.inspector.auditEmptyOf_one": "记录最近的 1 条审计事件没有提到该阶段。",
+  "map.bar.gatesUpTo_one": "最多 {n} 个关卡",
+  "map.bar.gatesUpTo_other": "最多 {n} 个关卡"
 }

@@ -99,8 +99,13 @@ export function repoText(card: ActionCard): string {
  * plan's checkpoint), but it asks for an approval, and "Question · Answered" over "AI-DLC recorded the plan
  * approval" read as two different things.
  */
-export function typeLabelOf(i18n: { t: (key: string) => string }, card: Pick<ActionCard, 'queue_type' | 'type' | 'decisions'>): string {
-  if (card.type === 'question' && card.decisions.some((spec) => spec.decision === 'approve_plan')) {
+export function typeLabelOf(
+  i18n: { t: (key: string) => string },
+  card: Pick<ActionCard, 'queue_type' | 'type' | 'decisions'> & { evidence?: Pick<ActionCard['evidence'], 'questions'> },
+): string {
+  // A closed card offers no decisions any more; the checkpoint it captured still says what it asked.
+  if (card.type === 'question' && (card.decisions.some((spec) => spec.decision === 'approve_plan')
+    || card.evidence?.questions?.pending_checkpoint === 'plan_approval')) {
     return i18n.t('queue.type.planApproval')
   }
   return i18n.t(`enum.actionType.${card.queue_type}`)
@@ -179,7 +184,7 @@ function Row({ card, selected, tabbable, now, onSelect }: QueueRowProps) {
 
         <span className="studio-qmeta studio-mono">
           <span className="studio-qwait" data-severity={card.severity}>{wait}</span>
-          {wide ? null : <MetaPart>{stage}</MetaPart>}
+          {wide ? null : <MetaPart keep>{stage}</MetaPart>}
           <MetaPart verbatim>{intent}</MetaPart>
         </span>
 
@@ -192,11 +197,15 @@ function Row({ card, selected, tabbable, now, onSelect }: QueueRowProps) {
   )
 }
 
-function MetaPart({ children, verbatim = false }: { children: ReactNode; verbatim?: boolean }) {
+/** `keep` holds a short fact whole (the stage) while a long one beside it (the objective) gives up the room. */
+function MetaPart({ children, verbatim = false, keep = false }: { children: ReactNode; verbatim?: boolean; keep?: boolean }) {
+  const classes = ['studio-trunc']
+  if (verbatim) classes.push('studio-verbatim')
+  if (keep) classes.push('studio-qkeep')
   return (
     <>
       <span aria-hidden="true" className="studio-qdot">·</span>
-      <span className={verbatim ? 'studio-trunc studio-verbatim' : 'studio-trunc'}>{children}</span>
+      <span className={classes.join(' ')}>{children}</span>
     </>
   )
 }

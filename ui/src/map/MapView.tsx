@@ -27,7 +27,7 @@ import { ContentSkeleton, EmptyState } from '@kirocrew/app-sdk/ui'
 import { useI18n, type I18n } from '../i18n'
 import { StudioApiError, type StudioApi } from '../lib/api'
 import { PHASES, type Phase } from '../lib/enums.generated'
-import { duration, plural } from '../lib/format'
+import { elapsed, plural } from '../lib/format'
 import { useResource } from '../lib/useResource'
 import type { Navigate, StudioRoute } from '../lib/route'
 import type {
@@ -137,9 +137,15 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
   )
   // Only read once something is selected, and never on a timer: a review verdict changes when the
   // record does, and the event stream already forces a refetch.
+  // The selected stage's own review: the current stage's would leave any other stage with only its configuration.
+  const reviewStage = route.stage
+  const reviewUnit = route.unit
   const reviewRes = useResource<ReviewResponse>(
-    ready && route.stage ? `map:review:${repo}:${intent}` : null,
-    useCallback((signal) => api.review(repo, intent, { signal }), [api, repo, intent]),
+    ready && reviewStage ? `map:review:${repo}:${intent}:${reviewStage}:${reviewUnit}` : null,
+    useCallback(
+      (signal) => api.review(repo, intent, { signal }, { stage: reviewStage, ...(reviewUnit ? { unit: reviewUnit } : {}) }),
+      [api, repo, intent, reviewStage, reviewUnit],
+    ),
     { interval: 0 },
   )
 
@@ -375,7 +381,9 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
         {showAllStages ? <Chip mono>{plural(i18n, 'map.bar.stagesKnown', allStages.length)}</Chip> : null}
         <Chip mono>{plural(i18n, 'map.bar.stagesSelected', planStages.length)}</Chip>
         <Chip mono icon="gate">
-          {plural(i18n, 'map.bar.gates', planStages.filter((stage) => stage.gate).length)}
+          {/* A conditional stage AI-DLC has not reached may still be skipped, so its Gate is not a fact yet. */}
+          {plural(i18n, planStages.some((stage) => stage.gate && stage.execution === 'CONDITIONAL' && stage.state === 'not_started')
+            ? 'map.bar.gatesUpTo' : 'map.bar.gates', planStages.filter((stage) => stage.gate).length)}
         </Chip>
         {model.graph_version ? <Chip mono icon="lock">{t('map.bar.engine', { version: model.graph_version })}</Chip> : null}
 
@@ -618,7 +626,7 @@ function StageTable({ phases, intentLabel, selectedStage, onSelect }: StageTable
                   <td className="studio-mono">{stage.agent}</td>
                   <td>{stage.gate ? t('map.chip.gate') : t('common.none')}</td>
                   <td className="studio-mono">{stage.review_class ?? t('common.none')}</td>
-                  <td className="studio-mono">{duration(i18n, stage.elapsed_secs)}</td>
+                  <td className="studio-mono">{elapsed(i18n, stage.elapsed_secs)}</td>
                   <td className="studio-mono">{artifactCountLabel(i18n, stage.artifacts.length)}</td>
                   {/* Not `studio-wrap-any`: in a table that lets the column shrink below its longest word
                       and split it ("Conditi|onal"). The table scrolls sideways instead. */}

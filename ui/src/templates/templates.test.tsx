@@ -481,6 +481,31 @@ describe('gate template', () => {
     expect(within(block).queryByText(en.t('changes.status.unchanged'))).toBeNull()
   })
 
+  it('compares a closed card\'s code with the HEAD it captured, and says it is read now', async () => {
+    const intent = `${BASE}/repos/r_1/intents/default~250901-guest`
+    const head = 'ab12cd3'.padEnd(40, '0')
+    setApiRoutes({
+      [`GET ${intent}/artifacts/art_1`]: () => ({
+        artifact: artifact(), content: '# Plan\n', encoding: 'utf-8', truncated: false, review: null, toc: [],
+        prior: { available: false, source: null, diff: null },
+      }),
+      [`GET ${intent}/changes*`]: () => ({
+        stage: 'functional-design', unit: null, manifest: 'record/source-manifest.json', available: true,
+        reason: null, truncated: false, manifest_readable: true, base: head,
+        files: [{ path: 'calc.py', status: 'modified', additions: 4, deletions: 0, truncated: false,
+          diff: '--- a/calc.py\n+++ b/calc.py\n@@ -1 +1,5 @@\n x = 1\n+\n+\n+def f():\n+    pass\n' }],
+      }),
+    })
+    const manifest = artifact({ artifact_id: 'art_2', name: 'source-manifest.json', relpath: 'record/source-manifest.json' })
+    const evidence = { ...card().evidence, artifacts: [artifact(), manifest], git: { available: true, reason: null, branch: 'main', detached: false, head, head_subject: 'Add line_count',
+      dirty: true, dirty_files: 2, ahead: null, behind: null, upstream: null, observed_at: '2026-10-13T14:30:00Z', took_ms: 9 } }
+    mount(GateTemplate, card({ status: 'StateChanged', evidence }))
+    const block = await screen.findByRole('region', { name: en.t('changes.labelBase', { stage: 'functional-design', sha: 'ab12cd3' }) })
+    expect(apiCalls.some((call) => call.path.includes(`/changes?stage=functional-design&base=${head}`))).toBe(true)
+    expect(within(block).getByText(en.t('changes.summaryBase', { n: '1', added: '4', removed: '0', sha: 'ab12cd3' }))).toBeInTheDocument()
+    expect(within(block).getByText(en.t('changes.readNowBase'))).toBeInTheDocument()
+  })
+
   it('shows zero-Unit code generation from its traceability, and says where the file list came from', async () => {
     const intent = `${BASE}/repos/r_1/intents/default~250901-guest`
     setApiRoutes({
@@ -730,15 +755,23 @@ describe('questions template', () => {
       stage: 'code-generation', questions: [], pending_count: 0, pending_checkpoint: 'plan_approval',
       plan_approval: { kind: 'plan_approval', present: true, answered: false, answer: null, options: ['- A. Approve Plan'], context: null },
     })
-    mount(QuestionsTemplate, card({
+    const sent = card({
       type: 'question', status: 'ResolvedNoTransition',
       headline: { key: 'action.question.headline', params: {} },
-      decisions: [spec('approve_plan', [])],
+      decisions: [],
       evidence: { ...card().evidence, questions: view, artifacts: [] },
-    }))
+    })
+    // Sent: a plan approval sends a decision, not answers, so the delivery is the proof.
+    const { unmount } = mount(QuestionsTemplate, { ...sent, delivery: { ...sent.delivery, delivering_at: '2026-10-13T14:14:36Z',
+      wire_text: 'Approve Plan' } })
     expect(screen.getByText(en.t('template.questions.checkpoint.plan_approval.bodyClosed'))).toBeInTheDocument()
     expect(screen.queryByText(en.t('template.questions.checkpoint.plan_approval.body'))).toBeNull()
     expect(screen.queryByText(/stays visible until/)).toBeNull()
+    expect(screen.queryByText(en.t('template.questions.closedUnsent'))).toBeNull()
+    unmount()
+    // Closed with nothing sent from it: that is what it says.
+    mount(QuestionsTemplate, { ...sent, status: 'Cancelled' })
+    expect(screen.getByText(en.t('template.questions.closedUnsent'))).toBeInTheDocument()
   })
 
   it('explains a plan asked in an earlier session and offers no change request it could not record', () => {
@@ -757,6 +790,16 @@ describe('questions template', () => {
     }))
     expect(screen.getByText(/only in the conversation session that asked for it, and that session has ended/)).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: /Change request feedback/ })).toBeNull()
+  })
+
+  it('heads one question as a question, and several as a group answered together', () => {
+    setApiRoutes({})
+    const { unmount } = mount(QuestionsTemplate, questionCard())
+    expect(screen.getByText(en.t('template.questions.single'))).toBeInTheDocument()
+    expect(screen.queryByText(en.t('template.questions.group'))).toBeNull()
+    unmount()
+    mount(QuestionsTemplate, questionCard(questionsView({ questions: [question(), question({ index: 2 })], pending_count: 2 })))
+    expect(screen.getByText(en.t('template.questions.group'))).toBeInTheDocument()
   })
 
   it('renders the ordered group with its prompts and option labels verbatim', () => {
@@ -1653,6 +1696,14 @@ describe('advisor block', () => {
     mount(DecisionTemplate, card({ ...commit, status: 'ResolvedNoTransition' }))
     expect(screen.getByText(en.t('template.command.dispatched'))).toBeInTheDocument()
     expect(screen.queryByText(en.t('template.command.dispatch'))).toBeNull()
+  })
+
+  it('says where a sent run was to resume from, in the past tense', () => {
+    setApiRoutes({})
+    const run = { type: 'run' as const, decisions: [spec('run')], headline: { key: 'action.run.headline', params: {} } }
+    mount(DecisionTemplate, card({ ...run, status: 'ResolvedNoTransition' }))
+    expect(screen.getByText(en.t('template.command.stageSubSent'))).toBeInTheDocument()
+    expect(screen.queryByText(en.t('template.command.stageSub'))).toBeNull()
   })
 
   it('offers no Advisor at all for a command card the backend refuses to analyse', () => {

@@ -12,7 +12,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { setApiRoutes, navigations } from '../test/stubs/app-sdk'
+import { apiCalls, setApiRoutes, navigations } from '../test/stubs/app-sdk'
 import { MAP_NOW, mapInputs, mapNode, stageRow } from '../test/fixtures'
 import { I18nProvider } from '../i18n'
 import { useStudioApi } from '../lib/api'
@@ -170,7 +170,8 @@ function installRoutes(over: Record<string, unknown> = {}) {
   setApiRoutes({
     [`GET ${INTENT_PATH}/map`]: () => ({ map_inputs: over['map'] ?? mapFixture() }),
     [`GET ${INTENT_PATH}`]: () => ({ intent: over['intent'] ?? intentDetail() }),
-    [`GET ${INTENT_PATH}/review`]: () => over['review'] ?? reviewResponse(),
+    // The selected stage's own review: the query names it.
+    [`GET ${INTENT_PATH}/review*`]: () => over['review'] ?? reviewResponse(),
   })
 }
 
@@ -238,6 +239,21 @@ describe('the workflow map', () => {
     expect(canvas.querySelector('[data-stage="reverse-engineering"]')).toBeNull()
     expect(screen.getByText('2 of 7 stages recorded as done or skipped')).toBeInTheDocument()
     expect(screen.getByText('6 Gates · exact')).toBeInTheDocument()
+  })
+
+  it('counts no Gate for a stage AI-DLC skipped, and only an upper bound while a conditional one is undecided', async () => {
+    const map = mapFixture()
+    const conditional = (slug: string) => map.nodes.map((node) => node.slug === slug ? { ...node, execution: 'CONDITIONAL' as const } : node)
+    // deployment-pipeline is conditional and not reached yet: its Gate may never open
+    installRoutes({ map: { ...map, nodes: conditional('deployment-pipeline') } })
+    const { unmount } = mount()
+    expect(await screen.findByText('up to 6 Gates')).toBeInTheDocument()
+    unmount()
+    // AI-DLC skipped it at runtime: no Gate opened, and the count is a fact again
+    installRoutes({ map: { ...map, nodes: conditional('deployment-pipeline'),
+      rows: map.rows.map((row) => row.slug === 'deployment-pipeline' ? { ...row, state: 'skipped' as const } : row) } })
+    mount()
+    expect(await screen.findByText('5 Gates · exact')).toBeInTheDocument()
   })
 
   it('shows excluded stages only on request, without their Gates or a changed progress denominator', async () => {
@@ -366,6 +382,8 @@ describe('the workflow map', () => {
       expect(within(inspector).getByText('Configured review: advisory by aidlc-product-lead-agent.')).toBeInTheDocument(),
     )
     expect(within(inspector).getByText(/CHANGES_REQUESTED/)).toBeInTheDocument()
+    // the review asked for is the selected stage's, not whatever the intent's current stage is
+    expect(apiCalls.some((call) => call.path.endsWith('/review?stage=requirements-analysis'))).toBe(true)
     expect(within(inspector).getByText(/Blocker 1/)).toBeInTheDocument()
     expect(within(inspector).getByText('Acceptance criteria for guest refunds are missing')).toBeInTheDocument()
 

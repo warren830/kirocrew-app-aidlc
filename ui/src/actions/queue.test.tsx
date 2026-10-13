@@ -448,5 +448,9 @@ describe('a card\'s kind in words', () => {
       decisions: [{ decision: 'approve_plan', label_key: 'decision.approve_plan.label', fields: [], wire_text: null }] as never })
     expect(typeLabelOf(en, plan)).toBe('Plan approval')
     expect(typeLabelOf(en, actionCard({ type: 'question', queue_type: 'question', decisions: [] }))).toBe('Question')
+    // closed, it offers no decisions any more; the checkpoint it captured still says what it asked
+    const closed = actionCard({ type: 'question', queue_type: 'question', status: 'ResolvedNoTransition', decisions: [] })
+    const questions = { ...(closed.evidence.questions ?? {}), pending_checkpoint: 'plan_approval' } as never
+    expect(typeLabelOf(en, { ...closed, evidence: { ...closed.evidence, questions } })).toBe('Plan approval')
   })
 })

@@ -1070,7 +1070,7 @@ describe('the upgrade preview', () => {
     expect(await screen.findByText('Receipt-owned files with local changes')).toBeInTheDocument()
     expect(screen.getByText('.kiro/steering/aidlc.md')).toBeInTheDocument()
     // FR-GIT-004: unrelated work in progress must not read as something that blocks an upgrade.
-    expect(screen.getByText(/4 other files or folders have local changes, which do not block an upgrade/)).toBeInTheDocument()
+    expect(screen.getByText(/4 other files or folders are changed or not committed, which does not block an upgrade/)).toBeInTheDocument()
     // An intent's code waiting for a commit is named with its intent, not counted as unrelated.
     expect(screen.getByText('Code an intent wrote, not committed yet')).toBeInTheDocument()
     expect(screen.getByText('ops.py')).toBeInTheDocument()

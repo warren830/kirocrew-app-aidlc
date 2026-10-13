@@ -110,8 +110,9 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
   // A sent card's group is the one captured before the reply: its own answers are what was chosen, not the
   // (empty) form, so a closed card no longer reads "4 of 4 unanswered" with nothing marked.
   const sent = answerable ? null : card.submitted_answers
-  // Closed before anything was sent from it (the questions moved on, or the card was replaced): not a form.
-  const unsent = !answerable && !sent
+  // Closed before anything was sent from it (the questions moved on, or the card was replaced): not a form. A plan
+  // approval or a summary confirmation sends a decision, not answers, so the delivery is what says it was sent.
+  const unsent = !answerable && !sent && !card.delivery.delivering_at
   const chosen = (index: number) =>
     sent ? sent.find((answer) => answer.index === index) : draft.answers[String(index)]
   // Nothing is preselected: `summaryChoice` has a stored default because the payload builder needs one,
@@ -295,7 +296,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
       ) : null}
 
       {showGroup ? (
-      <Block title={t('template.questions.group')} icon="question">
+      <Block title={t(questions.length === 1 ? 'template.questions.single' : 'template.questions.group')} icon="question">
         <div className="studio-qmetas">
           {sent ? (
             <Chip tone="ok" icon="check">{t('template.questions.sentCount', { n: sent.length })}</Chip>

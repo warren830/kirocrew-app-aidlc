@@ -184,6 +184,9 @@ export function EstimatePanel({ plan }: EstimatePanelProps) {
                       {t('estimate.dominant.turns', { range: range(i18n, item.turns) })}
                       {stage?.per_unit && units !== null ? ` · ${plural(i18n, 'estimate.dominant.perUnit', units)}` : ''}
                     </span>
+                    {stage?.execution === 'CONDITIONAL' ? (
+                      <span className="studio-crit-why">{t('estimate.dominant.conditional')}</span>
+                    ) : null}
                     <span className="studio-crit-why">
                       {locked
                         ? t('estimate.dominant.locked', { reason: locked })

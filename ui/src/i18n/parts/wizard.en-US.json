@@ -58,8 +58,8 @@
   "wizard.work.signal.drift": "files modified since install",
   "wizard.work.signal.gitBranch": "branch {branch}",
   "wizard.work.signal.gitClean": "clean",
-  "wizard.work.signal.gitDirty_one": "{n} uncommitted file",
-  "wizard.work.signal.gitDirty_other": "{n} uncommitted files",
+  "wizard.work.signal.gitDirty_one": "{n} file or folder not committed",
+  "wizard.work.signal.gitDirty_other": "{n} files or folders not committed",
   "wizard.work.signal.gitUnavailable": "Git observation unavailable",
   "wizard.work.signal.intents_one": "{n} intent already here",
   "wizard.work.signal.intents_other": "{n} intents already here",
@@ -115,7 +115,7 @@
   "wizard.plan.summary": "{stages} stages, {gates} Gates, up to {artifacts} artifacts",
   "wizard.review.exact": "Exact, from the installed graph",
   "wizard.review.estimates": "Estimated, with source and confidence",
-  "wizard.review.products": "Products this plan will create",
+  "wizard.review.products": "Products the selected stages declare",
   "wizard.review.productsNone": "No stage in this plan declares an artifact, which usually means nothing is selected.",
   "wizard.review.consequence": "Create does not run anything. To start the intent, open Intents, bind a conversation to it, and start it there. Budgets and Advisor drafts are never inherited from another intent.",
   "wizard.review.blockedInvalid": "AI-DLC will not accept this plan as described. The reasons are listed on the Plan step.",
@@ -153,5 +153,7 @@
   "wizard.review.whatIntent": "Intent name",
   "wizard.review.whatScope": "Scope",
   "wizard.review.whatObjective": "Objective",
-  "wizard.plan.summaryConditional": "{stages} stages, up to {gates} Gates, up to {artifacts} artifacts"
+  "wizard.plan.summaryConditional": "{stages} stages, up to {gates} Gates, up to {artifacts} artifacts",
+  "wizard.review.productsWhy": "A stage at a lower depth or test strategy writes fewer of these. One marked ⓘ comes only from a conditional stage, so it exists only if AI-DLC runs that stage.",
+  "wizard.review.productConditional": "Declared only by a conditional stage: it exists only if AI-DLC runs that stage."
 }

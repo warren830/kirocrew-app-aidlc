@@ -115,8 +115,8 @@ function stageOf(join: Join, slug: string, node: MapNode | null, row: StageRow |
     agent: node ? node.lead_agent : '',
     reviewer: node ? node.reviewer : null,
     review_class: node ? node.review_class : null,
-    // Only selected, non-initialization stages contribute a gate to this plan.
-    gate: inScope && phase !== 'initialization',
+    // Only selected, non-initialization stages contribute a gate to this plan, and a stage AI-DLC skipped opened none.
+    gate: inScope && phase !== 'initialization' && state !== 'skipped',
     per_unit: perUnit,
     summary_confirmation: node ? node.summary_confirmation : null,
     consumes: node ? [...node.consumes] : [],

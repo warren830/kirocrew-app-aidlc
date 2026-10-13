@@ -338,6 +338,8 @@ export interface SourceChange {
 export interface SourceChangesResponse {
   stage: string; unit: string | null; manifest: string | null; listed_by: 'manifest' | 'traceability' | null
   available: boolean; reason: string | null; files: SourceChange[]; truncated: boolean; manifest_readable: boolean
+  /** The commit compared with, when the request named one the repository has; `null` (or absent) for HEAD. */
+  base?: string | null
 }
 export interface ArtifactResponse { artifact: ArtifactMeta; content: string | null; encoding: 'utf-8' | 'binary'; truncated: boolean; review: { verdict: string | null; findings: ReviewFinding[] } | null; toc: { level: number; text: string; anchor: string }[]; prior: { available: boolean; source: 'git' | null; diff: string | null } }
 export interface ReviewResponse { stage: string | null; verdict: string | null; findings: ReviewFinding[]; receipts: { event: string; ts: string; stage: string | null; reviewer: string | null; iteration: number | null; verdict: string | null; fingerprint: string | null }[]; review_class: string | null; reviewer: string | null; revisions: number }

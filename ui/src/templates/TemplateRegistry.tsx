@@ -110,7 +110,8 @@ export function CommandTemplate({ card }: TemplateProps) {
             src={t('template.command.stage')}
             icon="gate"
             value={card.stage?.slug ?? t('common.none')}
-            sub={t(card.type === 'prepare_commit' ? 'template.command.stageSubCommit' : 'template.command.stageSub')}
+            sub={t(card.type === 'prepare_commit' ? 'template.command.stageSubCommit'
+              : sent ? 'template.command.stageSubSent' : 'template.command.stageSub')}
           />
         </EvidenceGrid>
         <div className="studio-row studio-qmetas">

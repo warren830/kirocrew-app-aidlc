@@ -14,6 +14,7 @@ import { EstimatePanel } from './EstimatePanel'
 import { PlanDiff } from './PlanDiff'
 import { PlanMatrix } from './PlanMatrix'
 import { RecomposePanel } from './RecomposePanel'
+import { StepReview } from '../wizard/StepReview'
 
 function stage(over: Partial<PlanStage> & { slug: string }): PlanStage {
   return {
@@ -153,6 +154,25 @@ describe('the estimate panel', () => {
     expect(within(counts).getByText(`up to ${plan.exact.artifacts}`)).toBeInTheDocument()
     expect(within(counts).getByText(/a stage AI-DLC skips opens none/)).toBeInTheDocument()
     expect(within(counts).getByText(/AI-DLC decides at runtime whether to run the \d+ conditional/)).toBeInTheDocument()
+  })
+
+  it('marks a product only a conditional stage declares, and says a conditional dominant stage may cost nothing', () => {
+    const base = makePlan()
+    const deploy = { ...(base.stages.find((stage) => stage.enabled) as PlanStage), slug: 'deployment-execution', number: '4.3',
+      execution: 'CONDITIONAL' as const, enabled: true, produces: ['deployment-log'] }
+    const plan = { ...base, stages: [...base.stages, deploy], products: [...base.products, 'deployment-log'],
+      estimate: { ...base.estimate, dominant: [...base.estimate.dominant,
+        { slug: 'deployment-execution', share_pct: 17, turns: { ...base.estimate.turns, low: 0, high: 4 } }] } }
+    render(
+      <I18nProvider>
+        <StepReview plan={plan} digest={'0'.repeat(64)} repo={null} busy={false} creating={false} workComplete presetComplete
+          error={null} />
+      </I18nProvider>,
+    )
+    expect(screen.getByText('Products the selected stages declare')).toBeInTheDocument()
+    expect(screen.getByText('deployment-log').closest('.studio-chip')).toHaveClass('studio-chip-maybe')
+    expect(screen.getByText('nfr-requirements.md').closest('.studio-chip')).not.toHaveClass('studio-chip-maybe')
+    expect(screen.getByText(/a run that skips it spends none of these turns/)).toBeInTheDocument()
   })
 
   it('shows credits as unavailable rather than as a number', () => {

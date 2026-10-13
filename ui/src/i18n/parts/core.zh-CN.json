@@ -30,7 +30,7 @@
   "enum.intentState.Failed": "失败",
   "enum.intentState.Completed": "已完成",
   "enum.intentState.Archived": "已归档",
-  "enum.actionType.gate": "审批关口",
+  "enum.actionType.gate": "审批关卡",
   "enum.actionType.revision": "修订中",
   "enum.actionType.question": "提问",
   "enum.actionType.missing_input": "缺少输入",
@@ -121,7 +121,7 @@
   "errors.session_unbound": "该意图尚未绑定会话。",
   "errors.slot_mismatch": "该会话属于其他仓库或代理。",
   "errors.slot_busy": "会话正忙。",
-  "errors.session_busy": "会话正在处理一轮对话。",
+  "errors.session_busy": "会话正在处理一轮会话。",
   "errors.unstable_read": "文件正在变化，不能作为证据使用。",
   "errors.breaker_open": "该意图因连续失败已停止。修复原因后可重试。",
   "errors.intent_paused": "该意图已暂停。",
@@ -164,5 +164,6 @@
   "common.durationMinutes": "{n} 分钟",
   "common.durationHours": "{n} 小时",
   "common.durationDays": "{n} 天",
-  "errors.grouped_answers_unavailable": "一次回答多个问题的方式尚未验证，请逐个作答或打开会话。"
+  "errors.grouped_answers_unavailable": "一次回答多个问题的方式尚未验证，请逐个作答或打开会话。",
+  "common.underAMinute": "不到 1 分钟"
 }

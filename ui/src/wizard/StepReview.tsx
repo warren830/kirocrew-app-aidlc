@@ -43,6 +43,11 @@ export function StepReview({ plan, digest, repo, origins, busy, creating, workCo
   if (!presetComplete || !plan) blockers.push(t('wizard.preview.none'))
   if (plan && !plan.valid) blockers.push(t('wizard.review.blockedInvalid'))
   if (blockingFindings > 0) blockers.push(plural(i18n, 'wizard.review.blockedFindings', blockingFindings))
+  // Products that only a selected CONDITIONAL stage declares: AI-DLC decides at runtime whether they exist.
+  const selected = plan ? plan.stages.filter((stage) => stage.enabled) : []
+  const always = new Set(selected.filter((stage) => stage.execution !== 'CONDITIONAL').flatMap((stage) => stage.produces))
+  const conditionalOnly = new Set(selected.filter((stage) => stage.execution === 'CONDITIONAL')
+    .flatMap((stage) => stage.produces).filter((name) => !always.has(name)))
 
   return (
     <div>
@@ -117,14 +122,22 @@ export function StepReview({ plan, digest, repo, origins, busy, creating, workCo
             {plan.products.length === 0 ? (
               <p className="studio-muted">{t('wizard.review.productsNone')}</p>
             ) : (
-              <div className="studio-row studio-wrap">
-                {/* Artifact names are AI-DLC's own words. */}
-                {plan.products.map((product) => (
-                  <Chip key={product} mono>
-                    {product}
-                  </Chip>
-                ))}
-              </div>
+              <>
+                <p className="studio-muted">{t('wizard.review.productsWhy')}</p>
+                <div className="studio-row studio-wrap">
+                  {/* Artifact names are AI-DLC's own words. A product only a conditional stage declares exists
+                      only if AI-DLC runs that stage, so it is marked rather than promised. */}
+                  {plan.products.map((product) => conditionalOnly.has(product) ? (
+                    <Chip key={product} mono icon="info" className="studio-chip-maybe" title={t('wizard.review.productConditional')}>
+                      {product}
+                    </Chip>
+                  ) : (
+                    <Chip key={product} mono>
+                      {product}
+                    </Chip>
+                  ))}
+                </div>
+              </>
             )}
           </section>
 

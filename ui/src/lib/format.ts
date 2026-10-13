@@ -34,6 +34,11 @@ export function duration(i18n: I18n, seconds: number | null | undefined): string
   return real(seconds) ? i18n.fmt.duration(seconds) : unavailable(i18n)
 }
 
+/** How long something took: `duration`, except that under a minute is "< 1 min", never "just now". */
+export function elapsed(i18n: I18n, seconds: number | null | undefined): string {
+  return real(seconds) && seconds < 60 ? i18n.t('common.underAMinute') : duration(i18n, seconds)
+}
+
 /**
  * How long something has been waiting, from its boundary timestamp.
  *

@@ -132,5 +132,7 @@
   "map.inspector.notProducedHere": "Greyed inputs come from stages this run does not include.",
   "map.inspector.summaryConfirmationRun": "Summary confirmation this run: {value}",
   "map.inspector.auditEmptyOf": "None of the record's last {n} audit events names this stage.",
-  "map.inspector.auditEmptyOf_one": "The record's last audit event does not name this stage."
+  "map.inspector.auditEmptyOf_one": "The record's last audit event does not name this stage.",
+  "map.bar.gatesUpTo_one": "up to {n} Gate",
+  "map.bar.gatesUpTo_other": "up to {n} Gates"
 }

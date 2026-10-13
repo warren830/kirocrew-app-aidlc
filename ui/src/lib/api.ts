@@ -230,9 +230,10 @@ export interface StudioApi extends WorkspaceApi {
   map(repoId: string, intentKey: string, o?: ReadOptions): Promise<MapResponse>
   artifacts(repoId: string, intentKey: string, filter?: { stage?: string; unit?: string; kind?: string }, o?: ReadOptions): Promise<ArtifactsResponse>
   artifact(repoId: string, intentKey: string, artifactId: string, o?: ReadOptions): Promise<ArtifactResponse>
-  review(repoId: string, intentKey: string, o?: ReadOptions): Promise<ReviewResponse>
+  /** The current stage's review, or `filter.stage`'s (the Map inspector asks about any stage). */
+  review(repoId: string, intentKey: string, o?: ReadOptions, filter?: { stage: string; unit?: string }): Promise<ReviewResponse>
   /** The files a stage's `source-manifest.json` lists, each diffed against HEAD. */
-  changes(repoId: string, intentKey: string, filter: { stage: string; unit?: string }, o?: ReadOptions): Promise<SourceChangesResponse>
+  changes(repoId: string, intentKey: string, filter: { stage: string; unit?: string; base?: string }, o?: ReadOptions): Promise<SourceChangesResponse>
   /** Every scope the installed engine defines, described and counted, for comparing them before one is picked. */
   planScopes(repoId: string, o?: ReadOptions): Promise<PlanScopesResponse>
   planPreview(repoId: string, body: PlanRequest): Promise<PlanPreviewResponse>
@@ -376,7 +377,8 @@ export function useStudioApi(): StudioApi {
         get(intentPath(repoId, intentKey, `/artifacts${query({ ...filter })}`), o),
       artifact: (repoId, intentKey, artifactId, o) =>
         get(intentPath(repoId, intentKey, `/artifacts/${encodeURIComponent(artifactId)}`), o),
-      review: (repoId, intentKey, o) => get(intentPath(repoId, intentKey, '/review'), o),
+      review: (repoId, intentKey, o, filter) =>
+        get(intentPath(repoId, intentKey, `/review${filter ? query({ ...filter }) : ''}`), o),
       changes: (repoId, intentKey, filter, o) =>
         get(intentPath(repoId, intentKey, `/changes${query({ ...filter })}`), o),
       planScopes: (repoId, o) => get(repoPath(repoId, '/intents/plan/scopes'), o),

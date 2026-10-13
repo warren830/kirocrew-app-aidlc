@@ -224,7 +224,7 @@
   "template.missingInput.adminLane": "admin lease",
   "template.missingInput.findings": "What else disagrees",
   "template.command.dispatch": "What will be dispatched",
-  "template.command.session": "Intent conversation",
+  "template.command.session": "Conversation key",
   "template.command.sessionSub": "{state} · last turn {turn}",
   "template.command.noSession": "No session bound",
   "template.command.noSessionSub": "Studio binds one before it dispatches, and refuses if it cannot.",
@@ -263,5 +263,7 @@
   "template.questions.neverEditsClosed": "Studio never edits {path} or its digest.",
   "template.questions.checkpoint.summary_confirmation.bodyClosed": "The engine asked whether its summary of this stage was correct before it moved on.",
   "template.questions.checkpoint.assumption_confirmation.bodyClosed": "The engine kept these as assumptions in the stage's artifacts and asked you to accept them, or to have it ask follow-up questions first.",
-  "template.questions.checkpoint.plan_approval.bodyClosed": "The engine asked you to approve the plan it composed before it executed it."
+  "template.questions.checkpoint.plan_approval.bodyClosed": "The engine asked you to approve the plan it composed before it executed it.",
+  "template.questions.single": "Question",
+  "template.command.stageSubSent": "Where the engine was to resume from, as recorded on disk when this was sent."
 }

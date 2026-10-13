@@ -58,8 +58,8 @@
   "wizard.work.signal.drift": "安装后有文件被修改",
   "wizard.work.signal.gitBranch": "分支 {branch}",
   "wizard.work.signal.gitClean": "干净",
-  "wizard.work.signal.gitDirty_one": "{n} 个未提交文件",
-  "wizard.work.signal.gitDirty_other": "{n} 个未提交文件",
+  "wizard.work.signal.gitDirty_one": "{n} 个文件或文件夹未提交",
+  "wizard.work.signal.gitDirty_other": "{n} 个文件或文件夹未提交",
   "wizard.work.signal.gitUnavailable": "无法观察 Git",
   "wizard.work.signal.intents_one": "这里已有 {n} 个意图",
   "wizard.work.signal.intents_other": "这里已有 {n} 个意图",
@@ -115,7 +115,7 @@
   "wizard.plan.summary": "{stages} 个阶段、{gates} 个关卡、最多 {artifacts} 个产物",
   "wizard.review.exact": "精确值，来自已安装的阶段图",
   "wizard.review.estimates": "估算值，附来源与置信度",
-  "wizard.review.products": "这个计划将产出的产物",
+  "wizard.review.products": "已选阶段声明的产物",
   "wizard.review.productsNone": "这个计划里没有任何阶段声明产物，通常意味着什么都没选。",
   "wizard.review.consequence": "创建不会运行任何东西。要启动它，请打开“意图”页面，为它绑定一个会话，再从那里启动。预算和顾问草稿都不会从别的意图继承过来。",
   "wizard.review.blockedInvalid": "AI-DLC 不会接受这样的计划。原因列在“计划”步骤里。",
@@ -153,5 +153,7 @@
   "wizard.review.whatIntent": "意图名称",
   "wizard.review.whatScope": "范围",
   "wizard.review.whatObjective": "目标",
-  "wizard.plan.summaryConditional": "{stages} 个阶段、最多 {gates} 个关卡、最多 {artifacts} 个产物"
+  "wizard.plan.summaryConditional": "{stages} 个阶段、最多 {gates} 个关卡、最多 {artifacts} 个产物",
+  "wizard.review.productsWhy": "深度或测试策略较低时，阶段会少写其中一些。标有 ⓘ 的只来自条件阶段，只有 AI-DLC 运行了那个阶段才会产出。",
+  "wizard.review.productConditional": "只有条件阶段声明了它：只有 AI-DLC 运行了那个阶段才会产出。"
 }

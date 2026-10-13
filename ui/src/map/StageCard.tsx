@@ -19,7 +19,7 @@
 import { useI18n, type I18n } from '../i18n'
 import { Chip, type ChipTone } from '../shell/Chip'
 import { Icon, type IconName } from '../shell/Icon'
-import { duration, plural } from '../lib/format'
+import { elapsed, plural } from '../lib/format'
 import type { MapStage, MapUnit, StageState } from '../lib/types'
 
 /** The three density modes of FR-MAP-007. `dependencies` = `detailed` plus the drawn edges. */
@@ -75,7 +75,7 @@ export function stageFacts(i18n: I18n, stage: MapStage): string[] {
       : i18n.t('map.chip.noReview'),
   )
   if (stage.elapsed_secs !== null) {
-    facts.push(i18n.t('map.a11y.elapsed', { duration: duration(i18n, stage.elapsed_secs) }))
+    facts.push(i18n.t('map.a11y.elapsed', { duration: elapsed(i18n, stage.elapsed_secs) }))
   }
   facts.push(artifactCountLabel(i18n, stage.artifacts.length))
   if (stage.skipped_reason) facts.push(i18n.t('map.a11y.reason', { reason: stage.skipped_reason }))
@@ -183,8 +183,8 @@ export function StageCard({ stage, density, selected, relation, scope, onSelect 
           </Chip>
         ) : null}
         {detailed && stage.elapsed_secs !== null ? (
-          <Chip icon="clock" mono title={t('map.chip.elapsedTitle', { duration: duration(i18n, stage.elapsed_secs) })}>
-            {duration(i18n, stage.elapsed_secs)}
+          <Chip icon="clock" mono title={t('map.chip.elapsedTitle', { duration: elapsed(i18n, stage.elapsed_secs) })}>
+            {elapsed(i18n, stage.elapsed_secs)}
           </Chip>
         ) : null}
         {detailed ? (

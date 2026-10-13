@@ -47,5 +47,6 @@
   "estimate.exact.ofGraphConditional_one": "exact, {selected} of {known} known stages; AI-DLC decides at runtime whether to run the {n} conditional one",
   "estimate.exact.ofGraphConditional_other": "exact, {selected} of {known} known stages; AI-DLC decides at runtime whether to run the {n} conditional ones",
   "estimate.exact.gatesConditional_one": "every selected stage outside initialization has a Gate, but {n} of them is conditional, and a stage AI-DLC skips opens none",
-  "estimate.exact.gatesConditional_other": "every selected stage outside initialization has a Gate, but {n} of them are conditional, and a stage AI-DLC skips opens none"
+  "estimate.exact.gatesConditional_other": "every selected stage outside initialization has a Gate, but {n} of them are conditional, and a stage AI-DLC skips opens none",
+  "estimate.dominant.conditional": "Conditional: AI-DLC decides at runtime whether to run it, and a run that skips it spends none of these turns."
 }

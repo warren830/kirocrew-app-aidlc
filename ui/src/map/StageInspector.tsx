@@ -19,7 +19,7 @@
  */
 
 import { useI18n } from '../i18n'
-import { at, bytes, duration, plural, since } from '../lib/format'
+import { at, bytes, elapsed, plural, since } from '../lib/format'
 import { Chip } from '../shell/Chip'
 import { Icon } from '../shell/Icon'
 import type {
@@ -147,7 +147,7 @@ export function StageInspector({
           <Chip mono title={t('map.chip.modeTitle', { mode: stage.mode })}>{stage.mode}</Chip>
         ) : null}
         <Chip icon="clock" mono>
-          {duration(i18n, stage.elapsed_secs)}
+          {elapsed(i18n, stage.elapsed_secs)}
         </Chip>
       </div>
 

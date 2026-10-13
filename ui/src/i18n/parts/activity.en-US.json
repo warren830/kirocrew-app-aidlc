@@ -184,7 +184,7 @@
   "audit.GATE_REJECTED": "Changes were requested at the Gate.",
   "audit.GUARDRAIL_LOADED": "Guardrails loaded.",
   "audit.HEALTH_CHECKED": "Workspace health checked.",
-  "audit.HUMAN_TURN": "AI-DLC recorded a message from a person. It records this only for a message actually sent in the conversation.",
+  "audit.HUMAN_TURN": "AI-DLC recorded a prompt submitted in a session on this repository as a person's turn. It records every submitted prompt this way, including one that starts a subagent.",
   "audit.MEMORY_EMPTY": "No prior memory was found.",
   "audit.PHASE_COMPLETED": "Phase completed.",
   "audit.PHASE_SKIPPED": "Phase skipped.",
