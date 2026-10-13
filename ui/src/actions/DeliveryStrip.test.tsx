@@ -196,7 +196,7 @@ describe('a reply AI-DLC records outside the state file', () => {
     const { unmount } = render(<I18nProvider><DeliveryStrip card={actionCard({
       type: 'prepare_commit', status: 'ResolvedNoTransition',
       resolution: { ...base.resolution, kind: 'no_transition', reason: 'commit_made',
-                    evidence: { presence: null, is_active: null, commit } },
+                    evidence: { presence: null, is_active: null, new_commit: commit } },
     })} /></I18nProvider>)
     const strip = screen.getByRole('region', { name: i18n.t('delivery.label') })
     expect(strip).toHaveTextContent('The conversation made commit 3223c4e: Fix word_count whitespace splitting.')

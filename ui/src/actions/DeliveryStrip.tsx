@@ -123,7 +123,7 @@ const TURN_REASONS: readonly string[] = ['turn_ended', 'commit_made', 'turn_ende
 
 /** The commit a commit request's turn made, as Git read it when the turn ended: the short sha and its subject. */
 function commitParams(card: Pick<ActionCard, 'resolution'>): { sha: string; subject: string } | undefined {
-  const commit = card.resolution.evidence?.commit
+  const commit = card.resolution.evidence?.new_commit
   return commit ? { sha: commit.sha.slice(0, 7), subject: commit.subject } : undefined
 }
 

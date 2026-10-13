@@ -770,7 +770,7 @@ def test_prepare_commit_says_whether_the_conversation_made_a_commit(svc, scene, 
                            decision="prepare_commit")
     rec = asyncio.run(svc.actions.get(action_id))
     assert rec.status == "ResolvedNoTransition" and rec.resolution["reason"] == reason
-    assert (rec.resolution["evidence"]["commit"] or {}).get("sha") == ("3223c4e5ee61" if reason == "commit_made" else None)
+    assert (rec.resolution["evidence"]["new_commit"] or {}).get("sha") == ("3223c4e5ee61" if reason == "commit_made" else None)
 
 
 def _force_stop(scene) -> str:

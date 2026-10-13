@@ -1052,8 +1052,8 @@ class Reconciler:
                 return Resolution(*_TURN_OUTCOME[False], seen)
             # AI-DLC records no commit, so Git is the only evidence the conversation made one: the newest commit, when
             # it is newer than the request. "The turn ended" alone told the person to go and look.
-            seen["commit"] = self._commit_since(rec, snap)
-            return Resolution("no_transition", "commit_made" if seen["commit"] else "turn_ended_no_commit", seen)
+            seen["new_commit"] = self._commit_since(rec, snap)
+            return Resolution("no_transition", "commit_made" if seen["new_commit"] else "turn_ended_no_commit", seen)
 
         if action_type == "force_stop":
             if slot is None:
