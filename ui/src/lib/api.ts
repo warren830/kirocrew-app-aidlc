@@ -233,7 +233,7 @@ export interface StudioApi extends WorkspaceApi {
   /** The current stage's review, or `filter.stage`'s (the Map inspector asks about any stage). */
   review(repoId: string, intentKey: string, o?: ReadOptions, filter?: { stage: string; unit?: string }): Promise<ReviewResponse>
   /** The files a stage's `source-manifest.json` lists, each diffed against HEAD. */
-  changes(repoId: string, intentKey: string, filter: { stage: string; unit?: string; base?: string }, o?: ReadOptions): Promise<SourceChangesResponse>
+  changes(repoId: string, intentKey: string, filter: { stage: string; unit?: string; base?: string; at?: string }, o?: ReadOptions): Promise<SourceChangesResponse>
   /** Every scope the installed engine defines, described and counted, for comparing them before one is picked. */
   planScopes(repoId: string, o?: ReadOptions): Promise<PlanScopesResponse>
   planPreview(repoId: string, body: PlanRequest): Promise<PlanPreviewResponse>

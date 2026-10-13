@@ -30,11 +30,11 @@
   "changes.fromTraceability": "没有 Unit 的工作，AI-DLC 不写源码清单，所以这里列出的是本阶段 traceability 指向的文件。改动了却没有对应任何需求的文件不会列出。",
   "changes.noneTraced": "本阶段的 traceability 没有指向任何工作区文件。",
   "changes.noTraceability": "无法读取本阶段的 traceability，Studio 因此说不出它写了哪些文件。",
-  "changes.summaryBase": "写入 {n} 个文件：相对 {sha}（这张卡片打开时的 HEAD）+{added} −{removed} 行。",
+  "changes.summaryBase": "写入 {n} 个文件：相对 {sha}（这张卡片做出决定时的最新提交）+{added} −{removed} 行。",
   "changes.labelBase": "{stage} 写入的代码，与 {sha} 比较",
-  "changes.readNowBase": "这是现在读取的结果：拿今天的文件对比这张卡片打开时的提交。决定之后文件若又被改过，那次改动也会显示在这里。",
+  "changes.readNowBase": "这是现在读取的结果：拿今天的文件对比这张卡片做出决定时的 HEAD 提交。之后文件若又被改过，那次改动也会显示在这里。",
   "changes.readNow": "这是现在读取的结果：拿今天的文件对比今天的最新提交，而不是这张卡片当时决定的代码。那份代码提交之后，这里会显示为没有变化。",
   "changes.status.unchangedBase": "与 {sha} 相同",
-  "changes.why.unchangedBase": "今天的文件与 {sha}（这张卡片打开时的提交）一致：要么这一阶段没有改它，要么改动已被撤回。",
+  "changes.why.unchangedBase": "今天的文件与 {sha}（这张卡片做出决定时的 HEAD 提交）一致：要么这一阶段没有改它，要么改动已被撤回。",
   "changes.addedNoteBase": "{sha} 中没有这个文件，所以整个文件都显示为新增，包括早于这一阶段的部分。"
 }

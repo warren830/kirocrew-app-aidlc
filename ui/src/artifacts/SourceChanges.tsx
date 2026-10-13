@@ -10,9 +10,9 @@
  * A file that is not shown says why (secret, binary, too large, outside the repository); none of those
  * may read as "unchanged", which is a claim about the file.
  *
- * A closed card compares with the HEAD it captured when it opened: once the approved code is committed, today's
- * HEAD already holds it and every file would read "Same as the last commit". The files are still read now, and
- * the copy says so.
+ * A closed card compares with the commit HEAD was when it was decided (the captured HEAD when the card has one):
+ * once the approved code is committed, today's HEAD already holds it and every file would read "Same as the last
+ * commit". The files are still read now, and the copy says so.
  */
 
 import { useCallback, useState } from 'react'
@@ -45,13 +45,17 @@ export function useSourceChanges(card: ActionCard, enabled: boolean): Resource<S
   const { intent_key: intentKey } = card.intent
   const stage = card.stage?.slug ?? ''
   const unit = card.stage?.unit ?? ''
-  const base = isClosedAction(card) ? card.evidence.git?.head ?? '' : ''
+  const closed = isClosedAction(card)
+  const base = closed ? card.evidence.git?.head ?? '' : ''
+  // When the decision was made: sent, else closed, else opened. HEAD then is what the decision was about.
+  const at = closed && !base ? card.delivery.delivering_at ?? card.resolution.resolved_at ?? card.created_at : ''
   const fetcher = useCallback(
     (signal: AbortSignal) =>
-      api.changes(repoId, intentKey, { stage, ...(unit ? { unit } : {}), ...(base ? { base } : {}) }, { signal }),
-    [api, repoId, intentKey, stage, unit, base],
+      api.changes(repoId, intentKey, { stage, ...(unit ? { unit } : {}), ...(base ? { base } : {}), ...(at ? { at } : {}) },
+        { signal }),
+    [api, repoId, intentKey, stage, unit, base, at],
   )
-  return useResource<SourceChangesResponse>(`changes:${repoId}:${intentKey}:${stage}:${unit}:${base}`, fetcher, {
+  return useResource<SourceChangesResponse>(`changes:${repoId}:${intentKey}:${stage}:${unit}:${base}:${at}`, fetcher, {
     enabled: enabled && stage !== '',
     interval: 0,
     revalidateOn: ['intent.updated', 'reset'],

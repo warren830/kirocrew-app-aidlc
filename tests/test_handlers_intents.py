@@ -179,6 +179,9 @@ def test_changes_needs_a_stage_and_says_when_it_listed_no_writes(api, repo):
     # a base is a full commit id, nothing else: never a ref or a revision expression git would resolve
     for bad in ("HEAD~1", "main", "abc123", "-p", "0" * 39):
         assert refusal(api("GET", base(repo, "/changes"), stage=STAGE, base=bad)) == (400, "bad_param")
+    # an instant is one Studio wrote, never one of git's approximate dates
+    for bad in ("yesterday", "2 weeks ago", "2026-10-13", "2026-10-13 14:38:13"):
+        assert refusal(api("GET", base(repo, "/changes"), stage=STAGE, at=bad)) == (400, "bad_param")
 
 
 def test_zero_unit_code_generation_lists_its_files_from_traceability(api, repo):

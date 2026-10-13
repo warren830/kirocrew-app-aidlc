@@ -346,6 +346,16 @@ class GitObserver:
         run = self._run(repo, ("show", "--no-textconv", spec), stdout_cap=C.MAX_ARTIFACT_RENDER_BYTES)
         return run.stdout if run.ok and not run.truncated else None
 
+    def commit_before(self, repo: Path, when: str) -> str | None:
+        """The commit HEAD's first-parent history was at ``when``, an ISO instant: the newest whose committer date is
+        not after it. ``None`` when there is none, or ``when`` is not an instant."""
+        if not C.ISO_INSTANT_RE.match(when):
+            return None
+        run = self._run(repo, ("log", "-1", "--first-parent", f"--before={when}", "--format=%H", "HEAD", "--"),
+                        stdout_cap=C.MAX_TEXT_PREVIEW_BYTES)
+        sha = run.text().strip() if run.ok else ""
+        return sha if C.COMMIT_ID_RE.match(sha) else None
+
     def is_commit(self, repo: Path, rev: str) -> bool:
         """Whether ``rev``, a full commit id, names a commit this repository still has."""
         if not C.COMMIT_ID_RE.match(rev):

@@ -151,11 +151,13 @@ async def get_changes(services: Any, request: web.Request) -> web.Response:
     code-generation gate asks the human to approve, beside the plan its reviewer judged. 2.11 writes no manifest for
     zero-Unit work, so zero-Unit code generation is read from its ``traceability.json`` targets, and ``listed_by``
     says which file named them. ``manifest`` is ``null`` when the stage wrote no manifest (no code stage, zero-Unit
-    work, or not reached yet). ``base``, a full commit id, compares with that commit instead of HEAD (a closed card's
-    captured HEAD); the answer's ``base`` is the commit used, ``null`` for HEAD."""
+    work, or not reached yet). ``base``, a full commit id, compares with that commit instead of HEAD; ``at``, an
+    instant, with the commit HEAD was then (a closed card's decision time); the answer's ``base`` is the commit used,
+    ``null`` for HEAD."""
     stage = query_str(request, "stage", pattern=C.STAGE_SLUG_RE)
     unit = query_str(request, "unit", pattern=C.UNIT_NAME_RE)
     base = query_str(request, "base", pattern=C.COMMIT_ID_RE)
+    at = query_str(request, "at", pattern=C.ISO_INSTANT_RE)
     if stage is None:
         raise StudioError("bad_param", "stage is required", details={"param": "stage"})
     repo, snap = await repo_and_snapshot(services, request)
@@ -170,7 +172,7 @@ async def get_changes(services: Any, request: web.Request) -> web.Response:
         return json_ok({**body, "available": True, "reason": None, "files": [], "truncated": False,
                         "manifest_readable": False, "base": None})
     changes = await asyncio.to_thread(read_changes, services.reader, services.git, Path(repo.canonical_path),
-                                      listing.relpath, base)
+                                      listing.relpath, base, at)
     return json_ok({**body, **changes})
 
 

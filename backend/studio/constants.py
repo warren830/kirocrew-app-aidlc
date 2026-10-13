@@ -440,6 +440,9 @@ UNIT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 STAGE_SLUG_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 #: A full commit id as `git status --porcelain=v2` prints it (SHA-1, or SHA-256 in a sha256 repository).
 COMMIT_ID_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
+#: An instant as Studio writes one (``2026-10-13T14:38:13Z``, fractions and offsets allowed): nothing git could
+#: read as another of its approximate dates.
+ISO_INSTANT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$")
 ENGINE_VERSION_RE = re.compile(r'AIDLC_VERSION\s*=\s*"([0-9][0-9.]*?)"')
 ENGINE_STATE_VERSION_RE = re.compile(r'CURRENT_STATE_VERSION\s*=\s*"(\d+)"')
 STATE_VERSION_FIELD = "State Version"

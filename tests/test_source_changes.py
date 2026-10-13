@@ -25,10 +25,11 @@ def git_bin() -> str:
     return path
 
 
-def _git(repo: Path, git: str, *args: str) -> None:
+def _git(repo: Path, git: str, *args: str, date: str | None = None) -> None:
     env = {"PATH": os.environ.get("PATH", os.defpath), "HOME": str(repo.parent), "GIT_CONFIG_NOSYSTEM": "1",
            "GIT_CONFIG_GLOBAL": os.devnull, "GIT_AUTHOR_NAME": "lab", "GIT_AUTHOR_EMAIL": "lab@example.invalid",
-           "GIT_COMMITTER_NAME": "lab", "GIT_COMMITTER_EMAIL": "lab@example.invalid"}
+           "GIT_COMMITTER_NAME": "lab", "GIT_COMMITTER_EMAIL": "lab@example.invalid",
+           **({"GIT_COMMITTER_DATE": date, "GIT_AUTHOR_DATE": date} if date else {})}
     subprocess.run([git, *args], cwd=repo, env=env, check=True, capture_output=True)
 
 
@@ -55,9 +56,9 @@ def _manifest(repo: Path, paths: list[str]) -> None:
 
 @pytest.fixture
 def read(studio, git_bin, clock):
-    def run(repo: Path, *, git: str | None = git_bin, base: str | None = None):
+    def run(repo: Path, *, git: str | None = git_bin, base: str | None = None, at: str | None = None):
         return studio.source_changes.read_changes(studio.aidlc_reader.AidlcReader(clock),
-                                                  studio.git_observer.GitObserver(git, clock), repo, MANIFEST, base)
+                                                  studio.git_observer.GitObserver(git, clock), repo, MANIFEST, base, at)
     return run
 
 
@@ -123,6 +124,27 @@ def test_a_closed_card_compares_with_the_head_it_captured(read, tmp_path, git_bi
     # a commit the repository does not have is not a comparison: HEAD is used, and the answer says so
     gone = read(repo, base="0" * 40)
     assert gone["base"] is None and _by_path(gone)["calc.py"]["status"] == "unchanged"
+
+
+def test_a_closed_card_compares_with_the_head_of_the_moment_it_was_decided(read, tmp_path, git_bin):
+    """A card stores no git reading, but its decision time names the commit HEAD was then."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "calc.py").write_text("def add(a, b):\n    return a + b\n")
+    _git(repo, git_bin, "-c", "init.defaultBranch=main", "init", "-q", ".")
+    _git(repo, git_bin, "add", "-A")
+    _git(repo, git_bin, "commit", "-qm", "base", date="2026-10-13T13:16:00Z")
+    first = subprocess.run([git_bin, "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True,
+                           text=True).stdout.strip()
+    (repo / "calc.py").write_text("def add(a, b):\n    return a + b\n\n\ndef subtract(a, b):\n    return a - b\n")
+    _manifest(repo, ["calc.py"])
+    _git(repo, git_bin, "add", "-A")
+    _git(repo, git_bin, "commit", "-qm", "the approved change", date="2026-10-13T15:08:00Z")
+    decided = read(repo, at="2026-10-13T14:38:13Z")
+    calc = _by_path(decided)["calc.py"]
+    assert decided["base"] == first and (calc["status"], calc["additions"]) == ("modified", 4)
+    # before the first commit there was nothing to compare with, and HEAD is used
+    assert read(repo, at="2026-10-01T00:00:00Z")["base"] is None
 
 
 def test_what_is_not_shown_says_why(read, tmp_path, git_bin):

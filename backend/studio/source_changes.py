@@ -25,19 +25,23 @@ __all__ = ["intent_written_paths", "read_changes"]
 _CONTEXT_LINES = 3
 
 
-def read_changes(reader: Any, git: Any, repo: Path, manifest_relpath: str, base: str | None = None) -> dict[str, Any]:
+def read_changes(reader: Any, git: Any, repo: Path, manifest_relpath: str, base: str | None = None,
+                 at: str | None = None) -> dict[str, Any]:
     """``{"available", "reason", "files", "truncated", "manifest_readable", "base"}`` for one listing: a source
     manifest, or a zero-Unit stage's ``traceability.json``. ``available`` is git's: without it nothing can be
     compared, so each listed path says ``unknown`` rather than "added".
 
-    Each file is compared with HEAD, or with ``base`` when it is a commit the repository has: a closed card asks for
-    the HEAD it captured, since once the approved code is committed, a comparison with today's HEAD reads as no
-    change at all. ``base`` in the answer is the commit used, ``None`` for HEAD.
+    Each file is compared with HEAD, or with ``base`` when it is a commit the repository has, or with the commit HEAD
+    was at ``at``: a closed card asks for the HEAD of the moment it was decided, since once the approved code is
+    committed, a comparison with today's HEAD reads as no change at all. ``base`` in the answer is the commit used,
+    ``None`` for HEAD.
     """
     paths, readable = _listed_paths(reader, repo, manifest_relpath)
     head = git.observe(repo)
     available = bool(head.available)
     rev = base if available and base is not None and git.is_commit(repo, base) else None
+    if rev is None and available and at is not None:
+        rev = git.commit_before(repo, at)
     files: list[dict[str, Any]] = []
     budget = C.MAX_SOURCE_CHANGES_DIFF_BYTES
     for path in paths[:C.MAX_SOURCE_CHANGE_FILES]:

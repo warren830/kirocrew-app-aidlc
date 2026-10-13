@@ -30,11 +30,11 @@
   "changes.fromTraceability": "AI-DLC writes no source manifest for work without Units, so these are the files this stage's traceability names. A file it changed without tracing a requirement to it is not listed.",
   "changes.noneTraced": "This stage's traceability names no workspace file.",
   "changes.noTraceability": "This stage's traceability could not be read, so Studio cannot say which files it wrote.",
-  "changes.summaryBase": "{n} files written: +{added} −{removed} lines against {sha}, the commit HEAD was when this card opened.",
+  "changes.summaryBase": "{n} files written: +{added} −{removed} lines against {sha}, the latest commit when this card was decided.",
   "changes.labelBase": "Code that {stage} wrote, compared with {sha}",
-  "changes.readNowBase": "Read now: today's files against the commit this card opened on. A file changed again after the decision shows that change too.",
+  "changes.readNowBase": "Read now: today's files against the commit that was HEAD when this card was decided. A file changed again since then shows that change too.",
   "changes.readNow": "Read now: today's files against today's latest commit, not the code this card decided on. Once that code is committed, it reads as unchanged here.",
   "changes.status.unchangedBase": "Same as {sha}",
-  "changes.why.unchangedBase": "Today's file matches {sha}, the commit this card opened on, so the stage left it as it was or the change was undone.",
+  "changes.why.unchangedBase": "Today's file matches {sha}, the commit that was HEAD when this card was decided: the stage left it as it was, or the change was undone.",
   "changes.addedNoteBase": "Not in {sha}, so the whole file is shown as new, including any part that predates this stage."
 }

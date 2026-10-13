@@ -506,6 +506,24 @@ describe('gate template', () => {
     expect(within(block).getByText(en.t('changes.readNowBase'))).toBeInTheDocument()
   })
 
+  it('asks for the commit of the decision time when a closed card stored no git reading', async () => {
+    const intent = `${BASE}/repos/r_1/intents/default~250901-guest`
+    setApiRoutes({
+      [`GET ${intent}/artifacts/art_1`]: () => ({
+        artifact: artifact(), content: '# Plan\n', encoding: 'utf-8', truncated: false, review: null, toc: [],
+        prior: { available: false, source: null, diff: null },
+      }),
+      [`GET ${intent}/changes*`]: () => ({
+        stage: 'functional-design', unit: null, manifest: 'record/source-manifest.json', available: true,
+        reason: null, truncated: false, manifest_readable: true, base: null, files: [],
+      }),
+    })
+    const manifest = artifact({ artifact_id: 'art_2', name: 'source-manifest.json', relpath: 'record/source-manifest.json' })
+    const closed = card({ status: 'StateChanged', evidence: { ...card().evidence, artifacts: [artifact(), manifest], git: null } })
+    mount(GateTemplate, { ...closed, delivery: { ...closed.delivery, delivering_at: '2026-10-13T14:38:13Z' } })
+    await waitFor(() => expect(apiCalls.some((call) => call.path.includes('/changes?stage=functional-design&at=2026-10-13T14'))).toBe(true))
+  })
+
   it('shows zero-Unit code generation from its traceability, and says where the file list came from', async () => {
     const intent = `${BASE}/repos/r_1/intents/default~250901-guest`
     setApiRoutes({
