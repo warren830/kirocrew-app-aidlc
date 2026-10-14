@@ -56,6 +56,45 @@ def test_confirmed_presence_anomaly_can_finish_without_rebasing_or_replay(svc, s
     assert _reconcile(svc, action_id).status_generation == settled.status_generation
 
 
+@pytest.mark.parametrize("extra_row,settles", [
+    # KiroCrew resumed the turn after a backend error: its own prompt, recorded by AI-DLC as a HUMAN_TURN
+    ({"role": "inject", "content": "[Interrupted turn — automatic recovery]\nContinue from where it stopped.",
+      "cls": "msg msg-inject", "ts": "2026-09-04T09:59:40Z", "meta": {}}, True),
+    ({"role": "subagent", "content": "Sub-agent result: done.", "cls": "msg", "ts": "2026-09-04T09:59:40Z",
+      "meta": {}}, True),
+    # a person wrote in the conversation beside the delivery: the extra turn is theirs, and stays an anomaly
+    ({"role": "user", "content": "actually, reject it", "cls": "msg msg-u", "ts": "2026-09-04T09:59:40Z",
+      "meta": {}}, False),
+])
+def test_a_prompt_kirocrew_wrote_itself_is_not_a_second_person(svc, scene, fake_host, extra_row, settles):
+    """Round 5: KiroCrew's automatic recovery after a backend error made two HUMAN_TURNs for one answer."""
+    touch_human_turn(scene.root, mtime_ns=1_000_000_000)
+    action_id = scene.make(status="Delivered", lease_generation=7)
+    approve_on_disk(scene.root, human_turns=2)
+    touch_human_turn(scene.root, mtime_ns=2_000_000_000)
+    finish_turn(fake_host, scene.slot_key)
+    scene.slot.messages.insert(-1, extra_row)
+
+    after = _reconcile(svc, action_id)
+    if settles:
+        assert after.status == "StateChanged"
+        assert after.resolution["evidence"]["presence"]["machine_prompts"] == 1
+    else:
+        assert after.status == "ReconciliationRequired"
+        assert "human_presence_anomaly" in {f["code"] for f in after.evidence["findings"]}
+
+
+def test_extra_turns_with_no_transcript_stay_an_anomaly(svc, scene, fake_host):
+    """A restarted gateway holds no transcript: nothing then says who submitted the second prompt."""
+    touch_human_turn(scene.root, mtime_ns=1_000_000_000)
+    action_id = scene.make(status="Delivered", lease_generation=7)
+    approve_on_disk(scene.root, human_turns=2)
+    touch_human_turn(scene.root, mtime_ns=2_000_000_000)
+    finish_turn(fake_host, scene.slot_key)
+    scene.slot.messages[:] = [row for row in scene.slot.messages if row["role"] == "assistant"]
+    assert _reconcile(svc, action_id).status == "ReconciliationRequired"
+
+
 @pytest.mark.parametrize("missing_proof", [
     "human_turn", "marker", "marker_advance", "marker_monotonicity", "baseline", "active_cursor", "gate_resolution",
     "new_gate_resolution", "complete_audit",

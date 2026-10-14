@@ -662,6 +662,21 @@ def test_findings_an_uncertain_action_carries(engine, poc_snap, make_facts, code
     assert code not in _codes(engine.evaluate_intent(poc_snap, make_facts(live_actions=[clean])))
 
 
+def test_a_recovery_card_does_not_keep_its_own_finding_alive(engine, poc_snap, make_facts):
+    """Round 5: a recovery card's evidence holds the finding that raised it, naming the action it judged. Lifting
+    that copy kept "Your reply could not be confirmed" in the queue after the answer had settled."""
+    judged = poc_action(status="ReconciliationRequired",
+                        evidence={"findings": [{"code": "human_presence_anomaly", "params": {"human_turn_delta": 2}}]})
+    recovery = replace(poc_action(status="Queued"), action_id="a_recovery0000000", type="recovery",
+                       evidence={"findings": [{"code": "human_presence_anomaly",
+                                               "params": {"action_id": judged.action_id, "human_turn_delta": 2}}]})
+    # while the judged action is live, its own stored finding is the one lifted, once
+    both = _codes(engine.evaluate_intent(poc_snap, make_facts(live_actions=[judged, recovery])))
+    assert both.count("human_presence_anomaly") == 1
+    # once it has settled, nothing lifts the copy, so the recovery card is no longer derived
+    assert "human_presence_anomaly" not in _codes(engine.evaluate_intent(poc_snap, make_facts(live_actions=[recovery])))
+
+
 def test_cursor_mismatch(engine, poc_snap, make_facts):
     refused = poc_action(cursor_readback=CursorReadbackView(ok=False, mismatch=("dir_name",)))
     finding = _one(engine.evaluate_intent(poc_snap, make_facts(live_actions=[refused])), "cursor_mismatch")

@@ -555,6 +555,11 @@ class ConsistencyEngine:
         for code, extra in _stored_findings(rec):
             if code not in ACTION_STORED_FINDING_CODES or code in seen:
                 continue
+            # A recovery card carries a copy of the finding that raised it, naming the action that finding judged.
+            # Lifting the copy kept the card alive after that action had settled; only the action itself counts.
+            named = extra.get("action_id")
+            if named and named != action_id:
+                continue
             seen.add(code)
             params = {"action_id": action_id, "status": status}
             params.update(extra)

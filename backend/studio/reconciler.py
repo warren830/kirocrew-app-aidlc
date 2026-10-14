@@ -17,7 +17,8 @@ decision landed.
 
 **Presence is required.** An in-flight human-lane resolution needs exactly one new ``HUMAN_TURN``
 since the baseline the submit recorded. Zero or multiple turns escalate as ``human_presence_anomaly``
-(FR-SES-010, C23). Once delivery is confirmed in ``ReconciliationRequired``, a complete audit with a
+(FR-SES-010, C23), unless KiroCrew's transcript shows its own prompts (an automatic recovery, a sub-agent's
+result) account for every extra turn and no person wrote beside this delivery. Once delivery is confirmed in ``ReconciliationRequired``, a complete audit with a
 positive increment and an advanced human marker can close a matching resolution contract. The original
 baseline stays intact; later turns must not make a completed decision permanently unresolvable.
 
@@ -139,6 +140,12 @@ _TURN_OUTCOME = {True: ("no_transition", "turn_ended"), False: ("pending", "turn
 #: Pending reasons that mean "a human must look", not "wait longer". They double as the finding codes: why a
 #: resolution was refused is exactly what the recovery card has to say.
 _ANOMALY_REASONS = ("human_presence_anomaly", "cursor_moved")
+#: Transcript roles a prompt into the conversation can carry: a person's message (sent, or waiting behind a turn),
+#: and the prompts KiroCrew writes itself, which AI-DLC's hook records as ``HUMAN_TURN`` all the same.
+_PROMPT_ROLES = ("user", "queued", "inject", "subagent")
+_PERSON_ROLES = ("user", "queued")
+#: How far back the transcript is read for one delivery's turn.
+_PRESENCE_ROWS = 200
 
 
 # --------------------------------------------------------------------------- #
@@ -1421,8 +1428,30 @@ class Reconciler:
             return {"human_turn_delta": delta, "new_human_turns": fresh, "partial": True,
                     "marker_advanced": advanced, "ok": fresh >= 1 and advanced}
         reconciling = rec.status == "ReconciliationRequired" and _attr(_attr(snap, "audit"), "complete", False) is True
-        return {"human_turn_delta": delta, "partial": False, "marker_advanced": advanced,
-                "ok": bool((delta >= 1 if reconciling else delta == 1) and advanced)}
+        ok = bool((delta >= 1 if reconciling else delta == 1) and advanced)
+        presence = {"human_turn_delta": delta, "partial": False, "marker_advanced": advanced, "ok": ok}
+        if not ok and delta > 1 and advanced:
+            machine = self._machine_prompts(rec)
+            if machine is not None and delta - 1 <= machine:
+                presence.update(machine_prompts=machine, ok=True)
+        return presence
+
+    def _machine_prompts(self, rec: Any) -> int | None:
+        """How many prompts KiroCrew itself put into the conversation since this delivery: an automatic recovery
+        after a backend error, a sub-agent's result, a scheduled or app message. AI-DLC records each as a
+        ``HUMAN_TURN``, since its hook cannot tell who submitted a prompt; KiroCrew's transcript can. ``None`` when
+        the transcript does not show this delivery (a restarted gateway holds none), or shows a person's message
+        beside it: then the extra turns stay unexplained and the anomaly stands."""
+        if not rec.slot_key or not rec.delivering_at:
+            return None
+        rows = self._s.host.recent_rows(str(rec.slot_key), since_ts=str(rec.delivering_at), roles=_PROMPT_ROLES,
+                                        limit=_PRESENCE_ROWS)
+        people = [row for row in rows if row.role in _PERSON_ROLES]
+        mine = [row for row in people if (rec.delivery_id and row.meta.get("studio_delivery_id") == rec.delivery_id)
+                or (rec.wire_text and row.content == rec.wire_text)]
+        if not mine or len(people) > len(mine):
+            return None
+        return sum(1 for row in rows if row.role not in _PERSON_ROLES)
 
     def _turn_started(self, rec: Any, slot: Any, snap: Any) -> bool:
         """Has the queued message become a running turn (P22)? The host has no "queue drained" event, so: the
