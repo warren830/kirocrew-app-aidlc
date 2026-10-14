@@ -25,7 +25,7 @@ import { StudioApiError, type StudioApi } from '../lib/api'
 import { plural } from '../lib/format'
 import type { IntentSummary, RepoGitResponse } from '../lib/types'
 import { useResource } from '../lib/useResource'
-import { StartStatus, startBlockedReason, startText, useStartRun, type StartKind } from './StartRun'
+import { StartStatus, hasProgress, startBlockedReason, startText, useStartRun, type StartKind } from './StartRun'
 import { ApprovalWaitNotice } from './ApprovalWait'
 
 type Pending = 'pause' | 'unpause' | 'archive' | 'restore' | StartKind
@@ -154,6 +154,7 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
   }, [api, intent, onGo, fail])
 
   const starting = pending === 'run' || pending === 'resume'
+  const confirmKey = pending === 'run' && hasProgress(intent) ? 'continue' : pending
   // Prepare commit leads only while code this intent wrote is still uncommitted: on a committed intent, a primary
   // "Prepare commit" read as unfinished work. The same reading as the repository's Git panel, shared per repository.
   const offerCommit = completed && !intent.archived
@@ -302,7 +303,7 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
         </p>
       ) : null}
 
-      <StartStatus run={run} />
+      <StartStatus run={run} continuing={hasProgress(intent)} />
 
       {intent.session?.waiting_approval ? (
         <ApprovalWaitNotice
@@ -316,16 +317,16 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
         <div
           className="studio-confirm"
           role="group"
-          aria-label={t(`intents.confirm.${pending}.title`)}
+          aria-label={t(`intents.confirm.${confirmKey}.title`)}
           onKeyDown={(event) => {
             if (event.key === 'Escape') setPending(null)
           }}
         >
-          <h3>{t(pauseFirst ? 'intents.confirm.archive.pauseFirst.title' : `intents.confirm.${pending}.title`)}</h3>
+          <h3>{t(pauseFirst ? 'intents.confirm.archive.pauseFirst.title' : `intents.confirm.${confirmKey}.title`)}</h3>
           <p>
             {pauseFirst
               ? plural(i18n, 'intents.confirm.archive.pauseFirst.body', intent.open_actions)
-              : t(`intents.confirm.${pending}.body`, { text: starting ? startText(pending as StartKind) : '' })}
+              : t(`intents.confirm.${confirmKey}.body`, { text: starting ? startText(pending as StartKind) : '' })}
           </p>
           {pending === 'archive' && !pauseFirst && intent.open_actions > 0 ? (
             <p className="studio-consequence">

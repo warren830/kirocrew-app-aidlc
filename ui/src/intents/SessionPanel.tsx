@@ -54,7 +54,7 @@ import { useI18n } from '../i18n'
 import { StudioApiError, type StudioApi } from '../lib/api'
 import { unavailable } from '../lib/format'
 import type { BindingView, ChatFolder, HostSlot, IntentSummary, RepoRecord, SessionRef, SlotView } from '../lib/types'
-import { StartStatus, startBlockedReason, startKind, startText, useStartRun } from './StartRun'
+import { StartStatus, hasProgress, startBlockedReason, startKind, startText, useStartRun } from './StartRun'
 import { APP_NAME } from '../lib/app'
 import { useResource } from '../lib/useResource'
 
@@ -466,7 +466,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
                 onClick={() => void run.start(intent, kind)}
               >
                 <Icon name="play" size={13} />
-                {t('intents.start.go', { text: startText(kind) })}
+                {t(kind === 'run' && hasProgress(intent) ? 'intents.start.continue' : 'intents.start.go', { text: startText(kind) })}
               </button>
             ) : null}
             <button type="button" className="studio-btn" onClick={() => navigate(conversationPath(bound.slotKey))}>
@@ -509,7 +509,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
                   onClick={() => void create(true)}
                 >
                   <Icon name="play" size={13} />
-                  {t('intents.session.createAndRun', { text: startText(kind) })}
+                  {t(kind === 'run' && hasProgress(intent) ? 'intents.session.createAndContinue' : 'intents.session.createAndRun', { text: startText(kind) })}
                 </button>
                 <button type="button" className="studio-btn" disabled={busy !== null || run.busy}
                   onClick={() => void create(false)}>
@@ -546,7 +546,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
         </p>
       ) : null}
 
-      <StartStatus run={run} />
+      <StartStatus run={run} continuing={hasProgress(intent)} />
 
       {filed ? (
         <p className="studio-consequence" role="status">

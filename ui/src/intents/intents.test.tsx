@@ -76,8 +76,9 @@ describe('the intents inventory', () => {
   })
 
   it('shows the text before sending, then queues and sends the run once; pauses behind a confirmation', async () => {
+    // Nothing has run yet, so the run starts the workflow.
     const runnable = { ...INTENT, operational_state: 'Idle' as const,
-      counts: { ...INTENT.counts, awaiting_approval: 0 } }
+      counts: { ...INTENT.counts, not_started: 33, in_progress: 0, awaiting_approval: 0, completed: 0, skipped: 0, done: 0 } }
     const card = actionCard({ action_id: 'a_9', type: 'run' })
     const receipt = {
       ok: true as const, action_id: 'a_9', status: 'Delivering' as const, lane: 'human_lane' as const,
@@ -445,6 +446,7 @@ const UNBOUND = { ...INTENT, session: null } as IntentSummary
 const RUNNABLE_UNBOUND = {
   ...UNBOUND, operational_state: 'Idle', counts: { ...INTENT.counts, awaiting_approval: 0 },
 } as IntentSummary
+const RUNNABLE_BOUND = { ...RUNNABLE_UNBOUND, session: INTENT.session } as IntentSummary
 
 /**
  * The panel with a REAL client, so the assertions are about the requests that leave the browser.
@@ -558,9 +560,9 @@ describe('the canonical conversation panel', () => {
     })
     mount(RUNNABLE_UNBOUND)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Create the conversation and start (sends /aidlc)' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Create the conversation and continue (sends /aidlc)' }))
 
-    expect(await screen.findByText('Sent /aidlc. The workflow has started in the conversation.')).toBeInTheDocument()
+    expect(await screen.findByText('Sent /aidlc. The workflow is continuing in the conversation.')).toBeInTheDocument()
     const paths = apiCalls.map((call) => `${call.method} ${call.path}`)
     expect(paths.slice(-5)).toEqual([
       `POST ${INTENT_PATH}/run`,
@@ -611,10 +613,26 @@ describe('the canonical conversation panel', () => {
     })
     mount({ ...RUNNABLE_UNBOUND, session: INTENT.session } as IntentSummary)
 
-    await userEvent.click(screen.getByRole('button', { name: 'Start the workflow (sends /aidlc)' }))
+    // Seven stages are done, so the panel says the run continues the workflow rather than starts it.
+    expect(screen.queryByRole('button', { name: 'Start the workflow (sends /aidlc)' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Continue the workflow (sends /aidlc)' }))
 
-    expect(await screen.findByText('Sent /aidlc. The workflow has started in the conversation.')).toBeInTheDocument()
+    expect(await screen.findByText('Sent /aidlc. The workflow is continuing in the conversation.')).toBeInTheDocument()
     expect(apiCalls.filter((call) => call.path === `${CHAT}?ws=1`)).toHaveLength(1)
+  })
+
+  it('asks to continue, not start, a run on an intent AI-DLC has already worked on', async () => {
+    const api = { run: vi.fn() } as unknown as StudioApi
+    render(
+      <I18nProvider>
+        <IntentActions api={api} intent={RUNNABLE_BOUND} onGo={() => {}} onQueued={() => {}} onChanged={() => {}} onRecompose={() => {}} onSession={() => {}} />
+      </I18nProvider>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Run to next checkpoint' }))
+    expect(screen.getByRole('group', { name: 'Continue the workflow?' })).toBeInTheDocument()
+    expect(screen.getByText(/AI-DLC picks up where it stopped/)).toBeInTheDocument()
+    expect(screen.queryByText('Start the workflow?')).toBeNull()
+    expect(api.run).not.toHaveBeenCalled()
   })
 
   it('reuses the intent folder a previous binding made', async () => {

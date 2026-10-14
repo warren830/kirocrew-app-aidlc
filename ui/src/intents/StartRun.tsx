@@ -28,6 +28,12 @@ export function startKind(intent: IntentSummary): StartKind {
   return intent.disk.parked_at ? 'resume' : 'run'
 }
 
+/** Whether AI-DLC has already worked on this intent, so a run continues it rather than starts it. */
+export function hasProgress(intent: IntentSummary): boolean {
+  const c = intent.counts
+  return c.completed + c.in_progress + c.awaiting_approval + c.revising > 0
+}
+
 /** Why this intent cannot be started now, or `null`. The checks the run route itself would refuse on. */
 export function startBlockedReason(intent: IntentSummary, t: (key: string) => string): string | null {
   if (intent.archived) return t('intents.run.disabledArchived')
@@ -72,7 +78,7 @@ export function useStartRun(api: StudioApi, onSettled?: () => void) {
 export type StartRun = ReturnType<typeof useStartRun>
 
 /** The single line that says what the start did: sending, sent, or why it did not go. */
-export function StartStatus({ run }: { run: StartRun }) {
+export function StartStatus({ run, continuing = false }: { run: StartRun; continuing?: boolean }) {
   const { t } = useI18n()
   const text = startText(run.kind)
   const { stage, attempt, refusal, actionId } = run.state
@@ -86,7 +92,7 @@ export function StartStatus({ run }: { run: StartRun }) {
   }
   if (stage === 'settled' && attempt) {
     if (attempt.outcome === 'delivered' && attempt.reported) {
-      return <Line tone="ok" icon="check" text={t('intents.start.sent', { text })} />
+      return <Line tone="ok" icon="check" text={t(continuing && run.kind === 'run' ? 'intents.start.sentContinue' : 'intents.start.sent', { text })} />
     }
     if (attempt.outcome === 'not_delivered') {
       const why = attempt.receipt?.error ?? attempt.receipt?.code ?? ''
