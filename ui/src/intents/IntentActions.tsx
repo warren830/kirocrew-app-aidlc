@@ -26,6 +26,7 @@ import { plural } from '../lib/format'
 import type { IntentSummary, RepoGitResponse } from '../lib/types'
 import { useResource } from '../lib/useResource'
 import { StartStatus, hasProgress, startBlockedReason, startText, useStartRun, type StartKind } from './StartRun'
+import { StoppedTurnNotice } from './StoppedTurn'
 import { ApprovalWaitNotice } from './ApprovalWait'
 
 type Pending = 'pause' | 'unpause' | 'archive' | 'restore' | StartKind
@@ -304,6 +305,10 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
       ) : null}
 
       <StartStatus run={run} continuing={hasProgress(intent)} />
+
+      {intent.session?.stopped_on_error && !intent.session.running && !run.busy ? (
+        <StoppedTurnNotice slotKey={intent.session.slot_key} {...intent.session.stopped_on_error} />
+      ) : null}
 
       {intent.session?.waiting_approval ? (
         <ApprovalWaitNotice

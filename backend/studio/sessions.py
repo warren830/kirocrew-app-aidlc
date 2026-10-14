@@ -75,6 +75,15 @@ BUSY_REASONS = ("running", "stage_execution", "stopping", "queued", "approval_pe
 #: turn is ``queued``, not appended, and it *is* delivered (review R02).
 DELIVERY_ROLES = ("user", "queued")
 
+#: The ``error`` rows KiroCrew appends while it is still retrying on its own (``meta.kind``, ``meta.notice``):
+#: not where a turn stopped. Any other ``error`` row is terminal.
+RETRYING_ERROR_KINDS = frozenset({"transient_retry"})
+RETRYING_ERROR_NOTICES = frozenset({"transient_retrying", "transient_resuming"})
+#: A newer row in one of these roles means the conversation went on past an older error.
+TURN_ROLES = frozenset({"user", "queued", "inject", "assistant"})
+#: How much of the host's error text a notice repeats; the conversation keeps the whole of it.
+STOPPED_TEXT_CHARS = 400
+
 #: Something may still be on the wire: rebinding would send its delivery report to a session that no longer
 #: owns it. Narrower than ``LIVE_ACTION_STATUS`` because rebinding is itself a recovery decision.
 IN_FLIGHT_ACTION_STATUS = ("Delivering", "Delivered")
@@ -343,6 +352,24 @@ class HostBridge:
                    if isinstance(row, Mapping) and (not wanted or _text(row.get("role")) in wanted)
                    and _at_or_after(row.get("ts"), since_ts))
         return list(islice(matches, cap))
+
+    def last_turn_error(self, slot_key: str) -> TranscriptRow | None:
+        """The error the slot's last turn stopped on, or ``None``: a retry KiroCrew is still making is not one,
+        and any later prompt or reply means the conversation went on past it. Process memory, like
+        ``recent_rows``: no rows is "no evidence", never "it did not fail"."""
+        for row in reversed(self._raw_rows(slot_key)):
+            if not isinstance(row, Mapping):
+                continue
+            role = _text(row.get("role"))
+            if role in TURN_ROLES:
+                return None
+            if role != "error":
+                continue
+            meta = row.get("meta") if isinstance(row.get("meta"), Mapping) else {}
+            if _text(meta.get("kind")) in RETRYING_ERROR_KINDS or _text(meta.get("notice")) in RETRYING_ERROR_NOTICES:
+                continue
+            return _row_view(row)
+        return None
 
     def find_delivery_row(self, slot_key: str, *, since_ts: str, delivery_id: str,
                           wire_text: str) -> TranscriptRow | None:
@@ -853,6 +880,8 @@ class SessionRef:
     bound_at: str
     waiting_approval: bool = False
     approval: Mapping[str, str] | None = None
+    #: The error the last turn stopped on (``at``, ``text``, ``kind``) while the conversation is idle.
+    stopped_on_error: Mapping[str, str] | None = None
 
     def to_json(self) -> dict[str, Any]:
         approval = (
@@ -860,7 +889,8 @@ class SessionRef:
             if self.waiting_approval and self.approval is not None else None
         )
         return {"slot_key": self.slot_key, "session_key": self.session_key, "running": self.running,
-                "bound_at": self.bound_at, "waiting_approval": self.waiting_approval, "approval": approval}
+                "bound_at": self.bound_at, "waiting_approval": self.waiting_approval, "approval": approval,
+                "stopped_on_error": dict(self.stopped_on_error) if self.stopped_on_error else None}
 
 
 @dataclass(frozen=True, slots=True)
@@ -978,7 +1008,40 @@ class SessionBinder:
             bound_at=_text(getattr(binding, "updated_at", "")),
             waiting_approval=waiting,
             approval=view.approval if waiting and view is not None else None,
+            stopped_on_error=self._stopped_on_error(slot_key, view),
         )
+
+    def _stopped_on_error(self, slot_key: str, view: SlotView | None) -> dict[str, str] | None:
+        """What the idle conversation's last turn stopped on; nothing while a turn runs or stops, since
+        KiroCrew may still be recovering it."""
+        if view is None or view.running or view.stopping or view.stop_state != "idle":
+            return None
+        row = self._host.last_turn_error(slot_key)
+        if row is None:
+            return None
+        text = row.content.removeprefix("❌").strip()
+        if len(text) > STOPPED_TEXT_CHARS:
+            text = text[:STOPPED_TEXT_CHARS - 1].rstrip() + "…"
+        return {"at": row.ts, "text": text, "kind": _text(row.meta.get("kind"))}
+
+    async def stopped_turns(self) -> list[dict[str, Any]]:
+        """Every bound, unarchived intent whose idle conversation stopped on an error, read from the host each
+        call. Not cards: nothing waits on a decision, but the run did not reach a checkpoint either."""
+        out: list[dict[str, Any]] = []
+        for row in await asyncio.to_thread(self._storage.select, _BINDINGS):
+            slot_key = _text(row.get("slot_key"))
+            if not slot_key or row.get("archive_state") == ARCHIVE_ARCHIVED:
+                continue
+            stopped = self._stopped_on_error(slot_key, self._host.slot(slot_key))
+            if stopped is None:
+                continue
+            space = _text(row.get("space")) or C.DEFAULT_SPACE
+            intent_dir = _text(row.get("intent_dir"))
+            out.append({
+                "repo_id": _text(row.get("repo_id")), "space": space, "intent_dir": intent_dir,
+                "intent_key": C.intent_key_for(space, intent_dir), "slot_key": slot_key, **stopped,
+            })
+        return out
 
     async def waiting_approvals(self) -> list[dict[str, Any]]:
         """Every bound, unarchived intent whose conversation is parked on a host tool approval, read from

@@ -988,7 +988,8 @@ def test_session_ref_reports_the_live_running_state(binder, bridge, registered, 
     assert ref.slot_key == SLOT and ref.session_key == f"dashboard:{SLOT}"
     assert ref.running is False and ref.bound_at == binding.updated_at
     assert ref.to_json() == {"slot_key": SLOT, "session_key": f"dashboard:{SLOT}", "running": False,
-                             "bound_at": binding.updated_at, "waiting_approval": False, "approval": None}
+                             "bound_at": binding.updated_at, "waiting_approval": False, "approval": None,
+                             "stopped_on_error": None}
     slot.running = True
     assert run(binder.session_ref(binding)).running is True
     assert run(binder.session_ref(run(binder.get("r_1", "default", "other")))) is None

@@ -24,6 +24,7 @@ import { API_BASE, actionCard, shellRoutes } from '../test/fixtures'
 import { apiCalls, navigations, setApiRoutes, StubApiError } from '../test/stubs/app-sdk'
 import { ApprovalWaitNotice } from './ApprovalWait'
 import { IntentActions } from './IntentActions'
+import { StoppedTurnNotice } from './StoppedTurn'
 import { IntentList } from './IntentList'
 import { activityText } from './IntentRow'
 import { readInventory } from './IntentsView'
@@ -306,6 +307,38 @@ describe('the intents inventory', () => {
     expect(screen.getByText('go test ./...')).toBeInTheDocument()
   })
 
+  it('says when the last turn stopped on a host error, what sending again does, and opens the conversation', async () => {
+    const stoppedAt = new Date(Date.now() - 3 * 60_000).toISOString()
+    const stopped = { ...INTENT, operational_state: 'Idle' as const, counts: { ...INTENT.counts, awaiting_approval: 0 },
+      session: { ...INTENT.session!, stopped_on_error: {
+        at: stoppedAt, text: 'The model backend hit a transient error (HTTP 5xx).', kind: '' } } } as IntentSummary
+    render(<I18nProvider><IntentActions api={{} as StudioApi} intent={stopped} onGo={() => {}}
+      onQueued={() => {}} onChanged={() => {}} onRecompose={() => {}} onSession={() => {}} /></I18nProvider>)
+    expect(screen.getByText(/^The last turn stopped on an error .*ago\.$/)).toBeInTheDocument()
+    expect(screen.getByText('The model backend hit a transient error (HTTP 5xx).')).toBeInTheDocument()
+    expect(screen.getByText('AI-DLC keeps what it already wrote. Run to next checkpoint sends /aidlc again to pick up from there.'))
+      .toBeInTheDocument()
+    navigations.length = 0
+    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }))
+    expect(navigations).toEqual(['/chat?sid=s1'])
+  })
+
+  it('does not promise a retry helps when the host error needs a fix in KiroCrew', () => {
+    render(<I18nProvider><StoppedTurnNotice slotKey="s1" at="2026-09-05T08:00:00Z" kind="usage_limit"
+      text="The monthly usage limit has been reached." label="devlake / 261001-servicenow-plugin" /></I18nProvider>)
+    expect(screen.getByText(/^devlake \/ 261001-servicenow-plugin: the last turn stopped on an error /)).toBeInTheDocument()
+    expect(screen.getByText('Sending /aidlc again stops the same way until this is fixed in KiroCrew; the conversation offers the fix.'))
+      .toBeInTheDocument()
+  })
+
+  it('says nothing about an old error while a turn runs', () => {
+    const running = { ...INTENT, operational_state: 'Running' as const, session: { ...INTENT.session!, running: true,
+      stopped_on_error: { at: '2026-09-05T08:00:00Z', text: 'An old error.', kind: '' } } } as IntentSummary
+    render(<I18nProvider><IntentActions api={{} as StudioApi} intent={running} onGo={() => {}}
+      onQueued={() => {}} onChanged={() => {}} onRecompose={() => {}} onSession={() => {}} /></I18nProvider>)
+    expect(screen.queryByText('An old error.')).toBeNull()
+  })
+
   it('does not offer Run before a conversation is bound', () => {
     const unbound = { ...INTENT, operational_state: 'Idle' as const, session: null,
       counts: { ...INTENT.counts, awaiting_approval: 0 } } as IntentSummary
@@ -510,7 +543,7 @@ describe('the time under an intent\'s state', () => {
     const at = (operational_state: string, last_activity_at: string | null) =>
       activityText(i18n, { ...INTENT, operational_state, last_activity_at } as IntentSummary)
     expect(at('WaitingForYou', twoMinutesAgo)).toMatch(/^waiting /)
-    expect(at('Running', twoMinutesAgo)).toMatch(/^last activity /)
+    expect(at('Running', twoMinutesAgo)).toMatch(/^last workflow step /)
     expect(at('Running', twoMinutesAgo)).not.toMatch(/waiting/)
     expect(at('Idle', null)).toBe('no activity yet')
   })

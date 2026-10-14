@@ -843,7 +843,8 @@
     "label_key": "queue.group.blocking"
    }
   ],
-  "organize": "priority"
+  "organize": "priority",
+  "stopped_turns": []
  },
  "status": 200
 }

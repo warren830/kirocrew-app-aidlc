@@ -32,6 +32,7 @@ import { QueueFilters, useOrganize } from './QueueFilters'
 import { QueueList } from './QueueList'
 import { intentText, repoText, stageText, typeLabelOf } from './QueueRow'
 import { ApprovalWaitNotice } from '../intents/ApprovalWait'
+import { StoppedTurnNotice } from '../intents/StoppedTurn'
 
 /** Every word a search should be able to find a row by. */
 function haystack(card: ActionCard, typeLabel: string, headline: string): string {
@@ -138,6 +139,17 @@ export function ActionsView({ route, go }: ViewProps) {
             tool={wait.tool}
             toolInput={wait.tool_input}
             label={`${wait.repo_label} / ${wait.intent_dir}`}
+          />
+        ))}
+
+        {(actions.data?.stopped_turns ?? []).map((stop) => (
+          <StoppedTurnNotice
+            key={stop.slot_key}
+            slotKey={stop.slot_key}
+            at={stop.at}
+            text={stop.text}
+            kind={stop.kind}
+            label={`${stop.repo_label} / ${stop.intent_dir}`}
           />
         ))}
 

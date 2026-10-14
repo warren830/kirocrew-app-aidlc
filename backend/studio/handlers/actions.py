@@ -68,17 +68,21 @@ async def list_actions(services: Any, request: web.Request) -> web.Response:
         "organize": organize,
         "groups": groups,
         "counts": counts,
-        "approval_waits": await _approval_waits(services, repo_id, space, intent_dir),
+        "approval_waits": await _in_scope(services, await services.sessions.waiting_approvals(), repo_id, space,
+                                          intent_dir),
+        "stopped_turns": await _in_scope(services, await services.sessions.stopped_turns(), repo_id, space,
+                                         intent_dir),
         "generated_at": services.clock.iso(),
     })
 
 
-async def _approval_waits(services: Any, repo_id: str | None, space: str | None,
-                          intent_dir: str | None) -> list[dict[str, Any]]:
-    """Conversations parked on a host tool approval, in the queue's filter. Not cards: the host answers them
-    in the conversation (A31); they are listed so a run that stopped to ask is seen with every other wait."""
+async def _in_scope(services: Any, waits: list[dict[str, Any]], repo_id: str | None, space: str | None,
+                    intent_dir: str | None) -> list[dict[str, Any]]:
+    """Conversations parked on a host tool approval, or stopped on a host error, in the queue's filter, with
+    their repository's label. Not cards: the host answers an approval in the conversation (A31), and a stopped
+    turn waits on no decision; they are listed so a run that stopped is seen with every other wait."""
     out: list[dict[str, Any]] = []
-    for wait in await services.sessions.waiting_approvals():
+    for wait in waits:
         if (repo_id and wait["repo_id"] != repo_id) or (space and wait["space"] != space) \
                 or (intent_dir and wait["intent_dir"] != intent_dir):
             continue

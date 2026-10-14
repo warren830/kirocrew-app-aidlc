@@ -55,6 +55,7 @@ import { StudioApiError, type StudioApi } from '../lib/api'
 import { unavailable } from '../lib/format'
 import type { BindingView, ChatFolder, HostSlot, IntentSummary, RepoRecord, SessionRef, SlotView } from '../lib/types'
 import { StartStatus, hasProgress, startBlockedReason, startKind, startText, useStartRun } from './StartRun'
+import { StoppedTurnNotice } from './StoppedTurn'
 import { APP_NAME } from '../lib/app'
 import { useResource } from '../lib/useResource'
 
@@ -456,6 +457,10 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
               },
             ]}
           />
+
+          {intent.session?.stopped_on_error && !bound.running && !started && !run.busy ? (
+            <StoppedTurnNotice slotKey={bound.slotKey} {...intent.session.stopped_on_error} />
+          ) : null}
 
           <div className="studio-row studio-wrap">
             {blocked === null ? (

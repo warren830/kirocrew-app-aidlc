@@ -3413,7 +3413,9 @@ export interface ArtifactMeta { artifact_id: string; relpath: string; name: stri
 export interface GitObservation { available: boolean; reason: string | null; branch: string | null; detached: boolean; head: string | null; head_subject: string | null; dirty: boolean; dirty_files: number; ahead: number | null; behind: number | null; upstream: string | null; observed_at: string; took_ms: number }
 export interface LeaseView { kind: 'execution' | 'admin'; repo_id: string; resolved_repo_identity: string; generation: number; acquired_at: string; heartbeat_at: string; intent_uuid: string | null; intent_key: string | null; session_key: string | null; action_id: string | null; operation_type: string | null; transaction_id: string | null; observed_busy_state: string | null; orphaned: boolean }
 export interface StableBoundary { stable: boolean; reasons: string[]; stage: string | null; marker: string | null; boundary_token: string | null; recorded_at: string }
-export interface SessionRef { slot_key: string; session_key: string; running: boolean; bound_at: string }
+export interface SessionRef { slot_key: string; session_key: string; running: boolean; bound_at: string; waiting_approval?: boolean; approval?: { tool: string; tool_input: string } | null; stopped_on_error?: StoppedOnError | null }
+/** The host error an idle conversation's last turn stopped on (architecture A38). */
+export interface StoppedOnError { at: string; text: string; kind: string }
 export interface SlotView { key: string; running: boolean; project: string; agent: string; app: string; queue_depth: number; pending_approval: boolean; needs_input: boolean; waiting_for_input: boolean; stop_state: 'idle' | 'soft_pending' | 'killing'; interrupted: boolean; last_ts: string; last_turn_ts: string; linked_session_key: string; session_key: string; messages: number; has_options: boolean; options: string[]; slack_linked: boolean; title: string; stopping: boolean; wait_state: Record<string, unknown> | null; in_stage_execution: boolean; approvals_pending: number; subagents_running: number; subagents_queued: number; deliveries_inflight: number }
 export type BusyReason = 'running' | 'stage_execution' | 'stopping' | 'queued' | 'approval_pending' | 'subagents' | 'deliveries_inflight'
 export interface BindingView { repo_id: string; space: string; intent_dir: string; intent_key: string; intent_uuid: string | null; slot_key: string | null; session_key: string | null; binding_generation: number; archive_state: 'active' | 'archived'; paused: boolean; paused_at: string | null; interrupted_at: string | null; keep_moving: boolean; last_stable_boundary: StableBoundary | null; updated_at: string }
@@ -3493,7 +3495,9 @@ export interface ActionCard {
   advisor: { latest_draft_id: string | null; status: string | null }
   deep_link: string; dedupe_key: string | null; human_text_present: boolean; acknowledged_evidence_sha256: string | null
 }
-export interface ActionsResponse { actions: ActionCard[]; organize: Organize; groups: { key: string; label_key: string; action_ids: string[] }[]; counts: { total: number; critical: number; blocking: number; attention: number; info: number }; generated_at: string }
+export interface ActionsResponse { actions: ActionCard[]; organize: Organize; groups: { key: string; label_key: string; action_ids: string[] }[]; counts: { total: number; critical: number; blocking: number; attention: number; info: number }; approval_waits?: ApprovalWait[]; stopped_turns?: StoppedTurn[]; generated_at: string }
+export interface ApprovalWait { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; slot_key: string; tool: string; tool_input: string }
+export interface StoppedTurn extends StoppedOnError { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; slot_key: string }
 export interface AnswerInput { index: number; option_letters: string[]; free_text: string | null }
 export type SubmitPayload =
   | { decision: 'approve' } | { decision: 'accept_as_is' } | { decision: 'request_changes'; feedback: string }
