@@ -17,8 +17,10 @@ the workflow did, and the boundary between them is never blurred.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import heapq
 import re
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
@@ -47,10 +49,10 @@ ACTIVITY_KINDS: tuple[str, ...] = (
     # because Activity is where a user checks why a subagent ran, and one sentence would hide it behind a click.
     "advisor.requested", "advisor.auto_requested", "advisor.completed", "advisor.failed",
     "notification.sent", "slack.sent", "slack.callback", "session.bound", "session.unbound", "session.takeover",
-    # What KiroCrew itself reported in a bound conversation (an `error` row it is not retrying), at that row's time.
-    "conversation.error",
     "intent.created", "intent.paused", "intent.resumed", "intent.archived", "intent.restored", "intent.force_stop",
     "settings.updated", "health.startup",
+    # What KiroCrew itself reported in a bound conversation (an `error` row it is not retrying), at that row's time.
+    "conversation.error",
 )
 _KIND_SET = frozenset(ACTIVITY_KINDS)
 
@@ -90,6 +92,40 @@ _ATTENTION_AUDIT_EVENTS = frozenset({C.ERROR_EVENT, "SENSOR_FAILED"})
 AUDIT_PARAM_MAX_CHARS = 1000
 TIMELINE_DEFAULT_LIMIT = 200
 _PARAM_KEY_RE = re.compile(r"[^a-z0-9]+")
+
+
+#: A merged timeline's cursor prefix; a Studio-rows cursor is an encoded row id and never starts with it.
+TIMELINE_CURSOR_PREFIX = "t:"
+
+
+def _epoch(value: object) -> float | None:
+    """An ISO instant in POSIX seconds, whatever its precision (the browser sends milliseconds); else ``None``."""
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw[:-1] + "+00:00" if raw[-1:] in ("z", "Z") else raw)
+    except ValueError:
+        return None
+    return (parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)).timestamp()
+
+
+def encode_timeline_cursor(key: tuple[str, int, int, int]) -> str:
+    """The newest-first key of the last entry a merged page showed: its time, then audit (1) before Studio (0)
+    inside one second, then the audit shard and block, or the Studio row id."""
+    return TIMELINE_CURSOR_PREFIX + "|".join(str(part) for part in key)
+
+
+def decode_timeline_cursor(raw: str) -> tuple[str, int, int, int]:
+    parts = raw[len(TIMELINE_CURSOR_PREFIX):].split("|") if raw.startswith(TIMELINE_CURSOR_PREFIX) else []
+    try:
+        at, side, first, second = parts
+        key = (at, int(side), int(first), int(second))
+    except ValueError:
+        raise StudioError("bad_param", "malformed timeline cursor", details={"param": "cursor"}) from None
+    if _epoch(at) is None:
+        raise StudioError("bad_param", "malformed timeline cursor", details={"param": "cursor"})
+    return key
 
 
 def severity_of_audit_event(event: "AuditEvent") -> str:
@@ -262,14 +298,25 @@ class ActivityProjector:
         return await asyncio.to_thread(self._storage.activity_query, q)
 
     async def timeline(
-        self, snap: "IntentSnapshot", *, limit: int = TIMELINE_DEFAULT_LIMIT, sources: Sequence[str] | None = None
+        self, snap: "IntentSnapshot", *, limit: int = TIMELINE_DEFAULT_LIMIT, sources: Sequence[str] | None = None,
+        q: ActivityQuery | None = None,
     ) -> list[TimelineEntry]:
         """Studio rows for this intent merged with its AI-DLC audit rows, newest first.
 
         The audit half comes from the snapshot the caller took, not a second read: a timeline assembled from
         another read could show a gate approval whose state file the caller never saw.
         """
-        return await asyncio.to_thread(self._timeline_sync, snap, limit, sources)
+        entries, _cursor = await self.timeline_page(snap, limit=limit, sources=sources, q=q)
+        return entries
+
+    async def timeline_page(
+        self, snap: "IntentSnapshot", *, limit: int = TIMELINE_DEFAULT_LIMIT, sources: Sequence[str] | None = None,
+        q: ActivityQuery | None = None,
+    ) -> tuple[list[TimelineEntry], str | None]:
+        """One page of the merged timeline plus the cursor for the next. ``q``'s stage, kind, severity, since,
+        until and cursor are applied to both halves before the page is cut: filtered in the browser, a stage filter
+        searched only the newest page and could not reach an older event at all."""
+        return await asyncio.to_thread(self._timeline_sync, snap, limit, sources, q)
 
     async def export(
         self, q: ActivityQuery, *, include_human_text: bool, allowed_roots: Sequence[str]
@@ -281,27 +328,63 @@ class ActivityProjector:
     # ---- internals (worker thread) ----
 
     def _timeline_sync(
-        self, snap: "IntentSnapshot", limit: int, sources: Sequence[str] | None
-    ) -> list[TimelineEntry]:
+        self, snap: "IntentSnapshot", limit: int, sources: Sequence[str] | None, q: ActivityQuery | None = None,
+    ) -> tuple[list[TimelineEntry], str | None]:
         width = max(1, min(int(limit or TIMELINE_DEFAULT_LIMIT), int(C.ACTIVITY_MAX_LIMIT)))
         wanted = frozenset(sources) if sources else None
-        entries: list[TimelineEntry] = []
-        if wanted is None or "aidlc" in wanted:
-            events = list(getattr(getattr(snap, "audit", None), "events", None) or ())
-            # nlargest, not a full sort: a tail-read shard can hold thousands of rows and only the newest
-            # `width` survive the merge — and it is correct for a bundle whose order was assembled by hand.
-            newest = heapq.nlargest(width, events, key=lambda e: getattr(e, "sort_key", (e.timestamp, 0, 0)))
-            entries.extend(self._audit_entry(event) for event in newest)
+        q = q or ActivityQuery()
+        after = decode_timeline_cursor(str(q.cursor)) if q.cursor else None
+        since, until = _epoch(q.since), _epoch(q.until)
+        keyed: list[tuple[tuple[float, int, int, int], tuple[str, int, int, int], TimelineEntry]] = []
+
+        def inside(at: str, key: tuple[str, int, int, int]) -> tuple[float, int, int, int] | None:
+            when = _epoch(at)
+            if when is None or (since is not None and when < since) or (until is not None and when > until):
+                return None
+            order = (when, *key[1:])
+            if after is not None and order >= (_epoch(after[0]) or 0.0, *after[1:]):
+                return None
+            return order  # type: ignore[return-value]
+
+        # The action-type filter is a join against Studio's actions, which AI-DLC's own events have no part in.
+        if (wanted is None or "aidlc" in wanted) and q.action_type is None:
+            candidates = []
+            for event in getattr(getattr(snap, "audit", None), "events", None) or ():
+                name = str(getattr(event, "event", ""))
+                if q.kind is not None and name != q.kind:
+                    continue
+                if q.severity is not None and severity_of_audit_event(event) != q.severity:
+                    continue
+                if q.stage is not None and str((getattr(event, "fields", None) or {}).get("Stage") or "") != q.stage:
+                    continue
+                _ts, shard, pos = getattr(event, "sort_key", (event.timestamp, 0, 0))
+                key = (str(event.timestamp), 1, int(shard), int(pos))
+                order = inside(key[0], key)
+                if order is not None:
+                    candidates.append((order, key, event))
+            # nlargest, not a full sort: a long history holds thousands of rows and one page survives the merge.
+            for order, key, event in heapq.nlargest(width + 1, candidates, key=lambda row: row[0]):
+                keyed.append((order, key, self._audit_entry(event)))
         if wanted is None or wanted - {"aidlc"}:
-            rows, _cursor = self._storage.activity_query(ActivityQuery(
-                repo_id=getattr(snap, "repo_id", None), space=getattr(snap, "space", None),
-                intent_dir=getattr(snap, "intent_dir", None), limit=width,
+            # Rows tied at the cursor's second are read again and dropped by key, so a page edge never skips one.
+            rows, _cursor = self._storage.activity_query(dataclasses.replace(
+                q, repo_id=getattr(snap, "repo_id", None), space=getattr(snap, "space", None),
+                intent_dir=getattr(snap, "intent_dir", None), source=None, cursor=None,
+                until=after[0] if after is not None and (until is None or (_epoch(after[0]) or 0) < until)
+                else q.until,
+                limit=min(2 * width + 1, int(C.ACTIVITY_MAX_LIMIT)),
             ))
-            entries.extend(TimelineEntry.of_row(row) for row in rows if wanted is None or row.source in wanted)
-        # Stable sort on `at` alone: each half is already in its own newest-first order and second-precision
-        # timestamps tie constantly, so stability keeps those orders inside a tie group.
-        entries.sort(key=lambda e: e.at, reverse=True)
-        return entries[:width]
+            for row in rows:
+                if wanted is not None and row.source not in wanted:
+                    continue
+                key = (str(row.at), 0, int(row.id or 0), 0)
+                order = inside(key[0], key)
+                if order is not None:
+                    keyed.append((order, key, TimelineEntry.of_row(row)))
+        keyed.sort(key=lambda row: row[0], reverse=True)
+        page = keyed[:width]
+        cursor = encode_timeline_cursor(page[-1][1]) if len(keyed) > width and page else None
+        return [entry for _order, _key, entry in page], cursor
 
     @staticmethod
     def _audit_entry(event: "AuditEvent") -> TimelineEntry:

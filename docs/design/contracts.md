@@ -2348,7 +2348,7 @@ class ActivityProjector:
     def __init__(self, storage, clock) -> None
     async def record(self, *, kind: str, severity: str = "info", source: str = "studio", repo_id=None, space=None,
                      intent_dir=None, stage=None, action_id=None, session_key=None, params=None,
-                     evidence: Sequence[EvidenceRef] = (), human_text: str | None = None) -> int
+                     evidence: Sequence[EvidenceRef] = (), human_text: str | None = None, at: str | None = None) -> int
         # message_key = f"activity.{kind}" ; params redacted ; human_text stored only for kind action.submitted
     async def query(self, q: ActivityQuery) -> tuple[list[ActivityRow], str | None]
     async def timeline(self, snap: IntentSnapshot, *, limit: int = 200, sources: Sequence[str] | None = None) -> list[TimelineEntry]
@@ -3181,7 +3181,10 @@ No cursor is a cold start (no backlog, `reset: false`); a cursor that is not res
 
 `GET /activity?repo=&space=&intent=&source=&stage=&kind=&type=&severity=&since=&until=&cursor=&limit=` → 200
 `{"items": [TimelineEntry], "next_cursor": str|null}` — when `repo` and `intent` are given the items are the merged
-timeline (Studio rows + live AI-DLC audit); otherwise Studio rows only (`source != aidlc`).
+timeline (Studio rows + live AI-DLC audit); otherwise Studio rows only (`source != aidlc`). The merged timeline applies
+`stage`, `kind`, `severity`, `since` and `until` to both halves before it cuts the page (an audit event's stage is its
+`Stage` field; `type` matches no audit event), and pages by a `t:`-prefixed cursor, the newest-first key of the last
+entry shown: time, then audit before Studio inside one second, then the audit shard and block or the Studio row id.
 `TimelineEntry` JSON: `{"at","source","kind","message_key","params","severity","refs": {...},"raw": str|null,"id": int|null}`.
 
 ### 2.7 Advisor (`handlers/advisor.py`)

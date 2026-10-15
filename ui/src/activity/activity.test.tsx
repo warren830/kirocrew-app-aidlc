@@ -366,3 +366,20 @@ describe('an Activity sentence', () => {
       .toBe('Notification sent.')
   })
 })
+
+describe('one intent\'s timeline', () => {
+  it('asks the server to filter and pages back with its cursor', async () => {
+    setApiRoutes({
+      'GET /api/apps/aidlc-studio/activity*': (_body: unknown, url: string) => ({
+        items: [AIDLC_ROW], next_cursor: url.includes('cursor=') ? null : 't:2026-09-04T10:00:00Z|1|0|3',
+      }),
+      'GET /api/apps/aidlc-studio/settings': () => SETTINGS,
+    })
+    render(<ActivityView route={{ ...EMPTY_ROUTE, view: 'activity', repo: 'r_1', intent: '260904-gate-demo' }} go={vi.fn()} />)
+    const older = await screen.findByRole('button', { name: /Older/ })
+    await waitFor(() => expect(older).toBeEnabled())
+    await userEvent.click(older)
+    await waitFor(() => expect(apiCalls.some((call) => call.path.includes('cursor=t%3A'))).toBe(true))
+    expect(screen.queryByText(/most recent events read/)).toBeNull()
+  })
+})

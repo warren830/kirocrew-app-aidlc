@@ -33,9 +33,10 @@ async def poll(services: Any, request: web.Request) -> web.Response:
 async def activity(services: Any, request: web.Request) -> web.Response:
     """Studio's rows, or one intent's merged timeline when ``repo`` and ``intent`` are named.
 
-    The merge reads that intent's own audit shards, and it has no cursor: only one of its two authorities
-    has stable row ids, so the client pages by narrowing ``until``. Every filter is validated first, so a
-    bad one is a 400 in either mode.
+    The merge reads that intent's own audit shards; every filter applies to both halves, and its cursor is the
+    key of the last entry shown (time, then audit before Studio, then shard and block or row id), since only one
+    of the two authorities has stable row ids. Every filter is validated first, so a bad one is a 400 in either
+    mode.
     """
     q = ActivityQuery(
         repo_id=query_str(request, "repo"),
@@ -59,8 +60,10 @@ async def activity(services: Any, request: web.Request) -> web.Response:
     if q.repo_id and q.intent_dir:
         repo = await repo_or_404(services, q.repo_id)
         snap = await asyncio.to_thread(services.projection.snapshot, repo, q.space or C.DEFAULT_SPACE, q.intent_dir)
-        entries = await services.activity.timeline(snap, limit=q.limit, sources=[q.source] if q.source else None)
-        return json_ok({"items": await _named(services, [entry.to_json() for entry in entries]), "next_cursor": None})
+        entries, next_cursor = await services.activity.timeline_page(
+            snap, limit=q.limit, sources=[q.source] if q.source else None, q=q)
+        return json_ok({"items": await _named(services, [entry.to_json() for entry in entries]),
+                        "next_cursor": next_cursor})
 
     rows, next_cursor = await services.activity.query(q)
     return json_ok({"items": await _named(services, [TimelineEntry.of_row(row).to_json() for row in rows]),

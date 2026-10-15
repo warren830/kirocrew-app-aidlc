@@ -8,16 +8,12 @@
  *    table, there is a real cursor, and `raw` is always `null` because Studio holds no audit blocks.
  *  - **Merged intent timeline** (repo *and* intent in scope). Studio's rows for that intent are merged with
  *    the intent's AI-DLC audit events, projected live out of its shards, which is the only mode where a
- *    raw audit block exists. It has no cursor (two authorities, one of them without stable ids) and the
- *    server applies only the `source` filter.
+ *    raw audit block exists. The server applies every filter to both halves before it cuts the page, and its
+ *    cursor is the key of the last entry shown. Filtered here over one page instead, a stage filter could
+ *    never reach an event older than that page.
  *
- * So in merged mode the remaining filters are applied here, in the browser, over the page that was read —
- * and the page says exactly that, with the number of events it was applied to. The alternative (pretending
- * the server filtered) would let a user conclude "nothing failed in that window" from a filter that never
- * ran, which is the class of lie this whole surface exists to avoid.
- *
- * `action type` is not client-filterable at all: it is a join against Studio's action table that the merged
- * projection does not carry, so the control is disabled with the reason rather than silently ignored.
+ * `action type` is not a filter of the merged timeline: it is a join against Studio's action table that
+ * AI-DLC's own events have no part in, so the control is disabled with the reason rather than silently ignored.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -57,25 +53,6 @@ function isoOf(local: string): string | undefined {
   if (!local) return undefined
   const ms = Date.parse(local)
   return Number.isFinite(ms) ? new Date(ms).toISOString() : undefined
-}
-
-/** The filters the browser can honestly apply to an already-read page (everything except action type). */
-function applyLocally(entries: TimelineEntry[], filters: Filters): TimelineEntry[] {
-  const since = filters.since ? Date.parse(filters.since) : NaN
-  const until = filters.until ? Date.parse(filters.until) : NaN
-  return entries.filter((entry) => {
-    if (filters.source && entry.source !== filters.source) return false
-    if (filters.severity && entry.severity !== filters.severity) return false
-    if (filters.kind && entry.kind !== filters.kind) return false
-    if (filters.stage) {
-      const stage = typeof entry.params['stage'] === 'string' ? entry.params['stage'] : null
-      if (stage !== filters.stage) return false
-    }
-    const at = Date.parse(entry.at)
-    if (Number.isFinite(since) && Number.isFinite(at) && at < since) return false
-    if (Number.isFinite(until) && Number.isFinite(at) && at > until) return false
-    return true
-  })
 }
 
 export interface ActivityViewProps {
@@ -142,9 +119,8 @@ export function ActivityView({ route, go }: ActivityViewProps) {
   )
 
   const loaded = activity.data?.items ?? []
-  // Server-side filtering already ran in Studio-rows mode; re-running it locally there would be a no-op
-  // that could only ever disagree with the server, so it is confined to the merged mode.
-  const visible = merged ? applyLocally(loaded, filters) : loaded
+  // The server filtered both modes; re-running a filter here could only ever disagree with it.
+  const visible = loaded
   const nextCursor = activity.data?.next_cursor ?? null
   const activeFilters = Object.values(filters).filter(Boolean).length
   const selectedKey = selected ? entryKey(selected) : null
@@ -276,7 +252,7 @@ export function ActivityView({ route, go }: ActivityViewProps) {
         {merged ? null : <p className="studio-consequence">{t('activity.page.studioOnlyNote')}</p>}
         {merged ? (
           <p className="studio-consequence">
-            {t('activity.page.mergedNote', { n: i18n.fmt.number(loaded.length) })}
+            {t('activity.page.mergedNote')}
           </p>
         ) : null}
         {merged ? (
@@ -294,11 +270,6 @@ export function ActivityView({ route, go }: ActivityViewProps) {
         <p className="studio-activity-count" role="status" aria-live="polite">
           {activity.loading
             ? t('activity.page.reading')
-            : merged && visible.length !== loaded.length
-              ? t('activity.page.narrowed', {
-                  shown: i18n.fmt.number(visible.length),
-                  loaded: i18n.fmt.number(loaded.length),
-                })
               // One page of a longer history is not the whole count: "200 events" read as all there were.
               : nextCursor ? plural(i18n, 'activity.page.countPage', visible.length)
               : plural(i18n, 'activity.page.count', visible.length)}

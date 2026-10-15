@@ -103,7 +103,7 @@ CONTRACT_KINDS = (
     "advisor.completed advisor.failed "
     "notification.sent slack.sent slack.callback session.bound session.unbound session.takeover "
     "intent.created intent.paused intent.resumed intent.archived intent.restored intent.force_stop "
-    "settings.updated health.startup"
+    "settings.updated health.startup conversation.error"
 ).split()
 
 
@@ -502,3 +502,27 @@ def test_export_lists_only_the_repos_the_rows_reference(A, proj, store):
     run(proj.record(kind="repo.added", repo_id=REPO))
     assert export(A, proj, roots=())["repos"] == [{"repo_id": REPO, "label": "alpha"},
                                                   {"repo_id": "r_000000000002", "label": "beta"}]
+
+
+def test_the_merged_timeline_filters_on_the_server_and_pages_by_a_cursor(A, R, proj, store):
+    """Filtered in the browser, a stage filter searched only the newest page and could not reach an older event."""
+    ActivityQuery = A.ActivityQuery
+    blocks = [F.audit_block("STAGE_STARTED", f"2026-09-04T10:{minute:02d}:00Z", Stage="code-generation")
+              for minute in range(30)]
+    blocks.insert(0, F.audit_block("STAGE_COMPLETED", "2026-09-04T08:00:00Z", Stage="reverse-engineering"))
+    snap = snapshot(bundle(R, F.audit_text(*blocks)))
+    run(proj.record(kind="session.bound", repo_id=REPO, space="default", intent_dir=INTENT))
+    # The oldest event of another stage is found though thirty newer ones would fill the page.
+    entries, cursor = run(proj.timeline_page(snap, limit=10, q=ActivityQuery(stage="reverse-engineering")))
+    assert [(e.kind, e.at) for e in entries] == [("STAGE_COMPLETED", "2026-09-04T08:00:00Z")] and cursor is None
+    # Pages meet exactly: every event once, newest first, the Studio row among them.
+    seen, cursor = [], None
+    for _ in range(10):
+        page, cursor = run(proj.timeline_page(snap, limit=7, q=ActivityQuery(cursor=cursor)))
+        seen += page
+        if cursor is None:
+            break
+    assert len(seen) == 32 and len({(e.source, e.at, e.kind, e.id) for e in seen}) == 32
+    assert [e.at for e in seen] == sorted((e.at for e in seen), reverse=True)
+    with pytest.raises(A.StudioError):
+        run(proj.timeline_page(snap, q=ActivityQuery(cursor="t:not-a-key")))
