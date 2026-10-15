@@ -181,7 +181,9 @@ export function GateTemplate({ card, detail, draft, setDraft, refreshing, api, r
         </Block>
       ) : null}
 
-      <ConsistencyFindings card={card} title={t('template.gate.risks')} />
+      {/* Information only is no risk: "Unresolved risks" over "nothing needs doing" contradicted itself. */}
+      <ConsistencyFindings card={card} title={t(card.evidence.findings.every((finding) => finding.severity === 'info')
+        ? 'template.gate.notes' : 'template.gate.risks')} />
 
       {card.evidence.state || review ? (
         <Block title={t('template.gate.history')} icon="clock">

@@ -265,5 +265,6 @@
   "template.questions.checkpoint.assumption_confirmation.bodyClosed": "引擎在这一步的产物里把这些保留为假设，并请你接受，或让它先追问确认。",
   "template.questions.checkpoint.plan_approval.bodyClosed": "引擎在执行之前，请你批准了它编排出的计划。",
   "template.questions.single": "问题",
-  "template.command.stageSubSent": "发出时磁盘记录的、引擎本应继续的位置。"
+  "template.command.stageSubSent": "发出时磁盘记录的、引擎本应继续的位置。",
+  "template.gate.notes": "Studio 检查留下的说明"
 }
