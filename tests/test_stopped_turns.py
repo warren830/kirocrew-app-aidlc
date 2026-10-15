@@ -1,5 +1,7 @@
 """A run whose turn stopped on a host error says so where the person looks, instead of reading as merely idle."""
 
+import asyncio
+
 import pytest
 
 from test_e2e_gate import INTENT, _get, repo_dir, scene  # noqa: F401
@@ -69,3 +71,12 @@ def test_a_long_error_is_cut_and_says_so(sv, routes, fake_host, scene):
     stopped = _session(sv, routes, fake_host, scene)["stopped_on_error"]
     assert len(stopped["text"]) == 400 and stopped["text"].endswith("…")
     assert stopped["kind"] == "usage_limit"
+
+
+def test_an_until_in_milliseconds_keeps_a_row_stamped_in_that_second(sv, routes, fake_host, scene):
+    """The browser sends "…:00.000Z" and Studio stores "…:00Z": compared as strings, the row fell outside."""
+    asyncio.run(sv.activity.record(kind="session.bound", repo_id=scene.repo_id, at="2026-09-04T10:30:00Z"))
+    status, body = _get(sv, routes, fake_host, "/activity", repo=scene.repo_id, until="2026-09-04T10:30:00.000Z")
+    assert status == 200 and any(item["at"] == "2026-09-04T10:30:00Z" for item in body["items"])
+    status, body = _get(sv, routes, fake_host, "/activity", until="not-an-instant")
+    assert status == 400

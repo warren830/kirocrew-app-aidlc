@@ -619,6 +619,15 @@ def _queue_key(rec: ActionRecord) -> tuple[int, int, str, str]:
 # ---- the human lane ---------------------------------------------------------- #
 
 
+
+def _condition_reason(rec: Any, live_keys: set[str]) -> str:
+    """Why a recovery or failure card left the queue. It reported a condition, not a stop of AI-DLC's: either a newer
+    card of its type for the same intent now reports it (its key carries the boundary it was raised at, so the state
+    moving re-raises it), or the condition cleared."""
+    prefix = ":".join(str(rec.dedupe_key or "").split(":")[:3]) + ":"
+    return "card_replaced" if any(key.startswith(prefix) for key in live_keys) else "condition_cleared"
+
+
 class HumanActionBroker:
     """Owns ``actions``, ``action_transitions`` and ``breakers``. Async; loop thread."""
 
@@ -726,9 +735,8 @@ class HumanActionBroker:
         for rec in await self.list_live(repo_id=repo_id, space=space, intent_dir=intent_dir, include_revision=True):
             if rec.type in COMMAND_ACTION_TYPES or not rec.dedupe_key or rec.dedupe_key in live_keys:
                 continue
-            # A recovery or failure card reported a condition, not a stop of AI-DLC's: that condition cleared.
-            why = "condition_cleared" if reason == "boundary_superseded" and rec.type not in BOUNDARY_CARD_TYPES \
-                else reason
+            why = reason if reason != "boundary_superseded" or rec.type in BOUNDARY_CARD_TYPES \
+                else _condition_reason(rec, live_keys)
             if rec.status in SUBMITTABLE_STATUSES:
                 await self._transition(rec, "Cancelled", reason=why, evidence={"superseded": True})
             elif rec.status == "Failed" and not rec.evidence.get("superseded"):

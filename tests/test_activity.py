@@ -526,3 +526,13 @@ def test_the_merged_timeline_filters_on_the_server_and_pages_by_a_cursor(A, R, p
     assert [e.at for e in seen] == sorted((e.at for e in seen), reverse=True)
     with pytest.raises(A.StudioError):
         run(proj.timeline_page(snap, q=ActivityQuery(cursor="t:not-a-key")))
+
+
+
+def test_a_notification_recorded_before_rows_named_their_intent_still_names_it(A):
+    row = A.ActivityRow(at="2026-10-14T04:11:30Z", source="studio", kind="notification.sent", severity="attention",
+                        repo_id=None, space=None, intent_dir=None, stage=None, action_id=None, session_key=None,
+                        message_key="activity.notification.sent", params={"kind": "approval", "repo_id": "r_1",
+                        "intent_key": "261013-char-count"}, evidence=(), redacted=True, human_text=None)
+    assert A.studio_refs(row)["repo"] == {"repo_id": "r_1", "label": None, "space": "default",
+                                         "intent_dir": "261013-char-count"}

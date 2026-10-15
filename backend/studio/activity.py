@@ -98,7 +98,7 @@ _PARAM_KEY_RE = re.compile(r"[^a-z0-9]+")
 TIMELINE_CURSOR_PREFIX = "t:"
 
 
-def _epoch(value: object) -> float | None:
+def instant_epoch(value: object) -> float | None:
     """An ISO instant in POSIX seconds, whatever its precision (the browser sends milliseconds); else ``None``."""
     raw = str(value or "").strip()
     if not raw:
@@ -123,7 +123,7 @@ def decode_timeline_cursor(raw: str) -> tuple[str, int, int, int]:
         key = (at, int(side), int(first), int(second))
     except ValueError:
         raise StudioError("bad_param", "malformed timeline cursor", details={"param": "cursor"}) from None
-    if _epoch(at) is None:
+    if instant_epoch(at) is None:
         raise StudioError("bad_param", "malformed timeline cursor", details={"param": "cursor"})
     return key
 
@@ -158,11 +158,17 @@ def studio_refs(row: ActivityRow) -> dict[str, Any]:
     Only present keys appear: the Evidence drawer renders a link per key, and a ``null`` would be an empty one.
     """
     refs: dict[str, Any] = {}
-    if row.repo_id:
+    repo_id, space, intent_dir = row.repo_id, row.space, row.intent_dir
+    if not repo_id and isinstance(row.params.get("repo_id"), str) and isinstance(row.params.get("intent_key"), str):
+        # A notification recorded before its rows carried the intent named it only in its params.
+        repo_id = row.params["repo_id"]
+        head, sep, tail = row.params["intent_key"].partition(C.INTENT_KEY_SEPARATOR)
+        space, intent_dir = (head, tail) if sep else (C.DEFAULT_SPACE, head)
+    if repo_id:
         # Which repository and intent the row is about: the label is filled per page (`handlers.events`), and stays
         # null once the repository is unregistered.
-        refs["repo"] = {"repo_id": row.repo_id, "label": None,
-                        **({"space": row.space or C.DEFAULT_SPACE, "intent_dir": row.intent_dir} if row.intent_dir else {})}
+        refs["repo"] = {"repo_id": repo_id, "label": None,
+                        **({"space": space or C.DEFAULT_SPACE, "intent_dir": intent_dir} if intent_dir else {})}
     if row.action_id:
         refs["action_id"] = row.action_id
     if row.session_key:
@@ -334,15 +340,15 @@ class ActivityProjector:
         wanted = frozenset(sources) if sources else None
         q = q or ActivityQuery()
         after = decode_timeline_cursor(str(q.cursor)) if q.cursor else None
-        since, until = _epoch(q.since), _epoch(q.until)
+        since, until = instant_epoch(q.since), instant_epoch(q.until)
         keyed: list[tuple[tuple[float, int, int, int], tuple[str, int, int, int], TimelineEntry]] = []
 
         def inside(at: str, key: tuple[str, int, int, int]) -> tuple[float, int, int, int] | None:
-            when = _epoch(at)
+            when = instant_epoch(at)
             if when is None or (since is not None and when < since) or (until is not None and when > until):
                 return None
             order = (when, *key[1:])
-            if after is not None and order >= (_epoch(after[0]) or 0.0, *after[1:]):
+            if after is not None and order >= (instant_epoch(after[0]) or 0.0, *after[1:]):
                 return None
             return order  # type: ignore[return-value]
 
@@ -370,7 +376,7 @@ class ActivityProjector:
             rows, _cursor = self._storage.activity_query(dataclasses.replace(
                 q, repo_id=getattr(snap, "repo_id", None), space=getattr(snap, "space", None),
                 intent_dir=getattr(snap, "intent_dir", None), source=None, cursor=None,
-                until=after[0] if after is not None and (until is None or (_epoch(after[0]) or 0) < until)
+                until=after[0] if after is not None and (until is None or (instant_epoch(after[0]) or 0) < until)
                 else q.until,
                 limit=min(2 * width + 1, int(C.ACTIVITY_MAX_LIMIT)),
             ))

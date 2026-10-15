@@ -39,7 +39,7 @@
   "changes.addedNoteBase": "{sha} 中没有这个文件，所以整个文件都显示为新增，包括早于这一阶段的部分。",
   "changes.summaryUntil": "写入 {n} 个文件：从 {sha}（这张卡片做出决定时的最新提交）到 {until}（收进这次改动的提交）+{added} −{removed} 行。",
   "changes.summaryUntilEach": "写入 {n} 个文件：从 {sha}（这张卡片做出决定时的最新提交）起，每个文件算到之后第一次改动它的提交，共 +{added} −{removed} 行。",
-  "changes.readCommitted": "从 git 读取：每个文件取决定之后第一次改动它的那个提交里的样子，所以之后对同一文件的其他改动不会算进来。还没有提交收进的文件，按今天的样子读取。",
+  "changes.readCommitted": "从 git 读取：每个文件取决定之后第一次改动它的那个提交里的样子，所以之后再提交到这个文件的改动不会算进来；但同一个提交里带进来的其他改动会算进来。还没有提交收进的文件，按今天的样子读取。",
   "changes.untilFile": "到 {sha}",
   "changes.untilNone": "按今天的文件"
 }

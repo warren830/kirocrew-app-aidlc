@@ -93,5 +93,6 @@
   "detail.transitions.why.cursor_moved": "AI-DLC's active intent changed",
   "detail.transitions.why.commit_made": "the conversation made a commit",
   "detail.transitions.why.turn_ended_no_commit": "the turn ended without a new commit",
-  "detail.transitions.why.turn_stopped_on_error": "the turn stopped on a KiroCrew error"
+  "detail.transitions.why.turn_stopped_on_error": "the turn stopped on a KiroCrew error",
+  "detail.transitions.why.card_replaced": "a newer card now reports it"
 }

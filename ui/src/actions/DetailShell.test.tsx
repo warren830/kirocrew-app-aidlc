@@ -353,6 +353,7 @@ describe('why Studio moved a card', () => {
     expect(transitionReason(en, 'boundary_superseded', 'recovery')).toBe('what it reported no longer holds')
     expect(transitionReason(en, 'condition_cleared', 'recovery')).toBe('what it reported no longer holds')
     expect(transitionReason(en, 'boundary_superseded', 'gate')).toBe('AI-DLC moved on before it was answered')
+    expect(transitionReason(en, 'card_replaced', 'recovery')).toBe('a newer card now reports it')
   })
 
   it('does not claim someone else replied when it only saw more prompts than it sent', () => {

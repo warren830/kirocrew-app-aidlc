@@ -2472,7 +2472,7 @@ button.studio-chip:hover { border-color: var(--border-hover); }
   border-bottom: 1px solid var(--border);
   font-size: 12.5px;
 }
-.studio-translist .studio-mono { font-size: 11px; }
+.studio-translist .studio-mono { font-size: 11px; flex: none; white-space: nowrap; }
 .studio-conv-note { margin: 0 0 8px; font-size: 12px; max-width: 62ch; }
 /* Bounded: the transcript scrolls inside the decision pane rather than pushing the action bar away. */
 /* A definite height, not a max: the host's transcript fills its parent (`h-full`) and scrolls inside

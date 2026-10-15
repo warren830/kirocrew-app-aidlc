@@ -13,7 +13,8 @@ from typing import Any
 from aiohttp import web
 
 from .. import constants as C
-from ..activity import TimelineEntry
+from ..activity import TimelineEntry, instant_epoch
+from ..errors import StudioError
 from ..storage import ActivityQuery
 from .common import json_ok, parse_intent_key, query_int, query_str, repo_or_404
 
@@ -52,6 +53,9 @@ async def activity(services: Any, request: web.Request) -> web.Response:
         limit=query_int(request, "limit", C.ACTIVITY_DEFAULT_LIMIT, lo=1, hi=C.ACTIVITY_MAX_LIMIT)
         or C.ACTIVITY_DEFAULT_LIMIT,
     )
+    # One stamp format on both sides of a comparison: the browser sends milliseconds, Studio stores whole seconds, and
+    # "…:00.000Z" sorted before a row stamped "…:00Z" in the same second.
+    q = dataclasses.replace(q, since=_wire_instant(q.since, "since"), until=_wire_instant(q.until, "until"))
     intent = query_str(request, "intent")
     if intent:
         intent_space, intent_dir = parse_intent_key(intent)
@@ -68,6 +72,16 @@ async def activity(services: Any, request: web.Request) -> web.Response:
     rows, next_cursor = await services.activity.query(q)
     return json_ok({"items": await _named(services, [TimelineEntry.of_row(row).to_json() for row in rows]),
                     "next_cursor": next_cursor})
+
+
+def _wire_instant(value: str | None, param: str) -> str | None:
+    """An instant filter as Studio's own second-precision stamp; a value that is not an instant is a 400."""
+    if value is None:
+        return None
+    when = instant_epoch(value)
+    if when is None:
+        raise StudioError("bad_param", f"{param} is not an instant", details={"param": param, "value": value})
+    return C.iso_from_epoch(when)
 
 
 async def _named(services: Any, items: list[dict[str, Any]]) -> list[dict[str, Any]]:

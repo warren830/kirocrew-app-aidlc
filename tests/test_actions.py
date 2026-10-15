@@ -1573,6 +1573,17 @@ async def test_a_retired_recovery_card_says_its_condition_cleared_not_that_ai_dl
     assert why(gate.action_id) == ["boundary_superseded"]
     assert why(recovery.action_id) == ["condition_cleared"]
 
+
+@aio
+async def test_a_recovery_card_raised_again_at_a_new_boundary_says_a_newer_card_reports_it(world):
+    """Its key carries the boundary it was raised at: the state moving while the condition persists re-raises it,
+    and the old card must not say what it reported no longer holds."""
+    old = await _retyped(world, "Queued", type="recovery", dedupe_key=f"recovery:{REPO_ID}:{INTENT}:stage:old-boundary")
+    await world.broker.retire_stale(REPO_ID, "default", INTENT,
+                                    live_keys={f"recovery:{REPO_ID}:{INTENT}:stage:new-boundary"})
+    rows = world.store.select("action_transitions", {"action_id": old.action_id})
+    assert [row["reason"] for row in rows if row["to_status"] == "Cancelled"] == ["card_replaced"]
+
 @pytest.mark.parametrize("checkpoint,title,options", [
     ("summary_confirmation", "Consolidated Summary Confirmation", "- Looks correct\n- Request changes"),
     ("plan_approval", "Plan Approval", "- Approve Plan\n- Request Changes"),
