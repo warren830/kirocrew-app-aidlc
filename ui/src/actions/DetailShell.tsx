@@ -612,7 +612,7 @@ export function DetailShell({
               onOpenAnchor={openAnchor}
             />
           ) : activeTab === 'activity' ? (
-            <TransitionList createdAt={card.created_at} transitions={currentDetail?.transitions ?? []} />
+            <TransitionList createdAt={card.created_at} transitions={currentDetail?.transitions ?? []} type={card.type} />
           ) : activeTab === 'conversation' ? (
             <Conversation slotKey={card.evidence.session?.slot_key ?? ''} />
           ) : (
@@ -699,9 +699,14 @@ function RefusalDetails({ refusal, onOpenAction }: { refusal: StudioApiError; on
  * Why Studio moved the card, in words. The machine word stays in the row's tooltip, beside its generation, so a
  * support conversation can still quote both; a reason without copy is shown as that word.
  */
-export function transitionReason(i18n: I18n, reason: string): string {
+export function transitionReason(i18n: I18n, reason: string, type?: string): string {
   const { t, has } = i18n
   const [code, decision] = reason.split(':', 2)
+  // Before 1.x a retired recovery or failure card was recorded as superseded by a boundary, which only a stop of
+  // AI-DLC's own has: what went away was the condition the card reported.
+  if (reason === 'boundary_superseded' && type && !BOUNDARY_CARD_TYPES.has(type)) {
+    return t('detail.transitions.why.condition_cleared')
+  }
   if (code === 'submitted' && decision) {
     return t('detail.transitions.why.submitted', {
       decision: has(`decision.${decision}.label`) ? t(`decision.${decision}.label`) : decision })
@@ -709,7 +714,12 @@ export function transitionReason(i18n: I18n, reason: string): string {
   return has(`detail.transitions.why.${reason}`) ? t(`detail.transitions.why.${reason}`) : reason
 }
 
-function TransitionList({ createdAt, transitions }: { createdAt: string; transitions: ActionTransition[] }) {
+/** Derived cards that stand for a stop of AI-DLC's own; every other derived card reports a condition Studio found. */
+const BOUNDARY_CARD_TYPES = new Set(['gate', 'revision', 'question', 'missing_input'])
+
+function TransitionList({ createdAt, transitions, type }: {
+  createdAt: string; transitions: ActionTransition[]; type: string
+}) {
   const i18n = useI18n()
   const { t } = i18n
   // Creation is not a stored transition, so a fresh card would read "Studio has not changed this item yet"
@@ -738,7 +748,7 @@ function TransitionList({ createdAt, transitions }: { createdAt: string; transit
                 from: row.from_status ? t(`enum.actionStatus.${row.from_status}`) : t('detail.transitions.initial'),
                 to: statusLabel(i18n, row.to_status, row.reason),
               })}
-              {row.reason ? <span className="studio-muted"> · {transitionReason(i18n, row.reason)}</span> : null}
+              {row.reason ? <span className="studio-muted"> · {transitionReason(i18n, row.reason, type)}</span> : null}
             </span>
           </li>
         ))}

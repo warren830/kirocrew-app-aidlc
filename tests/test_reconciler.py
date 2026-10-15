@@ -1346,3 +1346,20 @@ def test_retention_still_runs_behind_the_pass_in_the_same_tick(svc, scene, advis
     svc.advisor = StubAdvisor(settled=1, on_settle=settled_by_the_pass, expire=advisor.expire_stale)
     tick(svc)
     assert svc.storage.get("advisor_drafts", draft_id)["status"] == "expired"
+
+
+
+def test_a_bound_conversation_missing_right_after_a_restart_is_not_called_lost(svc, scene, fake_host, clock, C):
+    """KiroCrew brings its slots back over the first seconds after a restart: only a slot that stays missing for
+    ``SLOT_LOSS_GRACE_SECS`` is a lost conversation, and one that comes back resets the wait."""
+    binding = asyncio.run(svc.sessions.get(scene.repo_id, "default", GATE_DIR))
+    lost = svc.reconciler._slot_lost
+    assert lost("k", binding, None) is False
+    clock.advance(C.SLOT_LOSS_GRACE_SECS // 2)
+    assert lost("k", binding, scene.slot) is False  # back: the wait starts afresh
+    assert lost("k", binding, None) is False
+    clock.advance(C.SLOT_LOSS_GRACE_SECS // 2 + 1)
+    assert lost("k", binding, None) is False
+    clock.advance(C.SLOT_LOSS_GRACE_SECS)
+    assert lost("k", binding, None) is True
+    assert lost("k", SimpleNamespace(slot_key=None), None) is False  # unbound is not lost

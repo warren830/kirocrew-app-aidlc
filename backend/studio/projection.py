@@ -1029,7 +1029,7 @@ class Projection:
     def derive_cards(
         self, snap: IntentSnapshot, *, findings: Sequence[Any], binding: Any | None, install: "InstallHealth | None",
         breakers: Sequence[Any], live_actions: Sequence[Any], slot: Any | None = None, git: Any | None = None,
-        host_card: dict | None = None,
+        host_card: dict | None = None, slot_lost: bool | None = None,
     ) -> list[CardSeed]:
         """One seed per live boundary, in queue order (§1.8 table).
 
@@ -1049,7 +1049,9 @@ class Projection:
         # contradictions there are, and N critical cards for one broken intent would bury every other repository.
         codes = {str(_attr(f, "code", "")) for f in findings if str(_attr(f, "severity", "")) == "blocking"}
         codes -= RECOVERY_EXCLUDED_FINDINGS
-        if _attr(binding, "slot_key") and slot is None and state is not None and any(
+        # `slot_lost` is the reconciler's reading over consecutive scans; without it, a missing bound slot is lost.
+        lost = bool(_attr(binding, "slot_key")) and slot is None if slot_lost is None else slot_lost
+        if lost and state is not None and any(
             row.mark == "-" for row in state.stages
         ):  # the bound slot is gone mid-stage; `slot is None` without a binding is "not bound", not a loss
             codes.add("session_lost_mid_stage")

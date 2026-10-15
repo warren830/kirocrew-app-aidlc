@@ -36,7 +36,7 @@
   "finding.interrupted_session.title": "Work was stopped partway",
   "finding.interrupted_session.body": "A force stop ended this intent's conversation partway through its work. Studio will not run it again until you check where it stopped: open the Recovery card in the Action Center, then rebind the conversation or acknowledge the stop.",
   "finding.human_presence_anomaly.title": "Your reply could not be confirmed",
-  "finding.human_presence_anomaly.body": "AI-DLC's files show the change your decision asked for, but the audit trail does not show exactly one new message from you since Studio sent it, so Studio cannot prove the change came from you. Check the conversation, then settle the decision's card in the Action Center.",
+  "finding.human_presence_anomaly.body": "AI-DLC's files show the change your decision asked for, but since Studio sent it the audit trail records more than one new prompt, and Studio could not match the extra ones to KiroCrew's own automatic prompts. So it cannot prove the change came from your reply. Check the conversation, then settle the decision's card in the Action Center.",
   "finding.cursor_moved.title": "Active intent changed during delivery",
   "finding.cursor_moved.body": "While your decision was being delivered, AI-DLC's active intent switched away from this one, so Studio cannot tell which intent the decision applied to. Check the conversation, then settle the decision's card in the Action Center.",
   "finding.wrong_slot.title": "Decision found in another conversation",

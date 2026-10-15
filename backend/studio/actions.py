@@ -85,6 +85,8 @@ CLIENT_PREFLIGHT_CODES = ("slot_missing", "slot_mismatch_preflight")
 #: Types Studio creates because a human asked for a turn, as opposed to types derived from a boundary on
 #: disk. The distinction decides who may cancel a card and what ``retire_stale`` sweeps.
 COMMAND_ACTION_TYPES: frozenset[str] = frozenset({"run", "resume", "prepare_commit", "force_stop"})
+#: Derived cards that stand for a stop of AI-DLC's own; every other derived card reports a condition Studio found.
+BOUNDARY_CARD_TYPES: frozenset[str] = frozenset({"gate", "revision", "question", "missing_input"})
 #: Command types that use the two-phase prompt lane (``force_stop`` uses the stop endpoint).
 PROMPT_COMMAND_TYPES: tuple[str, ...] = ("run", "resume", "prepare_commit")
 
@@ -724,8 +726,11 @@ class HumanActionBroker:
         for rec in await self.list_live(repo_id=repo_id, space=space, intent_dir=intent_dir, include_revision=True):
             if rec.type in COMMAND_ACTION_TYPES or not rec.dedupe_key or rec.dedupe_key in live_keys:
                 continue
+            # A recovery or failure card reported a condition, not a stop of AI-DLC's: that condition cleared.
+            why = "condition_cleared" if reason == "boundary_superseded" and rec.type not in BOUNDARY_CARD_TYPES \
+                else reason
             if rec.status in SUBMITTABLE_STATUSES:
-                await self._transition(rec, "Cancelled", reason=reason, evidence={"superseded": True})
+                await self._transition(rec, "Cancelled", reason=why, evidence={"superseded": True})
             elif rec.status == "Failed" and not rec.evidence.get("superseded"):
                 await self.patch_evidence(rec, {"superseded": True})
 

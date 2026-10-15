@@ -101,6 +101,9 @@ STATE_UNREADABLE_GRACE_SECS = 60
 #: How long an intent directory must stay missing before its cards are retired: one tick's absence is a branch
 #: switch or a rename in progress, and cancelling then would dismiss a gate the human is about to answer.
 INTENT_MISSING_GRACE_SECS = 60
+#: How long a bound conversation must stay missing before Studio says it was lost: KiroCrew brings its slots back
+#: over the first seconds after a gateway or Studio restart, and a conversation that was only loading is not gone.
+SLOT_LOSS_GRACE_SECS = 60
 #: ``on_startup`` must return well inside the host's 30 s budget, or the gateway detaches it and refuses later
 #: lifecycle operations for this app.
 HOST_STARTUP_HOOK_BUDGET_SECS = 10.0

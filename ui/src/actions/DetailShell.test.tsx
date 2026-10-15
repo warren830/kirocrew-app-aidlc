@@ -22,7 +22,7 @@ import { EMPTY_ROUTE, type Navigate } from '../lib/route'
 import type { ActionCard } from '../lib/types'
 import { API_BASE, actionCard } from '../test/fixtures'
 import { apiCalls, setApiRoutes, StubApiError } from '../test/stubs/app-sdk'
-import { DetailShell } from './DetailShell'
+import { DetailShell, transitionReason } from './DetailShell'
 import '../templates/TemplateRegistry'
 
 const en = makeI18n('en-US')
@@ -345,5 +345,17 @@ describe('a refusal the server did return', () => {
     await userEvent.click(within(panel).getByRole('button', { name: new RegExp(en.t('confirm.send')) }))
     await waitFor(() => expect(within(confirmation()).getByText(en.t('errors.invalid_decision'))).toBeInTheDocument())
     expect(within(confirmation()).getByRole('button', { name: new RegExp(en.t('confirm.send')) })).toBeDisabled()
+  })
+})
+
+describe('why Studio moved a card', () => {
+  it('says a retired recovery card cleared, also on records written before that reason existed', () => {
+    expect(transitionReason(en, 'boundary_superseded', 'recovery')).toBe('what it reported no longer holds')
+    expect(transitionReason(en, 'condition_cleared', 'recovery')).toBe('what it reported no longer holds')
+    expect(transitionReason(en, 'boundary_superseded', 'gate')).toBe('AI-DLC moved on before it was answered')
+  })
+
+  it('does not claim someone else replied when it only saw more prompts than it sent', () => {
+    expect(transitionReason(en, 'human_presence_anomaly')).not.toMatch(/someone else/)
   })
 })

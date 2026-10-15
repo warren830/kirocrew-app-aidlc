@@ -368,6 +368,8 @@ class Reconciler:
         #: whose directory was not on disk. Only this component sees consecutive scans, so only it can
         #: tell a branch switch in progress from an intent that is gone (§1.13 step 1b).
         self._missing_since: dict[tuple[str, str, str], float] = {}
+        #: ``repo:space:intent -> monotonic`` first scan that found the intent's bound slot missing.
+        self._slot_missing_since: dict[str, float] = {}
         #: ``repo_id -> intent directories the last complete scan found``: ``GET /health`` ``counts.intents``.
         #: Binding rows outlive a deleted intent on purpose (its archive flag and session), so they cannot count.
         self._intents_on_disk: dict[str, int] = {}
@@ -725,6 +727,7 @@ class Reconciler:
         seeds = await self._in_pool(functools.partial(
             self._s.projection.derive_cards, snap, findings=findings, binding=binding, install=install,
             breakers=breakers, live_actions=live, slot=slot, host_card=self._host_card(binding.slot_key),
+            slot_lost=self._slot_lost(key, binding, slot),
         ))
         await self._s.actions.upsert_derived(seeds)
         keys = {seed.dedupe_key for seed in seeds if seed.dedupe_key}
@@ -753,6 +756,15 @@ class Reconciler:
         ))
         await self._publish_intent(key, summary, boundary)
         return summary, list(findings)
+
+    def _slot_lost(self, key: str, binding: Any, slot: Any) -> bool:
+        """Has the bound slot stayed missing for ``SLOT_LOSS_GRACE_SECS``? Right after a restart a recovery card said
+        "the bound conversation could not be found" for about twenty seconds about a conversation still loading."""
+        if not _attr(binding, "slot_key") or slot is not None:
+            self._slot_missing_since.pop(key, None)
+            return False
+        now = self._s.clock.monotonic()
+        return now - self._slot_missing_since.setdefault(key, now) >= C.SLOT_LOSS_GRACE_SECS
 
     def _track_unreadable(self, key: str, snap: Any, remembered: str | None) -> str | None:
         """Remember when the state file first went unreadable, and forget it once it reads again: ``state_unreadable``

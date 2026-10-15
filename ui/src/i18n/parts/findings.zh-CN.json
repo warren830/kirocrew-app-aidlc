@@ -36,7 +36,7 @@
   "finding.interrupted_session.title": "工作在中途被停止",
   "finding.interrupted_session.body": "一次强制停止让该意图的会话在工作中途结束。在你确认它停在哪里之前，Studio 不会再次运行它：请打开待办中心的“恢复”卡片，然后重新绑定会话，或确认已知悉这次停止。",
   "finding.human_presence_anomaly.title": "无法确认这是你的回复",
-  "finding.human_presence_anomaly.body": "AI-DLC 的文件显示你的决定所要求的变更已经发生，但自 Studio 发送以来，审计记录中来自你的新消息并不恰好是一条，因此 Studio 无法证明这一变更出自你。请查看会话，然后在待办中心处理该决定的卡片。",
+  "finding.human_presence_anomaly.body": "AI-DLC 的文件显示你的决定所要求的变更已经发生，但自 Studio 发送以来，审计记录里多了不止一条新提示，而 Studio 无法把多出来的那几条对应到 KiroCrew 自己的自动提示，因此无法证明这一变更出自你的回复。请查看会话，然后在待办中心处理该决定的卡片。",
   "finding.cursor_moved.title": "送达期间活动意图发生了变化",
   "finding.cursor_moved.body": "在你的决定送达期间，AI-DLC 的活动意图从该意图切换走了，Studio 因此无法判断该决定作用于哪个意图。请查看会话，然后在待办中心处理该决定的卡片。",
   "finding.wrong_slot.title": "决定出现在了另一个会话中",

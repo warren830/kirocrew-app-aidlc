@@ -84,11 +84,12 @@
   "detail.transitions.why.intent_missing": "该意图的文件夹已不存在",
   "detail.transitions.why.turn_ended": "回合已结束",
   "detail.transitions.why.boundary_superseded": "还没回答，AI-DLC 已经往下走了",
+  "detail.transitions.why.condition_cleared": "它报告的情况已经不存在了",
   "detail.transitions.why.force_stop_committed": "Studio 请求 KiroCrew 停止这一轮",
   "detail.transitions.why.not_delivered_unproven": "Studio 无法证明消息没有送达",
   "detail.transitions.why.session_rebound": "该意图已改绑到另一个会话",
   "detail.transitions.why.kept_paused": "你让该意图保持暂停",
-  "detail.transitions.why.human_presence_anomaly": "有其他人在会话里回复了",
+  "detail.transitions.why.human_presence_anomaly": "进入会话的提示比 Studio 发送的多，Studio 分不清哪一条是你的",
   "detail.transitions.why.cursor_moved": "AI-DLC 的活动意图变了",
   "detail.transitions.why.commit_made": "会话做了一次提交",
   "detail.transitions.why.turn_ended_no_commit": "这一轮结束了，没有新的提交"

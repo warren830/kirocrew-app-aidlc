@@ -1559,6 +1559,20 @@ async def test_retire_stale_cancels_a_queued_card_and_only_marks_a_failed_one(wo
     assert failed.evidence["superseded"] is True
 
 
+
+@aio
+async def test_a_retired_recovery_card_says_its_condition_cleared_not_that_ai_dlc_moved_on(world):
+    """Only a gate, question or missing-input card stands for a stop of AI-DLC's own; a recovery card that leaves
+    the queue does so because what it reported no longer holds."""
+    gate = pick(await seed(world), "gate")
+    recovery = await _retyped(world, "Queued", type="recovery", dedupe_key="recovery:gone:codes")
+    await world.broker.retire_stale(REPO_ID, "default", INTENT, live_keys=set())
+    def why(action_id):
+        return [row["reason"] for row in world.store.select("action_transitions", {"action_id": action_id})
+                if row["to_status"] == "Cancelled"]
+    assert why(gate.action_id) == ["boundary_superseded"]
+    assert why(recovery.action_id) == ["condition_cleared"]
+
 @pytest.mark.parametrize("checkpoint,title,options", [
     ("summary_confirmation", "Consolidated Summary Confirmation", "- Looks correct\n- Request changes"),
     ("plan_approval", "Plan Approval", "- Approve Plan\n- Request Changes"),

@@ -843,6 +843,10 @@ def test_recovery_card_for_a_session_lost_mid_stage(projection, snap_of, burst_r
     assert lost["recovery"].evidence["recovery_codes"] == ["session_lost_mid_stage"]
     assert "recovery" not in _by_type(_seeds(projection, snap, binding=bound, slot=SlotStub()))
     assert "recovery" not in _by_type(_seeds(projection, snap, binding=BindingStub(), slot=None))  # unbound != lost
+    # The reconciler's reading over consecutive scans decides: a slot still inside its grace window is not lost.
+    assert "recovery" not in _by_type(_seeds(projection, snap, binding=bound, slot=None, slot_lost=False))
+    assert _by_type(_seeds(projection, snap, binding=bound, slot=None, slot_lost=True))["recovery"].evidence[
+        "recovery_codes"] == ["session_lost_mid_stage"]
 
 
 def test_no_seed_is_derived_for_an_uncertain_delivery(projection, gate_snap, proj_mod):
