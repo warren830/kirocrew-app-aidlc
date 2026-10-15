@@ -128,6 +128,29 @@ def _at_or_after(row_ts: object, since_ts: object) -> bool:
     return since is None or row is None or row >= since
 
 
+def _retrying(meta: object) -> bool:
+    """Is this ``error`` row a notice of a retry KiroCrew is still making, rather than where something stopped?"""
+    if not isinstance(meta, Mapping):
+        return False
+    return _text(meta.get("kind")) in RETRYING_ERROR_KINDS or _text(meta.get("notice")) in RETRYING_ERROR_NOTICES
+
+
+def error_view(row: "TranscriptRow") -> dict[str, str]:
+    """A host error row as Studio repeats it: the wire stamp, the text without its glyph and capped, the row's
+    kind. The conversation keeps the whole of it."""
+    when = _instant(row.ts)
+    text = row.content.removeprefix("❌").strip()
+    if len(text) > STOPPED_TEXT_CHARS:
+        text = text[:STOPPED_TEXT_CHARS - 1].rstrip() + "…"
+    return {"at": C.iso_from_epoch(when) if when is not None else row.ts, "text": text,
+            "kind": _text(row.meta.get("kind"))}
+
+
+def row_epoch(row: "TranscriptRow") -> float | None:
+    """A transcript row's time in POSIX seconds, whatever precision and offset the host wrote."""
+    return _instant(row.ts)
+
+
 @dataclass(frozen=True, slots=True)
 class HostCapability:
     """One host seam and whether it can be used right now."""
@@ -363,13 +386,22 @@ class HostBridge:
             role = _text(row.get("role"))
             if role in TURN_ROLES:
                 return None
-            if role != "error":
-                continue
-            meta = row.get("meta") if isinstance(row.get("meta"), Mapping) else {}
-            if _text(meta.get("kind")) in RETRYING_ERROR_KINDS or _text(meta.get("notice")) in RETRYING_ERROR_NOTICES:
+            if role != "error" or _retrying(row.get("meta")):
                 continue
             return _row_view(row)
         return None
+
+    def errors_after(self, slot_key: str, after: float) -> list[TranscriptRow]:
+        """The terminal ``error`` rows newer than ``after`` (POSIX seconds), oldest first: what KiroCrew reported in
+        the conversation, not the retries it was still making. Process memory, like ``recent_rows``."""
+        out: list[TranscriptRow] = []
+        for row in self._raw_rows(slot_key):
+            if not isinstance(row, Mapping) or _text(row.get("role")) != "error" or _retrying(row.get("meta")):
+                continue
+            when = _instant(row.get("ts"))
+            if when is not None and when > after:
+                out.append(_row_view(row))
+        return out
 
     def find_delivery_row(self, slot_key: str, *, since_ts: str, delivery_id: str,
                           wire_text: str) -> TranscriptRow | None:
@@ -1017,12 +1049,7 @@ class SessionBinder:
         if view is None or view.running or view.stopping or view.stop_state != "idle":
             return None
         row = self._host.last_turn_error(slot_key)
-        if row is None:
-            return None
-        text = row.content.removeprefix("❌").strip()
-        if len(text) > STOPPED_TEXT_CHARS:
-            text = text[:STOPPED_TEXT_CHARS - 1].rstrip() + "…"
-        return {"at": row.ts, "text": text, "kind": _text(row.meta.get("kind"))}
+        return error_view(row) if row is not None else None
 
     async def stopped_turns(self) -> list[dict[str, Any]]:
         """Every bound, unarchived intent whose idle conversation stopped on an error, read from the host each

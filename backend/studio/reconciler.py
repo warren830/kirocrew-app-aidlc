@@ -72,6 +72,8 @@ __all__ = [
 ]
 
 _LOG = logging.getLogger("aidlc_studio.reconciler")
+#: Storage preference: ``slot_key -> POSIX seconds`` of the newest KiroCrew error Studio recorded for that conversation.
+HOST_ERRORS_PREF = "host_errors_seen"
 _attr = C.attr
 
 
@@ -713,6 +715,10 @@ class Reconciler:
                 intent_label=_attr(snap.row, "slug") or intent_dir, slot_key=binding.slot_key,
                 approval=slot.approval, turn=str(_attr(slot, "last_turn_ts") or ""),
             )
+        try:
+            await self._record_host_errors(binding, snap)
+        except Exception:  # history is a lesser failure than a scan that stops
+            _LOG.debug("could not record the conversation's errors", exc_info=True)
         for command in live:
             await self._retire_obsolete_run(command, snap)
         live = await self._s.actions.list_live(
@@ -1018,6 +1024,44 @@ class Reconciler:
         findings = self._with_finding(evidence.get("findings"), code, params)
         return Resolution("pending", code, {**evidence, "findings": findings})
 
+    def _stopped_after(self, rec: Any) -> dict[str, str] | None:
+        """The KiroCrew error the request's turn stopped on, when it came after the request was sent: a Run that
+        died on a model error read as "the turn ended without changing the workflow"."""
+        slot_key = str(_attr(rec, "slot_key") or "")
+        row = self._s.host.last_turn_error(slot_key) if slot_key else None
+        sent = C.epoch_from_iso(_attr(rec, "delivering_at"))
+        when = _sessions.row_epoch(row) if row is not None else None
+        if row is None or when is None or (sent is not None and when < sent):
+            return None
+        return _sessions.error_view(row)
+
+    async def _record_host_errors(self, binding: Any, snap: Any) -> None:
+        """Each error KiroCrew reported in a bound conversation, once, in Activity at its own time: a turn that
+        died on a model error left no trace in Studio's history. Watching starts the first time a conversation is
+        seen, so its older errors stay the conversation's own history; the mark survives a restart."""
+        slot_key = str(_attr(binding, "slot_key") or "")
+        if not slot_key:
+            return
+        marks = await self._to_thread(self._s.storage.pref_get, HOST_ERRORS_PREF)
+        marks = dict(marks) if isinstance(marks, Mapping) else {}
+        mark = marks.get(slot_key)
+        if not isinstance(mark, (int, float)):
+            marks[slot_key] = self._s.clock.now()
+            await self._to_thread(self._s.storage.pref_set, HOST_ERRORS_PREF, marks)
+            return
+        rows = self._s.host.errors_after(slot_key, float(mark))
+        if not rows:
+            return
+        for row in rows:
+            view = _sessions.error_view(row)
+            await self._s.activity.record(
+                kind="conversation.error", severity="attention", source="kirocrew", repo_id=snap.repo_id,
+                space=snap.space, intent_dir=snap.intent_dir, session_key=_attr(binding, "session_key"),
+                params={"text": view["text"], "kind": view["kind"]}, at=view["at"],
+            )
+        marks[slot_key] = max(_sessions.row_epoch(row) or float(mark) for row in rows)
+        await self._to_thread(self._s.storage.pref_set, HOST_ERRORS_PREF, marks)
+
     def _contract_row(self, rec: Any, snap: Any, slot: Any, decision: str) -> Resolution:
         """The type/decision row of the §1.12 table, with no presence or cursor judgement yet."""
         action_type, stage = rec.type, rec.stage
@@ -1064,6 +1108,10 @@ class Reconciler:
                 return Resolution("pending", "turn_running", seen)
             if seen["state_moved"] or movement is not None:
                 return Resolution("state_changed", "workflow_moved", seen)
+            stopped = self._stopped_after(rec)
+            if stopped is not None:
+                seen["host_error"] = stopped
+                return Resolution("no_transition", "turn_stopped_on_error", seen)
             return Resolution("no_transition", "turn_ended_without_movement", seen)
 
         if action_type == "prepare_commit":
@@ -1072,6 +1120,10 @@ class Reconciler:
             # AI-DLC records no commit, so Git is the only evidence the conversation made one: the newest commit, when
             # it is newer than the request. "The turn ended" alone told the person to go and look.
             seen["new_commit"] = self._commit_since(rec, snap)
+            stopped = None if seen["new_commit"] else self._stopped_after(rec)
+            if stopped is not None:
+                seen["host_error"] = stopped
+                return Resolution("no_transition", "turn_stopped_on_error", seen)
             return Resolution("no_transition", "commit_made" if seen["new_commit"] else "turn_ended_no_commit", seen)
 
         if action_type == "force_stop":

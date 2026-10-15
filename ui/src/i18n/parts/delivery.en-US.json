@@ -42,5 +42,8 @@
   "delivery.step.turnEnded": "Turn finished",
   "delivery.recorded.turn_ended": "The conversation finished the request. Repos → Git shows whether a commit was made.",
   "delivery.recorded.commit_made": "The conversation made commit {sha}: {subject}.",
-  "delivery.recorded.turn_ended_no_commit": "The conversation finished the request without a new commit. Its reply says why."
+  "delivery.recorded.turn_ended_no_commit": "The conversation finished the request without a new commit. Its reply says why.",
+  "delivery.stoppedOnError": "The turn stopped on a KiroCrew error",
+  "delivery.stoppedOnErrorStatus": "Stopped on an error",
+  "delivery.stoppedOnErrorBody": "The turn stopped on an error KiroCrew reported, before AI-DLC changed the workflow. AI-DLC keeps what it already wrote; sending the request again picks up from there."
 }

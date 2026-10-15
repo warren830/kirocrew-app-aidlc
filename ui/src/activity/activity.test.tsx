@@ -17,6 +17,8 @@ import { apiCalls, setApiRoutes } from '../test/stubs/app-sdk'
 import { EMPTY_ROUTE } from '../lib/route'
 import type { ActivityResponse, SettingsResponse, TimelineEntry } from '../lib/types'
 import { ActivityView } from './ActivityView'
+import { messageOf } from './TimelineRow'
+import { makeI18n } from '../i18n'
 import { ExportPanel } from './ExportPanel'
 
 const entry = (over: Partial<TimelineEntry>): TimelineEntry => ({
@@ -342,5 +344,25 @@ describe('Diagnostic export', () => {
       const call = apiCalls.find((c) => c.path.includes('/diagnostics'))
       expect(call?.path).toContain('include_human_text=1')
     })
+  })
+})
+
+describe('an Activity sentence', () => {
+  const en = makeI18n('en-US')
+  const entry = (message_key: string, params: Record<string, unknown>) => ({
+    id: 1, at: '2026-10-14T05:51:06Z', source: 'kirocrew', kind: message_key.replace(/^activity\./, ''), message_key,
+    params, severity: 'attention', refs: {}, raw: null,
+  }) as unknown as TimelineEntry
+
+  it('quotes what KiroCrew reported in the conversation', () => {
+    expect(messageOf(en, entry('activity.conversation.error', { text: 'HTTP 5xx', kind: '' })))
+      .toBe('KiroCrew reported an error in the conversation: HTTP 5xx')
+  })
+
+  it('says which notification was sent', () => {
+    expect(messageOf(en, entry('activity.notification.sent', { kind: 'approval', dashboard: true })))
+      .toBe('Studio told you the conversation is waiting for a tool approval.')
+    expect(messageOf(en, entry('activity.notification.sent', { kind: 'gate', dashboard: true })))
+      .toBe('Notification sent.')
   })
 })

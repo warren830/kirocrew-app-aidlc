@@ -258,5 +258,8 @@
   "audit.RECOVERY_COMPLETED": "会话被压缩后，已答复恢复提示。",
   "activity.page.countPage_one": "本页 {n} 条事件；“更早”可查看更多",
   "activity.page.countPage_other": "本页 {n} 条事件；“更早”可查看更多",
-  "activity.row.repoGone": "已取消注册的仓库"
+  "activity.row.repoGone": "已取消注册的仓库",
+  "activity.conversation.error": "KiroCrew 在会话里报告了错误：{text}",
+  "activity.notification.sent.approval": "Studio 提醒你：会话在等你批准一个工具调用。",
+  "activity.notification.sent.completion": "Studio 提醒你：这个意图已经完成。"
 }

@@ -1363,3 +1363,48 @@ def test_a_bound_conversation_missing_right_after_a_restart_is_not_called_lost(s
     clock.advance(C.SLOT_LOSS_GRACE_SECS)
     assert lost("k", binding, None) is True
     assert lost("k", SimpleNamespace(slot_key=None), None) is False  # unbound is not lost
+
+
+FAILED_ROW = {"role": "error", "ts": "2026-09-04T10:00:20Z", "cls": "msg msg-e", "meta": {"mid": "m-1"},
+              "content": "❌ The model backend hit a transient error (HTTP 5xx). Retry in a moment."}
+
+
+@pytest.mark.parametrize("kind,wire", [("run", "WIRE_RUN"), ("prepare_commit", "WIRE_PREPARE_COMMIT")])
+def test_a_turn_that_died_on_a_kirocrew_error_says_so(svc, scene, fake_host, C, kind, wire):
+    """Not "the turn ended without changing the workflow": the turn stopped on an error KiroCrew reported."""
+    action_id = scene.make(status="Delivered", action_type=kind, decision=kind, wire_text=getattr(C, wire))
+    touch_human_turn(scene.root)
+    append_audit(scene.root, F.audit_block("HUMAN_TURN", T0))
+    finish_turn(fake_host, scene.slot_key, wire_text=getattr(C, wire))
+    fake_host.get_slot(scene.slot_key).messages.append(dict(FAILED_ROW))
+    tick(svc)
+    assert status_of(svc, action_id) == "ResolvedNoTransition"
+    resolution = svc.storage.get("actions", action_id)["resolution_json"]
+    assert resolution["reason"] == "turn_stopped_on_error"
+    assert resolution["evidence"]["host_error"] == {
+        "at": "2026-09-04T10:00:20Z", "text": "The model backend hit a transient error (HTTP 5xx). Retry in a moment.",
+        "kind": ""}
+
+
+def _conversation_errors(svc, scene) -> list[dict]:
+    return [row for row in svc.storage.select("activity", {"repo_id": scene.repo_id})
+            if row.get("kind") == "conversation.error"]
+
+
+def test_kirocrew_errors_in_a_bound_conversation_reach_activity_once_at_their_own_time(svc, scene, fake_host, clock):
+    """A failed turn left no trace in Studio's history. Watching starts when Studio first sees the conversation,
+    so older errors stay the conversation's own history; a retry notice is not an error; nothing is recorded twice."""
+    slot = fake_host.get_slot(scene.slot_key)
+    slot.messages.append({**FAILED_ROW, "ts": "2000-01-01T00:00:00Z"})
+    tick(svc)
+    assert _conversation_errors(svc, scene) == []
+    retry = {"role": "error", "ts": "2099-01-01T00:00:01Z", "content": "⟳ Connection unstable — resuming…",
+             "meta": {"kind": "transient_retry", "notice": "transient_resuming"}}
+    slot.messages += [retry, {**FAILED_ROW, "ts": "2099-01-01T00:00:05.250000+00:00"}]
+    tick(svc)
+    tick(svc)
+    rows = _conversation_errors(svc, scene)
+    assert len(rows) == 1
+    assert (rows[0]["source"], rows[0]["severity"], rows[0]["at"], rows[0]["intent_dir"]) == (
+        "kirocrew", "attention", "2099-01-01T00:00:05Z", GATE_DIR)
+    assert rows[0]["params_json"]["text"].startswith("The model backend hit a transient error")

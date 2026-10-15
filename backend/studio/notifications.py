@@ -73,6 +73,13 @@ class _Message:
     params: dict = field(default_factory=dict)  # Activity params beside kind/dashboard/slack
 
 
+def _intent_scope(repo_id: str, intent_key: str) -> dict:
+    """The Activity columns of a notification about one intent, so its row carries the repository and intent."""
+    space, sep, rest = _text(intent_key).partition(C.INTENT_KEY_SEPARATOR)
+    space, intent_dir = (space, rest) if sep else (C.DEFAULT_SPACE, _text(intent_key))
+    return {"repo_id": _text(repo_id) or None, "space": space or None, "intent_dir": intent_dir or None}
+
+
 def _text(value: Any, limit: int | None = None) -> str:
     out = "" if value is None else str(value)
     return out[: limit - 1].rstrip() + "…" if limit is not None and len(out) > limit else out
@@ -200,6 +207,7 @@ class NotificationAdapter:
             link=self._intent_link(repo_id, intent_key),
             title=_text(f"AI-DLC is waiting for your approval: {label}", 150),
             body=_text(f"{body}: {command}" if command else body, _BODY_LIMIT), severity="attention",
+            scope=_intent_scope(repo_id, intent_key),
             params={"repo_id": repo_id, "intent_key": intent_key, "slot_key": slot_key},
         )
 
@@ -214,6 +222,7 @@ class NotificationAdapter:
             kind="completion", dedupe_key=f"completion:{repo_id}:{intent_key}", link=link, title=title,
             body=_text(f"{label} · {slug} reached Completed. Nothing is waiting for you.", _BODY_LIMIT),
             repo_id=repo_id, slack=(_blocks(f"Completed: {slug}", label, f"Open in Studio: {link}"), title),
+            scope=_intent_scope(repo_id, intent_key),
             params={"repo_id": repo_id, "intent_key": intent_key},
         )
 

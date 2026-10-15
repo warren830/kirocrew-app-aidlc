@@ -42,5 +42,8 @@
   "delivery.step.turnEnded": "回合已结束",
   "delivery.recorded.turn_ended": "会话已完成这次请求。可在“仓库 → Git”查看是否已生成提交。",
   "delivery.recorded.commit_made": "会话已提交 {sha}：{subject}。",
-  "delivery.recorded.turn_ended_no_commit": "会话完成了请求，但没有新的提交。原因见它的回复。"
+  "delivery.recorded.turn_ended_no_commit": "会话完成了请求，但没有新的提交。原因见它的回复。",
+  "delivery.stoppedOnError": "这一轮因 KiroCrew 报错停下了",
+  "delivery.stoppedOnErrorStatus": "因错误停下",
+  "delivery.stoppedOnErrorBody": "这一轮在 AI-DLC 改动工作流之前，就因 KiroCrew 报告的错误停下了。AI-DLC 已写下的内容都还在；再发送一次这个请求，会从停下的地方接着做。"
 }

@@ -92,5 +92,6 @@
   "detail.transitions.why.human_presence_anomaly": "进入会话的提示比 Studio 发送的多，Studio 分不清哪一条是你的",
   "detail.transitions.why.cursor_moved": "AI-DLC 的活动意图变了",
   "detail.transitions.why.commit_made": "会话做了一次提交",
-  "detail.transitions.why.turn_ended_no_commit": "这一轮结束了，没有新的提交"
+  "detail.transitions.why.turn_ended_no_commit": "这一轮结束了，没有新的提交",
+  "detail.transitions.why.turn_stopped_on_error": "这一轮因 KiroCrew 报错停下了"
 }

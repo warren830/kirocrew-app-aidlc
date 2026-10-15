@@ -76,3 +76,12 @@ def test_a_sub_agents_approval_on_the_coordinator_is_shown_and_notified(sv, rout
     slot.coordinator_approvals.clear()
     status, body = _get(sv, routes, fake_host, "/actions")
     assert body["approval_waits"] == []
+
+
+def test_the_activity_row_of_an_approval_notice_names_its_intent(sv, routes, fake_host, scene):
+    """It read only "Notification sent.", with no repository or intent to filter or click by."""
+    park(fake_host, scene)
+    _scan(sv, scene)
+    rows = [row for row in sv.storage.select("activity", {"kind": "notification.sent"})
+            if (row.get("params_json") or {}).get("kind") == "approval"]
+    assert rows and (rows[-1]["repo_id"], rows[-1]["intent_dir"]) == (scene.repo_id, INTENT)

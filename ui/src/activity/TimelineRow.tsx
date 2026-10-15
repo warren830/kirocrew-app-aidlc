@@ -62,7 +62,12 @@ export function provenanceOf(entry: TimelineEntry): Provenance {
  * released Studio knows), and `activity.row.unknownKind` / `audit.unknown_event` say so honestly.
  */
 export function messageOf(i18n: I18n, entry: TimelineEntry): string {
-  if (i18n.has(entry.message_key)) return i18n.t(entry.message_key)
+  const params = Object.fromEntries(Object.entries(entry.params ?? {})
+    .filter(([, value]) => typeof value === 'string' || typeof value === 'number')) as Record<string, string | number>
+  // One registered kind can say more per variant (a notification's `params.kind`), when the catalogue has it.
+  const variant = typeof params.kind === 'string' ? `${entry.message_key}.${params.kind}` : ''
+  if (variant && i18n.has(variant)) return i18n.t(variant, params)
+  if (i18n.has(entry.message_key)) return i18n.t(entry.message_key, params)
   return entry.message_key.startsWith('audit.') ? i18n.t('audit.unknown_event') : i18n.t('activity.row.unknownKind')
 }
 

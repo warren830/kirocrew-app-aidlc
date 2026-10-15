@@ -92,5 +92,6 @@
   "detail.transitions.why.human_presence_anomaly": "more prompts reached the conversation than Studio sent, and it could not tell which one was yours",
   "detail.transitions.why.cursor_moved": "AI-DLC's active intent changed",
   "detail.transitions.why.commit_made": "the conversation made a commit",
-  "detail.transitions.why.turn_ended_no_commit": "the turn ended without a new commit"
+  "detail.transitions.why.turn_ended_no_commit": "the turn ended without a new commit",
+  "detail.transitions.why.turn_stopped_on_error": "the turn stopped on a KiroCrew error"
 }

@@ -47,6 +47,8 @@ ACTIVITY_KINDS: tuple[str, ...] = (
     # because Activity is where a user checks why a subagent ran, and one sentence would hide it behind a click.
     "advisor.requested", "advisor.auto_requested", "advisor.completed", "advisor.failed",
     "notification.sent", "slack.sent", "slack.callback", "session.bound", "session.unbound", "session.takeover",
+    # What KiroCrew itself reported in a bound conversation (an `error` row it is not retrying), at that row's time.
+    "conversation.error",
     "intent.created", "intent.paused", "intent.resumed", "intent.archived", "intent.restored", "intent.force_stop",
     "settings.updated", "health.startup",
 )
@@ -221,9 +223,11 @@ class ActivityProjector:
         params: Mapping[str, Any] | None = None,
         evidence: Sequence[Any] = (),
         human_text: str | None = None,
+        at: str | None = None,
     ) -> int:
         """Append one Studio row; returns its id. Blocking: only for callers already on a worker thread, whose
-        rows would otherwise wait in a buffer a crash could lose."""
+        rows would otherwise wait in a buffer a crash could lose. ``at`` dates a row read from another record (a
+        host transcript row) at that record's own time; a malformed one is ignored for now."""
         if kind not in _KIND_SET:
             raise StudioError(
                 "internal_error",
@@ -239,7 +243,7 @@ class ActivityProjector:
         if source not in C.SOURCE:
             raise StudioError("internal_error", f"unknown activity source {source!r}", details={"source": source})
         row = ActivityRow(
-            at=self._clock.iso(), source=source, kind=kind, severity=severity, repo_id=repo_id, space=space,
+            at=at if at and C.epoch_from_iso(at) is not None else self._clock.iso(), source=source, kind=kind, severity=severity, repo_id=repo_id, space=space,
             intent_dir=intent_dir, stage=stage, action_id=action_id, session_key=session_key,
             message_key=f"activity.{kind}", params=_normalise_params(dict(params or {})),
             evidence=_normalise_evidence(evidence), redacted=True,

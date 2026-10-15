@@ -114,6 +114,22 @@ describe('delivery outcomes describe observed progress', () => {
     expect(strip).not.toHaveTextContent(i18n.t('enum.actionStatus.ResolvedNoTransition'))
   })
 
+  it.each(['en-US', 'zh-CN'] as const)('says a Run stopped on a KiroCrew error, and quotes it (%s)', (locale) => {
+    document.documentElement.lang = locale
+    const i18n = makeI18n(locale)
+    const card = actionCard({ type: 'run', status: 'ResolvedNoTransition', resolution: {
+      kind: 'no_transition', reason: 'turn_stopped_on_error', resolved_at: null,
+      evidence: { presence: null, is_active: null, host_error: {
+        at: '2026-10-14T05:51:06Z', text: 'The model backend hit a transient error (HTTP 5xx).', kind: '' } },
+    } })
+    render(<I18nProvider><DeliveryStrip card={card} /></I18nProvider>)
+    const strip = screen.getByRole('region', { name: i18n.t('delivery.label') })
+    expect(strip).toHaveTextContent(i18n.t('delivery.stoppedOnErrorStatus'))
+    expect(strip).toHaveTextContent(i18n.t('delivery.stoppedOnErrorBody'))
+    expect(strip).toHaveTextContent('The model backend hit a transient error (HTTP 5xx).')
+    expect(strip).not.toHaveTextContent(i18n.t('delivery.noTransition'))
+  })
+
   it.each(['en-US', 'zh-CN'] as const)('sends a refused plan reply to the new card (%s)', (locale) => {
     document.documentElement.lang = locale
     const i18n = makeI18n(locale)

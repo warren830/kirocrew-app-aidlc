@@ -2370,7 +2370,13 @@ breaker.opened breaker.reset lease.acquired lease.released lease.reclaimed engin
 migration.previewed migration.applied advisor.requested advisor.auto_requested advisor.completed advisor.failed
 notification.sent slack.sent session.bound session.unbound session.takeover intent.created intent.paused
 intent.resumed intent.archived intent.restored intent.force_stop settings.updated
-health.startup`.
+health.startup conversation.error`.
+
+`conversation.error` (source `kirocrew`) is an `error` row KiroCrew wrote in a bound conversation and is not
+retrying from, recorded once at that row's own time with its text in `params.text`; watching a conversation starts
+the first time Studio sees it, so its older errors are not replayed. A Run or commit request whose turn ended on one
+resolves `ResolvedNoTransition` with reason `turn_stopped_on_error` and the error in `resolution.evidence.host_error`.
+A notification's Activity row carries the intent it is about, and its sentence varies by `params.kind`.
 
 `advisor.auto_requested` is a separate kind from `advisor.requested` rather than a param on it (FR-ADV-010): the one
 question a user asks of a draft they did not ask for is "who started this?", and a kind is what Activity filters and

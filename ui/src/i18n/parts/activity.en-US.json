@@ -258,5 +258,8 @@
   "audit.RECOVERY_COMPLETED": "The person answered the recovery prompt after the conversation was compacted.",
   "activity.page.countPage_one": "{n} event on this page; Older shows more",
   "activity.page.countPage_other": "{n} events on this page; Older shows more",
-  "activity.row.repoGone": "unregistered repository"
+  "activity.row.repoGone": "unregistered repository",
+  "activity.conversation.error": "KiroCrew reported an error in the conversation: {text}",
+  "activity.notification.sent.approval": "Studio told you the conversation is waiting for a tool approval.",
+  "activity.notification.sent.completion": "Studio told you the intent finished."
 }

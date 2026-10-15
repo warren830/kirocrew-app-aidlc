@@ -92,6 +92,7 @@ export function statusLabel(
     && (reason === 'answer_not_verified_at_gate' || reason === 'answer_not_verified')) {
     return i18n.t('delivery.answerNotVerified')
   }
+  if (status === 'ResolvedNoTransition' && reason === 'turn_stopped_on_error') return i18n.t('delivery.stoppedOnErrorStatus')
   if (status === 'ResolvedNoTransition' && reason === 'plan_approval_recorded_before_reset') {
     return i18n.t('delivery.previousPlanApproval')
   }
@@ -151,8 +152,11 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
   const answerNotVerified = noTransition && (atNewGate || card.resolution.reason === 'answer_not_verified')
   const planReset = noTransition && card.resolution.reason === 'plan_approval_recorded_before_reset'
   const planAskedAgain = noTransition && card.resolution.reason === 'plan_reply_not_recorded'
+  const stoppedOnError = noTransition && card.resolution.reason === 'turn_stopped_on_error'
+  const hostError = card.resolution.evidence?.host_error ?? null
   const unverifiedLabel = atNewGate ? 'delivery.newGateReview' : 'delivery.conversationReview'
   const remainingLabel = planReset ? 'delivery.updatedPlanReview'
+    : stoppedOnError ? 'delivery.stoppedOnError'
     : planAskedAgain ? 'delivery.planAskedAgainReview'
     : answerNotVerified ? unverifiedLabel : 'delivery.noTransition'
   const sent = !BEFORE_SEND.includes(status)
@@ -175,6 +179,7 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
               </span>
               <span className="studio-dstep-label">{t(
                 state === 'unchanged' ? (planReset ? 'delivery.updatedPlanReview'
+                  : stoppedOnError ? 'delivery.stoppedOnError'
                   : planAskedAgain ? 'delivery.planAskedAgainReview'
                   : answerNotVerified ? unverifiedLabel : 'delivery.step.unchanged')
                   : state === 'cancelled' ? 'enum.actionStatus.Cancelled'
@@ -221,6 +226,15 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
         <div className="studio-banner studio-dwarn" data-tone="warn" role="alert">
           <Icon name="warn" size={15} />
           <p>{t('delivery.previousPlanApprovalBody')}</p>
+        </div>
+      ) : null}
+      {stoppedOnError ? (
+        <div className="studio-banner studio-dwarn" data-tone="warn" role="alert">
+          <Icon name="warn" size={15} />
+          <div className="studio-grow">
+            <p>{t('delivery.stoppedOnErrorBody')}</p>
+            {hostError?.text ? <p className="studio-muted studio-wrap-any">{hostError.text}</p> : null}
+          </div>
         </div>
       ) : null}
       {planAskedAgain ? (
