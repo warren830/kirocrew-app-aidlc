@@ -333,6 +333,9 @@ export interface SourceChange {
   truncated: boolean
   /** A `binary` file's own change (`added`/`modified`/`deleted`), since its diff is not shown. */
   change?: 'added' | 'modified' | 'deleted'
+  /** Against a decision-time `base`: the first later commit that changed the file, which the new side was read
+   *  from; `null` when none has, and the working tree was read. */
+  until?: string | null
 }
 /**
  * `GET …/{intent}/changes?stage=&unit=`: `manifest` is `null` when the stage listed no writes. `listed_by` names the
@@ -343,6 +346,8 @@ export interface SourceChangesResponse {
   available: boolean; reason: string | null; files: SourceChange[]; truncated: boolean; manifest_readable: boolean
   /** The commit compared with, when the request named one the repository has; `null` (or absent) for HEAD. */
   base?: string | null
+  /** The one commit every compared file was read up to; `null` when they differ or none was committed. */
+  until?: string | null
 }
 export interface ArtifactResponse { artifact: ArtifactMeta; content: string | null; encoding: 'utf-8' | 'binary'; truncated: boolean; review: { verdict: string | null; findings: ReviewFinding[] } | null; toc: { level: number; text: string; anchor: string }[]; prior: { available: boolean; source: 'git' | null; diff: string | null } }
 export interface ReviewResponse { stage: string | null; verdict: string | null; findings: ReviewFinding[]; receipts: { event: string; ts: string; stage: string | null; reviewer: string | null; iteration: number | null; verdict: string | null; fingerprint: string | null }[]; review_class: string | null; reviewer: string | null; revisions: number }

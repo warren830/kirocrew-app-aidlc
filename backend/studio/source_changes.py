@@ -35,6 +35,11 @@ def read_changes(reader: Any, git: Any, repo: Path, manifest_relpath: str, base:
     was at ``at``: a closed card asks for the HEAD of the moment it was decided, since once the approved code is
     committed, a comparison with today's HEAD reads as no change at all. ``base`` in the answer is the commit used,
     ``None`` for HEAD.
+
+    Against such a base, a file is read as the first later commit that changed it left it (its ``until``), and only
+    a file no commit has taken in yet is read from the working tree: today's file also holds every later intent's
+    work, and a closed gate counted that as its own. ``until`` in the answer is the one commit every compared file
+    was read from, ``None`` when they differ or none was committed.
     """
     paths, readable = _listed_paths(reader, repo, manifest_relpath)
     head = git.observe(repo)
@@ -46,14 +51,16 @@ def read_changes(reader: Any, git: Any, repo: Path, manifest_relpath: str, base:
     budget = C.MAX_SOURCE_CHANGES_DIFF_BYTES
     for path in paths[:C.MAX_SOURCE_CHANGE_FILES]:
         change = _change(reader, git, repo, path, has_head=available and (rev is not None or head.head is not None),
-                         rev=rev) if available else _row(path, "unknown")
+                         rev=rev, settled=rev is not None) if available else _row(path, "unknown")
         diff = change.get("diff")
         if diff is not None and len(diff) > budget:  # the whole response stays bounded, not only each file
             change.update(diff=None, truncated=True)
         budget -= len(change.get("diff") or "")
         files.append(change)
+    untils = {file.get("until") for file in files if file["status"] in ("added", "modified", "deleted", "unchanged")}
     return {"available": available, "reason": None if available else head.reason, "files": files,
-            "truncated": len(paths) > C.MAX_SOURCE_CHANGE_FILES, "manifest_readable": readable, "base": rev}
+            "truncated": len(paths) > C.MAX_SOURCE_CHANGE_FILES, "manifest_readable": readable, "base": rev,
+            "until": next(iter(untils)) if len(untils) == 1 else None}
 
 
 def intent_written_paths(reader: Any, repo: Path) -> dict[str, str]:
@@ -126,26 +133,39 @@ def _row(path: str, status: str, **extra: Any) -> dict[str, Any]:
             **extra}
 
 
-def _change(reader: Any, git: Any, repo: Path, path: str, *, has_head: bool, rev: str | None = None) -> dict[str, Any]:
+def _change(reader: Any, git: Any, repo: Path, path: str, *, has_head: bool, rev: str | None = None,
+            settled: bool = False) -> dict[str, Any]:
     """One written path: ``added``, ``modified``, ``deleted``, ``unchanged`` (HEAD already holds it), or why it is
-    not shown (``outside``, ``secret``, ``too_large``, ``binary``, ``unknown``)."""
+    not shown (``outside``, ``secret``, ``too_large``, ``binary``, ``unknown``). ``settled`` (a decision-time
+    ``rev``) reads the new side from the first later commit that changed the file, its ``until``, when there is one."""
     try:
         target = security.resolve_inside(repo, path)
     except StudioError:
         return _row(path, "outside")
     if security.is_secret_file(target):
         return _row(path, "secret")
-    try:
-        current = reader.read_artifact(repo, path)
-    except StudioError as exc:
-        return _row(path, "too_large" if exc.code == "too_large" else "unknown")
+    until = git.first_commit_touching(repo, rev, path) if settled and rev else None
+    return {**_compare(reader, git, repo, path, has_head=has_head, rev=rev, until=until), "until": until}
+
+
+def _compare(reader: Any, git: Any, repo: Path, path: str, *, has_head: bool, rev: str | None,
+             until: str | None) -> dict[str, Any]:
+    if until is not None:
+        new_state, new = git.head_blob(repo, path, until)
+        if new_state in ("too_large", "unknown"):
+            return _row(path, new_state)
+    else:
+        try:
+            current = reader.read_artifact(repo, path)
+        except StudioError as exc:
+            return _row(path, "too_large" if exc.code == "too_large" else "unknown")
+        new = current.bytes if current is not None else None
     old_state, old = (git.head_blob(repo, path, rev) if rev else git.head_blob(repo, path)) if has_head \
         else ("absent", None)
     if old_state == "too_large":
         return _row(path, "too_large")
     if old_state == "unknown":
         return _row(path, "unknown")
-    new = current.bytes if current is not None else None
     if old is None and new is None:
         return _row(path, "unknown")  # listed as written, yet neither on disk nor at HEAD
     if old is not None and new is not None and old == new:

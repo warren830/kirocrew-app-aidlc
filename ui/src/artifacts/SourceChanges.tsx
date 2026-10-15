@@ -64,7 +64,7 @@ export function useSourceChanges(card: ActionCard, enabled: boolean): Resource<S
 
 const SHOWN = new Set(['added', 'modified', 'deleted'])
 
-function FileChange({ change, base }: { change: SourceChange; base: string | null }) {
+function FileChange({ change, base, eachUntil }: { change: SourceChange; base: string | null; eachUntil: boolean }) {
   const { t, fmt } = useI18n()
   const short = base ? base.slice(0, 7) : ''
   const [open, setOpen] = useState(change.status === 'modified' || change.status === 'deleted')
@@ -83,6 +83,11 @@ function FileChange({ change, base }: { change: SourceChange; base: string | nul
           <span className="studio-mono studio-muted" aria-label={t('changes.counts', {
             added: fmt.number(change.additions), removed: fmt.number(change.deletions) })}>
             +{fmt.number(change.additions)} −{fmt.number(change.deletions)}
+          </span>
+        ) : null}
+        {eachUntil ? (
+          <span className="studio-mono studio-muted">
+            {change.until ? t('changes.untilFile', { sha: change.until.slice(0, 7) }) : t('changes.untilNone')}
           </span>
         ) : null}
         {shown ? (
@@ -140,26 +145,35 @@ export function SourceChanges({ card }: { card: ActionCard }) {
   const added = data.files.reduce((sum, file) => sum + file.additions, 0)
   const removed = data.files.reduce((sum, file) => sum + file.deletions, 0)
   const base = data.base ?? null
+  const until = base ? data.until ?? null : null
+  // Against a decision-time base each file is read up to the commit that took the change in: one commit for all of
+  // them, one per file, or none yet (today's files).
+  const committed = Boolean(base) && data.files.some((file) => file.until)
+  const eachUntil = committed && !until
   const counts = { n: fmt.number(data.files.length), added: fmt.number(added), removed: fmt.number(removed) }
+  const summary = !base ? t('changes.summary', counts)
+    : until ? t('changes.summaryUntil', { ...counts, sha: base.slice(0, 7), until: until.slice(0, 7) })
+      : eachUntil ? t('changes.summaryUntilEach', { ...counts, sha: base.slice(0, 7) })
+        : t('changes.summaryBase', { ...counts, sha: base.slice(0, 7) })
 
   return (
     <section className="studio-srcchanges" aria-label={base
       ? t('changes.labelBase', { stage: card.stage?.slug ?? '', sha: base.slice(0, 7) })
       : t('changes.label', { stage: card.stage?.slug ?? '' })}>
       <p className="studio-muted">
-        {base ? t('changes.summaryBase', { ...counts, sha: base.slice(0, 7) }) : t('changes.summary', counts)}
+        {summary}
       </p>
       {isClosedAction(card) ? (
         // Read now either way; without the captured commit it is today's HEAD, which may already hold the change.
         <p className="studio-muted studio-diff-note">
-          <Icon name="info" size={13} /> {t(base ? 'changes.readNowBase' : 'changes.readNow')}
+          <Icon name="info" size={13} /> {t(committed ? 'changes.readCommitted' : base ? 'changes.readNowBase' : 'changes.readNow')}
         </p>
       ) : null}
       {traced ? (
         <p className="studio-muted studio-diff-note"><Icon name="info" size={13} /> {t('changes.fromTraceability')}</p>
       ) : null}
       <ul className="studio-srcchange-list">
-        {data.files.map((change) => <FileChange change={change} base={base} key={change.path} />)}
+        {data.files.map((change) => <FileChange change={change} base={base} eachUntil={eachUntil} key={change.path} />)}
       </ul>
       {data.truncated ? <p className="studio-muted">{t('changes.moreFiles')}</p> : null}
     </section>

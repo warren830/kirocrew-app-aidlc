@@ -147,6 +147,36 @@ def test_a_closed_card_compares_with_the_head_of_the_moment_it_was_decided(read,
     assert read(repo, at="2026-10-01T00:00:00Z")["base"] is None
 
 
+
+def _head(repo: Path, git: str) -> str:
+    return subprocess.run([git, "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
+
+
+def test_a_closed_card_stops_at_the_commit_that_took_its_change_in(read, tmp_path, git_bin):
+    """A later intent's work on the same file is not this gate's: each file is read as the first commit after the
+    decision left it, and only a file no commit has taken in yet is read from the working tree."""
+    repo = _repo(tmp_path, git_bin)
+    decided_at = _head(repo, git_bin)
+    (repo / "calc.py").write_text("def add(a, b):\n    return a + b\n\n\ndef subtract(a, b):\n    return a - b\n")
+    _manifest(repo, ["calc.py", "same.py"])
+    _git(repo, git_bin, "add", "-A")
+    _git(repo, git_bin, "commit", "-qm", "the approved change")
+    took_in = _head(repo, git_bin)
+    (repo / "calc.py").write_text((repo / "calc.py").read_text() + "\n\ndef multiply(a, b):\n    return a * b\n")
+    _git(repo, git_bin, "commit", "-qam", "a later intent")
+    (repo / "calc.py").write_text((repo / "calc.py").read_text() + "\n# not committed yet\n")
+    out = read(repo, base=decided_at)
+    calc = _by_path(out)["calc.py"]
+    assert (calc["status"], calc["additions"], calc["deletions"], calc["until"]) == ("modified", 4, 0, took_in)
+    assert "multiply" not in calc["diff"]
+    # same.py was never changed after the decision: read from the working tree, like an uncommitted change
+    assert (_by_path(out)["same.py"]["status"], _by_path(out)["same.py"]["until"]) == ("unchanged", None)
+    assert out["until"] is None, "the files were read from different places"
+    _manifest(repo, ["calc.py"])
+    assert read(repo, base=decided_at)["until"] == took_in
+    # a live card (no decision-time base) still reads today's files against HEAD
+    assert _by_path(read(repo))["calc.py"]["until"] is None
+
 def test_what_is_not_shown_says_why(read, tmp_path, git_bin):
     repo = _repo(tmp_path, git_bin)
     (repo / ".env").write_text("API_KEY=do-not-show\n")

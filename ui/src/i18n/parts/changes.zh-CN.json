@@ -36,5 +36,10 @@
   "changes.readNow": "这是现在读取的结果：拿今天的文件对比今天的最新提交，而不是这张卡片当时决定的代码。那份代码提交之后，这里会显示为没有变化。",
   "changes.status.unchangedBase": "与 {sha} 相同",
   "changes.why.unchangedBase": "今天的文件与 {sha}（这张卡片做出决定时的 HEAD 提交）一致：要么这一阶段没有改它，要么改动已被撤回。",
-  "changes.addedNoteBase": "{sha} 中没有这个文件，所以整个文件都显示为新增，包括早于这一阶段的部分。"
+  "changes.addedNoteBase": "{sha} 中没有这个文件，所以整个文件都显示为新增，包括早于这一阶段的部分。",
+  "changes.summaryUntil": "写入 {n} 个文件：从 {sha}（这张卡片做出决定时的最新提交）到 {until}（收进这次改动的提交）+{added} −{removed} 行。",
+  "changes.summaryUntilEach": "写入 {n} 个文件：从 {sha}（这张卡片做出决定时的最新提交）起，每个文件算到之后第一次改动它的提交，共 +{added} −{removed} 行。",
+  "changes.readCommitted": "从 git 读取：每个文件取决定之后第一次改动它的那个提交里的样子，所以之后对同一文件的其他改动不会算进来。还没有提交收进的文件，按今天的样子读取。",
+  "changes.untilFile": "到 {sha}",
+  "changes.untilNone": "按今天的文件"
 }

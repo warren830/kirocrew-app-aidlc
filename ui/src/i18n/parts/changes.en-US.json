@@ -36,5 +36,10 @@
   "changes.readNow": "Read now: today's files against today's latest commit, not the code this card decided on. Once that code is committed, it reads as unchanged here.",
   "changes.status.unchangedBase": "Same as {sha}",
   "changes.why.unchangedBase": "Today's file matches {sha}, the commit that was HEAD when this card was decided: the stage left it as it was, or the change was undone.",
-  "changes.addedNoteBase": "Not in {sha}, so the whole file is shown as new, including any part that predates this stage."
+  "changes.addedNoteBase": "Not in {sha}, so the whole file is shown as new, including any part that predates this stage.",
+  "changes.summaryUntil": "{n} files written: +{added} −{removed} lines from {sha}, the latest commit when this card was decided, to {until}, the commit that took this change in.",
+  "changes.summaryUntilEach": "{n} files written: +{added} −{removed} lines from {sha}, the latest commit when this card was decided, each file to the first commit that changed it after that.",
+  "changes.readCommitted": "Read from git: each file as the first commit after the decision left it, so later work on the same file is not counted. A file no commit has taken in yet is read as it is today.",
+  "changes.untilFile": "to {sha}",
+  "changes.untilNone": "as it is today"
 }

@@ -356,6 +356,16 @@ class GitObserver:
         sha = run.text().strip() if run.ok else ""
         return sha if C.COMMIT_ID_RE.match(sha) else None
 
+    def first_commit_touching(self, repo: Path, since: str, relpath: str) -> str | None:
+        """The oldest commit on HEAD's first-parent history after ``since`` (a full commit id) that changed
+        ``relpath``: the commit that took in a change approved while ``since`` was HEAD. ``None`` when none has."""
+        if not C.COMMIT_ID_RE.match(since):
+            return None
+        run = self._run(repo, ("log", "--first-parent", "--reverse", "--format=%H", f"{since}..HEAD", "--",
+                               self._safe_rel(repo, relpath, allow_tree=False)), stdout_cap=C.MAX_TEXT_PREVIEW_BYTES)
+        first = run.text().split("\n", 1)[0].strip() if run.ok else ""
+        return first if C.COMMIT_ID_RE.match(first) else None
+
     def is_commit(self, repo: Path, rev: str) -> bool:
         """Whether ``rev``, a full commit id, names a commit this repository still has."""
         if not C.COMMIT_ID_RE.match(rev):

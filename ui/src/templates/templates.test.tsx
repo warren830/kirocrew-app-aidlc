@@ -506,6 +506,44 @@ describe('gate template', () => {
     expect(within(block).getByText(en.t('changes.readNowBase'))).toBeInTheDocument()
   })
 
+  it('reads a closed card\'s code up to the commit that took the change in, not today\'s later work', async () => {
+    const intent = `${BASE}/repos/r_1/intents/default~250901-guest`
+    const head = 'ab12cd3'.padEnd(40, '0')
+    const tookIn = 'cd34ef5'.padEnd(40, '0')
+    const diff = '--- a/calc.py\n+++ b/calc.py\n@@ -1 +1,5 @@\n x = 1\n+\n+\n+def f():\n+    pass\n'
+    const routes = (files: object[], until: string | null) => setApiRoutes({
+      [`GET ${intent}/artifacts/art_1`]: () => ({
+        artifact: artifact(), content: '# Plan\n', encoding: 'utf-8', truncated: false, review: null, toc: [],
+        prior: { available: false, source: null, diff: null },
+      }),
+      [`GET ${intent}/changes*`]: () => ({
+        stage: 'functional-design', unit: null, manifest: 'record/source-manifest.json', available: true,
+        reason: null, truncated: false, manifest_readable: true, base: head, until, files,
+      }),
+    })
+    routes([{ path: 'calc.py', status: 'modified', additions: 4, deletions: 0, truncated: false, diff, until: tookIn }], tookIn)
+    const manifest = artifact({ artifact_id: 'art_2', name: 'source-manifest.json', relpath: 'record/source-manifest.json' })
+    const evidence = { ...card().evidence, artifacts: [artifact(), manifest], git: { available: true, reason: null, branch: 'main', detached: false, head, head_subject: 'Add line_count',
+      dirty: true, dirty_files: 2, ahead: null, behind: null, upstream: null, observed_at: '2026-10-13T14:30:00Z', took_ms: 9 } }
+    const { unmount } = mount(GateTemplate, card({ status: 'StateChanged', evidence }))
+    let block = await screen.findByRole('region', { name: en.t('changes.labelBase', { stage: 'functional-design', sha: 'ab12cd3' }) })
+    expect(within(block).getByText(en.t('changes.summaryUntil', { n: '1', added: '4', removed: '0', sha: 'ab12cd3', until: 'cd34ef5' })))
+      .toBeInTheDocument()
+    expect(within(block).getByText(en.t('changes.readCommitted'))).toBeInTheDocument()
+    unmount()
+    // Two files read from different places: each says where.
+    routes([
+      { path: 'calc.py', status: 'modified', additions: 4, deletions: 0, truncated: false, diff, until: tookIn },
+      { path: 'notes.py', status: 'modified', additions: 4, deletions: 0, truncated: false, diff, until: null },
+    ], null)
+    mount(GateTemplate, card({ status: 'StateChanged', evidence }))
+    block = await screen.findByRole('region', { name: en.t('changes.labelBase', { stage: 'functional-design', sha: 'ab12cd3' }) })
+    expect(within(block).getByText(en.t('changes.summaryUntilEach', { n: '2', added: '8', removed: '0', sha: 'ab12cd3' })))
+      .toBeInTheDocument()
+    expect(within(block).getByText(en.t('changes.untilFile', { sha: 'cd34ef5' }))).toBeInTheDocument()
+    expect(within(block).getByText(en.t('changes.untilNone'))).toBeInTheDocument()
+  })
+
   it('asks for the commit of the decision time when a closed card stored no git reading', async () => {
     const intent = `${BASE}/repos/r_1/intents/default~250901-guest`
     setApiRoutes({
