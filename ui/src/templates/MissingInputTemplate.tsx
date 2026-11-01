@@ -13,8 +13,11 @@
  *    is gone. The fix is `pick_intent`, an admin-lane engine verb that needs an intent *directory*. The
  *    card carries only its own, so this template says where the real list is instead of building a picker
  *    out of one candidate: the cursor decides which intent every later dispatch moves.
+ *  - **`conversation_reply`** — AI-DLC asked something only in chat (`projection._conversation_reply_seeds`).
+ *    The host's reply suggestions start the answer; the words sent are always the box's own.
  */
 
+import { MarkdownRenderer } from '@kirocrew/app-sdk/ui'
 import { useI18n } from '../i18n'
 import { at } from '../lib/format'
 import { Chip } from '../shell/Chip'
@@ -35,7 +38,7 @@ import {
 } from './DecisionControls'
 
 /** The reasons the projection mints for this card; anything else falls back to a generic sentence. */
-const KNOWN_REASONS = ['missing_scope', 'dangling_cursor', 'no_cursor'] as const
+const KNOWN_REASONS = ['missing_scope', 'dangling_cursor', 'no_cursor', 'conversation_reply'] as const
 
 export function MissingInputTemplate({ card, detail, draft, setDraft, api, go }: TemplateProps) {
   const i18n = useI18n()
@@ -47,6 +50,11 @@ export function MissingInputTemplate({ card, detail, draft, setDraft, api, go }:
   const needsCursor = card.decisions.some((spec) => spec.decision === 'pick_intent')
   const kind = inputKind(card)
   const cursor = card.headline.params['cursor']
+  const conversational = reason === 'conversation_reply'
+  const reply = conversational ? card.evidence.conversation_reply : null
+  const suggestions = Array.isArray(card.headline.params['options'])
+    ? card.headline.params['options'].filter((option): option is string => typeof option === 'string')
+    : []
   // `mtime_ns` is nanoseconds since the epoch; `Date` wants milliseconds.
   const stateMtime = card.evidence.state?.mtime_ns
     ? new Date(card.evidence.state.mtime_ns / 1e6).toISOString()
@@ -56,14 +64,57 @@ export function MissingInputTemplate({ card, detail, draft, setDraft, api, go }:
     <section className="studio-template" data-type={card.type} aria-label={templateLabel(i18n, card)}>
       <DecisionBrief card={card} />
 
-      <Block title={t('template.missingInput.what')} icon="missingInput">
-        <Brief>
-          <p>{reason ? t(`template.missingInput.reason.${reason}`) : t('template.missingInput.reasonUnknown')}</p>
-          <Consequence icon="lock" label={t('template.missingInput.blockedLabel')}>
-            {t('template.missingInput.blocked')}
-          </Consequence>
-        </Brief>
-      </Block>
+      {reply?.text ? (
+        // The question itself replaces the explanation that it can only be read in the conversation.
+        <Block title={t('template.missingInput.lastReply')} icon="chat">
+          <p className="studio-help">
+            {t(suggestions.length > 0 ? 'template.missingInput.lastReplyHelp' : 'template.missingInput.lastReplyHelpPlain', {
+              at: at(i18n, reply.ts),
+            })}
+          </p>
+          {/* The same sanitising renderer as a question's context: this is evidence, not a draft. */}
+          <div className="msg-content studio-md studio-reply-quote">
+            <MarkdownRenderer content={reply.text} />
+          </div>
+          <button type="button" className="studio-btn" onClick={() => go({ tab: 'conversation' })}>
+            {t('template.missingInput.openConversation')}
+          </button>
+        </Block>
+      ) : (
+        <Block title={t('template.missingInput.what')} icon="missingInput">
+          <Brief>
+            <p>{reason ? t(`template.missingInput.reason.${reason}`) : t('template.missingInput.reasonUnknown')}</p>
+            {conversational ? (
+              <button type="button" className="studio-btn" onClick={() => go({ tab: 'conversation' })}>
+                {t('template.missingInput.openConversation')}
+              </button>
+            ) : (
+              <Consequence icon="lock" label={t('template.missingInput.blockedLabel')}>
+                {t('template.missingInput.blocked')}
+              </Consequence>
+            )}
+          </Brief>
+        </Block>
+      )}
+
+      {conversational && suggestions.length > 0 ? (
+        <Block title={t('template.missingInput.asked')} icon="question">
+          <p className="studio-help">{t('template.missingInput.askedHelp')}</p>
+          <div className="studio-row studio-wrapchips">
+            {suggestions.map((option) => (
+              <button
+                type="button"
+                key={option}
+                className="studio-btn studio-btn-sm"
+                aria-pressed={draft.freeText.trim() === option}
+                onClick={() => setDraft({ freeText: option, inputKind: 'free_text' })}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </Block>
+      ) : null}
 
       <Block title={t('template.missingInput.source')} icon="doc">
         <EvidenceGrid>
@@ -78,13 +129,15 @@ export function MissingInputTemplate({ card, detail, draft, setDraft, api, go }:
               })}
             />
           ) : null}
-          <Ev
-            src={t('template.missingInput.cursorSrc')}
-            icon="intent"
-            value={typeof cursor === 'string' && cursor ? cursor : t('common.none')}
-            sub={t('template.missingInput.cursorSub', { space: card.space })}
-            conflict={reason === 'dangling_cursor'}
-          />
+          {conversational ? null : (
+            <Ev
+              src={t('template.missingInput.cursorSrc')}
+              icon="intent"
+              value={typeof cursor === 'string' && cursor ? cursor : t('common.none')}
+              sub={t('template.missingInput.cursorSub', { space: card.space })}
+              conflict={reason === 'dangling_cursor'}
+            />
+          )}
         </EvidenceGrid>
       </Block>
 

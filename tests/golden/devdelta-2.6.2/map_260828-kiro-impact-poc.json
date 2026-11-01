@@ -1416,6 +1416,7 @@
    },
    "skip_reasons": {},
    "status": "Completed",
+   "unit_receipts": {},
    "units": [
     "kiro-impact-poc"
    ]

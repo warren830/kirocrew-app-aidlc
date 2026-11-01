@@ -546,6 +546,7 @@
     "rules_subdir": "steering",
     "stage_count": 33
    },
+   "executing_stage": "build-and-test",
    "findings": [],
    "git": {
     "ahead": null,

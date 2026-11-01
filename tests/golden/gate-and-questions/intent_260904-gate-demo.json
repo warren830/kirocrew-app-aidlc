@@ -493,6 +493,7 @@
     "rules_subdir": "steering",
     "stage_count": 33
    },
+   "executing_stage": "requirements-analysis",
    "findings": [
     {
      "code": "missing_required_artifact",

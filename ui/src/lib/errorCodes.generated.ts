@@ -17,6 +17,7 @@ export const ERROR_CODES = {
   breaker_open: 409,
   bun_missing: 503,
   cancel_not_safe: 409,
+  conversation_bun_missing: 409,
   cursor_mismatch: 409,
   delivery_ack_invalid: 409,
   draft_not_found: 404,

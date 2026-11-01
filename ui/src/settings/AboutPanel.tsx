@@ -84,7 +84,13 @@ export function AboutPanel({ health, versions, onOpenActivity }: AboutPanelProps
           id="aidlc-about-health"
           title={t('settings.about.status')}
           description={
-            health.issues.length > 0 ? health.issues.join(' · ') : t(`settings.about.status.${health.status}`)
+            health.issues.length > 0
+              ? health.issues.map((issue) => {
+                  // `payload:<code>`-style issues carry a detail after the colon; the copy is per kind.
+                  const key = `settings.about.issue.${issue.split(':')[0]}`
+                  return i18n.has(key) ? t(key) : issue
+                }).join(' · ')
+              : t(`settings.about.status.${health.status}`)
           }
         >
           {() => (

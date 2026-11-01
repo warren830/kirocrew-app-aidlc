@@ -30,6 +30,7 @@
      "status": "Completed",
      "total_stages": 8
     },
+    "executing_stage": "build-and-test",
     "intent_dir": "260820-health-probe",
     "intent_key": "260820-health-probe",
     "interrupted": false,
@@ -88,6 +89,7 @@
      "status": "Running",
      "total_stages": 32
     },
+    "executing_stage": "requirements-analysis",
     "intent_dir": "260901-ledger-export",
     "intent_key": "260901-ledger-export",
     "interrupted": false,

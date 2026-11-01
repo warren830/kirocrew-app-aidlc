@@ -40,9 +40,13 @@ export function stateLook(state: IntentState): { tone: ChipTone; icon: IconName 
   return STATE_LOOK[state] ?? { tone: 'neutral', icon: 'clock' }
 }
 
-/** The stage AI-DLC is on, in its own words, or the fact that it has not recorded one. */
+/**
+ * The stage AI-DLC is on, or the fact that it has not recorded one. The executing stage wins: in
+ * unit-major Construction the state file's Current Stage stays on the first block stage while the unit
+ * works through the rest, and the list read "functional-design" at Code Generation's Plan Approval.
+ */
 export function stageText(i18n: I18n, intent: IntentSummary): string {
-  return intent.disk.current_stage || i18n.t('intents.stage.none')
+  return intent.executing_stage || intent.disk.current_stage || i18n.t('intents.stage.none')
 }
 
 /**
@@ -137,7 +141,8 @@ export function IntentRow({ intent, layout, actions }: IntentRowProps) {
               total: count(i18n, intent.counts.total),
             })}
       </span>
-      {intent.disk.next_stage ? (
+      {/* "Next" is the state file's, and only means something beside the stage the file names. */}
+      {intent.disk.next_stage && (!intent.executing_stage || intent.executing_stage === intent.disk.current_stage) ? (
         <span className="studio-row-sub studio-mono">{t('intents.stage.next', { stage: intent.disk.next_stage })}</span>
       ) : null}
     </>

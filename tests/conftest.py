@@ -224,6 +224,8 @@ class FakeSlot:
         self.linked_session_key = ""
         self.task = None
         self.stopping = False
+        #: The host's parse of the newest reply's ``[OPTIONS: …]`` line (``has_options``/``options``).
+        self.options: list[str] = []
 
     def _pending_approval_info(self, slot_pending: bool) -> dict[str, str] | None:
         # The host's own reading (`slot_projection.to_dict`): the newest unresolved permission row for a
@@ -264,6 +266,8 @@ class FakeSlot:
             "pending_approval_info": self._pending_approval_info(slot_pending),
             "last_ts": self.messages[-1]["ts"] if self.messages else "",
             "linked_session_key": self.linked_session_key,
+            "has_options": bool(self.options),
+            "options": list(self.options),
         }
 
 
@@ -409,6 +413,27 @@ def _no_guard_bypass(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in list(os.environ):
         if key.startswith(("AIDLC_", "CLAUDE_", "AWS_AIDLC_")):
             monkeypatch.delenv(key, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def conversation_bin(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Conversations find ``bun`` unless a test says otherwise.
+
+    In the test process the host modules ``engine.conversation_path`` consults are importable, so the
+    answer would otherwise depend on the developer's own ``~/.local/bin`` — and a machine without bun
+    there would refuse every human-lane decision as ``conversation_bun_missing``.
+    """
+    root = tmp_path_factory.getbasetemp() / "conversation-bin"
+    stub = root / "bun"
+    if not stub.exists():
+        root.mkdir(parents=True, exist_ok=True)
+        stub.write_text("#!/bin/sh\necho 1.2.3\n")
+        stub.chmod(0o755)
+    engine = studio_module("engine")
+    if not hasattr(engine, "_unpatched_conversation_path"):
+        engine._unpatched_conversation_path = engine.conversation_path
+    monkeypatch.setattr(engine, "conversation_path", lambda environ=None: (str(root), True))
+    return root
 
 
 @pytest.fixture

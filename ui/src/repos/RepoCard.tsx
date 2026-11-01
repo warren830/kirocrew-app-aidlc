@@ -148,9 +148,13 @@ export function EngineChips({ repo }: { repo: RepoRecord }) {
 
   return (
     <span className="studio-chiplist">
-      <Chip mono icon="install" title={t('install.version.from')}>
-        {install.engine_version ?? t('install.version.notInstalled')}
-      </Chip>
+      {/* Not installed is already the install chip beside this one; a second "Not installed" here read
+          as two different facts. */}
+      {install.engine_version === null ? null : (
+        <Chip mono icon="install" title={t('install.version.from')}>
+          {install.engine_version}
+        </Chip>
+      )}
       {differs ? (
         <Chip mono title={t('install.version.to')}>
           {t('repos.engine.bundled', { version: install.bundled_engine_version })}
@@ -163,7 +167,7 @@ export function EngineChips({ repo }: { repo: RepoRecord }) {
       )}
       {install.upgrade_available ? (
         <Chip tone="accent" icon="install">
-          {t('repos.engine.upgradeAvailable')}
+          {t(sameVersionRefresh(install) ? 'repos.engine.refreshAvailable' : 'repos.engine.upgradeAvailable')}
         </Chip>
       ) : null}
       {install.newer_installed ? (
@@ -251,6 +255,14 @@ export function repoActions(repo: RepoRecord): RepoAction[] {
 
 /** The actions that write, or that open a write flow. Hidden below 900px (PRD §8.4). */
 const DESKTOP_ONLY: readonly RepoAction[] = ['install', 'upgrade', 'recover', 'rebind', 'remove', 'doctor', 'rename', 'archive', 'unarchive', 'uninstall', 'cleanup', 'rollback']
+
+/**
+ * Studio's bundled files changed while the engine version did not (a same-version payload refresh).
+ * "Upgrade to AI-DLC 2.10.0" over an installed 2.10.0 read as a mistake, so the flow says it updates files.
+ */
+export function sameVersionRefresh(install: RepoRecord['install']): boolean {
+  return !!install.own_engine_version && install.own_engine_version === install.bundled_engine_version
+}
 
 const ACTION_LABEL: Record<RepoAction, string> = {
   open: 'repos.action.details',
@@ -519,7 +531,7 @@ export function RepoCard({
                         {t(`enum.intentState.${intent.operational_state}`)}
                       </Chip>
                       <span className="studio-mono studio-muted">
-                        {intent.disk.current_stage ?? unavailable(i18n)}
+                        {intent.executing_stage || intent.disk.current_stage || unavailable(i18n)}
                       </span>
                       {intent.open_actions > 0 ? (
                         <Chip tone="accent" icon="inbox" mono>
@@ -650,7 +662,7 @@ export function RepoCard({
                   ? t('repos.action.rescanning')
                   : busy === action && action === 'doctor'
                     ? t('repos.action.doctorRunning')
-                    : t(ACTION_LABEL[action])}
+                    : t(action === 'upgrade' && sameVersionRefresh(repo.install) ? 'repos.action.refresh' : ACTION_LABEL[action])}
               </button>
             ))}
           </div>

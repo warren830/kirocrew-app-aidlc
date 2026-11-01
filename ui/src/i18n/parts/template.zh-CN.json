@@ -266,5 +266,19 @@
   "template.questions.checkpoint.plan_approval.bodyClosed": "引擎在执行之前，请你批准了它编排出的计划。",
   "template.questions.single": "问题",
   "template.command.stageSubSent": "发出时磁盘记录的、引擎本应继续的位置。",
-  "template.gate.notes": "Studio 检查留下的说明"
+  "template.gate.notes": "Studio 检查留下的说明",
+  "template.recovery.hooksSilent": "AI-DLC 的提示词 hook 没有在这个对话里运行：它的回合计数一次都没变。通常是对话找不到 Bun。请在设置中让对话可以使用 Bun，然后再发送下一个决策；确认只会关闭这条通知。",
+  "template.recovery.openBunSettings": "打开 Bun 设置",
+  "template.questions.learnings.intro": "这是 AI-DLC 的经验沉淀（Learnings）环节。每个编号都是 agent 在本阶段工作时记在阶段日志里的一条笔记：",
+  "template.questions.learnings.outcome": "你保留的笔记会写入项目记忆（memory/project.md），下次运行这个阶段时会遵循它。选「Nothing to add」表示都不保留；选「Add a note」可以自己补充一条。",
+  "template.questions.learnings.heading.Interpretations": "理解取舍",
+  "template.questions.learnings.heading.Deviations": "偏离说明",
+  "template.questions.learnings.heading.Tradeoffs": "权衡",
+  "template.missingInput.reason.conversation_reply": "AI-DLC 只在对话里问了这个问题，没有问题文件或审计记录可以让 Studio 生成表单。请在对话里看问题，然后在这里回复：Studio 会把你的原话作为你自己的回合发到对话里。也可以直接在对话里回答。",
+  "template.missingInput.lastReply": "AI-DLC 的提问",
+  "template.missingInput.lastReplyHelp": "AI-DLC 在会话中的最后一条消息（{at}）。下方的回复建议来自这条消息。",
+  "template.missingInput.lastReplyHelpPlain": "AI-DLC 在会话中的最后一条消息（{at}）。",
+  "template.missingInput.asked": "AI-DLC 给出的回复建议",
+  "template.missingInput.askedHelp": "这些是 AI-DLC 上一条消息里的回复建议。选一个作为回复开头，再补充它要求你提供的内容。",
+  "template.missingInput.openConversation": "打开对话"
 }

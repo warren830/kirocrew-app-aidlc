@@ -28,7 +28,7 @@ QUESTIONS_REL = f"inception/{STAGE}/{STAGE}-questions.md"
 SUMMARY_KEYS = {"repo_id", "repo_label", "space", "intent_dir", "intent_key", "uuid", "slug", "scope",
                 "registry_status", "title", "operational_state", "disk", "counts", "open_actions", "blocking_findings",
                 "warn_findings", "session", "archived", "paused", "interrupted", "last_activity_at", "stable_boundary",
-                "unstable", "is_active_cursor"}
+                "unstable", "is_active_cursor", "executing_stage"}
 
 
 def _state(marks: dict[str, str] | None = None) -> str:
@@ -142,7 +142,7 @@ def test_the_map_sends_the_graph_and_the_state_rows_for_the_ui_to_join(api, repo
     inputs = body["map_inputs"]
     assert set(inputs) == {"intent_key", "graph_version", "now", "nodes", "rows", "status", "phases", "current_stage",
                            "directive_stage", "scope_grid", "units", "active_unit", "artifacts", "skip_reasons",
-                           "attempts"}
+                           "attempts", "unit_receipts"}
     assert inputs["intent_key"] == INTENT and any(node["slug"] == STAGE for node in inputs["nodes"])
     assert any(row["slug"] == STAGE and row["state"] == "awaiting_approval" for row in inputs["rows"])
     assert inputs["current_stage"] == inputs["directive_stage"] == STAGE

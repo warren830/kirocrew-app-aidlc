@@ -570,6 +570,7 @@
     "rules_subdir": "steering",
     "stage_count": 33
    },
+   "executing_stage": "reverse-engineering",
    "findings": [],
    "git": {
     "ahead": null,

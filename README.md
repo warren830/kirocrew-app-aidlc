@@ -138,6 +138,13 @@ Bun, paste the full path printed by `command -v bun` into **Absolute path to Bun
 Desktop-launched gateways may have a different `PATH` from your terminal; these settings apply
 immediately without restarting Studio.
 
+Studio runs Bun by its full path, but AI-DLC's hooks inside each conversation call plain `bun`. A
+desktop-launched gateway gives conversations a `PATH` without `~/.bun/bin`, and then AI-DLC records no
+human turn and refuses every approval. When that is the case, the same Settings row says
+**AI-DLC conversations cannot run Bun**; click **Make Bun available to conversations** and confirm. Studio
+creates one symbolic link, `~/.local/bin/bun`, which every conversation's `PATH` already includes, and
+changes nothing else. Delete that link to undo it.
+
 ### Install from a local clone in Discover
 
 Clone the repository on the machine running the KiroCrew Gateway and note its absolute path:

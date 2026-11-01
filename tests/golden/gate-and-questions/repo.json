@@ -29,6 +29,7 @@
      "status": "Running",
      "total_stages": 33
     },
+    "executing_stage": "requirements-analysis",
     "intent_dir": "260904-gate-demo",
     "intent_key": "260904-gate-demo",
     "interrupted": false,
@@ -85,6 +86,7 @@
      "status": "Running",
      "total_stages": 33
     },
+    "executing_stage": "requirements-analysis",
     "intent_dir": "260905-question-demo",
     "intent_key": "260905-question-demo",
     "interrupted": false,

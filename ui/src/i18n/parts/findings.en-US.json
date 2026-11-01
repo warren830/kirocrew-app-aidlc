@@ -57,6 +57,8 @@
   "finding.mixed_harness_versions.body": "This repository has several AI-DLC installations at different versions ({versions}). They all work on the same aidlc/ records, so the versions could read those records differently. Bring them to one version.",
   "finding.bun_missing.title": "bun not found",
   "finding.bun_missing.body": "AI-DLC's tools run on bun, and Studio did not find it in any of the places it looked. Install bun, or start KiroCrew from a shell whose PATH includes it.",
+  "finding.bun_not_on_conversation_path.title": "AI-DLC conversations cannot run bun",
+  "finding.bun_not_on_conversation_path.body": "Studio can run bun, but the PATH a conversation gets does not include it, so AI-DLC's hooks fail there and AI-DLC refuses every approval and answer. Open Settings → Bun executable and make bun available to conversations.",
   "finding.git_missing.title": "Git not found",
   "finding.git_missing.body": "Studio could not find the git command, so it cannot show this repository's branch or uncommitted changes. Install Git to see them."
 }

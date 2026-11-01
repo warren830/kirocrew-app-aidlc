@@ -251,6 +251,23 @@ def test_submit_refuses_a_busy_slot_and_names_the_reasons(http, fake_host, gate,
     assert "running" in body["details"]["reasons"]
 
 
+def test_submit_refuses_a_decision_ai_dlc_would_refuse_for_lack_of_bun(http, sv, fake_host, gate, slot, studio,
+                                                                       monkeypatch, tmp_path):
+    """No bun on the conversation PATH means no HUMAN_TURN, so AI-DLC would refuse the approval."""
+    empty = tmp_path / "no-bun-here"
+    empty.mkdir()
+    monkeypatch.setattr(studio.engine, "conversation_path", lambda environ=None: (str(empty), True))
+    card = card_of(http, gate)
+    status, body = submit(http, gate, card)
+    assert status == 409 and body["code"] == "conversation_bun_missing"
+    assert sv.storage.get("actions", gate.action_id)["status"] == "Queued"
+    assert fake_host.get_slot(slot).running is False
+    # An estimated PATH (a host without the launcher functions) never refuses.
+    monkeypatch.setattr(studio.engine, "conversation_path", lambda environ=None: (str(empty), False))
+    status, body = submit(http, gate, card)
+    assert body.get("code") != "conversation_bun_missing", body
+
+
 def test_submit_needs_a_payload_that_names_a_decision(http, gate, slot):
     for body in ({"captured": {}}, {"payload": {"feedback": "x"}}):
         status, result = http.post(f"/actions/{gate.action_id}/submit", body)

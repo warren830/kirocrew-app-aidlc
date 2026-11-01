@@ -541,6 +541,9 @@ NOISE_EVENTS = (
     "ARTIFACT_CREATED",
     "ARTIFACT_UPDATED",
 )
+#: Construction's per-unit lifecycle rows (``aidlc-state.ts unit start|pause|resume|complete``). Under
+#: unit-major iteration they are the only durable record of which per-unit stage the active unit is in.
+UNIT_LIFECYCLE_EVENTS = ("UNIT_STARTED", "UNIT_PAUSED", "UNIT_RESUMED", "UNIT_COMPLETED")
 HUMAN_PRESENCE_EVENT = "HUMAN_TURN"
 ERROR_EVENT = "ERROR_LOGGED"
 

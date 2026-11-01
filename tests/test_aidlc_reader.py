@@ -1382,6 +1382,85 @@ def test_stable_boundary_inputs_without_a_state_file(reader, repo_builder):
     assert boundary.stage is None and boundary.questions is None
 
 
+def unit_major_repo(
+    repo_builder, *, iteration="unit-major", rows=None, directive_matches=False,
+    directive_stage="nfr-requirements",
+):
+    """A unit-major Construction record after ``unit start --stage nfr-requirements`` rewrote the state.
+
+    Current Stage still names functional-design (the engine keeps the durable cursor on the first block
+    stage) and the directive that named nfr-requirements was issued against the previous state file.
+    """
+    state = F.state_text(
+        marks={"functional-design": "-", "nfr-requirements": " "},
+        fields={"Current Stage": "functional-design", "Status": "Running", "Next Stage": "nfr-requirements"},
+    )
+    for key, value in (("Unit State", "in-progress"), ("Active Unit", "unit-a"),
+                       ("Construction Iteration", iteration)):
+        state = F.insert_runtime_field(state, key, value)
+    floor = {"Unit": "unit-a", "Run_floor": "WORKFLOW_STARTED:2026-09-04T08:00:00Z#1"}
+    if rows is None:
+        rows = [
+            F.audit_block("UNIT_STARTED", "2026-09-04T09:00:00Z", Stage="functional-design", **floor),
+            F.audit_block("UNIT_COMPLETED", "2026-09-04T09:10:00Z", Stage="functional-design", **floor),
+            F.audit_block("UNIT_STARTED", "2026-09-04T09:11:00Z", Stage="nfr-requirements", **floor),
+        ]
+    return repo_builder.with_workspace().with_intent(
+        "260904-unit-major",
+        state=state,
+        audit=F.audit_text(*rows),
+        directive={
+            "version": 2, "kind": "run-stage", "stage": directive_stage, "unit": "unit-a",
+            "state_sha256": "AUTO" if directive_matches else "0" * 64,
+        },
+        questions={
+            "construction/unit-a/functional-design/functional-design-questions.md": (
+                "# Q\n\n## Question 1: Scope\nA?\n\nA) Yes\nB) No\nX) Other (please specify)\n\n[Answer]: A\n"
+            ),
+            "construction/unit-a/nfr-requirements/nfr-requirements-questions.md": (
+                "# Q\n\n## Question 1: Latency\nB?\n\nA) Fast\nB) Slow\nX) Other (please specify)\n\n[Answer]:\n"
+            ),
+        },
+    ).build()
+
+
+def test_unit_major_stage_comes_from_the_units_lifecycle_rows_once_the_directive_is_stale(
+    reader, repo_builder,
+):
+    # Measured on a Standard run: the NFR Requirements questions were asked and Studio showed none,
+    # because it read the finished functional-design that Current Stage still names.
+    boundary = reader.stable_boundary_inputs(unit_major_repo(repo_builder), "default", "260904-unit-major")
+    assert boundary.directive is not None and boundary.directive.matches_state is False
+    assert boundary.stage == "nfr-requirements"
+    assert boundary.questions is not None and boundary.questions.pending_count == 1
+    assert boundary.questions.relpath.endswith("construction/unit-a/nfr-requirements/nfr-requirements-questions.md")
+
+
+@pytest.mark.parametrize("case", ["stage-major", "between-stages", "single-stage-run"])
+def test_unit_rows_do_not_move_the_stage_outside_a_unit_major_walk(reader, repo_builder, case):
+    floor = {"Unit": "unit-a"}
+    rows = {
+        "stage-major": None,
+        "between-stages": [
+            F.audit_block("UNIT_STARTED", "2026-09-04T09:00:00Z", Stage="nfr-requirements", **floor),
+            F.audit_block("UNIT_COMPLETED", "2026-09-04T09:10:00Z", Stage="nfr-requirements", **floor),
+        ],
+        "single-stage-run": [
+            F.audit_block("UNIT_STARTED", "2026-09-04T09:00:00Z", Stage="nfr-requirements",
+                          Workflow="single-stage:nfr-requirements", **floor),
+        ],
+    }[case]
+    repo = unit_major_repo(repo_builder, iteration="stage-major" if case == "stage-major" else "unit-major",
+                           rows=rows)
+    assert reader.stable_boundary_inputs(repo, "default", "260904-unit-major").stage == "functional-design"
+
+
+def test_a_current_directive_still_names_the_stage(reader, repo_builder):
+    repo = unit_major_repo(repo_builder, directive_matches=True, directive_stage="functional-design")
+    boundary = reader.stable_boundary_inputs(repo, "default", "260904-unit-major")
+    assert boundary.directive.matches_state is True and boundary.stage == "functional-design"
+
+
 PLAN_APPROVAL_QUESTIONS = "# Plan\n\n## Plan Approval\n\n- Approve Plan\n- Request Changes\n\n[Answer]:\n"
 PER_UNIT_GATE_STATE = F.state_text(marks={"code-generation": "?"}, fields={
     "Current Stage": "code-generation", "Status": "Running", "Next Stage": "build-and-test"})

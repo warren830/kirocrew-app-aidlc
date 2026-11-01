@@ -1293,6 +1293,7 @@
     "rules_subdir": "steering",
     "stage_count": 32
    },
+   "executing_stage": "feasibility",
    "findings": [
     {
      "code": "phase_stage_disagreement",

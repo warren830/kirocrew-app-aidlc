@@ -11,7 +11,6 @@
 import { Chip } from '../shell/Chip'
 import { Icon } from '../shell/Icon'
 import { useI18n } from '../i18n'
-import { plural } from '../lib/format'
 import type { StudioApiError } from '../lib/api'
 import type { EffectivePlan, RepoRecord } from '../lib/types'
 import { EstimatePanel } from '../plan/EstimatePanel'
@@ -36,13 +35,12 @@ export interface StepReviewProps {
 export function StepReview({ plan, digest, repo, origins, busy, creating, workComplete, presetComplete, error, work }: StepReviewProps) {
   const i18n = useI18n()
   const { t } = i18n
-  const blockingFindings = repo?.counts.blocking_findings ?? 0
-
+  // Nothing here counts the repository's findings: Create refuses on the repository's own (not on
+  // another intent's recovery card), and that refusal is shown above with its reason.
   const blockers: string[] = []
   if (!workComplete) blockers.push(t('wizard.review.blockedFields'))
   if (!presetComplete || !plan) blockers.push(t('wizard.preview.none'))
   if (plan && !plan.valid) blockers.push(t('wizard.review.blockedInvalid'))
-  if (blockingFindings > 0) blockers.push(plural(i18n, 'wizard.review.blockedFindings', blockingFindings))
   // Products that only a selected CONDITIONAL stage declares: AI-DLC decides at runtime whether they exist.
   const selected = plan ? plan.stages.filter((stage) => stage.enabled) : []
   const always = new Set(selected.filter((stage) => stage.execution !== 'CONDITIONAL').flatMap((stage) => stage.produces))

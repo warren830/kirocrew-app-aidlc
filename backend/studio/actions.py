@@ -38,7 +38,7 @@ from .aidlc_reader import (
     PresenceBaseline, audit_question_accepts_text, file_questions_support_forms, is_audit_text_label,
 )
 from .consistency import ACTION_STORED_FINDING_CODES, RepoFacts
-from .engine import CursorReadback
+from .engine import CursorReadback, conversation_bun
 from .errors import IllegalTransition, StaleGeneration, StudioError
 from .projection import (
     SEED_SEVERITY, SEVERITY_RANK, UNCERTAIN_STATUSES, dedupe_key, priority_group_for, queue_type_for,
@@ -231,25 +231,26 @@ def _plain(value: Any) -> Any:
     return value.to_json() if hasattr(value, "to_json") else value
 
 
+def _instant(value: object) -> float | None:
+    """Seconds for Studio's ``…Z`` and the host's offset-aware stamps alike, or ``None`` when it cannot be read: as
+    strings the host row sorts *before* a Studio stamp of the same second."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    if not isinstance(value, str) or not value:
+        return None
+    exact = C.epoch_from_iso(value)
+    if exact is not None:
+        return exact
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)).timestamp()
+
+
 def _at_or_after(candidate: object, since: object) -> bool:
-    """``candidate >= since`` across Studio's ``…Z`` and the host's offset-aware stamps (as strings the host
-    row sorts *before* a Studio stamp of the same second); ``False`` when either cannot be read."""
-
-    def seconds(value: object) -> float | None:
-        if isinstance(value, (int, float)):
-            return float(value)
-        if not isinstance(value, str) or not value:
-            return None
-        exact = C.epoch_from_iso(value)
-        if exact is not None:
-            return exact
-        try:
-            parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
-        except ValueError:
-            return None
-        return (parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)).timestamp()
-
-    left, right = seconds(candidate), seconds(since)
+    """``candidate >= since`` across both stamp spellings (``_instant``); ``False`` when either cannot be read."""
+    left, right = _instant(candidate), _instant(since)
     return left is not None and right is not None and left >= right
 
 
@@ -683,11 +684,32 @@ class HumanActionBroker:
                 out.setdefault(rec.action_id, rec)
         return sorted(out.values(), key=_queue_key)
 
+    async def _answered_in_flight(self, seed: "CardSeed") -> bool:
+        """A decision of this kind for this stage is already on its way to AI-DLC.
+
+        The boundary token moves while the engine applies a decision — ``GATE_APPROVED`` lands a moment
+        before the ``[?]`` row clears — so for a few seconds the same open gate derived a *new* card.
+        It sat in the queue beside the approval still in flight, inviting a second click on a gate the
+        human had just approved. The in-flight row already speaks for this boundary; once it settles,
+        anything still open on disk derives its card again.
+        """
+        for rec in await self.list_live(
+            repo_id=seed.repo_id, space=seed.space, intent_dir=seed.intent_dir, include_revision=True
+        ):
+            if (
+                rec.type == seed.type and rec.stage == seed.stage and rec.dedupe_key != seed.dedupe_key
+                and rec.status not in SUBMITTABLE_STATUSES
+            ):
+                return True
+        return False
+
     async def _upsert_seed(self, seed: "CardSeed") -> None:
         live = await self._live_for_key(seed.dedupe_key)
         if live is not None:
             if live.status in SUBMITTABLE_STATUSES:
                 await self._refresh_card(live, seed)
+            return
+        if await self._answered_in_flight(seed):
             return
         superseded = await self._live_for_key(seed.dedupe_key, newest=True)
         evidence = {**seed.evidence, CARD_META_KEY: _seed_meta(seed)}
@@ -712,8 +734,14 @@ class HumanActionBroker:
         evidence = {**rec.evidence, **{k: v for k, v in seed.evidence.items() if k != CARD_META_KEY},
                     "findings": _merge_findings(rec.evidence.get("findings"), seed.evidence.get("findings")),
                     CARD_META_KEY: meta}
+        # A card has been waiting since it was first seen. Seeds with no event of their own to date them (recovery, a
+        # missing cursor or scope, an install to repair) offer the observation time, and taking that on every tick
+        # kept such a card at "just now" and rewrote it every five seconds.
+        earlier, offered = _instant(rec.waiting_since), _instant(seed.waiting_since)
+        waiting_since = (rec.waiting_since if earlier is not None and (offered is None or earlier < offered)
+                         else seed.waiting_since)
         values = {**_captured_columns(seed.captured), "intent_uuid": seed.intent_uuid,
-                  "waiting_since": seed.waiting_since, "evidence_json": evidence}
+                  "waiting_since": waiting_since, "evidence_json": evidence}
         current = {**_captured_columns(rec.captured.to_json()), "intent_uuid": rec.intent_uuid,
                    "waiting_since": rec.waiting_since, "evidence_json": rec.evidence}
         if values == current:
@@ -784,6 +812,20 @@ class HumanActionBroker:
         return await self._insert(kind, scope, risk_class="host_control" if kind == "force_stop" else "human_lane",
                                   captured=captured, evidence=evidence, dedupe_key=key, waiting_since=snap.taken_at,
                                   source=source, resolved_repo_identity=repo.resolved_identity)
+
+    async def _assert_conversation_bun(self) -> None:
+        """Refuse a human-lane decision AI-DLC would refuse for having no human behind it.
+
+        The engine accepts an approval or an answer only after its prompt hook recorded a ``HUMAN_TURN``, and that
+        hook is ``bun …`` resolved on the conversation's PATH. When the host says that PATH has no ``bun`` the
+        decision would be delivered, refused by the engine, and end as ``human_presence_anomaly``; saying so before
+        a byte moves is the honest order. An estimated PATH (an older host) never refuses.
+        """
+        hooks = await asyncio.to_thread(conversation_bun, self._engine.bun_path)
+        if hooks.exact and not hooks.found:
+            _refuse("conversation_bun_missing",
+                    "AI-DLC's hooks cannot start bun in this conversation, so it would refuse this decision",
+                    link_available=hooks.link_blocked is None, link_blocked=hooks.link_blocked)
 
     async def _assert_run_current(self, decision: str, snap: "IntentSnapshot", rec: ActionRecord | None = None) -> None:
         """A Run/Resume must still be what the checkpoint asks for; a never-sent stale one is retired on the way
@@ -935,6 +977,7 @@ class HumanActionBroker:
         if busy_reasons(view):
             _refuse("slot_busy", "the session is busy; sending now would interleave two turns",
                     slot_key=slot_key, reasons=list(busy_reasons(view)))
+        await self._assert_conversation_bun()
         if file_answer:
             self._assert_file_answer_session(slot_key)
 
@@ -1453,6 +1496,9 @@ class HumanActionBroker:
                 stage_ref = self._projection.stage_ref(snap, rec.stage) or stage_ref
         evidence.update(presence_baseline=_plain(rec.presence_baseline), presence=rec.evidence.get("presence"),
                         cursor_readback=_plain(rec.cursor_readback))
+        if rec.type == "missing_input":
+            # The question a chat-only reply card answers; only that card carries it (seeded, not live).
+            evidence["conversation_reply"] = rec.evidence.get("conversation_reply")
         # Every §2.11 key has its kind of empty value: the UI type has no optional members.
         if not isinstance(evidence.get("audit"), Mapping):
             evidence["audit"] = {}

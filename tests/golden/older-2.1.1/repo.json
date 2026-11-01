@@ -29,6 +29,7 @@
      "status": "Running",
      "total_stages": 31
     },
+    "executing_stage": "feasibility",
     "intent_dir": "260707-trello-plugin",
     "intent_key": "260707-trello-plugin",
     "interrupted": false,

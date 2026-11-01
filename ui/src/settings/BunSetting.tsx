@@ -2,8 +2,69 @@ import { useEffect, useState } from 'react'
 
 import { useI18n } from '../i18n'
 import { decodeError, type StudioApi } from '../lib/api'
-import type { BunToolResponse } from '../lib/types'
+import type { BunToolResponse, ConversationBun } from '../lib/types'
+import { Chip } from '../shell/Chip'
 import { SettingRow } from './SettingsView'
+
+/**
+ * Whether AI-DLC's hooks can start Bun inside a conversation, and the one-click way to make them able.
+ *
+ * Studio runs the engine by absolute path, so "Bun is ready" above can be true while every hook in the
+ * harness (`bun .kiro/tools/aidlc.ts …`) fails in the conversation: a desktop gateway's PATH holds four
+ * system directories and KiroCrew's own additions, never `~/.bun/bin`. AI-DLC then records no human
+ * turn and refuses every approval, so this is shown as a problem, never a footnote.
+ */
+function ConversationStatus({
+  status, busy, onLink,
+}: {
+  status: ConversationBun
+  busy: boolean
+  onLink: () => void
+}) {
+  const { t } = useI18n()
+  const [confirming, setConfirming] = useState(false)
+  if (status.found) {
+    return (
+      <p className="studio-row studio-wrapchips">
+        <Chip tone="ok" icon="check">{t('settings.bun.conversations.ready')}</Chip>
+        {status.path ? <code className="studio-wrap-any">{status.path}</code> : null}
+      </p>
+    )
+  }
+  const reason = status.link.blocked_reason
+  return (
+    <div className="studio-failure-detail studio-bun-conversations" data-tone="warn" role="status">
+      <p className="studio-strong">{t('settings.bun.conversations.missing')}</p>
+      <p>{t('settings.bun.conversations.why')}</p>
+      {status.link.available && status.link.target ? (
+        confirming ? (
+          <div className="studio-col">
+            <p>{t('settings.bun.conversations.confirmBody')}</p>
+            <code className="studio-wrap-any">ln -s {status.link.target} {status.link.path}</code>
+            <div className="studio-row studio-wrapchips">
+              <button className="studio-btn" disabled={busy} onClick={() => setConfirming(false)}>
+                {t('install.cancel')}
+              </button>
+              <button className="studio-btn" data-variant="primary" disabled={busy}
+                onClick={() => { setConfirming(false); onLink() }}>
+                {t('settings.bun.conversations.confirm')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="studio-row studio-wrapchips">
+            <button className="studio-btn" data-variant="primary" disabled={busy} onClick={() => setConfirming(true)}>
+              {t('settings.bun.conversations.link')}
+            </button>
+          </div>
+        )
+      ) : (
+        <p>{t(`settings.bun.conversations.blocked.${reason ?? 'bun_missing'}`, { link: status.link.path })}</p>
+      )}
+      {status.exact ? null : <p className="studio-muted">{t('settings.bun.conversations.estimate')}</p>}
+    </div>
+  )
+}
 
 export function BunSetting({
   api, tool, onChanged,
@@ -30,14 +91,18 @@ export function BunSetting({
     if (!dirty) setPath(current?.configured_path ?? '')
   }, [current?.configured_path, dirty])
 
-  const update = async (kind: 'save' | 'auto' | 'probe') => {
+  const update = async (kind: 'save' | 'auto' | 'probe' | 'link') => {
     setBusy(true)
     setNotice(t('settings.bun.checking'))
     try {
-      const result = kind === 'probe' ? await api.probeBun() : await api.configureBun(kind === 'auto' ? null : path.trim())
+      const result = kind === 'probe'
+        ? await api.probeBun()
+        : kind === 'link'
+          ? await api.linkBunForConversations()
+          : await api.configureBun(kind === 'auto' ? null : path.trim())
       setApplied(result.tool)
       setHasResult(true)
-      if (kind !== 'probe') {
+      if (kind === 'save' || kind === 'auto') {
         setDirty(false)
         setPath(result.tool.configured_path ?? '')
       }
@@ -79,6 +144,9 @@ export function BunSetting({
           <p role="status" aria-live="polite">
             {notice || (hasResult && current ? t(current.found ? 'settings.bun.ready' : 'settings.bun.missing') : '')}
           </p>
+          {current?.found && current.conversations ? (
+            <ConversationStatus status={current.conversations} busy={busy} onLink={() => void update('link')} />
+          ) : null}
         </div>
       )}
     </SettingRow>

@@ -186,6 +186,8 @@ export interface StudioApi extends WorkspaceApi {
   health(o?: ReadOptions): Promise<HealthResponse>
   configureBun(path: string | null): Promise<BunToolResponse>
   probeBun(): Promise<BunToolResponse>
+  /** Link Studio's bun into `~/.local/bin`, where every conversation's PATH looks (owner, confirmed). */
+  linkBunForConversations(): Promise<BunToolResponse>
   diagnostics(opts?: { export?: boolean; includeHumanText?: boolean } & ReadOptions): Promise<DiagnosticsBundle>
   settings(o?: ReadOptions): Promise<SettingsResponse>
   putSettings(patch: DeepPartial<SettingsValues>): Promise<SettingsResponse>
@@ -316,6 +318,7 @@ export function useStudioApi(): StudioApi {
       health: (o) => get('/health', o),
       configureBun: (path) => send('put', '/tools/bun', { path }),
       probeBun: () => post('/tools/bun/probe', {}),
+      linkBunForConversations: () => post('/tools/bun/link', { confirm: true }),
       diagnostics: (opts) =>
         get(
           `/diagnostics${query({ export: opts?.export, include_human_text: opts?.includeHumanText })}`,

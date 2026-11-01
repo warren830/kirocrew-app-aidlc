@@ -613,6 +613,16 @@ describe('gate template', () => {
     expect(screen.queryByText(/also offered/)).toBeNull()
   })
 
+  it('features the stage product, not the diary or the questions sheet that happen to sort first', () => {
+    setApiRoutes({})
+    const memory = artifact({ artifact_id: 'art_mem', name: 'memory.md', kind: 'memory', relpath: 'x/memory.md' })
+    const sheet = artifact({ artifact_id: 'art_q', name: 'user-stories-questions.md', kind: 'questions', relpath: 'x/q.md' })
+    const stories = artifact({ artifact_id: 'art_stories', name: 'stories.md', relpath: 'x/stories.md' })
+    mount(GateTemplate, card({ evidence: { ...card().evidence, artifacts: [memory, sheet, stories] } }))
+    expect(screen.getByText('stories.md')).toBeInTheDocument()
+    expect(screen.queryByText('memory.md')).toBeNull()
+  })
+
   it('says a gate produced no artifact instead of showing an empty pane', () => {
     setApiRoutes({})
     mount(GateTemplate, card())
@@ -1583,6 +1593,47 @@ describe('budget and missing input templates', () => {
     await userEvent.type(screen.getByLabelText(en.t('template.missingInput.input.scope')), 'Guest checkout')
     expect(draft().scope).toBe('Guest checkout')
     expect(draft().inputKind).toBe('scope')
+  })
+
+  it('quotes the question AI-DLC asked in the conversation next to its reply suggestions', async () => {
+    setApiRoutes({})
+    const base = card()
+    const value = card({
+      type: 'missing_input',
+      headline: {
+        key: 'action.missing_input.headline',
+        params: { reason: 'conversation_reply', kind: 'free_text', options: ['Use setuptools>=64', 'Keep setuptools>=61'] },
+      },
+      decisions: [spec('provide_input', ['feedback'])],
+      primary: { decision: 'provide_input', label_key: 'decision.provide_input.label' },
+      evidence: {
+        ...base.evidence,
+        conversation_reply: {
+          text: 'Keeping setuptools>=61 will likely fail in Build and Test.',
+          ts: '2026-09-04T09:00:00Z',
+        },
+      },
+    })
+    const { draft } = mount(MissingInputTemplate, value)
+    expect(screen.getByText(en.t('template.missingInput.lastReply'))).toBeInTheDocument()
+    expect(screen.getByText('Keeping setuptools>=61 will likely fail in Build and Test.')).toBeInTheDocument()
+    // The quote replaces "read the question in the conversation"; the conversation stays one click away.
+    expect(screen.queryByText(en.t('template.missingInput.reason.conversation_reply'))).toBeNull()
+    expect(screen.getByRole('button', { name: en.t('template.missingInput.openConversation') })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Use setuptools>=64' }))
+    expect(draft().freeText).toBe('Use setuptools>=64')
+  })
+
+  it('shows no quote when the conversation could not be read', () => {
+    setApiRoutes({})
+    mount(MissingInputTemplate, card({
+      type: 'missing_input',
+      headline: { key: 'action.missing_input.headline', params: { reason: 'conversation_reply', kind: 'free_text', options: ['Yes'] } },
+      decisions: [spec('provide_input', ['feedback'])],
+      primary: { decision: 'provide_input', label_key: 'decision.provide_input.label' },
+    }))
+    expect(screen.queryByText(en.t('template.missingInput.lastReply'))).toBeNull()
+    expect(screen.getByText(en.t('template.missingInput.reason.conversation_reply'))).toBeInTheDocument()
   })
 
   it('sends the user to the Intents page for a dangling cursor instead of inventing a picker', async () => {

@@ -319,6 +319,9 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   max-width: 100%;
+  /* The monospace font's ligatures drew `>=` as `⩾` in a box that promises the exact text sent. */
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
 }
 
 /* Evidence that is being re-read cannot authorise a decision, and must look like it. */
@@ -802,6 +805,13 @@ button.studio-chip:hover { border-color: var(--border-hover); }
   border-radius: 3px;
   background: var(--bg-accent);
   white-space: pre-wrap;
+}
+/* AI-DLC's question, quoted on a conversation-reply card; long ones scroll inside the card. */
+.studio-reply-quote {
+  border-left: 3px solid var(--border-strong);
+  padding: 2px 0 2px 12px;
+  max-height: 360px;
+  overflow-y: auto;
 }
 .studio-plain {
   margin: 0;
@@ -1951,6 +1961,8 @@ button.studio-chip:hover { border-color: var(--border-hover); }
 .studio-mrow-desc { margin: 3px 0 0; font-size: 12px; color: var(--muted); max-width: 68ch; }
 .studio-mrow-ctl { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .studio-mrow-ctl .studio-evgrid { text-align: left; }
+/* The control column sizes to its content; a paragraph of explanation must wrap, not widen it. */
+.studio-mrow-ctl .studio-bun-conversations { max-width: 56ch; text-align: left; }
 
 .studio-mutelist { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; }
 .studio-mutelist li { padding: 2px 0; }
@@ -2033,6 +2045,16 @@ button.studio-chip:hover { border-color: var(--border-hover); }
 }
 .studio-q[data-answered='true'] { background: var(--bg-accent); }
 .studio-q-prompt { margin: 0 0 9px; font-size: 15px; font-weight: 600; color: var(--text-strong); line-height: 1.5; }
+.studio-learnings {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  border: 1px solid color-mix(in srgb, var(--info) 30%, var(--border));
+  border-radius: var(--radius-md);
+  background: var(--info-subtle);
+}
+.studio-learnings p { margin: 0 0 6px; }
+.studio-learnings .studio-list { margin: 0 0 6px; }
 .studio-q-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 11px; }
 .studio-q-advisor { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
 .studio-q-recorded { margin: 0; font-size: 13px; }

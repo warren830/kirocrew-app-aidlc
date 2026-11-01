@@ -158,16 +158,20 @@ function elapsed(inputs: MapInputs, slug: string, state: string): number | null 
  * Per-unit sub-rows for a Construction stage.
  *
  * The state file has ONE row per stage and writes a literal `Per unit: [TBD]` line (FORMAT-NOTES §3),
- * so there is no per-unit mark on disk. A unit's state is therefore presentational, derived from two
- * observable facts — whether it is the state file's `Active Unit`, and whether its stage directory
- * holds any file — and never authorises a decision.
+ * so there is no per-unit mark on disk. A unit's state is therefore presentational and never authorises
+ * a decision. While the row is open the unit's own lifecycle receipt says it best: under unit-major
+ * iteration the row stays `[ ]` until every unit has walked the block, and the unit that finished NFR
+ * Design read "Not started". Without one it falls back to two observable facts — whether it is the
+ * state file's `Active Unit`, and whether its stage directory holds any file.
  */
 function unitsOf(join: Join, slug: string, perUnit: boolean, state: MapStage['state']): MapUnit[] {
   const { inputs } = join
   if (!perUnit || !inputs.units.length) return []
+  const receipts = state === 'completed' || state === 'skipped' ? undefined : own(inputs.unit_receipts, slug)
   return inputs.units.map((unit) => {
     const artifacts = [...(join.artifacts.get(slug)?.get(unit) ?? [])]
-    const unitState = unit === inputs.active_unit ? state : artifacts.length ? 'completed' : 'not_started'
+    const receipt = receipts && own(receipts, unit)
+    const unitState = receipt ?? (unit === inputs.active_unit ? state : artifacts.length ? 'completed' : 'not_started')
     return { unit, state: unitState, artifacts }
   })
 }

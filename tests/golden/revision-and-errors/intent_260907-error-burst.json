@@ -225,6 +225,7 @@
     "rules_subdir": "steering",
     "stage_count": 33
    },
+   "executing_stage": "requirements-analysis",
    "findings": [],
    "git": {
     "ahead": null,

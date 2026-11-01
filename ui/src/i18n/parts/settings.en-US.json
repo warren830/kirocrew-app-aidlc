@@ -127,5 +127,13 @@
   "settings.about.updateState": "Update state",
   "settings.about.updateDesc": "KiroCrew installs and updates Apps. Studio does not check for its own updates.",
   "settings.about.updateChip": "Managed by KiroCrew",
-  "settings.about.hostDetached": "Not attached"
+  "settings.about.hostDetached": "Not attached",
+  "settings.about.issue.bun_missing": "Bun was not found",
+  "settings.about.issue.bun_not_on_conversation_path": "AI-DLC conversations cannot run Bun",
+  "settings.about.issue.git_missing": "Git was not found",
+  "settings.about.issue.host_unattached": "Not yet connected to the KiroCrew dashboard",
+  "settings.about.issue.storage_integrity": "Studio's database failed its integrity check",
+  "settings.about.issue.payload_manifest_unreadable": "The bundled AI-DLC manifest cannot be read",
+  "settings.about.issue.payload_degraded": "The bundled AI-DLC files do not match their manifest",
+  "settings.about.issue.payload_unverified": "The bundled AI-DLC files have not been verified yet"
 }

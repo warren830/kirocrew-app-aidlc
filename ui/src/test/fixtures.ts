@@ -110,6 +110,7 @@ export function mapInputs(over: Partial<MapInputs> = {}): MapInputs {
     artifacts: [],
     skip_reasons: {},
     attempts: {},
+    unit_receipts: {},
     ...over,
   }
 }

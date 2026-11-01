@@ -165,5 +165,6 @@
   "common.durationHours": "{n} 小时",
   "common.durationDays": "{n} 天",
   "errors.grouped_answers_unavailable": "一次回答多个问题的方式尚未验证，请逐个作答或打开会话。",
-  "common.underAMinute": "不到 1 分钟"
+  "common.underAMinute": "不到 1 分钟",
+  "errors.conversation_bun_missing": "AI-DLC 的 hook 在对话中无法启动 Bun，AI-DLC 会拒绝这次决策。请打开 设置 → Bun 可执行文件，让对话可以使用 Bun 后重试。"
 }

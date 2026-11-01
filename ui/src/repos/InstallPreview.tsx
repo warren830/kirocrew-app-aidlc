@@ -507,6 +507,9 @@ export function PreviewFlow({ api, repoId, kind, intro, targetVersion, onStarted
 
   const blocked = state.plan === null || state.plan.blocking || state.plan.state_version_blocked
   const receiptRecovery = Boolean(state.plan?.recovery_transaction_id)
+  // The same engine version with changed bundled files: an update of the files, not a version upgrade.
+  const refresh = kind === 'upgrade' && !!state.plan && state.plan.engine_from === state.plan.engine_to
+  const title = t(refresh ? 'install.preview.title.refresh' : `install.preview.title.${kind}`)
   const confirmLabel =
     receiptRecovery
       ? t('install.confirm.restoreTransaction')
@@ -516,14 +519,14 @@ export function PreviewFlow({ api, repoId, kind, intro, targetVersion, onStarted
       ? t('install.confirm.uninstall')
       : kind === 'recovery'
       ? t('install.confirm.recovery')
-      : t(kind === 'install' ? 'install.confirm.install' : 'install.confirm.upgrade', {
+      : t(kind === 'install' ? 'install.confirm.install' : refresh ? 'install.confirm.refresh' : 'install.confirm.upgrade', {
           version: state.plan?.engine_to ?? targetVersion ?? unavailable(i18n),
         })
 
   return (
-    <section className="studio-preview" aria-label={t(`install.preview.title.${kind}`)}>
+    <section className="studio-preview" aria-label={title}>
       <div className="studio-spread studio-preview-head">
-        <h2>{t(`install.preview.title.${kind}`)}</h2>
+        <h2>{title}</h2>
         <button type="button" className="studio-btn" disabled={applying} onClick={onClose}>
           <Icon name="close" size={14} />
           {t('install.cancel')}

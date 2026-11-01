@@ -730,14 +730,20 @@ class Reconciler:
             leases=leases, first_unreadable_at=first_unreadable, layout=snap.layout,
         )
         findings = await self._in_pool(self._s.consistency.evaluate_intent, snap, facts)
-        seeds = await self._in_pool(functools.partial(
-            self._s.projection.derive_cards, snap, findings=findings, binding=binding, install=install,
-            breakers=breakers, live_actions=live, slot=slot, host_card=self._host_card(binding.slot_key),
-            slot_lost=self._slot_lost(key, binding, slot),
-        ))
-        await self._s.actions.upsert_derived(seeds)
-        keys = {seed.dedupe_key for seed in seeds if seed.dedupe_key}
-        await self._s.actions.retire_stale(repo.repo_id, space, intent_dir, keys)
+        if binding.slot_key and slot is None and not self._s.host.can_prove_absence():
+            # "Cannot look" is not "the conversation is gone": right after a restart the host is not attached yet,
+            # and deriving from that read retired the cards that need the slot to be seen, all undone a tick later.
+            # The cards stay exactly as they are until the conversation can be read.
+            keys: set[str] = set()
+        else:
+            seeds = await self._in_pool(functools.partial(
+                self._s.projection.derive_cards, snap, findings=findings, binding=binding, install=install,
+                breakers=breakers, live_actions=live, slot=slot, host_card=self._host_card(binding.slot_key),
+                slot_lost=self._slot_lost(key, binding, slot), last_reply=self._last_reply(slot),
+            ))
+            await self._s.actions.upsert_derived(seeds)
+            keys = {seed.dedupe_key for seed in seeds if seed.dedupe_key}
+            await self._s.actions.retire_stale(repo.repo_id, space, intent_dir, keys)
         # Re-read rather than use upsert's answer, which is empty when nothing was derived: a queued Run or an
         # in-flight decision still belongs in this intent's summary and boundary.
         live = await self._s.actions.list_live(
@@ -786,6 +792,15 @@ class Reconciler:
     def _host_card(self, slot_key: str | None) -> dict | None:
         cards = self._s.host.pending_question_cards(str(slot_key)) if slot_key else None
         return cards[0] if cards else None
+
+    def _last_reply(self, slot: Any) -> Any | None:
+        """The idle conversation's newest row, when it is the assistant's: AI-DLC spoke last and waits."""
+        if slot is None or _attr(slot, "running", False):
+            return None
+        rows = self._s.host.recent_rows(
+            str(_attr(slot, "key") or ""), since_ts="", roles=("user", "queued", "assistant"), limit=1,
+        )
+        return rows[0] if rows and rows[0].role == "assistant" else None
 
     async def _breakers_for(self, repo_id: str, intent_key: str) -> list[dict]:
         prefix = f"{repo_id}:{intent_key}:"
@@ -1009,13 +1024,22 @@ class Reconciler:
         """The contract row for this action's decision, then presence and cursor, which turn a matched row into
         one Studio will sign: the disk may have moved for reasons unrelated to what was sent. Both apply to the
         prompt lane only; a force stop puts nothing before the model and never switched the cursor."""
-        row = self._contract_row(rec, snap, slot, self._decision_of(rec))
+        decision = self._decision_of(rec)
+        row = self._contract_row(rec, snap, slot, decision)
         if not row.resolved:
             return row
         presence = self._presence(rec, snap)
         evidence = {**row.evidence, "presence": presence, "is_active": _attr(snap, "is_active")}
         human = rec.risk_class == "human_lane"
-        if human and presence.get("ok") is not True:
+        # A run grants no authority, so what presence guards (an answer nobody gave) cannot happen through it. When
+        # AI-DLC's prompt hook did not run at all there is no human turn to count on either side, and holding the run
+        # open would block every later decision behind a delivery that provably landed and moved the workflow. It
+        # settles on its own contract, saying why.
+        unrecordable = (presence.get("hooks_silent") is True and decision in ("run", "resume")
+                        and row.outcome == "state_changed")
+        if unrecordable:
+            evidence["presence_unrecorded"] = True
+        if human and presence.get("ok") is not True and not unrecordable:
             code, params = "human_presence_anomaly", presence
         elif human and _attr(snap, "is_active") is False:
             code, params = "cursor_moved", {"cursor": _attr(snap, "cursor"), "intent_dir": _attr(snap, "intent_dir")}
@@ -1253,6 +1277,18 @@ class Reconciler:
             return Resolution("no_transition", "answer_requires_text", seen)
         receipt = self._unverified_receipt(rec, snap, origin, stage)
         if receipt is None:
+            refused = self._answer_refused(rec, snap, stage)
+            if refused is not None:
+                # AI-DLC received the reply and declined to record it (a protected checkpoint that did not see the
+                # exact offered choice, say). The refusal is on disk, so this delivery is settled — not answered;
+                # held open, a delivery-uncertain block would sit in front of the re-ask the conductor offers next.
+                seen.update(answer_verified=False, answer_refused=_json_of(refused))
+                return Resolution("no_transition", "answer_refused", seen)
+            if self._asks_in_chat(rec):
+                # The turn ended on a new question in the conversation without recording this answer (a host tool
+                # prompt was declined, say): "processing" would hide the open decision and the reply awaited.
+                seen.update(answer_verified=False, conversation_asks=True)
+                return Resolution("no_transition", "answer_not_recorded", seen)
             return Resolution("pending", "answers_not_recorded", seen)
         # A receipt for this question that does not verify our reply retires the lease, whether AI-DLC then opened
         # a gate or asked a follow-up — never a replay, and never an "answered" claim.
@@ -1487,10 +1523,16 @@ class Reconciler:
             _attr(baseline, "human_turn_events", 0) or 0)
         before, after = _attr(baseline, "human_turn_mtime_ns"), _attr(_attr(snap, "markers"), "human_turn_mtime_ns")
         advanced = after is not None and (before is None or int(after) > int(before))
+        # The prompt hook bumps ``aidlc/.aidlc-turn-counter`` on every turn before anything else, so a counter that
+        # never moved while presence failed says the hook itself did not run — in practice, ``bun`` is not on the
+        # conversation's PATH (``engine.ConversationBun``). The card names that cause instead of a contradiction
+        # between AI-DLC's files; only then, so a healthy presence keeps its exact shape.
+        hooks_silent = _attr(_attr(snap, "markers"), "turn_counter") == _attr(baseline, "turn_counter")
         if _attr(baseline, "human_turn_events_partial", False):
             fresh = len(self._new_events(rec, snap, (C.HUMAN_PRESENCE_EVENT,), None))
-            return {"human_turn_delta": delta, "new_human_turns": fresh, "partial": True,
-                    "marker_advanced": advanced, "ok": fresh >= 1 and advanced}
+            ok = fresh >= 1 and advanced
+            return {"human_turn_delta": delta, "new_human_turns": fresh, "partial": True, "marker_advanced": advanced,
+                    **({"hooks_silent": True} if hooks_silent and not ok else {}), "ok": ok}
         reconciling = rec.status == "ReconciliationRequired" and _attr(_attr(snap, "audit"), "complete", False) is True
         ok = bool((delta >= 1 if reconciling else delta == 1) and advanced)
         presence = {"human_turn_delta": delta, "partial": False, "marker_advanced": advanced, "ok": ok}
@@ -1498,6 +1540,8 @@ class Reconciler:
             machine = self._machine_prompts(rec)
             if machine is not None and delta - 1 <= machine:
                 presence.update(machine_prompts=machine, ok=True)
+        if hooks_silent and not presence["ok"]:
+            presence = {**{k: v for k, v in presence.items() if k != "ok"}, "hooks_silent": True, "ok": False}
         return presence
 
     def _machine_prompts(self, rec: Any) -> int | None:
@@ -1673,6 +1717,27 @@ class Reconciler:
             recorded = str(fields.get("Revision count", fields.get("Revision Count", ""))).strip()
             if recorded.isdecimal() and int(recorded) == current:
                 return gate
+        return None
+
+    def _asks_in_chat(self, rec: Any) -> bool:
+        """The bound conversation is idle on reply suggestions the conductor just offered."""
+        slot = self._slot_for(rec)
+        return bool(
+            slot is not None and _attr(slot, "has_options", False) and not _attr(slot, "running", False)
+            and not _attr(slot, "queue_depth", 0)
+        )
+
+    def _answer_refused(self, rec: Any, snap: Any, stage: Any) -> Any:
+        """The engine's own refusal of an answer for this stage, written after this delivery.
+
+        Matched on the logged command's ``answer`` subcommand and ``--stage``: only the decision-log
+        tool has that subcommand, and Studio names no engine tool in its own code.
+        """
+        for event in reversed(self._new_events(rec, snap, ("ERROR_LOGGED",), None)):
+            command = str((_attr(event, "fields", {}) or {}).get("Command") or "")
+            words = command.split()
+            if len(words) > 1 and words[1] == "answer" and f"--stage {stage} " in f"{command} ":
+                return event
         return None
 
     def _unverified_receipt(self, rec: Any, snap: Any, origin: Mapping[str, Any], stage: Any) -> Any:

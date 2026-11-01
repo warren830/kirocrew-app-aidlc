@@ -76,6 +76,19 @@ describe('the intents inventory', () => {
     expect(screen.getByText('payments-api: not reachable')).toBeInTheDocument()
   })
 
+  it('names the stage a unit-major walk is executing, not the block stage the state file keeps', () => {
+    const walking = { ...INTENT, executing_stage: 'code-generation', disk: { ...INTENT.disk, current_stage: 'functional-design' } }
+    render(
+      <I18nProvider>
+        <IntentList intents={[walking]} failures={[]} narrow={false} renderActions={() => null} />
+      </I18nProvider>,
+    )
+    expect(screen.getByText('code-generation')).toBeInTheDocument()
+    expect(screen.queryByText('functional-design')).not.toBeInTheDocument()
+    // The file's "next" belongs to the stage the file names, so it is not shown beside another one.
+    expect(screen.queryByText(/2\.4 nfr-requirements/)).not.toBeInTheDocument()
+  })
+
   it('shows the text before sending, then queues and sends the run once; pauses behind a confirmation', async () => {
     // Nothing has run yet, so the run starts the workflow.
     const runnable = { ...INTENT, operational_state: 'Idle' as const,

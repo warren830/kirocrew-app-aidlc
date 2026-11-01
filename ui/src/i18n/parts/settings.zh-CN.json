@@ -127,5 +127,13 @@
   "settings.about.updateState": "更新状态",
   "settings.about.updateDesc": "App 的安装与更新由 KiroCrew 负责。Studio 不会自行检查更新。",
   "settings.about.updateChip": "由 KiroCrew 管理",
-  "settings.about.hostDetached": "未接入"
+  "settings.about.hostDetached": "未接入",
+  "settings.about.issue.bun_missing": "未找到 Bun",
+  "settings.about.issue.bun_not_on_conversation_path": "AI-DLC 对话无法运行 Bun",
+  "settings.about.issue.git_missing": "未找到 Git",
+  "settings.about.issue.host_unattached": "尚未连接到 KiroCrew 控制台",
+  "settings.about.issue.storage_integrity": "Studio 数据库完整性检查未通过",
+  "settings.about.issue.payload_manifest_unreadable": "无法读取随附 AI-DLC 的清单",
+  "settings.about.issue.payload_degraded": "随附的 AI-DLC 文件与清单不一致",
+  "settings.about.issue.payload_unverified": "随附的 AI-DLC 文件尚未校验"
 }

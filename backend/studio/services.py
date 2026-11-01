@@ -31,7 +31,10 @@ from .actions import HumanActionBroker
 from .advisor import AdvisorBroker
 from .aidlc_reader import AidlcReader
 from .consistency import ConsistencyEngine
-from .engine import BUN_SOURCE_EXPLICIT, BunLocation, EngineRunner, find_bun, probe_bun_version, probe_explicit_bun
+from .engine import (
+    BUN_SOURCE_EXPLICIT, BunLocation, EngineRunner, conversation_bun, find_bun, link_conversation_bun,
+    probe_bun_version, probe_explicit_bun,
+)
 from .errors import StudioError
 from .estimates import EstimateService
 from .events import EventLog
@@ -301,14 +304,31 @@ class Services:
     # ---- health ----------------------------------------------------------- #
 
     def bun_tool(self) -> dict[str, Any]:
-        """Current tool configuration; explicit probes are exposed separately from this read."""
+        """Current tool configuration; explicit probes are exposed separately from this read.
+
+        ``conversations`` is the second half of "is bun usable": Studio's own engine calls use
+        ``path``, but AI-DLC's hooks resolve a bare ``bun`` inside each conversation
+        (``engine.ConversationBun``). Blocking — it may read the host config; call off the loop.
+        """
         with self._bun_config_lock:
             return {
                 "found": bool(self.bun_path), "path": self.bun_path,
                 "configured_path": self._bun_configured_path,
                 "version": self._bun_tool_version(), "source": self.bun_source,
                 "searched": list(self.bun_searched),
+                "conversations": conversation_bun(self.bun_path).to_json(),
             }
+
+    def conversation_bun_status(self) -> Any:
+        """``engine.ConversationBun`` for the bun Studio runs. Blocking; call off the loop."""
+        with self._bun_config_lock:
+            return conversation_bun(self.bun_path)
+
+    def link_bun_for_conversations(self) -> dict[str, Any]:
+        """Link Studio's bun where conversations find it (``engine.link_conversation_bun``)."""
+        with self._bun_config_lock:
+            link_conversation_bun(self.bun_path)
+            return self.bun_tool()
 
     def _apply_bun(self, located: BunLocation, configured_path: str | None) -> dict[str, Any]:
         self._bun_configured_path = configured_path
@@ -424,6 +444,8 @@ class Services:
             issues.append("host_unattached")
         if not self.bun_path:
             issues.append("bun_missing")
+        elif not conversation_bun(self.bun_path).found:
+            issues.append("bun_not_on_conversation_path")
         if not self.git_path:
             issues.append("git_missing")
 

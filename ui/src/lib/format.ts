@@ -145,6 +145,15 @@ export function ref(i18n: I18n, value: I18nRef | null | undefined, fallbackKey?:
         }).join(i18n.t('shell.format.listJoin'))
       : i18n.t('action.reason.recovery_details')
   }
+  if (value.key.startsWith('action.missing_input.') && typeof value.params.reason === 'string') {
+    // Each missing-input reason is a different sentence ("no scope chosen" is not "AI-DLC is waiting
+    // for your reply"); a reason-specific key wins, and the generic template gets the reason's phrase
+    // rather than its code.
+    const specific = `${value.key}.${value.params.reason}`
+    if (i18n.has(specific)) return i18n.t(specific, params)
+    const phrase = `action.reason.${value.params.reason}`
+    if (i18n.has(phrase)) params.reason = i18n.t(phrase)
+  }
   if (i18n.has(value.key)) return i18n.t(value.key, params)
   return fallbackKey ? i18n.t(fallbackKey, params) : value.key
 }

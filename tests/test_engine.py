@@ -961,8 +961,10 @@ def test_the_gateway_finds_bun_without_a_path_and_health_says_where(studio, fake
     with built_services(studio, fake_ctx, clock, ids, bun_version=lambda path: "1.2.3") as services:
         assert services.bun_path == installed and services.engine.bun_path == installed
         body = services.health()
+    conversations = body["tools"]["bun"].pop("conversations")
     assert body["tools"]["bun"] == {"found": True, "path": installed, "configured_path": None, "version": "1.2.3",
                                     "source": "install_location", "searched": [installed]}
+    assert conversations["found"] is True and conversations["link"]["blocked_reason"] == "already_found"
     assert "bun_missing" not in body["issues"]
 
 
@@ -973,6 +975,7 @@ def test_health_names_the_locations_when_bun_really_is_absent(studio, fake_ctx, 
     with built_services(studio, fake_ctx, clock, ids) as services:
         assert services.bun_path is None
         body = services.health()
+    body["tools"]["bun"].pop("conversations")
     assert body["tools"]["bun"] == {"found": False, "path": None, "configured_path": None, "version": None,
                                     "source": None, "searched": [nowhere]}
     assert "bun_missing" in body["issues"]

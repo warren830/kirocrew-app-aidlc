@@ -11,7 +11,8 @@ from typing import Any
 
 #: ``code -> HTTP status``, one row per status: every code a module raises, plus ``route_not_found``, which
 #: the UI also uses for a bare host 404. ``grouped_answers_unavailable``: a grouped submit while
-#: ``GROUPED_ANSWERS_VERIFIED`` is off (P18).
+#: ``GROUPED_ANSWERS_VERIFIED`` is off (P18). ``conversation_bun_missing``: AI-DLC's prompt hook, ``bun …`` on the
+#: conversation's PATH, cannot record the HUMAN_TURN a human-lane decision needs (``engine.ConversationBun``).
 _CODES_BY_STATUS: dict[int, str] = {
     400: (
         "bad_body bad_path bad_param invalid_decision feedback_required answers_incomplete unknown_stage "
@@ -29,9 +30,9 @@ _CODES_BY_STATUS: dict[int, str] = {
         "grouped_answers_unavailable install_conflict install_recovery_required "
         "not_installed already_installed newer_installed same_version_installed "
         "state_version_migration_unconfirmed payload_degraded session_unbound slot_mismatch slot_busy "
-        "session_busy unstable_read breaker_open intent_paused intent_archived cancel_not_safe "
-        "delivery_ack_invalid not_delivered_unproven cursor_mismatch plan_invalid recompose_not_allowed "
-        "legacy_layout rebind_not_allowed retry_not_allowed"
+        "conversation_bun_missing session_busy unstable_read breaker_open intent_paused intent_archived "
+        "cancel_not_safe delivery_ack_invalid not_delivered_unproven cursor_mismatch plan_invalid "
+        "recompose_not_allowed legacy_layout rebind_not_allowed retry_not_allowed"
     ),
     413: "too_large",
     429: "too_many_repos rate_limited",

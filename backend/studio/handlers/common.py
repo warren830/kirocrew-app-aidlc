@@ -44,6 +44,7 @@ ROUTES: tuple[tuple[str, str, str], ...] = (
     ("PUT", "/settings", "settings.put_settings"),
     ("PUT", "/tools/bun", "settings.put_bun"),
     ("POST", "/tools/bun/probe", "settings.probe_bun"),
+    ("POST", "/tools/bun/link", "settings.link_bun"),
     ("GET", "/events", "events.stream"),
     ("GET", "/events/poll", "events.poll"),
     ("GET", "/activity", "events.activity"),

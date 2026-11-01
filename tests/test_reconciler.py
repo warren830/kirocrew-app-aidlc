@@ -752,6 +752,31 @@ def test_run_and_resume_resolve_state_changed_when_the_workflow_moved(svc, scene
     assert status_of(svc, action_id) == "StateChanged"
 
 
+def test_a_run_whose_prompt_hook_never_ran_settles_on_its_own_contract(svc, scene, fake_host, C):
+    """No HUMAN_TURN and a turn counter that never moved: the hook did not run (no bun on PATH). A run grants no
+    authority, so the anomaly it would raise protects nothing — and holding it open blocked every later decision
+    behind it. It settles, and says presence could not be recorded."""
+    action_id = scene.make(status="Delivered", action_type="run", decision="run", wire_text=C.WIRE_RUN)
+    approve_on_disk(scene.root, human_turns=0)
+    finish_turn(fake_host, scene.slot_key, wire_text=C.WIRE_RUN)
+    tick(svc)
+    assert status_of(svc, action_id) == "StateChanged"
+    assert "human_presence_anomaly" not in finding_codes(svc, action_id)
+    evidence = svc.storage.get("actions", action_id)["resolution_json"]["evidence"]
+    assert evidence["presence_unrecorded"] is True and evidence["presence"]["hooks_silent"] is True
+
+
+def test_an_approval_whose_prompt_hook_never_ran_is_still_an_anomaly(svc, scene, fake_host):
+    """The same silence on a gate means AI-DLC recorded an approval with no human behind it."""
+    action_id = scene.make(status="Delivered")
+    approve_on_disk(scene.root, human_turns=0)
+    finish_turn(fake_host, scene.slot_key)
+    tick(svc)
+    assert status_of(svc, action_id) == "ReconciliationRequired"
+    presence = next(f for f in evidence_of(svc, action_id)["findings"] if f["code"] == "human_presence_anomaly")
+    assert presence["params"]["hooks_silent"] is True
+
+
 @pytest.mark.parametrize("kind,wire", [("run", "WIRE_RUN"), ("prepare_commit", "WIRE_PREPARE_COMMIT")])
 def test_a_turn_that_ended_without_movement_resolves_no_transition(svc, scene, fake_host, C, kind, wire):
     """The engine asked a question or parked (run), or the turn alone is the outcome (prepare_commit)."""
@@ -1408,3 +1433,36 @@ def test_kirocrew_errors_in_a_bound_conversation_reach_activity_once_at_their_ow
     assert (rows[0]["source"], rows[0]["severity"], rows[0]["at"], rows[0]["intent_dir"]) == (
         "kirocrew", "attention", "2099-01-01T00:00:05Z", GATE_DIR)
     assert rows[0]["params_json"]["text"].startswith("The model backend hit a transient error")
+
+
+# --- a host Studio cannot read yet is not a host without the conversation ---
+
+
+def test_an_unattached_host_never_reads_as_a_lost_conversation(svc, scene, monkeypatch):
+    """Right after a restart the host is not attached; deriving from that read raised a session-lost recovery card
+    for every intent mid-stage and retired it a tick later (seen on every deploy)."""
+    (_record(scene.root) / "aidlc-state.md").write_text(
+        F.state_text(marks={GATE_STAGE: "-"}, fields={"Current Stage": GATE_STAGE, "Status": "Running"}))
+    attached = svc.host._state
+    monkeypatch.setattr(svc.host, "_state", None)
+    tick(svc)
+    assert [a.type for a in asyncio.run(svc.actions.list_live(repo_id=scene.repo_id)) if a.type == "recovery"] == []
+    # Once the conversation is readable, a real loss is still reported.
+    monkeypatch.setattr(svc.host, "_state", attached)
+    tick(svc)
+    assert [a.type for a in asyncio.run(svc.actions.list_live(repo_id=scene.repo_id)) if a.type == "recovery"] == []
+
+
+def test_the_scan_reads_the_reply_a_chat_only_question_card_quotes(svc, scene, fake_host):
+    slot = fake_host.get_slot(scene.slot_key)
+    slot.messages.append({"role": "user", "content": "Approve", "ts": "2026-09-04T10:00:00+00:00"})
+    slot.messages.append({"role": "assistant", "ts": "2026-09-04T10:00:17.206272+00:00",
+                          "content": "Change the build setup?\n\n[OPTIONS: Upgrade | Keep]"})
+    # The agent spoke last, with or without suggestions: that is the question the card quotes.
+    reply = svc.reconciler._last_reply(svc.host.slot(scene.slot_key))
+    assert reply is not None and reply.content.startswith("Change the build setup?")
+    slot.running = True
+    assert svc.reconciler._last_reply(svc.host.slot(scene.slot_key)) is None  # still answering
+    slot.running = False
+    slot.messages.append({"role": "user", "content": "Upgrade", "ts": "2026-09-04T10:01:00+00:00"})
+    assert svc.reconciler._last_reply(svc.host.slot(scene.slot_key)) is None  # the human answered

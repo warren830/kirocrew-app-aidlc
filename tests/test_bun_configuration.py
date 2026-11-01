@@ -77,3 +77,84 @@ def test_bun_startup_loads_saved_configuration(sv, routes, fake_host, tmp_path):
     sv.restore_bun_configuration()  # the same startup seam must restore both runtime and preflight consumers
     assert sv.engine.bun_path == str(binary)
     assert sv.health()["tools"]["bun"]["configured_path"] == str(binary)
+
+
+# --------------------------------------------------------------------------- #
+# bun inside a conversation (engine.ConversationBun)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def launchd_conversation(studio, monkeypatch, tmp_path):
+    """A conversation PATH like a desktop gateway's: ``~/.local/bin`` first, then the system dirs."""
+    home = tmp_path / "home"
+    (home / ".local" / "bin").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    path = f"{home / '.local' / 'bin'}:/usr/bin:/bin"
+    monkeypatch.setattr(studio.engine, "conversation_path", lambda environ=None: (path, True))
+    return home
+
+
+def _studio_bun(sv, tmp_path):
+    binary = tmp_path / "studio-bun" / "bun"
+    binary.parent.mkdir()
+    binary.write_text("#!/bin/sh\nprintf '1.3.0\\n'\n")
+    binary.chmod(0o755)
+    sv.configure_bun(str(binary))
+    return binary
+
+
+def test_health_says_conversations_cannot_run_the_bun_studio_found(sv, launchd_conversation, tmp_path):
+    _studio_bun(sv, tmp_path)
+    body = sv.health()
+    assert "bun_not_on_conversation_path" in body["issues"]
+    conversations = body["tools"]["bun"]["conversations"]
+    assert conversations["found"] is False and conversations["exact"] is True
+    assert conversations["link"]["available"] is True
+    assert conversations["link"]["path"] == str(launchd_conversation / ".local" / "bin" / "bun")
+
+
+def test_linking_bun_needs_confirmation_and_makes_conversations_find_it(
+    sv, routes, fake_host, launchd_conversation, tmp_path
+):
+    binary = _studio_bun(sv, tmp_path)
+    status, body = request(sv, routes, fake_host, "POST", "/tools/bun/link", {})
+    assert status == 400 and body["details"]["reason"] == "confirm_required"
+    link = launchd_conversation / ".local" / "bin" / "bun"
+    assert not link.exists()
+
+    status, body = request(sv, routes, fake_host, "POST", "/tools/bun/link", {"confirm": True})
+    assert status == 200, body
+    assert link.is_symlink() and link.resolve() == binary.resolve()
+    assert body["tool"]["conversations"]["found"] is True
+    assert "bun_not_on_conversation_path" not in sv.health()["issues"]
+    # A second confirmation is a no-op answer, not a refusal.
+    status, body = request(sv, routes, fake_host, "POST", "/tools/bun/link", {"confirm": True})
+    assert status == 200 and body["tool"]["conversations"]["found"] is True
+
+
+def test_linking_never_replaces_an_existing_file(sv, routes, fake_host, launchd_conversation, tmp_path):
+    _studio_bun(sv, tmp_path)
+    occupied = launchd_conversation / ".local" / "bin" / "bun"
+    occupied.symlink_to(tmp_path / "somewhere-else")  # dangling: not found on PATH, but present
+    assert sv.health()["tools"]["bun"]["conversations"]["link"]["blocked_reason"] == "link_exists"
+    status, body = request(sv, routes, fake_host, "POST", "/tools/bun/link", {"confirm": True})
+    assert status == 400 and body["details"]["reason"] == "link_exists"
+    assert occupied.readlink() == tmp_path / "somewhere-else"
+
+
+def test_linking_bun_is_owner_only(sv, routes, fake_host, launchd_conversation, tmp_path):
+    _studio_bun(sv, tmp_path)
+    status, _ = call(sv, routes, "POST", "/tools/bun/link", CT.app_request(
+        "POST", "/tools/bun/link", host=fake_host, body={"confirm": True},
+    ))
+    assert status == 403
+    assert not (launchd_conversation / ".local" / "bin" / "bun").exists()
+
+
+def test_an_estimated_conversation_path_is_reported_but_never_exact(studio, monkeypatch, tmp_path):
+    """Without the host's launcher functions the PATH is a guess, and a guess must not refuse decisions."""
+    monkeypatch.setitem(__import__("sys").modules, "kiro_crew.env", None)
+    path, exact = studio.engine._unpatched_conversation_path({"PATH": "/usr/bin"})
+    assert exact is False and path.endswith("/usr/bin")
+    assert path.split(":")[0].endswith("/.local/bin")

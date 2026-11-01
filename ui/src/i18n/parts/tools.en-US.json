@@ -8,5 +8,16 @@
   "settings.bun.checking": "Checking Bun…",
   "settings.bun.ready": "Bun is ready.",
   "settings.bun.missing": "Bun was not found. Set its path or install it, then detect again.",
-  "settings.bun.searched": "Checked: {paths}"
+  "settings.bun.searched": "Checked: {paths}",
+  "settings.bun.conversations.ready": "AI-DLC conversations can run Bun.",
+  "settings.bun.conversations.missing": "AI-DLC conversations cannot run Bun.",
+  "settings.bun.conversations.why": "Studio runs Bun by its full path, but AI-DLC's hooks inside each conversation call plain bun, and the PATH KiroCrew gives a conversation does not include it. Until that changes, AI-DLC records no human turn and refuses every approval and answer you send.",
+  "settings.bun.conversations.link": "Make Bun available to conversations",
+  "settings.bun.conversations.confirmBody": "Studio will create this one symbolic link and change nothing else. ~/.local/bin is already on every conversation's PATH. Remove the link to undo it.",
+  "settings.bun.conversations.confirm": "Create the link",
+  "settings.bun.conversations.estimate": "This KiroCrew version does not say which PATH a conversation gets, so this is Studio's estimate. Decisions are not blocked on it.",
+  "settings.bun.conversations.blocked.already_found": "Conversations already find Bun.",
+  "settings.bun.conversations.blocked.bun_missing": "Studio has not found Bun yet, so there is nothing to link. Set its path above first.",
+  "settings.bun.conversations.blocked.link_dir_not_on_path": "~/.local/bin is not on this gateway's conversation PATH, so a link there would not help. Add Bun's directory to KiroCrew's agent environment (agent.env PATH) and restart the gateway.",
+  "settings.bun.conversations.blocked.link_exists": "Something already exists at {link}, and Studio will not replace it. Point it at Bun yourself, or remove it and try again."
 }

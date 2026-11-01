@@ -24,6 +24,7 @@ from ..errors import StudioError
 # The installer's own version rule ("unparseable is not older" decides whether an upgrade is offered).
 from ..installer import payload_refresh_available, version_tuple
 from ..leases import lease_view
+from ..projection import SCHEDULING_FINDINGS
 from ..source_changes import intent_written_paths
 from .common import (
     body_choice, intent_view, json_ok, query_bool, read_json, repo_or_404, summarize_intent, without_archived,
@@ -373,7 +374,9 @@ async def _repo_json(services: Any, repo: Any, *, leases: Sequence[Any], fresh: 
         "intents": len(summaries) if summaries is not None else await _count_intents(services, repo),
         "in_flight": sum(1 for rec in live if rec.status in ("Delivering", "Delivered")),
         "open_actions": sum(1 for rec in live if rec.status in C.AWAITING_PERSON_STATUS),
-        "blocking_findings": sum(1 for finding in (findings or ()) if C.attr(finding, "severity") == "blocking"),
+        # A scheduling finding (another intent's turn holds the repository) contradicts nothing (projection).
+        "blocking_findings": sum(1 for finding in (findings or ()) if C.attr(finding, "severity") == "blocking"
+                                 and C.attr(finding, "code") not in SCHEDULING_FINDINGS),
     }
     body["leases"] = {
         kind: next((lease_view(rec) for rec in leases

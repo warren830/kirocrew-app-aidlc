@@ -57,6 +57,8 @@
   "finding.mixed_harness_versions.body": "该仓库中有多个 AI-DLC 安装，版本各不相同（{versions}）。它们都操作同一份 aidlc/ 记录，不同版本可能会对这些记录有不同的理解。请把它们统一到同一个版本。",
   "finding.bun_missing.title": "未找到 bun",
   "finding.bun_missing.body": "AI-DLC 的工具依赖 bun 运行，而 Studio 在查找过的所有位置都没有找到它。请安装 bun，或从 PATH 中包含 bun 的 shell 启动 KiroCrew。",
+  "finding.bun_not_on_conversation_path.title": "AI-DLC 对话无法运行 bun",
+  "finding.bun_not_on_conversation_path.body": "Studio 能运行 bun，但对话拿到的 PATH 里没有它，因此 AI-DLC 的 hook 在对话中会失败，AI-DLC 会拒绝每一次审批和回答。请打开 设置 → Bun 可执行文件，让对话可以使用 bun。",
   "finding.git_missing.title": "未找到 Git",
   "finding.git_missing.body": "Studio 找不到 git 命令，因此无法显示该仓库的分支和未提交的改动。安装 Git 后即可看到。"
 }

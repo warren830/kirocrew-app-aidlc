@@ -44,3 +44,20 @@ async def probe_bun(services: Any, request: web.Request) -> web.Response:
 async def _bun_changed(services: Any, tool: dict[str, Any]) -> web.Response:
     await services.events.publish("settings.updated", {"tool": "bun"})
     return json_ok({"tool": tool})
+
+
+async def link_bun(services: Any, request: web.Request) -> web.Response:
+    """``{"confirm": true}`` links Studio's bun where every conversation's PATH finds it.
+
+    The one write outside a repository, so it takes an explicit ``confirm`` and the service refuses unless
+    nothing exists at the link path (``engine.link_conversation_bun``).
+    """
+    body = await read_json(request)
+    if body.get("confirm") is not True:
+        raise StudioError("invalid_decision", "linking bun requires confirm: true",
+                          details={"reason": "confirm_required"})
+    tool = await asyncio.to_thread(services.link_bun_for_conversations)
+    linked = bool(tool["conversations"]["found"])
+    await services.activity.record(kind="settings.updated", severity="attention",
+                                   params={"tool": "bun", "linked_for_conversations": linked})
+    return await _bun_changed(services, tool)

@@ -165,5 +165,6 @@
   "common.durationHours": "{n} h",
   "common.durationDays": "{n} d",
   "errors.grouped_answers_unavailable": "Answering several questions in one message is not yet verified, so answer them one at a time or open the conversation.",
-  "common.underAMinute": "< 1 min"
+  "common.underAMinute": "< 1 min",
+  "errors.conversation_bun_missing": "AI-DLC's hooks cannot start Bun in conversations, so AI-DLC would refuse this decision. Open Settings → Bun executable and make Bun available to conversations, then try again."
 }

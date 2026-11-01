@@ -1800,3 +1800,64 @@ async def test_every_transition_publishes_an_event_and_an_activity_row(world):
     assert "action.created" in kinds and "action.submitted" in kinds
     rows = world.store.select("action_transitions", {"action_id": gate.action_id})
     assert rows[-1]["to_status"] == "Delivering" and rows[-1]["reason"] == "submitted:approve"
+
+
+# --- cards a scan re-derives ---
+
+
+@pytest.mark.parametrize("repo_options", [{"runnable": True}])
+@aio
+async def test_a_chat_only_question_card_shows_the_question_it_answers(world):
+    # Measured on a Standard run: the reply was seeded with the question, and the card API dropped it.
+    await bind(world)
+    slot = world.fake_host.get_slot(SLOT)
+    slot.messages.append({"role": "assistant", "ts": "2026-09-04T10:00:17+00:00",
+                          "content": "Keep setuptools>=61? It will likely fail.\n\n[OPTIONS: Keep | Upgrade]"})
+    slot.options = ["Keep", "Upgrade"]
+    binding = await world.binder.get(REPO_ID, "default", INTENT)
+    reply = world.host.recent_rows(SLOT, since_ts="", roles=("assistant",), limit=1)[0]
+    seeds = world.projection.derive_cards(snapshot(world), findings=[], binding=binding, install=None, breakers=[],
+                                          live_actions=[], slot=world.host.slot(SLOT), last_reply=reply)
+    rec = pick(await world.broker.upsert_derived(seeds), "missing_input")
+    card = await world.broker.card(rec, snapshot(world))
+    assert card["evidence"]["conversation_reply"]["text"] == "Keep setuptools>=61? It will likely fail."
+
+
+@aio
+async def test_a_card_dated_by_its_first_sighting_keeps_that_date_and_its_generation(world):
+    # A recovery card has no audit event of its own to date it, so the projection offers the read time. Taking that
+    # on every tick kept the card at "just now" and rewrote it every five seconds (one observed card had reached
+    # status generation 4690), so a tab holding it lost every Acknowledge.
+    blocking = SimpleNamespace(code="human_presence_anomaly", severity="blocking",
+                               to_json=lambda: {"code": "human_presence_anomaly", "severity": "blocking", "params": {}})
+
+    async def derive():
+        live = await world.broker.list_live(repo_id=REPO_ID, space="default", intent_dir=INTENT)
+        seeds = world.projection.derive_cards(snapshot(world), findings=[blocking], binding=None, install=None,
+                                              breakers=[], live_actions=live, slot=None)
+        return pick(await world.broker.upsert_derived(seeds), "recovery")
+
+    first = await derive()
+    before = world.store.get("actions", first.action_id)
+    for _ in range(3):
+        world.clock.advance(5)
+        again = await derive()
+        assert again.action_id == first.action_id and again.waiting_since == first.waiting_since
+        assert world.store.get("actions", first.action_id) == before
+
+
+@aio
+async def test_an_approval_in_flight_is_not_shadowed_by_a_fresh_gate_card(world):
+    """``GATE_APPROVED`` lands before the ``[?]`` row clears, which moves the boundary token: for those seconds the
+    same open gate derived a second Queued card beside the approval still on the wire — a fresh Approve button for
+    a gate the human had just approved."""
+    gate = await bound_card(world)
+    receipt = await submit(world, gate)
+    for shard in (world.builder.record(INTENT) / "audit").glob("*.md"):
+        shard.write_text(shard.read_text() + F.audit_text(
+            F.audit_block("HUMAN_TURN", F._plus(TS, 30)),
+            F.audit_block("GATE_APPROVED", F._plus(TS, 30), Stage=STAGE, User_Input="Approve"),
+        ))
+    gates = [rec for rec in await seed(world) if rec.type == "gate"]
+    assert [rec.action_id for rec in gates] == [receipt.action_id]
+    assert gates[0].status not in ("Queued", "NotDelivered")

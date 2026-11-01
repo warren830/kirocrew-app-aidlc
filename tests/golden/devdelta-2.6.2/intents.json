@@ -30,6 +30,7 @@
      "status": "Running",
      "total_stages": 13
     },
+    "executing_stage": "reverse-engineering",
     "intent_dir": "260814-review-major-remediation",
     "intent_key": "260814-review-major-remediation",
     "interrupted": false,
@@ -89,6 +90,7 @@
      "status": "Completed",
      "total_stages": 33
     },
+    "executing_stage": "build-and-test",
     "intent_dir": "260828-kiro-impact-poc",
     "intent_key": "260828-kiro-impact-poc",
     "interrupted": false,

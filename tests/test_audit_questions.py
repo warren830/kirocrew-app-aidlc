@@ -1276,3 +1276,168 @@ def test_finished_stage_cannot_reopen_an_audit_question(sv, scene, mark, pending
     (record / ".aidlc-active-directive.json").write_text(
         json.dumps({"version": 1, "stage": STAGE, "state_sha256": F.sha256(state)}))
     assert (snap(sv, scene).questions is not None) is pending
+
+
+MEMORY = """<!-- INVARIANT: examples are single-line HTML comments -->
+> kept up to date automatically
+
+## Interpretations
+<!-- example: 2026-05-29T10:14:32Z — chose REST over GraphQL -->
+- 2026-09-04T09:30:00Z — Read "overdue" as strictly before today; the brief never said
+
+## Deviations
+- 2026-09-04T09:31:00Z — Skipped the coverage run; pytest is not installed here
+
+## Open questions
+- 2026-09-04T09:32:00Z — Confirm the retention window
+"""
+
+
+def _with_memory(scene):
+    memory = _record_dir(scene.root) / "inception" / STAGE / "memory.md"
+    memory.parent.mkdir(parents=True, exist_ok=True)
+    memory.write_text(MEMORY)
+    return memory
+
+
+def test_learnings_candidate_ids_are_explained_from_the_stage_diary(sv, routes, fake_host, scene, studio):
+    """The ritual often asks "keep c1/c2?" and explains the ids only in chat; the card reads the diary."""
+    _with_memory(scene)
+    append(scene, decision(
+        ts="2026-09-04T09:59:40Z", Decision="Learnings ritual: keep candidates c1/c2? Anything to add?",
+        Options="c1,c2,Nothing to add,Add a note",
+    ))
+    card = question_card(sv, routes, fake_host, scene)
+    # Asked back to back with the fixture's own "anything to add?", so the two arrive as one group.
+    questions = card["evidence"]["questions"]["questions"]
+    question = next(q for q in questions if q["prompt"].startswith("Learnings ritual"))
+    by_text = {o["text"]: o for o in question["options"]}
+    assert by_text["c1"]["detail"].startswith('Read "overdue" as strictly before today')
+    assert by_text["c2"]["detail"].startswith("Skipped the coverage run")
+    assert "detail" not in by_text["Nothing to add"]
+    assert [c["id"] for c in question["learning_candidates"]] == ["c1", "c2"]
+    assert question["learnings_memory"].endswith(f"inception/{STAGE}/memory.md")
+    # The wire text is still the engine's own label.
+    assert [o["text"] for o in question["options"]][:4] == ["c1", "c2", "Nothing to add", "Add a note"]
+
+
+def test_the_anything_to_add_question_lists_the_candidates_it_is_about(sv, routes, fake_host, scene):
+    _with_memory(scene)
+    card = question_card(sv, routes, fake_host, scene)
+    question = card["evidence"]["questions"]["questions"][0]
+    assert question["prompt"] == PROMPT
+    assert [c["id"] for c in question["learning_candidates"]] == ["c1", "c2"]
+    assert all("detail" not in o for o in question["options"])
+
+
+def test_a_question_without_a_diary_is_left_alone(sv, routes, fake_host, scene):
+    card = question_card(sv, routes, fake_host, scene)
+    question = card["evidence"]["questions"]["questions"][0]
+    assert "learning_candidates" not in question
+
+
+def test_candidate_numbering_matches_the_engines_surface(studio):
+    """Open questions are parked, never numbered; fenced, quoted and comment lines are not entries."""
+    parsed = studio.aidlc_reader.parse_learning_candidates(MEMORY + "\n## Tradeoffs\n```\n- not an entry\n```\n- 2026-09-04T09:33:00Z — Picked JSON over SQLite; small data\n")
+    assert [(c.id, c.heading) for c in parsed] == [("c1", "Interpretations"), ("c2", "Deviations"), ("c3", "Tradeoffs")]
+    assert parsed[2].summary == "Picked JSON over SQLite" and parsed[2].context == "small data"
+
+
+PLAIN_SHEET = H3_QUESTIONS.replace("[Answer]:", "[Answer]: A")
+SHEET_ANSWERED_AT = "2026-09-04T09:59:10Z"
+
+
+def install_plain_sheet(scene, *audit_tail):
+    path = _record_dir(scene.root) / QUESTIONS_REL
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(PLAIN_SHEET)
+    _shard(scene.root).write_text(start_audit() + "".join(audit_tail))
+    return path
+
+
+def sheet_answer(ts=SHEET_ANSWERED_AT, **fields):
+    return F.audit_block("QUESTION_ANSWERED", ts, **{"Stage": STAGE, "Details": "Q1: A | Q2: A | Q3: A", **fields})
+
+
+def test_an_answered_plain_sheet_hands_the_learnings_ritual_to_the_queue(closed_sheet_scene):
+    """Practices/requirements sheets close with a plain QUESTION_ANSWERED; the ritual follows as audit."""
+    scene = closed_sheet_scene
+    install_plain_sheet(scene, sheet_answer(), decision())
+    questions = closed_sheet_questions(scene)
+    assert questions.origin["kind"] == "audit"
+    assert questions.questions[0].prompt == PROMPT
+    assert questions.closed_file is not None and questions.closed_file.relpath.endswith(QUESTIONS_REL)
+
+
+@pytest.mark.parametrize("tail", ["no_receipt", "receipt_after_decision", "other_stage", "old_attempt", "empty"])
+def test_a_plain_sheet_keeps_ownership_without_its_answer_receipt(closed_sheet_scene, tail):
+    scene = closed_sheet_scene
+    blocks = {
+        "no_receipt": (decision(),),
+        # An answer written after the decision is that decision's answer, not the sheet's closure.
+        "receipt_after_decision": (decision(), sheet_answer(ANSWERED)),
+        "other_stage": (sheet_answer(Stage="user-stories"), decision()),
+        "old_attempt": (sheet_answer(**{"Attempt Generation": "2"}), decision()),
+        "empty": (sheet_answer(Details=" "), decision()),
+    }[tail]
+    install_plain_sheet(scene, *blocks)
+    questions = closed_sheet_questions(scene)
+    assert questions is None or questions.origin is None
+
+
+def test_an_answered_plain_sheet_with_a_newer_ritual_reaches_the_api(sv, routes, fake_host, scene):
+    install_plain_sheet(scene, sheet_answer(), decision())
+    card = question_card(sv, routes, fake_host, scene)
+    assert card["evidence"]["questions"]["origin"]["kind"] == "audit"
+    assert card["evidence"]["questions"]["questions"][0]["prompt"] == PROMPT
+
+
+def test_an_answer_the_engine_refused_settles_instead_of_stranding_the_queue(sv, routes, fake_host, scene):
+    """A protected checkpoint that did not see the exact choice logs ERROR_LOGGED and records nothing.
+
+    The delivery is settled (no answer claimed), so the conductor's re-ask is not stuck behind a
+    delivery-uncertain block that could only clear when the refused answer appeared.
+    """
+    card = question_card(sv, routes, fake_host, scene)
+    label = LABELS[0]
+    status, receipt = _submit(sv, routes, fake_host, card, payload=answer_payload("A"), wire_text=label)
+    assert status == 200, receipt
+    _finish_the_turn(fake_host, scene.slot_key, wire_text=label)
+    assert _report(sv, routes, fake_host, card["action_id"], receipt)[0] == 200
+    append(
+        scene,
+        F.audit_block("HUMAN_TURN", ANSWERED),
+        F.audit_block(
+            "ERROR_LOGGED", ANSWERED, Tool="aidlc-log",
+            Command=f"aidlc-log answer --stage {STAGE} --checkpoint verification-command --details {label}",
+            Error="verification-command requires the actual offered choice",
+        ),
+    )
+    stamp_human_turn(_record_dir(scene.root), ANSWERED)
+    for _ in range(3):
+        asyncio.run(sv.reconciler.reconcile_now(card["action_id"]))
+    row = _row(sv, card["action_id"])
+    assert row["status"] == "ResolvedNoTransition"
+    assert row["resolution_json"]["reason"] == "answer_refused"
+    assert row["resolution_json"]["evidence"]["answer_verified"] is False
+
+
+def test_a_turn_that_ends_asking_something_else_settles_the_unrecorded_answer(sv, routes, fake_host, scene):
+    """The answer went out, a host tool prompt was declined, and the conductor now asks in chat."""
+    card = question_card(sv, routes, fake_host, scene)
+    label = LABELS[0]
+    status, receipt = _submit(sv, routes, fake_host, card, payload=answer_payload("A"), wire_text=label)
+    assert status == 200, receipt
+    _finish_the_turn(fake_host, scene.slot_key, wire_text=label)
+    assert _report(sv, routes, fake_host, card["action_id"], receipt)[0] == 200
+    append(scene, F.audit_block("HUMAN_TURN", ANSWERED))
+    stamp_human_turn(_record_dir(scene.root), ANSWERED)
+    asyncio.run(sv.reconciler.reconcile_now(card["action_id"]))
+    assert _row(sv, card["action_id"])["status"] == "Delivered", "no new question yet: keep waiting"
+
+    fake_host.get_slot(scene.slot_key).options = ["Go on and save the command", "Choose the command later"]
+    for _ in range(3):
+        asyncio.run(sv.reconciler.reconcile_now(card["action_id"]))
+    row = _row(sv, card["action_id"])
+    assert row["status"] == "ResolvedNoTransition"
+    assert row["resolution_json"]["reason"] == "answer_not_recorded"

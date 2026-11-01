@@ -85,9 +85,14 @@ export function GateTemplate({ card, detail, draft, setDraft, refreshing, api, r
     (spec) => spec.decision === 'request_changes' || spec.decision === 'request_plan_changes',
   )
 
-  // The produced artifact of this stage: the route's selection when it names one of them, else the first.
+  // The produced artifact of this stage: the route's selection when it names one of them, else the first
+  // real product. The stage diary (`memory.md`) and the questions sheet sit in the same directory and are
+  // often the newest files there, but they are not what the gate approves.
+  const featured = artifacts.find((meta) => meta.kind === 'artifact')
+    ?? artifacts.find((meta) => meta.kind !== 'memory' && meta.kind !== 'questions')
+    ?? artifacts[0] ?? null
   const selected: ArtifactMeta | null =
-    artifacts.find((meta) => meta.artifact_id === route.artifact) ?? artifacts[0] ?? null
+    artifacts.find((meta) => meta.artifact_id === route.artifact) ?? featured
   const body = useArtifactBody(card.repo.repo_id, card.intent.intent_key, selected)
 
   const openAnchor = (anchor: string) => {

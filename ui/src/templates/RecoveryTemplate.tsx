@@ -64,6 +64,11 @@ export function RecoveryTemplate({ card, detail, api, go }: TemplateProps) {
   const codes = card.headline.params.codes
   const missingSession = (Array.isArray(codes) && codes.includes('session_lost_mid_stage'))
     || card.headline.params.reason === 'session_lost_mid_stage'
+  // The prompt hook never ran (reconciler `_presence` → `hooks_silent`): name that cause, because the
+  // generic reading — AI-DLC's files disagree — sends the user looking for a contradiction that is not there.
+  const hooksSilent = evidence.findings.some(
+    (finding) => finding.code === 'human_presence_anomaly' && finding.params?.hooks_silent === true,
+  )
   const deliveryConfirmed = delivery.delivery_confirmed === true
   const needsReconciliation = card.status === 'ReconciliationRequired' || delivery.outcome === 'uncertain'
 
@@ -89,6 +94,18 @@ export function RecoveryTemplate({ card, detail, api, go }: TemplateProps) {
               tab: 'conversation',
             })}>
               {t('template.recovery.manageConversation')}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {hooksSilent && !closed ? (
+        <div className="studio-consequence">
+          <Icon name="warn" size={14} />
+          <div>
+            <p>{t('template.recovery.hooksSilent')}</p>
+            <button type="button" className="studio-btn" onClick={() => go({ ...EMPTY_ROUTE, view: 'settings' })}>
+              {t('template.recovery.openBunSettings')}
             </button>
           </div>
         </div>

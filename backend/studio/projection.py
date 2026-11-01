@@ -18,8 +18,10 @@ why the reconciler can run it on the scan pool and a test can pin a rule with a 
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from dataclasses import field as dataclasses_field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
@@ -127,6 +129,11 @@ _CHECKPOINT_DECISIONS: dict[str, tuple[str, ...]] = {
 #: finishes — a critical card for it would teach the user to ignore critical cards.
 RECOVERY_EXCLUDED_FINDINGS: frozenset[str] = frozenset({"delivery_uncertain_action", "lease_conflict"})
 
+#: Blocking findings that refuse a dispatch but describe no contradiction to reconcile: another
+#: intent's turn holds the repository. They must not turn an intent red — a completed intent read
+#: "Needs reconciliation" the moment a second intent in its repository started.
+SCHEDULING_FINDINGS: frozenset[str] = frozenset({"lease_conflict"})
+
 #: Action types that represent a turn Studio asked for, as opposed to a boundary it observed. Only
 #: these make an intent `Queued` (review P08).
 COMMAND_ACTION_TYPES: frozenset[str] = frozenset({"run", "resume", "prepare_commit", "force_stop"})
@@ -138,6 +145,11 @@ UNCERTAIN_STATUSES: frozenset[str] = frozenset({"ReconciliationRequired"})
 
 #: How many audit rows `IntentDetail.audit_tail` carries (§1.8).
 AUDIT_TAIL_LIMIT = 50
+
+#: A conversation-reply card quotes the question it answers; the rest is one tab away.
+MAX_REPLY_EXCERPT_CHARS = 4000
+#: The host's reply-suggestion line, which the card already renders as buttons.
+OPTIONS_LINE_RE = re.compile(r"^[ \t]*\[OPTIONS:[^\n]*\][ \t]*$", re.MULTILINE)
 
 #: `## Q…` errors aside, `ERROR_LOGGED` is a failure only when dense — this many rows inside the window for the
 #: current stage. Isolated rows are the conductor correcting itself (FORMAT-NOTES §6) and raise no card.
@@ -202,6 +214,22 @@ def _json_of(obj: Any) -> Any:
 
 def _iso_from_ns(mtime_ns: int | None) -> str | None:
     return None if mtime_ns is None else C.iso_from_epoch(mtime_ns / 1_000_000_000)
+
+
+def _host_stamp(value: str) -> str | None:
+    """A host ``datetime.isoformat()`` stamp (``…:17.206272+00:00``) as a §0.2 wire stamp."""
+    if _epoch(value) is not None:
+        return value
+    raw = value.strip()
+    if raw[-1:] in ("z", "Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except (ValueError, TypeError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return C.iso_from_epoch(parsed.timestamp())
 
 
 def _sha12(*parts: str) -> str:
@@ -513,6 +541,9 @@ class IntentSummary(WireRecord):
     stable_boundary: Any | None
     unstable: bool
     is_active_cursor: bool
+    #: The stage AI-DLC is executing: the directive's, which in unit-major Construction runs ahead of the
+    #: `disk.current_stage` the state file keeps on the first block stage.
+    executing_stage: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -909,7 +940,12 @@ class Projection:
         types = [str(_attr(action, "type", "")) for action in live_actions]
         if str(_attr(binding, "archive_state", "active")) == "archived":
             return "Archived"
-        blocking = any(str(_attr(f, "severity", "")) == "blocking" for f in findings)
+        # A scheduling finding (another intent's turn holds the repository) refuses a dispatch but contradicts
+        # nothing: a completed intent read "Needs reconciliation" the moment a second one in its repository started.
+        blocking = any(
+            str(_attr(f, "severity", "")) == "blocking" and str(_attr(f, "code", "")) not in SCHEDULING_FINDINGS
+            for f in findings
+        )
         if blocking or any(status in UNCERTAIN_STATUSES for status in statuses):
             return "ReconciliationRequired"
         slot_running = bool(_attr(host, "running", False)) or bool(_attr(slot, "running", False))
@@ -1029,7 +1065,7 @@ class Projection:
     def derive_cards(
         self, snap: IntentSnapshot, *, findings: Sequence[Any], binding: Any | None, install: "InstallHealth | None",
         breakers: Sequence[Any], live_actions: Sequence[Any], slot: Any | None = None, git: Any | None = None,
-        host_card: dict | None = None, slot_lost: bool | None = None,
+        host_card: dict | None = None, slot_lost: bool | None = None, last_reply: Any | None = None,
     ) -> list[CardSeed]:
         """One seed per live boundary, in queue order (§1.8 table).
 
@@ -1137,7 +1173,13 @@ class Projection:
         newest = self._newest_action(live_actions)
         failed = newest if newest is not None and str(_attr(newest, "status", "")) == "Failed" and (
             self._deterministic(newest)) else None
-        burst = self._error_burst(snap)
+        # Never a burst while the turn still runs: the conductor may yet get past its errors, and an in-flight
+        # action's own errors are classified by the reconciler once its turn ends. Measured on a Standard run, a
+        # refused second review pass raised a red card with Retry now while the conductor went on to finish the unit.
+        in_turn = bool(_attr(slot, "running", False)) or any(
+            str(_attr(action, "status", "")) in ("Delivering", "Delivered") for action in live_actions
+        )
+        burst = None if in_turn else self._error_burst(snap)
         if failed is not None or burst is not None:
             waiting = (str(_attr(failed, "resolved_at", "") or _attr(failed, "updated_at", "") or snap.taken_at)
                        if failed is not None else burst)
@@ -1171,6 +1213,10 @@ class Projection:
                 {"engine_dir": _attr(install, "engine_dir"), "engine_version": _attr(install, "engine_version")},
                 token="recovery_required", reason="recovery_required", space_wide=True,
             ))
+
+        # Only when no other card speaks for this intent: an open boundary on disk is already what AI-DLC waits on.
+        if not any(seed.type != "revision" for seed in seeds):
+            seeds.extend(self._conversation_reply_seeds(snap, base, slot=slot, binding=binding, last_reply=last_reply))
 
         seeds.sort(key=lambda s: (priority_group_for(s.type), SEVERITY_RANK.get(s.severity, 3), s.dedupe_key))
         return seeds
@@ -1214,6 +1260,51 @@ class Projection:
             "unit": snap.unit if slug == snap.stage else None,
         }
 
+    def _conversation_reply_seeds(
+        self, snap: IntentSnapshot, base: dict, *, slot: Any | None, binding: Any | None, last_reply: Any | None,
+    ) -> list[CardSeed]:
+        """AI-DLC asked something only in the conversation, and nothing on disk records it.
+
+        The conductor sometimes asks a follow-up without logging a decision — the learnings ritual's "Add a note"
+        is the common one. The turn ends, no file or audit row is pending, and the intent read Idle with an empty
+        queue while AI-DLC waited on the human. The host's own reading of that last reply (``has_options``, the
+        ``[OPTIONS: …]`` suggestions it renders as reply buttons) is the evidence; the card offers the human's own
+        words as a free-text reply, sent verbatim, and only while the conversation is idle and bound.
+
+        ``last_reply`` is that reply's transcript row (redacted by the bridge), passed only when the newest row is
+        the assistant's. The suggestions alone are not enough to choose from — measured on a Standard run, "Keep
+        setuptools>=61" sat next to "Use setuptools>=64" while the warning that the first would fail Build and Test
+        was only in the conversation — so the card carries the message without its ``[OPTIONS: …]`` line. A
+        question with no suggestions at all is the same wait, so the agent having spoken last mid-stage is enough.
+        """
+        state = snap.state
+        if slot is None or state is None:
+            return []
+        options = ([str(o) for o in (_attr(slot, "options", ()) or ()) if str(o).strip()]
+                   if _attr(slot, "has_options", False) else [])
+        if (
+            not _attr(binding, "slot_key") or _attr(binding, "slot_key") != _attr(slot, "key")
+            or _attr(slot, "running", False) or _attr(slot, "queue_depth", 0) or _attr(slot, "busy_reasons", ())
+            or (state.status or "").lower() == "completed" or state.parked_at
+            or any(row.mark == "?" for row in state.stages)
+            or (not options and (last_reply is None or not any(row.mark in ("-", "R") for row in state.stages)))
+        ):
+            return []
+        questions = snap.questions
+        if questions is not None and (questions.pending_count or questions.pending_checkpoint):
+            return []
+        asked_at = str(_attr(slot, "last_turn_ts", "") or "") or snap.taken_at
+        text = OPTIONS_LINE_RE.sub("", str(_attr(last_reply, "content", "") or "")).strip()
+        if len(text) > MAX_REPLY_EXCERPT_CHARS:
+            text = text[:MAX_REPLY_EXCERPT_CHARS].rstrip() + "…"
+        reply = {"text": text, "ts": _host_stamp(str(_attr(last_reply, "ts", "") or "")) or None} if text else None
+        return [self._seed(
+            snap, "missing_input", snap.stage, {**base, "conversation_reply": reply},
+            _host_stamp(asked_at) or snap.taken_at, ("provide_input",),
+            {"reason": "conversation_reply", "kind": "free_text", "options": options},
+            token=_sha12("conversation_reply", asked_at, *options), reason="conversation_reply",
+        )]
+
     @staticmethod
     def _error_burst(snap: IntentSnapshot) -> str | None:
         """Newest unresolved burst in the current scope, using audit causality rather than age.
@@ -1221,12 +1312,20 @@ class Projection:
         Only complete history can prove that a later lifecycle boundary retired old errors. Same-shard
         append order is authoritative; cross-shard timestamp ties cannot prove resolution. Unit-scoped
         boundaries never clear another unit's errors, and separate units never combine into a burst.
+        An error row without a unit belongs to the selected unit, so that unit's own boundaries clear it.
+
+        Progress the conductor made after the errors is a boundary too: the stage reaching its gate, a
+        recorded answer, and Construction's per-unit `UNIT_*` rows, which are how a unit of a stage
+        starts and finishes — `STAGE_COMPLETED` only comes once every unit is done, so without them a
+        burst in the first Construction stage stayed a failure through every later stage of the unit.
         """
         stage = snap.stage
         workflow_boundaries = {"WORKFLOW_STARTED", "WORKFLOW_COMPLETED"}
         stage_boundaries = {
             "STAGE_STARTED", "STAGE_REVISING", "STAGE_JUMPED",
-            "STAGE_COMPLETED", "STAGE_SKIPPED", "GATE_APPROVED",
+            "STAGE_COMPLETED", "STAGE_SKIPPED", "STAGE_AWAITING_APPROVAL",
+            "UNIT_STARTED", "UNIT_RESUMED", "UNIT_COMPLETED",
+            *C.RESOLUTION_EVENTS,
         }
         boundaries = [
             event for event in snap.audit.events
@@ -1240,8 +1339,10 @@ class Projection:
             if boundary.event in workflow_boundaries:
                 return boundary_unit is None
             boundary_stage = boundary.fields.get("Stage")
+            error_unit = error.fields.get("Unit") or None
             return (
-                bool(boundary_stage) and boundary_unit == (error.fields.get("Unit") or None)
+                bool(boundary_stage)
+                and boundary_unit in ({error_unit} if error_unit else {None, snap.unit})
                 and error.fields.get("Stage") in (None, "", boundary_stage)
             )
 
@@ -1344,7 +1445,8 @@ class Projection:
             # as does a decision already sent: it waits on AI-DLC, not on the person.
             open_actions=sum(1 for a in live_actions if str(_attr(a, "type", "")) != "revision"
                              and str(_attr(a, "status", "")) in C.AWAITING_PERSON_STATUS),
-            blocking_findings=sum(1 for f in findings if str(_attr(f, "severity", "")) == "blocking"),
+            blocking_findings=sum(1 for f in findings if str(_attr(f, "severity", "")) == "blocking"
+                                  and str(_attr(f, "code", "")) not in SCHEDULING_FINDINGS),
             warn_findings=sum(1 for f in findings if str(_attr(f, "severity", "")) == "warn"),
             session=host, archived=str(_attr(binding, "archive_state", "active")) == "archived",
             paused=bool(_attr(binding, "paused", False)),
@@ -1352,6 +1454,7 @@ class Projection:
             last_activity_at=self._latest_ts(snap, C.MOVEMENT_EVENTS, None),
             stable_boundary=_attr(binding, "last_stable_boundary"), unstable=not snap.stable,
             is_active_cursor=snap.is_active,
+            executing_stage=snap.stage,
         )
 
     def detail(
@@ -1480,7 +1583,39 @@ class Projection:
             "artifacts": [meta.to_json() for meta in metas],
             "skip_reasons": self._skip_reasons(snap),
             "attempts": self._attempts(snap),
+            "unit_receipts": self._unit_receipts(snap),
         }
+
+    @staticmethod
+    def _unit_receipts(snap: IntentSnapshot) -> dict[str, dict[str, str]]:
+        """`{stage: {unit: "in_progress" | "completed"}}` from each unit's newest lifecycle row in the stage's current
+        attempt (`UNIT_STARTED` … `UNIT_COMPLETED`, written since 2.10).
+
+        Under unit-major iteration a per-unit row stays `[ ]` until every unit has walked the block, and the unit that
+        finished NFR Design read "Not started". A receipt older than the workflow's start or the stage's latest
+        revise, jump or rejection belongs to an earlier attempt and says nothing about this one.
+        """
+        main = [e for e in snap.audit.events if e.fields.get("Workflow") in (None, "", "main")]
+        started = max((e.sort_key for e in main if e.event == "WORKFLOW_STARTED"), default=None)
+        floors: dict[str, Any] = {}
+        for event in main:
+            slug = event.fields.get("Stage")
+            if slug and event.event in ("STAGE_REVISING", "STAGE_JUMPED", "GATE_REJECTED"):
+                floors[slug] = max(floors.get(slug, event.sort_key), event.sort_key)
+        newest: dict[tuple[str, str], AuditEvent] = {}
+        for event in main:
+            slug, unit = event.fields.get("Stage"), event.fields.get("Unit")
+            if event.event not in C.UNIT_LIFECYCLE_EVENTS or not slug or not unit:
+                continue
+            floor = max((f for f in (started, floors.get(slug)) if f is not None), default=None)
+            if floor is not None and event.sort_key <= floor:
+                continue
+            if (slug, unit) not in newest or event.sort_key > newest[(slug, unit)].sort_key:
+                newest[(slug, unit)] = event
+        out: dict[str, dict[str, str]] = {}
+        for (slug, unit), event in newest.items():
+            out.setdefault(slug, {})[unit] = "completed" if event.event == "UNIT_COMPLETED" else "in_progress"
+        return out
 
     @staticmethod
     def _attempts(snap: IntentSnapshot) -> dict[str, dict[str, float | None]]:

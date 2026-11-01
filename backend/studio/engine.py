@@ -15,6 +15,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, replace
 from itertools import takewhile
 from pathlib import Path
@@ -695,3 +696,157 @@ def find_bun(
         if version:
             return BunLocation(path=path, version=version, source=source, searched=tuple(searched))
     return BunLocation(path=None, version=None, source=None, searched=tuple(searched))
+
+
+# --------------------------------------------------------------------------- #
+# bun inside a conversation
+# --------------------------------------------------------------------------- #
+
+#: The directories KiroCrew's agent launcher puts in front of every conversation's PATH
+#: (``kiro_crew.env._EXTRA_PATH_DIRS``, KiroCrew 0.10). Used only when the running host does not expose
+#: ``augmented_path``, so the answer is then an estimate and nothing is refused on it.
+CONVERSATION_PATH_FALLBACK_DIRS: tuple[str, ...] = (
+    "~/.local/bin",
+    "~/.toolbox/bin",
+    "~/.npm-packages/bin",
+    "~/.volta/bin",
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+)
+#: Where Studio offers to link ``bun``: the first directory KiroCrew adds to every conversation's PATH,
+#: inside the user's home, and already where the desktop app links ``kirocrew`` and ``kiro-cli``.
+CONVERSATION_BUN_LINK_DIR = "~/.local/bin"
+#: The link as error details name it: home-relative, because details never carry a path outside the
+#: registered repository (``errors.StudioError``).
+_LINK_DISPLAY = f"{CONVERSATION_BUN_LINK_DIR}/bun"
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationBun:
+    """Whether AI-DLC's hooks can start ``bun`` inside a KiroCrew conversation.
+
+    Studio runs the engine with an absolute path, but the harness Studio installs does not: every hook
+    in ``.kiro/agents/aidlc.json`` is ``bun .kiro/tools/aidlc.ts …``, resolved by kiro-cli against the
+    PATH the gateway hands the conversation. Under launchd that PATH is four system directories plus
+    KiroCrew's own additions, so a bun installed by its official installer (``~/.bun/bin``) is invisible
+    there while Studio reports it found. The hooks then fail silently: no ``HUMAN_TURN`` is ever
+    recorded, AI-DLC refuses every approval and answer as having no human behind it, and each decision
+    Studio sends ends as ``human_presence_anomaly``. Measured on a desktop gateway, 2026-10-30.
+
+    ``exact`` says the PATH was composed by the host's own launcher functions; an estimate is reported
+    but never used to refuse a decision.
+    """
+
+    found: bool
+    path: str | None
+    exact: bool
+    link_path: str
+    link_target: str | None
+    #: ``None`` when Studio can link, else why not: ``already_found``, ``bun_missing``,
+    #: ``link_dir_not_on_path`` or ``link_exists``.
+    link_blocked: str | None
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "found": self.found,
+            "path": self.path,
+            "exact": self.exact,
+            "link": {
+                "path": self.link_path,
+                "target": self.link_target,
+                "available": self.link_blocked is None,
+                "blocked_reason": self.link_blocked,
+            },
+        }
+
+
+def _loaded_host_function(module: str, name: str) -> Callable[..., Any] | None:
+    """A host function from a module the gateway has already imported, else ``None``. Never imports."""
+    mod = sys.modules.get(module)
+    fn = getattr(mod, name, None) if mod is not None else None
+    return fn if callable(fn) else None
+
+
+def conversation_path(environ: Mapping[str, str] | None = None) -> tuple[str, bool]:
+    """The PATH a new KiroCrew conversation starts with, and whether the host composed it.
+
+    Mirrors ``kiro_crew.acp.launch``: the gateway's environment, then ``agent.env`` over it, then
+    ``augmented_path`` in front. Blocking (``agent.env`` may read the host config); call off the loop.
+    """
+    base = dict(os.environ if environ is None else environ)
+    overlay = _loaded_host_function("kiro_crew.acp.agent_env", "agent_env_overlay")
+    augment = _loaded_host_function("kiro_crew.env", "augmented_path")
+    exact = overlay is not None and augment is not None
+    if overlay is not None:
+        try:
+            base.update({str(k): str(v) for k, v in dict(overlay()).items()})
+        except Exception:  # noqa: BLE001 - an unreadable host config makes this an estimate, not a crash
+            exact = False
+    path = base.get("PATH") or os.defpath
+    if augment is not None:
+        try:
+            return str(augment(path)), exact
+        except Exception:  # noqa: BLE001
+            pass
+    extra = [str(Path(entry).expanduser()) for entry in CONVERSATION_PATH_FALLBACK_DIRS]
+    return os.pathsep.join([*extra, path]), False
+
+
+def conversation_bun(bun_path: str | None, environ: Mapping[str, str] | None = None) -> ConversationBun:
+    """Can a conversation start ``bun``, and can Studio make it able to? Blocking; call off the loop."""
+    path, exact = conversation_path(environ)
+    resolved = shutil.which("bun", path=path)
+    link_dir = Path(CONVERSATION_BUN_LINK_DIR).expanduser()
+    link = link_dir / "bun"
+    if resolved:
+        blocked: str | None = "already_found"
+    elif not bun_path:
+        blocked = "bun_missing"
+    elif str(link_dir) not in path.split(os.pathsep):
+        blocked = "link_dir_not_on_path"
+    elif os.path.lexists(link):
+        blocked = "link_exists"
+    else:
+        blocked = None
+    return ConversationBun(
+        found=bool(resolved),
+        path=resolved,
+        exact=exact,
+        link_path=str(link),
+        link_target=bun_path,
+        link_blocked=blocked,
+    )
+
+
+def link_conversation_bun(bun_path: str | None) -> ConversationBun:
+    """Symlink Studio's ``bun`` into ``~/.local/bin`` so conversations resolve it. Blocking.
+
+    The only write Studio makes outside a repository and its own data directory, so it is narrow by
+    construction: one fixed link name, created only where nothing exists yet, pointing at the
+    executable Studio already proved runs, and only when that directory is on the conversation PATH.
+    Never replaces a file, never follows a user-supplied path.
+    """
+    before = conversation_bun(bun_path)
+    if before.found:
+        return before
+    if before.link_blocked is not None:
+        raise StudioError(
+            "invalid_decision",
+            "Studio cannot link bun for conversations",
+            details={"reason": before.link_blocked, "link": _LINK_DISPLAY},
+        )
+    target = str(bun_path)
+    if not Path(target).is_absolute() or not os.access(target, os.X_OK):
+        raise StudioError("bun_missing", "the bun Studio found can no longer be run",
+                          details={"path": target})
+    link = Path(before.link_path)
+    try:
+        link.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+        os.symlink(target, link)
+    except FileExistsError as exc:
+        raise StudioError("invalid_decision", "a file appeared where Studio would link bun",
+                          details={"reason": "link_exists", "link": _LINK_DISPLAY}) from exc
+    except OSError as exc:
+        raise StudioError("storage_unavailable", "Studio could not create the bun link",
+                          details={"link": _LINK_DISPLAY, "errno": exc.errno}) from exc
+    return conversation_bun(bun_path)

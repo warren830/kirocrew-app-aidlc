@@ -242,6 +242,21 @@ describe('buildMap', () => {
     expect(model.units).toEqual(['ledger-export', 'refunds', 'audit-log'])
   })
 
+  it("reads a unit's lifecycle receipt over the stage row while the row is open", () => {
+    const inputs: Partial<MapInputs> = {
+      units: ['ledger-export', 'refunds', 'audit-log'],
+      active_unit: 'refunds',
+      unit_receipts: { 'code-generation': { 'ledger-export': 'completed', refunds: 'in_progress' } },
+    }
+    // unit-major: the row stays [ ] until every unit has walked the block
+    expect(stage(buildMap(planned({ 'code-generation': 'not_started' }, inputs)), 'code-generation').units.map((unit) => unit.state))
+      .toEqual(['completed', 'in_progress', 'not_started'])
+    // a done row speaks for every unit; a receipt does not reopen one
+    expect(stage(buildMap(planned({ 'code-generation': 'completed' }, {
+      ...inputs, unit_receipts: { 'code-generation': { 'ledger-export': 'in_progress' } },
+    })), 'code-generation').units.map((unit) => unit.state)).toEqual(['not_started', 'completed', 'not_started'])
+  })
+
   it('measures the latest attempt: to the end when it ended, to the server\'s now while in flight', () => {
     const model = buildMap(planned(
       { 'requirements-analysis': 'awaiting_approval', 'workspace-scaffold': 'completed', 'user-stories': 'in_progress' },

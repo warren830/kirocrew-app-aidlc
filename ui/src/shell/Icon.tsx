@@ -57,6 +57,7 @@ export const ICON_NAMES = {
   sun: 'Sun',
   // lucide 1.7.0 has no Slack brand glyph in any form (§11), and a wrong brand mark is worse than none.
   slack: 'MessageSquare',
+  chat: 'MessageSquare',
   git: 'GitBranch',
   lock: 'Lock',
   plus: 'Plus',

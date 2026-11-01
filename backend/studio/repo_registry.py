@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 from . import constants as C
 from . import security
-from .engine import find_bun
+from .engine import conversation_bun, find_bun
 from .errors import StudioError
 from .storage import EvidenceRef, Storage
 from .wire import WireRecord
@@ -60,7 +60,10 @@ REBINDABLE_AVAILABILITY = ("moved", "unavailable", "permission_denied")
 
 #: Preflight warning codes (§1.5) with the severity each carries (§1.7 vocabulary).
 PREFLIGHT_WARNING_SEVERITY = {"legacy_layout": "warn", "engine_version_unknown": "warn",
-                              "mixed_harness_versions": "warn", "bun_missing": "warn", "git_missing": "info"}
+                              "mixed_harness_versions": "warn", "bun_missing": "warn", "git_missing": "info",
+                              # Studio can run bun, but AI-DLC's hooks inside a conversation cannot
+                              # (``engine.ConversationBun``).
+                              "bun_not_on_conversation_path": "warn"}
 
 #: What a rebind rewrites; label, archive flag, history and ``receipt_version`` stay as they were.
 _REBIND_COLUMNS = ("canonical_path", "resolved_identity", "git_common_dir_identity", "platform",
@@ -352,6 +355,8 @@ class RepoRegistry:
             if not bun.found:  # the finding is stored: "not installed" is only true next to where we looked
                 warnings.append(_warning("bun_missing", {"locations": list(bun.searched)},
                                          EvidenceRef("studio", "bun")))
+            elif not conversation_bun(bun.path).found:
+                warnings.append(_warning("bun_not_on_conversation_path", {}, EvidenceRef("studio", "bun")))
         if git_reason == "git_missing":
             warnings.append(_warning("git_missing", {}, EvidenceRef("studio", "git")))
 

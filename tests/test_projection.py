@@ -10,6 +10,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import fixtures as F
@@ -81,6 +82,7 @@ class SlotStub:
     session_key: str = "dashboard:aidlc-studio-r_000000000001-260904-gate-demo"
     busy_reasons: tuple[str, ...] = ()
     session_live: bool | None = True
+    has_options: bool = False
     options: tuple[str, ...] = ()
 
 
@@ -548,7 +550,14 @@ def test_rule_03_interrupted_only_while_the_stop_is_in_flight(op):
 def test_rule_04_breaker_open(op):
     assert op(breaker_open=True) == "CircuitOpen"
     # but a blocking finding still outranks it
-    assert op(breaker_open=True, findings=[FindingStub("lease_conflict", "blocking")]) == "ReconciliationRequired"
+    assert op(breaker_open=True, findings=[FindingStub("cursor_mismatch", "blocking")]) == "ReconciliationRequired"
+
+
+def test_another_intents_turn_holding_the_repository_is_not_a_reconciliation(op, projection, gate_snap):
+    # Measured on a Standard run: starting a second intent turned the completed one red.
+    held = [FindingStub("lease_conflict", "blocking")]
+    assert op(findings=held) == "WaitingForYou"
+    assert projection.summarize(gate_snap, findings=held).blocking_findings == 0
 
 
 def test_rule_05_completed_and_rule_06_parked(op, snap_of, parked_repo):
@@ -800,6 +809,64 @@ def test_question_card_from_a_host_needs_input_signal(projection, snap_of, repo_
     assert snap.questions is not None and snap.questions.pending_count == 0 and _seeds(projection, snap) == []
     seeds = _seeds(projection, snap, slot=SlotStub(needs_input=True))
     assert [seed.type for seed in seeds] == ["question"] and seeds[0].reason == "needs_input"
+
+
+def _conversation_snap(snap_of, repo_builder, *, mark="-"):
+    return snap_of(build(repo_builder, "conversation", audit=STARTED_AUDIT,
+                         state=F.state_text(marks={GATE_STAGE: mark}, fields=RUNNING)))
+
+
+ASKED_IN_CHAT = SlotStub(has_options=True, options=("Interpretation", "Deviation"),
+                         last_turn_ts="2026-09-04T10:00:17.206272+00:00")
+
+
+def test_a_question_asked_only_in_the_conversation_becomes_a_reply_card(projection, snap_of, repo_builder):
+    """The learnings "Add a note" follow-up is asked in chat only; the queue must not read empty."""
+    snap = _conversation_snap(snap_of, repo_builder)
+    seeds = _seeds(projection, snap, slot=ASKED_IN_CHAT, binding=SessionStub())
+    assert [seed.type for seed in seeds] == ["missing_input"]
+    seed = seeds[0]
+    assert seed.reason == "conversation_reply" and seed.decisions == ("provide_input",)
+    assert seed.headline_params == {"reason": "conversation_reply", "kind": "free_text",
+                                    "options": ["Interpretation", "Deviation"]}
+    assert seed.risk_class == "human_lane" and seed.waiting_since == "2026-09-04T10:00:17Z"
+    # A new question in the conversation is a new card, not the old one reused.
+    later = replace(ASKED_IN_CHAT, last_turn_ts="2026-09-04T10:05:00+00:00")
+    assert _seeds(projection, snap, slot=later, binding=SessionStub())[0].dedupe_key != seed.dedupe_key
+
+
+def test_a_reply_card_quotes_the_question_without_its_suggestion_line(projection, snap_of, repo_builder):
+    snap = _conversation_snap(snap_of, repo_builder)
+    reply = SimpleNamespace(role="assistant", ts="2026-09-04T10:00:17.206272+00:00",
+                            content="Keeping setuptools>=61 will likely fail.\n\n[OPTIONS: Interpretation | Deviation]")
+    seed = _seeds(projection, snap, slot=ASKED_IN_CHAT, binding=SessionStub(), last_reply=reply)[0]
+    assert seed.evidence["conversation_reply"] == {"text": "Keeping setuptools>=61 will likely fail.",
+                                                   "ts": "2026-09-04T10:00:17Z"}
+    # Without a readable reply the card still offers the suggestions; it just quotes nothing.
+    assert _seeds(projection, snap, slot=ASKED_IN_CHAT, binding=SessionStub())[0].evidence["conversation_reply"] is None
+
+
+def test_a_question_asked_without_suggestions_still_gets_a_reply_card(projection, snap_of, repo_builder):
+    # Measured on a Standard run: "What should the note say? Type it in your own words." offered no [OPTIONS: …],
+    # and the intent read Idle with an empty queue while AI-DLC waited.
+    snap = _conversation_snap(snap_of, repo_builder)
+    quiet = replace(ASKED_IN_CHAT, has_options=False, options=())
+    reply = SimpleNamespace(role="assistant", ts="2026-09-04T10:00:17Z", content="What should the note say?")
+    seed = _seeds(projection, snap, slot=quiet, binding=SessionStub(), last_reply=reply)[0]
+    assert seed.type == "missing_input" and seed.headline_params["options"] == []
+    assert seed.evidence["conversation_reply"]["text"] == "What should the note say?"
+    # Without the agent having spoken last there is nothing to answer.
+    assert _seeds(projection, snap, slot=quiet, binding=SessionStub()) == []
+
+
+@pytest.mark.parametrize("why", ["no_options", "running", "queued", "unbound", "other_slot", "gate_open"])
+def test_no_reply_card_without_an_idle_bound_conversation_asking(projection, snap_of, repo_builder, why):
+    snap = _conversation_snap(snap_of, repo_builder, mark="?" if why == "gate_open" else "-")
+    slot = {"no_options": replace(ASKED_IN_CHAT, has_options=False), "running": replace(ASKED_IN_CHAT, running=True),
+            "queued": replace(ASKED_IN_CHAT, queue_depth=1)}.get(why, ASKED_IN_CHAT)
+    binding = {"unbound": SessionStub(slot_key=""),
+               "other_slot": SessionStub(slot_key="aidlc-studio-r_000000000001-other")}.get(why, SessionStub())
+    assert "missing_input" not in {seed.type for seed in _seeds(projection, snap, slot=slot, binding=binding)}
 
 
 def test_missing_input_card_for_a_dangling_cursor_is_admin_lane_and_space_scoped(projection, snap_of, dangling_repo):
@@ -1081,7 +1148,8 @@ def test_priority_group_table_covers_every_action_type(proj_mod, C):
 
 # --- map inputs (the assembly is `ui/src/map/buildMap.ts`, pinned by `buildMap.test.ts`) ---
 MAP_INPUT_KEYS = {"intent_key", "graph_version", "now", "nodes", "rows", "status", "phases", "current_stage",
-                  "directive_stage", "scope_grid", "units", "active_unit", "artifacts", "skip_reasons", "attempts"}
+                  "directive_stage", "scope_grid", "units", "active_unit", "artifacts", "skip_reasons", "attempts",
+                  "unit_receipts"}
 MAP_NODE_KEYS = {"slug", "number", "name", "phase", "execution", "mode", "lead_agent", "reviewer", "review_class",
                  "summary_confirmation", "per_unit", "consumes", "produces", "requires_stage"}
 
@@ -1238,7 +1306,7 @@ def test_artifacts_truncation_is_reported(projection, snap_of, gate_repo, monkey
 SUMMARY_KEYS = {"repo_id", "repo_label", "space", "intent_dir", "intent_key", "uuid", "slug", "scope",
                 "registry_status", "title", "operational_state", "disk", "counts", "open_actions",
                 "blocking_findings", "warn_findings", "session", "archived", "paused", "interrupted",
-                "last_activity_at", "stable_boundary", "unstable", "is_active_cursor"}
+                "last_activity_at", "stable_boundary", "unstable", "is_active_cursor", "executing_stage"}
 DETAIL_EXTRA_KEYS = {"state_sections", "phases", "stages", "findings", "actions", "directive", "recovery", "markers",
                      "audit_tail", "questions", "artifacts_count", "artifacts_truncated", "git", "binding", "engine",
                      "active_directive_stage"}
@@ -1463,3 +1531,37 @@ def test_a_cards_review_class_is_capped_like_the_plan(proj_mod, scope_cap, overr
     snap = _review_snap("s", override, scopes=(NS(name="s", review_cap=scope_cap),))
     assert proj_mod._run_review_class(snap, NS(review_class=node_class, reviewer=reviewer)) == expected
     assert proj_mod._run_review_class(snap, None) is None
+
+
+def test_the_summary_names_the_stage_a_unit_major_walk_is_executing(projection, repo_record, repo_builder):
+    from test_aidlc_reader import unit_major_repo
+
+    snap = projection.snapshot(repo_record(unit_major_repo(repo_builder)), "default", "260904-unit-major")
+    body = projection.summarize(snap).to_json()
+    assert body["disk"]["current_stage"] == "functional-design"   # the file's own words, unjudged
+    assert body["executing_stage"] == "nfr-requirements"
+
+
+def test_map_unit_receipts_follow_the_units_own_lifecycle_rows(projection, repo_record, repo_builder):
+    # Unit-major keeps every per-unit row `[ ]` until the block is done; the unit that finished a stage read
+    # "Not started" on the map. The receipts say where each unit is.
+    state = F.state_text(
+        marks={"functional-design": "-", "nfr-requirements": " ", "nfr-design": " "},
+        fields={"Current Stage": "functional-design", "Status": "Running", "Lifecycle Phase": "CONSTRUCTION"})
+    for key, value in (("Unit State", "in-progress"), ("Active Unit", "unit-a"),
+                       ("Construction Iteration", "unit-major")):
+        state = F.insert_runtime_field(state, key, value)
+    rows = [
+        F.audit_block("STAGE_STARTED", "2026-09-04T08:59:00Z", Stage="functional-design"),
+        F.audit_block("UNIT_STARTED", "2026-09-04T09:00:00Z", Stage="functional-design", Unit="unit-a"),
+        F.audit_block("UNIT_COMPLETED", "2026-09-04T09:10:00Z", Stage="functional-design", Unit="unit-a"),
+        F.audit_block("UNIT_STARTED", "2026-09-04T09:11:00Z", Stage="nfr-requirements", Unit="unit-a"),
+        # A revise reopens the stage's attempt: what the unit did before it says nothing about this one.
+        F.audit_block("UNIT_STARTED", "2026-09-04T08:00:00Z", Stage="nfr-design", Unit="unit-a"),
+        F.audit_block("STAGE_REVISING", "2026-09-04T08:30:00Z", Stage="nfr-design"),
+    ]
+    root = repo_builder.with_engine("payload").with_workspace().with_intent(
+        GATE_DIR, state=state, audit=F.audit_text(*rows)).build()
+    inputs = projection.map_inputs(projection.snapshot(repo_record(root), "default", GATE_DIR))
+    assert inputs["unit_receipts"] == {"functional-design": {"unit-a": "completed"},
+                                       "nfr-requirements": {"unit-a": "in_progress"}}

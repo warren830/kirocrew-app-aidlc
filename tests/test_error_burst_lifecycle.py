@@ -58,6 +58,8 @@ def failure(projection, snap, **overrides):
 @pytest.mark.parametrize("kind", [
     "WORKFLOW_STARTED", "WORKFLOW_COMPLETED", "STAGE_STARTED", "STAGE_REVISING",
     "STAGE_COMPLETED", "GATE_APPROVED", "STAGE_SKIPPED", "STAGE_JUMPED",
+    # The conductor got past the errors itself: the stage reached its gate or an answer was recorded.
+    "STAGE_AWAITING_APPROVAL", "QUESTION_ANSWERED", "PLAN_APPROVAL_RECORDED",
 ])
 def test_proven_lifecycle_boundary_retires_an_older_burst(snapshot, projection, kind, bound_stage):
     barrier = event(kind, 40, **({} if kind.startswith("WORKFLOW_") else {"Stage": STAGE}))
@@ -98,7 +100,8 @@ def test_cross_shard_boundary_tie_cannot_prove_a_burst_resolved(snapshot, projec
     assert failure(projection, snap) is not None
 
 
-@pytest.mark.parametrize("kind", ["STAGE_STARTED", "STAGE_COMPLETED", "GATE_APPROVED", "WORKFLOW_COMPLETED"])
+@pytest.mark.parametrize("kind", ["STAGE_STARTED", "STAGE_COMPLETED", "GATE_APPROVED", "WORKFLOW_COMPLETED",
+                                  "UNIT_COMPLETED"])
 @pytest.mark.parametrize("selected_unit", ["unit-a", None])
 def test_another_units_progress_does_not_resolve_unit_a_errors(snapshot, projection, kind, selected_unit):
     snap = snapshot([*errors(stage=STAGE, unit="unit-a"), event(kind, 40, Stage=STAGE, Unit="unit-b")],
@@ -138,6 +141,30 @@ UNIT_A = {"stage": STAGE, "unit": "unit-a"}
 ])
 def test_a_burst_resolves_only_through_its_own_proven_boundary(snapshot, projection, rows, options, resolved):
     assert (failure(projection, snapshot(rows, **options)) is None) is resolved
+
+
+@pytest.mark.parametrize("kind,stage", [("UNIT_COMPLETED", STAGE), ("UNIT_STARTED", NEXT)])
+def test_construction_unit_progress_resolves_the_selected_units_unscoped_errors(snapshot, projection, kind, stage):
+    # Measured on a Standard run: `aidlc-log review` refusals carry no Stage or Unit, and the unit then completed
+    # functional-design and started nfr-requirements while the state still named functional-design
+    # (STAGE_COMPLETED waits for every unit). The red card stayed up all along.
+    snap = snapshot([event("STAGE_STARTED", 0, Stage=STAGE), *errors(), event(kind, 40, Stage=stage, Unit="unit-a")],
+                    unit="unit-a")
+    assert failure(projection, snap) is None
+
+
+def test_another_units_progress_leaves_unscoped_errors_of_the_selected_unit(snapshot, projection):
+    snap = snapshot([*errors(), event("UNIT_COMPLETED", 40, Stage=STAGE, Unit="unit-b")], unit="unit-a")
+    assert failure(projection, snap) is not None
+
+
+@pytest.mark.parametrize("running,status", [(True, None), (False, "Delivering"), (False, "Delivered")])
+def test_no_burst_card_while_the_turn_is_still_running(snapshot, projection, running, status):
+    snap = snapshot([event("STAGE_STARTED", 0, Stage=STAGE), *errors(stage=STAGE)])
+    live = [ActionStub(type="question", status=status, stage=STAGE)] if status else []
+    assert failure(projection, snap, slot=SlotStub(running=running), live_actions=live) is None
+    # The turn ending without getting past them is the loop a human has to break.
+    assert failure(projection, snap, slot=SlotStub()) is not None
 
 
 def test_terminal_completion_keeps_explicit_action_failures_and_circuit_cards(snapshot, projection):

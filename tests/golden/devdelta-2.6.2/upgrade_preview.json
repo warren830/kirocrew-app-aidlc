@@ -148,7 +148,7 @@
     }
    ],
    "blocking": true,
-   "bytes_to_write": 9910103,
+   "bytes_to_write": 9911261,
    "counts": {
     "conflict": 11,
     "create": 315,
@@ -1076,9 +1076,9 @@
      "live_sha256": null,
      "ownership": "framework",
      "path": ".kiro/hooks/aidlc-kiro-adapter.ts",
-     "payload_sha256": "9dfde4e8ae3c9fcecfcd1cd101f7eb0be15168fa6075b5f23f7f86815485a484",
+     "payload_sha256": "f11a3a1b7188e9f5fd7b30f4b33c233ade2a7a6db9d7bd30e8b79f2f2bfc274a",
      "receipt_sha256": null,
-     "size": 58039
+     "size": 58961
     },
     {
      "action": "create",
@@ -2780,9 +2780,9 @@
      "live_sha256": null,
      "ownership": "framework",
      "path": ".kiro/steering/aidlc-onboarding.md",
-     "payload_sha256": "bda41e102cbf03b9c0ab4f91d155186ac6dfc193989ddf1cf921ce9a8966b7ab",
+     "payload_sha256": "09572325818af52497a2fe798f3b953d45e1484b1fab388a8054cd29da67ef81",
      "receipt_sha256": null,
-     "size": 14754
+     "size": 14990
     },
     {
      "action": "create",
@@ -4203,7 +4203,7 @@
    ],
    "kind": "upgrade",
    "newer_installed": false,
-   "payload_digest": "38c7a32cbbe91df0de553cf695968ab3ffa55049f3d1a40bbe89e0add99fc08d",
+   "payload_digest": "31847b0cf8bbdfe25ec9234b7f75d316ba591932f3d5cca461cdf6337b40974c",
    "preflight": {
     "aidlc": {
      "intents": 2,
@@ -4261,7 +4261,7 @@
    "studio_version": "2.0.0-beta.1",
    "warnings": []
   },
-  "plan_digest": "e0db6c72bc50ee2a70e74bf7c6dffd105d956223491adbe87a29897c251e0ceb"
+  "plan_digest": "0d22fdfafdb6fb01f653988e5ec1f64ae3e88e1b4a9242515dee4ef4385ac3c8"
  },
  "status": 200
 }

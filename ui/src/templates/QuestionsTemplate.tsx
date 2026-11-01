@@ -352,6 +352,31 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
                     <MarkdownRenderer content={question.context} />
                   </div>
                 ) : null}
+                {question.learning_candidates?.length ? (
+                  // The ritual asked with ids only; this is what each id is, read from the stage diary.
+                  <div className="studio-learnings" role="note">
+                    <p>{t('template.questions.learnings.intro')}</p>
+                    <ul className="studio-list">
+                      {question.learning_candidates.map((candidate) => (
+                        <li key={candidate.id}>
+                          <span className="studio-mono studio-strong">{candidate.id}</span>
+                          {' · '}
+                          <span className="studio-muted">
+                            {i18n.has(`template.questions.learnings.heading.${candidate.heading}`)
+                              ? t(`template.questions.learnings.heading.${candidate.heading}`)
+                              : candidate.heading}
+                          </span>
+                          {' — '}
+                          {candidate.summary}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="studio-help">{t('template.questions.learnings.outcome')}</p>
+                    {question.learnings_memory ? (
+                      <p className="studio-help studio-mono studio-wrap-any">{question.learnings_memory}</p>
+                    ) : null}
+                  </div>
+                ) : null}
                 <p className="studio-q-sub">
                   <Chip>
                     {textInput ? t('template.questions.freeText')
@@ -433,6 +458,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
                             <span className="studio-opt-letter">{option.letter}</span>
                             {/* The option label is the engine's own text, verbatim (FR-Q-001). */}
                             <span className="studio-opt-label">{withInlineCode(option.text)}</span>
+                            {option.detail ? <span className="studio-opt-desc">{option.detail}</span> : null}
                             {option.is_other ? (
                               <span className="studio-opt-desc">{t('template.questions.otherDesc')}</span>
                             ) : null}

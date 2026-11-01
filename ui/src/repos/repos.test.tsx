@@ -1169,6 +1169,17 @@ describe('the harness Studio owns, next to one it does not', () => {
     expect(within(row).queryByText(/which Studio does not manage/)).not.toBeInTheDocument()
   })
 
+  it('calls a same-version payload refresh an update of the files, not an upgrade', async () => {
+    routes(repo({ install: install({ own_engine_version: '2.7.1', engine_version: '2.7.1' }) }))
+    mount()
+
+    const table = await screen.findByRole('table')
+    const row = within(table).getByRole('row', { name: /checkout-web/ })
+    expect(within(row).getByRole('button', { name: 'Update AI-DLC files' })).toBeInTheDocument()
+    expect(within(row).queryByRole('button', { name: /Upgrade AI-DLC/ })).not.toBeInTheDocument()
+    expect(within(row).getByText('Updated files available')).toBeInTheDocument()
+  })
+
   it("offers Install, not Upgrade, when a receipt survives but Studio's harness does not", async () => {
     // `.kiro` was deleted by hand: the receipt is still there, so every managed file reads as drift and
     // the registry reports `drift`. There is nothing left to upgrade — the install lane must rebuild it.

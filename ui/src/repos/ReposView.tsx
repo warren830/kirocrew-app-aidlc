@@ -107,7 +107,9 @@ export function ReposView({ route, go }: ViewProps) {
   const [flowState, setFlowState] = useState<FlowState>(NO_FLOW)
   const [busy, setBusy] = useState<RepoAction | null>(null)
   const [error, setError] = useState<StudioApiError | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  /** Keyed to the repository it is about: registering navigates to that repository, and the
+   *  selection reset below must not erase the one sentence that says what just happened. */
+  const [notice, setNotice] = useState<{ text: string; repoId: string } | null>(null)
   const [doctorRun, setDoctorRun] = useState<{ repoId: string; feedback: DoctorFeedback } | null>(null)
   const doctorRequest = useRef(0)
   const [rebindPath, setRebindPath] = useState('')
@@ -194,7 +196,7 @@ export function ReposView({ route, go }: ViewProps) {
   useEffect(() => {
     setBusy(null)
     setError(null)
-    setNotice(null)
+    setNotice((current) => (current && current.repoId === route.repo ? current : null))
     setSpacesRepo('')
     setDoctorRun(null)
     doctorRequest.current += 1
@@ -408,7 +410,7 @@ export function ReposView({ route, go }: ViewProps) {
         {error ? <ErrorNote error={error} reassure={t('repos.error.unchanged')} /> : null}
         {notice ? (
           <p className="studio-note" role="status">
-            <Icon name="check" size={13} /> {notice}
+            <Icon name="check" size={13} /> {notice.text}
           </p>
         ) : null}
 
@@ -606,7 +608,7 @@ export function ReposView({ route, go }: ViewProps) {
           onClose={closeFlow}
           onRegistered={(repo) => {
             closeFlow()
-            setNotice(t('repos.registered', { label: repo.label }))
+            setNotice({ text: t('repos.registered', { label: repo.label }), repoId: repo.repo_id })
             void repos.refresh()
             go({ repo: repo.repo_id, tx: '' })
           }}

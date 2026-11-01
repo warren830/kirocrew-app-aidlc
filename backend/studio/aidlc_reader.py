@@ -509,8 +509,58 @@ class Directive(WireRecord):
     marker_name: str = DIRECTIVE_FILENAME
 
 
-def parse_directive(data: bytes, state_sha256: str) -> Directive | None:
-    """The directive marker (v1 or v2) or ``None``; stale means ``matches_state=False`` (FORMAT-NOTES §11.5)."""
+#: ``STATE_DIGEST_IGNORED_FIELDS`` in aidlc-lib.ts: the state file's cache layer (timestamps, the active
+#: persona, the active Unit's lifecycle mirror, derived counts, project prose, workspace facts, the resume
+#: breadcrumb). The digest the engine stamps into the active directive (2.10 on) leaves these lines out.
+ENGINE_DIGEST_IGNORED_FIELDS = frozenset({
+    "Last Updated", "Active Agent", "Practices Affirmed Timestamp", "Start Date",
+    "Active Unit", "Unit Stage", "Unit State", "Unit Pause Reason", "Unit Next Action",
+    "Completed", "Worktree Path", "Bolt Refs",
+    "Project", "Project Description Source",
+    "Project Root", "Languages", "Frameworks", "Build System",
+    "Last Completed Stage", "Next Action", "Pending Artifacts",
+})
+_ENGINE_DIGEST_DERIVED_SECTION = "## Unit Progress"
+_ENGINE_DIGEST_LINES = re.compile(r"\r\n|[\n\r\u2028\u2029]")
+_ENGINE_DIGEST_FIELD = re.compile(r"^- \*\*([^*]+)\*\*:")
+
+
+def engine_state_digest(text: str) -> str:
+    """``stateDigest`` from aidlc-lib.ts: the sha256 of the state file's routing projection.
+
+    The engine binds its active directive to this projection, not to the file's bytes, so that a cache
+    write ("Last Updated", ``unit start`` setting Active Unit) does not invalidate the directive it just
+    issued. Compared against the raw file hash, every directive read stale minutes after it was issued,
+    and in unit-major Construction (where Current Stage stays on the first block stage) Studio then
+    read functional-design while the unit sat at Code Generation's Plan Approval: no card, and the
+    plan was approved in chat with text the protected checkpoint refused five times.
+    """
+    kept: list[str] = []
+    derived = False
+    for line in _ENGINE_DIGEST_LINES.split(text):
+        if line == "":
+            continue
+        if line.startswith("## "):
+            derived = line.strip() == _ENGINE_DIGEST_DERIVED_SECTION
+            kept.append(line)
+            continue
+        if derived and re.match(r"^[ \t]*\|", line):
+            continue
+        field = _ENGINE_DIGEST_FIELD.match(line)
+        name = field.group(1).strip() if field else None
+        if name in ENGINE_DIGEST_IGNORED_FIELDS:
+            continue
+        if name == "Change Control":
+            # The retired name of Guard Policy; a name-only migration keeps the directive.
+            line = "- **Guard Policy**:" + line[len("- **Change Control**:"):]
+        kept.append(line)
+    return hashlib.sha256("\n".join(kept).encode("utf-8")).hexdigest()
+
+
+def parse_directive(data: bytes, state_sha256: str, engine_digest: str | None = None) -> Directive | None:
+    """The directive marker (v1 or v2) or ``None``; stale means ``matches_state=False`` (FORMAT-NOTES §11.5). The
+    marker's digest is the file's sha256 for markers bound to bytes and ``engine_digest`` (``engine_state_digest``)
+    from 2.10 on, which binds the routing projection; either match is exact."""
     payload = _json_loads(data)
     if not isinstance(payload, dict):
         return None
@@ -529,7 +579,9 @@ def parse_directive(data: bytes, state_sha256: str) -> Directive | None:
     unit = payload.get("unit")
     return Directive(
         version=int(version), stage=stage, unit=str(unit) if isinstance(unit, str) and unit else None,
-        state_sha256=digest, matches_state=digest == state_sha256, kind=kind if version != 1 else None,
+        state_sha256=digest,
+        matches_state=digest == state_sha256 or (engine_digest is not None and digest == engine_digest),
+        kind=kind if version != 1 else None,
         units=_str_tuple(payload.get("units")),
         zero_unit_run=(version == 2 and kind == "run-stage" and stage == "code-generation"
                        and "unit" not in payload and "units" not in payload),
@@ -604,6 +656,34 @@ def latest_event(
     if not candidates:
         return None
     return max(candidates, key=lambda event: event.sort_key)
+
+
+def unit_major_stage(state: StateFile, audit: "AuditBundle") -> str | None:
+    """The per-unit Construction stage the active unit is in, when only its own audit rows say so.
+
+    Under ``Construction Iteration: unit-major`` the engine walks one unit through every per-unit stage
+    "while the durable cursor stays on the first block stage" (aidlc-lib.ts): Current Stage keeps
+    naming functional-design while the unit works on nfr-requirements, and only the active directive
+    names the real stage. When that directive cannot be used (absent, or stale after a routing write),
+    reading Current Stage showed the finished functional-design and no question at all while the unit
+    was asking NFR Requirements'. The unit's latest main-workflow lifecycle row is the engine's own
+    answer (``activeUnitCheckpoint``); a completion means it is between stages, which the state file
+    answers again.
+    """
+    if (state.runtime.get("Construction Iteration") or "").strip() != "unit-major":
+        return None
+    unit = state.active_unit
+    if not unit or (state.unit_state or "").strip() not in ("in-progress", "paused"):
+        return None
+    rows = [
+        event for event in audit.events
+        if event.event in C.UNIT_LIFECYCLE_EVENTS and event.fields.get("Unit") == unit
+        and event.fields.get("Workflow") in (None, "", "main")
+    ]
+    latest = max(rows, key=lambda event: event.sort_key, default=None)
+    stage = latest.fields.get("Stage") if latest is not None and latest.event != "UNIT_COMPLETED" else None
+    row = state.row(stage) if stage in _PER_UNIT_STAGE_SET else None
+    return stage if row is not None and row.state not in C.DONE_STAGE_STATES else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -867,14 +947,81 @@ def parse_scope_frontmatter(text: str, filename: str) -> ScopeMeta | None:
 
 @dataclass(frozen=True, slots=True)
 class QuestionOption(WireRecord):
+    _wire_keys = ("letter", "text", "is_other", "detail?")
     letter: str
     text: str
     is_other: bool
+    #: What the label stands for when the engine asked with a bare id (``c1``): the learning candidate's
+    #: own diary line. Display only — the label stays the wire text.
+    detail: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class LearningCandidate(WireRecord):
+    """One entry ``aidlc-learnings.ts surface`` would offer to keep, with the id it gives it."""
+
+    id: str
+    heading: str
+    summary: str
+    context: str
+
+
+_MEMORY_HEADINGS = {
+    "## Interpretations": "Interpretations",
+    "## Deviations": "Deviations",
+    "## Tradeoffs": "Tradeoffs",
+    "## Open questions": "Open questions",
+}
+_MEMORY_COMMENT_RE = re.compile(r"^<!--.*-->\s*$")
+_MEMORY_ENTRY_RE = re.compile(r"^(\S+)\s+—\s+(.*)$")
+#: A learnings-ritual option that names a candidate by id instead of quoting it.
+LEARNING_ID_RE = re.compile(r"^c[1-9][0-9]{0,2}$")
+
+
+def parse_learning_candidates(text: str) -> tuple[LearningCandidate, ...]:
+    """The learning candidates in a stage diary, numbered exactly as the engine numbers them.
+
+    A port of ``parseMemoryEntries`` + ``surface`` (``aidlc-lib.ts``/``aidlc-learnings.ts``, 2.10): one
+    entry per counted line under the four canonical headings, fenced blocks, blockquotes and
+    single-line comments skipped, and ``c<N>`` counting every entry except the parked open questions.
+    The ritual's question often lists only those ids, which mean nothing without this.
+    """
+    out: list[LearningCandidate] = []
+    current: str | None = None
+    in_fence = False
+    for line in text.lstrip("\ufeff").replace("\r\n", "\n").split("\n"):
+        if line.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if line in _MEMORY_HEADINGS:
+            current = _MEMORY_HEADINGS[line]
+            continue
+        if line.startswith("## "):
+            current = None
+            continue
+        trimmed = line.strip()
+        if current is None or not trimmed or trimmed.startswith(">") or _MEMORY_COMMENT_RE.match(trimmed):
+            continue
+        if current == "Open questions":
+            continue
+        body = re.sub(r"^[-*]\s+", "", trimmed)
+        match = _MEMORY_ENTRY_RE.match(body)
+        if match is None:
+            summary, context = body, ""
+        else:
+            rest = match.group(2)
+            semi = rest.find(";")
+            summary, context = (rest.strip(), "") if semi == -1 else (rest[:semi].strip(), rest[semi + 1:].strip())
+        out.append(LearningCandidate(f"c{len(out) + 1}", current, summary, context))
+    return tuple(out)
 
 
 @dataclass(frozen=True, slots=True)
 class Question(WireRecord):
-    _wire_keys = ("index", "prompt", "context", "options", "multi_select", "answer", "answered", "raw")
+    _wire_keys = ("index", "prompt", "context", "options", "multi_select", "answer", "answered", "raw",
+                  "learning_candidates?", "learnings_memory?")
     index: int
     prompt: str
     options: tuple[QuestionOption, ...]
@@ -883,6 +1030,10 @@ class Question(WireRecord):
     answered: bool
     raw: str
     context: str = ""
+    #: The stage diary's candidates when this is the learnings ritual asking by id (``c1``/``c2``), and
+    #: the diary they came from. ``None`` for every other question.
+    learning_candidates: tuple[LearningCandidate, ...] | None = None
+    learnings_memory: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1233,6 +1384,22 @@ def _closed_question_receipts(
     normalized = re.sub(r"\r\n?", "\n", text)
     confirmed_digests = {_sha256(_confirmed_content(normalized))}
     assumption = found.assumption_confirmation
+    if found.summary_confirmation is None and found.plan_approval is None and assumption is None:
+        # A sheet of plain questions has no checkpoint receipt to bind: the engine closes it with the
+        # ``QUESTION_ANSWERED`` its ``log answer`` writes, which names no file. Every stage that asks
+        # its questions in a file then runs the learnings ritual as an audit decision, so without this
+        # the ritual — and anything else asked after the sheet — never reached the queue. That answer,
+        # in this attempt, after the floors and before the decision, is the proof the sheet is behind
+        # the engine; the file's own bytes stay bound through the card's evidence digest.
+        answered = _audit_frontier([
+            e for e in history if e.event == "QUESTION_ANSWERED" and _audit_question_scope(e, stage, unit)
+            and (e.fields.get("Attempt Generation") or None) == generation
+            and _audit_follows(decision, e) is True
+            and all(_audit_follows(e, floor) is True for floor in floors)
+        ])
+        if len(answered) != 1 or not (answered[0].fields.get("Details") or "").strip():
+            return None
+        return [answered[0]]
     if assumption is not None:
         prefix = _before_final_assumption_section(normalized)
         if prefix is None:
@@ -2096,13 +2263,13 @@ class AidlcReader:
         return (snap, parse_state_file(snap.text))
 
     def read_directive(
-        self, repo: Path, space: str, intent_dir: str, state_sha256: str
+        self, repo: Path, space: str, intent_dir: str, state_sha256: str, engine_digest: str | None = None,
     ) -> Directive | None:
         path = record_file(repo, self.record_rel(space, intent_dir), DIRECTIVE_FILENAME)
         data = security.bounded_read(path, C.MAX_JSON_BYTES)
         if data is None:
             return None
-        directive = parse_directive(data, state_sha256)
+        directive = parse_directive(data, state_sha256, engine_digest)
         if directive is not None and path.parent.name == ENGINE_DIRNAME:
             directive = replace(directive, marker_name=f"{ENGINE_DIRNAME}/{path.name}")
         return directive
@@ -2461,8 +2628,11 @@ class AidlcReader:
                                   stage=None, stable=False, taken_at=taken_at)
         snap, state = first
         audit = self.read_audit(repo, space, intent_dir)
-        directive = self.read_directive(repo, space, intent_dir, snap.sha256)
-        stage = directive.stage if directive and directive.matches_state else state.current_stage
+        directive = self.read_directive(repo, space, intent_dir, snap.sha256, engine_state_digest(snap.text))
+        stage = (
+            directive.stage if directive and directive.matches_state
+            else unit_major_stage(state, audit) or state.current_stage
+        )
         unit = (directive.unit if directive and directive.matches_state else None) or state.active_unit
         questions, unit_ambiguous = self._questions_for_stage(
             repo, space, intent_dir, state, stage, unit, audit=audit, directive=directive
@@ -2511,9 +2681,9 @@ class AidlcReader:
             generation, readable = self._question_claim_generation(repo, space, intent_dir, unit, audit)
             if not readable:
                 return found
-            pending = audit_questions(
+            pending = self._with_learning_candidates(repo, space, intent_dir, stage, row, audit_questions(
                 audit, self.record_rel(space, intent_dir), stage, unit, generation=generation,
-            )
+            ))
             if pending is None:
                 return found
             evidence: dict[str, Any] = {
@@ -2573,12 +2743,63 @@ class AidlcReader:
             generation, readable = self._question_claim_generation(repo, space, intent_dir, unit, audit)
             if readable:
                 return (
-                    audit_questions(
+                    self._with_learning_candidates(repo, space, intent_dir, stage, row, audit_questions(
                         audit, self.record_rel(space, intent_dir), stage, unit, generation=generation
-                    ),
+                    )),
                     False,
                 )
         return (None, False)
+
+    def _with_learning_candidates(
+        self, repo: Path, space: str, intent_dir: str, stage: str, row: Any,
+        questions: QuestionsFile | None,
+    ) -> QuestionsFile | None:
+        """Say what ``c1``/``c2`` are when the learnings ritual asked with candidate ids.
+
+        The conductor logs the ritual's decision with the ids ``surface`` gave each diary entry
+        ("keep candidates c1/c2?") and explains them only in chat, so the card read as two bare
+        letters. The ids are deterministic over the stage's ``memory.md``, so the same numbering is
+        read here and attached for display. The labels, and therefore the wire text, are unchanged,
+        and so is the digest: what is compared before sending is still the decision AI-DLC recorded.
+        """
+        def ritual(question: Question) -> bool:
+            return question.prompt.strip().lower().startswith("learnings") or any(
+                LEARNING_ID_RE.match(option.text) for option in question.options
+            )
+
+        if questions is None or not any(ritual(q) for q in questions.questions):
+            return questions
+        phase = getattr(row, "phase", None)
+        if phase not in C.PHASES:
+            return questions
+        memory_rel = f"{self.record_rel(space, intent_dir)}/{phase}/{stage}/memory.md"
+        try:
+            text = security.bounded_text(security.resolve_inside(repo, memory_rel), C.MAX_TEXT_PREVIEW_BYTES)
+        except (OSError, StudioError):
+            return questions
+        candidates = {c.id: c for c in parse_learning_candidates(text or "")}
+        if not candidates:
+            return questions
+        annotated: list[Question] = []
+        for question in questions.questions:
+            named = [o.text for o in question.options if o.text in candidates]
+            if not named and ritual(question):
+                # "Learnings: anything to add?" is asked about the candidates the chat just listed, often
+                # without naming them in the recorded options; the card still has to show what they are.
+                named = list(candidates)
+            if not named:
+                annotated.append(question)
+                continue
+            annotated.append(replace(
+                question,
+                options=tuple(
+                    replace(o, detail=candidates[o.text].summary) if o.text in candidates else o
+                    for o in question.options
+                ),
+                learning_candidates=tuple(candidates[name] for name in named),
+                learnings_memory=memory_rel,
+            ))
+        return replace(questions, questions=tuple(annotated))
 
     def _question_claim_generation(
         self, repo: Path, space: str, intent_dir: str, unit: str | None, audit: AuditBundle,

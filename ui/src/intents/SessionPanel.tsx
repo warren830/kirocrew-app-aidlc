@@ -246,11 +246,14 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
     ? knownTitle || hostSlots.data?.find((slot) => slot.key === bound.slotKey)?.title || null
     : null
   const kind = startKind(intent)
-  // A start this panel just delivered is running even before the row says so.
+  // A start this panel just delivered is running even before the row says so, and so is a turn the row
+  // reports running: offering Start again then only invites a second /aidlc into a conversation already
+  // working on the first.
   const started = run.state.stage === 'settled' && run.state.attempt?.outcome === 'delivered'
+  const turning = Boolean(intent.session?.running) || intent.operational_state === 'Running'
   // A just-bound conversation is idle; the inventory row's `running` is one poll behind until it catches up.
   const blocked = startBlockedReason(bound && !caughtUp ? { ...intent, session: null } : intent, t)
-    ?? (bound?.running || started ? t('intents.run.disabledRunning') : null)
+    ?? (bound?.running || started || turning ? t('intents.run.disabledRunning') : null)
   const stepLabel = (step: number): string => t(STEP_KEYS[step - 1] ?? STEP_KEYS[0])
 
   const fail = useCallback((caught: unknown, step: number) => {

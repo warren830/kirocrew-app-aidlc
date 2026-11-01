@@ -8,5 +8,16 @@
   "settings.bun.checking": "正在检查 Bun…",
   "settings.bun.ready": "Bun 已就绪。",
   "settings.bun.missing": "未找到 Bun。请指定路径，或安装后重新探测。",
-  "settings.bun.searched": "已检查：{paths}"
+  "settings.bun.searched": "已检查：{paths}",
+  "settings.bun.conversations.ready": "AI-DLC 对话可以运行 Bun。",
+  "settings.bun.conversations.missing": "AI-DLC 对话无法运行 Bun。",
+  "settings.bun.conversations.why": "Studio 用完整路径运行 Bun，但每个对话里 AI-DLC 的 hook 调用的是不带路径的 bun，而 KiroCrew 给对话的 PATH 里没有它。不解决的话，AI-DLC 不会记录人类回合，你发出的每一次审批和回答都会被它拒绝。",
+  "settings.bun.conversations.link": "让对话可以使用 Bun",
+  "settings.bun.conversations.confirmBody": "Studio 只会创建下面这一个符号链接，不改动其他任何东西。~/.local/bin 已在每个对话的 PATH 里。删除该链接即可撤销。",
+  "settings.bun.conversations.confirm": "创建链接",
+  "settings.bun.conversations.estimate": "当前 KiroCrew 版本不提供对话使用的 PATH，这里是 Studio 的估计，不会因此阻止决策。",
+  "settings.bun.conversations.blocked.already_found": "对话已经能找到 Bun。",
+  "settings.bun.conversations.blocked.bun_missing": "Studio 还没找到 Bun，无从链接。请先在上方设置 Bun 路径。",
+  "settings.bun.conversations.blocked.link_dir_not_on_path": "~/.local/bin 不在本 gateway 的对话 PATH 里，在那里建链接没有用。请把 Bun 所在目录加入 KiroCrew 的 agent 环境（agent.env 的 PATH），然后重启 gateway。",
+  "settings.bun.conversations.blocked.link_exists": "{link} 已经存在，Studio 不会覆盖它。请自行把它指向 Bun，或删除后重试。"
 }

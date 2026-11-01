@@ -272,6 +272,19 @@ function nativePreloadError(projectDir: string, agents: string[]): PreloadFailur
   }
 }
 
+// KiroCrew (AI-DLC Studio's host, itself a kiro-cli client) wraps every dashboard turn in its context
+// envelope; hostEnvelopeTurnText reads the person's text after the `[CURRENT USER REQUEST …]` header. A
+// context-free host turn has no header and instead trails the same reply-format rules after the typed text,
+// so a terminal command sent that way ("/aidlc --version\n\n(If presenting choices, …") was not recognised.
+// Studio patch to the bundled 2.11.0 harness; a prompt with the header, or without the rules, is unchanged.
+const HOST_TRAILING_RULES = "\n\n(If presenting choices, end with [OPTIONS:";
+
+function hostTypedPrompt(prompt: string): string {
+  if (hostEnvelopeTurnText(prompt) !== prompt) return prompt;
+  const rules = prompt.indexOf(HOST_TRAILING_RULES);
+  return rules > 0 ? prompt.slice(0, rules) : prompt;
+}
+
 export async function run(
   target: string,
   input: string,
@@ -285,6 +298,7 @@ if (!process.stdin.isTTY) {
     return 0; // malformed stdin — advisory hooks fail open
   }
 }
+if (typeof kiro.prompt === "string") kiro.prompt = hostTypedPrompt(kiro.prompt);
 
 const projectDirRaw =
   process.env.AIDLC_PROJECT_DIR ?? kiro.cwd ?? process.cwd();

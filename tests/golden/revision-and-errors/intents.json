@@ -30,6 +30,7 @@
      "status": "Running",
      "total_stages": 33
     },
+    "executing_stage": "requirements-analysis",
     "intent_dir": "260906-revising",
     "intent_key": "260906-revising",
     "interrupted": false,
@@ -86,6 +87,7 @@
      "status": "Running",
      "total_stages": 33
     },
+    "executing_stage": "requirements-analysis",
     "intent_dir": "260907-error-burst",
     "intent_key": "260907-error-burst",
     "interrupted": false,

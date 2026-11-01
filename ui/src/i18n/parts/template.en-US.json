@@ -266,5 +266,19 @@
   "template.questions.checkpoint.plan_approval.bodyClosed": "The engine asked you to approve the plan it composed before it executed it.",
   "template.questions.single": "Question",
   "template.command.stageSubSent": "Where the engine was to resume from, as recorded on disk when this was sent.",
-  "template.gate.notes": "Notes from Studio's checks"
+  "template.gate.notes": "Notes from Studio's checks",
+  "template.recovery.hooksSilent": "AI-DLC's prompt hook did not run in this conversation: its turn counter never moved. The usual cause is that the conversation cannot find Bun. Make Bun available to conversations in Settings, then send the next decision; acknowledging only dismisses this notice.",
+  "template.recovery.openBunSettings": "Open Bun settings",
+  "template.questions.learnings.intro": "This is AI-DLC's learnings step. Each id is a note the agent wrote in this stage's diary while working:",
+  "template.questions.learnings.outcome": "A note you keep is added to the project's memory (memory/project.md), so the next run of this stage follows it. Nothing to add keeps none; Add a note lets you write your own.",
+  "template.questions.learnings.heading.Interpretations": "Interpretation",
+  "template.questions.learnings.heading.Deviations": "Deviation",
+  "template.questions.learnings.heading.Tradeoffs": "Tradeoff",
+  "template.missingInput.reason.conversation_reply": "AI-DLC asked this only in the conversation, so there is no question file or audit record for Studio to turn into a form. Read the question in the conversation, then reply here: Studio sends your words to the conversation as your own turn. You can also answer in the conversation itself.",
+  "template.missingInput.lastReply": "What AI-DLC asked",
+  "template.missingInput.lastReplyHelp": "AI-DLC's last message in the conversation ({at}). The reply suggestions below come from it.",
+  "template.missingInput.lastReplyHelpPlain": "AI-DLC's last message in the conversation ({at}).",
+  "template.missingInput.asked": "What AI-DLC suggested",
+  "template.missingInput.askedHelp": "These are the reply suggestions from AI-DLC's last message. Choose one to start your reply, then add anything it asked you for.",
+  "template.missingInput.openConversation": "Open the conversation"
 }
