@@ -14,12 +14,17 @@
  *    card carries only its own, so this template says where the real list is instead of building a picker
  *    out of one candidate: the cursor decides which intent every later dispatch moves.
  *  - **`conversation_reply`** — AI-DLC asked something only in chat (`projection._conversation_reply_seeds`).
- *    The host's reply suggestions start the answer; the words sent are always the box's own.
+ *    The host's reply suggestions are a choice in "What to send" itself: choosing one puts exactly its
+ *    text in the box, and the words sent are always the box's own. Exact matters — at a protected
+ *    checkpoint the engine compares the reply with the text it offered, so a suggestion with words added
+ *    is refused (an E2E appended to "Approve Plan" five times and was refused five times).
  */
 
+import { useRef, useState } from 'react'
 import { MarkdownRenderer } from '@kirocrew/app-sdk/ui'
 import { useI18n } from '../i18n'
 import { at } from '../lib/format'
+import { withInlineCode } from '../lib/inlineCode'
 import { Chip } from '../shell/Chip'
 import { AdvisorBlock, useAdvisor } from './AdvisorBlock'
 import {
@@ -40,6 +45,17 @@ import {
 /** The reasons the projection mints for this card; anything else falls back to a generic sentence. */
 const KNOWN_REASONS = ['missing_scope', 'dangling_cursor', 'no_cursor', 'conversation_reply'] as const
 
+/**
+ * Whether a reply suggestion means "something else", which is a prompt to write rather than words to send.
+ *
+ * Read from the suggestion's own leading words, because the host hands Studio plain strings with no
+ * flag: `Other`, `Other (please specify)`, `Something else`, and the Chinese 其他 / 其它.
+ */
+export function isOtherSuggestion(option: string): boolean {
+  const text = option.trim()
+  return /^(?:other|something else)(?![a-z])/i.test(text) || /^其[他它]/.test(text)
+}
+
 export function MissingInputTemplate({ card, detail, draft, setDraft, api, go }: TemplateProps) {
   const i18n = useI18n()
   const { t } = i18n
@@ -55,6 +71,41 @@ export function MissingInputTemplate({ card, detail, draft, setDraft, api, go }:
   const suggestions = Array.isArray(card.headline.params['options'])
     ? card.headline.params['options'].filter((option): option is string => typeof option === 'string')
     : []
+  const offersChoice = conversational && suggestions.length > 0
+  // What the radios show is read from the box, so they can never claim a send the box will not make: a
+  // suggestion is selected only while the box holds exactly its text, and anything else the user wrote is
+  // the "something else" suggestion when there is one. `otherChosen` covers the moment between choosing
+  // it and typing, when the box is empty and the text alone cannot say so.
+  const [otherChosen, setOtherChosen] = useState(false)
+  // Arrowing through a radio group changes the selection as it moves; focus must not jump into the box
+  // just because the cursor passed over "Other" on its way.
+  const arrowed = useRef(false)
+  const typed = draft.freeText.trim()
+  const exact = suggestions.findIndex((option) => !isOtherSuggestion(option) && option.trim() === typed && typed !== '')
+  const otherAt = suggestions.findIndex(isOtherSuggestion)
+  const selected = exact >= 0 ? exact : otherAt >= 0 && (otherChosen || typed !== '') ? otherAt : -1
+  // A suggestion with words added is the one shape a protected checkpoint refuses; say so as it happens.
+  // The longest one it starts with, so "Yes, but…" is not reported as "Yes" when both are offered.
+  const extended =
+    exact >= 0
+      ? null
+      : suggestions.reduce<number | null>((best, option, position) => {
+          if (isOtherSuggestion(option) || !typed.startsWith(option.trim())) return best
+          return best === null || option.trim().length > (suggestions[best] ?? '').trim().length ? position : best
+        }, null)
+  const choose = (position: number) => {
+    const viaArrow = arrowed.current
+    arrowed.current = false
+    const option = suggestions[position] ?? ''
+    if (isOtherSuggestion(option)) {
+      setOtherChosen(true)
+      setDraft({ freeText: '', inputKind: 'free_text' })
+      if (!viaArrow) document.getElementById('studio-input')?.focus()
+      return
+    }
+    setOtherChosen(false)
+    setDraft({ freeText: option, inputKind: 'free_text' })
+  }
   // `mtime_ns` is nanoseconds since the epoch; `Date` wants milliseconds.
   const stateMtime = card.evidence.state?.mtime_ns
     ? new Date(card.evidence.state.mtime_ns / 1e6).toISOString()
@@ -97,25 +148,6 @@ export function MissingInputTemplate({ card, detail, draft, setDraft, api, go }:
         </Block>
       )}
 
-      {conversational && suggestions.length > 0 ? (
-        <Block title={t('template.missingInput.asked')} icon="question">
-          <p className="studio-help">{t('template.missingInput.askedHelp')}</p>
-          <div className="studio-row studio-wrapchips">
-            {suggestions.map((option) => (
-              <button
-                type="button"
-                key={option}
-                className="studio-btn studio-btn-sm"
-                aria-pressed={draft.freeText.trim() === option}
-                onClick={() => setDraft({ freeText: option, inputKind: 'free_text' })}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-        </Block>
-      ) : null}
-
       <Block title={t('template.missingInput.source')} icon="doc">
         <EvidenceGrid>
           {card.evidence.state ? (
@@ -143,6 +175,49 @@ export function MissingInputTemplate({ card, detail, draft, setDraft, api, go }:
 
       {wantsText ? (
         <Block title={t(`template.missingInput.input.${kind}`)} icon="send">
+          {offersChoice ? (
+            <>
+              <p className="studio-help">{t('template.missingInput.suggestHelp')}</p>
+              <div
+                role="radiogroup"
+                aria-label={t('template.missingInput.suggestGroup')}
+                onKeyDown={(event) => {
+                  arrowed.current = event.key.startsWith('Arrow')
+                }}
+              >
+                {suggestions.map((option, position) => {
+                  const other = isOtherSuggestion(option)
+                  const checked = position === selected
+                  return (
+                    <label key={position} className="studio-opt" data-selected={String(checked)}>
+                      <input
+                        type="radio"
+                        name={`studio-reply-${card.action_id}`}
+                        value={String(position)}
+                        checked={checked}
+                        onChange={() => choose(position)}
+                      />
+                      <span className="studio-opt-body">
+                        {/* The suggestion is the host's text, verbatim: it is what the box will hold. */}
+                        <span className="studio-opt-label">{withInlineCode(option)}</span>
+                        <span className="studio-opt-desc">
+                          {t(other ? 'template.missingInput.suggestOtherDesc' : 'template.missingInput.suggestVerbatim')}
+                        </span>
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+              <Consequence icon="warn" tone="warn" label={t('template.missingInput.exactLabel')}>
+                {t('template.missingInput.exact')}
+              </Consequence>
+              {extended !== null ? (
+                <p className="studio-help" role="status">
+                  {t('template.missingInput.extended', { option: suggestions[extended] ?? '' })}
+                </p>
+              ) : null}
+            </>
+          ) : null}
           <InputBox
             card={card}
             draft={draft}

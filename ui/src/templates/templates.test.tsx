@@ -1651,8 +1651,117 @@ describe('budget and missing input templates', () => {
     // The quote replaces "read the question in the conversation"; the conversation stays one click away.
     expect(screen.queryByText(en.t('template.missingInput.reason.conversation_reply'))).toBeNull()
     expect(screen.getByRole('button', { name: en.t('template.missingInput.openConversation') })).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Use setuptools>=64' }))
+    await userEvent.click(screen.getByRole('radio', { name: /Use setuptools>=64/ }))
     expect(draft().freeText).toBe('Use setuptools>=64')
+  })
+
+  /** A conversation-reply card as the projection mints it for the host's "keep which?" reply. */
+  const replyCard = (options = ['Keep none, nothing to add', 'Keep 1 and 2, nothing to add', 'Keep none, add a note', 'Other']) =>
+    card({
+      type: 'missing_input',
+      headline: { key: 'action.missing_input.headline', params: { reason: 'conversation_reply', kind: 'free_text', options } },
+      decisions: [spec('provide_input', ['feedback'])],
+      primary: { decision: 'provide_input', label_key: 'decision.provide_input.label' },
+    })
+  const replyGroup = () => screen.getByRole('radiogroup', { name: en.t('template.missingInput.suggestGroup') })
+  const replyBox = () => screen.getByLabelText<HTMLTextAreaElement>(en.t('template.missingInput.input.free_text'))
+
+  it('offers the reply suggestions as one choice, and choosing one puts exactly its text in the box', async () => {
+    setApiRoutes({})
+    const { draft } = mount(MissingInputTemplate, replyCard())
+    const group = replyGroup()
+    // The choice lives in "What to send" itself, beside the box it fills — not as chips in a block above.
+    expect(group.closest('section')?.textContent).toContain(en.t('template.missingInput.input.free_text'))
+    expect(within(group).getAllByRole('radio').every((radio) => !(radio as HTMLInputElement).checked)).toBe(true)
+
+    await userEvent.click(within(group).getByRole('radio', { name: /^Keep 1 and 2, nothing to add/ }))
+    expect(draft().freeText).toBe('Keep 1 and 2, nothing to add')
+    expect(replyBox().value).toBe('Keep 1 and 2, nothing to add')
+
+    await userEvent.click(within(group).getByRole('radio', { name: /^Keep none, nothing to add/ }))
+    expect(draft().freeText).toBe('Keep none, nothing to add')
+    const checked = within(group).getAllByRole('radio').filter((radio) => (radio as HTMLInputElement).checked)
+    expect(checked).toHaveLength(1)
+    expect(checked[0]).toHaveAccessibleName(/^Keep none, nothing to add/)
+  })
+
+  it('clears the box and puts the cursor in it when the suggestion is Other', async () => {
+    setApiRoutes({})
+    const { draft } = mount(MissingInputTemplate, replyCard())
+    await userEvent.click(screen.getByRole('radio', { name: /^Keep none, add a note/ }))
+    await userEvent.click(screen.getByRole('radio', { name: /^Other/ }))
+    // "Other" is a prompt to write, never the word sent.
+    expect(draft().freeText).toBe('')
+    expect(replyBox()).toHaveFocus()
+    expect(screen.getByRole('radio', { name: /^Other/ })).toBeChecked()
+    await userEvent.type(replyBox(), 'Keep 2 only')
+    expect(draft().freeText).toBe('Keep 2 only')
+    expect(screen.getByRole('radio', { name: /^Other/ })).toBeChecked()
+  })
+
+  it('moves through the suggestions with the arrow keys without jumping into the box', async () => {
+    setApiRoutes({})
+    const { draft } = mount(MissingInputTemplate, replyCard(['Keep none, nothing to add', 'Other']))
+    await userEvent.click(screen.getByRole('radio', { name: /^Keep none, nothing to add/ }))
+    await userEvent.keyboard('{ArrowDown}')
+    expect(screen.getByRole('radio', { name: /^Other/ })).toBeChecked()
+    expect(screen.getByRole('radio', { name: /^Other/ })).toHaveFocus()
+    expect(draft().freeText).toBe('')
+  })
+
+  it('says a suggestion is sent word for word, and notices when words were added to one', async () => {
+    setApiRoutes({})
+    mount(MissingInputTemplate, replyCard())
+    expect(screen.getByText(en.t('template.missingInput.exact'))).toBeInTheDocument()
+    expect(screen.queryByRole('status')).toBeNull()
+    await userEvent.click(screen.getByRole('radio', { name: /^Keep none, nothing to add/ }))
+    await userEvent.type(replyBox(), ', and drop the cache')
+    expect(screen.getByRole('status')).toHaveTextContent(
+      en.t('template.missingInput.extended', { option: 'Keep none, nothing to add' }),
+    )
+    // The radios never claim a send the box will not make: the text is the user's own now.
+    expect(screen.getByRole('radio', { name: /^Keep none, nothing to add/ })).not.toBeChecked()
+    expect(screen.getByRole('radio', { name: /^Other/ })).toBeChecked()
+  })
+
+  it('shows a saved draft that is a suggestion as that suggestion chosen', () => {
+    setApiRoutes({})
+    mount(MissingInputTemplate, replyCard(), { draft: { freeText: 'Keep 1 and 2, nothing to add' } })
+    expect(screen.getByRole('radio', { name: /^Keep 1 and 2, nothing to add/ })).toBeChecked()
+    expect(replyBox().value).toBe('Keep 1 and 2, nothing to add')
+  })
+
+  it('keeps the send refused for want of input until a suggestion is chosen', async () => {
+    // `provide_input` travels the human lane (`actions._lane`); the shared `spec` helper defaults it to Studio-only.
+    const value = { ...replyCard(), decisions: [{ ...spec('provide_input', ['feedback']), lane: 'human_lane' as const }] }
+    setApiRoutes({ [`GET ${BASE}/actions/${value.action_id}`]: () => detail({ action: value }) })
+    function Harness() {
+      const api = useStudioApi()
+      return (
+        <DetailShell
+          actionId={value.action_id}
+          queueCard={value}
+          api={api}
+          route={{ ...EMPTY_ROUTE, action: value.action_id }}
+          go={() => {}}
+          groupedAnswers={false}
+          onQueueChanged={() => {}}
+        />
+      )
+    }
+    render(
+      <I18nProvider>
+        <Harness />
+      </I18nProvider>,
+    )
+    const send = await screen.findByRole('button', { name: new RegExp(en.t('decision.provide_input.label')) })
+    expect(send).toBeDisabled()
+    expect(send).toHaveAttribute('title', en.t('confirm.blocked.inputRequired'))
+
+    await userEvent.click(screen.getByRole('radio', { name: /^Keep none, nothing to add/ }))
+    await waitFor(() => expect(send).toBeEnabled())
+    await userEvent.click(send)
+    expect(within(screen.getByRole('group', { name: en.t('confirm.label') })).getByText('Keep none, nothing to add')).toBeInTheDocument()
   })
 
   it('shows no quote when the conversation could not be read', () => {

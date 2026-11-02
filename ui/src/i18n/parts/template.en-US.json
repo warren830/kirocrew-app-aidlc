@@ -278,7 +278,12 @@
   "template.missingInput.lastReply": "What AI-DLC asked",
   "template.missingInput.lastReplyHelp": "AI-DLC's last message in the conversation ({at}). The reply suggestions below come from it.",
   "template.missingInput.lastReplyHelpPlain": "AI-DLC's last message in the conversation ({at}).",
-  "template.missingInput.asked": "What AI-DLC suggested",
-  "template.missingInput.askedHelp": "These are the reply suggestions from AI-DLC's last message. Choose one to start your reply, then add anything it asked you for.",
+  "template.missingInput.suggestGroup": "AI-DLC's suggested replies",
+  "template.missingInput.suggestHelp": "Choose one of the replies AI-DLC suggested, or write your own. Choosing a suggestion puts exactly its text in the box below, and that text is what Studio sends.",
+  "template.missingInput.suggestVerbatim": "Sent word for word.",
+  "template.missingInput.suggestOtherDesc": "Clears the box so you can write your own reply.",
+  "template.missingInput.exactLabel": "Send a suggestion as it is.",
+  "template.missingInput.exact": "At a protected checkpoint, such as approving a plan, AI-DLC compares your reply with the exact text it offered. Adding words to a suggestion can make it refuse the reply, so put anything extra in a separate message.",
+  "template.missingInput.extended": "Your reply starts with “{option}” but adds to it, so it is no longer that suggestion word for word.",
   "template.missingInput.openConversation": "Open the conversation"
 }

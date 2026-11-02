@@ -278,7 +278,12 @@
   "template.missingInput.lastReply": "AI-DLC 的提问",
   "template.missingInput.lastReplyHelp": "AI-DLC 在会话中的最后一条消息（{at}）。下方的回复建议来自这条消息。",
   "template.missingInput.lastReplyHelpPlain": "AI-DLC 在会话中的最后一条消息（{at}）。",
-  "template.missingInput.asked": "AI-DLC 给出的回复建议",
-  "template.missingInput.askedHelp": "这些是 AI-DLC 上一条消息里的回复建议。选一个作为回复开头，再补充它要求你提供的内容。",
+  "template.missingInput.suggestGroup": "AI-DLC 给出的回复建议",
+  "template.missingInput.suggestHelp": "从 AI-DLC 给出的回复建议中选一个，或自己写。选中建议后，下方输入框里就是这条建议的原文，Studio 发送的也正是这段文字。",
+  "template.missingInput.suggestVerbatim": "按原文发送。",
+  "template.missingInput.suggestOtherDesc": "清空输入框，由你自己写回复。",
+  "template.missingInput.exactLabel": "建议请按原样发送。",
+  "template.missingInput.exact": "在受保护的检查点（例如批准计划）上，AI-DLC 会把你的回复与它给出的原文逐字比对。在建议后面加字可能导致它拒绝这条回复，额外的内容请另发一条消息。",
+  "template.missingInput.extended": "你的回复以“{option}”开头但加了内容，已不再是这条建议的原文。",
   "template.missingInput.openConversation": "打开对话"
 }
