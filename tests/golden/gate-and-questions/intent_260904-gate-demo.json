@@ -164,7 +164,8 @@
        "sha256": "d33649fa317b5af002e3ef5d1b268e5ff7d427592c934be86b2e65d9ddd532f4",
        "size": 3374,
        "stable": true,
-       "status": "Running"
+       "status": "Running",
+       "summary_confirmation": null
       }
      },
      "human_text_present": false,
@@ -350,7 +351,8 @@
        "sha256": "d33649fa317b5af002e3ef5d1b268e5ff7d427592c934be86b2e65d9ddd532f4",
        "size": 3374,
        "stable": true,
-       "status": "Running"
+       "status": "Running",
+       "summary_confirmation": null
       }
      },
      "human_text_present": false,
@@ -482,6 +484,7 @@
     "revision_count": 0,
     "state_version": 8,
     "status": "Running",
+    "summary_confirmation": null,
     "total_stages": 33
    },
    "engine": {

@@ -65,7 +65,7 @@ describe('the priority tables', () => {
       recovery: 1, delivery_uncertain: 1,
       gate: 2, question: 2, missing_input: 2,
       circuit_breaker: 3, failure: 3, install_conflict: 3,
-      budget_stop: 4, revision: 4, run: 4, resume: 4, force_stop: 4, prepare_commit: 4,
+      budget_stop: 4, revision: 4, run: 4, resume: 4, force_stop: 4, prepare_commit: 4, set_summary_confirmation: 4,
     })
     expect(SEVERITY_RANK).toEqual({ critical: 0, blocking: 1, attention: 2, info: 3 })
   })

@@ -193,6 +193,9 @@ export function wireTextFor(
       return WIRE.RESUME
     case 'prepare_commit':
       return WIRE.PREPARE_COMMIT
+    case 'set_summary_confirmation':
+      return payload.value === 'on' ? WIRE.SUMMARY_CONFIRMATION_ON
+        : payload.value === 'off' ? WIRE.SUMMARY_CONFIRMATION_OFF : null
   }
 }
 

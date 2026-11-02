@@ -172,7 +172,8 @@
       "sha256": "d33649fa317b5af002e3ef5d1b268e5ff7d427592c934be86b2e65d9ddd532f4",
       "size": 3374,
       "stable": true,
-      "status": "Running"
+      "status": "Running",
+      "summary_confirmation": null
      }
     },
     "failure": null,
@@ -410,7 +411,8 @@
       "sha256": "d33649fa317b5af002e3ef5d1b268e5ff7d427592c934be86b2e65d9ddd532f4",
       "size": 3374,
       "stable": true,
-      "status": "Running"
+      "status": "Running",
+      "summary_confirmation": null
      }
     },
     "failure": null,
@@ -760,7 +762,8 @@
       "sha256": "0d090d7936fd00eb7b479a0581399ad6a53085d5156beae260abb6c80473e7c2",
       "size": 3374,
       "stable": true,
-      "status": "Running"
+      "status": "Running",
+      "summary_confirmation": null
      }
     },
     "failure": null,

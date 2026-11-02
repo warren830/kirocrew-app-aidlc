@@ -431,6 +431,31 @@ def parse_state_file(text: str) -> StateFile:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class CeremonySetting(WireRecord):
+    """One per-intent ceremony line as AI-DLC wrote it (``- **Summary Confirmation**: off (set by you)``).
+
+    ``value`` is the engine's word, ``source`` its own label for who set it (``from scope feature``, ``set by
+    you``, ``set by a command``), and ``line`` the whole text: Studio shows it and never re-words it. A machine-wide
+    kill switch can still force the ceremony off without touching the line, and only the engine resolves that.
+    """
+
+    value: str
+    source: str | None
+    line: str
+
+
+def ceremony_setting(state: StateFile | None, field: str) -> CeremonySetting | None:
+    """The ``## Scope Configuration`` line ``field``, read as 2.11's ``parseCeremonyStateLine`` reads it, or ``None``
+    when the file has no such line or one it would not read (an older record: the scope default applies)."""
+    raw = (state.scope_config.get(field) if state is not None else None) or ""
+    match = C.CEREMONY_LINE_RE.match(raw.strip())
+    if match is None:
+        return None
+    return CeremonySetting(value=match.group(1).lower(), source=(match.group(2) or "").strip() or None,
+                           line=raw.strip())
+
+
 # ---- 1.6.2 parsers — registry, cursors, directive --------------------------- #
 
 

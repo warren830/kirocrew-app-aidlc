@@ -153,10 +153,13 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
   const planReset = noTransition && card.resolution.reason === 'plan_approval_recorded_before_reset'
   const planAskedAgain = noTransition && card.resolution.reason === 'plan_reply_not_recorded'
   const stoppedOnError = noTransition && card.resolution.reason === 'turn_stopped_on_error'
+  // A setting request's turn ended with the intent's line as it was: the reply in the conversation says why.
+  const settingUnchanged = noTransition && card.resolution.reason === 'summary_confirmation_unchanged'
   const hostError = card.resolution.evidence?.host_error ?? null
   const unverifiedLabel = atNewGate ? 'delivery.newGateReview' : 'delivery.conversationReview'
   const remainingLabel = planReset ? 'delivery.updatedPlanReview'
     : stoppedOnError ? 'delivery.stoppedOnError'
+    : settingUnchanged ? 'delivery.summarySettingUnchanged'
     : planAskedAgain ? 'delivery.planAskedAgainReview'
     : answerNotVerified ? unverifiedLabel : 'delivery.noTransition'
   const sent = !BEFORE_SEND.includes(status)

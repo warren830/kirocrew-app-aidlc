@@ -106,7 +106,8 @@
      "sha256": "0d090d7936fd00eb7b479a0581399ad6a53085d5156beae260abb6c80473e7c2",
      "size": 3374,
      "stable": true,
-     "status": "Running"
+     "status": "Running",
+     "summary_confirmation": null
     }
    },
    "failure": null,

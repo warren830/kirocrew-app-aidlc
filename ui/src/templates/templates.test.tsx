@@ -278,6 +278,7 @@ describe('every template', () => {
     const types: ActionType[] = [
       'gate', 'revision', 'question', 'missing_input', 'recovery', 'delivery_uncertain', 'failure',
       'circuit_breaker', 'install_conflict', 'budget_stop', 'run', 'resume', 'force_stop', 'prepare_commit',
+      'set_summary_confirmation',
     ]
     for (const type of types) expect(typeof templateFor(card({ type }))).toBe('function')
     // A gate whose delivery is unproven must not show the gate body again: the decision is now about the

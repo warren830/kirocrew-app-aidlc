@@ -588,6 +588,7 @@
     "revision_count": 0,
     "state_version": 7,
     "status": "Completed",
+    "summary_confirmation": null,
     "total_stages": 8
    },
    "engine": {

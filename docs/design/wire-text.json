@@ -16,6 +16,8 @@
     "WIRE_RESUME": "/aidlc --resume",
     "WIRE_SCOPE_PREFIX": "/aidlc --scope ",
     "WIRE_PREPARE_COMMIT": "Please prepare a commit for the current AI-DLC changes. Do not push.",
+    "WIRE_SUMMARY_CONFIRMATION_OFF": "/aidlc --summary-confirmation off",
+    "WIRE_SUMMARY_CONFIRMATION_ON": "/aidlc --summary-confirmation on",
     "WIRE_GROUPED_ANSWER_SUFFIX": "\n\nStudio grouped-answer delivery: this is one human reply. Apply each Q<n> answer to its matching [Answer] tag. Record all Q<n> answers together in ONE aidlc-log.ts answer --details call, preserving their text; do not record separate answer receipts for each question. Then present the next human checkpoint and wait.",
     "WIRE_ACCEPT_ASSUMPTIONS": "A. Accept assumptions",
     "WIRE_CONVERT_ASSUMPTIONS": "B. Convert to follow-up questions"
@@ -37,6 +39,8 @@
     "run": "/aidlc",
     "resume": "/aidlc --resume",
     "prepare_commit": "Please prepare a commit for the current AI-DLC changes. Do not push.",
+    "set_summary_confirmation.off": "/aidlc --summary-confirmation off",
+    "set_summary_confirmation.on": "/aidlc --summary-confirmation on",
     "force_stop": null,
     "pick_intent": null
   },

@@ -249,6 +249,11 @@ export interface StudioApi extends WorkspaceApi {
   run(repoId: string, intentKey: string, type: 'run' | 'resume'): Promise<CommandResponse>
   /** `POST …/prepare-commit`: the card asking the conversation to commit a finished workflow's changes. */
   prepareCommit(repoId: string, intentKey: string): Promise<CommandResponse>
+  /**
+   * `POST …/summary-confirmation`: the card asking AI-DLC, as the person's own turn, to turn the intent's summary
+   * confirmation off or back on. Queued, not sent: the send is the two-phase submit.
+   */
+  summaryConfirmation(repoId: string, intentKey: string, value: 'on' | 'off'): Promise<CommandResponse>
   pause(repoId: string, intentKey: string, paused: boolean): Promise<PauseResponse>
   forceStop(repoId: string, intentKey: string): Promise<SubmitReceipt>
   /** Bind, move (a takeover, when already bound elsewhere) or, with `null`, forget the intent's slot. */
@@ -394,6 +399,8 @@ export function useStudioApi(): StudioApi {
       recompose: (repoId, intentKey, body) => post(intentPath(repoId, intentKey, '/recompose'), body),
       run: (repoId, intentKey, type) => post(intentPath(repoId, intentKey, '/run'), { type }),
       prepareCommit: (repoId, intentKey) => post(intentPath(repoId, intentKey, '/prepare-commit'), {}),
+      summaryConfirmation: (repoId, intentKey, value) =>
+        post(intentPath(repoId, intentKey, '/summary-confirmation'), { value }),
       pause: (repoId, intentKey, paused) => post(intentPath(repoId, intentKey, '/pause'), { paused }),
       forceStop: (repoId, intentKey) =>
         post(intentPath(repoId, intentKey, '/force-stop'), { confirm: true }),

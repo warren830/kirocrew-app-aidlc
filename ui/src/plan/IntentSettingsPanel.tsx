@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { useI18n } from '../i18n'
 import { decodeError, type StudioApiError } from '../lib/api'
@@ -12,6 +12,12 @@ export interface IntentSettingsPanelProps {
   intentLabel?: string
   onApplied?: () => void
   onClose?: () => void
+  /**
+   * The intent's summary-confirmation control (`SummaryConfirmationSwitch`), when the view that owns the intent can
+   * send to its conversation. A slot, because that is a turn in the conversation through the two-phase submit, not
+   * an engine call this panel previews and applies.
+   */
+  summaryConfirmation?: ReactNode
 }
 
 const DEPTHS: IntentDepth[] = ['Minimal', 'Standard', 'Comprehensive']
@@ -21,7 +27,7 @@ export function IntentSettingsPanel(props: IntentSettingsPanelProps) {
   return <SettingsEditor key={`${props.repoId}:${props.intentKey}`} {...props} />
 }
 
-function SettingsEditor({ api, repoId, intentKey, intentLabel, onApplied, onClose }: IntentSettingsPanelProps) {
+function SettingsEditor({ api, repoId, intentKey, intentLabel, onApplied, onClose, summaryConfirmation }: IntentSettingsPanelProps) {
   const { t } = useI18n()
   const [draft, setDraft] = useState<IntentSettings | null>(null)
   const [scopes, setScopes] = useState<string[]>([])
@@ -134,6 +140,9 @@ function SettingsEditor({ api, repoId, intentKey, intentLabel, onApplied, onClos
           {t('workspace.settings.preview')}
         </button>
       </div>
+      {summaryConfirmation ? (
+        <section className="studio-workspace-ceremony" aria-label={t('summarySwitch.title')}>{summaryConfirmation}</section>
+      ) : null}
       {busy ? <p role="status">{t('common.loading')}</p> : null}
       {error ? <p className="studio-failure-detail" role="alert">{errorText}</p> : null}
       {applied ? <p role="status">{t('workspace.settings.applied')}</p> : null}

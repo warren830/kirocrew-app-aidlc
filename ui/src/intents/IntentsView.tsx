@@ -37,6 +37,7 @@ import { IntentSettingsPanel } from '../plan/IntentSettingsPanel'
 import { IntentActions } from './IntentActions'
 import { IntentList } from './IntentList'
 import { SessionPanel } from './SessionPanel'
+import { SummaryConfirmationSwitch, summarySwitchBlockedReason } from './SummaryConfirmationSwitch'
 
 interface Failure {
   repo: string
@@ -154,6 +155,10 @@ export function IntentsView({ route, go }: IntentsViewProps) {
 
   const data = inventory.data
   const intents = data?.intents ?? []
+  const settingsIntent = editingSettings
+    ? (intents.find((intent) => intent.repo_id === editingSettings.repo_id
+        && intent.intent_key === editingSettings.intent_key) ?? editingSettings)
+    : null
   // Of the repositories in scope: "1 of 2" counted every repository's intents while the bar showed one.
   const total = targets.reduce((sum, repo) => sum + repo.counts.intents, 0)
   const states = useMemo(
@@ -348,7 +353,14 @@ export function IntentsView({ route, go }: IntentsViewProps) {
         {editingSettings ? (
           <IntentSettingsPanel api={api} repoId={editingSettings.repo_id}
             intentKey={editingSettings.intent_key} intentLabel={editingSettings.intent_dir}
-            onClose={() => setEditingSettings(null)} onApplied={() => void inventory.refresh()} />
+            onClose={() => setEditingSettings(null)} onApplied={() => void inventory.refresh()}
+            summaryConfirmation={settingsIntent ? (
+              // The live row, not the one the panel opened on: the line and the conversation's state move under it.
+              <SummaryConfirmationSwitch api={api} repoId={settingsIntent.repo_id} intentKey={settingsIntent.intent_key}
+                setting={settingsIntent.disk.summary_confirmation}
+                blockedReason={summarySwitchBlockedReason(settingsIntent, t)}
+                onSettled={() => void inventory.refresh()} />
+            ) : null} />
         ) : null}
 
         {allRepos.length === 0 ? (

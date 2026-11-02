@@ -47,7 +47,7 @@ from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 from . import constants as C
 from . import sessions as _sessions
 from .actions import ABSENCE_PROOF
-from .aidlc_reader import audit_question_accepts_text, audit_question_answer, plan_approval_choice
+from .aidlc_reader import audit_question_accepts_text, audit_question_answer, ceremony_setting, plan_approval_choice
 from .consistency import RepoFacts
 from .errors import IllegalTransition, StaleGeneration, StudioError
 from .projection import UNCERTAIN_STATUSES, run_unavailable_reason
@@ -1184,6 +1184,22 @@ class Reconciler:
                 seen["host_error"] = stopped
                 return Resolution("no_transition", "turn_stopped_on_error", seen)
             return Resolution("no_transition", "commit_made" if seen["new_commit"] else "turn_ended_no_commit", seen)
+
+        if action_type == "set_summary_confirmation":
+            if not ended:
+                return Resolution(*_TURN_OUTCOME[False], seen)
+            # The prompt hook writes the person's switch into the intent's line before the conductor runs, and the
+            # conductor's own setter writes `on`: the line is the engine's record of what took effect.
+            wanted = str((rec.payload or {}).get("value") or "")
+            current = ceremony_setting(_attr(snap, "state"), C.SUMMARY_CONFIRMATION_FIELD)
+            seen["summary_confirmation"] = current.line if current is not None else None
+            if current is not None and current.value == wanted:
+                return Resolution("state_changed", "summary_confirmation_set", seen)
+            stopped = self._stopped_after(rec)
+            if stopped is not None:
+                seen["host_error"] = stopped
+                return Resolution("no_transition", "turn_stopped_on_error", seen)
+            return Resolution("no_transition", "summary_confirmation_unchanged", seen)
 
         if action_type == "force_stop":
             if slot is None:

@@ -16,6 +16,8 @@ export const WIRE = {
   RESUME: "/aidlc --resume",
   SCOPE_PREFIX: "/aidlc --scope ",
   PREPARE_COMMIT: "Please prepare a commit for the current AI-DLC changes. Do not push.",
+  SUMMARY_CONFIRMATION_OFF: "/aidlc --summary-confirmation off",
+  SUMMARY_CONFIRMATION_ON: "/aidlc --summary-confirmation on",
   GROUPED_ANSWER_SUFFIX: "\n\nStudio grouped-answer delivery: this is one human reply. Apply each Q<n> answer to its matching [Answer] tag. Record all Q<n> answers together in ONE aidlc-log.ts answer --details call, preserving their text; do not record separate answer receipts for each question. Then present the next human checkpoint and wait.",
   ACCEPT_ASSUMPTIONS: "A. Accept assumptions",
   CONVERT_ASSUMPTIONS: "B. Convert to follow-up questions",

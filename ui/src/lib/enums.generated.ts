@@ -7,8 +7,8 @@ export const ACTION_STATUSES: readonly ActionStatus[] = ["Queued", "Delivering",
 export type IntentState = "Idle" | "Queued" | "Running" | "WaitingForYou" | "Paused" | "Parked" | "Interrupted" | "ReconciliationRequired" | "RetryEligible" | "CircuitOpen" | "Failed" | "Completed" | "Archived"
 export const INTENT_STATES: readonly IntentState[] = ["Idle", "Queued", "Running", "WaitingForYou", "Paused", "Parked", "Interrupted", "ReconciliationRequired", "RetryEligible", "CircuitOpen", "Failed", "Completed", "Archived"]
 
-export type ActionType = "gate" | "revision" | "question" | "missing_input" | "recovery" | "delivery_uncertain" | "failure" | "circuit_breaker" | "install_conflict" | "budget_stop" | "run" | "resume" | "force_stop" | "prepare_commit"
-export const ACTION_TYPES: readonly ActionType[] = ["gate", "revision", "question", "missing_input", "recovery", "delivery_uncertain", "failure", "circuit_breaker", "install_conflict", "budget_stop", "run", "resume", "force_stop", "prepare_commit"]
+export type ActionType = "gate" | "revision" | "question" | "missing_input" | "recovery" | "delivery_uncertain" | "failure" | "circuit_breaker" | "install_conflict" | "budget_stop" | "run" | "resume" | "force_stop" | "prepare_commit" | "set_summary_confirmation"
+export const ACTION_TYPES: readonly ActionType[] = ["gate", "revision", "question", "missing_input", "recovery", "delivery_uncertain", "failure", "circuit_breaker", "install_conflict", "budget_stop", "run", "resume", "force_stop", "prepare_commit", "set_summary_confirmation"]
 
 export type Severity = "critical" | "blocking" | "attention" | "info"
 export const SEVERITIES: readonly Severity[] = ["critical", "blocking", "attention", "info"]
@@ -37,8 +37,8 @@ export const OWNERSHIP_KINDS: readonly Ownership[] = ["framework", "framework-mu
 export type StageState = "not_started" | "in_progress" | "awaiting_approval" | "revising" | "completed" | "skipped" | "unknown"
 export const STAGE_STATES: readonly StageState[] = ["not_started", "in_progress", "awaiting_approval", "revising", "completed", "skipped", "unknown"]
 
-export type Decision = "approve" | "request_changes" | "accept_as_is" | "approve_plan" | "request_plan_changes" | "confirm_summary" | "accept_assumptions" | "convert_assumptions" | "answers" | "provide_input" | "run" | "resume" | "prepare_commit" | "force_stop" | "rebind_session" | "mark_not_delivered" | "acknowledge" | "reconcile" | "resubmit" | "retry_now" | "keep_paused" | "run_now" | "pick_intent"
-export const DECISIONS: readonly Decision[] = ["approve", "request_changes", "accept_as_is", "approve_plan", "request_plan_changes", "confirm_summary", "accept_assumptions", "convert_assumptions", "answers", "provide_input", "run", "resume", "prepare_commit", "force_stop", "rebind_session", "mark_not_delivered", "acknowledge", "reconcile", "resubmit", "retry_now", "keep_paused", "run_now", "pick_intent"]
+export type Decision = "approve" | "request_changes" | "accept_as_is" | "approve_plan" | "request_plan_changes" | "confirm_summary" | "accept_assumptions" | "convert_assumptions" | "answers" | "provide_input" | "run" | "resume" | "prepare_commit" | "set_summary_confirmation" | "force_stop" | "rebind_session" | "mark_not_delivered" | "acknowledge" | "reconcile" | "resubmit" | "retry_now" | "keep_paused" | "run_now" | "pick_intent"
+export const DECISIONS: readonly Decision[] = ["approve", "request_changes", "accept_as_is", "approve_plan", "request_plan_changes", "confirm_summary", "accept_assumptions", "convert_assumptions", "answers", "provide_input", "run", "resume", "prepare_commit", "set_summary_confirmation", "force_stop", "rebind_session", "mark_not_delivered", "acknowledge", "reconcile", "resubmit", "retry_now", "keep_paused", "run_now", "pick_intent"]
 
 export type Phase = "initialization" | "ideation" | "inception" | "construction" | "operation"
 export const PHASES: readonly Phase[] = ["initialization", "ideation", "inception", "construction", "operation"]

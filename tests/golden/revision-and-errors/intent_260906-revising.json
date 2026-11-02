@@ -91,7 +91,8 @@
        "sha256": "60376bc5c69fea5b112e5f99baaffe1c47f41940a96ad95ee8f22a6133513676",
        "size": 3374,
        "stable": true,
-       "status": "Running"
+       "status": "Running",
+       "summary_confirmation": null
       }
      },
      "human_text_present": false,
@@ -246,6 +247,7 @@
     "revision_count": 1,
     "state_version": 8,
     "status": "Running",
+    "summary_confirmation": null,
     "total_stages": 33
    },
    "engine": {

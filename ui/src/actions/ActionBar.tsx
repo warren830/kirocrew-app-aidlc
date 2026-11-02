@@ -45,6 +45,7 @@ const DECISION_ICON: Partial<Record<Decision, IconName>> = {
   keep_paused: 'pause',
   force_stop: 'pause',
   prepare_commit: 'git',
+  set_summary_confirmation: 'check',
   reconcile: 'refresh',
   resubmit: 'send',
   rebind_session: 'link',

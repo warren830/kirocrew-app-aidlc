@@ -319,6 +319,28 @@ async def prepare_commit(services: Any, request: web.Request) -> web.Response:
                    status=201)
 
 
+async def summary_confirmation(services: Any, request: web.Request) -> web.Response:
+    """``{"value": "off"|"on"}``: create the card that asks AI-DLC, in the person's own turn, to stop (or go back to)
+    asking whether its summary of a stage is correct before writing the stage's files (201).
+
+    The text is AI-DLC's typed switch on its own (`/aidlc --summary-confirmation off`), never folded into a
+    checkpoint's reply: the engine applies it as the person's when the prompt arrives and treats the turn as a
+    command, so a confirmation already open stays open and is answered as before. Sending is ``submit``'s.
+    """
+    value = body_choice(await read_json(request, required=("value",)), "value", ("off", "on"))
+    repo, snap = await repo_and_snapshot(services, request)
+    if snap.state is None or snap.state.header_only:
+        raise StudioError("state_inconsistent", "summary confirmation is set on an initialized intent",
+                          details={"intent_key": snap.intent_key})
+    if (snap.state.status or "").strip().lower() == "completed":
+        raise StudioError("invalid_decision", "a finished workflow has no stage left to confirm",
+                          details={"intent_key": snap.intent_key, "reason": "intent_completed"})
+    rec = await services.actions.create_command("set_summary_confirmation", repo, snap.space, snap.intent_dir,
+                                                snap=snap, value=value)
+    return json_ok({"ok": True, "action_id": rec.action_id, "status": rec.status, "action": await card_of(services, rec)},
+                   status=201)
+
+
 async def pause(services: Any, request: web.Request) -> web.Response:
     """``{"paused": bool}``. ``blocked_actions`` lists the live cards ``submit`` will now refuse with
     ``intent_paused`` (C29), so the UI greys them out instead of letting a click earn a 409."""

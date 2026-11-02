@@ -93,6 +93,7 @@ ROUTES: tuple[tuple[str, str, str], ...] = (
     ("POST", f"{_INTENT}/runtime/compile", "runtime.compile_runtime"),
     ("POST", f"{_INTENT}/run", "intents.run"),
     ("POST", f"{_INTENT}/prepare-commit", "intents.prepare_commit"),
+    ("POST", f"{_INTENT}/summary-confirmation", "intents.summary_confirmation"),
     ("POST", f"{_INTENT}/pause", "intents.pause"),
     ("POST", f"{_INTENT}/archive", "intents.archive"),
     ("POST", f"{_INTENT}/force-stop", "intents.force_stop"),

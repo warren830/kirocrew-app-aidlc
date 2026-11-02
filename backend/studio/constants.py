@@ -221,6 +221,7 @@ ACTION_TYPE = (
     "resume",
     "force_stop",
     "prepare_commit",
+    "set_summary_confirmation",
 )
 #: Every consequence variant each card type may emit, so the i18n gate proves no card reaches a person without a "what
 #: happens if you act" sentence. Declared, not read from ``projection.SEED_CONSEQUENCE``: two sites override the seed at
@@ -270,6 +271,7 @@ DECISION_KIND = (
     "run",
     "resume",
     "prepare_commit",
+    "set_summary_confirmation",
     "force_stop",
     "rebind_session",
     "mark_not_delivered",
@@ -296,6 +298,7 @@ HUMAN_LANE_DECISIONS = frozenset(
         "run",
         "resume",
         "prepare_commit",
+        "set_summary_confirmation",
     }
 )
 HOST_CONTROL_DECISIONS = frozenset({"force_stop"})
@@ -334,6 +337,7 @@ DECISIONS: dict[str, tuple[str, ...]] = {
     "resume": ("resume",),
     "force_stop": ("force_stop",),
     "prepare_commit": ("prepare_commit",),
+    "set_summary_confirmation": ("set_summary_confirmation",),
 }
 
 #: Legal action-state transitions (PRD §11.1, with ``Processing`` folded into ``Delivered`` and
@@ -384,6 +388,11 @@ OTHER_OPTION_LETTER = "X"
 ANSWER_CONTINUATION_RE = re.compile(r"^- (.*)$")
 #: Checkpoint headings: the reader maps a heading to a checkpoint kind and the pattern below matches it.
 SUMMARY_CONFIRMATION_HEADING = "Consolidated Summary Confirmation"
+#: The intent's own setting for that checkpoint, under ``## Scope Configuration``: ``on (from scope feature)``,
+#: ``off (set by you)``, ``on (set by a command)``. The engine writes it and reads only its value (2.11
+#: ``CEREMONY_FIELDS``, ``parseCeremonyStateLine``); an environment kill switch can still force it off unrecorded.
+SUMMARY_CONFIRMATION_FIELD = "Summary Confirmation"
+CEREMONY_LINE_RE = re.compile(r"^(on|off)\b(?:\s*\((.*)\))?\s*$", re.IGNORECASE)
 PLAN_APPROVAL_HEADING = "Plan Approval"
 #: The engine's audit name for the same checkpoint differs from the Markdown heading.
 PLAN_APPROVAL_AUDIT_CHECKPOINT = "Code Generation Plan Approval"
@@ -680,6 +689,12 @@ WIRE_RUN = "/aidlc"
 WIRE_RESUME = "/aidlc --resume"
 WIRE_SCOPE_PREFIX = "/aidlc --scope "
 WIRE_PREPARE_COMMIT = "Please prepare a commit for the current AI-DLC changes. Do not push."
+# The person's typed switch for this intent's ceremony (2.11 ``parseTypedGuardSwitchRequest``): settings alone, no
+# description, so the prompt hook applies ``off`` as the person's own (``Summary Confirmation: off (set by you)``)
+# before the conductor reads it, and forwards ``on`` to the conductor's ``next``. Words beside it would make it a
+# flag of new work instead, so these are sent exactly, on their own turn.
+WIRE_SUMMARY_CONFIRMATION_OFF = "/aidlc --summary-confirmation off"
+WIRE_SUMMARY_CONFIRMATION_ON = "/aidlc --summary-confirmation on"
 WIRE_ACCEPT_ASSUMPTIONS = "A. Accept assumptions"
 WIRE_CONVERT_ASSUMPTIONS = "B. Convert to follow-up questions"
 # There is deliberately NO wire text for picking the active intent: ``/aidlc intent <name>`` as a prompt would mint a

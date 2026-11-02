@@ -28,6 +28,7 @@ import { MarkdownRenderer } from '@kirocrew/app-sdk/ui'
 
 import { ArtifactViewer, useArtifactBody } from '../artifacts/ArtifactViewer'
 import { useI18n } from '../i18n'
+import { SummaryConfirmationSwitch, cardSummarySwitchBlockedReason } from '../intents/SummaryConfirmationSwitch'
 import { pendingQuestions } from '../actions/useSubmit'
 import { withInlineCode } from '../lib/inlineCode'
 import type { DraftResult, Question } from '../lib/types'
@@ -87,7 +88,7 @@ function sameAnswer(stored: AnswerDraft | undefined, filled: AnswerDraft): boole
   return stored.option_letters.every((letter, i) => letter === filled.option_letters[i])
 }
 
-export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, api, go }: TemplateProps) {
+export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, api, go, reload }: TemplateProps) {
   const i18n = useI18n()
   const { t } = i18n
   const advisor = useAdvisor(card, api, detail?.drafts)
@@ -532,6 +533,19 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
               changesLabel={t('template.questions.summaryChanges')}
               changesHint={t('template.questions.summaryChangesHint')}
               chosen={choiceTouched}
+            />
+          ) : null}
+          {checkpoint.kind === 'summary_confirmation' && !checkpoint.answered && answerable ? (
+            // Turning the checkpoint off is a turn of its own, never part of this reply: `Looks correct` is matched
+            // exactly. The confirmation stays open either way, and AI-DLC still records the answer to it.
+            <SummaryConfirmationSwitch
+              api={api}
+              repoId={card.repo.repo_id}
+              intentKey={card.intent.intent_key}
+              setting={card.evidence.state?.summary_confirmation}
+              blockedReason={refreshing ? t('summarySwitch.blocked.refreshing') : cardSummarySwitchBlockedReason(card, t)}
+              pending
+              onSettled={reload}
             />
           ) : null}
           {!showGroup && view ? (

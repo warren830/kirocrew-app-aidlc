@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any, Mapping, NoReturn, Sequence
 from . import constants as C
 from . import security
 from .aidlc_reader import (
-    PresenceBaseline, audit_question_accepts_text, file_questions_support_forms, is_audit_text_label,
+    PresenceBaseline, audit_question_accepts_text, ceremony_setting, file_questions_support_forms, is_audit_text_label,
 )
 from .consistency import ACTION_STORED_FINDING_CODES, RepoFacts
 from .engine import CursorReadback, conversation_bun
@@ -84,11 +84,14 @@ CLIENT_PREFLIGHT_CODES = ("slot_missing", "slot_mismatch_preflight")
 
 #: Types Studio creates because a human asked for a turn, as opposed to types derived from a boundary on
 #: disk. The distinction decides who may cancel a card and what ``retire_stale`` sweeps.
-COMMAND_ACTION_TYPES: frozenset[str] = frozenset({"run", "resume", "prepare_commit", "force_stop"})
+COMMAND_ACTION_TYPES: frozenset[str] = frozenset(
+    {"run", "resume", "prepare_commit", "set_summary_confirmation", "force_stop"})
 #: Derived cards that stand for a stop of AI-DLC's own; every other derived card reports a condition Studio found.
 BOUNDARY_CARD_TYPES: frozenset[str] = frozenset({"gate", "revision", "question", "missing_input"})
 #: Command types that use the two-phase prompt lane (``force_stop`` uses the stop endpoint).
-PROMPT_COMMAND_TYPES: tuple[str, ...] = ("run", "resume", "prepare_commit")
+PROMPT_COMMAND_TYPES: tuple[str, ...] = ("run", "resume", "prepare_commit", "set_summary_confirmation")
+#: What a summary-confirmation request may ask for: the engine's own two words for the ceremony.
+SUMMARY_CONFIRMATION_VALUES: tuple[str, ...] = ("off", "on")
 
 #: Nothing has been handed to the host yet: a decision may be submitted, and live evidence joined.
 SUBMITTABLE_STATUSES: frozenset[str] = frozenset({"Queued", "NotDelivered"})
@@ -119,13 +122,15 @@ WIRE_TEXT_TEMPLATES: dict[str, str | None] = {
     "run": C.WIRE_RUN,
     "resume": C.WIRE_RESUME,
     "prepare_commit": C.WIRE_PREPARE_COMMIT,
+    "set_summary_confirmation.off": C.WIRE_SUMMARY_CONFIRMATION_OFF,
+    "set_summary_confirmation.on": C.WIRE_SUMMARY_CONFIRMATION_ON,
     "force_stop": None,
     "pick_intent": None,
 }
 #: The template a multi-form decision's card shows; the confirmation panel swaps in the other form.
 _DEFAULT_TEMPLATE = {
     "confirm_summary": "confirm_summary.looks_correct", "answers": "answers.single",
-    "provide_input": "provide_input.free_text",
+    "provide_input": "provide_input.free_text", "set_summary_confirmation": "set_summary_confirmation.off",
 }
 #: Decisions whose wire text is a constant.
 _FIXED_WIRE: dict[str, str] = {
@@ -140,6 +145,9 @@ _CHOICE_WIRE: dict[str, tuple[str, dict[str, tuple[str, str | None]]]] = {
         "request_changes": (C.WIRE_SUMMARY_REQUEST_CHANGES_PREFIX, "feedback"),
     }),
     "provide_input": ("kind", {"scope": (C.WIRE_SCOPE_PREFIX, "scope"), "free_text": ("", "text")}),
+    "set_summary_confirmation": ("value", {
+        "off": (C.WIRE_SUMMARY_CONFIRMATION_OFF, None), "on": (C.WIRE_SUMMARY_CONFIRMATION_ON, None),
+    }),
 }
 
 #: What the UI must collect before a decision can be sent (§2.11 ``DecisionSpec.requires``).
@@ -792,38 +800,50 @@ class HumanActionBroker:
 
     async def create_command(
         self, type: str, repo: RepoRecord, space: str, intent_dir: str, *, snap: "IntentSnapshot",
-        source: str = "studio",
+        source: str = "studio", value: str | None = None,
     ) -> ActionRecord:
-        """Create the ``run``/``resume``/``prepare_commit`` card a human asked for. A second click while the
-        first card is live returns it: one live command per boundary."""
+        """Create the ``run``/``resume``/``prepare_commit``/``set_summary_confirmation`` card a human asked for. A
+        second click while the first card is live returns it: one live command per boundary (and, for a setting,
+        per value asked for)."""
         if type not in PROMPT_COMMAND_TYPES:
             raise ValueError(f"{type!r} is not a prompt command type; force_stop uses create_force_stop")
+        if (type == "set_summary_confirmation") != (value is not None):
+            raise ValueError("a value goes with set_summary_confirmation, and only with it")
+        if value is not None and value not in SUMMARY_CONFIRMATION_VALUES:
+            _refuse("invalid_decision", f"summary confirmation is {' or '.join(SUMMARY_CONFIRMATION_VALUES)}",
+                    decision=type, value=value)
         binding = await self._sessions.get(repo.repo_id, space, intent_dir)
         await self._assert_dispatchable(binding, decision=type, intent_key=snap.intent_key, repo_id=repo.repo_id)
         findings = await self._assert_consistent(repo, snap, binding)
+        if value is not None:
+            await self._assert_setting_wanted(snap, value)
         if type in ("run", "resume"):
             await self._assert_run_current(type, snap)
+        if type in ("run", "resume", "set_summary_confirmation"):
             slot = self._host.slot(binding.slot_key) if binding.slot_key else None
             if slot is not None and busy_reasons(slot):
                 _refuse("slot_busy", "the canonical conversation is already busy",
                         slot_key=binding.slot_key, reasons=list(busy_reasons(slot)))
-        return await self._command_card(type, repo, space, intent_dir, snap, binding, findings, source)
+        return await self._command_card(type, repo, space, intent_dir, snap, binding, findings, source, value=value)
 
     async def _command_card(
         self, kind: str, repo: RepoRecord, space: str, intent_dir: str, snap: "IntentSnapshot", binding: Any,
-        findings: Sequence[Any], source: str,
+        findings: Sequence[Any], source: str, *, value: str | None = None,
     ) -> ActionRecord:
         captured = self._projection.captured(snap, snap.stage)
-        key = dedupe_key(kind, repo.repo_id, snap.intent_key, snap.stage, captured["boundary_token"])
+        token = captured["boundary_token"] if value is None else f"{value}:{captured['boundary_token'] or '-'}"
+        key = dedupe_key(kind, repo.repo_id, snap.intent_key, snap.stage, token)
         live = await self._live_for_key(key)
         if live is not None:
             return live
         evidence = self._projection.evidence(snap, findings=findings, binding=binding).to_json()
         evidence[CARD_META_KEY] = {
-            "severity": "info", "decisions": list(DECISIONS[kind]), "headline_params": {"stage": snap.stage},
+            "severity": "info", "decisions": list(DECISIONS[kind]),
+            "headline_params": {"stage": snap.stage, **({} if value is None else {"value": value})},
             "consequence_variant": "one_turn" if kind == "run" else None,
             "stage_ref": self._projection.stage_ref(snap, snap.stage), "reason": None, "related_action_id": None,
             "captured_at": captured["captured_at"], "stable": bool(captured["stable"]),
+            **({} if value is None else {"setting_value": value}),
         }
         scope = {"repo_id": repo.repo_id, "space": space, "intent_dir": intent_dir, "stage": snap.stage,
                  "unit": snap.unit, "intent_uuid": snap.row.uuid if snap.row is not None else binding.intent_uuid}
@@ -858,6 +878,19 @@ class HumanActionBroker:
                 "superseded": True, "command_unavailable_reason": reason, "current_stage": snap.stage})
         _refuse("run_not_applicable", "open the intent's current checkpoint instead of this run", reason=reason,
                 current_stage=snap.stage, **({"card": await self.card(rec, snap)} if rec is not None else {}))
+
+    async def _assert_setting_wanted(self, snap: "IntentSnapshot", value: str, rec: ActionRecord | None = None) -> None:
+        """A summary-confirmation request must still change the intent's line. Sent again, AI-DLC only says it is
+        already so, and that is a turn of the person's spent on nothing; a never-sent card asking for what the line
+        now says is retired on the way out, as a stale Run is."""
+        current = ceremony_setting(snap.state, C.SUMMARY_CONFIRMATION_FIELD)
+        if current is None or current.value != value:
+            return
+        if rec is not None and rec.status == "Queued" and not rec.delivery_id and not rec.delivering_at:
+            await self._transition(rec, "Cancelled", reason="command_superseded",
+                                   evidence={"superseded": True, "setting_already": current.line})
+        _refuse("invalid_decision", f"summary confirmation is already {value} for this intent", reason="already_set",
+                value=value, current=current.line)
 
     async def _assert_plan_session(self, decision: str, snap: "IntentSnapshot", rec: ActionRecord,
                                    slot: Any | None) -> None:
@@ -931,6 +964,11 @@ class HumanActionBroker:
         if decision == "accept_as_is" and int(rec.captured.stage_attempt or 1) < C.ACCEPT_AS_IS_MIN_ATTEMPT:
             _refuse("invalid_decision", "Accept as-is only exists after three rejection cycles", decision=decision,
                     stage_attempt=rec.captured.stage_attempt, min_attempt=C.ACCEPT_AS_IS_MIN_ATTEMPT)
+        setting = rec.card_meta.get("setting_value") if rec.type == "set_summary_confirmation" else None
+        if rec.type == "set_summary_confirmation" and payload.get("value") != setting:
+            # The card was confirmed as one request: the other value is a different card, never this one's payload.
+            _refuse("invalid_decision", "this card asks for the setting it was created for", decision=decision,
+                    value=payload.get("value"), expected=setting)
 
         repo = await self._repo(rec.repo_id)
         if repo.availability != "available":
@@ -941,6 +979,8 @@ class HumanActionBroker:
 
         snap = await self._snapshot(repo, rec.space, rec.intent_dir)
         await self._assert_run_current(decision, snap, rec)
+        if setting is not None:
+            await self._assert_setting_wanted(snap, setting, rec)
         await self._assert_plan_session(decision, snap, rec, self._host.slot(binding.slot_key) if binding.slot_key
                                         else None)
         card_questions = rec.evidence.get("questions") or {}
@@ -1218,7 +1258,10 @@ class HumanActionBroker:
         await self._reset_breakers(rec.repo_id, rec.intent_key)
         repo = await self._repo(rec.repo_id)
         snap = await self._snapshot(repo, rec.space, rec.intent_dir)
-        created = await self.create_command(rec.type, repo, rec.space, rec.intent_dir, snap=snap, source=rec.source)
+        # A setting is retried as the same request: the value its card was confirmed for.
+        value = rec.card_meta.get("setting_value") if rec.type == "set_summary_confirmation" else None
+        created = await self.create_command(rec.type, repo, rec.space, rec.intent_dir, snap=snap, source=rec.source,
+                                            value=value)
         await self.patch_evidence(rec, {"superseded": True, "retried_as": created.action_id})
         await self._activity.record(
             kind="action.retried", severity="info", repo_id=rec.repo_id, space=rec.space, intent_dir=rec.intent_dir,
@@ -1598,7 +1641,8 @@ class HumanActionBroker:
         confirmed = bool(rec.evidence.get("delivery_confirmed"))
         return [
             {"decision": name, "label_key": f"decision.{name}.label", "lane": lane_for(name),
-             "wire_text_template": _template_for(name), "requires": list(DECISION_REQUIRES.get(name, ()))}
+             "wire_text_template": _template_for(name, meta.get("setting_value")),
+             "requires": list(DECISION_REQUIRES.get(name, ()))}
             for name in names
             if (uncertain or name in DECISIONS.get(rec.type, ()))
             # A missing workflow receipt does not undo a confirmed message delivery.
@@ -1873,8 +1917,11 @@ def _authoritative_4xx(http_status: Any, receipt: Mapping[str, Any] | None) -> b
     return 400 <= status <= 499 and body.get("ok") is not True and bool(body.get("error") or body.get("code"))
 
 
-def _template_for(decision: str) -> str | None:
-    """The wire-text template a card shows for a decision (§2.11 ``wire_text_template``)."""
+def _template_for(decision: str, value: str | None = None) -> str | None:
+    """The wire-text template a card shows for a decision (§2.11 ``wire_text_template``). A setting card carries the
+    value it was created for, so it shows that form rather than the decision's default one."""
+    if value is not None and f"{decision}.{value}" in WIRE_TEXT_TEMPLATES:
+        return WIRE_TEXT_TEMPLATES[f"{decision}.{value}"]
     return WIRE_TEXT_TEMPLATES.get(decision, WIRE_TEXT_TEMPLATES.get(_DEFAULT_TEMPLATE.get(decision, "")))
 
 
