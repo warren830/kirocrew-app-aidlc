@@ -357,7 +357,8 @@ describe('the repository list', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save label' }))
     await waitFor(() => expect(record.label).toBe('Updated label'))
     await userEvent.click(screen.getByRole('button', { name: 'Archive repository' }))
-    await userEvent.click(screen.getAllByRole('button', { name: 'Archive repository' })[0]!)
+    const archive = screen.getByRole('heading', { name: 'Archive repository' }).closest('section')!
+    await userEvent.click(within(archive).getByRole('button', { name: 'Archive repository' }))
     await waitFor(() => expect(record.archived).toBe(true))
     await userEvent.click(screen.getByLabelText('Show archived repositories'))
     await userEvent.click(await screen.findByRole('button', { name: 'Details' }))
@@ -904,8 +905,10 @@ describe('the install preview', () => {
     await userEvent.click(within(table).getByRole('button', { name: /Install AI-DLC/ }))
 
     // The click both navigates and opens the flow; neither may cancel the other.
-    expect(await screen.findByRole('region', { name: 'Install preview' })).toBeInTheDocument()
+    const preview = await screen.findByRole('region', { name: 'Install preview' })
     expect(window.location.search).toContain('repo=r_new')
+    // Opened from the list, it is above the card the click lands on, not at that card's foot.
+    expect(preview.closest('section.studio-block')).toBeNull()
   })
 
   it('blocks the confirmation on a conflict and shows its diff', async () => {
@@ -1357,10 +1360,11 @@ describe('install recovery required', () => {
 })
 
 describe('a confirmation opened from Maintenance', () => {
-  // Maintenance sits at the foot of a long card and its confirmations render above the card, so a click
-  // there looked like it did nothing. What is pinned is where focus goes: into the confirmation (its
-  // field, else its heading, never its confirm button) and back to the opening button on Cancel.
-  function mountDetail() {
+  // Maintenance sits at the foot of a long card. A confirmation it opened used to render above the card,
+  // so the user pressed a button at the bottom and then had to find a second one a screen up. What is
+  // pinned: it opens under the button, its refusal and the transaction it starts stay there, and focus
+  // goes into it (its field, else its heading, never its confirm button) and back to the opener on Cancel.
+  function mountDetail(over: Record<string, RouteHandler> = {}) {
     const record = repo()
     setApiRoutes({
       ...shellRoutes(),
@@ -1375,9 +1379,46 @@ describe('a confirmation opened from Maintenance', () => {
           eligible_bytes: 0, selected_bytes: 0, selected_files: 0, unknown_sizes: 0,
         },
       }),
+      ...over,
     })
     mount('?view=repos&repo=r_1')
   }
+
+  async function maintenanceBlock() {
+    return (await screen.findByRole('heading', { name: 'Maintenance' })).closest('section')!
+  }
+
+  it('opens Unregister under its button, and keeps its refusal there rather than at the top of the page', async () => {
+    const busy = /Another operation holds this repository/
+    mountDetail({
+      [`DELETE ${BASE}/repos/r_1`]: () => { throw new StubApiError(409, { code: 'repo_busy', error: 'repository busy' }) },
+    })
+    const maintenance = await maintenanceBlock()
+    await userEvent.click(within(maintenance).getByRole('button', { name: 'Unregister' }))
+    const confirm = within(maintenance).getByRole('heading', { name: 'Unregister checkout-web?' }).closest('section')!
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Yes, unregister it' }))
+
+    expect(await within(maintenance).findByText(busy)).toBeInTheDocument()
+    expect(screen.getAllByText(busy)).toHaveLength(1)
+  })
+
+  it('opens Uninstall under its button, and shows the transaction it starts there too', async () => {
+    mountDetail({
+      [`POST ${BASE}/repos/r_1/transactions`]: () => ({ ok: true, transaction_id: 'tx_u', status: 'staged' }),
+      [`GET ${BASE}/repos/r_1/transactions/tx_u`]: () => ({
+        transaction: transaction({ transaction_id: 'tx_u', kind: 'uninstall', status: 'committed', error: null, failed_dir: null, steps: [] }),
+      }),
+    })
+    const maintenance = await maintenanceBlock()
+    await userEvent.click(within(maintenance).getByRole('button', { name: 'Uninstall harness' }))
+    const preview = await within(maintenance).findByRole('region', { name: 'Uninstall AI-DLC harness' })
+    const confirm = await within(preview).findByRole('button', { name: 'Uninstall the reviewed harness' })
+    await waitFor(() => expect(confirm).toBeEnabled())
+    await userEvent.click(confirm)
+
+    expect(await within(maintenance).findByRole('region', { name: 'Transaction tx_u' })).toBeInTheDocument()
+    expect(window.location.search).toContain('tx=tx_u')
+  })
 
   it('puts focus in the label field for Rename, and Cancel returns it to the button', async () => {
     mountDetail()
@@ -1410,5 +1451,37 @@ describe('a confirmation opened from Maintenance', () => {
     await userEvent.click(dismiss)
     expect(screen.queryByRole('heading', { name: heading })).not.toBeInTheDocument()
     expect(document.activeElement).toBe(opener)
+  })
+})
+
+describe('a late answer from the repository the user left', () => {
+  it("does not show one repository's Rescan refusal on the next repository's page", async () => {
+    let refuse: (caught: unknown) => void = () => {}
+    const first = repo()
+    const second = repo({ repo_id: 'r_2', label: 'billing-api', canonical_path: '/work/billing-api', resolved_identity: 'dev:1/ino:3' })
+    setApiRoutes({
+      ...shellRoutes(),
+      [`GET ${BASE}/repos`]: () => ({ repos: [first, second], totals: { repos: 2, unavailable: 0, open_actions: 0 } }),
+      [`GET ${BASE}/repos/r_1`]: () => ({ repo: first, intents: [], transactions: [] }),
+      [`GET ${BASE}/repos/r_2`]: () => ({ repo: second, intents: [], transactions: [] }),
+      [`GET ${BASE}/repos/r_1/git`]: () => ({ git: first.git, owned_dirty: [], unrelated_dirty: 0 }),
+      [`GET ${BASE}/repos/r_2/git`]: () => ({ git: second.git, owned_dirty: [], unrelated_dirty: 0 }),
+      [`POST ${BASE}/repos/r_1/rescan`]: () => new Promise((_resolve, reject) => { refuse = reject }),
+    })
+    mount('?view=repos&repo=r_1')
+    await userEvent.click(await screen.findByRole('button', { name: 'Rescan' }))
+    await screen.findByRole('button', { name: /Rescanning/ })
+
+    act(() => {
+      window.history.pushState(null, '', '/apps/aidlc-studio?view=repos&repo=r_2')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+    await screen.findByRole('heading', { name: 'billing-api' })
+    await act(async () => {
+      refuse(new StubApiError(409, { code: 'repo_busy', error: 'repository busy' }))
+    })
+
+    expect(screen.queryByText(/Another operation holds this repository/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Rescan' })).toBeEnabled()
   })
 })

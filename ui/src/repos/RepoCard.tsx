@@ -317,11 +317,15 @@ export interface RepoCardProps {
   transactions?: TransactionResult[]
   /** The repository's intents, from `GET /repos/{id}`. Detail mode lists them (FR-INV-001). */
   intents?: IntentSummary[]
-  onAction: (action: RepoAction) => void
+  /** `place` is `'maintenance'` when the pressed button sits in the detail card's Maintenance block, so the
+   *  page can open what it starts there instead of above the card. */
+  onAction: (action: RepoAction, place?: 'maintenance') => void
   /** Re-open a past transaction from the install history (detail mode only). */
   onOpenTransaction?: (transactionId: string) => void
   /** Extra blocks in detail mode (the Git panel, an open preview). */
   children?: ReactNode
+  /** A confirmation or transaction a Maintenance button opened, rendered under those buttons. */
+  maintenanceFlow?: ReactNode
   /** Results of maintenance controls, shown beside those controls instead of above the long card. */
   maintenanceFeedback?: ReactNode
 }
@@ -338,6 +342,7 @@ export function RepoCard({
   onAction,
   onOpenTransaction,
   children,
+  maintenanceFlow,
   maintenanceFeedback,
 }: RepoCardProps) {
   const i18n = useI18n()
@@ -656,7 +661,7 @@ export function RepoCard({
                     ? { 'data-variant': 'danger' }
                     : {})}
                 disabled={busy !== null}
-                onClick={() => onAction(action)}
+                onClick={() => onAction(action, detailed ? 'maintenance' : undefined)}
               >
                 {busy === action && action === 'rescan'
                   ? t('repos.action.rescanning')
@@ -672,6 +677,7 @@ export function RepoCard({
         return detailed ? (
           <Block title={t('repos.maintenance.title')} icon="settings">
             {buttons}
+            {maintenanceFlow}
             {maintenanceFeedback}
             {actions.includes('doctor') ? <Note>{t('repos.action.doctorNote')}</Note> : null}
             <Note>{t('repos.maintenance.note')}</Note>
