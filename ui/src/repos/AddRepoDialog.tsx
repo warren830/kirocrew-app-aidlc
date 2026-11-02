@@ -41,7 +41,8 @@ function focusable(root: HTMLElement): HTMLElement[] {
 
 export interface AddRepoDialogProps {
   api: StudioApi
-  /** Registered repositories, so a duplicate can be named rather than shown as an id. */
+  /** Registered repositories, archived ones included, so a duplicate can be named rather than shown as an id:
+   *  the registry refuses a path an archived row owns as firmly as one a listed row owns. */
   repos: RepoRecord[]
   onClose: () => void
   onRegistered: (repo: RepoRecord) => void
@@ -63,6 +64,8 @@ export function AddRepoDialog({ api, repos, onClose, onRegistered, onOpenRepo }:
   const dialog = useRef<HTMLDivElement | null>(null)
   const input = useRef<HTMLInputElement | null>(null)
   const alive = useRef(true)
+  /** The field as it is now, for a preflight that answers after the path was edited. */
+  const currentPath = useRef('')
 
   useEffect(() => {
     alive.current = true
@@ -104,6 +107,7 @@ export function AddRepoDialog({ api, repos, onClose, onRegistered, onOpenRepo }:
 
   const changePath = useCallback((next: string) => {
     setPath(next)
+    currentPath.current = next
     // A report belongs to the path it was read for. Keeping it would let `Register` confirm a preflight
     // of a different directory — the exact class of mistake this dialog exists to make impossible.
     setReport(null)
@@ -128,10 +132,13 @@ export function AddRepoDialog({ api, repos, onClose, onRegistered, onOpenRepo }:
     try {
       const answer = await api.preflight(trimmed)
       if (!alive.current) return
+      // The field stays editable while the preflight runs, and editing it already threw the report away:
+      // an answer for the path that was there before is not a report for the path that is there now.
+      if (currentPath.current.trim() !== trimmed) return
       setReport(answer.preflight)
       setDuplicateOf(answer.preflight.duplicate_of)
     } catch (caught) {
-      if (!alive.current) return
+      if (!alive.current || currentPath.current.trim() !== trimmed) return
       setReport(null)
       setError(caught instanceof StudioApiError ? caught : new StudioApiError('internal_error', String(caught), {}, 0))
     } finally {

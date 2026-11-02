@@ -131,7 +131,7 @@ ENGINE_DENY: frozenset[str] = frozenset(C.ENGINE_FORBIDDEN_TOOLS)
 
 _MAX_CURSOR_BYTES = 4096  # a cursor file is one directory name and a newline
 _MAX_CURSOR_REPORT_CHARS = 128
-_MAX_ARGUMENTS_CHARS = 4000  # §1.9: --arguments becomes one argv token and an audit field
+_MAX_ARGUMENTS_CHARS = C.MAX_INTENT_ARGUMENTS_CHARS  # §1.9: --arguments becomes one argv token and an audit field
 #: ``aidlc-state.ts lookup`` queries (§1.9); an unlisted one would reach the engine's own argument parser.
 _LOOKUP_QUERIES = (
     "phase-of", "next-stage", "agent-for", "number-of", "stages-in-scope", "first-in-phase", "validate-stage",

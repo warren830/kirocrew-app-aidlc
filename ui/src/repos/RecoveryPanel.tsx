@@ -39,10 +39,12 @@ export interface RecoveryBannerProps {
   failedDir: string | null
   /** Absent below 900px: recovery is a desktop flow, and a button that opens nothing is worse than none. */
   onStart?: () => void
+  /** The repository cannot be read, so recovery cannot start: the banner says to make it readable first. */
+  unreadable?: boolean
 }
 
 /** Shown wherever a recovery-required repository is shown, whether or not the flow is open. */
-export function RecoveryBanner({ repoLabel, failedDir, onStart }: RecoveryBannerProps) {
+export function RecoveryBanner({ repoLabel, failedDir, onStart, unreadable = false }: RecoveryBannerProps) {
   const { t } = useI18n()
   return (
     <div className="studio-failure-detail studio-recovery" role="alert">
@@ -61,6 +63,7 @@ export function RecoveryBanner({ repoLabel, failedDir, onStart }: RecoveryBanner
         <p className="studio-muted">{t('install.recovery.noPath')}</p>
       )}
       <p className="studio-help">{t('install.recovery.pathNote')}</p>
+      {unreadable ? <p>{t('install.recovery.unreadable')}</p> : null}
       {onStart ? (
         <button type="button" className="studio-btn" onClick={onStart}>
           <Icon name="refresh" size={14} />

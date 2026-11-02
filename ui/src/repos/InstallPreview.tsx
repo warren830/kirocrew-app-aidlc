@@ -420,6 +420,8 @@ export interface PreviewFlowProps {
    * the button most carefully.
    */
   targetVersion?: string
+  /** A same-version upgrade that restores Studio's drifted files rather than updating them (`sameVersionRepair`). */
+  repair?: boolean
   /** Called with the transaction id after the 202. The caller opens the transaction drawer. */
   onStarted: (transactionId: string) => void
   onClose: () => void
@@ -430,7 +432,7 @@ export interface PreviewFlowProps {
  * route and the words: the refusals that separate them are the server's, and re-deciding them here
  * would be a second implementation of the rules that keep a repository on one complete version.
  */
-export function PreviewFlow({ api, repoId, kind, intro, targetVersion, onStarted, onClose }: PreviewFlowProps) {
+export function PreviewFlow({ api, repoId, kind, intro, targetVersion, repair = false, onStarted, onClose }: PreviewFlowProps) {
   const i18n = useI18n()
   const { t } = i18n
   const [state, setState] = useState<PreviewState>(INITIAL)
@@ -509,7 +511,8 @@ export function PreviewFlow({ api, repoId, kind, intro, targetVersion, onStarted
   const receiptRecovery = Boolean(state.plan?.recovery_transaction_id)
   // The same engine version with changed bundled files: an update of the files, not a version upgrade.
   const refresh = kind === 'upgrade' && !!state.plan && state.plan.engine_from === state.plan.engine_to
-  const title = t(refresh ? 'install.preview.title.refresh' : `install.preview.title.${kind}`)
+  const sameVersion = refresh ? (repair ? 'repair' : 'refresh') : null
+  const title = t(sameVersion ? `install.preview.title.${sameVersion}` : `install.preview.title.${kind}`)
   const confirmLabel =
     receiptRecovery
       ? t('install.confirm.restoreTransaction')
@@ -519,7 +522,7 @@ export function PreviewFlow({ api, repoId, kind, intro, targetVersion, onStarted
       ? t('install.confirm.uninstall')
       : kind === 'recovery'
       ? t('install.confirm.recovery')
-      : t(kind === 'install' ? 'install.confirm.install' : refresh ? 'install.confirm.refresh' : 'install.confirm.upgrade', {
+      : t(kind === 'install' ? 'install.confirm.install' : sameVersion ? `install.confirm.${sameVersion}` : 'install.confirm.upgrade', {
           version: state.plan?.engine_to ?? targetVersion ?? unavailable(i18n),
         })
 

@@ -18,6 +18,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider, makeI18n } from '../i18n'
 import { useStudioApi } from '../lib/api'
+import { APP_NAME } from '../lib/app'
 import { EMPTY_ROUTE, type Navigate } from '../lib/route'
 import type { ActionCard } from '../lib/types'
 import { API_BASE, actionCard } from '../test/fixtures'
@@ -345,6 +346,63 @@ describe('a refusal the server did return', () => {
     await userEvent.click(within(panel).getByRole('button', { name: new RegExp(en.t('confirm.send')) }))
     await waitFor(() => expect(within(confirmation()).getByText(en.t('errors.invalid_decision'))).toBeInTheDocument())
     expect(within(confirmation()).getByRole('button', { name: new RegExp(en.t('confirm.send')) })).toBeDisabled()
+  })
+})
+
+describe('the words a user typed, after a send', () => {
+  const text = 'Cover the decline path and the 3DS retry.'
+  const stored = (card: ActionCard) => localStorage.getItem(`${APP_NAME}:draft:${card.action_id}`)
+
+  /** Send Request changes from a gate whose feedback is a stored draft; the delivery report answers `after`. */
+  async function requestChanges(slots: unknown[], after: ActionCard) {
+    const card = actionCard()
+    let current = card
+    localStorage.setItem(`${APP_NAME}:draft:${card.action_id}`, JSON.stringify({ feedback: text }))
+    setApiRoutes({
+      [`GET ${API_BASE}/actions/${card.action_id}`]: () => ({ action: current, transitions: [], drafts: [] }),
+      [`POST ${API_BASE}/actions/${card.action_id}/submit`]: () => ({
+        ok: true, action_id: card.action_id, status: 'Delivering', lane: 'human_lane', delivery_id: 'dl_1',
+        slot_key: 'aidlc-r1-guest', session_key: 'ses_1', wire_text: `Request Changes: ${text}`,
+        expires_at: '2026-09-04T10:01:30Z', lease_generation: 3,
+        host: { method: 'POST', path: '/api/chat?ws=1', body: { message: `Request Changes: ${text}` } },
+      }),
+      'GET /api/chat/slots': () => slots,
+      'POST /api/chat?ws=1': () => ({ ok: true, slot: 'aidlc-r1-guest', mid: 'm_1' }),
+      [`POST ${API_BASE}/actions/${card.action_id}/delivery`]: () => {
+        current = after
+        return { ok: true, action: after, idempotent: false }
+      },
+    })
+    const view = mount(card)
+    expect(((await screen.findByLabelText(en.t('template.gate.feedbackLabel'))) as HTMLTextAreaElement).value).toBe(text)
+    await userEvent.click(await screen.findByRole('button', { name: /^Request changes/ }))
+    await userEvent.click(within(confirmation()).getByRole('button', { name: new RegExp(en.t('confirm.send')) }))
+    // The confirmation closes once the outcome is recorded: the draft has been kept or discarded by then.
+    await waitFor(() => expect(screen.queryByRole('group', { name: en.t('confirm.label') })).not.toBeInTheDocument())
+    expect(apiCalls.filter((call) => call.path.endsWith('/delivery'))).toHaveLength(1)
+    return view
+  }
+
+  it('keeps them when the slot was gone and nothing was sent, because Request changes is offered again', async () => {
+    const card = actionCard()
+    const notDelivered: ActionCard = { ...card, status: 'NotDelivered', status_generation: 3,
+      updated_at: '2026-09-04T09:05:00Z' }
+    const view = await requestChanges([], notDelivered)
+    expect(apiCalls.filter((call) => call.path === '/api/chat?ws=1')).toHaveLength(0)
+    // Walk away and come back to the card: the box is filled from storage again.
+    view.select(null, '')
+    view.select(notDelivered)
+    const box = await screen.findByLabelText(en.t('template.gate.feedbackLabel'))
+    expect((box as HTMLTextAreaElement).value).toBe(text)
+  })
+
+  it('discards them once the conductor has them', async () => {
+    const card = actionCard()
+    const slot = { key: 'aidlc-r1-guest', project: card.repo.canonical_path, agent: 'aidlc', running: false }
+    await requestChanges([slot], { ...card, status: 'Delivered', status_generation: 3,
+      updated_at: '2026-09-04T09:05:00Z', decisions: [], primary: null })
+    expect(apiCalls.filter((call) => call.path === '/api/chat?ws=1')).toHaveLength(1)
+    expect(stored(card)).toBeNull()
   })
 })
 

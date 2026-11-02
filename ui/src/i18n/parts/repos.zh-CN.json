@@ -16,6 +16,7 @@
   "repos.action.recover": "安装恢复",
   "repos.action.refresh": "更新 AI-DLC 文件",
   "repos.action.remove": "取消注册",
+  "repos.action.repair": "恢复 AI-DLC 文件",
   "repos.action.rescan": "重新扫描",
   "repos.action.rescanning": "正在重新扫描…",
   "repos.action.upgrade": "升级 AI-DLC",

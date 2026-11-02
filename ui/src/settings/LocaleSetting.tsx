@@ -13,7 +13,7 @@
  */
 
 import { useI18n } from '../i18n'
-import { setStudioLocale, useHostLocale, type StudioLocale } from '../lib/host'
+import { setSavedLocale, setStudioLocale, useHostLocale, type StudioLocale } from '../lib/host'
 import { SettingRow, type SettingsControl } from './SettingsView'
 
 const LOCALE_CHOICES = ['auto', 'en-US', 'zh-CN'] as const
@@ -34,6 +34,8 @@ export function LocaleSetting({ control }: LocaleSettingProps) {
     // The local override first: it is synchronous and cannot fail, so the page never ends up showing a
     // language the server has already accepted.
     setStudioLocale(next === 'auto' ? null : (next as StudioLocale))
+    // The saved copy moves with it, or "Follow the dashboard" would keep showing the old saved language.
+    setSavedLocale(next)
     control.save({ locale: next })
   }
 

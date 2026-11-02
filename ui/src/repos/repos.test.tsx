@@ -596,6 +596,57 @@ describe('adding a repository', () => {
     expect(within(dialog).getByRole('button', { name: /Register this path/ })).toBeDisabled()
   })
 
+  it('drops a preflight that answers after the path was edited, so Register cannot confirm the new text', async () => {
+    let answer: (value: unknown) => void = () => {}
+    setApiRoutes({
+      ...shellRoutes(),
+      [`GET ${BASE}/repos`]: () => ({ repos: [], totals: { repos: 0, unavailable: 0, open_actions: 0 } }),
+      [`POST ${BASE}/repos/preflight`]: (body) => new Promise((resolve) => {
+        answer = () => resolve({ preflight: preflight({ path_input: (body as Json)['path'] }) })
+      }),
+    })
+    mount()
+
+    await userEvent.click(await screen.findByRole('button', { name: /Add repository/ }))
+    const dialog = screen.getByRole('dialog')
+    const path = within(dialog).getByLabelText('Absolute path')
+    await userEvent.type(path, '/work/checkout-web')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Run preflight' }))
+    await userEvent.type(path, '-other')
+    await act(async () => answer(null))
+
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Run preflight' })).toBeEnabled())
+    expect(within(dialog).queryByText('This path can be registered.')).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: /Register this path/ })).toBeDisabled()
+  })
+
+  it('names an archived registration that already owns the path, and opens it', async () => {
+    const archived = repo({ repo_id: 'r_old', label: 'legacy-web', archived: true })
+    setApiRoutes({
+      ...shellRoutes(),
+      [`GET ${BASE}/repos`]: () => ({ repos: [repo()], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
+      [`GET ${BASE}/repos?include_archived=1`]: () => ({
+        repos: [repo(), archived], totals: { repos: 2, unavailable: 0, open_actions: 0 },
+      }),
+      [`GET ${BASE}/repos/r_old`]: () => ({ repo: archived, intents: [], transactions: [] }),
+      [`POST ${BASE}/repos/preflight`]: () => ({
+        preflight: preflight({ duplicate_of: 'r_old', can_register: false, path_input: '/work/legacy-web' }),
+      }),
+    })
+    mount()
+
+    await userEvent.click(await screen.findByRole('button', { name: /Add repository/ }))
+    const dialog = screen.getByRole('dialog')
+    await userEvent.type(within(dialog).getByLabelText('Absolute path'), '/work/legacy-web')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Run preflight' }))
+
+    expect(await within(dialog).findByText(/same repository as legacy-web/)).toBeInTheDocument()
+    expect(within(dialog).queryByText(/r_old/)).not.toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Open legacy-web' }))
+    expect(await screen.findByRole('heading', { name: 'legacy-web' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Restore repository' })).toBeInTheDocument()
+  })
+
   it('refuses an absolute-path rule client-side without calling the server', async () => {
     setApiRoutes({
       ...shellRoutes(),
@@ -1183,6 +1234,29 @@ describe('the harness Studio owns, next to one it does not', () => {
     expect(within(row).getByText('Updated files available')).toBeInTheDocument()
   })
 
+  it('calls a same-version upgrade of drifted files a restore, in the button and in its preview', async () => {
+    // The bundled files are the ones installed; one of them went missing. The upgrade re-creates it.
+    const drifted = repo({ install: install({
+      status: 'drift', engine_version: '2.7.1', own_engine_version: '2.7.1', upgrade_available: false, drift_count: 1,
+    }) })
+    setApiRoutes({
+      ...shellRoutes(),
+      [`GET ${BASE}/repos`]: () => ({ repos: [drifted], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
+      [`POST ${BASE}/repos/r_1/transactions/preview`]: () => ({
+        plan: plan({ kind: 'upgrade', engine_from: '2.7.1', engine_to: '2.7.1' }), plan_digest: 'repair',
+      }),
+    })
+    mount()
+
+    const table = await screen.findByRole('table')
+    const row = within(table).getByRole('row', { name: /checkout-web/ })
+    expect(within(row).queryByRole('button', { name: 'Update AI-DLC files' })).not.toBeInTheDocument()
+    await userEvent.click(within(row).getByRole('button', { name: 'Restore AI-DLC files' }))
+    const preview = await screen.findByRole('region', { name: 'File restore preview' })
+    expect(within(preview).getByText(/re-creates the missing ones/)).toBeInTheDocument()
+    expect(await within(preview).findByRole('button', { name: /Restore the AI-DLC 2\.7\.1 files/ })).toBeEnabled()
+  })
+
   it("offers Install, not Upgrade, when a receipt survives but Studio's harness does not", async () => {
     // `.kiro` was deleted by hand: the receipt is still there, so every managed file reads as drift and
     // the registry reports `drift`. There is nothing left to upgrade — the install lane must rebuild it.
@@ -1321,6 +1395,25 @@ describe('install recovery required', () => {
     expect(screen.getByRole('button', { name: /Preview the recovery/ })).toBeInTheDocument()
   })
 
+  it('does not offer recovery for a repository Studio cannot read, and points to rebinding it first', async () => {
+    const moved = repo({
+      availability: 'moved', install: install({ status: 'recovery_required', upgrade_available: false }),
+    })
+    setApiRoutes({
+      ...shellRoutes(),
+      [`GET ${BASE}/repos`]: () => ({ repos: [moved], totals: { repos: 1, unavailable: 1, open_actions: 0 } }),
+      [`GET ${BASE}/repos/r_1`]: () => ({ repo: moved, intents: [], transactions: [transaction()] }),
+    })
+    mount('?view=repos&repo=r_1')
+
+    const banner = await screen.findByText('Install recovery required', { selector: 'p' })
+    const alert = banner.closest('[role="alert"]') as HTMLElement
+    expect(alert).toHaveTextContent(/cannot start while Studio cannot read it/)
+    expect(screen.queryByRole('button', { name: /Preview the recovery/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Install recovery' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Rebind to a new path' })).toBeInTheDocument()
+  })
+
   it('runs recovery as its own previewed transaction', async () => {
     setApiRoutes({
       ...shellRoutes(),
@@ -1356,6 +1449,30 @@ describe('install recovery required', () => {
     expect(within(drawer).getAllByText(/failed/).length).toBeGreaterThan(0)
     expect(within(drawer).getByText('restore_backups: permission denied')).toBeInTheDocument()
     expect(within(drawer).getAllByText('Install recovery required').length).toBeGreaterThan(0)
+  })
+})
+
+describe('the transaction drawer', () => {
+  it("says what a recorded error code means, and keeps an exception's own text as it is", async () => {
+    const record = repo()
+    let error = 'repo_busy'
+    setApiRoutes({
+      ...shellRoutes(),
+      [`GET ${BASE}/repos`]: () => ({ repos: [record], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
+      [`GET ${BASE}/repos/r_1`]: () => ({ repo: record, intents: [], transactions: [] }),
+      [`GET ${BASE}/repos/r_1/git`]: () => ({ git: record['git'], owned_dirty: [], unrelated_dirty: 0 }),
+      [`GET ${BASE}/repos/r_1/transactions/tx_9`]: () => ({ transaction: transaction({ status: 'failed', error }) }),
+    })
+    const view = mount('?view=repos&repo=r_1&tx=tx_9')
+
+    const drawer = await screen.findByRole('region', { name: 'Transaction tx_9' })
+    expect(await within(drawer).findByText('Another operation holds this repository. It will not be interrupted.')).toBeInTheDocument()
+    expect(within(drawer).queryByText('repo_busy')).not.toBeInTheDocument()
+
+    view.unmount()
+    error = 'OSError: disk full'
+    mount('?view=repos&repo=r_1&tx=tx_9')
+    expect(await screen.findByText('OSError: disk full')).toBeInTheDocument()
   })
 })
 

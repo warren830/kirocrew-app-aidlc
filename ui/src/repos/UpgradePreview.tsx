@@ -20,6 +20,7 @@ import { Chip } from '../shell/Chip'
 import { Icon } from '../shell/Icon'
 import { Note } from './PreflightReport'
 import { PreviewFlow } from './InstallPreview'
+import { sameVersionRepair } from './RepoCard'
 
 export interface UpgradePreviewProps {
   api: StudioApi
@@ -32,6 +33,7 @@ export interface UpgradePreviewProps {
 export function UpgradePreview({ api, repoId, install, onStarted, onClose }: UpgradePreviewProps) {
   const i18n = useI18n()
   const { t } = i18n
+  const repair = sameVersionRepair(install)
 
   return (
     <PreviewFlow
@@ -39,6 +41,7 @@ export function UpgradePreview({ api, repoId, install, onStarted, onClose }: Upg
       repoId={repoId}
       kind="upgrade"
       targetVersion={install.bundled_engine_version}
+      repair={repair}
       onStarted={onStarted}
       onClose={onClose}
       intro={
@@ -65,7 +68,7 @@ export function UpgradePreview({ api, repoId, install, onStarted, onClose }: Upg
           {install.newer_installed ? <Note tone="warn">{t('repos.engine.newerInstalled')}</Note> : null}
           {/* Named up front rather than only in the plan: "what disappears" is the part of an upgrade a
               user is least able to reconstruct afterwards. */}
-          <Note>{t('install.retire.body')}</Note>
+          <Note>{t(repair ? 'install.repair.body' : 'install.retire.body')}</Note>
         </>
       }
     />

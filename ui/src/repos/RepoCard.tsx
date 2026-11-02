@@ -232,7 +232,8 @@ export function repoActions(repo: RepoRecord): RepoAction[] {
   const readable = repo.availability === 'available'
   const ownInstalled = repo.install.own_engine_version !== null
 
-  if (status === 'recovery_required') out.push('recover')
+  // Recovery reads and writes the repository, so an unreadable one is rebound (or made readable) first.
+  if (readable && status === 'recovery_required') out.push('recover')
   // Not under recovery: a failed transaction is cleared by recovery, not by installing over it.
   if (readable && !ownInstalled && status !== 'recovery_required') out.push('install')
   if (
@@ -262,6 +263,21 @@ const DESKTOP_ONLY: readonly RepoAction[] = ['install', 'upgrade', 'recover', 'r
  */
 export function sameVersionRefresh(install: RepoRecord['install']): boolean {
   return !!install.own_engine_version && install.own_engine_version === install.bundled_engine_version
+}
+
+/**
+ * The same engine version and the same bundled files, with Studio's files changed or missing on disk: the
+ * upgrade re-writes them from the bundle, so it is named as restoring files rather than updating them.
+ */
+export function sameVersionRepair(install: RepoRecord['install']): boolean {
+  return sameVersionRefresh(install) && !install.upgrade_available && install.drift_count > 0
+}
+
+/** The upgrade button's words: an upgrade, an update of the bundled files, or a restore of drifted ones. */
+export function upgradeLabel(install: RepoRecord['install']): string {
+  return sameVersionRepair(install)
+    ? 'repos.action.repair'
+    : sameVersionRefresh(install) ? 'repos.action.refresh' : 'repos.action.upgrade'
 }
 
 const ACTION_LABEL: Record<RepoAction, string> = {
@@ -427,7 +443,8 @@ export function RepoCard({
         <RecoveryBanner
           repoLabel={repo.label}
           failedDir={recoveryEvidencePath(transactions)}
-          {...(desktop ? { onStart: () => onAction('recover') } : {})}
+          unreadable={repo.availability !== 'available'}
+          {...(desktop && repo.availability === 'available' ? { onStart: () => onAction('recover') } : {})}
         />
       ) : null}
 
@@ -667,7 +684,7 @@ export function RepoCard({
                   ? t('repos.action.rescanning')
                   : busy === action && action === 'doctor'
                     ? t('repos.action.doctorRunning')
-                    : t(action === 'upgrade' && sameVersionRefresh(repo.install) ? 'repos.action.refresh' : ACTION_LABEL[action])}
+                    : t(action === 'upgrade' ? upgradeLabel(repo.install) : ACTION_LABEL[action])}
               </button>
             ))}
           </div>

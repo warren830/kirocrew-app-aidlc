@@ -407,6 +407,27 @@ def test_the_other_option_sends_free_text_and_refuses_a_blank_one(A, E, studio):
     assert exc.value.details["reason"] == "free_text_required"
 
 
+@pytest.mark.parametrize("raw,sent", [
+    ("\ufeffDynamoDB\u3000", "DynamoDB"),  # ECMAScript trims these; `str.strip()` kept U+FEFF
+    ("\x1cDynamoDB\x85", "\x1cDynamoDB\x85"),  # and keeps these, which `str.strip()` removed
+])
+def test_free_text_is_trimmed_exactly_as_the_browser_trims_it(A, C, studio, raw, sent):
+    """``client_wire_text`` comes from JavaScript's ``.trim()``: any other edge set makes the text unsendable."""
+    questions = _parse(studio, F.questions_text(stage=STAGE, questions=[("Which store?", ["Postgres"])]))
+    assert _answers(A, questions, ans(1, ["X"], raw)) == sent
+    assert A.wire_text_for("request_changes", {"feedback": raw}, questions=None, grouped_answers_enabled=False) == (
+        C.WIRE_REQUEST_CHANGES_PREFIX + sent)
+
+
+def test_nothing_chosen_answers_only_a_question_without_options(A, E, studio):
+    """Free text with no option ticked is what an unticked ``Other`` box held, not the human's answer."""
+    questions = _parse(studio, "## Q1: Checks? (multi-select)\nA. Alpha\nB. Beta\nX. Other\n[Answer]:\n")
+    with refused(E, "answers_incomplete") as exc:
+        _answers(A, questions, ans(1, [], "Use Redis"))
+    assert exc.value.details == {"index": 1, "reason": "choice_required"}
+    assert _answers(A, _parse(studio, "## Q1: Why?\n[Answer]:\n"), ans(1, [], " Because. ")) == "Because."
+
+
 @pytest.mark.parametrize("context", [
     "Keep the boundary explicit. (Select all that should be recorded as out of scope.)",
     "**(Select all that should be recorded as out of scope.)**",
@@ -583,6 +604,36 @@ async def test_a_boundary_that_moved_on_disk_is_stale_even_when_the_client_agree
     with refused(E, "action_stale") as exc:
         await submit(world, gate, captured=body)
     assert "state_hash" in exc.value.details["fields"]
+
+
+@pytest.mark.parametrize("edit", ["relabel", "append"])
+@pytest.mark.parametrize("repo_options", [{"questions": _questions(single=True)}])
+@aio
+async def test_a_questions_file_edited_before_submit_is_stale_and_hands_back_the_new_questions(world, E, edit):
+    """Answers are encoded against the live file, so its edit must surface as the boundary moving, with the card
+    the human has to re-read, and not as a browser that sent the wrong label or skipped a question."""
+    question = await bound_card(world, "question")
+    answer = {"decision": "answers", "answers": [{"index": 1, "option_letters": ["B"]}]}
+    # The same file and a browser that displayed other text: that one is still the browser's mistake.
+    with refused(E, "invalid_decision") as exc:
+        await submit(world, question, payload=answer, wire="Postgres")
+    assert exc.value.details["expected"] == "SQLite"
+    path = world.builder.record(INTENT) / QUESTIONS_REL
+    text = path.read_text()
+    path.write_text(text.replace("SQLite", "Changed choice") if edit == "relabel"
+                    else text + "\n## Q2. Another?\n\nA. Yes\nB. No\n\n[Answer]:\n")
+    with refused(E, "action_stale") as exc:
+        await submit(world, question, payload=answer, wire="SQLite")
+    assert "question_digest" in exc.value.details["fields"]
+    card = exc.value.details["card"]
+    assert card["action_id"] == question.action_id
+    assert card["captured"]["question_digest"] != question.captured.question_digest
+    labels = [[option["text"] for option in q["options"] if not option["is_other"]]
+              for q in card["evidence"]["questions"]["questions"]]
+    assert labels == ([["Postgres", "Changed choice"]] if edit == "relabel"
+                      else [["Postgres", "SQLite"], ["Yes", "No"]])
+    assert (await world.broker.get(question.action_id)).delivery_id is None
+    assert world.scheduler.live() == []
 
 
 @aio

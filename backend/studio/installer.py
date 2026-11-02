@@ -484,12 +484,27 @@ def payload_refresh_available(repo: "RepoRecord", receipt: Receipt | Mapping[str
     the full SQLite receipt (the registry summary omits identity and digest)."""
     prior = C.attr(receipt, "payload_digest")
     return bool(
+        _trusted_same_version_receipt(repo, receipt, own_engine_version, manifest)
+        and _is_digest(prior) and _is_digest(manifest.payload_digest) and prior != manifest.payload_digest
+    )
+
+
+def drift_repair_available(repo: "RepoRecord", receipt: Receipt | Mapping[str, Any] | None,
+                           own_engine_version: str | None, manifest: PayloadManifest, drift_count: int) -> bool:
+    """Whether a trusted current receipt's files drifted at the bundled engine version. A same-version upgrade
+    is then the repair: it re-creates what went missing, while a file the user edited still blocks with its
+    diff (FR-INST-009), so nothing is overwritten that the plan does not already allow."""
+    return bool(drift_count) and _trusted_same_version_receipt(repo, receipt, own_engine_version, manifest)
+
+
+def _trusted_same_version_receipt(repo: "RepoRecord", receipt: Receipt | Mapping[str, Any] | None,
+                                  own_engine_version: str | None, manifest: PayloadManifest) -> bool:
+    return bool(
         repo.resolved_identity and version_tuple(own_engine_version)
         and own_engine_version == manifest.engine_version
         and C.attr(receipt, "status") == "current" and C.attr(receipt, "repo_id") == repo.repo_id
         and C.attr(receipt, "resolved_repo_identity") == repo.resolved_identity
         and C.attr(receipt, "engine_version") == own_engine_version
-        and _is_digest(prior) and _is_digest(manifest.payload_digest) and prior != manifest.payload_digest
     )
 
 
@@ -1204,7 +1219,9 @@ class Installer:
             counts=counts, blocking=bool(blockers), blockers=blockers, warnings=tuple(warnings),
             newer_installed=bool(installed and bundled and installed > bundled),
             same_version=bool(own and own == self._manifest.engine_version
-                              and not payload_refresh_available(repo, receipt, own, self._manifest)),
+                              and not payload_refresh_available(repo, receipt, own, self._manifest)
+                              and not drift_repair_available(repo, receipt, own, self._manifest,
+                                                             health.drift_count)),
             # Always: the lease is taken before anything is checked, even when the plan writes nothing.
             requires_admin_lease=True, bytes_to_write=bytes_to_write, state_versions_found=found,
             state_version_blocked=bool(incompatible) or bool(unreadable), preflight=preflight,

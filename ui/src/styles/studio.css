@@ -2509,3 +2509,15 @@ button.studio-chip:hover { border-color: var(--border-hover); }
 }
 .studio-conv > * { flex: 1 1 auto; min-height: 0; }
 .studio-chip-maybe { border-style: dashed; }
+
+/* ---------- display density (Settings → Display density) ---------- */
+/* Everything above is the compact default (PRD §10.1). Comfortable loosens only the surfaces read row by row
+   and the controls pressed most, so it reads as one setting rather than a different layout. */
+.studio[data-density='comfortable'] { line-height: 1.65; }
+.studio[data-density='comfortable'] .studio-qitem { padding: 15px 15px 15px 12px; }
+.studio[data-density='comfortable'] .studio-qgroup { padding-top: 10px; padding-bottom: 8px; }
+.studio[data-density='comfortable'] .studio-btn:not(.studio-btn-sm) { min-height: 40px; padding: 9px 16px; }
+.studio[data-density='comfortable'] .studio-block { margin-bottom: 28px; }
+.studio[data-density='comfortable'] .studio-field { margin-bottom: 18px; }
+.studio[data-density='comfortable'] .studio-cardlist { gap: 16px; }
+.studio[data-density='comfortable'] .studio-repocard { padding: 18px 20px; }

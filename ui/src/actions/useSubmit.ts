@@ -50,6 +50,14 @@ import type {
  */
 export const MAX_FEEDBACK_CHARS = 8000
 export const MAX_ANSWER_CHARS = 8000
+
+/**
+ * A length as the server measures it against those bounds: Python's `len` counts code points, and
+ * `.length` counts UTF-16 units, which refused 5000 emoji the server accepts.
+ */
+export function charCount(text: string): number {
+  return [...text].length
+}
 /** Mirrors `constants.AUDIT_NONE_LABEL`: Studio's own empty choice on a same-turn audit question (A37). */
 export const AUDIT_NONE_LABEL = 'None of these'
 
@@ -69,13 +77,16 @@ export function answerText(answer: AnswerInput, question: Question, textInput = 
   if (letters.length > 1 && !question.multi_select) return null
   const free = (answer.free_text ?? '').trim()
   if (textInput && /^free text(?: note)?$/.test(free.toLowerCase().replace(/-/g, ' ').replace(/\s+/g, ' '))) return null
+  // Nothing chosen answers only a question that offers nothing to choose: on any other it is text left in
+  // an `Other` box that was unticked again.
+  if (letters.length === 0 && question.options.length > 0) return null
   const chosenOther = letters.some((letter) => known.get(letter)?.is_other === true)
   if ((chosenOther || letters.length === 0) && !free) return null
   const text = letters.length === 0 ? free : letters
     .map((letter) => known.get(letter)?.is_other ? free : known.get(letter)?.text ?? '')
     .join(WIRE.MULTI_SELECT_JOINER)
   if (!text) return null
-  return text.length > MAX_ANSWER_CHARS ? null : text
+  return charCount(text) > MAX_ANSWER_CHARS ? null : text
 }
 
 /** The pending questions of a group, in file order — the set one submit has to answer together. */
@@ -85,7 +96,7 @@ export function pendingQuestions(questions: QuestionsView | null): Question[] {
 
 function feedbackText(raw: string): string | null {
   const text = raw.trim()
-  if (!text || text.length > MAX_FEEDBACK_CHARS) return null
+  if (!text || charCount(text) > MAX_FEEDBACK_CHARS) return null
   return text
 }
 

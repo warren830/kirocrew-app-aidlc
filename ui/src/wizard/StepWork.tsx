@@ -24,6 +24,20 @@ import { count, plural } from '../lib/format'
 import type { RepoRecord } from '../lib/types'
 import type { WizardState } from './WizardView'
 
+/**
+ * `constants.MAX_INTENT_ARGUMENTS_CHARS`: the objective, a blank line and the context travel as one
+ * `--arguments` token, and the backend refuses a longer one rather than truncate what the engine reads.
+ */
+export const MAX_ARGUMENTS_CHARS = 4000
+
+/** The length of the `--arguments` token `plan.py::_require_arguments` builds from these two fields. */
+export function argumentsLength(objective: string, context: string): number {
+  // Code points, as Python's len() counts them: `.length` would count an emoji twice.
+  const head = [...objective.trim()].length
+  const tail = [...context.trim()].length
+  return head + (tail ? 2 + tail : 0)
+}
+
 export interface StepWorkProps {
   state: WizardState
   repos: RepoRecord[]
@@ -60,7 +74,10 @@ export function StepWork({
   const blur = (field: 'objective' | 'label') =>
     setBlurred((was) => (was[field] ? was : { ...was, [field]: true }))
   const objectiveMissing = !state.objective.trim()
-  const objectiveError = objectiveMissing && (revealErrors || blurred.objective)
+  const objectiveDash = state.objective.trim().startsWith('-')
+  const objectiveError = objectiveDash || (objectiveMissing && (revealErrors || blurred.objective))
+  const used = argumentsLength(state.objective, state.context)
+  const over = used > MAX_ARGUMENTS_CHARS
   // A typed label is judged when it is left. An empty one is only wrong when a real objective slugifies to
   // nothing, which is worth saying as soon as the objective is left; with no objective yet, the
   // objective's own error is the one to show.
@@ -140,7 +157,7 @@ export function StepWork({
           onBlur={() => blur('objective')}
         />
         <p className="studio-help" id="wizard-objective-help">
-          {objectiveError ? t('wizard.work.objectiveRequired') : ''}
+          {objectiveDash ? t('wizard.work.objectiveDash') : objectiveError ? t('wizard.work.objectiveRequired') : ''}
         </p>
       </div>
 
@@ -151,8 +168,15 @@ export function StepWork({
           id="wizard-context"
           value={state.context}
           placeholder={t('wizard.work.contextPlaceholder')}
+          aria-invalid={over ? 'true' : 'false'}
+          aria-describedby="wizard-context-count"
           onChange={(event) => onPatch({ context: event.target.value })}
         />
+        <p className="studio-help" id="wizard-context-count">
+          {over
+            ? t('wizard.work.argumentsOver', { over: i18n.fmt.number(used - MAX_ARGUMENTS_CHARS), max: i18n.fmt.number(MAX_ARGUMENTS_CHARS) })
+            : t('wizard.work.argumentsCount', { used: i18n.fmt.number(used), max: i18n.fmt.number(MAX_ARGUMENTS_CHARS) })}
+        </p>
       </div>
 
       <div className="studio-field">

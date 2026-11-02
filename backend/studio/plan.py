@@ -1034,6 +1034,21 @@ class PlanService:
             raise StudioError("bad_body", "an objective is required", details={"key": "objective"})
         context = (req.context or "").strip()
         arguments = objective + (_ARGUMENTS_JOINER + context if context else "")
+        # The argv grammar `engine.build_argv` enforces, checked here because there it is a ValueError raised
+        # under the admin lease, which reaches the user as an internal error with no field to fix.
+        for key, text in (("objective", objective), ("context", context)):
+            if "\x00" in text:
+                raise StudioError("bad_body", f"the {key} contains a NUL byte",
+                                  details={"key": key, "reason": "a NUL byte"})
+        if objective.startswith("-"):
+            reason = "a leading '-', which the engine would read as an option; start with a word"
+            raise StudioError("bad_body", f"the objective has {reason}", details={"key": "objective", "reason": reason})
+        limit = C.MAX_INTENT_ARGUMENTS_CHARS
+        if len(arguments) > limit:
+            key = "context" if context and len(objective) <= limit else "objective"
+            reason = f"more than {limit} characters with the objective and context together"
+            raise StudioError("bad_body", f"the {key} has {reason}",
+                              details={"key": key, "reason": reason, "limit": limit, "length": len(arguments)})
         reason, offset = _document_marker_reason(arguments)
         if reason is not None:
             key = "context" if context and offset >= len(objective) + len(_ARGUMENTS_JOINER) else "objective"

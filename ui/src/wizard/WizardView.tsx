@@ -51,7 +51,7 @@ import { PlanAdvisorPanel, type ProposalPicks, readScopeMeta, type ScopeMetaView
 import { StepPlan } from './StepPlan'
 import { StepPreset } from './StepPreset'
 import { StepReview } from './StepReview'
-import { StepWork } from './StepWork'
+import { argumentsLength, MAX_ARGUMENTS_CHARS, StepWork } from './StepWork'
 
 export const WIZARD_STEPS = ['work', 'preset', 'plan', 'review'] as const
 export type WizardStep = (typeof WIZARD_STEPS)[number]
@@ -492,13 +492,17 @@ export function WizardView({ route, go }: WizardViewProps) {
   const derivedLabel = slugifyObjective(state.objective)
   const effectiveLabel = state.label.trim() || derivedLabel
   const labelValid = LABEL_RE.test(effectiveLabel) && effectiveLabel.length <= 120
+  // A leading '-' and an over-long pair are refused by the engine's argv grammar, so they stop here too.
+  const objectiveDash = state.objective.trim().startsWith('-')
+  const argumentsOver = argumentsLength(state.objective, state.context) > MAX_ARGUMENTS_CHARS
   const workComplete = Boolean(repo) && !blocked && state.objective.trim().length > 0 && labelValid
-    && Boolean(activeSpace) && !inventory.error
+    && !objectiveDash && !argumentsOver && Boolean(activeSpace) && !inventory.error
   const presetComplete = state.scope.trim().length > 0
   // Why Continue is off, said beside it: a disabled button with no reason reads as the wizard being stuck.
   const continueBlocked = step === 'work'
     ? (!repo ? 'wizard.nav.needRepo' : blocked ? 'wizard.nav.needUsableRepo'
-      : !state.objective.trim() ? 'wizard.nav.needObjective' : !labelValid ? 'wizard.nav.needLabel'
+      : !state.objective.trim() ? 'wizard.nav.needObjective' : objectiveDash ? 'wizard.nav.needObjectiveWord'
+      : argumentsOver ? 'wizard.nav.needShorter' : !labelValid ? 'wizard.nav.needLabel'
       : inventory.error ? 'wizard.nav.needInventory' : !activeSpace ? 'wizard.nav.needSpace' : null)
     : step === 'preset' && !presetComplete ? 'wizard.nav.needScope' : null
 
@@ -720,6 +724,7 @@ export function WizardView({ route, go }: WizardViewProps) {
             presetComplete={presetComplete}
             error={createError}
             work={{ objective: state.objective, label: effectiveLabel, space: activeSpace ?? '', scope: state.scope }}
+            onEditWork={() => goToStep('work')}
           />
         ) : null}
 

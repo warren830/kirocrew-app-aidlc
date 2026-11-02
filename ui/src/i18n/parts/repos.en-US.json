@@ -16,6 +16,7 @@
   "repos.action.recover": "Install recovery",
   "repos.action.refresh": "Update AI-DLC files",
   "repos.action.remove": "Unregister",
+  "repos.action.repair": "Restore AI-DLC files",
   "repos.action.rescan": "Rescan",
   "repos.action.rescanning": "Rescanning…",
   "repos.action.upgrade": "Upgrade AI-DLC",

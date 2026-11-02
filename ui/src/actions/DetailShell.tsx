@@ -330,14 +330,17 @@ export function DetailShell({
   )
 
 
-  // A settled send is the end of this draft's life: keeping it would re-populate the box the next time
-  // the card appears, and offer to send text the conductor already has.
+  // A settled send ends this draft's life once the conductor has, or may have, the text: keeping it would
+  // re-populate the box the next time the card appears, and offer to send it again. A proven-undelivered
+  // send is the exception while the card stays submittable: nothing left, and the words are what a retry sends.
+  const outcome = submit.attempt?.outcome ?? null
+  const cardStatus = card?.status ?? null
   useEffect(() => {
-    if (submit.stage === 'settled' && submit.actionId === actionId) {
-      clearDraft(actionId)
-      setChosen(null)
-    }
-  }, [submit.stage, submit.actionId, actionId])
+    if (submit.stage !== 'settled' || submit.actionId !== actionId) return
+    setChosen(null)
+    const left = cardStatus !== null && !['Queued', 'NotDelivered'].includes(cardStatus)
+    if (outcome === 'delivered' || outcome === 'uncertain' || left) clearDraft(actionId)
+  }, [submit.stage, submit.actionId, actionId, outcome, cardStatus])
 
   if (detail.error && ['action_not_found', 'repo_not_found', 'intent_not_found'].includes(detail.error.code)) {
     return (

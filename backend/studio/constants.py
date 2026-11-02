@@ -68,6 +68,8 @@ MAX_SUBPROCESS_STDERR = 64 * 1024
 MAX_FEEDBACK_CHARS = 8000
 MAX_ANSWER_CHARS = 8000
 MAX_LABEL_CHARS = 120
+#: ``intent-create --arguments``: the objective, a blank line and the context, as one argv token and audit field.
+MAX_INTENT_ARGUMENTS_CHARS = 4000
 MAX_EVIDENCE_PACKAGE_CHARS = 60_000
 #: How much of a subagent's ``result.txt`` Studio reads back when the host's completion event kept only
 #: ``agent.completion_keep_chars`` (3 000 by default; a real Advisor draft is ~10 KB): far above a draft, far below a

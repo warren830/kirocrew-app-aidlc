@@ -114,7 +114,12 @@ export function AdvisorDrawer({ draftId, onClose, onUseFeedback, onApplyAnswers 
           {draft && draft.status !== 'ready' ? (
             <span className="studio-muted">
               {draft.status === 'failed'
-                ? t('advisor.drawer.status.failed', { message: draft.error ?? t('common.unavailable') })
+                ? t('advisor.drawer.status.failed', {
+                    // `draft.error` is a code (`advisor.py::_finish`), so it is said as its sentence, never raw.
+                    message: i18n.has(`advisor.error.${draft.error ?? ''}`)
+                      ? t(`advisor.error.${draft.error ?? ''}`)
+                      : t('advisor.error.unknown'),
+                  })
                 : t(`advisor.drawer.status.${draft.status}`)}
             </span>
           ) : null}

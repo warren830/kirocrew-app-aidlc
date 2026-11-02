@@ -676,6 +676,31 @@ def test_create_intent_refuses_a_malformed_document_paste_before_the_lease(P, de
     assert not deps.denied_log.exists()
 
 
+@pytest.mark.parametrize("over, key, fragment", [
+    ({"objective": "- Add CSV export\n- Keep the API stable"}, "objective", "leading '-'"),  # a pasted bullet list
+    ({"objective": "Export the ledger", "context": "x" * 4000}, "context", "more than 4000 characters"),
+    ({"objective": "x" * 4001}, "objective", "more than 4000 characters"),
+    ({"context": "the spec\x00 ends"}, "context", "NUL"),
+])
+def test_create_intent_refuses_an_argument_the_engine_argv_would_reject_before_the_lease(P, deps, fresh_repo, errors,
+                                                                                        over, key, fragment):
+    """``build_argv`` raises a bare ValueError for these under the lease, which the user saw as a 500."""
+    with pytest.raises(errors.StudioError) as excinfo:
+        run(deps.svc.create_intent(fresh_repo, request(P, "poc", label="ledger-export", **over)))
+    assert excinfo.value.code == "bad_body"
+    assert excinfo.value.details["key"] == key
+    assert fragment in excinfo.value.details["reason"]
+    nothing_created(deps, fresh_repo)
+
+
+def test_create_intent_accepts_arguments_at_the_engine_limit(P, deps, fresh_repo):
+    objective = "Export the ledger"
+    context = "x" * (4000 - len(objective) - 2)
+    result = run(deps.svc.create_intent(fresh_repo, request(P, "poc", objective=objective, context=context)))
+    argv = list(result.engine.argv)
+    assert len(argv[argv.index("--arguments") + 1]) == 4000
+
+
 # ---- recompose / scope-change / config-change ---- #
 
 

@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { setApiRoutes, type RouteHandler } from '../test/stubs/app-sdk'
 import { healthCounts, settingsResponse } from '../test/fixtures'
 import { I18nProvider, makeI18n } from '../i18n'
+import { setSavedLocale, setStudioLocale } from '../lib/host'
 import { EMPTY_ROUTE, VIEWS, type View } from '../lib/route'
 import { registerView, ViewRouter, viewLabelKey, viewRegistry } from './ViewRouter'
 import { StudioApp } from './StudioApp'
@@ -129,6 +130,32 @@ describe('the app shell', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 
+  it('applies the stored display density to the Studio root, compact until it is read', async () => {
+    const comfortable = settingsResponse()
+    comfortable.settings.density = 'comfortable'
+    setApiRoutes({ ...routeTable(), [`GET ${BASE}/settings`]: () => comfortable })
+    const { container } = mount()
+    const root = container.querySelector('.studio')
+    expect(root).toHaveAttribute('data-density', 'compact')
+    await waitFor(() => expect(root).toHaveAttribute('data-density', 'comfortable'))
+  })
+
+  it("speaks the saved settings.locale in a browser that has no override of its own", async () => {
+    const chinese = settingsResponse()
+    chinese.settings.locale = 'zh-CN'
+    setStudioLocale(null)
+    document.documentElement.lang = 'en-US'
+    setApiRoutes({ ...routeTable(), [`GET ${BASE}/settings`]: () => chinese })
+    try {
+      mount()
+      const nav = screen.getByRole('navigation')
+      const first = () => nav.querySelector('.studio-nav-text')?.textContent
+      await waitFor(() => expect(first()).toBe(makeI18n('zh-CN').t(viewLabelKey('actions'))))
+    } finally {
+      setSavedLocale(null)
+    }
+  })
+
   it('collapses the execution strip and still reports the active alerts', async () => {
     installRoutes()
     mount()
@@ -223,5 +250,27 @@ describe('the app shell', () => {
 
     await userEvent.click(within(drawer).getByRole('button', { name: /Close/i }))
     expect(window.location.search).not.toContain('draft=')
+  })
+
+  it.each([
+    ['timed_out', 'The Advisor could not finish: The Advisor did not answer in time.'],
+    ['no_such_code', 'The Advisor could not finish: The Advisor could not produce a draft.'],
+  ])('says a %s draft failure as a sentence in the drawer, never as its code', async (code, sentence) => {
+    setApiRoutes({
+      ...routeTable(),
+      [`GET ${BASE}/advisor/drafts/d_1`]: () => ({
+        draft: {
+          draft_id: 'd_1', action_id: 'a_1', kind: 'gate_analysis', status: 'failed',
+          request: { action_id: 'a_1', kind: 'gate_analysis', question_index: null, locale: 'en-US' },
+          result: null, error: code, created_at: '2026-09-04T10:00:00Z', updated_at: '2026-09-04T10:01:00Z',
+          expires_at: '2026-09-04T11:00:00Z', neutrality: null,
+        },
+      }),
+    })
+    window.history.replaceState(null, '', '/apps/aidlc-studio?view=settings&draft=d_1')
+    mount()
+    const drawer = await screen.findByRole('complementary', { name: /AI Advisor/i })
+    await waitFor(() => expect(drawer).toHaveTextContent(sentence))
+    expect(drawer).not.toHaveTextContent(code)
   })
 })

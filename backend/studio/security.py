@@ -214,9 +214,15 @@ def scrub_repo_paths(text: str, allowed_roots: Sequence[str]) -> str:
     if not text:
         return text
     roots = tuple(str(realpath(r)) for r in allowed_roots)
-    return _ABS_PATH_RE.sub(
-        lambda m: m.group(0) if any(m.group(0).startswith(root) for root in roots) else "<path>", text
-    )
+    # Under a root means the root itself or below its separator: a bare prefix test let `/work/app-private`
+    # through with `/work/app` registered. A sentence's full stop is not part of the path it ends with.
+    prefixes = tuple(root if root.endswith(os.sep) else root + os.sep for root in roots)
+
+    def keep(path: str) -> bool:
+        path = path.rstrip(".")
+        return path in roots or path.startswith(prefixes)
+
+    return _ABS_PATH_RE.sub(lambda m: m.group(0) if keep(m.group(0)) else "<path>", text)
 
 
 def build_subprocess_env() -> dict[str, str]:

@@ -24,7 +24,7 @@ import { useI18n, type I18n } from '../i18n'
 import { findingCopy, ref } from '../lib/format'
 import { isClosedAction } from '../lib/actionQueue'
 import type { ActionCard, DecisionSpec, Question } from '../lib/types'
-import { answerText, MAX_ANSWER_CHARS, MAX_FEEDBACK_CHARS } from '../actions/useSubmit'
+import { answerText, charCount, MAX_ANSWER_CHARS, MAX_FEEDBACK_CHARS } from '../actions/useSubmit'
 import { stageText } from '../actions/QueueRow'
 import { statusLabel } from '../actions/DeliveryStrip'
 import { Chip } from '../shell/Chip'
@@ -432,7 +432,7 @@ export function FeedbackBox({
 }) {
   const i18n = useI18n()
   const { t } = i18n
-  const over = draft.feedback.length > MAX_FEEDBACK_CHARS
+  const over = charCount(draft.feedback) > MAX_FEEDBACK_CHARS
   return (
     <>
       <textarea
@@ -479,7 +479,7 @@ export function InputBox({
   const { t } = i18n
   const kind = inputKind(card)
   const value = kind === 'scope' ? draft.scope : draft.freeText
-  const over = value.length > MAX_ANSWER_CHARS
+  const over = charCount(value) > MAX_ANSWER_CHARS
   return (
     <>
       <textarea

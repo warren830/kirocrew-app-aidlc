@@ -207,7 +207,9 @@ export function TransactionDrawer({
             <p className="studio-note" role="status">{t('install.cancel.finished')}</p>
           ) : tx.error ? (
             <div className="studio-failure-detail">
-              <strong>{t('install.tx.error')}</strong> <span className="studio-wrap-any">{tx.error}</span>
+              {/* The row records a backend code when there is one (an exception's text otherwise). */}
+              <strong>{t('install.tx.error')}</strong>{' '}
+              <span className="studio-wrap-any">{i18n.has(`errors.${tx.error}`) ? t(`errors.${tx.error}`) : tx.error}</span>
             </div>
           ) : null}
 

@@ -96,9 +96,11 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
   const pending = pendingQuestions(view)
   // What is still to choose in this form: the file stays unanswered until the reply lands, so counting it
   // read "4 of 4 unanswered" with every answer already picked.
+  // Free text alone answers only a question with no options, as `answerText` reads it.
   const unchosen = pending.filter((question) => {
     const answer = draft.answers[String(question.index)]
-    return !answer || (answer.option_letters.length === 0 && !(answer.free_text ?? '').trim())
+    return !answer || (answer.option_letters.length === 0
+      && (question.options.length > 0 || !(answer.free_text ?? '').trim()))
   }).length
   const unsupportedPending = view?.unsupported_pending_count ?? 0
   const hasPending = pending.length > 0 || unsupportedPending > 0
@@ -147,12 +149,11 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
   const toggle = (question: Question, letter: string) => {
     const stored = draft.answers[String(question.index)]
     const letters = stored?.option_letters ?? []
-    if (!question.multi_select) {
-      setAnswer(question.index, [letter], stored?.free_text ?? null)
-      return
-    }
-    const next = letters.includes(letter) ? letters.filter((l) => l !== letter) : [...letters, letter]
-    setAnswer(question.index, next, stored?.free_text ?? null)
+    const next = !question.multi_select ? [letter]
+      : letters.includes(letter) ? letters.filter((l) => l !== letter) : [...letters, letter]
+    // Unticking `Other` hides its box, so its text goes too: kept, it would travel in the payload unseen.
+    const other = question.options.find((option) => option.is_other)
+    setAnswer(question.index, next, other && next.includes(other.letter) ? stored?.free_text ?? null : null)
   }
 
   /**

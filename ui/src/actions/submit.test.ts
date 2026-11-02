@@ -229,6 +229,28 @@ describe('wireTextFor', () => {
     expect(wireTextFor({ decision: 'answers', answers: [a] }, { ...view([q]), mode: 'degraded' }, true)).toBeNull()
   })
 
+  it('trims and counts free text exactly as the server does', () => {
+    // `actions._ECMASCRIPT_WHITESPACE`: U+FEFF and U+3000 go, U+001C and U+0085 stay (`str.strip()` disagreed).
+    const other = (free_text: string) => answerText({ index: 1, option_letters: ['X'], free_text }, question())
+    expect(other('\uFEFFDynamoDB\u3000')).toBe('DynamoDB')
+    expect(other('\u001CDynamoDB\u0085')).toBe('\u001CDynamoDB\u0085')
+    expect(wireTextFor({ decision: 'request_changes', feedback: '\uFEFFFix it\u0085' }, null, false))
+      .toBe('Request Changes: Fix it\u0085')
+    // Python's `len` counts code points: 5000 emoji are 10000 UTF-16 units and still within the 8000 cap.
+    const emoji = '😀'.repeat(5000)
+    expect(other(emoji)).toBe(emoji)
+    expect(wireTextFor({ decision: 'request_changes', feedback: emoji }, null, false)).toBe(`Request Changes: ${emoji}`)
+    expect(other('😀'.repeat(8001))).toBeNull()
+  })
+
+  it('reads nothing chosen as unanswered when the question offers options', () => {
+    // What an `Other` box held before it was unticked is not an answer.
+    expect(answerText({ index: 1, option_letters: [], free_text: 'Use Redis' }, question({ multi_select: true })))
+      .toBeNull()
+    expect(answerText({ index: 1, option_letters: [], free_text: ' Because. ' }, question({ options: [] })))
+      .toBe('Because.')
+  })
+
   it('skips questions the file already records as answered', () => {
     const mixed = view([question({ answered: true, answer: 'DynamoDB' }), question({ index: 2 })])
     expect(wireTextFor({ decision: 'answers', answers: [{ index: 2, option_letters: ['B'], free_text: null }] }, mixed, false))

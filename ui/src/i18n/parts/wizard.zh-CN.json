@@ -153,5 +153,12 @@
   "wizard.review.whatObjective": "目标",
   "wizard.plan.summaryConditional": "{stages} 个阶段、最多 {gates} 个关卡、最多 {artifacts} 个产物",
   "wizard.review.productsWhy": "深度或测试策略较低时，阶段会少写其中一些。标有 ⓘ 的只来自条件阶段，只有 AI-DLC 运行了那个阶段才会产出。",
-  "wizard.review.productConditional": "只有条件阶段声明了它：只有 AI-DLC 运行了那个阶段才会产出。"
+  "wizard.review.productConditional": "只有条件阶段声明了它：只有 AI-DLC 运行了那个阶段才会产出。",
+  "wizard.work.objectiveDash": "目标请以文字开头：AI-DLC 会把开头的“-”当作选项。列表请写在下面的背景信息里。",
+  "wizard.work.argumentsCount": "目标与背景信息合计 {used} / {max} 个字符。",
+  "wizard.work.argumentsOver": "目标与背景信息合计超出 AI-DLC 接受的 {max} 个字符 {over} 个。请缩短，或在意图创建后再附上长文档。",
+  "wizard.nav.needObjectiveWord": "目标需以文字开头才能继续。",
+  "wizard.nav.needShorter": "请缩短目标或背景信息后继续。",
+  "wizard.error.field": "“{field}”字段未被接受：{reason}。",
+  "wizard.error.fieldEdit": "回到“工作”步骤修改"
 }

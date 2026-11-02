@@ -219,6 +219,16 @@ def test_diagnostics_keeps_the_registered_root_and_scrubs_every_other_path(sv, o
     assert body["recent_activity"][0]["human_text"] is None
 
 
+def test_diagnostics_scrubs_a_sibling_directory_that_only_shares_the_root_as_a_prefix(sv, ocall, gate_repo):
+    repo = sv.repos.add(str(gate_repo), "demo")
+    asyncio.run(sv.activity.record(kind="repo.added", severity="info", repo_id=repo.repo_id, params={
+        "sibling": str(gate_repo) + "-private/notes/salary.md", "root": f"registered at {gate_repo}."}))
+    _status, body = ocall("GET", "/diagnostics")
+    params = body["recent_activity"][0]["params"]
+    assert params["sibling"] == "<path>"
+    assert params["root"] == f"registered at {gate_repo}."
+
+
 def test_diagnostics_export_sets_a_download_header(sv, routes, fake_host):
     request = CT.owner_request("GET", "/diagnostics", host=fake_host, query={"export": "1"})
     request.app["ctx"] = sv.ctx

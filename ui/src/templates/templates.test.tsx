@@ -638,6 +638,16 @@ describe('gate template', () => {
     expect(screen.getByText(en.t('template.gate.feedbackRouting'))).toBeInTheDocument()
   })
 
+  it('counts the note in characters as the server does, not in UTF-16 units', () => {
+    setApiRoutes({})
+    const tooLong = en.t('template.common.tooLong', { max: en.fmt.number(8000) })
+    const first = mount(GateTemplate, card(), { draft: { feedback: '😀'.repeat(5000) } })
+    expect(screen.queryByText(tooLong)).toBeNull()
+    first.unmount()
+    mount(GateTemplate, card(), { draft: { feedback: '😀'.repeat(8001) } })
+    expect(screen.getByText(tooLong)).toBeInTheDocument()
+  })
+
   it('offers no change-request box when the card does not offer the decision', () => {
     setApiRoutes({})
     mount(GateTemplate, card({ decisions: [spec('approve')] }))
@@ -1004,6 +1014,26 @@ describe('questions template', () => {
     const box = screen.getByLabelText(en.t('template.questions.otherLabel', { index: 1 }))
     await userEvent.type(box, 'Use the existing worker queue.')
     expect(draft().answers['1']).toEqual({ option_letters: ['X'], free_text: 'Use the existing worker queue.' })
+  })
+
+  it('drops the Other text with the Other tick, and counts nothing chosen as unanswered', async () => {
+    setApiRoutes({})
+    const view = questionsView({ questions: [question({ multi_select: true })] })
+    const unanswered = (n: number) => screen.queryByText(en.t('template.questions.pending', { n, total: 1 }))
+    const first = mount(QuestionsTemplate, questionCard(view))
+    await userEvent.click(screen.getByRole('checkbox', { name: /Other/ }))
+    await userEvent.type(screen.getByLabelText(en.t('template.questions.otherLabel', { index: 1 })), 'Use Redis')
+    expect(unanswered(0)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('checkbox', { name: /Other/ }))
+    // The box is gone, so its words must not travel in the payload unseen.
+    expect(first.draft().answers['1']).toEqual({ option_letters: [], free_text: null })
+    expect(unanswered(1)).toBeInTheDocument()
+    first.unmount()
+    // A draft stored before the tick dropped its text still reads as unanswered, and builds no reply.
+    const stale = { option_letters: [], free_text: 'Use Redis' }
+    mount(QuestionsTemplate, questionCard(view), { draft: { answers: { '1': stale } } })
+    expect(unanswered(1)).toBeInTheDocument()
+    expect(wireTextFor({ decision: 'answers', answers: [{ index: 1, ...stale }] }, view, false)).toBeNull()
   })
 
   it('shows an answered question as evidence, with no control that could overwrite it', () => {

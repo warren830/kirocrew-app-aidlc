@@ -399,6 +399,31 @@ describe('the new intent wizard', () => {
     expect(apiCalls.filter((call) => call.method === 'POST' && call.path === `${BASE}/repos/r_1/intents`)).toHaveLength(1)
   })
 
+  it('names the refused field and the reason when Create is refused over one, and offers to go back to Work', async () => {
+    installRoutes({
+      [`POST ${BASE}/repos/r_1/intents`]: () => {
+        throw new StubApiError(400, {
+          code: 'bad_body', error: 'the context has </document> without a matching <document>',
+          details: { key: 'context', reason: '</document> without a matching <document>' },
+        })
+      },
+    })
+    mount()
+    await toPreset()
+    await pickScope('feature')
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    const create = screen.getByRole('button', { name: /Create the intent, paused/ })
+    await waitFor(() => expect(create).toBeEnabled())
+    await userEvent.click(create)
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain(
+      'The “Context the engine should know” field was refused: </document> without a matching <document>.',
+    )
+    await userEvent.click(within(alert).getByRole('button', { name: 'Edit it on the Work step' }))
+    expect(await screen.findByLabelText('Context the engine should know')).toBeInTheDocument()
+  })
+
   it('shows four steps and promises that Create writes nothing until it is pressed', async () => {
     mount()
     expect(await screen.findByRole('heading', { name: 'New intent' })).toBeInTheDocument()
@@ -436,6 +461,32 @@ describe('the new intent wizard', () => {
     await userEvent.clear(screen.getByLabelText('Label'))
     await userEvent.type(screen.getByLabelText('Label'), 'guest-checkout')
     await waitFor(() => expect(next).toBeEnabled())
+  })
+
+  it('will not continue past Work with an objective or context the engine argv refuses', async () => {
+    mount()
+    const next = await screen.findByRole('button', { name: 'Continue' })
+    await userEvent.selectOptions(screen.getByLabelText('Repository'), 'r_1')
+    await userEvent.type(screen.getByLabelText('Label'), 'csv-export')
+    await userEvent.type(screen.getByLabelText('Objective'), '- Add CSV export')
+    expect(screen.getByText(/AI-DLC reads a leading '-' as an option/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Objective')).toHaveAttribute('aria-invalid', 'true')
+    expect(next).toBeDisabled()
+    expect(screen.getByText('Start the objective with a word to continue.')).toBeInTheDocument()
+
+    await userEvent.clear(screen.getByLabelText('Objective'))
+    await userEvent.type(screen.getByLabelText('Objective'), 'Add CSV export')
+    await waitFor(() => expect(next).toBeEnabled())
+    // The counter is the server's: the objective, the blank-line joiner and the context, against 4000.
+    const context = screen.getByLabelText('Context the engine should know')
+    fireEvent.change(context, { target: { value: 'x'.repeat(3984) } })
+    expect(screen.getByText('4,000 of 4,000 characters, objective and context together.')).toBeInTheDocument()
+    expect(next).toBeEnabled()
+    fireEvent.change(context, { target: { value: 'x'.repeat(3985) } })
+    expect(screen.getByText(/^1 over the 4,000 characters AI-DLC accepts/)).toBeInTheDocument()
+    expect(context).toHaveAttribute('aria-invalid', 'true')
+    expect(next).toBeDisabled()
+    expect(screen.getByText('Shorten the objective or context to continue.')).toBeInTheDocument()
   })
 
   it('opens Work with no errors, and says what is wrong with a field once it is left', async () => {

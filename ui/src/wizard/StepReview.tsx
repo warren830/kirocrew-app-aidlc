@@ -30,9 +30,27 @@ export interface StepReviewProps {
   error: StudioApiError | null
   /** What Create makes, said on the step Create sits on: the scope bar can name another repository meanwhile. */
   work?: { objective: string; label: string; space: string; scope: string }
+  /** Back to the Work step, offered when Create was refused over one of its fields. */
+  onEditWork?: () => void
 }
 
-export function StepReview({ plan, digest, repo, origins, busy, creating, workComplete, presetComplete, error, work }: StepReviewProps) {
+/** The Work step's fields a refusal's `details.key` can name, and the label each carries there. */
+const WORK_FIELDS: Readonly<Record<string, string>> = {
+  objective: 'wizard.work.objective',
+  context: 'wizard.work.context',
+  label: 'wizard.work.label',
+}
+
+/** The Work field a `bad_body`/`plan_invalid` refusal names, or null when it names none. */
+function refusedField(error: StudioApiError): string | null {
+  if (error.code !== 'bad_body' && error.code !== 'plan_invalid') return null
+  const key = error.details['key']
+  return typeof key === 'string' && key in WORK_FIELDS ? key : null
+}
+
+export function StepReview({
+  plan, digest, repo, origins, busy, creating, workComplete, presetComplete, error, work, onEditWork,
+}: StepReviewProps) {
   const i18n = useI18n()
   const { t } = i18n
   // Nothing here counts the repository's findings: Create refuses on the repository's own (not on
@@ -46,6 +64,10 @@ export function StepReview({ plan, digest, repo, origins, busy, creating, workCo
   const always = new Set(selected.filter((stage) => stage.execution !== 'CONDITIONAL').flatMap((stage) => stage.produces))
   const conditionalOnly = new Set(selected.filter((stage) => stage.execution === 'CONDITIONAL')
     .flatMap((stage) => stage.produces).filter((name) => !always.has(name)))
+  // A refusal over one field says which and why: `errors.bad_body` alone ("could not be read") reads as a
+  // transport fault, when the fix is a paste on the Work step. The reason is the backend's own words.
+  const field = error ? refusedField(error) : null
+  const reason = error && typeof error.details['reason'] === 'string' ? (error.details['reason'] as string) : error?.message
 
   return (
     <div>
@@ -53,8 +75,16 @@ export function StepReview({ plan, digest, repo, origins, busy, creating, workCo
         <p className="studio-banner" data-tone="danger" role="alert">
           <Icon name="warn" size={15} />
           <span className="studio-grow">
-            {t('wizard.error.create')} {error.known ? t(`errors.${error.code}`) : error.message}
+            {t('wizard.error.create')}{' '}
+            {field
+              ? t('wizard.error.field', { field: t(WORK_FIELDS[field] as string), reason: reason ?? '' })
+              : error.known ? t(`errors.${error.code}`) : error.message}
           </span>
+          {field && onEditWork ? (
+            <button type="button" className="studio-btn" onClick={onEditWork}>
+              {t('wizard.error.fieldEdit')}
+            </button>
+          ) : null}
         </p>
       ) : null}
 

@@ -33,7 +33,7 @@ import { useI18n } from '../i18n'
 import { AUTH_REQUIRED_EVENT, useStudioApi, type StudioApi } from '../lib/api'
 import { forActionQueue } from '../lib/actionQueue'
 import { plural } from '../lib/format'
-import { useHostMode } from '../lib/host'
+import { setSavedLocale, useHostMode } from '../lib/host'
 import { paneFor, useStudioRoute, type Navigate, type StudioRoute } from '../lib/route'
 import { EventStreamProvider, useStreamStatus } from '../lib/sse'
 import { useResource, type Resource } from '../lib/useResource'
@@ -153,12 +153,20 @@ function Shell({ api }: { api: StudioApi }) {
     [api, route, go, actions, repos, settings, health],
   )
 
+  const savedLocale = settings.data?.settings.locale
+  useEffect(() => {
+    // Kept when /settings cannot be read: an outage must not flip the language back to the dashboard's.
+    if (savedLocale !== undefined) setSavedLocale(savedLocale)
+  }, [savedLocale])
+
   const pane = paneFor(route)
   const viewLabel = t(viewLabelKey(route.view))
   const issues = health.data && health.data.status !== 'healthy' ? health.data.issues.length : 0
+  // Compact until the stored setting is read: it is the default (PRD §10.1), so the first paint never jumps.
+  const density = settings.data?.settings.density ?? 'compact'
 
   return (
-    <div className="studio" data-mode={mode} data-pane={pane} data-view={route.view}>
+    <div className="studio" data-mode={mode} data-pane={pane} data-view={route.view} data-density={density}>
       <a className="studio-skip" href="#studio-view">
         {t('a11y.skipToDetail')}
       </a>

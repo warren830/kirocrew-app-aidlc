@@ -153,5 +153,12 @@
   "wizard.review.whatObjective": "Objective",
   "wizard.plan.summaryConditional": "{stages} stages, up to {gates} Gates, up to {artifacts} artifacts",
   "wizard.review.productsWhy": "A stage at a lower depth or test strategy writes fewer of these. One marked ⓘ comes only from a conditional stage, so it exists only if AI-DLC runs that stage.",
-  "wizard.review.productConditional": "Declared only by a conditional stage: it exists only if AI-DLC runs that stage."
+  "wizard.review.productConditional": "Declared only by a conditional stage: it exists only if AI-DLC runs that stage.",
+  "wizard.work.objectiveDash": "Start the objective with a word: AI-DLC reads a leading '-' as an option. A list belongs in the context below.",
+  "wizard.work.argumentsCount": "{used} of {max} characters, objective and context together.",
+  "wizard.work.argumentsOver": "{over} over the {max} characters AI-DLC accepts for the objective and context together. Shorten them, or attach a long document once the intent exists.",
+  "wizard.nav.needObjectiveWord": "Start the objective with a word to continue.",
+  "wizard.nav.needShorter": "Shorten the objective or context to continue.",
+  "wizard.error.field": "The “{field}” field was refused: {reason}.",
+  "wizard.error.fieldEdit": "Edit it on the Work step"
 }

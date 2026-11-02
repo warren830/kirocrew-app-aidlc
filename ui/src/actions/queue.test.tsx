@@ -330,6 +330,36 @@ describe('the action queue', () => {
     expect(localStorage.getItem(STUDIO_ORGANIZE_KEY)).toBe('repo')
   })
 
+  it('opens on the saved queue_organize when this browser has none, and saves a new choice to the server', async () => {
+    const saved = (organize: string) => () => ({
+      settings: { queue_organize: organize },
+      capabilities: { grouped_answers: { available: false, reason: 's1_s2_unverified' } },
+      versions: {}, updated_at: null,
+    })
+    installRoutes([
+      card({ id: 'a_1', repo: 'checkout-web' }),
+      card({ id: 'a_2', repo: 'billing-api', repoId: 'r_2' }),
+    ], {
+      [`GET ${BASE}/settings`]: saved('repo'),
+      [`PUT ${BASE}/settings`]: saved('oldest'),
+    })
+    mount()
+    await waitFor(() =>
+      expect(screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent)).toEqual([
+        'billing-api1',
+        'checkout-web1',
+      ]),
+    )
+    expect(localStorage.getItem(STUDIO_ORGANIZE_KEY)).toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Oldest' }))
+    await waitFor(() =>
+      expect(apiCalls.filter((call) => call.method === 'PUT' && call.path === `${BASE}/settings`).map((call) => call.body))
+        .toEqual([{ queue_organize: 'oldest' }]),
+    )
+    expect(localStorage.getItem(STUDIO_ORGANIZE_KEY)).toBe('oldest')
+  })
+
   it('renders far fewer rows than cards, so 200 items stay responsive', async () => {
     const many = Array.from({ length: 200 }, (_, index) =>
       card({ id: `a_${index}`, waiting: `2026-09-0${(index % 9) + 1}T09:00:00Z` }),

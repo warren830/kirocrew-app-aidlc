@@ -340,3 +340,37 @@ def test_missing_manifest_digest_cannot_offer_a_refresh(refresh_env):
     installer._manifest = env.services.payload
     assert _install_json(env)["upgrade_available"] is False
     assert installer.preview(env.repo, "upgrade").same_version is True
+
+
+def test_same_version_upgrade_repairs_a_deleted_owned_file(refresh_env):
+    env = refresh_env()
+    installer = env.services.installer
+    (env.root / OWNED).unlink()
+    install = _install_json(env)
+    assert install["own_engine_version"] == install["bundled_engine_version"] == VERSION
+    assert install["drift_count"] == 1 and install["upgrade_available"] is False
+    status, preview = env.upgrade_preview()
+    assert status == 200, preview
+    assert preview["plan"]["same_version"] is False and preview["plan"]["blocking"] is False
+    assert next(e for e in preview["plan"]["entries"] if e["path"] == OWNED)["action"] == "create"
+    result = asyncio.run(installer.run(env.repo, "upgrade", plan_digest=preview["plan_digest"]))
+    assert result.status == "committed", result.error
+    assert _tree(env.root) == env.before
+    current = installer.current_receipt(env.repo.repo_id)
+    assert current.prior_receipt_id == env.old_receipt.receipt_id
+    assert _install_json(env)["drift_count"] == 0
+    assert env.upgrade_preview()[1]["code"] == "same_version_installed"
+
+
+def test_same_version_repair_still_blocks_on_an_edited_owned_file(refresh_env, studio):
+    env = refresh_env()
+    installer = env.services.installer
+    (env.root / OWNED).write_text("// User changed an owned file\n")
+    before = _tree(env.root)
+    status, preview = env.upgrade_preview()
+    assert status == 200, preview
+    blocker = next(e for e in preview["plan"]["blockers"] if e["path"] == OWNED)
+    assert blocker["action"] == "owned_modified" and "User changed an owned file" in blocker["diff"]
+    assert refused(studio, env, installer, installer.preview(env.repo, "upgrade")) == "install_conflict"
+    assert installer.current_receipt(env.repo.repo_id) == env.old_receipt
+    assert _tree(env.root) == before

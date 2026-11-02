@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { readLocale, setStudioLocale, STUDIO_LOCALES } from './host'
+import { readLocale, setSavedLocale, setStudioLocale, STUDIO_LOCALES } from './host'
 import { makeI18n } from '../i18n'
 import { WIRE } from './wire.generated'
 import { ERROR_CODES } from './errorCodes.generated'
@@ -14,6 +14,22 @@ describe('locale resolution', () => {
     expect(readLocale()).toBe('en-US')
     setStudioLocale(null)
     expect(readLocale()).toBe('zh-CN')
+  })
+
+  it('inherits the saved settings.locale when this browser has no override, and auto follows the dashboard', () => {
+    document.documentElement.lang = 'en-US'
+    setStudioLocale(null)
+    setSavedLocale('zh-CN')
+    try {
+      expect(readLocale()).toBe('zh-CN')
+      setStudioLocale('en-US')
+      expect(readLocale()).toBe('en-US')
+      setStudioLocale(null)
+      setSavedLocale('auto')
+      expect(readLocale()).toBe('en-US')
+    } finally {
+      setSavedLocale(null)
+    }
   })
 
   it('falls back to English for a language Studio does not ship', () => {

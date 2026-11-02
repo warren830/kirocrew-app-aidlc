@@ -25,7 +25,7 @@ import type { ViewProps } from '../shell/ViewRouter'
 import { useI18n } from '../i18n'
 import { forActionQueue } from '../lib/actionQueue'
 import { sortActions } from '../lib/sort'
-import type { ActionCard } from '../lib/types'
+import type { ActionCard, Organize } from '../lib/types'
 import { ArtifactView } from '../map/ArtifactView'
 import { DetailShell } from './DetailShell'
 import { QueueFilters, useOrganize } from './QueueFilters'
@@ -56,7 +56,13 @@ export function ActionsView({ route, go }: ViewProps) {
   const i18n = useI18n()
   const { t } = i18n
   const { api, actions, settings, setQueueCount } = useShellData()
-  const [organize, setOrganize] = useOrganize()
+  const refreshSettings = settings.refresh
+  // The server copy is the one a new browser inherits. A failed write loses nothing here: this browser's
+  // own copy already holds the choice, so there is nothing for the user to retry.
+  const persistOrganize = useCallback((mode: Organize) => {
+    void api.putSettings({ queue_organize: mode }).then(() => refreshSettings(), () => undefined)
+  }, [api, refreshSettings])
+  const [organize, setOrganize] = useOrganize(settings.data?.settings.queue_organize, persistOrganize)
   const [query, setQuery] = useState('')
 
   const queue = useMemo(() => actions.data ? forActionQueue(actions.data) : null, [actions.data])

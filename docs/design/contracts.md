@@ -2051,7 +2051,8 @@ Upgrade retirement: path in old receipt and not in new manifest → `retire` whe
 `retire_blocked` (kept on disk, reported, non-blocking). Version rules (every comparison below is against
 `health.own_engine_version` — the engine version of Studio's own `.kiro`, never a harness Studio merely reads; §1.5, A26):
 Studio's own installed engine > payload → `newer_installed` (409 `newer_installed`); equal with no drift → 409
-`same_version_installed`; equal with drift → allowed as `recovery`;
+`same_version_installed`; equal with drift on a trusted current receipt → allowed as `upgrade`, the repair the
+Repositories page offers ("Restore AI-DLC files": missing owned files are re-created, user-modified ones still block), and as `recovery`;
 **any** `State Version` on disk outside `manifest.compatible_state_versions` → 409 `state_version_migration_unconfirmed`
 for `upgrade` and `recovery` (a fresh `install` into a repo with no intents is unaffected; one with v7 intents is refused
 the same way — review P03).

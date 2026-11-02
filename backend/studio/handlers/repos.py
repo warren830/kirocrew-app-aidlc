@@ -350,7 +350,7 @@ async def _repo_json(services: Any, repo: Any, *, leases: Sequence[Any], fresh: 
     cached = await asyncio.to_thread(services.storage.get, "repos", repo.repo_id)
     cached_scan = (cached or {}).get("scan_json") or {}
 
-    if not fresh and isinstance(cached_scan.get("install"), dict):
+    if not fresh and _scan_install_current(cached or {}, cached_scan.get("install")):
         install = dict(cached_scan["install"])
     else:
         install = (await asyncio.to_thread(services.repos.detect_install, repo)).to_json()
@@ -392,6 +392,16 @@ async def _repo_json(services: Any, repo: Any, *, leases: Sequence[Any], fresh: 
     body["findings"] = [f.to_json() for f in (findings or ())]
     body["scanned_at"] = cached_scan.get("scanned_at")
     return body
+
+
+def _scan_install_current(row: dict[str, Any], install: Any) -> bool:
+    """Whether the last scan's install block still describes the row. A rescan writes both together; an installer
+    transaction writes the row and the receipt but not the scan, so a block that disagrees with the row is the
+    tree from before that transaction (the list said "Not installed" right after an install committed)."""
+    return isinstance(install, dict) and (
+        install.get("status"), install.get("engine_version"), install.get("engine_dir"), install.get("receipt_id"),
+    ) == (row.get("install_status"), row.get("installed_engine_version"), row.get("engine_dir"),
+          row.get("receipt_version"))
 
 
 def _install_json(services: Any, install: dict[str, Any], receipt: Any, *, repo: Any,

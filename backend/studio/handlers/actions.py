@@ -31,7 +31,10 @@ MAX_ACTIONS = 500
 async def list_actions(services: Any, request: web.Request) -> web.Response:
     """Sorted and grouped server-side as ``ui/src/lib/sort.ts`` does (the comparators are pinned against each
     other), so a client that has not loaded its locale yet shows the same order as one that has."""
-    organize = query_str(request, "organize", "priority", choices=ORGANIZE_MODES) or "priority"
+    # Without ``?organize=`` the queue is arranged the way the user saved it (§3.2), not always by priority.
+    stored = services.settings.values().get("queue_organize")
+    default = stored if stored in ORGANIZE_MODES else "priority"
+    organize = query_str(request, "organize", default, choices=ORGANIZE_MODES) or default
     repo_id = query_str(request, "repo")
     space = query_str(request, "space")
     intent = query_str(request, "intent")

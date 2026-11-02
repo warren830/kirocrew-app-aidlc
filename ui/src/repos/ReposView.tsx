@@ -131,8 +131,10 @@ export function ReposView({ route, go }: ViewProps) {
   const [repoLabel, setRepoLabel] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [spacesRepo, setSpacesRepo] = useState('')
+  // Also while Add repository is open: a path an archived registration owns is refused as a duplicate,
+  // and the dialog names that registration and opens it (its page offers Restore).
   const allRepos = useResource<ReposResponse>(
-    showArchived ? 'repos-with-archived' : null,
+    showArchived || flowState.kind === 'add' ? 'repos-with-archived' : null,
     useCallback((signal) => api.repos(true, { signal }), [api]),
     { revalidateOn: ['repo.updated', 'repo.removed', 'reset'] },
   )
@@ -637,7 +639,7 @@ export function ReposView({ route, go }: ViewProps) {
       {flow === 'add' && desktop ? (
         <AddRepoDialog
           api={api}
-          repos={list}
+          repos={allRepos.data?.repos ?? list}
           onClose={closeFlow}
           onRegistered={(repo) => {
             closeFlow()

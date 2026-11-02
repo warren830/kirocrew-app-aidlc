@@ -489,11 +489,24 @@ def wire_text_for(
     _refuse("invalid_decision", f"unknown decision {decision!r}", decision=decision)
 
 
+#: What ECMAScript's ``String.prototype.trim`` removes (WhiteSpace and LineTerminator), as
+#: ``aidlc_reader._CONFIRMED_CONTENT_TRAILING`` does for the engine. The browser derives ``client_wire_text`` with
+#: ``.trim()``; ``str.strip()`` keeps U+FEFF and removes U+0085 and U+001C-U+001F, so text with one of those at
+#: an end could never be sent.
+_ECMASCRIPT_WHITESPACE = (
+    "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006"
+    "\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+)
+
+
+def _trimmed(raw: object) -> str:
+    return "" if raw is None else str(raw).strip(_ECMASCRIPT_WHITESPACE)
+
+
 def _feedback(payload: Mapping[str, Any], key: str) -> str:
     """A required free-text field, stripped and bounded. Blank is ``feedback_required``, not an empty prompt:
     ``Request Changes: `` is a turn the conductor cannot act on, and it still spends the human's reply."""
-    raw = payload.get(key)
-    text = str(raw).strip() if raw is not None else ""
+    text = _trimmed(payload.get(key))
     if not text:
         _refuse("feedback_required", f"{key} must not be blank", field=key)
     if len(text) > C.MAX_FEEDBACK_CHARS:
@@ -550,12 +563,17 @@ def _answers_wire_text(payload: Mapping[str, Any], questions: "QuestionsFile | N
         if len(letters) > 1 and not question.multi_select:
             _refuse("invalid_decision", "this question accepts one option", index=question.index,
                     option_letters=letters)
-        free_text = str(answer.get("free_text") or "").strip()
+        free_text = _trimmed(answer.get("free_text") or "")
         if batch and len(letters) > 1 and any(known[letter].text == C.AUDIT_NONE_LABEL for letter in letters):
             _refuse("invalid_decision", "None of these cannot be combined with another choice", index=question.index)
         if questions.origin is not None and not text_input and not batch and (len(letters) != 1 or free_text):
             _refuse("invalid_decision", "an audit question requires one of its exact recorded labels",
                     index=question.index)
+        if not letters and question.options:
+            # Nothing chosen is no answer, whatever free text came along: it is what an `Other` box held
+            # before it was unticked again, and the human never chose to send it.
+            _refuse("answers_incomplete", "this question needs one of its options", index=question.index,
+                    reason="choice_required")
         if not letters or any(known[letter].is_other for letter in letters):
             # `X. Other` and an option-less (free-form) question both send the human's own words.
             if not free_text or (text_input and is_audit_text_label(free_text)):
@@ -939,12 +957,10 @@ class HumanActionBroker:
         if file_answer and (snap.questions is None or not file_questions_support_forms(snap.questions)):
             _refuse("invalid_decision", "this question file cannot be answered as a form",
                     reason="unsupported_question_format")
-        grouped = bool(self._settings.capabilities().get("grouped_answers", {}).get("available"))
-        wire_text = wire_text_for(decision, payload, questions=snap.questions, grouped_answers_enabled=grouped)
-        if client_wire_text != wire_text:
-            _refuse("invalid_decision", "the text the browser displayed is not the text this decision sends",
-                    decision=decision, expected=wire_text)
 
+        # The boundary is compared before the wire text: answers are encoded against the live file, so a
+        # relabelled option or an appended question would otherwise read as the browser's mistake
+        # (`invalid_decision`, `answers_incomplete`) and never hand back the card the human must re-read.
         live_captured = Captured.from_json(self._projection.captured(snap, rec.stage))
         if (live_captured.differences(rec.captured) and rec.type in PROMPT_COMMAND_TYPES and rec.status == "Queued"
                 and rec.delivery_id is None and rec.delivering_at is None and snap.stable):
@@ -965,6 +981,11 @@ class HumanActionBroker:
         if drift:
             _refuse("action_stale", "the boundary this decision was captured against has moved", fields=drift,
                     card=await self.card(rec, snap))
+        grouped = bool(self._settings.capabilities().get("grouped_answers", {}).get("available"))
+        wire_text = wire_text_for(decision, payload, questions=snap.questions, grouped_answers_enabled=grouped)
+        if client_wire_text != wire_text:
+            _refuse("invalid_decision", "the text the browser displayed is not the text this decision sends",
+                    decision=decision, expected=wire_text)
 
         await self._assert_consistent(repo, snap, binding)
         slot_key = binding.slot_key

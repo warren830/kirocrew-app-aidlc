@@ -170,6 +170,15 @@ def test_the_queue_can_be_organised_four_ways_and_refuses_a_fifth(http, gate):
     assert status == 400 and body["code"] == "bad_param"
 
 
+def test_the_queue_is_organised_by_the_saved_setting_when_the_request_names_none(http, sv, gate):
+    """``settings.queue_organize`` is what a browser with nothing in localStorage inherits (§3.2)."""
+    asyncio.run(sv.settings.put({"queue_organize": "repo"}))
+    status, body = http.get("/actions")
+    assert status == 200 and body["organize"] == "repo"
+    assert body["groups"][0]["key"] != "group.2"
+    assert http.get("/actions", organize="oldest")[1]["organize"] == "oldest"
+
+
 def test_the_queue_filters_by_repo_intent_type_and_status(http, repo, gate):
     for query, expected in (
         ({"repo": repo.repo_id}, 1), ({"repo": "r_000000000009"}, 0), ({"intent": INTENT}, 1),

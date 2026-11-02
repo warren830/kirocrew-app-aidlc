@@ -123,6 +123,27 @@ def test_the_list_does_not_observe_git_and_the_detail_does(api, demo, sv):
     assert api("GET", "/repos")[1]["repos"][0]["git"]["observed_at"] == detail["repo"]["git"]["observed_at"]
 
 
+def test_the_list_shows_the_install_a_transaction_just_committed_not_the_last_scan(sv, api, bare_repo):
+    """A rescan caches the install block; the installer's commit does not touch that cache."""
+    def listed() -> dict:
+        return next(r for r in api("GET", "/repos")[1]["repos"] if r["repo_id"] == bare_repo.repo_id)["install"]
+
+    sv.repos.rescan(bare_repo.repo_id)
+    assert listed()["status"] == "not_installed"
+    plan = sv.installer.preview(bare_repo, "install")
+    assert asyncio.run(sv.installer.run(bare_repo, "install", plan_digest=plan.digest())).status == "committed"
+    install = listed()
+    assert install["status"] == "installed" and install["own_engine_version"] == MANIFEST["engineVersion"]
+    assert install["receipt"] is not None
+
+    sv.repos.rescan(bare_repo.repo_id)
+    repo = sv.repos.get(bare_repo.repo_id)
+    plan = sv.installer.preview(repo, "uninstall")
+    assert asyncio.run(sv.installer.run(repo, "uninstall", plan_digest=plan.digest())).status == "committed"
+    install = listed()
+    assert install["status"] == "not_installed" and install["own_engine_version"] is None
+
+
 def test_archived_repositories_are_hidden_unless_asked_for(sv, api, demo):
     sv.storage.update("repos", demo.repo_id, {"archived": 1})
     assert api("GET", "/repos")[1]["repos"] == []

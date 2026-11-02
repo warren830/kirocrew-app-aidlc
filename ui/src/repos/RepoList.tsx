@@ -15,7 +15,7 @@ import { plural } from '../lib/format'
 import type { RepoRecord } from '../lib/types'
 import { Icon } from '../shell/Icon'
 import { GitSummaryChips } from './GitPanel'
-import { EngineChips, InstallChip, repoActions, sameVersionRefresh, type RepoAction } from './RepoCard'
+import { EngineChips, InstallChip, repoActions, upgradeLabel, type RepoAction } from './RepoCard'
 
 type Flow = 'recover' | 'install' | 'upgrade'
 const FLOW_ORDER: readonly Flow[] = ['recover', 'install', 'upgrade']
@@ -100,7 +100,7 @@ export function RepoList({ repos, desktop, onAction }: RepoListProps) {
                       data-variant={flow === 'recover' ? 'danger' : 'primary'}
                       onClick={() => onAction(repo.repo_id, flow)}
                     >
-                      {t(flow === 'upgrade' && sameVersionRefresh(repo.install) ? 'repos.action.refresh' : FLOW_LABEL[flow])}
+                      {t(flow === 'upgrade' ? upgradeLabel(repo.install) : FLOW_LABEL[flow])}
                     </button>
                   ) : null}
                 </div>

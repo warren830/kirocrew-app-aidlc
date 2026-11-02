@@ -73,14 +73,30 @@ function readStored(key: string): string | null {
   }
 }
 
+/** `settings.locale` once the server has answered, or `null` for "auto" and before it has. */
+let savedLocale: StudioLocale | null = null
+
 /**
- * Precedence: Studio's own override, then the dashboard's language choice, then `<html lang>` (which the
- * host rewrites on every switch), then the browser's preferences, then English. The host choice beats
- * `<html lang>` for "Auto", where `lang` holds the *resolved* tag and the stored value is `''`.
+ * Record the server's `settings.locale`: what a browser with no override of its own inherits (contracts
+ * §3.6, "overridden by `settings.locale !== 'auto'`"). Repaints only when the effective value moves.
+ */
+export function setSavedLocale(locale: string | null | undefined): void {
+  const next = locale && locale !== 'auto' ? matchLocale(locale) : null
+  if (next === savedLocale) return
+  savedLocale = next
+  window.dispatchEvent(new CustomEvent(LOCALE_CHANGED_EVENT))
+}
+
+/**
+ * Precedence: Studio's own override in this browser, then the saved `settings.locale`, then the dashboard's
+ * language choice, then `<html lang>` (which the host rewrites on every switch), then the browser's
+ * preferences, then English. The host choice beats `<html lang>` for "Auto", where `lang` holds the
+ * *resolved* tag and the stored value is `''`.
  */
 export function readLocale(): StudioLocale {
   return (
     matchLocale(readStored(STUDIO_LOCALE_KEY)) ??
+    savedLocale ??
     matchLocale(readStored(HOST_LANG_KEY)) ??
     matchLocale(typeof document !== 'undefined' ? document.documentElement.lang : null) ??
     (typeof navigator !== 'undefined'

@@ -2,9 +2,10 @@
  * The queue header: what this list is, how much of it you are seeing, and how it is arranged.
  *
  * The organize choice is persisted (FR-ACT-005) in `localStorage['aidlc-studio:organize']` — the key
- * `host.ts` already names, so Settings and the queue read the same slot. `useOrganize` is exported
- * because the choice belongs to the view (it changes the sort of the list, which lives above this
- * component) while the control that changes it belongs here.
+ * `host.ts` already names, so Settings and the queue read the same slot — and in `settings.queue_organize`,
+ * which is what a browser with nothing stored inherits (§3.2: "localStorage, else settings"). `useOrganize`
+ * is exported because the choice belongs to the view (it changes the sort of the list, which lives above
+ * this component) while the control that changes it belongs here.
  *
  * `SegmentedControl` comes from the host UI kit so the four modes look and behave like every other
  * segmented control in the dashboard; the search box is the host's `SearchInput` for the same reason.
@@ -20,20 +21,31 @@ import type { Organize } from '../lib/types'
 
 const ORGANIZE_MODES: readonly Organize[] = ['priority', 'repo', 'type', 'oldest']
 
-function readOrganize(): Organize {
+function isOrganize(value: unknown): value is Organize {
+  return ORGANIZE_MODES.includes(value as Organize)
+}
+
+/** This browser's own choice, or `null` when it has none (or storage is disabled). */
+function readOrganize(): Organize | null {
   try {
     const stored = localStorage.getItem(STUDIO_ORGANIZE_KEY)
-    return ORGANIZE_MODES.includes(stored as Organize) ? (stored as Organize) : 'priority'
+    return isOrganize(stored) ? stored : null
   } catch {
-    return 'priority' // storage disabled: the choice still works for this session
+    return null // storage disabled: the choice still works for this session
   }
 }
 
-/** The persisted organize mode and a setter that persists it. */
-export function useOrganize(): [Organize, (mode: Organize) => void] {
+/**
+ * The persisted organize mode and a setter that persists it: this browser's choice, else `saved` (the
+ * server's `settings.queue_organize`), else priority. `persist` writes a new choice to the server too.
+ */
+export function useOrganize(
+  saved?: Organize | null,
+  persist?: (mode: Organize) => void,
+): [Organize, (mode: Organize) => void] {
   // Read lazily rather than in a module constant: `localStorage` may throw, and the value must be read
   // after the host has restored it rather than at import time.
-  const [organize, setOrganize] = useState<Organize>(readOrganize)
+  const [local, setOrganize] = useState<Organize | null>(readOrganize)
 
   useEffect(() => {
     // Another tab (or Settings) changing the mode should not leave this queue on the old one.
@@ -51,9 +63,10 @@ export function useOrganize(): [Organize, (mode: Organize) => void] {
     } catch {
       // Unpersisted is still applied.
     }
-  }, [])
+    persist?.(mode)
+  }, [persist])
 
-  return [organize, choose]
+  return [local ?? (isOrganize(saved) ? saved : 'priority'), choose]
 }
 
 export interface QueueFiltersProps {
