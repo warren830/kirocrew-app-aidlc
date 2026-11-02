@@ -511,7 +511,7 @@ export function DetailShell({
   return (
     <section className="studio-detail" aria-label={t('detail.label')}>
       <DetailHeader card={card} onOpenCurrent={() => go({
-        ...EMPTY_ROUTE, view: 'actions', repo: card.repo.repo_id, intent: card.intent.intent_key,
+        ...EMPTY_ROUTE, view: 'actions', repo: card.repo.repo_id, space: card.space, intent: card.intent.intent_key,
       })} />
       <DetailTabs tabs={tabs} active={activeTab} onSelect={(tab) => go({ tab })} />
 

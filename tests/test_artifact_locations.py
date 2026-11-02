@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 
 import pytest
 
@@ -133,6 +135,85 @@ def test_codekb_does_not_use_another_space_repo_or_symlink(repo_builder, finding
     expected.mkdir()
     (expected / "architecture.md").symlink_to(wrong / "architecture.md")
     assert len(findings(root, "release")) == 9
+
+
+def registry_row(root, **fields):
+    """Patch this intent's ``intents.json`` row, or add another intent's row when ``dirName`` names one."""
+    path = root / "aidlc/spaces/default/intents/intents.json"
+    rows = json.loads(path.read_text())
+    target = fields.get("dirName", INTENT)
+    row = next((r for r in rows if r["dirName"] == target), None)
+    if row is None:
+        rows.append(row := {"uuid": f"01a00000-0000-7000-8000-{len(rows) + 1:012d}", "slug": target.split("-", 1)[-1],
+                            "status": "in-flight"})
+    row.update(fields)
+    path.write_text(json.dumps(rows))
+
+
+def test_codekb_store_is_the_one_repo_the_intent_records(repo_builder, projection, repo_record, findings):
+    """``codekbRepoName``: one recorded repo names the store, whatever the project folder is called."""
+    root, node = workspace(repo_builder, "reverse-engineering")
+    registry_row(root, repos=["billing-service"])
+    rel = "aidlc/spaces/default/codekb/billing-service"
+    write_outputs(root, rel, node)
+    assert not findings(root)
+    snap = projection.snapshot(repo_record(root), "default", INTENT)
+    assert {f"{rel}/{name}.md" for name in node["produces"]} <= {m.relpath for m in projection.artifacts(snap)[0]}
+    (root / rel / "architecture.md").unlink()
+    write_outputs(root, f"aidlc/spaces/default/codekb/{root.name}", node)
+    assert [(f.params["artifact"], f.params["stage_dir"]) for f in findings(root)] == [("architecture", rel)]
+
+
+def test_every_recorded_repo_needs_its_own_complete_store(repo_builder, findings):
+    """The engine's gate wants all nine outputs in each repository's store: one cannot stand in for another."""
+    root, node = workspace(repo_builder, "reverse-engineering")
+    registry_row(root, repos=["billing", "identity"])
+    write_outputs(root, "aidlc/spaces/default/codekb/billing", node)
+    identity = write_outputs(root, "aidlc/spaces/default/codekb/identity", node)
+    assert not findings(root)
+    (identity / "architecture.md").unlink()
+    assert [(f.params["artifact"], f.params["stage_dir"]) for f in findings(root)] == [
+        ("architecture", "aidlc/spaces/default/codekb/identity")]
+
+
+def test_a_linked_worktree_reads_the_store_named_for_its_main_checkout(tmp_path, projection, repo_record):
+    """``mainCheckoutRepoName``: a worktree's knowledge base is the repository's, under the main checkout's name."""
+    main, worktree = tmp_path / "shop", tmp_path / "shop-feature"
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+
+    def git(*argv):
+        subprocess.run(["git", "-c", "user.email=studio@example.com", "-c", "user.name=Studio", *argv],
+                       check=True, env=env)
+
+    git("init", "-q", str(main))
+    (main / "README").write_text("shop\n")
+    git("-C", str(main), "add", "README")
+    git("-C", str(main), "commit", "-qm", "init")
+    git("-C", str(main), "worktree", "add", "-q", str(worktree))
+    CT.RepoBuilder(worktree).with_engine().with_workspace(active_space="default").with_intent(
+        INTENT, state=F.state_text(marks={"reverse-engineering": "?"}, fields={
+            "Current Stage": "reverse-engineering", "Status": "Running", "Lifecycle Phase": "INCEPTION"}),
+        audit=F.gate_open_audit("reverse-engineering")).build()
+    graph = json.loads((worktree / ".kiro/tools/data/stage-graph.json").read_text())
+    node = next(n for n in graph if n["slug"] == "reverse-engineering")
+    write_outputs(worktree, "aidlc/spaces/default/codekb/shop", node)
+    # A second unclaimed store, so the moved-folder rule cannot be what finds `shop`.
+    write_outputs(worktree, "aidlc/spaces/default/codekb/storefront", node)
+    snap = projection.snapshot(repo_record(worktree), "default", INTENT)
+    assert not artifact_findings(projection, snap)
+    assert snap.artifact_dirs_rel == ("aidlc/spaces/default/codekb/shop",)
+
+
+def test_a_moved_folder_keeps_the_one_store_no_intent_claims(repo_builder, findings):
+    """``movedFolderStoreName``: a renamed folder finds the store it wrote under its old name, while that store is
+    the only one no intent's repos own; two such stores are ambiguous and keep the folder's name."""
+    root, node = workspace(repo_builder, "reverse-engineering")
+    write_outputs(root, "aidlc/spaces/default/codekb/shop-before-the-move", node)
+    assert not findings(root)
+    write_outputs(root, "aidlc/spaces/default/codekb/payments", node)
+    assert {f.params["stage_dir"] for f in findings(root)} == {f"aidlc/spaces/default/codekb/{root.name}"}
+    registry_row(root, dirName="260911-payments", repos=["payments"])
+    assert not findings(root)
 
 
 @pytest.mark.parametrize("stage", ["functional-design", "nfr-design", "code-generation"])

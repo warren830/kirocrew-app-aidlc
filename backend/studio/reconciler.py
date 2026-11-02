@@ -50,7 +50,7 @@ from .actions import ABSENCE_PROOF
 from .aidlc_reader import audit_question_accepts_text, audit_question_answer, plan_approval_choice
 from .consistency import RepoFacts
 from .errors import IllegalTransition, StaleGeneration, StudioError
-from .projection import run_unavailable_reason
+from .projection import UNCERTAIN_STATUSES, run_unavailable_reason
 from .repo_registry import RepoScan
 from .wire import WireRecord
 
@@ -95,6 +95,10 @@ STARTUP_STATUS: tuple[str, ...] = ("Delivering", "Delivered")
 
 #: The host was handed something and has not answered yet.
 IN_FLIGHT_STATUS: tuple[str, ...] = STARTUP_STATUS
+
+#: Cards a scan announces when it derives one (PRD FR-SLK-003). A breaker card is announced by the broker the moment
+#: it opens, and every other type waits in the queue without interrupting anyone.
+_ANNOUNCED_CARD_TYPES: tuple[str, ...] = ("gate", "question", "failure", "recovery")
 
 #: ``PresenceBaseline`` fields compared for "did anything on disk move?". Not ``taken_at``: it is the clock
 #: of the read, and comparing it would make every comparison false and ``NotDelivered`` unreachable.
@@ -724,6 +728,9 @@ class Reconciler:
         live = await self._s.actions.list_live(
             repo_id=repo.repo_id, space=space, intent_dir=intent_dir, include_revision=True
         )
+        # A recovery or failure card is minted again for every new boundary while its condition lasts: only one that
+        # was not already open before this scan is a condition that started.
+        held = {str(_attr(rec, "type")) for rec in live if _attr(rec, "status") == "Queued"}
         breakers = await self._breakers_for(repo.repo_id, snap.intent_key)
         facts = RepoFacts(
             now=self._s.clock.iso(), repo=repo, install=install, binding=binding, slot=slot, live_actions=live,
@@ -750,12 +757,9 @@ class Reconciler:
             repo_id=repo.repo_id, space=space, intent_dir=intent_dir, include_revision=True
         )
         if not binding.archived:  # an archived intent's cards are set aside with it
+            breaker_open = any(_attr(b, "opened_at") for b in breakers)
             for rec in live:
-                # A gate or question this scan leaves open is announced once; the notification ledger remembers.
-                # Only cards this process minted: an upgrade or restart must not replay every pending decision.
-                if (_attr(rec, "type") in ("gate", "question") and _attr(rec, "status") == "Queued"
-                        and _attr(rec, "dedupe_key") in keys
-                        and str(_attr(rec, "created_at") or "") >= self._announce_since):
+                if await self._is_news(rec, keys, held=held, breaker_open=breaker_open):
                     await self._notify("action", rec, snap=snap)
 
         boundary = await self._record_boundary(repo, snap, binding, live, slot, leases)
@@ -768,6 +772,33 @@ class Reconciler:
         ))
         await self._publish_intent(key, summary, boundary)
         return summary, list(findings)
+
+    async def _is_news(self, rec: Any, keys: set[str], *, held: set[str], breaker_open: bool) -> bool:
+        """Whether a live card is worth telling the user about (PRD FR-SLK-003); the notification ledger then makes
+        it once per card and class. A gate or question this scan left open, a failure or recovery that started, or
+        any decision whose delivery became uncertain. Only what happened in this process: an upgrade or restart must
+        not replay every pending decision."""
+        status, card_type = str(_attr(rec, "status") or ""), str(_attr(rec, "type") or "")
+        if status in UNCERTAIN_STATUSES:
+            return await self._uncertain_since(rec) >= self._announce_since
+        if card_type not in _ANNOUNCED_CARD_TYPES or status != "Queued" or _attr(rec, "dedupe_key") not in keys:
+            return False
+        if card_type in ("failure", "recovery") and card_type in held:
+            return False
+        if card_type == "failure" and breaker_open:
+            # A failure that opened the breaker was announced as the breaker's opening; telling it twice teaches
+            # the user to skim.
+            return False
+        return str(_attr(rec, "created_at") or "") >= self._announce_since
+
+    async def _uncertain_since(self, rec: Any) -> str:
+        """When the action last became uncertain: the status's own transition row, since ``updated_at`` moves with
+        every evidence stamp the reconciler makes afterwards."""
+        rows = await self._to_thread(
+            self._s.storage.select, "action_transitions",
+            {"action_id": _attr(rec, "action_id"), "to_status": _attr(rec, "status")}, order_by="id DESC", limit=1,
+        )
+        return str(rows[0].get("at") or "") if rows else ""
 
     def _slot_lost(self, key: str, binding: Any, slot: Any) -> bool:
         """Has the bound slot stayed missing for ``SLOT_LOSS_GRACE_SECS``? Right after a restart a recovery card said
@@ -1982,7 +2013,7 @@ class Reconciler:
             return
         try:
             if kind == "action":
-                if await notifications.announced(subject.action_id):
+                if await notifications.announced(subject.action_id, subject.status):
                     return
                 subject = await self._s.actions.card(subject, snap)
             await notifications.notify(kind, subject, **fields)

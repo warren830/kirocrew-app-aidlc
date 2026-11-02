@@ -11,7 +11,7 @@
  * an intent bound by any other sequence is refused `slot_mismatch`. A test that only checked "the client
  * was called" would pass with the PATCH sent as a POST, which the host answers 404 to.
  */
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -209,6 +209,29 @@ describe('the intents inventory', () => {
 
     expect(await screen.findByText(/A decision for this intent is being delivered/)).toBeInTheDocument()
     expect(api.pause).not.toHaveBeenCalled()
+  })
+
+  it('says the intent was paused, and reads it again, when the archive after the pause is refused', async () => {
+    const api = {
+      pause: vi.fn(async () => ({ ok: true as const, binding: {} as never, blocked_actions: ['a_1', 'a_2'] })),
+      archive: vi.fn(async () => {
+        throw new StudioApiError('action_not_submittable', 'a decision for this intent may still be in flight',
+          { operation: 'archive', reason: 'in_flight' }, 409)
+      }),
+    } as unknown as StudioApi
+    const onChanged = vi.fn()
+    render(
+      <I18nProvider>
+        <IntentActions api={api} intent={INTENT} onGo={() => {}} onQueued={() => {}} onChanged={onChanged} onRecompose={() => {}} onSession={() => {}} />
+      </I18nProvider>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'Archive' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Pause and archive' }))
+
+    expect(await screen.findByText(/A decision for this intent is being delivered/)).toBeInTheDocument()
+    // The pause stood: without a refresh the row went on showing an intent that still dispatches.
+    expect(onChanged).toHaveBeenCalledWith('Paused. 2 waiting decisions will now refuse to send.')
   })
 
   it('offers no pause or rescope once the workflow is complete', () => {
@@ -441,6 +464,17 @@ describe('the intents inventory', () => {
   })
 })
 
+/** `GET /repos` with the one repository the inventory rows belong to. */
+const oneRepo = (intents: number) => ({
+  [`GET ${API_BASE}/repos*`]: () => ({
+    repos: [{
+      repo_id: INTENT.repo_id, label: INTENT.repo_label, canonical_path: '/work/checkout-web',
+      availability: 'available', counts: { intents },
+    }],
+    totals: { repos: 1, unavailable: 0, open_actions: 0 },
+  }),
+})
+
 describe('a link to an intent\'s conversation', () => {
   it('opens that intent\'s conversation panel and then drops the tab from the route', async () => {
     const unbound = { ...INTENT, session: null } as IntentSummary
@@ -468,6 +502,61 @@ describe('a link to an intent\'s conversation', () => {
       view: 'intents', repo: INTENT.repo_id, intent: '', tab: 'decision',
     }))
     expect(apiCalls.every((call) => call.method === 'GET')).toBe(true)
+  })
+
+  it('is not followed when the Intents page is reached from the top bar, and the intent stays in scope', async () => {
+    setApiRoutes({
+      ...shellRoutes([]),
+      ...oneRepo(1),
+      [`GET ${API_BASE}/repos/${INTENT.repo_id}/intents`]: () => ({
+        intents: [{ ...INTENT, session: null }], spaces: ['default'], active_space: 'default',
+      }),
+      ['GET /api/chat/slots']: () => [],
+    })
+    // A card's Conversation tab, open in the Action Center.
+    window.history.replaceState(null, '', buildRoute({
+      view: 'actions', repo: INTENT.repo_id, intent: INTENT.intent_key, tab: 'conversation',
+    }))
+    render(<I18nProvider><StudioApp /></I18nProvider>)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Intents' }))
+    expect(await screen.findByText(INTENT.title!)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Create and bind the conversation' })).toBeNull()
+    expect(parseRoute(window.location.search, window.location.hash)).toMatchObject({
+      view: 'intents', repo: INTENT.repo_id, intent: INTENT.intent_key, tab: 'decision',
+    })
+  })
+})
+
+describe('the conversation panel, opened from one row and then another', () => {
+  it('shows the second intent\'s own binding, not the one just made for the first', async () => {
+    const first = { ...INTENT, intent_dir: '250901-a', intent_key: '250901-a', title: 'First', session: null } as IntentSummary
+    const second = { ...first, intent_dir: '250902-b', intent_key: '250902-b', title: 'Second' } as IntentSummary
+    setApiRoutes({
+      ...shellRoutes([]),
+      ...oneRepo(2),
+      [`GET ${API_BASE}/repos/r_1/intents`]: () => ({ intents: [first, second], spaces: ['default'], active_space: 'default' }),
+      ['GET /api/chat/slots']: () => [{ key: 'slot-of-a', agent: 'aidlc', project: '/work/checkout-web', title: 'A conversation' }],
+      [`POST ${API_BASE}/repos/r_1/intents/250901-a/session`]: () => ({
+        ok: true, binding: { slot_key: 'slot-of-a', session_key: 'ses_a' }, slot: null,
+      }),
+    })
+    window.history.replaceState(null, '', buildRoute({ view: 'intents' }))
+    render(<I18nProvider><StudioApp /></I18nProvider>)
+    const bindFor = async (title: string) =>
+      within((await screen.findByText(title)).closest('tr, li') as HTMLElement).getByRole('button', { name: 'Bind a conversation' })
+
+    await userEvent.click(await bindFor('First'))
+    await userEvent.click(screen.getByRole('button', { name: 'Bind an existing conversation' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Bind this one' }))
+    const panelA = screen.getByRole('region', { name: 'Conversation for 250901-a' })
+    await waitFor(() => expect(within(panelA).getByText('slot-of-a')).toBeInTheDocument())
+
+    await userEvent.click(await bindFor('Second'))
+    const panelB = await screen.findByRole('region', { name: 'Conversation for 250902-b' })
+    // Kept from A, the slot made "Open conversation" open A's chat from B's panel.
+    expect(within(panelB).queryByText('slot-of-a')).toBeNull()
+    expect(within(panelB).getByRole('button', { name: 'Create and bind the conversation' })).toBeInTheDocument()
   })
 })
 

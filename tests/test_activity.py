@@ -529,6 +529,22 @@ def test_the_merged_timeline_filters_on_the_server_and_pages_by_a_cursor(A, R, p
 
 
 
+def test_the_merged_timeline_keeps_a_row_written_before_older_dated_ones(A, R, proj, store, clock):
+    """A KiroCrew error is recorded at its own, earlier time after newer rows exist; read by id, enough of them filled
+    the Studio half and the newer row fell past the page's time cursor, on no page at all."""
+    run(proj.record(kind="session.bound", repo_id=REPO, space="default", intent_dir=INTENT))
+    for minute in range(9):
+        run(proj.record(kind="conversation.error", source="kirocrew", repo_id=REPO, space="default",
+                        intent_dir=INTENT, params={"text": "model error"}, at=f"2026-09-04T09:{minute:02d}:00Z"))
+    seen, cursor = [], None
+    for _ in range(10):
+        page, cursor = run(proj.timeline_page(snapshot(bundle(R, "")), limit=3, q=A.ActivityQuery(cursor=cursor)))
+        seen += page
+        if cursor is None:
+            break
+    assert [e.kind for e in seen] == ["session.bound"] + ["conversation.error"] * 9
+
+
 def test_a_notification_recorded_before_rows_named_their_intent_still_names_it(A):
     row = A.ActivityRow(at="2026-10-14T04:11:30Z", source="studio", kind="notification.sent", severity="attention",
                         repo_id=None, space=None, intent_dir=None, stage=None, action_id=None, session_key=None,

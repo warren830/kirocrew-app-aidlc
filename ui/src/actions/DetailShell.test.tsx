@@ -307,6 +307,21 @@ describe('a refusal the server did return', () => {
     expect(apiCalls.filter((call) => call.method !== 'GET')).toHaveLength(0)
   })
 
+  it('opens the current actions of a closed card\'s intent in that intent\'s own space', async () => {
+    const base = actionCard()
+    const card: ActionCard = {
+      ...base, status: 'StateChanged', space: 'feature',
+      intent: { ...base.intent, intent_key: 'feature~250901-guest' },
+    }
+    const go = vi.fn()
+    setApiRoutes({ [`GET ${API_BASE}/actions/${card.action_id}`]: () => ({ action: card, transitions: [], drafts: [] }) })
+    mount(card, go)
+    await userEvent.click(await screen.findByRole('button', { name: en.t('detail.currentActions') }))
+    expect(go).toHaveBeenCalledWith(expect.objectContaining({
+      view: 'actions', repo: card.repo.repo_id, space: 'feature', intent: 'feature~250901-guest',
+    }))
+  })
+
   it('is shown where the click was, not only at the top of the pane', async () => {
     const card = actionCard()
     setApiRoutes({

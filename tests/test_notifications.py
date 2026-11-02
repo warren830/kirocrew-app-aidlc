@@ -304,6 +304,27 @@ def test_announced_answers_whether_an_open_card_was_notified(studio, clock):
     assert asyncio.run(adapter.announced("a_0000000000000002")) is False
 
 
+def test_announced_answers_for_the_class_the_status_falls_in(studio, clock):
+    """A card announced open is still news when its delivery becomes uncertain: the scan asks per class."""
+    adapter = _adapter(studio, clock)
+    notify(adapter, "action", _card())
+    assert asyncio.run(adapter.announced("a_0000000000000001", "ReconciliationRequired")) is False
+    notify(adapter, "action", _card(status="ReconciliationRequired", queue_type="delivery_uncertain"))
+    assert asyncio.run(adapter.announced("a_0000000000000001", "ReconciliationRequired")) is True
+
+
+def test_an_intent_link_names_the_space_of_an_intent_outside_the_default_one(studio, clock):
+    """Read as the default space, ``feature~x`` opened another intent's Activity under the same directory name."""
+    adapter = _adapter(studio, clock)
+    summary = SimpleNamespace(repo_id="r_000000000001", repo_label="ledger", intent_key="feature~260904-ledger-export",
+                              intent_dir="260904-ledger-export", slug="ledger-export")
+    assert notify(adapter, "completion", summary).deep_link == (
+        f"/apps/{APP_NAME}?view=intents&repo=r_000000000001&space=feature&intent=feature~260904-ledger-export")
+    default = SimpleNamespace(**{**vars(summary), "intent_key": "260904-ledger-export"})
+    assert notify(adapter, "completion", default).deep_link == (
+        f"/apps/{APP_NAME}?view=intents&repo=r_000000000001&intent=260904-ledger-export")
+
+
 # --- what a scan announces: the reconciler through the real services ---
 
 
@@ -348,7 +369,8 @@ def test_a_scan_announces_each_new_gate_and_question_once(sv, fake_host, gate_re
     repo = sv.repos.add(str(gate_repo), "ledger")
     _scan(sv, repo)
     first = _announced(fake_host)
-    assert sorted(kind for kind, _ in first) == ["gate", "question"]
+    # The fixture's state file also names a stage outside its lifecycle phase: a recovery card, which is news too.
+    assert sorted(kind for kind, _ in first) == ["gate", "question", "recovery"]
     assert all(action_id for _, action_id in first)
     rendered: list[str] = []
     render = sv.actions.card
@@ -369,6 +391,7 @@ def test_a_scan_announces_each_new_gate_and_question_once(sv, fake_host, gate_re
     _scan(sv, repo)
     _scan(sv, repo)
     later = _announced(fake_host)[len(first):]
+    # The recovery card was minted again for the new boundary; its condition did not start again.
     assert sorted(kind for kind, _ in later) == ["gate", "question"]
     assert not {action_id for _, action_id in later} & {action_id for _, action_id in first}
 
@@ -442,4 +465,88 @@ def test_a_scan_announces_through_the_switches_it_is_given(sv, fake_host, gate_r
     if muted:
         assert fake_host.notifications == [] and fake_host.slack_client.posts == []
     else:
-        assert len(fake_host.notifications) == 2 and len(fake_host.slack_client.posts) == 2
+        # The gate, its question, and the fixture's recovery card.
+        assert len(fake_host.notifications) == 3 and len(fake_host.slack_client.posts) == 3
+
+
+def _gate_of(sv: Any, repo: Any) -> Any:
+    return next(rec for rec in asyncio.run(sv.actions.list_live(repo_id=repo.repo_id)) if rec.type == "gate")
+
+
+def _make_uncertain(sv: Any, rec: Any) -> Any:
+    """The answer went out and nobody can tell whether it landed."""
+    rec = asyncio.run(sv.actions.transition(rec.action_id, "Delivering", expected_generation=rec.status_generation,
+                                            reason="test_dispatch", evidence={}))
+    return asyncio.run(sv.actions.transition(rec.action_id, "ReconciliationRequired",
+                                             expected_generation=rec.status_generation, reason="ack_deadline",
+                                             evidence={}))
+
+
+def test_a_scan_announces_a_decision_whose_delivery_became_uncertain_once(sv, fake_host, gate_repo):
+    repo = sv.repos.add(str(gate_repo), "ledger")
+    _scan(sv, repo)
+    gate = _gate_of(sv, repo)
+    assert ("gate", gate.action_id) in _announced(fake_host)
+    _make_uncertain(sv, gate)
+    before = len(_announced(fake_host))
+    _scan(sv, repo)
+    _scan(sv, repo)
+    assert _announced(fake_host)[before:] == [("delivery_uncertain", gate.action_id)]
+    assert fake_host.notifications[-1]["title"] == "Delivery uncertain: gate-demo"
+
+
+def test_a_delivery_uncertain_before_a_restart_is_not_announced_after_it(sv, fake_host, gate_repo, studio,
+                                                                       monkeypatch):
+    repo = sv.repos.add(str(gate_repo), "ledger")
+    notifications = sv.notifications
+    monkeypatch.setattr(sv, "notifications", None)       # the earlier process: it went uncertain, nothing was sent
+    _scan(sv, repo)
+    _make_uncertain(sv, _gate_of(sv, repo))
+    _scan(sv, repo)
+    sv.clock.advance(60)
+    monkeypatch.setattr(sv, "notifications", notifications)
+    sv.reconciler = studio.reconciler.Reconciler(sv)
+    _scan(sv, repo)
+    assert "delivery_uncertain" not in {kind for kind, _ in _announced(fake_host)}
+
+
+def _burst_repo(repo_builder: Any) -> Path:
+    """AI-DLC's own run failed: the running stage logged three errors inside ten minutes, and nothing moved since."""
+    return repo_builder.with_engine("payload").with_workspace().with_intent(
+        GATE_INTENT,
+        state=F.state_text(marks={"requirements-analysis": "-"},
+                           fields={"Current Stage": "requirements-analysis", "Status": "Running"}),
+        audit=F.audit_block("STAGE_STARTED", "2026-09-04T08:50:00Z", Stage="requirements-analysis")
+        + F.error_burst_audit(ts="2026-09-04T09:00:00Z", count=3),
+    ).build()
+
+
+def test_a_scan_announces_an_execution_failure_once(sv, fake_host, repo_builder):
+    repo = sv.repos.add(str(_burst_repo(repo_builder)), "ledger")
+    _scan(sv, repo)
+    _scan(sv, repo)
+    failures = [note for note in fake_host.notifications if note["meta"]["kind"] == "failure"]
+    assert [note["title"] for note in failures] == ["AI-DLC run failed: gate-demo"]
+
+
+def test_a_failure_the_open_breaker_speaks_for_is_not_announced_again(sv, fake_host, repo_builder):
+    """The broker announces a breaker the moment it opens; the failure card beside it is the same news."""
+    repo = sv.repos.add(str(_burst_repo(repo_builder)), "ledger")
+    sv.storage.insert("breakers", {"key": f"{repo.repo_id}:{GATE_INTENT}:transport.acp-transport-closed", "count": 3,
+                                   "opened_at": sv.clock.iso(), "reason": "transport", "fingerprint_class": "transport"})
+    _scan(sv, repo)
+    assert {rec.type for rec in asyncio.run(sv.actions.list_live(repo_id=repo.repo_id))} >= {"failure",
+                                                                                             "circuit_breaker"}
+    assert "failure" not in {kind for kind, _ in _announced(fake_host)}
+
+
+def test_a_recovery_is_announced_when_it_starts_and_not_for_each_boundary_it_outlasts(sv, fake_host, gate_repo):
+    repo = sv.repos.add(str(gate_repo), "ledger")
+    _scan(sv, repo)
+    recovery = [action_id for kind, action_id in _announced(fake_host) if kind == "recovery"]
+    assert len(recovery) == 1
+    _open_next_gate(gate_repo)
+    _scan(sv, repo)
+    live = {rec.type: rec.action_id for rec in asyncio.run(sv.actions.list_live(repo_id=repo.repo_id))}
+    assert live["recovery"] != recovery[0], "the card was minted again for the new boundary"
+    assert [action_id for kind, action_id in _announced(fake_host) if kind == "recovery"] == recovery

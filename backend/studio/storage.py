@@ -513,11 +513,13 @@ class Storage:
             )
         return int(cur.lastrowid or 0)
 
-    def activity_query(self, q: ActivityQuery) -> tuple[list[ActivityRow], str | None]:
+    def activity_query(self, q: ActivityQuery, *, by_time: bool = False) -> tuple[list[ActivityRow], str | None]:
         """One page of activity, newest first, plus the cursor for the next page.
 
         Paged by the autoincrement ``id``, not by ``at``: timestamps are second-precision, so rows routinely share
-        one, and an ``at`` cursor would skip or repeat them.
+        one, and an ``at`` cursor would skip or repeat them. ``by_time`` orders by ``at`` (then ``id``) instead, for
+        the merged timeline, which pages by time itself: a row dated at its source's own time is written after rows
+        that are newer than it, and read by id it filled the page and pushed one of them past the time cursor.
         """
         limit = max(1, min(int(q.limit or C.ACTIVITY_DEFAULT_LIMIT), int(C.ACTIVITY_MAX_LIMIT)))
         conds: list[str] = []
@@ -544,7 +546,8 @@ class Storage:
         where = f" WHERE {' AND '.join(conds)}" if conds else ""
         params.append(limit + 1)  # one extra row answers "is there a next page?"
         with self._txn() as conn:
-            rows = conn.execute(f"SELECT * FROM activity{where} ORDER BY id DESC LIMIT ?", params).fetchall()
+            order = "at DESC, id DESC" if by_time else "id DESC"
+            rows = conn.execute(f"SELECT * FROM activity{where} ORDER BY {order} LIMIT ?", params).fetchall()
         page = [self._activity_row(r) for r in rows[:limit]]
         return page, (_encode_cursor(page[-1].id) if len(rows) > limit and page else None)
 

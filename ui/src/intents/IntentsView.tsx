@@ -319,7 +319,10 @@ export function IntentsView({ route, go }: IntentsViewProps) {
         ) : null}
 
         {bindingRow && bindingRepo ? (
+          // Keyed by the intent: re-pointed at another row, the panel must not keep the previous intent's
+          // slot, or "Open conversation" would open the wrong chat.
           <SessionPanel
+            key={`${bindingRow.repo_id}/${bindingRow.intent_key}`}
             api={api}
             repo={bindingRepo}
             intent={bindingRow}

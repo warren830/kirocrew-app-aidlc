@@ -83,7 +83,10 @@ export function parseRoute(search: string, hash: string): StudioRoute {
   const rawTab = params.get('tab')
   const tab: Tab = TABS.includes(rawTab as Tab) ? (rawTab as Tab) : DEFAULT_TAB
   const intent = value(params.get('intent'))
-  const space = value(params.get('space')) || (intent ? DEFAULT_SPACE : '')
+  // An intent key names its own space (`space~dir`, a bare dir is `default`), and a link that carries only the
+  // key — a notification, a card's "open current" — must not land in `default`: Activity would read another
+  // intent's history under the same directory name.
+  const space = intent ? splitIntentKey(intent)[0] : value(params.get('space'))
   const rawAnchor = (hash.startsWith('#') ? hash.slice(1) : hash).trim()
 
   return {
@@ -100,6 +103,13 @@ export function parseRoute(search: string, hash: string): StudioRoute {
     draft: value(params.get('draft')),
     anchor: ANCHOR_RE.test(rawAnchor) ? rawAnchor : '',
   }
+}
+
+/** `space~dir` → `[space, dir]`; a bare dir is in `default` (§0.1). */
+export function splitIntentKey(key: string): [string, string] {
+  if (!key) return ['', '']
+  const at = key.indexOf('~')
+  return at < 0 ? [DEFAULT_SPACE, key] : [key.slice(0, at), key.slice(at + 1)]
 }
 
 /**
@@ -122,7 +132,7 @@ export function buildRoute(patch: RoutePatch, base?: StudioRoute): string {
     // Slack and the notification adapter already sent out.
     if (name === 'view' && raw === DEFAULT_VIEW && !merged.action) continue
     if (name === 'tab' && raw === DEFAULT_TAB) continue
-    // `space` is re-derived as `default` by `parseRoute` whenever an intent is named, so writing it is
+    // `space` is re-derived from the key by `parseRoute` whenever an intent is named, so writing `default` is
     // noise; without an intent it is a filter and must survive.
     if (name === 'space' && raw === DEFAULT_SPACE && merged.intent) continue
     if (!VALUE_RE.test(raw)) continue

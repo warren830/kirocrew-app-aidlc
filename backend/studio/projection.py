@@ -266,7 +266,8 @@ class StageEvidence:
     questions: "QuestionsFile | None"
     review_unreadable: bool = False
     acceptance_criteria: tuple[str, ...] = ()
-    artifact_dir_rel: str | None = None
+    #: Where the stage's outputs are, when not `stage_dir_rel`: one code knowledge base store per repository.
+    artifact_dirs_rel: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -313,7 +314,7 @@ class IntentSnapshot:
     review_unreadable: bool = False
     #: Evidence for every open boundary row that is NOT `stage`; empty for the usual single-boundary intent.
     other_stage_evidence: "Mapping[str, StageEvidence]" = dataclasses_field(default_factory=dict)
-    artifact_dir_rel: str | None = None
+    artifact_dirs_rel: tuple[str, ...] = ()
     # Internal read evidence for audit questions, including after the pending question disappears.
     audit_question_attempt: tuple[str | None, bool] | None = None
 
@@ -323,7 +324,7 @@ class IntentSnapshot:
         if slug is not None and slug != self.stage and slug in self.other_stage_evidence:
             return self.other_stage_evidence[slug]
         return StageEvidence(self.stage_dir_rel, self.stage_artifacts, self.review, self.questions,
-                             self.review_unreadable, self.acceptance_criteria, self.artifact_dir_rel)
+                             self.review_unreadable, self.acceptance_criteria, self.artifact_dirs_rel)
 
     @property
     def state_sha256(self) -> str | None:
@@ -654,7 +655,7 @@ class Projection:
             canonical_path=repo.canonical_path, engine_dir=engine_dir, stage=stage, unit=unit,
             stage_dir_rel=current.stage_dir_rel, units=units, cursor=cursor, active_space=active_space,
             layout=self._reader.layout(root), acceptance_criteria=current.acceptance_criteria,
-            other_stage_evidence=others, artifact_dir_rel=current.artifact_dir_rel,
+            other_stage_evidence=others, artifact_dirs_rel=current.artifact_dirs_rel,
             audit_question_attempt=audit_question_attempt,
         )
 
@@ -696,12 +697,11 @@ class Projection:
         if stage_dir_rel is None:
             return StageEvidence(None, (), None, questions)
         # Reverse engineering writes shared repository knowledge; its questions and notes stay in the record.
-        artifact_dir_rel = stage_dir_rel
+        artifact_dirs_rel = (stage_dir_rel,)
         if C.artifact_output_location(node) == "codekb":
-            artifact_dir_rel = f"aidlc/spaces/{space}/codekb/{root.name}"
-        artifacts, artifacts_capped = _capped(
-            lambda: tuple(self._reader.stage_artifacts(root, artifact_dir_rel, node)), ()
-        )
+            artifact_dirs_rel = self._reader.codekb_stores(root, space, intent_dir)
+        artifacts, artifacts_capped = _capped(lambda: tuple(
+            meta for rel in artifact_dirs_rel for meta in self._reader.stage_artifacts(root, rel, node)), ())
         review, review_capped = _capped(
             lambda: self._review_of(root, artifacts, node, space=space, intent_dir=intent_dir, slug=slug, unit=unit,
                                     events=events), None)
@@ -722,7 +722,7 @@ class Projection:
             meta = _capped(lambda: self._reader.read_stage_file(root, engine_dir, phase, slug or ""), None)[0]
             criteria = tuple(meta.acceptance_criteria) if meta is not None else ()
         return StageEvidence(stage_dir_rel, artifacts, review, questions, review_capped or artifacts_capped,
-                             criteria, artifact_dir_rel)
+                             criteria, artifact_dirs_rel)
 
     def _stage_dir_rel(
         self, space: str, intent_dir: str, state: StateFile | None, node: StageNode | None, stage: str | None,
@@ -1534,9 +1534,9 @@ class Projection:
         for node in snap.graph:
             if C.artifact_output_location(node) != "codekb":
                 continue
-            output_dir = f"aidlc/spaces/{snap.space}/codekb/{root.name}"
-            for meta in self._reader.stage_artifacts(root, output_dir, node):
-                found[meta.relpath] = meta
+            for output_dir in self._reader.codekb_stores(root, snap.space, snap.intent_dir):
+                for meta in self._reader.stage_artifacts(root, output_dir, node):
+                    found[meta.relpath] = meta
         ordered = sorted(found.values(), key=lambda meta: meta.relpath)
         truncated = bool(getattr(metas, "truncated", False)) or len(ordered) > C.MAX_ARTIFACTS_PER_INTENT
         return (ordered[:C.MAX_ARTIFACTS_PER_INTENT], truncated)

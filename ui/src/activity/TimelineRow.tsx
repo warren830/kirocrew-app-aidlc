@@ -86,7 +86,12 @@ export function timeOfDay(locale: string, iso: string): string {
 
 /** A stable identity for one row, used to keep the drawer pointed at the same record across refetches. */
 export function entryKey(entry: TimelineEntry): string {
-  return entry.id !== null ? `id:${entry.id}` : `at:${entry.at}:${entry.kind}:${entry.message_key}`
+  if (entry.id !== null) return `id:${entry.id}`
+  // An audit row has no id, and one turn writes several blocks of a kind in the same second; its place in its
+  // shard is what tells them apart.
+  const audit = entry.refs.audit
+  const place = audit ? `${audit.shard}:${audit.pos ?? ''}` : ''
+  return `at:${entry.at}:${entry.kind}:${entry.message_key}:${place}`
 }
 
 export interface TimelineRowProps {

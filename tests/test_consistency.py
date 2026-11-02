@@ -505,6 +505,26 @@ def test_audit_gate_without_checkbox(ev, make_facts, gate_state, gate_audit):
                                                           audit_shards=(gate_audit,)))
 
 
+def test_a_team_owned_unit_gate_is_not_a_checkbox_contradiction(ev, make_facts):
+    """Under ``Unit Ownership: team`` the engine opens a Unit's gate in the audit and the ``## Unit Progress`` grid;
+    the stage's checkbox is derived from that grid and stays ``[-]``. Read as a contradiction, it blocked the intent
+    behind a recovery card that could not clear it. A unitless gate on that row still contradicts it."""
+    state = F.state_text(marks={"functional-design": "-"}, fields={
+        "Current Stage": "functional-design", "Status": "Running", "Lifecycle Phase": "CONSTRUCTION"})
+    team = F.insert_runtime_field(F.insert_runtime_field(state, "Unit Ownership", "team"),
+                                  "Construction Iteration", "unit-major")
+
+    def gate(state_text: str, **unit: str):
+        audit = F.audit_text(
+            F.audit_block("STAGE_STARTED", "2026-09-04T09:00:02Z", Stage="functional-design"),
+            F.audit_block("STAGE_AWAITING_APPROVAL", "2026-09-04T09:00:03Z", Stage="functional-design", **unit))
+        return _codes(ev(state_text, make_facts(), audit_shards=(audit,)))
+
+    assert "audit_gate_without_checkbox" not in gate(team, Unit="billing", Gate_Scope="per-stage")
+    assert "audit_gate_without_checkbox" in gate(team)
+    assert "audit_gate_without_checkbox" in gate(state, Unit="billing", Gate_Scope="per-stage")
+
+
 def test_missing_required_artifact(ev, make_facts, gate_state, gate_audit, graph):
     facts = make_facts(engine_state_version=7)
     stage_dir = f"aidlc/spaces/default/intents/{F.PAYLOAD_GATE_OPEN}/inception/requirements-analysis"

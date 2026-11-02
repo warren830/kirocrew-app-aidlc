@@ -105,8 +105,15 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
         )
       } else if (pending === 'archive') {
         // PRD §11.2 archives from Paused: one confirmation names both steps, so nothing happens unasked.
-        if (archiveNeedsPause) await api.pause(intent.repo_id, intent.intent_key, true)
-        await api.archive(intent.repo_id, intent.intent_key, true)
+        const paused = archiveNeedsPause ? await api.pause(intent.repo_id, intent.intent_key, true) : null
+        try {
+          await api.archive(intent.repo_id, intent.intent_key, true)
+        } catch (caught) {
+          // The pause stood though the archive was refused: the row has to be read again and say so, or it
+          // shows an intent that still dispatches.
+          if (paused) onChanged(plural(i18n, 'intents.paused.done', paused.blocked_actions.length))
+          throw caught
+        }
         onChanged(t('intents.archived.done'))
       } else {
         await api.archive(intent.repo_id, intent.intent_key, false)

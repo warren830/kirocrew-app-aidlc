@@ -257,6 +257,16 @@ describe('buildMap', () => {
     })), 'code-generation').units.map((unit) => unit.state)).toEqual(['not_started', 'completed', 'not_started'])
   })
 
+  it('gives every unit of a stage that will never run its state, unless the unit holds a file of its own', () => {
+    const code = artifactMeta({ artifact_id: 'a1', name: 'code.md', stage: 'code-generation', unit: 'refunds' })
+    const inputs = planned({}, { units: ['ledger-export', 'refunds', 'audit-log'], active_unit: 'ledger-export', artifacts: [code] })
+    const units = (map: MapInputs) => stage(buildMap(map), 'code-generation').units.map((unit) => unit.state)
+    expect(units(withRow(inputs, stageRow('code-generation', 'skipped', { suffix: 'SKIP' }))))
+      .toEqual(['skipped', 'completed', 'skipped'])
+    expect(units({ ...inputs, rows: inputs.rows.filter((row) => row.slug !== 'code-generation') }))
+      .toEqual(['excluded', 'completed', 'excluded'])
+  })
+
   it('measures the latest attempt: to the end when it ended, to the server\'s now while in flight', () => {
     const model = buildMap(planned(
       { 'requirements-analysis': 'awaiting_approval', 'workspace-scaffold': 'completed', 'user-stories': 'in_progress' },

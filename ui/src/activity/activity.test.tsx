@@ -10,15 +10,17 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { apiCalls, setApiRoutes } from '../test/stubs/app-sdk'
 import { EMPTY_ROUTE } from '../lib/route'
+import { BusContext, type StreamEvent } from '../lib/sse'
 import type { ActivityResponse, SettingsResponse, TimelineEntry } from '../lib/types'
 import { ActivityView } from './ActivityView'
-import { messageOf } from './TimelineRow'
-import { makeI18n } from '../i18n'
+import { Timeline } from './Timeline'
+import { entryKey, messageOf } from './TimelineRow'
+import { I18nProvider, makeI18n } from '../i18n'
 import { ExportPanel } from './ExportPanel'
 
 const entry = (over: Partial<TimelineEntry>): TimelineEntry => ({
@@ -381,5 +383,92 @@ describe('one intent\'s timeline', () => {
     await userEvent.click(older)
     await waitFor(() => expect(apiCalls.some((call) => call.path.includes('cursor=t%3A'))).toBe(true))
     expect(screen.queryByText(/most recent events read/)).toBeNull()
+  })
+})
+
+describe('which intent a timeline reads', () => {
+  it('asks for the space the intent key names, whatever space the route carries', async () => {
+    activityRoutes([])
+    // A link that named only the key used to land here with the default space.
+    render(<ActivityView route={{ ...EMPTY_ROUTE, view: 'activity', repo: 'r_1', space: 'default', intent: 'feature~250901-x' }}
+      go={vi.fn()} />)
+    await waitFor(() => expect(apiCalls.some((call) => call.path.includes('/activity'))).toBe(true))
+    const query = new URLSearchParams(apiCalls.find((call) => call.path.includes('/activity'))!.path.split('?')[1])
+    expect([query.get('intent'), query.get('space')]).toEqual(['feature~250901-x', 'feature'])
+  })
+})
+
+describe('paging the timeline', () => {
+  const row = (id: number): TimelineEntry => entry({
+    id, at: `2026-09-05T10:${String(id).padStart(2, '0')}:00+00:00`, kind: 'repo.added',
+    message_key: 'activity.repo.added', params: { label: `row-${id}` },
+  })
+
+  it('goes Older from the boundary the page now ends at, after rows arrived while an older page was open', async () => {
+    // Pages of three, newest first; a cursor is the id of the last row shown.
+    let newest = 6
+    setApiRoutes({
+      'GET /api/apps/aidlc-studio/activity*': (_body: unknown, path?: string) => {
+        const cursor = new URLSearchParams(String(path ?? '').split('?')[1] ?? '').get('cursor')
+        const ids: number[] = []
+        for (let id = cursor === null ? newest : Number(cursor) - 1; id >= 1 && ids.length < 3; id--) ids.push(id)
+        const last = ids[ids.length - 1]!
+        return { items: ids.map(row), next_cursor: last > 1 ? String(last) : null }
+      },
+      'GET /api/apps/aidlc-studio/settings': () => SETTINGS,
+    } as never)
+    renderActivity()
+    const older = await screen.findByRole('button', { name: /Older/ })
+    await waitFor(() => expect(older).toBeEnabled())
+    await userEvent.click(older)
+    await screen.findByText('Page 2')
+    newest = 8
+    await userEvent.click(screen.getByRole('button', { name: /Newer/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /Older/ })).toBeEnabled())
+    await userEvent.click(screen.getByRole('button', { name: /Older/ }))
+    // The first page is now 8, 7, 6: Older continues before 6, or 5 and 4 would be on no page at all.
+    const cursors = () => apiCalls.filter((call) => call.path.includes('/activity'))
+      .map((call) => new URLSearchParams(call.path.split('?')[1]).get('cursor'))
+    await waitFor(() => expect(cursors().at(-1)).not.toBeNull())
+    expect(cursors().at(-1)).toBe('6')
+  })
+})
+
+describe('two audit rows in the same second', () => {
+  const audit = (stage: string, pos: number): TimelineEntry => entry({
+    id: null, at: '2026-08-20T08:02:11+00:00', source: 'aidlc', kind: 'STAGE_STARTED',
+    message_key: 'audit.STAGE_STARTED', params: { stage, event: 'STAGE_STARTED' },
+    refs: { audit: { shard: 'audit.md', pos, event: 'STAGE_STARTED' } }, raw: `block ${pos}`,
+  })
+
+  it('are keyed, and selected, one at a time', () => {
+    const first = audit('workspace-detection', 10)
+    const second = audit('reverse-engineering', 11)
+    expect(entryKey(first)).not.toBe(entryKey(second))
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const view = render(
+      <I18nProvider>
+        <Timeline entries={[first, second]} selectedKey={entryKey(first)} onOpenEvidence={() => {}} />
+      </I18nProvider>,
+    )
+    expect(view.container.querySelectorAll('[aria-current="true"]')).toHaveLength(1)
+    expect(errors.mock.calls.some((call) => String(call[0]).includes('same key'))).toBe(false)
+  })
+})
+
+describe('a timeline left open', () => {
+  it('reads one intent\'s timeline again when that intent changes, since its audit rows write no Studio row', async () => {
+    activityRoutes([AIDLC_ROW])
+    const handlers = new Set<(event: StreamEvent) => void>()
+    const bus = { subscribe: (h: (event: StreamEvent) => void) => (handlers.add(h), () => void handlers.delete(h)) }
+    render(
+      <BusContext.Provider value={bus}>
+        <ActivityView route={{ ...EMPTY_ROUTE, view: 'activity', repo: 'r_1', intent: '260904-gate-demo' }} go={vi.fn()} />
+      </BusContext.Provider>,
+    )
+    const reads = () => apiCalls.filter((call) => call.path.includes('/activity')).length
+    await waitFor(() => expect(reads()).toBe(1))
+    act(() => handlers.forEach((h) => h({ type: 'intent.updated', seq: 1, payload: {} })))
+    await waitFor(() => expect(reads()).toBe(2))
   })
 })

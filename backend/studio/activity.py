@@ -17,6 +17,7 @@ the workflow did, and the boundary between them is never blurred.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
 import heapq
 import re
@@ -246,9 +247,10 @@ def _normalise_evidence(evidence: Any) -> tuple[EvidenceRef, ...]:
 class ActivityProjector:
     """Records Studio's own activity, projects AI-DLC's live, and never confuses the two."""
 
-    def __init__(self, storage: "Storage", clock: "Clock") -> None:
+    def __init__(self, storage: "Storage", clock: "Clock", events: Any = None) -> None:
         self._storage = storage
         self._clock = clock
+        self._events = events
 
     def record_sync(
         self,
@@ -296,8 +298,17 @@ class ActivityProjector:
         return int(self._storage.activity_append(row))
 
     async def record(self, **fields: Any) -> int:
-        """``record_sync`` on a worker thread; loop-safe. A misspelled keyword fails at the caller's await."""
-        return await asyncio.to_thread(self.record_sync, **fields)
+        """``record_sync`` on a worker thread; loop-safe. A misspelled keyword fails at the caller's await.
+
+        The new row is announced as ``activity.appended``, which is what an open Activity page reads again on; a
+        hint that could not be published costs one poll interval, never the row.
+        """
+        row_id = await asyncio.to_thread(self.record_sync, **fields)
+        if self._events is not None:
+            with contextlib.suppress(StudioError, ValueError):
+                await self._events.publish("activity.appended", {
+                    "id": row_id, "kind": fields.get("kind"), "repo_id": fields.get("repo_id")})
+        return row_id
 
     async def query(self, q: ActivityQuery) -> tuple[list[ActivityRow], str | None]:
         """One page of Studio rows, newest first, plus the cursor for the next page."""
@@ -379,7 +390,7 @@ class ActivityProjector:
                 until=after[0] if after is not None and (until is None or (instant_epoch(after[0]) or 0) < until)
                 else q.until,
                 limit=min(2 * width + 1, int(C.ACTIVITY_MAX_LIMIT)),
-            ))
+            ), by_time=True)
             for row in rows:
                 if wanted is not None and row.source not in wanted:
                     continue

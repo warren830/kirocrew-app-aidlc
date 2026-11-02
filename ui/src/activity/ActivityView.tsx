@@ -23,7 +23,7 @@ import { useI18n } from '../i18n'
 import { useStudioApi, type ActivityFilter } from '../lib/api'
 import { ACTION_TYPES, SEVERITIES, SOURCES } from '../lib/enums.generated'
 import { plural } from '../lib/format'
-import { DEFAULT_SPACE, type Navigate, type StudioRoute } from '../lib/route'
+import { splitIntentKey, type Navigate, type StudioRoute } from '../lib/route'
 import type { ActivityResponse, SettingsResponse, TimelineEntry } from '../lib/types'
 import { useResource } from '../lib/useResource'
 import { Icon } from '../shell/Icon'
@@ -34,6 +34,9 @@ import { entryKey } from './TimelineRow'
 
 /** One page of history. The backend clamps to its own maximum; this is the request. */
 const PAGE_LIMIT = 200
+
+/** What changes any page of Activity: a Studio row was written, or a card moved. */
+const LIVE_EVENTS = ['activity.appended', 'action.created', 'action.updated', 'reset'] as const
 
 interface Filters {
   source: string
@@ -85,8 +88,9 @@ export function ActivityView({ route, go }: ActivityViewProps) {
     const base: ActivityFilter = { limit: PAGE_LIMIT }
     if (route.repo) base.repo = route.repo
     if (route.intent) {
+      // The key's own space, whatever the route says: the same directory name can exist in two spaces.
       base.intent = route.intent
-      base.space = route.space || DEFAULT_SPACE
+      base.space = splitIntentKey(route.intent)[0]
     } else if (route.space) {
       base.space = route.space
     }
@@ -107,7 +111,9 @@ export function ActivityView({ route, go }: ActivityViewProps) {
   const activity = useResource<ActivityResponse>(
     key,
     useCallback((signal) => api.activity(query, { signal }), [api, query]),
-    { revalidateOn: ['activity.appended', 'action.created', 'action.updated', 'reset'] },
+    // AI-DLC's half of a merged timeline is read from its audit shards and writes no Studio row, so only the
+    // intent's own change says it grew.
+    { revalidateOn: merged ? [...LIVE_EVENTS, 'intent.updated'] : LIVE_EVENTS },
   )
 
   // Only read for the export gate: whether the backend will accept `include_human_text` at all. Shares the
@@ -132,7 +138,9 @@ export function ActivityView({ route, go }: ActivityViewProps) {
 
   const older = () => {
     if (!nextCursor) return
-    setCursors((prev) => (prev.length > page + 1 ? prev : [...prev, nextCursor]))
+    // Always this page's own boundary: rows that arrived since an older page was read pushed this page's end
+    // down, and the cursor stored for the next page would skip the rows pushed past it.
+    setCursors((prev) => [...prev.slice(0, page + 1), nextCursor])
     setPage((n) => n + 1)
   }
 

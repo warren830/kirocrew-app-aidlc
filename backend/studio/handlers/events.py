@@ -58,8 +58,10 @@ async def activity(services: Any, request: web.Request) -> web.Response:
     q = dataclasses.replace(q, since=_wire_instant(q.since, "since"), until=_wire_instant(q.until, "until"))
     intent = query_str(request, "intent")
     if intent:
+        # The key names its own space; a ``space`` beside it is at best the same word. Preferring it read
+        # ``space=default&intent=feature~x`` as the default space's ``x``: another intent's history.
         intent_space, intent_dir = parse_intent_key(intent)
-        q = dataclasses.replace(q, space=q.space or intent_space, intent_dir=intent_dir)
+        q = dataclasses.replace(q, space=intent_space, intent_dir=intent_dir)
 
     if q.repo_id and q.intent_dir:
         repo = await repo_or_404(services, q.repo_id)

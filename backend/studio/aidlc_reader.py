@@ -105,6 +105,10 @@ SCOPES_DIRNAME = "scopes"
 SCOPE_FILE_PREFIX = "aidlc-"
 STAGES_REL = "aidlc-common/stages"
 QUESTIONS_SUFFIX = "-questions.md"
+#: The space-level code knowledge base, one store per repository (``codekbDir``).
+CODEKB_DIRNAME = "codekb"
+#: The engine's ``REPO_NAME_REGEX``: a store or recorded repository is one path segment.
+_REPO_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 #: Build manifests whose *presence* says what kind of project this is (FR-ADV-003); never opened.
 WORKSPACE_MANIFESTS: tuple[str, ...] = (
@@ -2434,6 +2438,23 @@ class AidlcReader:
             return f"{record}/construction/{unit}/{slug}"
         return f"{record}/{phase}/{slug}"
 
+    def codekb_stores(self, repo: Path, space: str, intent_dir: str) -> tuple[str, ...]:
+        """The code knowledge base stores an intent's reverse engineering fills, where the engine's gate looks for
+        them (``producesDirsForStage``): one per repository the intent records, else the one ``codekbRepoName``
+        names for the project folder. Keyed by the folder's own name, Studio missed every store the engine named
+        otherwise and held the gate on nine artifacts that were all on disk."""
+        codekb = f"{WORKSPACE_DIRNAME}/{SPACES_DIRNAME}/{space}/{CODEKB_DIRNAME}"
+        path = security.resolve_inside(repo, f"{self.intents_rel(space)}/{INTENTS_REGISTRY_FILENAME}")
+        data = security.bounded_read(path, C.MAX_JSON_BYTES) or b""
+        rows = parse_intents_json(data)
+        row = match_intent_row(rows, intent_dir)
+        recorded = dict.fromkeys(name for name in (row.repos if row is not None else ()) if _REPO_NAME_RE.match(name))
+        if recorded:
+            return tuple(f"{codekb}/{name}" for name in recorded)
+        name = _main_checkout_name(repo) or repo.name
+        moved = _moved_folder_store(repo, codekb, _json_loads(data), rows, row, name)
+        return (f"{codekb}/{moved or name}",)
+
     def read_questions(self, repo: Path, stage_dir_rel: str, slug: str) -> QuestionsFile | None:
         rel = f"{stage_dir_rel}/{slug}{QUESTIONS_SUFFIX}"
         path = security.resolve_inside(repo, rel)
@@ -2863,6 +2884,47 @@ def _iterdir(path: Path) -> list[Path]:
         return list(path.iterdir())
     except OSError:
         return []
+
+
+def _main_checkout_name(repo: Path) -> str | None:
+    """The main checkout's folder name when ``repo`` is a linked git worktree (``mainCheckoutRepoName``).
+
+    Read from the files ``git rev-parse`` resolves instead of running git, which the read model never does: a
+    worktree's ``.git`` file names its git dir, and only a worktree's git dir has a ``commondir`` leading back to
+    the main repository's. Only the folder's own ``.git`` is read, never a parent's (FR-REP-002).
+    """
+    pointer = security.bounded_text(repo / ".git", C.MAX_TEXT_PREVIEW_BYTES)
+    lines = pointer.splitlines() if pointer else []
+    if not lines or not lines[0].startswith("gitdir:"):
+        return None
+    git_dir = security.realpath(repo / lines[0][len("gitdir:"):].strip())
+    common = (security.bounded_text(git_dir / "commondir", C.MAX_TEXT_PREVIEW_BYTES) or "").strip()
+    if not common:
+        return None
+    common_dir = security.realpath(git_dir / common)
+    return (common_dir.parent.name or None) if common_dir != git_dir else None
+
+
+def _moved_folder_store(
+    repo: Path, codekb_rel: str, registry: Any, rows: list[IntentRow], row: IntentRow | None, name: str
+) -> str | None:
+    """``movedFolderStoreName``: a moved or renamed project folder keeps the one store in the space no intent's
+    recorded repos claim. Two such stores are ambiguous, and a registry without this intent's row or with a
+    malformed entry cannot say which stores the others own; all three keep the folder's name."""
+    try:
+        root = security.resolve_inside(repo, codekb_rel)
+    except StudioError:
+        return None
+    if row is None or (root / name).exists():
+        return None
+    if not isinstance(registry, list) or not all(
+        isinstance(entry, dict) and ("repos" not in entry or isinstance(entry["repos"], list)) for entry in registry
+    ):
+        return None
+    claimed = {repo_name for entry in rows for repo_name in entry.repos}
+    stores = [entry.name for entry in _iterdir(root) if not entry.is_symlink() and entry.is_dir()
+              and _REPO_NAME_RE.match(entry.name) and entry.name not in claimed]
+    return stores[0] if len(stores) == 1 else None
 
 
 def _mtime_ns(path: Path) -> int | None:

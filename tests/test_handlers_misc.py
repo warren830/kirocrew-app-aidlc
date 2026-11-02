@@ -449,6 +449,27 @@ def test_activity_merges_the_audit_trail_for_one_intent(sv, ocall, gate_repo):
     assert body["next_cursor"] is None
 
 
+def test_activity_reads_the_space_an_intent_key_names_over_a_space_beside_it(sv, ocall, gate_repo):
+    """``space=default&intent=feature~x`` is what a link naming only the key used to produce: the default space's
+    ``x`` is another intent, and its history is not this one's."""
+    repo = sv.repos.add(str(gate_repo), "demo")
+    for space, kind in (("feature", "intent.paused"), ("default", "intent.archived")):
+        asyncio.run(sv.activity.record(kind=kind, repo_id=repo.repo_id, space=space, intent_dir="260904-gate-demo",
+                                       params={}))
+    status, body = ocall("GET", "/activity", query={"repo": repo.repo_id, "intent": "feature~260904-gate-demo",
+                                                     "space": "default", "source": "studio"})
+    assert status == 200
+    assert [item["kind"] for item in body["items"]] == ["intent.paused"]
+
+
+def test_recording_a_row_announces_it_to_open_activity_pages(sv, ocall):
+    cursor = asyncio.run(sv.events.poll())["cursor"]
+    row_id = asyncio.run(sv.activity.record(kind="repo.added", repo_id="r_000000000001", params={"label": "demo"}))
+    _status, body = ocall("GET", "/events/poll", query={"cursor": str(cursor)})
+    assert [(event["type"], event["payload"]) for event in body["events"]] == [
+        ("activity.appended", {"id": row_id, "kind": "repo.added", "repo_id": "r_000000000001"})]
+
+
 @pytest.mark.parametrize("query", [{"severity": "urgent"}, {"cursor": "!!!"}])
 def test_activity_refuses_an_unknown_severity_filter_or_a_malformed_cursor(ocall, query):
     status, body = ocall("GET", "/activity", query=query)

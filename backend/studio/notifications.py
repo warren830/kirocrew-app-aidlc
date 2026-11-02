@@ -80,6 +80,11 @@ def _intent_scope(repo_id: str, intent_key: str) -> dict:
     return {"repo_id": _text(repo_id) or None, "space": space or None, "intent_dir": intent_dir or None}
 
 
+def _status_class(status: str) -> str:
+    """A card's notification class: the dedupe ledger's key is ``action_id:class``, one notification per class."""
+    return "uncertain" if status in _UNCERTAIN_STATUSES else "open"
+
+
 def _text(value: Any, limit: int | None = None) -> str:
     out = "" if value is None else str(value)
     return out[: limit - 1].rstrip() + "…" if limit is not None and len(out) > limit else out
@@ -118,11 +123,16 @@ class NotificationAdapter:
         return f"{C.DEEP_LINK_BASE}?view=actions&action={_text(action_id)}"
 
     def _intent_link(self, repo_id: str, intent_key: str) -> str:
-        return f"{C.DEEP_LINK_BASE}?view=intents&repo={_text(repo_id)}&intent={_text(intent_key)}"
+        """The intent's own space travels with it, as the UI's ``buildRoute`` writes it: only ``default`` is left
+        out, so a link to ``feature~x`` can never open the default space's ``x``."""
+        space = _intent_scope(repo_id, intent_key)["space"]
+        scope = f"&space={space}" if space and space != C.DEFAULT_SPACE else ""
+        return f"{C.DEEP_LINK_BASE}?view=intents&repo={_text(repo_id)}{scope}&intent={_text(intent_key)}"
 
-    async def announced(self, action_id: str) -> bool:
-        """Whether this card's open-class notification already went out, so a scan need not render it to ask."""
-        return f"{_text(action_id)}:open" in await asyncio.to_thread(self._read_ledger)
+    async def announced(self, action_id: str, status: str = "Queued") -> bool:
+        """Whether this card's notification for the class ``status`` falls in already went out, so a scan need not
+        render it to ask. A card announced open is still news the first time its delivery becomes uncertain."""
+        return f"{_text(action_id)}:{_status_class(status)}" in await asyncio.to_thread(self._read_ledger)
 
     async def notify(self, kind: str, subject: Any = None, **fields: Any) -> NotificationResult:
         """The one entry point, at most once per dedupe key:
@@ -172,9 +182,8 @@ class NotificationAdapter:
             context += f" · waiting since {waiting}"
         blocks = _blocks(heading, context, _text(headline, _SECTION_LIMIT), f"Decide in Studio: {link}")
 
-        status_class = "uncertain" if _text(_get(card, "status")) in _UNCERTAIN_STATUSES else "open"
         return _Message(
-            kind=card_type, dedupe_key=f"{action_id}:{status_class}", link=link,
+            kind=card_type, dedupe_key=f"{action_id}:{_status_class(_text(_get(card, 'status')))}", link=link,
             title=_text(title, 150), body=_text(body, _BODY_LIMIT),
             severity=_text(_get(card, "severity")) or "info", action_id=action_id, repo_id=repo_id,
             slack=(blocks, _text(heading, 150)),

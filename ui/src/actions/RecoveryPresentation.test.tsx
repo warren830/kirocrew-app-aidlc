@@ -188,7 +188,7 @@ describe('recovery notices explain the actual cause and lifecycle', () => {
     expect(screen.getByRole('region', { name: 'Delivery state' }).querySelector('[data-state="now"]')).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: 'View current actions' }))
     expect(go).toHaveBeenLastCalledWith({
-      ...EMPTY_ROUTE, view: 'actions', repo: card.repo.repo_id, intent: card.intent.intent_key,
+      ...EMPTY_ROUTE, view: 'actions', repo: card.repo.repo_id, space: card.space, intent: card.intent.intent_key,
     })
     expect(apiCalls.filter((call) => call.method !== 'GET')).toEqual([])
   })

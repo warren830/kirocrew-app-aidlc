@@ -805,7 +805,7 @@
        "units": [
         {
          "artifacts": [],
-         "state": "not_started",
+         "state": "excluded",
          "unit": "health-probe"
         }
        ]
@@ -855,7 +855,7 @@
        "units": [
         {
          "artifacts": [],
-         "state": "not_started",
+         "state": "excluded",
          "unit": "health-probe"
         }
        ]
@@ -908,7 +908,7 @@
        "units": [
         {
          "artifacts": [],
-         "state": "not_started",
+         "state": "excluded",
          "unit": "health-probe"
         }
        ]
@@ -962,7 +962,7 @@
        "units": [
         {
          "artifacts": [],
-         "state": "not_started",
+         "state": "excluded",
          "unit": "health-probe"
         }
        ]

@@ -394,6 +394,11 @@ class ConsistencyEngine:
         stage = (_attr(snap, "stage") or "").strip()
         if stage not in C.PER_UNIT_STAGES or _attr(snap, "unit"):
             return []
+        directive = _attr(snap, "directive")
+        if (_attr(directive, "kind") == "invoke-swarm" and _attr(directive, "matches_state", False)
+                and _attr(directive, "stage") == stage and _attr(directive, "units", ())):
+            # A swarm builds a batch of units at once and names every one; no single unit is meant to be executing.
+            return []
         units = sorted(unit for unit in (_attr(snap, "units", ()) or ()) if unit)
         if len(units) < 2:
             return []
@@ -457,6 +462,7 @@ class ConsistencyEngine:
                 and _attr(latest_gate, "event") == "STAGE_AWAITING_APPROVAL"
                 and row is not None
                 and _attr(row, "state") in _NON_GATE_STAGE_STATES
+                and not _team_unit_gate(state, current, latest_gate)
             ):
                 out.append(self._finding(
                     "audit_gate_without_checkbox",
@@ -507,26 +513,30 @@ class ConsistencyEngine:
             return []
 
         artifacts = list(_attr(snap, "stage_artifacts", ()) or ())
-        present = set()
-        for meta in artifacts:
-            for candidate in (_attr(meta, "name"), (_attr(meta, "relpath") or "").rsplit("/", 1)[-1]):
-                if candidate:
-                    present.add(candidate)
-                    present.add(candidate.rsplit(".", 1)[0])
-        stage_dir = self._stage_dir_rel(snap, node, artifacts)
+        stage_dirs = self._artifact_dirs_rel(snap, node, artifacts)
 
         out: list[Finding] = []
-        for name in required:
-            expected_name = C.ARTIFACT_FILENAME_ALIASES.get(name, name)
-            if expected_name in present:
-                continue
-            out.append(self._finding(
-                "missing_required_artifact",
-                {"stage": current, "artifact": name, "stage_dir": stage_dir,
-                 "present": sorted(_attr(m, "name") or "" for m in artifacts)},
-                (EvidenceRef("file", self._graph_rel(snap), f"{current} produces {name}"),
-                 EvidenceRef("file", stage_dir, f"no regular file for {expected_name} in this directory")),
-            ))
+        for stage_dir in stage_dirs:
+            # The engine's gate wants every output in each repository's store, so one store cannot fill another.
+            held = artifacts if len(stage_dirs) == 1 else [
+                m for m in artifacts if (_attr(m, "relpath") or "").rsplit("/", 1)[0] == stage_dir]
+            present = set()
+            for meta in held:
+                for candidate in (_attr(meta, "name"), (_attr(meta, "relpath") or "").rsplit("/", 1)[-1]):
+                    if candidate:
+                        present.add(candidate)
+                        present.add(candidate.rsplit(".", 1)[0])
+            for name in required:
+                expected_name = C.ARTIFACT_FILENAME_ALIASES.get(name, name)
+                if expected_name in present:
+                    continue
+                out.append(self._finding(
+                    "missing_required_artifact",
+                    {"stage": current, "artifact": name, "stage_dir": stage_dir,
+                     "present": sorted(_attr(m, "name") or "" for m in held)},
+                    (EvidenceRef("file", self._graph_rel(snap), f"{current} produces {name}"),
+                     EvidenceRef("file", stage_dir, f"no regular file for {expected_name} in this directory")),
+                ))
         return out
 
     # ---- Studio rows -------------------------------------------------- #
@@ -672,18 +682,20 @@ class ConsistencyEngine:
         engine_dir = _attr(_attr(snap, "engine"), "dir") or C.STUDIO_HARNESS_DIR
         return f"{engine_dir}/{STAGE_GRAPH_REL}"
 
-    def _stage_dir_rel(
+    def _artifact_dirs_rel(
         self, snap: "IntentSnapshot", node: "StageNode", artifacts: Sequence[Any]
-    ) -> str:
-        resolved = _attr(snap, "artifact_dir_rel") or _attr(snap, "stage_dir_rel")
+    ) -> tuple[str, ...]:
+        resolved = tuple(_attr(snap, "artifact_dirs_rel", ()) or ())
         if resolved:
-            return str(resolved)
+            return resolved
+        if _attr(snap, "stage_dir_rel"):
+            return (str(_attr(snap, "stage_dir_rel")),)
         for meta in artifacts:
             relpath = _attr(meta, "relpath") or ""
             if "/" in relpath:
-                return relpath.rsplit("/", 1)[0]
+                return (relpath.rsplit("/", 1)[0],)
         phase = (_attr(node, "phase") or "").strip().lower()
-        return f"{self._record_rel(snap)}/{phase}/{_attr(node, 'slug')}"
+        return (f"{self._record_rel(snap)}/{phase}/{_attr(node, 'slug')}",)
 
 
 # ---- module-private functions ----------------------------------------------- #
@@ -725,6 +737,13 @@ def _audit_ref(event: Any) -> EvidenceRef:
         f"{_attr(event, 'shard') or ''}#{_attr(event, 'pos', 0)}",
         f"{_attr(event, 'event')} {_attr(event, 'timestamp')}",
     )
+
+
+def _team_unit_gate(state: Any, stage: str, event: Any) -> bool:
+    """A team-owned Unit's gate (``Unit Ownership: team``). The engine records it in the audit and the derived
+    ``## Unit Progress`` grid only; the stage's own checkbox is a projection of that grid and never reads ``[?]``."""
+    ownership = (((_attr(state, "sections", {}) or {}).get("Runtime State") or {}).get("Unit Ownership") or "").strip()
+    return ownership == "team" and stage in C.PER_UNIT_STAGES and bool((_attr(event, "fields", {}) or {}).get("Unit"))
 
 
 def _unit_of_path(relpath: str | None, units: Sequence[str]) -> str | None:

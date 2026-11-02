@@ -1478,12 +1478,12 @@ def test_stable_boundary_inputs_finds_a_per_unit_questions_file(reader, repo_bui
     assert reader.list_units(repo, "default", X) == ["unit-a"]
 
 
-def two_units(reader, studio, repo_builder, *holding_questions):
+def two_units(reader, studio, repo_builder, *holding_questions, directive=None):
     """``unit-a`` and ``unit-b`` and nothing naming the executing one: the boundary, units and findings."""
     repo = one_intent(repo_builder, state=PER_UNIT_GATE_STATE, audit=F.gate_open_audit("code-generation"),
                       questions={UNIT_QUESTIONS.format(unit): PLAN_APPROVAL_QUESTIONS for unit in holding_questions},
                       artifacts={f"construction/unit-{u}/code-generation/code-generation-plan.md": f"# {u}\n"
-                                 for u in "ab"})
+                                 for u in "ab"}, directive=directive)
     boundary, units = reader.stable_boundary_inputs(repo, "default", X), reader.list_units(repo, "default", X)
     snap = SimpleNamespace(space="default", intent_dir=X, intent_key=f"default/{X}", state_snap=boundary.state_snap,
                            state=boundary.state, directive=boundary.directive, audit=boundary.audit,
@@ -1512,6 +1512,17 @@ def test_the_only_unit_holding_questions_is_resolved_from_its_path_and_not_repor
     assert boundary.unit_ambiguous is False
     assert boundary.questions.relpath.endswith(UNIT_QUESTIONS.format("unit-b"))
     assert [finding.code for finding in findings if finding.code == "unit_ambiguous"] == []
+
+
+def test_a_swarm_that_names_the_units_it_builds_is_not_ambiguous(reader, studio, repo_builder):
+    """``invoke-swarm`` builds a batch of units at once and names all of them: no single unit is meant to be
+    executing, so the run is not blocked for its whole length. A directive the state has moved past names nothing."""
+    swarm = {"version": 2, "kind": "invoke-swarm", "stage": "code-generation", "units": ["unit-a", "unit-b"],
+             "state_sha256": "AUTO"}
+    _, _, _, findings = two_units(reader, studio, repo_builder, directive=swarm)
+    assert [finding.code for finding in findings if finding.code == "unit_ambiguous"] == []
+    _, _, _, findings = two_units(reader, studio, repo_builder, directive={**swarm, "state_sha256": "0" * 64})
+    assert [finding.code for finding in findings if finding.code == "unit_ambiguous"] == ["unit_ambiguous"]
 
 
 # --- artifacts and units ---

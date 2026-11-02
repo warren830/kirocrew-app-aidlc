@@ -162,16 +162,20 @@ function elapsed(inputs: MapInputs, slug: string, state: string): number | null 
  * a decision. While the row is open the unit's own lifecycle receipt says it best: under unit-major
  * iteration the row stays `[ ]` until every unit has walked the block, and the unit that finished NFR
  * Design read "Not started". Without one it falls back to two observable facts — whether it is the
- * state file's `Active Unit`, and whether its stage directory holds any file.
+ * state file's `Active Unit`, and whether its stage directory holds any file. A stage that will never
+ * run (skipped or excluded) leaves no unit anything to start, so a unit without a file of its own shares
+ * the stage's state.
  */
 function unitsOf(join: Join, slug: string, perUnit: boolean, state: MapStage['state']): MapUnit[] {
   const { inputs } = join
   if (!perUnit || !inputs.units.length) return []
   const receipts = state === 'completed' || state === 'skipped' ? undefined : own(inputs.unit_receipts, slug)
+  const neverRuns = state === 'skipped' || state === 'excluded'
   return inputs.units.map((unit) => {
     const artifacts = [...(join.artifacts.get(slug)?.get(unit) ?? [])]
     const receipt = receipts && own(receipts, unit)
-    const unitState = receipt ?? (unit === inputs.active_unit ? state : artifacts.length ? 'completed' : 'not_started')
+    const fallback = artifacts.length ? 'completed' : neverRuns ? state : 'not_started'
+    const unitState = receipt ?? (unit === inputs.active_unit ? state : fallback)
     return { unit, state: unitState, artifacts }
   })
 }

@@ -16,7 +16,7 @@ import type { ReactNode } from 'react'
 
 import { useI18n } from '../i18n'
 import { plural } from '../lib/format'
-import { DEFAULT_SPACE, type Navigate, type StudioRoute } from '../lib/route'
+import { DEFAULT_SPACE, splitIntentKey, type Navigate, type StudioRoute } from '../lib/route'
 import type { RepoRecord } from '../lib/types'
 import { Icon } from './Icon'
 
@@ -112,11 +112,4 @@ function Crumb({ route, repo }: { route: StudioRoute; repo: RepoRecord | null })
       ))}
     </span>
   )
-}
-
-/** `space~dir` → `[space, dir]`; a bare dir is in `default` (§0.1). */
-export function splitIntentKey(key: string): [string, string] {
-  if (!key) return ['', '']
-  const at = key.indexOf('~')
-  return at < 0 ? [DEFAULT_SPACE, key] : [key.slice(0, at), key.slice(at + 1)]
 }

@@ -34,14 +34,17 @@ describe('parseRoute', () => {
     expect(route.action).toBe('a_7712')
   })
 
-  it('derives the default space only when an intent is named', () => {
+  it('derives the space from the intent key, and keeps it as a filter only without one', () => {
     expect(parse('?intent=250901-guest-checkout').space).toBe('default')
     expect(parse('?repo=r_1').space).toBe('')
+    expect(parse('?space=team-b').space).toBe('team-b')
+    // A notification or a card's "open current" link names only the key: its space is the key's own.
     expect(parse('?intent=team-b~250901-guest-checkout')).toMatchObject({
-      space: 'default',
+      space: 'team-b',
       intent: 'team-b~250901-guest-checkout',
     })
     expect(parse('?space=team-b&intent=team-b~250901-guest-checkout').space).toBe('team-b')
+    expect(parse('?space=default&intent=team-b~250901-guest-checkout').space).toBe('team-b')
   })
 
   it('drops values that could change a URL or a path segment', () => {

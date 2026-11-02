@@ -15,7 +15,7 @@ import { Btn } from '@kirocrew/app-sdk/ui'
 
 import { useI18n } from '../i18n'
 import { plural } from '../lib/format'
-import type { Navigate, StudioRoute, View } from '../lib/route'
+import { DEFAULT_TAB, type Navigate, type StudioRoute, type View } from '../lib/route'
 import { APP_NAME, DEFAULT_APP_NAME } from '../lib/app'
 import { MANIFEST_APP_NAME } from '../lib/enums.generated'
 import { Chip } from './Chip'
@@ -86,7 +86,9 @@ export function TopBar({ route, go, queueCount, showBack, onBack }: TopBarProps)
               // `page`, not a boolean: the rail is the app's primary navigation, and a screen reader
               // announces "current page" from this attribute alone.
               {...(active ? { 'aria-current': 'page' as const } : {})}
-              onClick={() => go({ view })}
+              // The scope travels with the user; what one page had open does not. A card's `tab=conversation`
+              // carried to Intents opened that intent's conversation panel unasked.
+              onClick={() => go({ view, tab: DEFAULT_TAB, artifact: '', tx: '', anchor: '' })}
             >
               <Icon name={icon} size={15} />
               <span className="studio-nav-text">{t(`nav.${view}`)}</span>
