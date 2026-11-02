@@ -96,6 +96,8 @@ export function statusLabel(
   if (status === 'ResolvedNoTransition' && reason === 'plan_approval_recorded_before_reset') {
     return i18n.t('delivery.previousPlanApproval')
   }
+  // AI-DLC received the reply and refused to record it: its own refusal is on disk.
+  if (status === 'ResolvedNoTransition' && reason === 'answer_refused') return i18n.t('delivery.answerRefused')
   // AI-DLC recorded nothing for this reply and put the same plan to the person again.
   if (status === 'ResolvedNoTransition' && reason === 'plan_reply_not_recorded') {
     return i18n.t('delivery.planReplyNotRecorded')
@@ -152,6 +154,8 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
   const answerNotVerified = noTransition && (atNewGate || card.resolution.reason === 'answer_not_verified')
   const planReset = noTransition && card.resolution.reason === 'plan_approval_recorded_before_reset'
   const planAskedAgain = noTransition && card.resolution.reason === 'plan_reply_not_recorded'
+  // The engine refused the reply's receipt; the conversation may have carried on as if it had been recorded.
+  const answerRefused = noTransition && card.resolution.reason === 'answer_refused'
   const stoppedOnError = noTransition && card.resolution.reason === 'turn_stopped_on_error'
   // A setting request's turn ended with the intent's line as it was: the reply in the conversation says why.
   const settingUnchanged = noTransition && card.resolution.reason === 'summary_confirmation_unchanged'
@@ -161,6 +165,7 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
     : stoppedOnError ? 'delivery.stoppedOnError'
     : settingUnchanged ? 'delivery.summarySettingUnchanged'
     : planAskedAgain ? 'delivery.planAskedAgainReview'
+    : answerRefused ? 'delivery.answerRefusedReview'
     : answerNotVerified ? unverifiedLabel : 'delivery.noTransition'
   const sent = !BEFORE_SEND.includes(status)
 
@@ -184,6 +189,7 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
                 state === 'unchanged' ? (planReset ? 'delivery.updatedPlanReview'
                   : stoppedOnError ? 'delivery.stoppedOnError'
                   : planAskedAgain ? 'delivery.planAskedAgainReview'
+                  : answerRefused ? 'delivery.answerRefusedReview'
                   : answerNotVerified ? unverifiedLabel : 'delivery.step.unchanged')
                   : state === 'cancelled' ? 'enum.actionStatus.Cancelled'
                   : confirmedPending && position === 2 ? 'delivery.step.reconciliation'
@@ -244,6 +250,15 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
         <div className="studio-banner studio-dwarn" data-tone="warn" role="alert">
           <Icon name="warn" size={15} />
           <p>{t('delivery.planReplyNotRecordedBody')}</p>
+        </div>
+      ) : null}
+      {answerRefused ? (
+        <div className="studio-banner studio-dwarn" data-tone="warn" role="alert">
+          <Icon name="warn" size={15} />
+          <div className="studio-grow">
+            <p>{t('delivery.answerRefusedBody')}</p>
+            {card.resolution.evidence?.answers_in_file ? <p>{t('delivery.answerRefusedInFileBody')}</p> : null}
+          </div>
         </div>
       ) : null}
 

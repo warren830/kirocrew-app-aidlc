@@ -690,6 +690,15 @@ WIRE_OTHER_ANSWER = "{option}: {text}"
 # never split it.
 WIRE_MULTI_SELECT_ANSWER = "{letters} — {options}"
 WIRE_MULTI_SELECT_OPTION_JOINER = "; "
+# A file's answers sent while the engine's mode question is still open (``QuestionsFile.answer_mode_pending``): the
+# engine reads the next answer as the mode, and one reply closes both only when no decision is logged between them.
+# Placed before the grouped suffix, and after a single answer.
+WIRE_ANSWER_MODE_CHAT_NOTE = (
+    "\n\nStudio answer mode: this reply also answers how this person would like to answer the questions: Chat. "
+    "Record Chat for that question in its own answer call first, then the answers in this reply right after it. "
+    "Log no decision for the questions in the file: they were asked there, and a question logged after this reply "
+    "leaves its answers unrecorded."
+)
 # Several audit-log questions asked in one turn (A37): one reply, one receipt.
 WIRE_AUDIT_GROUPED_ANSWER_SUFFIX = (
     "\n\nStudio grouped-answer delivery: this is one human reply to the questions you asked together, "

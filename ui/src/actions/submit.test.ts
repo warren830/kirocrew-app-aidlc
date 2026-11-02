@@ -196,6 +196,20 @@ describe('wireTextFor', () => {
       .toBe('Q1: B. Aurora\nQ2: A. DynamoDB' + WIRE.GROUPED_ANSWER_SUFFIX)
   })
 
+  it("names AI-DLC's open mode question as Chat, before the delivery note and after a single answer", () => {
+    // `wire_text_for` sends the same: the engine reads the reply as the mode answer first (live 2026-11-02).
+    const two = { ...view([question(), question({ index: 2, prompt: 'Retries?' })]), answer_mode_pending: true }
+    const answers = [
+      { index: 1, option_letters: ['B'], free_text: null },
+      { index: 2, option_letters: ['A'], free_text: null },
+    ]
+    expect(wireTextFor({ decision: 'answers', answers }, two, true))
+      .toBe('Q1: B. Aurora\nQ2: A. DynamoDB' + WIRE.ANSWER_MODE_CHAT_NOTE + WIRE.GROUPED_ANSWER_SUFFIX)
+    const one = { ...view([question()]), answer_mode_pending: true }
+    expect(wireTextFor({ decision: 'answers', answers: [{ index: 1, option_letters: ['A'], free_text: null }] }, one, false))
+      .toBe('A. DynamoDB' + WIRE.ANSWER_MODE_CHAT_NOTE)
+  })
+
   it('refuses an incomplete group instead of sending a partial reply', () => {
     const two = view([question(), question({ index: 2 })])
     expect(wireTextFor({ decision: 'answers', answers: [{ index: 1, option_letters: ['A'], free_text: null }] }, two, true))

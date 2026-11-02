@@ -188,7 +188,9 @@ export function wireTextFor(
         if (text === null) return null
         texts.push(text)
       }
-      if (texts.length === 1) return texts[0] ?? null
+      // AI-DLC's mode question is still open beside the file: the reply chooses Chat too, and says so (`wire_text_for`).
+      const mode = !questions?.origin && questions?.answer_mode_pending === true ? WIRE.ANSWER_MODE_CHAT_NOTE : ''
+      if (texts.length === 1) return texts[0] === undefined ? null : texts[0] + mode
       const lines = pending
         .map((question, position) =>
           fill(WIRE.ANSWER_LINE, { index: String(question.index), answer: texts[position] ?? '' }),
@@ -205,7 +207,7 @@ export function wireTextFor(
       }
       // The backend advertises compatibility for this file-backed grouped reply.
       if (!groupedAnswers) return null
-      return lines + WIRE.GROUPED_ANSWER_SUFFIX
+      return lines + mode + WIRE.GROUPED_ANSWER_SUFFIX
     }
     case 'provide_input': {
       if (payload.kind === 'scope') {

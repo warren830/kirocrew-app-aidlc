@@ -9,5 +9,9 @@
   "delivery.previousPlanApprovalBody": "The original plan approval was recorded, and that reply is complete. The plan was later reset for review. Its current version still requires approval; no new write authority was granted and the earlier reply will not be resent.",
   "delivery.planReplyNotRecorded": "Reply not recorded",
   "delivery.planAskedAgainReview": "Answer the new card",
-  "delivery.planReplyNotRecordedBody": "AI-DLC did not record this reply as your choice and asked for the same plan again, so nothing was approved and the idle lease was released. Studio opens a new card for that plan; answer it there. The earlier reply will not be resent."
+  "delivery.planReplyNotRecordedBody": "AI-DLC did not record this reply as your choice and asked for the same plan again, so nothing was approved and the idle lease was released. Studio opens a new card for that plan; answer it there. The earlier reply will not be resent.",
+  "delivery.answerRefused": "Answer refused",
+  "delivery.answerRefusedReview": "Answer what AI-DLC asks next",
+  "delivery.answerRefusedBody": "AI-DLC received this reply but refused to record it as your answer, so it is not on record. The idle lease was released. Studio opens a card for whatever AI-DLC waits on now, the same questions again if they are still open; the earlier reply will not be resent.",
+  "delivery.answerRefusedInFileBody": "The conversation still wrote these answers into the questions file and carried on, but AI-DLC's record has no receipt for them."
 }

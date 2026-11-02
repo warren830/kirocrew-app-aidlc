@@ -15,6 +15,7 @@ export const WIRE = {
   OTHER_ANSWER: "{option}: {text}",
   MULTI_SELECT_ANSWER: "{letters} — {options}",
   MULTI_SELECT_OPTION_JOINER: "; ",
+  ANSWER_MODE_CHAT_NOTE: "\n\nStudio answer mode: this reply also answers how this person would like to answer the questions: Chat. Record Chat for that question in its own answer call first, then the answers in this reply right after it. Log no decision for the questions in the file: they were asked there, and a question logged after this reply leaves its answers unrecorded.",
   AUDIT_GROUPED_ANSWER_SUFFIX: "\n\nStudio grouped-answer delivery: this is one human reply to the questions you asked together, in the order you asked them. Record all Q<n> answers together in ONE aidlc-log.ts answer --details call, preserving their text. Then continue the stage.",
   RUN: "/aidlc",
   RESUME: "/aidlc --resume",

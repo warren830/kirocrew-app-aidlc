@@ -600,6 +600,8 @@ Audit-backed questions (a decision the engine asked in the chat, with no open qu
   (`practices-batch-decision/`, `chat-only-reply/`). With plan approval off the engine writes a record-only sheet
   (`[Answer]: Plan approval off`) and a `PLAN_APPROVAL_SKIPPED` row bound to it by file and whole-file digest; that
   row closes the sheet as `PLAN_APPROVAL_RECORDED` closes an approved one (`learnings-ritual/`).
+- While the mode question is the stage's open decision, a pending sheet says so (`answer_mode_pending`) and its
+  answers choose Chat in the same reply; the mode answer is never the sheet's receipt (`mode-question-reply/`).
 
 ### 11.9 Review sections
 

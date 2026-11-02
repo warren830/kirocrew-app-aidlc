@@ -120,6 +120,10 @@ WIRE_TEXT_TEMPLATES: dict[str, str | None] = {
     "answers.grouped": (
         "Q<n>: <answer>\\nQ<m>: <answer> + WIRE_GROUPED_ANSWER_SUFFIX (file-backed group; one audit receipt)"
     ),
+    "answers.answer_mode": (
+        "<answer> + WIRE_ANSWER_MODE_CHAT_NOTE, or Q<n> lines + WIRE_ANSWER_MODE_CHAT_NOTE + "
+        "WIRE_GROUPED_ANSWER_SUFFIX (file questions while the engine's mode question is open)"
+    ),
     "provide_input.scope": f"{C.WIRE_SCOPE_PREFIX}<scope>",
     "provide_input.free_text": "<text>",
     "run": C.WIRE_RUN,
@@ -624,14 +628,18 @@ def _answers_wire_text(payload: Mapping[str, Any], questions: "QuestionsFile | N
                     index=question.index, cap=C.MAX_ANSWER_CHARS)
         texts.append((question.index, text))
 
+    # The engine's mode question is still open beside the file: this reply chooses Chat as well, and says so, or the
+    # conductor records the answers as the mode and logs a question after the reply that no answer can then close.
+    mode = C.WIRE_ANSWER_MODE_CHAT_NOTE if questions.origin is None and getattr(
+        questions, "answer_mode_pending", None) else ""
     if len(texts) == 1:
-        return texts[0][1]
+        return texts[0][1] + mode
     if not batch and not grouped_enabled:
         _refuse("grouped_answers_unavailable", "answering several questions in one prompt is not verified yet",
                 pending=[index for index, _ in texts], reason="s1_s2_unverified")
     lines = C.WIRE_ANSWER_JOINER.join(C.WIRE_ANSWER_LINE.format(index=index, answer=text) for index, text in texts)
     # An audit batch is one engine question expecting one reply (A37): no file mapping is involved.
-    return lines + (C.WIRE_AUDIT_GROUPED_ANSWER_SUFFIX if batch else C.WIRE_GROUPED_ANSWER_SUFFIX)
+    return lines + (C.WIRE_AUDIT_GROUPED_ANSWER_SUFFIX if batch else mode + C.WIRE_GROUPED_ANSWER_SUFFIX)
 
 
 def _human_prose(payload: Mapping[str, Any]) -> str | None:

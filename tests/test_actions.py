@@ -480,7 +480,7 @@ def test_answer_text_fills_its_templates_once_whatever_the_answer_holds(A, studi
 def test_an_audit_questions_answer_keeps_its_exact_labels(A, studio):
     """Its receipt must repeat the sent text, and its letters are Studio's own: no letters, no Other marker."""
     asked = (studio.aidlc_reader._batch_question(1, "Which notes should I keep?", ["c1", "c2"], "raw"),
-             studio.aidlc_reader._batch_question(2, studio.constants.LEARNINGS_ADD_PROMPT, ["Nothing to add"], "raw"))
+             studio.aidlc_reader._batch_question(2, studio.constants.LEARNINGS_ADD_PROMPTS[0], ["Nothing to add"], "raw"))
     assert [o.text for o in asked[1].options] == ["Nothing to add", "Other"] and asked[1].options[1].is_other
     audit = dataclasses.replace(_parse(studio, "## Q1: Unused?\nA. A\n[Answer]:\n"), questions=asked,
                                 origin={"kind": "audit", "batch_size": 2})

@@ -475,7 +475,7 @@ class QuestionsView(WireRecord):
     _wire_keys = (
         "relpath", "sha256", "stage", "unit", "questions", "summary_confirmation", "plan_approval",
         "assumption_confirmation?", "pending_count", "unsupported_pending_count", "pending_checkpoint", "mode",
-        "host_card", "origin?",
+        "host_card", "origin?", "answer_mode_pending?",
     )
     relpath: str
     sha256: str
@@ -491,6 +491,8 @@ class QuestionsView(WireRecord):
     origin: dict[str, Any] | None = None
     unsupported_pending_count: int = 0
     assumption_confirmation: Any | None = None
+    #: The engine's mode question is open with this file: the answers' wire text names the mode (``wire_text_for``).
+    answer_mode_pending: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -985,6 +987,7 @@ class Projection:
             mode="structured" if not native_wait and (questions.origin or file_form) else "degraded",
             host_card=dict(host_card) if host_card else None, origin=questions.origin,
             unsupported_pending_count=questions.unsupported_pending_count,
+            answer_mode_pending=getattr(questions, "answer_mode_pending", None),
         )
 
     # -- operational state -------------------------------------------------- #

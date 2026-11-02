@@ -122,6 +122,7 @@ export function ConfirmPanel({
   const inline = pending.wire !== null && pending.wire.length <= INLINE_WIRE_MAX && !pending.wire.includes('\n')
   const deliveryNote = pending.wire !== null &&
     [WIRE.GROUPED_ANSWER_SUFFIX, WIRE.AUDIT_GROUPED_ANSWER_SUFFIX].some((suffix) => pending.wire?.endsWith(suffix))
+  const answerModeNote = pending.wire?.includes(WIRE.ANSWER_MODE_CHAT_NOTE) === true
 
   return (
     <section className="studio-confirm" id={CONFIRM_PANEL_ID} role="group" aria-label={t('confirm.label')}>
@@ -145,6 +146,7 @@ export function ConfirmPanel({
               <pre className="studio-sendtext studio-wrap-any">{pending.wire}</pre>
             )}
             {deliveryNote ? <p className="studio-muted">{t('confirm.deliveryNote')}</p> : null}
+            {answerModeNote ? <p className="studio-muted">{t('confirm.answerModeNote')}</p> : null}
           </>
         ) : (
           <p className="studio-confirm-label">

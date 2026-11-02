@@ -1627,6 +1627,11 @@ question must be present (`answers_incomplete`). Then:
   Duplicate/extra indexes and duplicate options are rejected. A multi-select containing Other preserves
   the regular options alongside the free text. Unsupported files and native blocking waits remain degraded.
   The capability-off path still refuses `409 grouped_answers_unavailable`.
+- while the engine's mode question ("How would you like to answer…?") is the stage's open decision
+  (`QuestionsFile.answer_mode_pending`), `WIRE_ANSWER_MODE_CHAT_NOTE` follows a single answer, and sits between the
+  `Q<n>` lines and `WIRE_GROUPED_ANSWER_SUFFIX`. The engine reads the next answer as the mode and refuses one that
+  names none; one reply closes both when the mode answer comes first and no decision is logged between them
+  (`tests/test_mode_question_reply.py` runs the engine). A refused receipt settles the card as `answer_refused`.
 
 Both strings are pinned in `docs/design/wire-text.json` and mirrored by `wireTextFor` in `ui/src/lib/wire.ts`.
 

@@ -29,6 +29,7 @@
   "confirm.labelSends": "按钮：{label} → 发送：{wire}",
   "confirm.labelSendsBelow": "按钮：{label} → 原样发送下面的文字：",
   "confirm.deliveryNote": "最后一段是 Studio 写给 AI-DLC 的投递说明：请它把你的回答记录为一次回复。它也是发送内容的一部分。",
+  "confirm.answerModeNote": "以“Studio answer mode”开头的那一段告诉 AI-DLC：在这里作答，也就回答了它关于“你想怎样回答这些问题”的提问，选择是 Chat。没有这一段，AI-DLC 会把这条回复只当作那个选择，你的回答就不会被记录。它也是发送内容的一部分。",
   "confirm.mismatch": "KiroCrew 记录的文本与本页显示的不一致。下面是实际发送的内容。",
   "confirm.noWireText": "暂无内容",
   "confirm.routing": "将作为你本人的消息发送到 {repo}/{intent} 的会话。AI-DLC 会把它记录为你的回复，并自行完成变更。Studio 不会修改 aidlc-state.md，也不会绕过 AI-DLC 的任何检查。",

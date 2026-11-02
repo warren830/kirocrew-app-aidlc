@@ -144,6 +144,25 @@ describe('delivery outcomes describe observed progress', () => {
     expect(strip).not.toHaveTextContent(i18n.t('enum.actionStatus.ResolvedNoTransition'))
   })
 
+  it.each(['en-US', 'zh-CN'] as const)('says AI-DLC refused the answers, never that it recorded them (%s)', (locale) => {
+    // Live 2026-11-02: the engine refused the answers' receipt and the conversation wrote them into the file anyway.
+    document.documentElement.lang = locale
+    const i18n = makeI18n(locale)
+    const card = actionCard({ status: 'ResolvedNoTransition', resolution: {
+      kind: 'no_transition', reason: 'answer_refused', resolved_at: null,
+      evidence: { presence: null, is_active: true, answers_in_file: true },
+    } })
+    render(<I18nProvider><DeliveryStrip card={card} /></I18nProvider>)
+    const strip = screen.getByRole('region', { name: i18n.t('delivery.label') })
+    expect(strip).toHaveTextContent(i18n.t('delivery.answerRefused'))
+    expect(strip).toHaveTextContent(i18n.t('delivery.answerRefusedReview'))
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent(i18n.t('delivery.answerRefusedBody'))
+    expect(alert).toHaveTextContent(i18n.t('delivery.answerRefusedInFileBody'))
+    expect(strip).not.toHaveTextContent(i18n.t('delivery.recorded.question_answered'))
+    expect(strip).not.toHaveTextContent(i18n.t('enum.actionStatus.ResolvedNoTransition'))
+  })
+
   it('marks every step complete when the workflow state did change', () => {
     const strip = show('StateChanged')
     expect([...strip.querySelectorAll('.studio-dstep')].map((step) => step.getAttribute('data-state'))).toEqual([

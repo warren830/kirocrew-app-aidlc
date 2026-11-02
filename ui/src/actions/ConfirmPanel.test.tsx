@@ -39,5 +39,12 @@ describe('the text a confirmation shows', () => {
     expect(document.querySelectorAll('.studio-sendtext')).toHaveLength(1)
     expect(document.querySelector('.studio-sendtext')?.textContent).toBe(wire)
     expect(screen.getByText(en.t('confirm.deliveryNote'))).toBeInTheDocument()
+    expect(screen.queryByText(en.t('confirm.answerModeNote'))).toBeNull()
+  })
+
+  it('names the paragraph that answers AI-DLC\'s mode question as Chat', () => {
+    show('answers', `Q1: True division\nQ2: Like multiply${WIRE.ANSWER_MODE_CHAT_NOTE}${WIRE.GROUPED_ANSWER_SUFFIX}`)
+    expect(screen.getByText(en.t('confirm.deliveryNote'))).toBeInTheDocument()
+    expect(screen.getByText(en.t('confirm.answerModeNote'))).toBeInTheDocument()
   })
 })

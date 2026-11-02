@@ -48,7 +48,9 @@ from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 from . import constants as C
 from . import sessions as _sessions
 from .actions import ABSENCE_PROOF
-from .aidlc_reader import audit_question_accepts_text, audit_question_answer, ceremony_setting, plan_approval_choice
+from .aidlc_reader import (
+    answers_mode_question, audit_question_accepts_text, audit_question_answer, ceremony_setting, plan_approval_choice,
+)
 from .consistency import RepoFacts
 from .errors import IllegalTransition, StaleGeneration, StudioError
 from .projection import UNCERTAIN_STATUSES, run_unavailable_reason
@@ -1304,10 +1306,19 @@ class Reconciler:
             origin = (rec.evidence.get("questions") or {}).get("origin")
             if isinstance(origin, dict) and origin.get("kind") == "audit":
                 return self._audit_answer_row(rec, snap, questions, origin, stage, seen)
-            answered = self._newest_new(rec, snap, ("QUESTION_ANSWERED",), stage)
+            answered = self._file_answer_receipt(rec, snap, stage)
             seen["question_answered"] = _json_of(answered)
             if answered is not None:
                 return Resolution("no_transition", "question_answered", seen)
+            refused = self._answer_refused(rec, snap, stage)
+            if refused is not None:
+                # Measured on a real run: the reply answered the mode question asked beside the file ("Chat"), the
+                # conductor logged the file's questions as a decision after it, and the engine refused the answers
+                # for want of a newer reply. The conductor may write them into the file all the same and go on,
+                # saying they were saved; the refusal on disk is what this delivery came to.
+                seen.update(answer_verified=False, answer_refused=_json_of(refused),
+                            answers_in_file=bool(digest_changed and self._answers_filled(rec, questions)))
+                return Resolution("no_transition", "answer_refused", seen)
             if digest_changed and self._answers_filled(rec, questions):
                 return Resolution("no_transition", "answers_recorded", seen)
             return Resolution("pending", "answers_not_recorded", seen)
@@ -1865,6 +1876,15 @@ class Reconciler:
             if len(words) > 1 and words[1] == "answer" and f"--stage {stage} " in f"{command} ":
                 return event
         return None
+
+    def _file_answer_receipt(self, rec: Any, snap: Any, stage: Any) -> Any:
+        """The newest new ``QUESTION_ANSWERED`` in this stage that can be a file's answers: not the answer to the
+        engine's mode question, which says how the person answers the file and not what. The same reply may close
+        both, mode first; a mode answer alone is no receipt for the answers this delivery carried."""
+        audit, unit = _attr(snap, "audit"), rec.unit or None
+        answers = [event for event in self._new_events(rec, snap, ("QUESTION_ANSWERED",), stage)
+                   if answers_mode_question(audit, event, str(stage), unit) is not True]
+        return max(answers, key=lambda e: _attr(e, "sort_key", ("", 0, 0))) if answers else None
 
     def _unverified_receipt(self, rec: Any, snap: Any, origin: Mapping[str, Any], stage: Any) -> Any:
         """A new receipt for exactly this audit question whose recorded text is not our reply."""

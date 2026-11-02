@@ -1091,6 +1091,7 @@ class QuestionsFile(WireRecord):
     _wire_keys = (
         "relpath", "sha256", "questions", "summary_confirmation", "plan_approval", "assumption_confirmation?",
         "pending_count", "unsupported_pending_count", "pending_checkpoint", "source_language_hint", "origin?",
+        "answer_mode_pending?",
     )
     relpath: str
     sha256: str
@@ -1107,6 +1108,9 @@ class QuestionsFile(WireRecord):
     # Blank human-answer tags outside supported Q/checkpoint sections. These carry no Q identifiers.
     unsupported_pending_count: int = 0
     assumption_confirmation: Checkpoint | None = None
+    #: ``True`` while the engine's mode question, asked with this file, is the stage's open decision: the reply that
+    #: answers the file answers it too (``answer_mode_pending``). ``None`` otherwise, and for an audit question.
+    answer_mode_pending: bool | None = None
 
 
 # These are the bundled aidlc-log.ts / aidlc-lib.ts handshake and attempt boundaries.
@@ -1189,7 +1193,7 @@ def _is_answer_mode_decision(event: AuditEvent) -> bool:
     return len(offered) == len(labels) and all(label in offered for label in labels)
 
 
-def _answers_mode_question(audit: AuditBundle, answer: AuditEvent, stage: str, unit: str | None) -> bool | None:
+def answers_mode_question(audit: AuditBundle, answer: AuditEvent, stage: str, unit: str | None) -> bool | None:
     """Does ``answer`` close the mode question? The engine pairs an answer with the decision open before it
     (``nextOpenDecision``): its stage's newest decision or closing row. ``None`` when that order is not provable."""
     earlier: list[AuditEvent] = []
@@ -1325,6 +1329,21 @@ def _in_asked_order(batch: list[_AskedRow]) -> list[_AskedRow]:
     "Anything to add" first at intent capture and build-and-test, last at requirements and code generation), but §13
     step 3 asks it after the keep question, and every chat did, so the grouped reply's Q<n> follow the chat."""
     return sorted(batch, key=lambda pair: _is_learnings_add_prompt(pair[1][0]))
+
+
+def answer_mode_pending(
+    audit: AuditBundle, record_rel: str, stage: str, unit: str | None, *, generation: str | None = None,
+) -> bool:
+    """Is the engine's mode question the stage's provably open decision? The engine's ``log answer`` then reads the
+    next answer as the mode (``openDecisionBlock`` + ``isAnswerModeDecision``) and refuses one that names none, so a
+    reply that answers the file must close the mode question first. One reply answers every question open when it
+    arrived (``humanTurnState`` "answered"): the file's answers can follow in the same reply, before any decision."""
+    pending = audit_questions(audit, record_rel, stage, unit, generation=generation)
+    origin = pending.origin if pending is not None else None
+    if origin is None or int(origin.get("batch_size") or 1) > 1:
+        return False
+    decision = next((e for e in audit.events if (e.shard, e.pos) == (origin["shard"], origin["pos"])), None)
+    return decision is not None and _is_answer_mode_decision(decision)
 
 
 def _batch_question(index: int, prompt: str, labels: list[str], raw: str) -> Question:
@@ -1494,7 +1513,7 @@ def _closed_question_receipts(
         # close it. Measured twice, the conductor logged the sheet's questions as one decision after the reply had
         # arrived ("Practices interview Q1-Q6", Options "Q1 A/B/C/X,…"), the engine refused the answer, and the
         # card offered "Q1" for six questions.
-        if _answers_mode_question(audit, answered[0], stage, unit) is not False:
+        if answers_mode_question(audit, answered[0], stage, unit) is not False:
             return None
         return [answered[0]]
     if assumption is not None:
@@ -2966,7 +2985,7 @@ class AidlcReader:
             # Pending file content owns the interaction, including unsupported answer sections
             # that require the conversation. Closed content can yield to a later audit decision
             # only with a current, file-bound checkpoint receipt.
-            if found.pending_count or found.pending_checkpoint:
+            if found.pending_checkpoint and not found.pending_count:
                 return found
             if (
                 audit is None or row is None or row.state in C.DONE_STAGE_STATES
@@ -2975,6 +2994,12 @@ class AidlcReader:
                 return found
             generation, readable = self._question_claim_generation(repo, space, intent_dir, unit, audit)
             if not readable:
+                return found
+            if found.pending_count:
+                # The mode question asked with the file stays open until the reply that answers the file: that reply
+                # must name its mode too, or the engine takes it for the mode answer alone.
+                if answer_mode_pending(audit, self.record_rel(space, intent_dir), stage, unit, generation=generation):
+                    return replace(found, answer_mode_pending=True)
                 return found
             pending = self._with_learning_candidates(repo, space, intent_dir, stage, row, audit_questions(
                 audit, self.record_rel(space, intent_dir), stage, unit, generation=generation,

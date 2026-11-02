@@ -113,6 +113,26 @@ def learnings_ritual_chat(stage_words: str) -> str:
     [row] = [row for row in rows if stage_words in row["content"]]
     return row["content"]
 
+#: A UI-driven run (2026-11-02, v2-full, intent-capture): AI-DLC asked the mode question ("How would you like to answer
+#: the questions?") beside its questions file, Studio showed the file's five questions and delivered the person's
+#: answers. The conductor recorded that reply as the mode answer ("Chat"), logged the file's questions as a decision
+#: after it ("Q1-Q5 intent capture questions"), and the engine refused the answers (no reply since that decision). It
+#: wrote them into the file anyway, said "I saved your 5 answers" and asked the learnings questions; Studio settled the
+#: card as answered. The tree is the record when that turn ended (12:19:32): the state Studio captured on the card
+#: (sha256 ``f88d0dc1…``, reconstructed and checked by digest), the shard to its last row then, the file as the
+#: conductor filled it. ``questions-as-asked.md`` is the file as created at 12:12:18, from the transcript (Studio's
+#: question digest ``d60074be…``); ``conversation.jsonl`` is KiroCrew's transcript to that turn's end, the project path
+#: written as ``<project-dir>``.
+MODE_QUESTION_REPLY = FIXTURES / "mode-question-reply"
+MODE_QUESTION_REPLY_INTENT = "261102-add-an-optional"
+MODE_QUESTION_REPLY_SHARD = "80a99723a8c8-ff4fdddb2126.md"
+MODE_QUESTION_REPLY_QUESTIONS = "ideation/intent-capture/intent-capture-questions.md"
+#: Each moment as (the shard's last row, the human-turn marker, the turn counter, the transcript's last row): the card
+#: raised with the mode question open (after the person's summary switch), and the delivered turn's end.
+MODE_QUESTION_REPLY_MOMENTS = {
+    "asked": ("2026-11-02T12:13:12Z", "2026-11-02T12:13:12Z", 2, "2026-11-02T12:13:24"),
+    "refused": ("2026-11-02T12:19:20Z", "2026-11-02T12:16:33Z", 3, "2026-11-02T12:19:32"),
+}
 
 _CHECKBOX_LINE = re.compile(r"^- \[([ xXsSrR?\-])\] (\S+)(?:\s*(?:—|–|--)\s*(.*))?$", re.MULTILINE)
 _FIELD_LINE = re.compile(r"^- \*\*(.+?)\*\*:[ \t]*(.*?)[ \t]*$", re.MULTILINE)
@@ -263,6 +283,52 @@ def practices_batch_rows(moment: str) -> list[dict]:
     """The transcript's message rows up to the end of ``moment``, oldest first."""
     end = PRACTICES_BATCH_MOMENTS[moment][3]
     rows = [json.loads(line) for line in (PRACTICES_BATCH / "conversation.jsonl").read_text("utf-8").splitlines()
+            if line.strip()]
+    return [row for row in rows if "role" in row and row["ts"][:19] <= end]
+
+
+def mode_question_reply_record(root: Path) -> Path:
+    return root / "aidlc" / "spaces" / "default" / "intents" / MODE_QUESTION_REPLY_INTENT
+
+
+def mode_question_reply_tree(root: Path, moment: str, *, recorded: bool = False) -> Path:
+    """Copy the ``MODE_QUESTION_REPLY`` record into ``root`` as it was at one of ``MODE_QUESTION_REPLY_MOMENTS``: the
+    shard cut after its last row, that moment's human-turn marker and turn counter, and at ``asked`` the file as
+    created.
+
+    ``recorded`` is what the engine writes when the conductor closes both questions with the one reply, mode first
+    (``test_mode_question_reply.py`` runs it with bun): the round's decision and the refusal give way to the receipt
+    for the answers it tried to record, right after the mode answer."""
+    import shutil
+
+    last_row, human_turn, counter, _ = MODE_QUESTION_REPLY_MOMENTS[moment]
+    shutil.copytree(MODE_QUESTION_REPLY / "aidlc", root / "aidlc", dirs_exist_ok=True, copy_function=shutil.copyfile)
+    record = mode_question_reply_record(root)
+    shard = record / "audit" / MODE_QUESTION_REPLY_SHARD
+    text = shard.read_text("utf-8")
+    text = text[:text.index("\n---\n", text.rindex(f"**Timestamp**: {last_row}")) + len("\n---\n")]
+    if recorded:
+        blocks = text.split("\n---\n")
+        decision = next(i for i, b in enumerate(blocks) if "**Decision**: Q1-Q5 intent capture questions" in b)
+        refused = next(i for i, b in enumerate(blocks) if "**Event**: ERROR_LOGGED" in b and "aidlc-log answer" in b)
+        assert refused == decision + 1, (decision, refused)
+        details = blocks[refused].split("--details ", 1)[1].split("\n", 1)[0]
+        words = blocks[decision - 1].split("**Person Reply**: ", 1)[1].split("\n", 1)[0]  # the mode answer's
+        receipt = audit_block("QUESTION_ANSWERED", "2026-11-02T12:16:56Z", Stage="intent-capture", Details=details)
+        receipt = receipt.replace("\n\n---\n", f"\n**Person Reply**: {words}\n\n---\n")
+        text = "\n---\n".join(blocks[:decision]) + "\n---\n" + receipt + "\n---\n".join(blocks[refused + 1:])
+    shard.write_text(text, "utf-8")
+    (record / ".aidlc-engine" / "human-turn").write_text(f"{human_turn}\n")
+    (root / "aidlc" / ".aidlc-turn-counter").write_text(f"{counter}\n")
+    if moment == "asked":
+        shutil.copyfile(MODE_QUESTION_REPLY / "questions-as-asked.md", record / MODE_QUESTION_REPLY_QUESTIONS)
+    return root
+
+
+def mode_question_reply_rows(moment: str) -> list[dict]:
+    """The transcript's message rows up to the end of ``moment``, oldest first."""
+    end = MODE_QUESTION_REPLY_MOMENTS[moment][3]
+    rows = [json.loads(line) for line in (MODE_QUESTION_REPLY / "conversation.jsonl").read_text("utf-8").splitlines()
             if line.strip()]
     return [row for row in rows if "role" in row and row["ts"][:19] <= end]
 
