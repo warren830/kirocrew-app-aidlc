@@ -108,6 +108,8 @@ export function ActionBar({
           ? t('detail.bar.refreshing')
           : decisions.length === 0
             ? t('detail.bar.noDecisions')
+            : pending
+            ? t('detail.bar.confirmOpen')
             : t('detail.bar.hint')}
       </span>
 

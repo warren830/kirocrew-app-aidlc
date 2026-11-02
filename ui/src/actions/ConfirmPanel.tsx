@@ -125,85 +125,88 @@ export function ConfirmPanel({
 
   return (
     <section className="studio-confirm" id={CONFIRM_PANEL_ID} role="group" aria-label={t('confirm.label')}>
-      <p className="studio-ch" ref={heading} tabIndex={-1}>
-        <Icon name="send" size={14} />
-        {t(`confirm.title.${decision}`)}
-      </p>
+      {/* Everything above the send scrolls; the send and Cancel below it never do (see `.studio-confirm-body`). */}
+      <div className="studio-confirm-body">
+        <p className="studio-ch" ref={heading} tabIndex={-1}>
+          <Icon name="send" size={14} />
+          {t(`confirm.title.${decision}`)}
+        </p>
 
-      {sendsWire ? (
-        <>
+        {sendsWire ? (
+          <>
+            <p className="studio-confirm-label">
+              {pending.wire === null || inline
+                ? t('confirm.labelSends', { label, wire: pending.wire ?? t('confirm.noWireText') })
+                : t('confirm.labelSendsBelow', { label })}
+            </p>
+            {pending.wire === null ? null : (
+              // `<pre>`, not a paragraph: every byte matters and collapsed whitespace would hide a
+              // difference the conductor will not forgive.
+              <pre className="studio-sendtext studio-wrap-any">{pending.wire}</pre>
+            )}
+            {deliveryNote ? <p className="studio-muted">{t('confirm.deliveryNote')}</p> : null}
+          </>
+        ) : (
           <p className="studio-confirm-label">
-            {pending.wire === null || inline
-              ? t('confirm.labelSends', { label, wire: pending.wire ?? t('confirm.noWireText') })
-              : t('confirm.labelSendsBelow', { label })}
+            {t(lane === 'host_control' ? 'confirm.hostControl' : 'confirm.studioOnly', { label })}
           </p>
-          {pending.wire === null ? null : (
-            // `<pre>`, not a paragraph: every byte matters and collapsed whitespace would hide a
-            // difference the conductor will not forgive.
-            <pre className="studio-sendtext studio-wrap-any">{pending.wire}</pre>
-          )}
-          {deliveryNote ? <p className="studio-muted">{t('confirm.deliveryNote')}</p> : null}
-        </>
-      ) : (
-        <p className="studio-confirm-label">
-          {t(lane === 'host_control' ? 'confirm.hostControl' : 'confirm.studioOnly', { label })}
-        </p>
-      )}
+        )}
 
-      <p className="studio-route studio-muted">
-        <Icon name="info" size={13} />
-        {sendsWire
-          ? t(card.evidence.session?.session_key ? 'confirm.routing' : 'confirm.routingUnbound', {
-              session: card.evidence.session?.session_key ?? '',
-              repo: card.repo.label || card.repo.repo_id,
-              intent: card.intent.slug || card.intent.intent_dir,
-            })
-          : t(`confirm.consequence.${decision}`)}
-      </p>
-
-      {blocked ? (
-        <p className="studio-route" data-tone="danger" role="status">
-          <Icon name="warn" size={13} />
-          {t(blocked)}
-        </p>
-      ) : pending.noteKey ? (
-        <p className="studio-route" data-tone="warn" role="status">
+        <p className="studio-route studio-muted">
           <Icon name="info" size={13} />
-          {t(pending.noteKey)}
+          {sendsWire
+            ? t(card.evidence.session?.session_key ? 'confirm.routing' : 'confirm.routingUnbound', {
+                session: card.evidence.session?.session_key ?? '',
+                repo: card.repo.label || card.repo.repo_id,
+                intent: card.intent.slug || card.intent.intent_dir,
+              })
+            : t(`confirm.consequence.${decision}`)}
         </p>
-      ) : null}
-      {blocked === 'confirm.blocked.sessionUnbound' && onOpenSession ? (
-        <Btn type="button" onClick={onOpenSession}>{t('confirm.openSession')}</Btn>
-      ) : null}
-      {ownerAction && onOpenBlockingAction ? (
-        <Btn type="button" onClick={() => onOpenBlockingAction(ownerAction)}>
-          {t('detail.repoBusy.openOwner')}
-        </Btn>
-      ) : null}
 
-      {needsAck ? (
-        <label className="studio-ack">
-          <input
-            type="checkbox"
-            checked={acknowledged}
-            disabled={!beforeSend(submit.stage) || busy}
-            onChange={(event) => onAcknowledge(event.currentTarget.checked)}
-          />
-          <span>{t(`confirm.acknowledge.${decision}`)}</span>
-        </label>
-      ) : null}
+        {blocked ? (
+          <p className="studio-route" data-tone="danger" role="status">
+            <Icon name="warn" size={13} />
+            {t(blocked)}
+          </p>
+        ) : pending.noteKey ? (
+          <p className="studio-route" data-tone="warn" role="status">
+            <Icon name="info" size={13} />
+            {t(pending.noteKey)}
+          </p>
+        ) : null}
+        {blocked === 'confirm.blocked.sessionUnbound' && onOpenSession ? (
+          <Btn type="button" onClick={onOpenSession}>{t('confirm.openSession')}</Btn>
+        ) : null}
+        {ownerAction && onOpenBlockingAction ? (
+          <Btn type="button" onClick={() => onOpenBlockingAction(ownerAction)}>
+            {t('detail.repoBusy.openOwner')}
+          </Btn>
+        ) : null}
 
-      {mismatch ? (
-        // Assertive: what was sent is not what this browser displayed. The user must see the server's
-        // record, not ours.
-        <div className="studio-banner" data-tone="danger" role="alert">
-          <Icon name="warn" size={15} />
-          <div className="studio-grow">
-            <p>{t('confirm.mismatch')}</p>
-            <pre className="studio-sendtext studio-wrap-any">{serverWire}</pre>
+        {needsAck ? (
+          <label className="studio-ack">
+            <input
+              type="checkbox"
+              checked={acknowledged}
+              disabled={!beforeSend(submit.stage) || busy}
+              onChange={(event) => onAcknowledge(event.currentTarget.checked)}
+            />
+            <span>{t(`confirm.acknowledge.${decision}`)}</span>
+          </label>
+        ) : null}
+
+        {mismatch ? (
+          // Assertive: what was sent is not what this browser displayed. The user must see the server's
+          // record, not ours.
+          <div className="studio-banner" data-tone="danger" role="alert">
+            <Icon name="warn" size={15} />
+            <div className="studio-grow">
+              <p>{t('confirm.mismatch')}</p>
+              <pre className="studio-sendtext studio-wrap-any">{serverWire}</pre>
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       <div className="studio-confirm-actions">
         <Btn

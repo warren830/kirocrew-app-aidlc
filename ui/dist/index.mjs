@@ -665,6 +665,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"delivery.watchingDisk": "Studio reads AI-DLC's files for the outcome; a KiroCrew receipt alone does not count",
 	"detail.additionalAttemptBlocked": "This additional attempt was blocked. An earlier delivery is recorded below.",
 	"detail.bar.closed": "This is a closed record. Open current actions to continue.",
+	"detail.bar.confirmOpen": "The confirmation above shows exactly what this does. Confirm it there; this button only opens and closes it.",
 	"detail.bar.hint": "Choosing an action opens a confirmation that shows the exact text Studio will send.",
 	"detail.bar.noDecisions": "There is nothing to decide here. Follow the recorded progress above.",
 	"detail.bar.refreshing": "A file used as evidence is changing right now, so nothing can be submitted against it.",
@@ -3268,6 +3269,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"delivery.watchingDisk": "Studio 依据 AI-DLC 的文件判断结果，仅有 KiroCrew 回执不算数",
 	"detail.additionalAttemptBlocked": "本次再次提交被阻止。此前已发送的内容见下方记录。",
 	"detail.bar.closed": "这是一条已关闭的记录。请打开当前待办继续。",
+	"detail.bar.confirmOpen": "上方的确认面板写明了这个操作会做什么，请在面板里确认；这里的按钮只负责打开和收起它。",
 	"detail.bar.hint": "选择一个操作后会打开确认面板，显示 Studio 将要发送的原文。",
 	"detail.bar.noDecisions": "这里没有需要决定的事，可查看上方记录的进度。",
 	"detail.bar.refreshing": "作为证据的文件正在变化，因此现在不能基于它提交任何内容。",
@@ -8224,124 +8226,126 @@ function fr({ card: e, pending: t, submit: n, busy: r, refreshing: i, acknowledg
 		id: ur,
 		role: "group",
 		"aria-label": g("confirm.label"),
-		children: [
-			/* @__PURE__ */ h("p", {
-				className: "studio-ch",
-				ref: _,
-				tabIndex: -1,
-				children: [/* @__PURE__ */ m(X, {
-					name: "send",
-					size: 14
-				}), g(`confirm.title.${v}`)]
-			}),
-			S ? /* @__PURE__ */ h(p, { children: [
-				/* @__PURE__ */ m("p", {
-					className: "studio-confirm-label",
-					children: t.wire === null || A ? g("confirm.labelSends", {
-						label: y,
-						wire: t.wire ?? g("confirm.noWireText")
-					}) : g("confirm.labelSendsBelow", { label: y })
+		children: [/* @__PURE__ */ h("div", {
+			className: "studio-confirm-body",
+			children: [
+				/* @__PURE__ */ h("p", {
+					className: "studio-ch",
+					ref: _,
+					tabIndex: -1,
+					children: [/* @__PURE__ */ m(X, {
+						name: "send",
+						size: 14
+					}), g(`confirm.title.${v}`)]
 				}),
-				t.wire === null ? null : /* @__PURE__ */ m("pre", {
-					className: "studio-sendtext studio-wrap-any",
-					children: t.wire
-				}),
-				j ? /* @__PURE__ */ m("p", {
-					className: "studio-muted",
-					children: g("confirm.deliveryNote")
-				}) : null
-			] }) : /* @__PURE__ */ m("p", {
-				className: "studio-confirm-label",
-				children: g(C === "host_control" ? "confirm.hostControl" : "confirm.studioOnly", { label: y })
-			}),
-			/* @__PURE__ */ h("p", {
-				className: "studio-route studio-muted",
-				children: [/* @__PURE__ */ m(X, {
-					name: "info",
-					size: 13
-				}), S ? g(e.evidence.session?.session_key ? "confirm.routing" : "confirm.routingUnbound", {
-					session: e.evidence.session?.session_key ?? "",
-					repo: e.repo.label || e.repo.repo_id,
-					intent: e.intent.slug || e.intent.intent_dir
-				}) : g(`confirm.consequence.${v}`)]
-			}),
-			E ? /* @__PURE__ */ h("p", {
-				className: "studio-route",
-				"data-tone": "danger",
-				role: "status",
-				children: [/* @__PURE__ */ m(X, {
-					name: "warn",
-					size: 13
-				}), g(E)]
-			}) : t.noteKey ? /* @__PURE__ */ h("p", {
-				className: "studio-route",
-				"data-tone": "warn",
-				role: "status",
-				children: [/* @__PURE__ */ m(X, {
-					name: "info",
-					size: 13
-				}), g(t.noteKey)]
-			}) : null,
-			E === "confirm.blocked.sessionUnbound" && f ? /* @__PURE__ */ m(b, {
-				type: "button",
-				onClick: f,
-				children: g("confirm.openSession")
-			}) : null,
-			T && d ? /* @__PURE__ */ m(b, {
-				type: "button",
-				onClick: () => d(T),
-				children: g("detail.repoBusy.openOwner")
-			}) : null,
-			x ? /* @__PURE__ */ h("label", {
-				className: "studio-ack",
-				children: [/* @__PURE__ */ m("input", {
-					type: "checkbox",
-					checked: a,
-					disabled: !Zn(n.stage) || r,
-					onChange: (e) => s(e.currentTarget.checked)
-				}), /* @__PURE__ */ m("span", { children: g(`confirm.acknowledge.${v}`) })]
-			}) : null,
-			k ? /* @__PURE__ */ h("div", {
-				className: "studio-banner",
-				"data-tone": "danger",
-				role: "alert",
-				children: [/* @__PURE__ */ m(X, {
-					name: "warn",
-					size: 15
-				}), /* @__PURE__ */ h("div", {
-					className: "studio-grow",
-					children: [/* @__PURE__ */ m("p", { children: g("confirm.mismatch") }), /* @__PURE__ */ m("pre", {
+				S ? /* @__PURE__ */ h(p, { children: [
+					/* @__PURE__ */ m("p", {
+						className: "studio-confirm-label",
+						children: t.wire === null || A ? g("confirm.labelSends", {
+							label: y,
+							wire: t.wire ?? g("confirm.noWireText")
+						}) : g("confirm.labelSendsBelow", { label: y })
+					}),
+					t.wire === null ? null : /* @__PURE__ */ m("pre", {
 						className: "studio-sendtext studio-wrap-any",
-						children: O
+						children: t.wire
+					}),
+					j ? /* @__PURE__ */ m("p", {
+						className: "studio-muted",
+						children: g("confirm.deliveryNote")
+					}) : null
+				] }) : /* @__PURE__ */ m("p", {
+					className: "studio-confirm-label",
+					children: g(C === "host_control" ? "confirm.hostControl" : "confirm.studioOnly", { label: y })
+				}),
+				/* @__PURE__ */ h("p", {
+					className: "studio-route studio-muted",
+					children: [/* @__PURE__ */ m(X, {
+						name: "info",
+						size: 13
+					}), S ? g(e.evidence.session?.session_key ? "confirm.routing" : "confirm.routingUnbound", {
+						session: e.evidence.session?.session_key ?? "",
+						repo: e.repo.label || e.repo.repo_id,
+						intent: e.intent.slug || e.intent.intent_dir
+					}) : g(`confirm.consequence.${v}`)]
+				}),
+				E ? /* @__PURE__ */ h("p", {
+					className: "studio-route",
+					"data-tone": "danger",
+					role: "status",
+					children: [/* @__PURE__ */ m(X, {
+						name: "warn",
+						size: 13
+					}), g(E)]
+				}) : t.noteKey ? /* @__PURE__ */ h("p", {
+					className: "studio-route",
+					"data-tone": "warn",
+					role: "status",
+					children: [/* @__PURE__ */ m(X, {
+						name: "info",
+						size: 13
+					}), g(t.noteKey)]
+				}) : null,
+				E === "confirm.blocked.sessionUnbound" && f ? /* @__PURE__ */ m(b, {
+					type: "button",
+					onClick: f,
+					children: g("confirm.openSession")
+				}) : null,
+				T && d ? /* @__PURE__ */ m(b, {
+					type: "button",
+					onClick: () => d(T),
+					children: g("detail.repoBusy.openOwner")
+				}) : null,
+				x ? /* @__PURE__ */ h("label", {
+					className: "studio-ack",
+					children: [/* @__PURE__ */ m("input", {
+						type: "checkbox",
+						checked: a,
+						disabled: !Zn(n.stage) || r,
+						onChange: (e) => s(e.currentTarget.checked)
+					}), /* @__PURE__ */ m("span", { children: g(`confirm.acknowledge.${v}`) })]
+				}) : null,
+				k ? /* @__PURE__ */ h("div", {
+					className: "studio-banner",
+					"data-tone": "danger",
+					role: "alert",
+					children: [/* @__PURE__ */ m(X, {
+						name: "warn",
+						size: 15
+					}), /* @__PURE__ */ h("div", {
+						className: "studio-grow",
+						children: [/* @__PURE__ */ m("p", { children: g("confirm.mismatch") }), /* @__PURE__ */ m("pre", {
+							className: "studio-sendtext studio-wrap-any",
+							children: O
+						})]
 					})]
-				})]
-			}) : null,
-			/* @__PURE__ */ h("div", {
-				className: "studio-confirm-actions",
-				children: [
-					/* @__PURE__ */ h(b, {
-						primary: !0,
-						type: "button",
-						disabled: E !== null || r || !Zn(n.stage),
-						onClick: c,
-						children: [/* @__PURE__ */ m(X, {
-							name: "check",
-							size: 14
-						}), g(S ? "confirm.send" : "confirm.apply")]
-					}),
-					/* @__PURE__ */ m(b, {
-						type: "button",
-						disabled: r,
-						onClick: l,
-						children: g("common.cancel")
-					}),
-					/* @__PURE__ */ m("span", {
-						className: "studio-hint studio-muted",
-						children: g(S ? "confirm.atMostOnce" : C === "host_control" ? "confirm.hostControlHint" : "confirm.studioOnlyHint")
-					})
-				]
-			})
-		]
+				}) : null
+			]
+		}), /* @__PURE__ */ h("div", {
+			className: "studio-confirm-actions",
+			children: [
+				/* @__PURE__ */ h(b, {
+					primary: !0,
+					type: "button",
+					disabled: E !== null || r || !Zn(n.stage),
+					onClick: c,
+					children: [/* @__PURE__ */ m(X, {
+						name: "check",
+						size: 14
+					}), g(S ? "confirm.send" : "confirm.apply")]
+				}),
+				/* @__PURE__ */ m(b, {
+					type: "button",
+					disabled: r,
+					onClick: l,
+					children: g("common.cancel")
+				}),
+				/* @__PURE__ */ m("span", {
+					className: "studio-hint studio-muted",
+					children: g(S ? "confirm.atMostOnce" : C === "host_control" ? "confirm.hostControlHint" : "confirm.studioOnlyHint")
+				})
+			]
+		})]
 	});
 }
 //#endregion
@@ -8401,7 +8405,7 @@ function hr({ card: e, submit: t, busy: n, refreshing: r, pending: i, onChoose: 
 			children: [/* @__PURE__ */ m(X, {
 				name: r ? "refresh" : "info",
 				size: 13
-			}), l ? c("detail.repoUnavailable.footer") : d ? c("detail.bar.closed") : r ? c("detail.bar.refreshing") : u.length === 0 ? c("detail.bar.noDecisions") : c("detail.bar.hint")]
+			}), l ? c("detail.repoUnavailable.footer") : d ? c("detail.bar.closed") : r ? c("detail.bar.refreshing") : u.length === 0 ? c("detail.bar.noDecisions") : c(i ? "detail.bar.confirmOpen" : "detail.bar.hint")]
 		}), p.map((e) => {
 			let t = s(e), o = i?.spec.decision === e.decision;
 			return /* @__PURE__ */ h(b, {

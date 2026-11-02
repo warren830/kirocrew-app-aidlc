@@ -1738,6 +1738,16 @@ button.studio-chip:hover { border-color: var(--border-hover); }
 .studio-ack input { accent-color: var(--accent); width: 15px; height: 15px; margin-top: 2px; }
 .studio-confirm-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-top: 12px; }
 .studio-confirm-actions .studio-hint { flex: 1 1 100%; }
+/* On a card, the confirmation sits between the scrolling card body and the action bar, in neither scroll
+   area. A long text (a whole answer group) pushed its own "Yes, send" and Cancel under the bar, where
+   nothing could scroll to them, while the bar's decision button only opens and closes this panel: the send
+   looked dead. So while it is open the card body only takes the space left over (its 96px foot padding is
+   for the bar alone), the panel takes up to 60% of the column, its text scrolls inside it when even that
+   does not fit, and its actions stay at its foot. */
+.studio-detail:has(> .studio-confirm) > .studio-detail-body { flex-basis: 0; padding-bottom: 16px; }
+.studio-detail > .studio-confirm { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; max-height: 60%; }
+.studio-detail > .studio-confirm > .studio-confirm-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.studio-detail > .studio-confirm > .studio-confirm-actions { flex: 0 0 auto; }
 .studio-hint { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; }
 .studio-actionbar .studio-hint { margin-right: auto; }
 .studio-refusal-details { margin: 6px 0 0; padding-left: 18px; font-size: 11.5px; }

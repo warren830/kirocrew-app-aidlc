@@ -1,5 +1,6 @@
 {
   "detail.additionalAttemptBlocked": "本次再次提交被阻止。此前已发送的内容见下方记录。",
+  "detail.bar.confirmOpen": "上方的确认面板写明了这个操作会做什么，请在面板里确认；这里的按钮只负责打开和收起它。",
   "detail.bar.hint": "选择一个操作后会打开确认面板，显示 Studio 将要发送的原文。",
   "detail.bar.noDecisions": "这里没有需要决定的事，可查看上方记录的进度。",
   "detail.bar.refreshing": "作为证据的文件正在变化，因此现在不能基于它提交任何内容。",

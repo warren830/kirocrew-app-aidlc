@@ -433,6 +433,24 @@ describe('the decision pane', () => {
     expect(within(panel).getByRole('button', { name: /Yes, send this exact text/ })).toBeEnabled()
   })
 
+  it('keeps the send outside the part of a long confirmation that scrolls, and says to confirm there', async () => {
+    installRoutes([card({ id: 'a_1' })])
+    mount()
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    await userEvent.click(rows()[0]!)
+    expect(screen.getByText(/Choosing an action opens a confirmation/)).toBeInTheDocument()
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Approve/ }))
+    const panel = await screen.findByRole('group', { name: 'Confirmation' })
+    // The text scrolls inside `.studio-confirm-body`; a send inside it could be pushed out of reach by a long
+    // answer group, under the action bar, while the bar's own button only opens and closes the panel.
+    const body = panel.querySelector('.studio-confirm-body')!
+    expect(body).toContainElement(within(panel).getByText('Approve', { selector: 'pre' }))
+    expect(body).not.toContainElement(within(panel).getByRole('button', { name: /Yes, send this exact text/ }))
+    expect(body).not.toContainElement(within(panel).getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByText(/Confirm it there; this button only opens and closes it/)).toBeInTheDocument()
+  })
+
   it('confirms a force stop as a KiroCrew call, with no wire text to send', async () => {
     const stop = card({ id: 'a_9', type: 'force_stop', severity: 'attention' })
     stop.decisions = [

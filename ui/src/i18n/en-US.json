@@ -652,6 +652,7 @@
   "delivery.watchingDisk": "Studio reads AI-DLC's files for the outcome; a KiroCrew receipt alone does not count",
   "detail.additionalAttemptBlocked": "This additional attempt was blocked. An earlier delivery is recorded below.",
   "detail.bar.closed": "This is a closed record. Open current actions to continue.",
+  "detail.bar.confirmOpen": "The confirmation above shows exactly what this does. Confirm it there; this button only opens and closes it.",
   "detail.bar.hint": "Choosing an action opens a confirmation that shows the exact text Studio will send.",
   "detail.bar.noDecisions": "There is nothing to decide here. Follow the recorded progress above.",
   "detail.bar.refreshing": "A file used as evidence is changing right now, so nothing can be submitted against it.",
