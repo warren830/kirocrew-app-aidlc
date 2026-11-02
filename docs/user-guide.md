@@ -16,20 +16,21 @@ bundles AI-DLC **2.11.0** and needs KiroCrew **0.8.0** or newer.
 ## Contents
 
 1. [Before you start](#before-you-start)
-2. [Step 0: Install Bun first](#step-0-install-bun-first)
-3. [Step 1: Install Studio into KiroCrew](#step-1-install-studio-into-kirocrew)
-4. [Step 2: Check the installation](#step-2-check-the-installation)
-5. [A tour of the interface](#a-tour-of-the-interface)
-6. [Your first intent, end to end](#your-first-intent-end-to-end)
-7. [Action Center](#action-center)
-8. [Intents](#intents)
-9. [Workflow Map](#workflow-map)
-10. [Activity](#activity)
-11. [Repos](#repos)
-12. [Settings](#settings)
-13. [Using Studio on a phone](#using-studio-on-a-phone)
-14. [Update, rebuild or uninstall Studio](#update-rebuild-or-uninstall-studio)
-15. [Troubleshooting](#troubleshooting)
+2. [Windows: run it in WSL 2](#windows-run-it-in-wsl-2)
+3. [Step 0: Install Bun first](#step-0-install-bun-first)
+4. [Step 1: Install Studio into KiroCrew](#step-1-install-studio-into-kirocrew)
+5. [Step 2: Check the installation](#step-2-check-the-installation)
+6. [A tour of the interface](#a-tour-of-the-interface)
+7. [Your first intent, end to end](#your-first-intent-end-to-end)
+8. [Action Center](#action-center)
+9. [Intents](#intents)
+10. [Workflow Map](#workflow-map)
+11. [Activity](#activity)
+12. [Repos](#repos)
+13. [Settings](#settings)
+14. [Using Studio on a phone](#using-studio-on-a-phone)
+15. [Update, rebuild or uninstall Studio](#update-rebuild-or-uninstall-studio)
+16. [Troubleshooting](#troubleshooting)
 
 ## Before you start
 
@@ -39,7 +40,7 @@ bundles AI-DLC **2.11.0** and needs KiroCrew **0.8.0** or newer.
 |---|---|
 | **Bun** | Required. Install it first: [Step 0](#step-0-install-bun-first) |
 | KiroCrew | 0.8.0 or newer, running |
-| Platform | macOS or Linux |
+| Platform | macOS or Linux. On Windows, run it in WSL 2: [Windows](#windows-run-it-in-wsl-2) |
 | `kiro-cli` | Signed in, as the same operating-system user that runs the gateway |
 | Kiro plan | A paid plan for the models AI-DLC expects |
 | Git | To clone Studio. In a repository it is optional: without it Studio shows "Git observation is off" |
@@ -65,10 +66,78 @@ machine too.
 | Conversation | The KiroCrew chat, running the `aidlc` agent, that one intent is bound to. Studio sends your decisions there as your own messages |
 | Card | One item in the Action Center queue |
 
+## Windows: run it in WSL 2
+
+KiroCrew itself installs directly on Windows (its official `KiroCrew-Setup.exe`), but **Studio does not run on native
+Windows yet**:
+
+- Studio's backend uses a file lock (`fcntl`) that exists only on macOS and Linux. In KiroCrew for Windows, Studio
+  installs, but its backend fails to load.
+- KiroCrew on Windows does not support project skills (`<project>/.kiro/skills`) yet, and AI-DLC is installed in a
+  project's `.kiro/`.
+- `app.json` declares only macOS and Linux, and Studio has not been validated on Windows.
+
+So on Windows, run the KiroCrew Gateway in Linux under WSL 2 and use it from a Windows browser. If KiroCrew is already
+installed directly on Windows, quit it first: both use port 5476 by default.
+
+> [!WARNING]
+> This path has not been validated end to end on a Windows host yet. It relies on the Linux environment Studio already
+> supports. If something goes wrong, attach a **Diagnostic export** from the Activity page to your report.
+
+You need Windows 10 version 2004 (build 19041) or newer, or Windows 11.
+
+1. Open PowerShell as an administrator, install WSL 2 with Ubuntu, restart when asked and create a Linux user:
+
+   ```powershell
+   wsl --install -d Ubuntu
+   ```
+
+2. Open the **Ubuntu** terminal from the Start menu and install the basic tools:
+
+   ```bash
+   sudo apt update && sudo apt install -y curl unzip git
+   ```
+
+3. Install Bun **inside WSL**: follow the Linux steps of [Step 0](#step-0-install-bun-first) in the Ubuntu terminal. A
+   Windows Bun installed from PowerShell is invisible to the gateway and conversations in WSL.
+4. In the Ubuntu terminal, install KiroCrew with its official one-line installer, and sign in to `kiro-cli` as the
+   same Linux user:
+
+   ```bash
+   curl -fsSL https://download.crew.kiro.dev/cli.sh | sh
+   ```
+
+   Channels, first-run setup and upgrades are in
+   [KiroCrew's install guide](https://github.com/kirodotdev/KiroCrew/blob/main/docs/guides/install.md).
+5. Continue with [Step 1](#step-1-install-studio-into-kirocrew) inside WSL: clone into the Linux file system (for
+   example `~/work`). With the helper script, set `KC_PY` to the Python that runs the gateway in WSL.
+6. Open `http://localhost:5476` in a Windows browser. WSL 2 forwards localhost ports to Windows by default. Then do
+   [Step 2](#step-2-check-the-installation) as usual.
+
+You can also run KiroCrew's official image under Docker Desktop. This command is from KiroCrew's README and binds the
+port to this machine only:
+
+```bash
+docker run -d --name kirocrew \
+  -p 127.0.0.1:5476:5476 \
+  -v kirocrew-home:/home/kirocrew \
+  ghcr.io/kirodotdev/kirocrew:stable
+```
+
+Then open a shell in it with `docker exec -it kirocrew bash` and install Bun and Studio there with the Linux steps (see
+the [Docker installation verification](verification/2026-09-17-docker-install/README.md)).
+
+Keep in mind:
+
+- Every path you give Studio is a Linux path inside WSL (or the container), such as `/home/<you>/work/tasklist`,
+  including in **Install from Path** and **Add repository**.
+- Keep the projects you register in the WSL file system too, not on a Windows drive under `/mnt/c/...`: Windows drives
+  are much slower through WSL, and Studio tells repositories apart by stable file identity (device and inode).
+
 ## Step 0: Install Bun first
 
 Install Bun **before installing Studio, and preferably before launching KiroCrew**, so that the gateway
-and every conversation it starts can see it.
+and every conversation it starts can see it. On Windows, install it inside WSL: [Windows](#windows-run-it-in-wsl-2).
 
 ### Why first
 
@@ -685,6 +754,7 @@ make a safe uninstall possible are kept in Studio's own storage. Then use
 | Symptom | What to do |
 |---|---|
 | `bun: command not found` in a terminal | Follow [Step 0](#step-0-install-bun-first), add Bun to `PATH`, open a new terminal, run `bun --version` |
+| On Windows, Bun runs in PowerShell but Studio cannot find it | Studio runs in WSL: install Bun again in the Ubuntu terminal, following [Step 0](#step-0-install-bun-first) |
 | Terminal runs Bun, but Studio says **Bun was not found** | Run `command -v bun` on the gateway's machine, paste the result into **Settings → About → Absolute path to Bun**, **Save and verify path** |
 | **AI-DLC conversations cannot run Bun**, or every approval is refused | **Make Bun available to conversations → Create the link** |
 | "~/.local/bin is not on this gateway's conversation PATH" | Add Bun's directory to KiroCrew's agent environment (`agent.env` `PATH`) and restart the gateway |

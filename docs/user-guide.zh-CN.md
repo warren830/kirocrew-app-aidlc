@@ -15,20 +15,21 @@
 ## 目录
 
 1. [开始之前](#before-you-start)
-2. [第 0 步：先安装 Bun](#step-0)
-3. [第 1 步：把 Studio 安装到 KiroCrew](#step-1)
-4. [第 2 步：检查安装结果](#step-2)
-5. [界面导览](#tour)
-6. [从零跑完第一个意图](#first-intent)
-7. [待办中心](#action-center)
-8. [意图](#intents)
-9. [流程图](#workflow-map)
-10. [活动](#activity)
-11. [仓库](#repos)
-12. [设置](#settings)
-13. [在手机上使用](#mobile)
-14. [更新、重新构建或卸载 Studio](#update)
-15. [常见问题](#troubleshooting)
+2. [Windows：在 WSL 2 里运行](#windows)
+3. [第 0 步：先安装 Bun](#step-0)
+4. [第 1 步：把 Studio 安装到 KiroCrew](#step-1)
+5. [第 2 步：检查安装结果](#step-2)
+6. [界面导览](#tour)
+7. [从零跑完第一个意图](#first-intent)
+8. [待办中心](#action-center)
+9. [意图](#intents)
+10. [流程图](#workflow-map)
+11. [活动](#activity)
+12. [仓库](#repos)
+13. [设置](#settings)
+14. [在手机上使用](#mobile)
+15. [更新、重新构建或卸载 Studio](#update)
+16. [常见问题](#troubleshooting)
 
 <a id="before-you-start"></a>
 
@@ -40,7 +41,7 @@
 |---|---|
 | **Bun** | 必需，并且要最先安装：[第 0 步](#step-0) |
 | KiroCrew | 0.8.0 或更新版本，并已启动 |
-| 平台 | macOS 或 Linux |
+| 平台 | macOS 或 Linux。Windows 请在 WSL 2 里运行，见 [Windows](#windows) |
 | `kiro-cli` | 已登录，且登录用户与运行 Gateway 的系统用户相同 |
 | Kiro 订阅 | 支持 AI-DLC 所用模型的付费订阅 |
 | Git | 用于克隆 Studio。在项目仓库里是可选的：没有 Git 时 Studio 显示“Git 观测未启用” |
@@ -65,11 +66,75 @@
 | 会话 | 某个意图绑定的那个 KiroCrew 对话，运行 `aidlc` agent。Studio 把你的决定以你本人消息的形式发到这里 |
 | 卡片 | 待办中心队列里的一项 |
 
+<a id="windows"></a>
+
+## Windows：在 WSL 2 里运行
+
+KiroCrew 本身可以直接装在 Windows 上（官方安装包 `KiroCrew-Setup.exe`），但 **Studio 目前还不能在原生 Windows 上运行**：
+
+- Studio 的后端用到了只有 macOS 和 Linux 才有的文件锁（`fcntl`）。在 Windows 版 KiroCrew 里，Studio 能装上，但后端加载会失败。
+- KiroCrew 在 Windows 上暂不支持项目级 skills（`<项目>/.kiro/skills`），而 AI-DLC 正是装在项目的 `.kiro/` 下。
+- `app.json` 声明的平台只有 macOS 和 Linux，Studio 也还没有在 Windows 上做过验证。
+
+所以在 Windows 上，请把 KiroCrew Gateway 跑在 WSL 2 的 Linux 里，再用 Windows 的浏览器访问。如果已经在 Windows 上直接装了
+KiroCrew，先退出它：两边默认都用 5476 端口。
+
+> [!WARNING]
+> 这条路径还没有在 Windows 主机上做过端到端验证，它依靠的是 Studio 已支持的 Linux 环境。遇到问题时，请附上活动页的
+> **诊断导出** 反馈。
+
+需要 Windows 10 2004（内部版本 19041）或更新版本，或 Windows 11。
+
+1. 以管理员身份打开 PowerShell，安装 WSL 2 和 Ubuntu，按提示重启并创建 Linux 用户：
+
+   ```powershell
+   wsl --install -d Ubuntu
+   ```
+
+2. 打开开始菜单里的 **Ubuntu** 终端，装好基础工具：
+
+   ```bash
+   sudo apt update && sudo apt install -y curl unzip git
+   ```
+
+3. **在 WSL 里**安装 Bun：在 Ubuntu 终端里按 [第 0 步](#step-0) 的 Linux 步骤执行。在 PowerShell 里装的 Windows 版 Bun，
+   WSL 里的 Gateway 和会话都用不到。
+4. 在 Ubuntu 终端里用 KiroCrew 官方的一行命令安装 KiroCrew，并以同一个 Linux 用户登录 `kiro-cli`：
+
+   ```bash
+   curl -fsSL https://download.crew.kiro.dev/cli.sh | sh
+   ```
+
+   版本选择、首次设置和升级，见 [KiroCrew 安装指南](https://github.com/kirodotdev/KiroCrew/blob/main/docs/guides/install.md)。
+5. 继续在 WSL 里做 [第 1 步](#step-1)：把仓库克隆到 Linux 文件系统里（例如 `~/work`）。用安装脚本时，把 `KC_PY` 设为
+   WSL 里运行 Gateway 的 Python。
+6. 在 Windows 的浏览器里打开 `http://localhost:5476`。WSL 2 默认会把 localhost 端口转发给 Windows。然后照常做
+   [第 2 步](#step-2)。
+
+也可以用 Docker Desktop 运行 KiroCrew 官方镜像，命令来自 KiroCrew 的 README，端口只绑定在本机：
+
+```bash
+docker run -d --name kirocrew \
+  -p 127.0.0.1:5476:5476 \
+  -v kirocrew-home:/home/kirocrew \
+  ghcr.io/kirodotdev/kirocrew:stable
+```
+
+然后用 `docker exec -it kirocrew bash` 进入容器，在容器里按 Linux 步骤安装 Bun 和 Studio（见
+[Docker 验证记录](verification/2026-09-17-docker-install/README.md)）。
+
+注意：
+
+- 填给 Studio 的路径都是 WSL（或容器）里的 Linux 路径，例如 `/home/<你>/work/tasklist`，包括 **Install from Path**
+  和 **添加仓库**。
+- 要登记的项目也放在 WSL 的文件系统里，不要用 `/mnt/c/...` 下的 Windows 盘：经过 WSL 读写 Windows 盘慢得多，而 Studio
+  靠稳定的文件身份（设备号和 inode）来区分仓库。
+
 <a id="step-0"></a>
 
 ## 第 0 步：先安装 Bun
 
-请在**安装 Studio 之前、最好在启动 KiroCrew 之前**装好 Bun，这样 Gateway 和它启动的每个会话都能找到它。
+请在**安装 Studio 之前、最好在启动 KiroCrew 之前**装好 Bun，这样 Gateway 和它启动的每个会话都能找到它。Windows 用户要装在 WSL 里，见 [Windows](#windows)。
 
 ### 为什么必须最先装
 
@@ -622,6 +687,7 @@ bash scripts/dev-install.sh       # 先构建 ui/dist/index.mjs，再安装
 | 现象 | 处理方法 |
 |---|---|
 | 终端提示 `bun: command not found` | 按 [第 0 步](#step-0) 安装并配置 `PATH`，重新打开终端后运行 `bun --version` |
+| Windows 上 PowerShell 里能运行 Bun，Studio 却找不到 | Studio 运行在 WSL 里，要在 Ubuntu 终端里按 [第 0 步](#step-0) 再装一次 Bun |
 | 终端能运行 Bun，Studio 却显示未找到 | 在 Gateway 机器上运行 `command -v bun`，把输出填入 **设置 → 关于 → Bun 的绝对路径**，点 **保存并校验路径** |
 | 显示 **AI-DLC 对话无法运行 Bun**，或所有批准都被拒绝 | **让对话可以使用 Bun → 创建链接** |
 | 提示“~/.local/bin 不在本 gateway 的对话 PATH 里” | 把 Bun 所在目录加入 KiroCrew 的 agent 环境（`agent.env` 的 `PATH`），然后重启 Gateway |

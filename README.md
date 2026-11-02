@@ -96,7 +96,7 @@ Studio removes that cost without weakening the method.
 |---|---|
 | **Bun** | **Install it first, before anything else** ([below](#1-install-bun-first)), on the gateway's machine |
 | KiroCrew | 0.8.0 or newer (`minKiroCrewVersion`) |
-| Platform | macOS or Linux |
+| Platform | macOS or Linux. KiroCrew also runs on Windows, but Studio does not yet: on Windows, run the gateway in WSL 2 ([guide](docs/user-guide.md#windows-run-it-in-wsl-2)), not yet validated end to end |
 | For running AI-DLC in a repository | a signed-in `kiro-cli`, and a paid Kiro plan for the models AI-DLC expects |
 | For Git observation | `git` on `PATH` (optional; Studio degrades to "Git unavailable" without it) |
 

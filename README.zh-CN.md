@@ -74,7 +74,7 @@ Studio 去掉了这些代价，同时不削弱这套方法本身。
 
 ## 快速开始
 
-需要：KiroCrew 0.8.0 或更新版本，macOS 或 Linux。要在仓库里运行 AI-DLC，还需要已登录的 `kiro-cli`，以及支持所用模型的
+需要：KiroCrew 0.8.0 或更新版本，macOS 或 Linux（KiroCrew 也能装在 Windows 上，但 Studio 暂不支持原生 Windows，请在 WSL 2 里运行，见[使用指南](docs/user-guide.zh-CN.md#windows)，尚未在 Windows 上做过端到端验证）。要在仓库里运行 AI-DLC，还需要已登录的 `kiro-cli`，以及支持所用模型的
 Kiro 订阅。以下命令都在运行 KiroCrew Gateway 的机器上、以运行 Gateway 的同一系统用户执行。
 
 <a id="install-bun-first"></a>
