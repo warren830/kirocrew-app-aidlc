@@ -506,7 +506,7 @@
   "confirm.title.accept_as_is": "确认按现状接受该阶段",
   "confirm.title.accept_assumptions": "确认接受这些假设",
   "confirm.title.acknowledge": "确认你已阅读该事件",
-  "confirm.title.answers": "确认作为一次操作发送的答案组",
+  "confirm.title.answers": "确认发送到该意图会话的答案",
   "confirm.title.approve": "确认发送到该意图会话的原文",
   "confirm.title.approve_plan": "确认发送到该意图会话的计划批准",
   "confirm.title.confirm_summary": "确认你对摘要检查点的回复",

@@ -506,7 +506,7 @@
   "confirm.title.accept_as_is": "Confirm accepting this stage as it stands",
   "confirm.title.accept_assumptions": "Confirm accepting the assumptions",
   "confirm.title.acknowledge": "Confirm you have read this incident",
-  "confirm.title.answers": "Confirm the answer group sent as one action",
+  "confirm.title.answers": "Confirm the answers sent to this intent's conversation",
   "confirm.title.approve": "Confirm the exact text sent to this intent's conversation",
   "confirm.title.approve_plan": "Confirm the plan approval sent to this intent's conversation",
   "confirm.title.confirm_summary": "Confirm your reply to the summary checkpoint",
