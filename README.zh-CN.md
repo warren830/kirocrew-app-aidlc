@@ -14,6 +14,11 @@ AI-DLC 自己的会话送回去，从不绕过它。
 > 请在 1.x 里升级或卸载；同一个 intent 的决定只在一个 Studio 里回答（各自会开自己的会话）。进展与改动见
 > [`docs/plan.md`](docs/plan.md)。
 
+> [!IMPORTANT]
+> **在一切开始之前，先在 KiroCrew Gateway 所在机器上[安装 Bun](#install-bun-first)。** AI-DLC 靠它运行，没有它，
+> 任何仓库都装不了 AI-DLC，你的每个决定也都会被拒绝。第一次使用请读[使用指南](docs/user-guide.zh-CN.md)：
+> 安装、第一个意图、每个页面的说明。
+
 ## 为什么需要 Studio
 
 AI-DLC 是一套刻意严谨的方法：5 个阶段、33 个步骤、14 个专家 agent，凡是需要人做决定的地方都会停下来，
@@ -29,7 +34,7 @@ Studio 去掉了这些代价，同时不削弱这套方法本身。
 ## 核心价值
 
 - **一个队列装下所有待你决策的事。** 所有已登记仓库的审批关卡、问题、计划批准、缺失输入、故障恢复、失败、
-  熔断、安装冲突和工具授权，统一按优先级排好；有新事项时会通知你回来处理。
+  熔断和安装冲突，统一按优先级排好；有新事项，或会话在等你授权工具调用时，会通知你回来处理。
 - **看着证据做决定。** 关卡旁边就是这一步的产物、验收标准、评审结论与发现、未解决的风险和历次修订；问题直接
   变成表单。还可以让只读的 AI 顾问先起草一个答案，你看过之后才会发出。
 - **AI-DLC 始终说了算。** Studio 不重新实现任何步骤，也不改任何工作流文件。你的批准以你本人消息的形式，
@@ -42,8 +47,8 @@ Studio 去掉了这些代价，同时不削弱这套方法本身。
   阶段会按单元展开成多条泳道。活动时间线标明每个事件来自 AI-DLC、KiroCrew、Git 还是 Studio。
 - **几步就能从空仓库走到第一个检查点。** 安装 AI-DLC 是一次先预览、有回执、可回滚的事务。编排计划时能看到准确
   的步骤数和如实的耗时区间。最后一键创建意图的会话，把它放进侧栏中该仓库的文件夹，并开始运行。
-- **对自身局限说实话。** 完全无人值守的连续运行（Keep moving）默认关闭，设置页里写明了原因：对 AI-DLC
-  来说，任何往会话里发文字的方式都算一次人工回合，Studio 不会假装不是这样。
+- **对自身局限说实话。** Studio 没有无人值守模式：对 AI-DLC 来说，任何往会话里发文字的方式都算一次人工回合，
+  所以每次运行都会停在下一个检查点。Studio 不会假装不是这样。
 
 ## 一个决定是怎么送达 AI-DLC 的
 
@@ -69,13 +74,31 @@ Studio 去掉了这些代价，同时不削弱这套方法本身。
 
 ## 快速开始
 
-需要：KiroCrew 0.8.0 或更新版本，macOS 或 Linux。要在仓库里运行 AI-DLC，还需要 Bun、已登录的 `kiro-cli`，
-以及支持所用模型的 Kiro 订阅。
+需要：KiroCrew 0.8.0 或更新版本，macOS 或 Linux。要在仓库里运行 AI-DLC，还需要已登录的 `kiro-cli`，以及支持所用模型的
+Kiro 订阅。以下命令都在运行 KiroCrew Gateway 的机器上、以运行 Gateway 的同一系统用户执行。
 
-在 Gateway 所在机器上克隆仓库，并记下目录的绝对路径：
+<a id="install-bun-first"></a>
+
+### 1. 最先安装 Bun
+
+AI-DLC 的引擎和每个 AI-DLC 会话里的 hook 都靠 Bun 运行。没有 Bun，Studio 无法给仓库安装 AI-DLC、无法新建意图、无法计算计划，
+AI-DLC 还会拒绝你发出的每个批准和答复。请在安装 Studio 之前（最好在启动 KiroCrew 之前）装好：
 
 ```bash
-git clone https://github.com/warren830/kirocrew-app-aidlc.git
+curl -fsSL https://bun.com/install | bash      # 或者：brew install oven-sh/bun/bun
+export PATH="$HOME/.bun/bin:$PATH"             # 同时把这一行加到 ~/.zshrc 或 ~/.bashrc
+bun --version
+command -v bun
+```
+
+Linux 上该脚本需要 `unzip`（Debian/Ubuntu：`sudo apt install curl unzip`）。
+
+### 2. 安装 Studio
+
+克隆 **`v2` 分支**（默认分支 `main` 是 1.x），并记下目录的绝对路径：
+
+```bash
+git clone -b v2 https://github.com/warren830/kirocrew-app-aidlc.git
 cd kirocrew-app-aidlc
 pwd
 ```
@@ -87,21 +110,30 @@ pwd
 
 不方便用界面时，也可以在克隆目录中执行 `bash scripts/dev-install.sh --no-build`。
 
-接着打开 AI-DLC Studio v2：
+### 3. 在 Studio 里确认 Bun
 
-1. **仓库 → 添加仓库**，选择项目目录。Studio 会先做只读预检。
+打开 **AI-DLC Studio v2 → 设置 → 关于 → Bun 可执行文件**，必须显示 Bun 的路径和版本，以及 **AI-DLC 对话可以运行 Bun**：
+
+- 只有 **已检查：** 列表、没有路径，说明找不到 Bun：点 **重新探测 Bun**，或把 `command -v bun` 的输出填入 **Bun 的绝对路径**，点 **保存并校验路径**。
+- 显示 **AI-DLC 对话无法运行 Bun**：点 **让对话可以使用 Bun** 并确认。Studio 只创建一个符号链接 `~/.local/bin/bun`，
+  删除它即可撤销。从桌面版启动的 Gateway 给会话的 `PATH` 里没有 `~/.bun/bin`，不建这个链接，AI-DLC 会拒绝你的每个决定。
+
+### 4. 跑第一个意图
+
+1. **仓库 → 添加仓库**，选择项目目录，**运行预检**（只读）后注册。
 2. 如果仓库里还没有 AI-DLC，点 **安装 AI-DLC**。写入任何文件之前，你会先看到全部变更。
-3. **新建意图**：依次完成「工作、预设、计划、复核」四步。新建的意图默认暂停。
-4. 在意图上点 **创建会话并开始运行**。工作流跑到第一个需要你决定的地方时，它会出现在待办中心。
+3. **新建意图**：依次完成「工作、预设、计划、复核」四步。创建时不会运行任何东西。
+4. 在 **意图** 页点 **绑定会话 → 创建会话并继续运行**。工作流跑到第一个需要你决定的地方时，它会出现在待办中心。
 
-Bun 安装、安装脚本、GitHub registry、更新等完整步骤，见 [中文安装说明](docs/installation.zh-CN.md)。
+完整的安装方式（安装脚本、Docker、GitHub registry）、安装后检查、逐页功能说明和常见问题，见
+[使用指南](docs/user-guide.zh-CN.md)。
 
 ## 文档
 
 | 文档 | 内容 |
 |---|---|
 | [README.md](README.md)（英文） | 功能全貌、权限说明、开发方式 |
-| [docs/installation.zh-CN.md](docs/installation.zh-CN.md) | 中文安装与更新说明 |
+| [docs/user-guide.zh-CN.md](docs/user-guide.zh-CN.md) | 使用指南：安装（先装 Bun）、从零跑完第一个意图、逐页功能说明、常见问题 |
 | [docs/AI-DLC-Studio-PRD.md](docs/AI-DLC-Studio-PRD.md) | 产品需求 |
 | [docs/design/architecture.md](docs/design/architecture.md) | 模块划分、权限模型、决策记录 |
 

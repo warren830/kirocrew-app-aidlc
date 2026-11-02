@@ -15,6 +15,11 @@ never around it.
 > receipts, upgrade or uninstall the repositories 1.x installed from 1.x, and answer each intent's decisions in one
 > Studio only (each opens its own conversation). Progress and what changed: [`docs/plan.md`](docs/plan.md).
 
+> [!IMPORTANT]
+> **Install [Bun](#1-install-bun-first) before anything else**, on the machine running the KiroCrew Gateway.
+> AI-DLC runs on it, and without it no repository can be set up and every decision is refused. New here? Read the
+> [user guide](docs/user-guide.md) ([中文](docs/user-guide.zh-CN.md)): installation, first intent, every page.
+
 ## Why Studio
 
 AI-DLC is rigorous by design. It has five phases, 33 stages and 14 specialist agents, and it stops for a
@@ -31,8 +36,9 @@ Studio removes that cost without weakening the method.
 ## Core value
 
 - **One queue for every human decision.** Gates, questions, plan approvals, missing inputs, recovery
-  incidents, failures, circuit breakers, install conflicts and tool approvals all arrive from every
-  registered repository. They are ordered by priority, and a notification brings you back when one arrives.
+  incidents, failures, circuit breakers and install conflicts all arrive from every registered repository.
+  They are ordered by priority, and a notification brings you back when one arrives, or when a conversation
+  waits for a tool approval.
 - **Decide with the evidence in view.** A gate shows the stage's artifacts, its acceptance criteria,
   reviewer verdicts and findings, unresolved risks and earlier revisions. Questions become forms. An
   optional read-only Advisor can draft an answer, and you review it before anything is sent.
@@ -51,9 +57,8 @@ Studio removes that cost without weakening the method.
   receipt-backed transaction that you can roll back. Compose a plan with exact stage counts and honest
   estimate ranges. Then one click creates the intent's conversation, files it in the sidebar under the
   repository, and starts the workflow.
-- **Honest about its limits.** Fully unattended runs ("Keep moving") ship disabled, with the reason shown in
-  Settings, because every way of sending text to a session counts as a human turn to AI-DLC. Studio will not
-  pretend otherwise.
+- **Honest about its limits.** Studio has no unattended mode: every way of sending text to a session counts
+  as a human turn to AI-DLC, so each run stops at the next checkpoint. Studio will not pretend otherwise.
 
 ## What you get
 
@@ -78,7 +83,8 @@ Studio removes that cost without weakening the method.
 - **Workspace controls** — preview changes to an existing intent's scope, depth and test strategy; create
   and switch spaces through the engine. Rename or archive repository registrations and clean up selected
   historical transaction directories while protecting active recovery and current rollback backups.
-- **Bun configuration** — select and verify an executable or repeat automatic detection from Settings.
+- **Bun configuration** — select and verify an executable or repeat automatic detection from Settings, and
+  make Bun reachable from AI-DLC conversations with one reversible link.
 - **Evidence trail** — a readable timeline that always says whether an event came from AI-DLC, KiroCrew,
   Git or Studio, with a drawer onto the raw audit block behind it.
 - **English and Simplified Chinese**, light and dark, keyboard reachable, and usable at 390px for the
@@ -88,9 +94,10 @@ Studio removes that cost without weakening the method.
 
 | | |
 |---|---|
+| **Bun** | **Install it first, before anything else** ([below](#1-install-bun-first)), on the gateway's machine |
 | KiroCrew | 0.8.0 or newer (`minKiroCrewVersion`) |
 | Platform | macOS or Linux |
-| For running AI-DLC in a repository | [Bun installed on the gateway](#install-bun-for-ai-dlc), a signed-in `kiro-cli`, and a paid Kiro plan for the models AI-DLC expects |
+| For running AI-DLC in a repository | a signed-in `kiro-cli`, and a paid Kiro plan for the models AI-DLC expects |
 | For Git observation | `git` on `PATH` (optional; Studio degrades to "Git unavailable" without it) |
 
 Studio itself opens no port, no tunnel and no external network connection. It inherits the KiroCrew
@@ -98,178 +105,79 @@ Gateway's binding, authentication and remote-access policy.
 
 ## Install
 
-[中文安装说明](docs/installation.zh-CN.md)
+The [user guide](docs/user-guide.md) ([中文](docs/user-guide.zh-CN.md)) has every installation option,
+the checks to run afterwards, a walkthrough of the first intent and troubleshooting. The short version
+follows. Run every command on the machine that runs the KiroCrew Gateway, as the user that runs it.
 
-### Install Bun for AI-DLC
+### 1. Install Bun first
 
-AI-DLC uses Bun to run its TypeScript tools. Install it **on the machine running the KiroCrew
-Gateway, as the same operating-system user**. If the gateway is remote, run these commands there.
-Node.js and npm are needed only if you rebuild Studio's UI.
-
-On macOS (13 or newer) or Linux, use the [official Bun installer](https://bun.com/docs/installation):
+AI-DLC's engine and the hooks inside every AI-DLC conversation run on Bun. Without it Studio cannot install
+AI-DLC, create an intent or compute a plan, and AI-DLC refuses every approval and answer you send. Install
+it before Studio, preferably before launching KiroCrew:
 
 ```bash
-curl -fsSL https://bun.com/install | bash
-
-# Make the default installation available in this terminal immediately.
-export PATH="$HOME/.bun/bin:$PATH"
+curl -fsSL https://bun.com/install | bash      # or: brew install oven-sh/bun/bun
+export PATH="$HOME/.bun/bin:$PATH"             # also add this line to ~/.zshrc or ~/.bashrc
 bun --version
 command -v bun
 ```
 
-Linux needs `unzip` for this installer. On Debian/Ubuntu, install missing prerequisites with
-`sudo apt install curl unzip`; on other distributions, use their package manager.
+Linux needs `unzip` for this installer (`sudo apt install curl unzip` on Debian/Ubuntu).
 
-If you already use Homebrew, this is an alternative installation method:
+### 2. Install Studio
 
-```bash
-brew install oven-sh/bun/bun
-bun --version
-command -v bun
-```
-
-If a new terminal reports `bun: command not found`, add `export PATH="$HOME/.bun/bin:$PATH"` to
-`~/.zshrc` for zsh or `~/.bashrc` for Bash (`~/.bash_profile` for a login shell), then reopen the terminal. This path applies to the official
-installer's default location; use your actual installation directory if you customized it.
-
-After Studio is installed, open **Settings → Bun executable → Detect Bun again**. If it still cannot find
-Bun, paste the full path printed by `command -v bun` into **Absolute path to Bun**, then click
-**Save and verify path**. Use the expanded absolute path, not a literal `~` or `$HOME`.
-Desktop-launched gateways may have a different `PATH` from your terminal; these settings apply
-immediately without restarting Studio.
-
-Studio runs Bun by its full path, but AI-DLC's hooks inside each conversation call plain `bun`. A
-desktop-launched gateway gives conversations a `PATH` without `~/.bun/bin`, and then AI-DLC records no
-human turn and refuses every approval. When that is the case, the same Settings row says
-**AI-DLC conversations cannot run Bun**; click **Make Bun available to conversations** and confirm. Studio
-creates one symbolic link, `~/.local/bin/bun`, which every conversation's `PATH` already includes, and
-changes nothing else. Delete that link to undo it.
-
-### Install from a local clone in Discover
-
-Clone the repository on the machine running the KiroCrew Gateway and note its absolute path:
+Clone the **`v2` branch**; the default branch, `main`, is the 1.x line:
 
 ```bash
-git clone https://github.com/warren830/kirocrew-app-aidlc.git
+git clone -b v2 https://github.com/warren830/kirocrew-app-aidlc.git
 cd kirocrew-app-aidlc
 pwd
 ```
 
-1. In KiroCrew, open **Discover** and click **Add source** at the bottom of the **Sources** list.
+Then either:
 
-   ![Add source at the bottom of the Discover Sources list](docs/images/install/discover-add-source.png)
+- in KiroCrew, **Discover → Add source → Install from Path**, paste the `pwd` output, **Install**, then
+  **Library → AI-DLC Studio v2 → Enable** (grant trust to this app only if asked); or
+- run `bash scripts/dev-install.sh --no-build` in the clone. For a gateway other than the macOS desktop
+  app, set `KC_PY` to the gateway's Python and `KC_PORT` to its port.
 
-2. In the **External Registries** panel, paste the path printed by `pwd` into **Install from Path**
-   and click **Install**.
+The repository includes the built UI, so neither needs Node.js or npm.
 
-   ![Install from Path in the External Registries panel](docs/images/install/install-from-path.png)
+### 3. Check Bun from Studio
 
-3. Open **Library**, find **AI-DLC Studio v2** and click **Enable**. If it is not listed, check whether
-   **Show enabled only** is on. Once enabled, its **⋯** menu also offers **Sync** (used for updates),
-   **Disable** and **Uninstall**.
+Open **AI-DLC Studio v2 → Settings → About → Bun executable**. It must show Bun's path and version, and
+**AI-DLC conversations can run Bun**:
 
-   ![AI-DLC Studio v2 enabled in Library, with its ⋯ menu open](docs/images/install/library-enable.png)
+- Only a **Checked:** list and no path, meaning Bun was not found: click **Detect Bun again**, or paste the output of `command -v bun` into
+  **Absolute path to Bun** and click **Save and verify path**.
+- **AI-DLC conversations cannot run Bun**: click **Make Bun available to conversations** and confirm.
+  Studio creates one symbolic link, `~/.local/bin/bun`, which every conversation's `PATH` already
+  includes; delete it to undo. A desktop-launched gateway gives conversations a `PATH` without
+  `~/.bun/bin`, and without this link AI-DLC records no human turn and refuses every decision.
 
-4. If KiroCrew opens the app's details and asks for trust, grant it to this app only; blanket
-   third-party trust is not needed.
-
-The path must be a directory on the gateway's machine. This uses the built UI checked into the
-repository, so it needs neither Node.js, npm nor the helper script.
-
-### Install with the helper script
-
-Use this from a terminal, inside a Docker container or for a remote gateway. The installation helper needs Git,
-Bash, `curl` and the gateway's Python: `KC_PY` when set (a path or a command name on `PATH`),
-otherwise the runtime bundled in `/Applications/KiroCrew.app` when present, otherwise `python3` on
-`PATH`. It passes the same interpreter to `scripts/kcapi.sh`. The repository includes the built UI,
-so `--no-build` needs neither Node.js nor npm:
-
-```bash
-git clone https://github.com/warren830/kirocrew-app-aidlc.git
-cd kirocrew-app-aidlc
-bash scripts/dev-install.sh --no-build
-```
-
-The helper installs or updates this checkout in the **local running gateway**, grants trust to
-`aidlc-studio-v2` only, enables its backend, and prints hook and app health. Its defaults match an Apple
-Silicon macOS desktop installation: port `5476` and the Python runtime bundled inside
-`/Applications/KiroCrew.app`. Open **Apps → AI-DLC Studio v2** after installation; the final app-health
-response should report `"status": "healthy"`.
-
-For Linux, Intel macOS, or a source/virtual-environment installation, set `KC_PY` to the **same Python
-interpreter that runs your KiroCrew gateway** unless that is already the `python3` on `PATH` (as in the
-official Docker image). Set `KC_PORT` if the gateway uses another port:
-
-```bash
-# Replace the interpreter path with your gateway's actual Python executable.
-KC_PY=/path/to/kirocrew/.venv/bin/python KC_PORT=5476 \
-  bash scripts/dev-install.sh --no-build
-```
-
-Installing Studio adds the KiroCrew app. Installing the AI-DLC harness into a project is a separate,
-explicit step in **Repos → Add repository → Install AI-DLC**, described under [First run](#first-run).
-
-### Install from the GitHub registry
-
-This repository is also an app registry: its `app-registry.json` lists the `release` branch, so this
-installs the 1.x **AI-DLC Studio** (`aidlc-studio`), not this branch's v2. In
-**Discover → Add source → Add Registry**, add `https://github.com/warren830/kirocrew-app-aidlc` with
-branch `release`, then **Discover → AI-DLC Studio → Install**, and later **Update** when a new release lands. From a
-script, `GET /api/apps/registries` first: `PUT` replaces the whole list, so send your existing rows plus
-`{"name": "aidlc-studio", "repo": "https://github.com/warren830/kirocrew-app-aidlc", "branch": "release"}`.
-The gateway clones the registry itself, without your shell's proxy variables, so it needs direct access to
-GitHub. Grant trust to this app when prompted; blanket third-party trust is not needed.
-
-### Update or rebuild
-
-Run an update when no Studio operation is active. Pull the new code into your clone first:
-
-```bash
-git pull --ff-only
-```
-
-For an app installed from a path, click **Library → AI-DLC Studio v2 → ⋯ → Sync**: KiroCrew re-syncs it
-from its source directory and reloads its backend. For a helper installation, rerun the helper, which
-briefly disables the app to reload its backend hooks:
-
-```bash
-bash scripts/dev-install.sh --no-build
-```
-
-To rebuild after editing the UI, install the locked development dependencies first. The checked-in
-Vite dependency requires Node.js `^20.19.0 || >=22.12.0`.
-
-```bash
-(cd ui && npm ci)
-bash scripts/dev-install.sh       # builds ui/dist/index.mjs, then installs
-```
-
-`scripts/dev-install.sh --dev` additionally enables UI live reload. `scripts/kcapi.sh` is an authenticated
-`curl` wrapper for the local gateway; use it to check an installation without changing it:
-
-```bash
-bash scripts/kcapi.sh GET /api/apps/aidlc-studio-v2/health
-```
-
-If token creation or cookie exchange fails, check that KiroCrew is running, `KC_PORT` points to that
-gateway, and `KC_PY` belongs to the same installation and operating-system user. The helper obtains local
-gateway authentication itself; no API token needs to be copied into this repository.
+To update later, `git pull --ff-only` in the clone, then **Library → AI-DLC Studio v2 → ⋯ → Sync** (or
+rerun the helper). See the [user guide](docs/user-guide.md#update-rebuild-or-uninstall-studio).
 
 ## First run
 
-1. **Repos → Add repository** and browse to a directory on the gateway or give an absolute path. Studio computes a stable identity for it (device
-   and inode, falling back to the canonical path plus Git common directory) and refuses a second path that
-   resolves to a repository already registered.
-2. The preflight tells you what is there: platform, Git state, `bun`, existing harnesses, installed AI-DLC
-   version, state versions, conflicts, permissions.
-3. **Install AI-DLC** if the repository has none. You see every managed path and every conflict before
+1. **Repos → Add repository**: browse to a directory on the gateway or give an absolute path, then
+   **Run preflight**. The read-only preflight reports Git state, `bun`, existing harnesses, the installed
+   AI-DLC version, state versions, conflicts and permissions. Studio refuses a second path that resolves to
+   a repository already registered.
+2. **Install AI-DLC** if the repository has none. You see every managed path and every conflict before
    anything is written. Files the framework owns are recorded with their digests in a receipt; your
    `.kiro/settings/*.json` are merge targets where Studio owns only its own fragment and leaves
    everything else — including secrets — untouched. Studio writes no `AGENTS.md` or `.gitignore`: AI-DLC
    adds its own marked part to each at its next session (see [Bundled AI-DLC](#bundled-ai-dlc)).
-4. **New intent** walks Work → Preset → Plan → Review. Creation also compiles the runtime graph; it never starts a workflow turn. If compilation fails after creation, retry it on the existing intent from the wizard without creating a duplicate.
-5. **Run to next checkpoint** takes the intent to its first human boundary, which then appears in the
-   Action Center.
+3. **New intent** walks Work → Preset → Plan → Review. Creation also compiles the runtime graph; it never
+   starts a workflow turn. If compilation fails after creation, retry it on the existing intent from the
+   wizard without creating a duplicate.
+4. On **Intents**, **Bind a conversation → Create the conversation and continue** creates the intent's
+   `aidlc` conversation, files it in the sidebar under the repository, and sends `/aidlc` once. Later,
+   **Run to next checkpoint** does the same in the bound conversation.
+5. The intent runs to its first human boundary, which then appears in the **Action Center**.
+
+The [user guide](docs/user-guide.md#your-first-intent-end-to-end) walks through each step and every page.
 
 ## What Studio deliberately does not do
 
@@ -290,9 +198,9 @@ gateway authentication itself; no API token needs to be copied into this reposit
 - It does not delete intents. Archive is reversible and changes only Studio's own view.
 - **It does not run your workflow unattended.** Every KiroCrew path that delivers text to a session is a
   user turn as far as AI-DLC's anti-forgery guard is concerned, and Studio will not pretend otherwise. So
-  `Keep moving`, the night work window and automatic session failover ship **disabled**, with the reason
-  shown in Settings, until a host-authenticated machine lane exists that provably does not mint human
-  presence. See [docs/design/architecture.md](docs/design/architecture.md) §3.2.
+  there is no unattended continuation, night work window or automatic session failover until a
+  host-authenticated machine lane exists that provably does not mint human presence. See
+  [docs/design/architecture.md](docs/design/architecture.md) §3.2.
 
 ## How a decision reaches AI-DLC
 
@@ -373,6 +281,7 @@ never submits anything. It analyses an evidence package Studio passes to it and 
 
 | Document | Contents |
 |---|---|
+| [docs/user-guide.md](docs/user-guide.md) ([中文](docs/user-guide.zh-CN.md)) | installation (Bun first), the first intent end to end, every page, troubleshooting |
 | [docs/AI-DLC-Studio-PRD.md](docs/AI-DLC-Studio-PRD.md) | the product requirements this app implements |
 | [docs/design/architecture.md](docs/design/architecture.md) | module layout, authority model, the two lanes, storage, decision log |
 | [docs/design/contracts.md](docs/design/contracts.md) | binding module, API, frontend and test contracts |

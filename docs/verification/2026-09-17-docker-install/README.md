@@ -36,7 +36,7 @@
 
 本轮没有验证浏览器渲染、Linux x86_64、全新 macOS 环境或所有历史 KiroCrew 版本，也没有执行 Kiro CLI 登录、模型调用或真实聊天平台请求。当前主机正在使用的 KiroCrew 未被重新安装或重启。
 
-已有 Docker KiroCrew 实例时，可在容器内部按[中文安装指南](../../installation.zh-CN.md)执行 Bun 和应用安装命令。官方镜像的预构建安装不需要额外安装 Node 或系统 Python：
+已有 Docker KiroCrew 实例时，可在容器内部按[使用指南](../../user-guide.zh-CN.md#step-0)执行 Bun 和应用安装命令。官方镜像的预构建安装不需要额外安装 Node 或系统 Python：
 
 ```bash
 docker exec -it <KiroCrew容器名> bash
