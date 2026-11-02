@@ -150,3 +150,57 @@ def test_handoff_receipt_repeats_the_engines_blanked_prompt_digest(sv, routes, f
     assert after.status == "ResolvedNoTransition", after.resolution
     assert after.resolution["reason"] == "plan_approved"
     assert not sv.scheduler.live()
+
+
+def approved_then_moved_on(sv, routes, fake_host, scene, **receipt):
+    """The plan approved through its card and AI-DLC's own receipt for it, with the turn ended."""
+    checkpoint(scene, "plan")
+    _rescan(sv, routes, fake_host, scene)
+    card = question_card(sv, routes, fake_host)
+    sent = approve_plan(sv, routes, fake_host, card)
+    assert _report(sv, routes, fake_host, card["action_id"], sent)[0] == 200
+    path = _record_dir(scene.root) / QUESTIONS_REL
+    path.write_text(path.read_text().replace("[Answer]:", "[Answer]: A. Approve Plan"))
+    with _shard(scene.root).open("a") as file:
+        file.write(F.audit_text(
+            F.audit_block("HUMAN_TURN", "2026-09-04T10:00:20Z"),
+            F.audit_block("PLAN_APPROVAL_RECORDED", "2026-09-04T10:00:20Z", **{
+                "Stage": STAGE, "Details": "Approve Plan", "Checkpoint": "plan-approval",
+                "Questions File": str(path.relative_to(scene.root)), "Questions SHA-256": F.sha256(path.read_text()),
+                "Prompt SHA-256": card["captured"]["question_digest"], **receipt,
+            }),
+        ))
+    mark_human_turn(_record_dir(scene.root))
+    _finish_the_turn(fake_host, scene.slot_key, wire_text="Approve Plan")
+    return asyncio.run(sv.actions.get(card["action_id"]))
+
+
+def moved_on(snap, next_prompt):
+    """The snapshot once AI-DLC has gone on: the next unit's plan asked in its own file, or nothing asked."""
+    if next_prompt == "nothing":
+        return replace(snap, questions=None)
+    plan = replace(snap.questions.plan_approval, answered=False, answer=None)
+    return replace(snap, questions=replace(snap.questions, plan_approval=plan, relpath=(
+        "aidlc/spaces/default/intents/" + INTENT + "/construction/u3/code-generation/code-generation-questions.md")))
+
+
+@pytest.mark.parametrize("next_prompt", ["next_units_plan", "nothing"])
+def test_plan_settles_once_aidlc_has_moved_on_from_its_file(sv, routes, fake_host, scene, next_prompt):
+    """Construction builds unit by unit, so when the turn ends AI-DLC can be asking the next unit's plan. Held
+    open, the card kept the repository in flight and the next plan never got a card of its own."""
+    rec = approved_then_moved_on(sv, routes, fake_host, scene)
+    snap = moved_on(sv.projection.snapshot(sv.repos.get(scene.repo_id), "default", INTENT), next_prompt)
+    resolution = sv.reconciler.evaluate_resolution(rec, snap, sv.host.slot(scene.slot_key))
+    assert resolution.resolved and resolution.reason == "plan_approved"
+    assert resolution.evidence["approved_questions_file"] == rec.evidence["questions"]["relpath"]
+
+
+@pytest.mark.parametrize("receipt", [
+    {"Details": "Request Changes"}, {"Unit": "another-unit"}, {"Prompt SHA-256": "0" * 64},
+    {"Intent": "01a19cd3-0000-7000-8000-000000000000"}, {"Questions File": "aidlc/another-plan-questions.md"},
+], ids=["another-choice", "another-unit", "another-prompt", "another-intent", "another-file"])
+def test_a_moved_on_plan_settles_only_on_its_own_approval(sv, routes, fake_host, scene, receipt):
+    rec = approved_then_moved_on(sv, routes, fake_host, scene, **receipt)
+    snap = moved_on(sv.projection.snapshot(sv.repos.get(scene.repo_id), "default", INTENT), "next_units_plan")
+    resolution = sv.reconciler.evaluate_resolution(rec, snap, sv.host.slot(scene.slot_key))
+    assert not resolution.resolved and resolution.reason == "plan_not_approved"

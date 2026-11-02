@@ -1449,6 +1449,21 @@ class Reconciler:
             if receipt is not None:
                 seen.update(plan_approval_recorded=_json_of(receipt), approved_questions_file=_attr(closed, "relpath"))
                 return Resolution("no_transition", "plan_approved", seen)
+        # Construction builds unit by unit: by the time the turn ends AI-DLC can be asking the next unit's plan, or
+        # nothing, and the snapshot no longer reads this card's file at all. The receipt is then this dispatch's
+        # approval row for the card's unit and file, answering the prompt it captured.
+        if captured_question.get("relpath") and _attr(questions, "relpath") != captured_question.get("relpath"):
+            receipt = next((
+                event for event in self._plan_rows(rec, snap, stage, "PLAN_APPROVAL_RECORDED")
+                if plan_approval_choice((fields := _attr(event, "fields", {}) or {}).get("Details")).startswith(
+                    C.WIRE_APPROVE_PLAN)
+                and fields.get("Intent") in (None, rec.intent_uuid)
+                and self._receipt_prompt_matches(rec, snap, stage, event)
+            ), None)
+            if receipt is not None:
+                seen.update(plan_approval_recorded=_json_of(receipt),
+                            approved_questions_file=captured_question.get("relpath"))
+                return Resolution("no_transition", "plan_approved", seen)
         if _attr(plan, "present", False) and not _attr(plan, "answered", False):
             receipt = self._historical_plan_approval(rec, snap, stage, questions)
             if receipt is not None:
