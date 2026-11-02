@@ -213,7 +213,10 @@ def test_label_only_recovery_requires_same_text_prompt_and_proven_human_turn(
         append(scene, decision("2026-09-04T10:00:30Z", Decision="A different note?", Options=label))
     before = _tree_digest(scene.root)
     row = reconcile(sv, card, times=1)
-    assert row["status"] in ("Delivered", "ReconciliationRequired")
+    if case == "missing_presence":  # without the human turn, settling is refused and a human must look
+        assert row["status"] == "ReconciliationRequired"
+    else:  # the turn ended on AI-DLC's own reply and nothing on disk records this answer
+        assert (row["status"], row["resolution_json"]["reason"]) == ("ResolvedNoTransition", "answer_not_recorded")
     assert (row.get("resolution_json") or {}).get("reason") != "answer_requires_text"
     assert bool(sv.scheduler.live()) == (row["status"] == "Delivered")  # only in flight holds the repo
     assert _tree_digest(scene.root) == before
@@ -1432,12 +1435,20 @@ def test_a_turn_that_ends_asking_something_else_settles_the_unrecorded_answer(sv
     assert _report(sv, routes, fake_host, card["action_id"], receipt)[0] == 200
     append(scene, F.audit_block("HUMAN_TURN", ANSWERED))
     stamp_human_turn(_record_dir(scene.root), ANSWERED)
+    fake_host.set_running(scene.slot_key, True)
     asyncio.run(sv.reconciler.reconcile_now(card["action_id"]))
-    assert _row(sv, card["action_id"])["status"] == "Delivered", "no new question yet: keep waiting"
+    assert _row(sv, card["action_id"])["status"] == "Delivered", "the turn still runs: keep waiting"
 
-    fake_host.get_slot(scene.slot_key).options = ["Go on and save the command", "Choose the command later"]
+    fake_host.set_running(scene.slot_key, False)
+    options = ["Go on and save the command", "Choose the command later"]
+    fake_host.get_slot(scene.slot_key).options = options
     for _ in range(3):
         asyncio.run(sv.reconciler.reconcile_now(card["action_id"]))
     row = _row(sv, card["action_id"])
     assert row["status"] == "ResolvedNoTransition"
     assert row["resolution_json"]["reason"] == "answer_not_recorded"
+    # The decision the answer went to is not offered again: the conversation's question is.
+    _rescan(sv, routes, fake_host, scene)
+    [reply] = _queue(sv, routes, fake_host)
+    assert (reply["type"], reply["headline"]["params"]["reason"]) == ("missing_input", "conversation_reply")
+    assert reply["headline"]["params"]["options"] == options

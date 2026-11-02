@@ -1140,12 +1140,14 @@ class Projection:
         self, snap: IntentSnapshot, *, findings: Sequence[Any], binding: Any | None, install: "InstallHealth | None",
         breakers: Sequence[Any], live_actions: Sequence[Any], slot: Any | None = None, git: Any | None = None,
         host_card: dict | None = None, slot_lost: bool | None = None, last_reply: Any | None = None,
+        answer_unrecorded: bool = False,
     ) -> list[CardSeed]:
         """One seed per live boundary, in queue order (§1.8 table).
 
         No `delivery_uncertain` seed: that card is the uncertain action, re-typed by `queue_type_for`, and a seed
         would be the second live row for one decision that PRD §12.1 forbids. `budget_stop` is reserved: there are
-        no unattended turns without the machine lane (C16).
+        no unattended turns without the machine lane (C16). `answer_unrecorded`: Studio's newest answer to the pending
+        question reached AI-DLC, which ended that turn on a reply in the conversation without recording it.
         """
         def evidence(stage: str | None = None, unit: str | None = None) -> dict:
             return self.evidence(snap, findings=findings, binding=binding, slot=slot, git=git, host_card=host_card,
@@ -1215,6 +1217,7 @@ class Projection:
         # A reply already on the wire for this stage's questions: AI-DLC records the answers one by one, and each
         # half-written file read as a new pending group flashed a card into the queue for seconds. Whatever is still
         # pending once that turn settles gets its card on the next scan.
+        held: CardSeed | None = None
         answering = any(
             str(_attr(action, "type", "")) == "question" and str(_attr(action, "stage", "") or "") == (snap.stage or "")
             and str(_attr(action, "status", "")) in _ANSWER_IN_FLIGHT_STATUSES for action in live_actions
@@ -1232,7 +1235,7 @@ class Projection:
             stale = checkpoint == "plan_approval" and plan_session_stale(snap, slot)
             if stale:
                 decisions = [d for d in decisions if d not in _CHECKPOINT_DECISIONS["plan_approval"]] + ["resume"]
-            seeds.append(self._seed(
+            question = self._seed(
                 snap, "question", snap.stage, base, self._question_asked_at(snap),
                 # the host wants input the file does not show: answer in the file's own vocabulary
                 [] if questions.unsupported_pending_count else decisions or ["answers"],
@@ -1243,7 +1246,15 @@ class Projection:
                     else checkpoint if pending == 0 and checkpoint in C.QUESTION_CHECKPOINT_KINDS else "__default__"
                 ),
                 reason=checkpoint or ("needs_input" if needs_input and pending == 0 else "questions"),
-            ))
+            )
+            # An audit decision is one row written before asking; once the answer Studio sent it went unrecorded and
+            # AI-DLC replied in the conversation instead, that reply is what it waits on. Offering the decision's
+            # choices again invites the answer AI-DLC just set aside, so the conversation-reply card speaks for it,
+            # and the decision comes back only when the conversation cannot be read.
+            if answer_unrecorded and (questions.origin or {}).get("kind") == "audit":
+                held = question
+            else:
+                seeds.append(question)
 
         if snap.dangling_cursor or snap.cursor is None:
             # Space-level, so every intent's copy collapses into one card; picking the intent is the admin-lane
@@ -1305,8 +1316,13 @@ class Projection:
             ))
 
         # Only when no other card speaks for this intent: an open boundary on disk is already what AI-DLC waits on.
+        replies: list[CardSeed] = []
         if not any(seed.type != "revision" for seed in seeds):
-            seeds.extend(self._conversation_reply_seeds(snap, base, slot=slot, binding=binding, last_reply=last_reply))
+            replies = self._conversation_reply_seeds(snap, base, slot=slot, binding=binding, last_reply=last_reply,
+                                                     holds_question=held is not None)
+            seeds.extend(replies)
+        if held is not None and not replies and not (_attr(slot, "running", False) or _attr(slot, "busy_reasons", ())):
+            seeds.append(held)
 
         seeds.sort(key=lambda s: (priority_group_for(s.type), SEVERITY_RANK.get(s.severity, 3), s.dedupe_key))
         return seeds
@@ -1356,6 +1372,7 @@ class Projection:
 
     def _conversation_reply_seeds(
         self, snap: IntentSnapshot, base: dict, *, slot: Any | None, binding: Any | None, last_reply: Any | None,
+        holds_question: bool = False,
     ) -> list[CardSeed]:
         """AI-DLC asked something only in the conversation, and nothing on disk records it.
 
@@ -1370,6 +1387,7 @@ class Projection:
         setuptools>=61" sat next to "Use setuptools>=64" while the warning that the first would fail Build and Test
         was only in the conversation — so the card carries the message without its ``[OPTIONS: …]`` line. A
         question with no suggestions at all is the same wait, so the agent having spoken last mid-stage is enough.
+        ``holds_question``: the pending question is an audit decision this reply supersedes (``derive_cards``).
         """
         state = snap.state
         if slot is None or state is None:
@@ -1385,7 +1403,7 @@ class Projection:
         ):
             return []
         questions = snap.questions
-        if questions is not None and (questions.pending_count or questions.pending_checkpoint):
+        if not holds_question and questions is not None and (questions.pending_count or questions.pending_checkpoint):
             return []
         asked_at = str(_attr(slot, "last_turn_ts", "") or "") or snap.taken_at
         text = OPTIONS_LINE_RE.sub("", str(_attr(last_reply, "content", "") or "")).strip()

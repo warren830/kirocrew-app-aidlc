@@ -41,6 +41,7 @@ import hashlib
 import logging
 import re
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
@@ -150,6 +151,8 @@ _ANOMALY_REASONS = ("human_presence_anomaly", "cursor_moved")
 #: and the prompts KiroCrew writes itself, which AI-DLC's hook records as ``HUMAN_TURN`` all the same.
 _PROMPT_ROLES = ("user", "queued", "inject", "subagent")
 _PERSON_ROLES = ("user", "queued")
+#: The rows that say who spoke last: a prompt, or AI-DLC's reply to one.
+_REPLY_ROLES = ("user", "queued", "assistant")
 #: How far back the transcript is read for one delivery's turn.
 _PRESENCE_ROWS = 200
 
@@ -295,13 +298,30 @@ def _unit_scoped(event: Any, unit: Any, snap: Any) -> bool:
     return expected is None or _attr(snap, "unit") == expected
 
 
+def _instant(value: Any) -> float | None:
+    """A Studio (``…Z``) or host (``isoformat()``) stamp as POSIX seconds; ``None`` when unreadable."""
+    text = str(value or "")
+    try:
+        parsed = datetime.fromisoformat(text[:-1] + "+00:00" if text[-1:] in ("z", "Z") else text)
+    except ValueError:
+        return None
+    return (parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)).timestamp()
+
+
 def _iso_gt(left: Any, right: Any) -> bool:
-    """``left > right`` for two second-precision UTC stamps; ``False`` when either is absent."""
-    return bool(left) and bool(right) and str(left) > str(right)
+    """``left > right`` for two UTC stamps; ``False`` when either is absent. Studio's and the host's stamps do not
+    compare as strings (``.`` < ``Z``): a turn whose rows all fell in the dispatch's own second read as never run."""
+    if not left or not right:
+        return False
+    a, b = _instant(left), _instant(right)
+    return a > b if a is not None and b is not None else str(left) > str(right)
 
 
 def _iso_ge(left: Any, right: Any) -> bool:
-    return bool(left) and bool(right) and str(left) >= str(right)
+    if not left or not right:
+        return False
+    a, b = _instant(left), _instant(right)
+    return a >= b if a is not None and b is not None else str(left) >= str(right)
 
 
 def _carry_recorded_at(previous: Any, boundary: Any) -> Any:
@@ -747,6 +767,7 @@ class Reconciler:
                 self._s.projection.derive_cards, snap, findings=findings, binding=binding, install=install,
                 breakers=breakers, live_actions=live, slot=slot, host_card=self._host_card(binding.slot_key),
                 slot_lost=self._slot_lost(key, binding, slot), last_reply=self._last_reply(slot),
+                answer_unrecorded=await self._answer_unrecorded(snap),
             ))
             await self._s.actions.upsert_derived(seeds)
             keys = {seed.dedupe_key for seed in seeds if seed.dedupe_key}
@@ -832,6 +853,19 @@ class Reconciler:
             str(_attr(slot, "key") or ""), since_ts="", roles=("user", "queued", "assistant"), limit=1,
         )
         return rows[0] if rows and rows[0].role == "assistant" else None
+
+    async def _answer_unrecorded(self, snap: Any) -> bool:
+        """Did Studio's newest answer to the audit question pending now settle as ``answer_not_recorded``? Found by
+        the question's own digest, so a decision asked again is a new question with no such answer behind it."""
+        questions = _attr(snap, "questions")
+        if (_attr(questions, "origin") or {}).get("kind") != "audit":
+            return False
+        rows = await self._to_thread(self._s.storage.select, "actions", {
+            "repo_id": snap.repo_id, "space": snap.space, "intent_dir": snap.intent_dir, "type": "question",
+            "question_digest": questions.sha256,
+        }, order_by="created_at DESC, action_id DESC", limit=1)
+        resolution = rows[0].get("resolution_json") if rows else None
+        return isinstance(resolution, Mapping) and resolution.get("reason") == "answer_not_recorded"
 
     async def _breakers_for(self, repo_id: str, intent_key: str) -> list[dict]:
         prefix = f"{repo_id}:{intent_key}:"
@@ -1365,9 +1399,12 @@ class Reconciler:
                 # held open, a delivery-uncertain block would sit in front of the re-ask the conductor offers next.
                 seen.update(answer_verified=False, answer_refused=_json_of(refused))
                 return Resolution("no_transition", "answer_refused", seen)
-            if self._asks_in_chat(rec):
+            if (_attr(_attr(snap, "audit"), "complete", False) is True
+                    and not self._new_events(rec, snap, ("QUESTION_ANSWERED",), stage) and self._asks_in_chat(rec)):
                 # The turn ended on a new question in the conversation without recording this answer (a host tool
-                # prompt was declined, say): "processing" would hide the open decision and the reply awaited.
+                # prompt was declined, say): "processing" would hide the open decision and the reply awaited. Only
+                # when nothing on disk could be its record: a receipt Studio cannot match (another unit or attempt,
+                # an order it cannot prove) or history it cannot read in full leaves the answer's fate open.
                 seen.update(answer_verified=False, conversation_asks=True)
                 return Resolution("no_transition", "answer_not_recorded", seen)
             return Resolution("pending", "answers_not_recorded", seen)
@@ -1801,12 +1838,20 @@ class Reconciler:
         return None
 
     def _asks_in_chat(self, rec: Any) -> bool:
-        """The bound conversation is idle on reply suggestions the conductor just offered."""
+        """The bound conversation is idle on what the conductor said after this delivery: reply suggestions, or a
+        message with none. The conversation-reply card reads the same wait off the same rows. Measured on a real run,
+        "Please send all six answers again" carried no ``[OPTIONS: …]`` line, and a delivered answer waiting for
+        suggestions sat at ``Delivered`` with nothing on the queue for the person to act on."""
         slot = self._slot_for(rec)
-        return bool(
-            slot is not None and _attr(slot, "has_options", False) and not _attr(slot, "running", False)
-            and not _attr(slot, "queue_depth", 0)
-        )
+        if slot is None or _attr(slot, "running", False) or _attr(slot, "queue_depth", 0):
+            return False
+        if _attr(slot, "has_options", False):
+            return True
+        row = self._delivery_row(rec)
+        if row is None or self._stopped_after(rec) is not None:
+            return False
+        newest = self._s.host.recent_rows(str(rec.slot_key or ""), since_ts=row.ts, roles=_REPLY_ROLES, limit=1)
+        return bool(newest) and newest[0].role == "assistant" and _iso_ge(newest[0].ts, row.ts)
 
     def _answer_refused(self, rec: Any, snap: Any, stage: Any) -> Any:
         """The engine's own refusal of an answer for this stage, written after this delivery.

@@ -859,6 +859,33 @@ def test_a_question_asked_without_suggestions_still_gets_a_reply_card(projection
     assert _seeds(projection, snap, slot=quiet, binding=SessionStub()) == []
 
 
+@pytest.mark.parametrize("conversation", ["asks", "running", "unread"])
+def test_a_decision_whose_answer_went_unrecorded_yields_to_the_conversations_question(
+        projection, repo_record, repo_builder, conversation):
+    """The real run of 2026-11-02 (tests/fixtures/chat-only-reply): Studio sent "Q1" to the decision, AI-DLC recorded
+    nothing and asked in chat. Its question is the card; the decision returns only when the chat cannot be read."""
+    root = F.chat_only_reply_tree(_builder(repo_builder, "chat-only").with_engine("payload").build(), replied=True)
+    snap = projection.snapshot(repo_record(root), "default", F.CHAT_ONLY_REPLY_INTENT)
+    [question] = _seeds(projection, snap)
+    assert question.type == "question"
+    assert question.evidence["questions"]["questions"][0]["prompt"] == "Q1-Q6 intent capture questions"
+
+    row = F.chat_only_reply_rows()[-1]
+    key = f"aidlc-studio-{REPO_ID}-{F.CHAT_ONLY_REPLY_INTENT}"
+    slot = SlotStub(key=key, last_turn_ts=row["ts"], running=conversation == "running")
+    reply = None if conversation == "unread" else SimpleNamespace(role="assistant", ts=row["ts"], content=row["content"])
+    seeds = _seeds(projection, snap, slot=slot, binding=SessionStub(slot_key=key), last_reply=reply,
+                   answer_unrecorded=True)
+    if conversation == "running":  # the turn settles first; the next scan decides
+        assert seeds == []
+    elif conversation == "unread":
+        assert [seed.dedupe_key for seed in seeds] == [question.dedupe_key]
+    else:
+        [seed] = seeds
+        assert (seed.type, seed.reason) == ("missing_input", "conversation_reply")
+        assert seed.evidence["conversation_reply"]["text"].startswith('Your reply came through as just "Q1".')
+
+
 @pytest.mark.parametrize("why", ["no_options", "running", "queued", "unbound", "other_slot", "gate_open"])
 def test_no_reply_card_without_an_idle_bound_conversation_asking(projection, snap_of, repo_builder, why):
     snap = _conversation_snap(snap_of, repo_builder, mark="?" if why == "gate_open" else "-")

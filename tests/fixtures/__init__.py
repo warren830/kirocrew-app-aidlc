@@ -49,6 +49,16 @@ TEAM_UNIT_GATE = FIXTURES / "team-unit-gate"
 TEAM_UNIT_GATE_INTENT = "261102-ledger"
 TEAM_UNIT_GATE_UUID = "01a19a4a-4f0e-7973-9f06-fcffeb2262ce"
 
+#: A real run (2026-11-02) where Studio answered a conductor's mis-logged batch decision ("Q1-Q6 intent capture
+#: questions", Options "Q1,…,Q6") with "Q1" and AI-DLC replied only in chat, asking for the six answers again. The
+#: tree is the record once that reply had arrived (only the files a Studio read needs); ``conversation.jsonl`` is
+#: KiroCrew's transcript of the conversation, the project path written as ``<project-dir>``.
+CHAT_ONLY_REPLY = FIXTURES / "chat-only-reply"
+CHAT_ONLY_REPLY_INTENT = "261102-add-an-optional"
+#: The last bytes of the audit shard are the ``HUMAN_TURN`` Studio's "Q1" minted; the record before it is the one
+#: the question card was raised from.
+CHAT_ONLY_REPLY_SHARD = "80a99723a8c8-498d2b12f686.md"
+
 _CHECKBOX_LINE = re.compile(r"^- \[([ xXsSrR?\-])\] (\S+)(?:\s*(?:—|–|--)\s*(.*))?$", re.MULTILINE)
 _FIELD_LINE = re.compile(r"^- \*\*(.+?)\*\*:[ \t]*(.*?)[ \t]*$", re.MULTILINE)
 
@@ -123,6 +133,38 @@ def team_unit_gate_tree(root: Path, moment: str) -> Path:
 
 def team_unit_gate_record(root: Path) -> Path:
     return root / "aidlc" / "spaces" / "default" / "intents" / TEAM_UNIT_GATE_INTENT
+
+
+def chat_only_reply_record(root: Path) -> Path:
+    return root / "aidlc" / "spaces" / "default" / "intents" / CHAT_ONLY_REPLY_INTENT
+
+
+def chat_only_reply_tree(root: Path, *, replied: bool) -> Path:
+    """Copy the ``CHAT_ONLY_REPLY`` record into ``root``: as it was when the card was raised, or with ``replied`` once
+    the "Q1" it delivered reached AI-DLC. The earlier moment is the later one without what that reply wrote: the
+    shard's final ``HUMAN_TURN``, its marker stamp and its turn-counter bump. Copies take the time of the copy, so the
+    later moment's marker reads as the newer one, as it does when the hook writes it."""
+    import shutil
+
+    shutil.copytree(CHAT_ONLY_REPLY / "aidlc", root / "aidlc", dirs_exist_ok=True, copy_function=shutil.copyfile)
+    if not replied:
+        record = chat_only_reply_record(root)
+        shard = record / "audit" / CHAT_ONLY_REPLY_SHARD
+        text = shard.read_text("utf-8")
+        head, _, tail = text.rpartition("\n## Human Turn\n")
+        assert head and "**Timestamp**: 2026-11-02T07:09:18Z" in tail
+        shard.write_text(head, "utf-8")
+        (record / ".aidlc-engine" / "human-turn").write_text("2026-11-02T07:07:49Z\n")
+        counter = root / "aidlc" / ".aidlc-turn-counter"
+        counter.write_text(str(int(counter.read_text().strip()) - 1) + "\n")
+    return root
+
+
+def chat_only_reply_rows() -> list[dict]:
+    """The transcript's message rows, oldest first (its metadata line is not a message)."""
+    rows = [json.loads(line) for line in (CHAT_ONLY_REPLY / "conversation.jsonl").read_text("utf-8").splitlines()
+            if line.strip()]
+    return [row for row in rows if "role" in row]
 
 
 def real_state(tree: Path = DEVDELTA, intent_dir: str = DEVDELTA_POC) -> str:

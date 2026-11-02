@@ -72,6 +72,9 @@ def test_unverified_reply_releases_only_after_a_scoped_receipt(sv, routes, fake_
             assert evidence["answer_verified"] is False
             assert evidence["recorded_answer"]["fields"]["Details"] != wire
             assert (evidence["next_gate"] is not None) is (case in AT_GATE)
+    elif case == "no_receipt":  # the turn ended on AI-DLC's own reply and nothing on disk records the answer
+        assert (row["status"], row["resolution_json"]["reason"]) == ("ResolvedNoTransition", "answer_not_recorded")
+        assert not sv.scheduler.live()
     else:
         assert row["status"] in ("Delivered", "ReconciliationRequired")
         assert bool(sv.scheduler.live()) == (row["status"] == "Delivered")  # only in flight holds the repo
