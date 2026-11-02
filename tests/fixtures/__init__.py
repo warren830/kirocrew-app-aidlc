@@ -85,6 +85,29 @@ PRACTICES_BATCH_MOMENTS = {
     "learnings": ("2026-11-02T10:18:29Z", "2026-11-02T10:16:17Z", 5, "2026-11-02T10:18:35"),
 }
 
+#: A real poc run (v2-full, 2026-11-02, plan approval off) through five stages, each ending in the learnings ritual.
+#: ``audit-excerpt.md`` is every ritual decision row and the plan-approval skip row, verbatim and in shard order;
+#: ``conversation.jsonl`` is each assistant message that asked the ritual; ``code-generation-questions.md`` is the
+#: record-only sheet the engine wrote for code generation. The conductor logged the ritual's two rows in either
+#: order, and every chat asked the keep question first.
+LEARNINGS_RITUAL = FIXTURES / "learnings-ritual"
+
+
+def learnings_ritual_rows(stage: str, *, event: str = "DECISION_RECORDED") -> list[str]:
+    """``stage``'s rows of ``event`` from the excerpt, verbatim, in the order they were appended."""
+    blocks = (LEARNINGS_RITUAL / "audit-excerpt.md").read_text("utf-8").split("\n---\n")
+    return ["\n" + block.strip("\n") + "\n\n---\n" for block in blocks
+            if f"**Event**: {event}\n" in block and f"**Stage**: {stage}\n" in block]
+
+
+def learnings_ritual_chat(stage_words: str) -> str:
+    """The assistant message that asked the ritual, picked by words it alone contains."""
+    rows = [json.loads(line) for line in (LEARNINGS_RITUAL / "conversation.jsonl").read_text("utf-8").splitlines()
+            if line.strip()]
+    [row] = [row for row in rows if stage_words in row["content"]]
+    return row["content"]
+
+
 _CHECKBOX_LINE = re.compile(r"^- \[([ xXsSrR?\-])\] (\S+)(?:\s*(?:—|–|--)\s*(.*))?$", re.MULTILINE)
 _FIELD_LINE = re.compile(r"^- \*\*(.+?)\*\*:[ \t]*(.*?)[ \t]*$", re.MULTILINE)
 

@@ -120,6 +120,9 @@ export function splitIntentKey(key: string): [string, string] {
  */
 export function buildRoute(patch: RoutePatch, base?: StudioRoute): string {
   const merged: StudioRoute = { ...(base ?? EMPTY_ROUTE), ...patch }
+  // `tx` is the Repos view's transaction drawer and means nothing anywhere else: leaving Repos for another view
+  // drops it unless the patch names one. "New intent" and a repository's "Intents" kept `tx=` in the URL.
+  if (patch.view !== undefined && patch.view !== 'repos' && patch.tx === undefined) merged.tx = ''
   // Assembled by hand rather than with `URLSearchParams`: its form-urlencoded serialiser escapes `~`
   // as `%7E`, and `~` is the intent-key separator (`space~dir`), so every intent link would arrive
   // encoded. `encodeURIComponent` leaves every character `VALUE_RE` allows alone.

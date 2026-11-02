@@ -580,9 +580,13 @@ Audit-backed questions (a decision the engine asked in the chat, with no open qu
 
 - A same-turn batch (A37): the engine logs every structured question before presenting them, so decision rows written
   back to back in one shard were asked together, and any other row in between ends the run. The audit row has no
-  multi-select flag: the engine's mandated "anything to add?" prompt is single choice, and every other row asked
-  alongside it (the learnings candidates) takes any subset, so Studio adds an explicit "None of these". Each question
-  keeps an "Other" free-text escape, as in the chat.
+  multi-select flag. The learnings ritual's two questions keep exactly the engine's labels (stage-protocol-learnings
+  §13 step 3): "Anything to add for next time?" (or SKILL.md's "Learnings: anything to add?") is single choice with
+  the harness's "Other" escape; the keep question, which the engine opens with its own "Keep none of these", takes
+  any subset and nothing else. Every other row asked alongside them takes any subset, with Studio's "None of these"
+  and an "Other" free-text escape. The conductor logs the ritual's rows in either order (`learnings-ritual/`: two of
+  five stages, and the practices run, logged "Anything to add?" first), but every chat asked the keep question
+  first, so the batch puts "Anything to add?" last and the grouped reply's `Q<n>` follow the chat.
 - Handing an answered sheet back to audit (`_closed_question_receipts`) needs a file-bound closure in this attempt.
   Legacy answered questions without a checkpoint receipt keep file ownership. The engine's confirmed-content-v1 hash
   normalizes newlines and trims ECMAScript trailing whitespace; it is not the whole-file digest Studio captures, so the
@@ -593,7 +597,9 @@ Audit-backed questions (a decision the engine asked in the chat, with no open qu
   closes with the `QUESTION_ANSWERED` before the decision, unless that row answers the mode question (paired as the
   engine's `nextOpenDecision` pairs it, recognised as its `isAnswerModeDecision` does): the mode says how the sheet is
   answered, and a decision logged after it while the sheet's answers were unrecorded belongs to the sheet's round
-  (`practices-batch-decision/`, `chat-only-reply/`).
+  (`practices-batch-decision/`, `chat-only-reply/`). With plan approval off the engine writes a record-only sheet
+  (`[Answer]: Plan approval off`) and a `PLAN_APPROVAL_SKIPPED` row bound to it by file and whole-file digest; that
+  row closes the sheet as `PLAN_APPROVAL_RECORDED` closes an approved one (`learnings-ritual/`).
 
 ### 11.9 Review sections
 

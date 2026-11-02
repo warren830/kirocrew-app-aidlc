@@ -124,9 +124,10 @@ def test_the_learnings_asked_after_the_rounds_answer_are_still_a_card(sv, routes
     [card] = cards(sv, routes, fake_host, built)
     questions = card["evidence"]["questions"]
     assert card["type"] == "question" and questions["origin"]["kind"] == "audit"
+    # Logged "Anything to add?" first, asked second in the chat (10:18:35): the card follows the chat.
     assert [q["prompt"] for q in questions["questions"]] == [
-        "Anything to add for next time?", "Which notes should be kept for next time?"]
-    assert [o["text"] for o in questions["questions"][0]["options"]][:2] == ["Nothing to add", "Add a note"]
+        "Which notes should be kept for next time?", "Anything to add for next time?"]
+    assert [o["text"] for o in questions["questions"][1]["options"]][:2] == ["Nothing to add", "Add a note"]
 
 
 @at("2026-11-02T08:43:52Z")

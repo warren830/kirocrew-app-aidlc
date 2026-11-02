@@ -41,7 +41,7 @@ import { RecoveryTemplate } from './RecoveryTemplate'
 import { FailureTemplate } from './FailureTemplate'
 import { InstallConflictTemplate } from './InstallConflictTemplate'
 import { BudgetStopTemplate } from './BudgetStopTemplate'
-import { MissingInputTemplate } from './MissingInputTemplate'
+import { MissingInputTemplate, wrapQuotedFences } from './MissingInputTemplate'
 
 const BASE = '/api/apps/aidlc-studio'
 const en = makeI18n('en-US')
@@ -1682,6 +1682,34 @@ describe('budget and missing input templates', () => {
     expect(screen.getByRole('button', { name: en.t('template.missingInput.openConversation') })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('radio', { name: /Use setuptools>=64/ }))
     expect(draft().freeText).toBe('Use setuptools>=64')
+  })
+
+  it('wraps a command quoted in a fenced block instead of cutting it off at the edge', () => {
+    // v2-full, shot 067: the developer asked to run this, and the quote showed it only up to `tests/test_tasklist`.
+    const asked = 'The developer needs your OK to run this test command:\n\n```bash\n'
+      + 'uv run --no-project --python 3.12 --with pytest==8.3.3 python -m pytest tests/test_tasklist.py -q\n```\n\n'
+      + 'Risk: `uv` downloads Python 3.12 and pytest 8.3.3 from the internet.'
+    const base = card()
+    mount(MissingInputTemplate, card({
+      type: 'missing_input',
+      headline: { key: 'action.missing_input.headline', params: { reason: 'conversation_reply', kind: 'free_text', options: ['Yes'] } },
+      decisions: [spec('provide_input', ['feedback'])],
+      primary: { decision: 'provide_input', label_key: 'decision.provide_input.label' },
+      evidence: { ...base.evidence, conversation_reply: { text: asked, ts: '2026-11-02T12:43:15Z' } },
+    }))
+    const quoted = screen.getByTestId('markdown').textContent ?? ''
+    expect(quoted).toContain('```text\nuv run --no-project --python 3.12 --with pytest==8.3.3 python -m pytest tests/test_tasklist.py -q\n```')
+    expect(quoted).not.toContain('```bash')
+    expect(quoted).toContain('Risk: `uv` downloads')
+  })
+
+  it('marks only real fences as plain text, and keeps a diagram a diagram', () => {
+    expect(wrapQuotedFences('~~~ts\nconst a = 1\n~~~')).toBe('~~~text\nconst a = 1\n~~~')
+    // A longer fence holds a shorter one as content; only the opening line changes.
+    expect(wrapQuotedFences('````md\n```bash\nls\n```\n````')).toBe('````text\n```bash\nls\n```\n````')
+    expect(wrapQuotedFences('```mermaid\ngraph TD\n```\n```sh\nls\n```')).toBe('```mermaid\ngraph TD\n```\n```text\nls\n```')
+    // Inline code with three backticks is not a fence; four spaces is an indented line.
+    expect(wrapQuotedFences('```a``` b\n    ```sh')).toBe('```a``` b\n    ```sh')
   })
 
   /** A conversation-reply card as the projection mints it for the host's "keep which?" reply. */

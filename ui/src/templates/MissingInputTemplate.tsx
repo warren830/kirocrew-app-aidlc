@@ -56,6 +56,36 @@ export function isOtherSuggestion(option: string): boolean {
   return /^(?:other|something else)(?![a-z])/i.test(text) || /^其[他它]/.test(text)
 }
 
+/** A CommonMark fence line: up to three spaces, three or more backticks or tildes, then the info string. */
+const FENCE_RE = /^( {0,3})(`{3,}|~{3,})(.*)$/
+
+/**
+ * The quoted reply with each fenced block marked as plain text, so its long lines wrap inside the quote.
+ *
+ * The host's code block scrolls a highlighted block sideways with a scrollbar that shows only on hover, so a
+ * command AI-DLC asks to run read as cut off at the box's edge (v2-full, 2026-11-02: `uv run … pytest
+ * tests/test_tasklist…`); it wraps only the languages it treats as plain text. The person is asked to approve
+ * that command, so all of it has to be readable; the highlighting is what is given up. Mermaid keeps its
+ * diagram, and the block's lines are untouched.
+ */
+export function wrapQuotedFences(text: string): string {
+  let open: string | null = null
+  return text
+    .split('\n')
+    .map((line) => {
+      const fence = FENCE_RE.exec(line)
+      if (open !== null) {
+        if (fence && fence[2]![0] === open[0] && fence[2]!.length >= open.length && !fence[3]!.trim()) open = null
+        return line
+      }
+      if (!fence || (fence[2]![0] === '`' && fence[3]!.includes('`'))) return line
+      open = fence[2]!
+      const info = fence[3]!.trim()
+      return /^mermaid\b/i.test(info) ? line : `${fence[1]}${fence[2]}text`
+    })
+    .join('\n')
+}
+
 export function MissingInputTemplate({ card, detail, draft, setDraft, api, go }: TemplateProps) {
   const i18n = useI18n()
   const { t } = i18n
@@ -125,7 +155,7 @@ export function MissingInputTemplate({ card, detail, draft, setDraft, api, go }:
           </p>
           {/* The same sanitising renderer as a question's context: this is evidence, not a draft. */}
           <div className="msg-content studio-md studio-reply-quote">
-            <MarkdownRenderer content={reply.text} />
+            <MarkdownRenderer content={wrapQuotedFences(reply.text)} />
           </div>
           <button type="button" className="studio-btn" onClick={() => go({ tab: 'conversation' })}>
             {t('template.missingInput.openConversation')}

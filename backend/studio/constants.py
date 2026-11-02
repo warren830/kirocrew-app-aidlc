@@ -398,6 +398,10 @@ PLAN_APPROVAL_HEADING = "Plan Approval"
 PLAN_APPROVAL_AUDIT_CHECKPOINT = "Code Generation Plan Approval"
 #: Every ``Checkpoint`` an audit row names Plan Approval by: 2.10's, and 2.11's engine-held question.
 PLAN_APPROVAL_AUDIT_CHECKPOINTS = (PLAN_APPROVAL_AUDIT_CHECKPOINT, "plan-approval")
+#: With plan approval off the engine builds without asking and leaves the record an approval would: the questions
+#: file answered with this (aidlc-plan-approval-ask.ts ``PLAN_APPROVAL_OFF_ANSWER``) and a ``PLAN_APPROVAL_SKIPPED``
+#: row bound to it, which aidlc-unit.ts reads as the equal of ``PLAN_APPROVAL_RECORDED`` / ``Approve Plan``.
+PLAN_APPROVAL_OFF_ANSWER = "Plan approval off"
 #: 2.11 asks Plan Approval from the engine and writes its choices lettered (``- A. Approve Plan``); the answer it
 #: records is the lettered choice (``[Answer]: A. Approve Plan``). 2.10 never lettered them.
 PLAN_APPROVAL_OPTION_RE = re.compile(
@@ -684,7 +688,12 @@ WIRE_AUDIT_GROUPED_ANSWER_SUFFIX = (
 )
 AUDIT_NONE_LABEL = "None of these"       # Studio's own choice on a multi-select audit question (A37)
 AUDIT_OTHER_LABEL = "Other"              # free-text escape on an audit question asked with others (A37)
-LEARNINGS_ADD_PROMPT = "Learnings: anything to add?"   # the engine's mandated single-choice prompt
+# The learnings ritual's mandated single-choice question, in both spellings the bundled engine tells the conductor
+# to log (stage-protocol-learnings.md §13 step 3, skills/aidlc/SKILL.md). The chat asks it after the keep question.
+LEARNINGS_ADD_PROMPTS = ("Anything to add for next time?", "Learnings: anything to add?")
+# §13 step 3 puts this first in every call of the keep question: the engine's own empty pick, which may sit beside
+# kept notes. That question takes any subset of its labels and nothing else; its free-text channel is the add question.
+LEARNINGS_KEEP_NONE_LABEL = "Keep none of these"
 # The engine's mode question, asked with a stage's questions file (aidlc-lib.ts ``isAnswerModeDecision``): its answer
 # says how the person answers the file, not what they answered.
 ANSWER_MODE_QUESTION_PREFIX = "How would you like to answer"

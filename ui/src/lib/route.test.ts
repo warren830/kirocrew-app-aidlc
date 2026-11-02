@@ -117,6 +117,17 @@ describe('buildRoute', () => {
     expect(buildRoute({ action: '' }, base)).toBe(`${PAGE_PATH}?repo=r_1`)
   })
 
+  it('leaves the Repos view without its transaction drawer', () => {
+    // The v2-full run: after a repository's install transaction, "New intent" and "Intents" kept `tx=`.
+    const base = parse('?view=repos&repo=r_1&tx=tx_abc')
+    expect(buildRoute({ view: 'new-intent' }, base)).toBe(`${PAGE_PATH}?view=new-intent&repo=r_1`)
+    expect(buildRoute({ view: 'intents', repo: 'r_1' }, base)).toBe(`${PAGE_PATH}?view=intents&repo=r_1`)
+    // Within Repos it stays until closed, and a link that names one keeps it.
+    expect(buildRoute({ repo: 'r_1' }, base)).toBe(`${PAGE_PATH}?view=repos&repo=r_1&tx=tx_abc`)
+    expect(buildRoute({ view: 'repos' }, base)).toBe(`${PAGE_PATH}?view=repos&repo=r_1&tx=tx_abc`)
+    expect(buildRoute({ view: 'map', tx: 'tx_1' }, base)).toBe(`${PAGE_PATH}?view=map&repo=r_1&tx=tx_1`)
+  })
+
   it('refuses to write a value it would not parse back', () => {
     expect(buildRoute({ repo: '../evil' })).toBe(PAGE_PATH)
     expect(buildRoute({ anchor: 'not an anchor' })).toBe(PAGE_PATH)

@@ -647,6 +647,63 @@ def test_ui_mirrors_the_audit_none_label(C):
     assert f"export const AUDIT_NONE_LABEL = '{C.AUDIT_NONE_LABEL}'" in source
 
 
+KEEP_PROMPT, ADD_PROMPT = "Which notes should be kept for next time?", "Anything to add for next time?"
+
+
+def real_ritual(stage: str) -> list[str]:
+    """The ritual's two rows as v2-full logged them for ``stage``, moved to this scene's stage and second."""
+    return [re.sub(r"\*\*Timestamp\*\*: \S+", f"**Timestamp**: {ASKED}", row.replace(
+        f"**Stage**: {stage}\n", f"**Stage**: {STAGE}\n")) for row in F.learnings_ritual_rows(stage)]
+
+
+@pytest.mark.parametrize("stage, chat_words", [
+    ("requirements-analysis", "I saved your 6 answers and wrote the requirements."),
+    ("build-and-test", "Build and Test is done"),
+    ("intent-capture", "I saved your 5 answers."),
+])
+def test_the_ritual_is_asked_as_the_chat_asked_it_whatever_order_it_was_logged(closed_sheet_scene, stage, chat_words):
+    """v2-full: the keep question then "Anything to add?", in every chat; the rows were logged in either order."""
+    chat = F.learnings_ritual_chat(chat_words)
+    assert chat.index("Which notes should I keep for next time?") < chat.index(ADD_PROMPT)
+    rows = real_ritual(stage)
+    logged = [re.search(r"\*\*Decision\*\*: (.*)", row).group(1) for row in rows]
+    assert sorted(logged) == sorted([KEEP_PROMPT, ADD_PROMPT])
+    rewrite_audit(closed_sheet_scene, closed_sheet_receipt(closed_sheet_scene), *rows)
+    questions = closed_sheet_questions(closed_sheet_scene)
+    assert questions.origin["kind"] == "audit" and questions.origin["batch_size"] == 2
+    assert [q.prompt for q in questions.questions] == [KEEP_PROMPT, ADD_PROMPT]
+    assert [q.index for q in questions.questions] == [1, 2]
+
+
+def test_the_ritual_offers_exactly_the_engines_choices(closed_sheet_scene, C):
+    """§13 step 3: the keep question opens with the engine's own "Keep none of these" and takes any subset; "Anything to
+    add?" is one pick of "Nothing to add" / "Add a note", with the harness's free-text escape. Shot 113 offered
+    checkboxes for both, and "None of these" / "Other" beside "Keep none of these"."""
+    rewrite_audit(closed_sheet_scene, closed_sheet_receipt(closed_sheet_scene), *real_ritual("build-and-test"))
+    keep, add = closed_sheet_questions(closed_sheet_scene).questions
+    assert keep.multi_select is True
+    assert [(o.letter, o.text, o.is_other) for o in keep.options] == [
+        ("A", "Keep none of these", False), ("B", "c1", False)]
+    assert add.multi_select is False
+    assert [(o.text, o.is_other) for o in add.options] == [
+        ("Nothing to add", False), ("Add a note", False), (C.AUDIT_OTHER_LABEL, True)]
+    assert C.AUDIT_NONE_LABEL not in {o.text for q in (keep, add) for o in q.options}
+
+
+def test_the_ritual_card_sends_its_answers_in_the_order_asked(sv, routes, fake_host, scene, C):
+    """build-and-test logged "Anything to add?" first; the reply's Q1 is still the keep question the chat asked first."""
+    install_closed_sheet(scene)
+    rewrite_audit(scene, closed_sheet_receipt(scene), *real_ritual("build-and-test"))
+    card = question_card(sv, routes, fake_host, scene)
+    assert [q["prompt"] for q in card["evidence"]["questions"]["questions"]] == [KEEP_PROMPT, ADD_PROMPT]
+    # "Keep none of these" may sit beside a kept note (§13); "Anything to add?" takes one choice.
+    status, body = _submit(sv, routes, fake_host, card, payload=batch_payload(["A"], ["A", "B"]), wire_text="x")
+    assert status == 400, body
+    wire = grouped("Q1: Keep none of these, c1", "Q2: Nothing to add", C=C)
+    receipt = submit_ok(sv, routes, fake_host, card, wire, batch_payload(["A", "B"], ["A"]))
+    assert receipt["wire_text"] == wire
+
+
 def test_a_row_between_two_decisions_leaves_only_the_newest_asked(closed_sheet_scene):
     scene = closed_sheet_scene
     rewrite_audit(scene, closed_sheet_receipt(scene),
@@ -827,6 +884,53 @@ def test_zero_unit_codegen_learnings_reach_the_intent_detail(sv, routes, fake_ho
     assert view["origin"]["kind"] == "audit" and view["origin"]["stage"] == CODEGEN_STAGE
     assert view["questions"][0]["prompt"] == PROMPT
     assert _tree_digest(scene.root) == original
+
+
+REAL_PLAN_OFF_SHEET = (F.LEARNINGS_RITUAL / "code-generation-questions.md").read_text("utf-8")
+
+
+def install_plan_off_sheet(scene, *, receipt_edit=lambda row: row) -> Path:
+    """v2-full's code generation with plan approval off: the engine's record-only sheet and its skip row, then the
+    ritual, each moved to this scene's intent and seconds."""
+    path = _record_dir(scene.root) / CODEGEN_QUESTIONS_REL
+    path.write_text(REAL_PLAN_OFF_SHEET)
+    [skip] = F.learnings_ritual_rows(CODEGEN_STAGE, event="PLAN_APPROVAL_SKIPPED")
+    skip = re.sub(r"\*\*Timestamp\*\*: \S+", f"**Timestamp**: {CLOSED_AT}", skip)
+    skip = skip.replace("intents/261102-add-an-optional/", f"intents/{INTENT}/")
+    ritual = [re.sub(r"\*\*Timestamp\*\*: \S+", f"**Timestamp**: {ASKED}", row)
+              for row in F.learnings_ritual_rows(CODEGEN_STAGE)]
+    rewrite_audit(scene, start_audit().replace(STAGE, CODEGEN_STAGE), receipt_edit(skip), *ritual, start=False)
+    return path
+
+
+def test_a_plan_built_without_asking_hands_code_generation_to_its_later_decisions(zero_unit_codegen_scene):
+    """v2-full asked the test command and the learnings in chat after a plan built with plan approval off; with the
+    sheet in charge Studio raised each only as a conversation reply, unlike every other stage's learnings."""
+    scene = zero_unit_codegen_scene
+    install_plan_off_sheet(scene)
+    assert F.sha256(REAL_PLAN_OFF_SHEET) == "269b7bed4ab335b96bee23bc0143cef97e1d10f4fdcf0af645f2644464fadd62"
+    questions = closed_sheet_questions(scene)
+    assert questions.origin["kind"] == "audit" and questions.origin["stage"] == CODEGEN_STAGE
+    assert [q.prompt for q in questions.questions] == [KEEP_PROMPT, ADD_PROMPT]
+    assert questions.closed_file.relpath.endswith(CODEGEN_QUESTIONS_REL)
+    assert [e.event for e in questions.closed_file_receipts] == ["PLAN_APPROVAL_SKIPPED"]
+
+
+@pytest.mark.parametrize("change", ["no_skip_row", "other_sheet", "other_bytes", "approve_details", "edited_sheet"])
+def test_a_plan_built_without_asking_needs_its_own_skip_row(zero_unit_codegen_scene, change):
+    scene = zero_unit_codegen_scene
+    edit = {
+        "no_skip_row": lambda row: row.replace("PLAN_APPROVAL_SKIPPED", "NOTE"),
+        "other_sheet": lambda row: row.replace("code-generation-questions.md", "other-questions.md"),
+        "other_bytes": lambda row: row.replace("269b7bed", "00000000"),
+        # An approval's receipt does not close a sheet that says it was never asked.
+        "approve_details": lambda row: row.replace("PLAN_APPROVAL_SKIPPED", "PLAN_APPROVAL_RECORDED").replace(
+            "**Details**: Plan approval off", "**Details**: Approve Plan"),
+    }.get(change, lambda row: row)
+    path = install_plan_off_sheet(scene, receipt_edit=edit)
+    if change == "edited_sheet":
+        path.write_text(REAL_PLAN_OFF_SHEET + "\n")
+    assert_not_audit_owned(closed_sheet_questions(scene))
 
 
 @pytest.mark.parametrize("change", ["none", "old_receipt_generation", "claim_advanced", "claim_unreadable"])

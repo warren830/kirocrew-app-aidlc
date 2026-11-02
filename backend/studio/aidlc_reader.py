@@ -1294,7 +1294,7 @@ def audit_questions(
         ))
         questions = tuple(
             _batch_question(n, p, ls, e.raw)
-            for n, (e, (p, ls)) in enumerate(zip(batch, parsed), start=1)
+            for n, (e, (p, ls)) in enumerate(_in_asked_order(list(zip(batch, parsed))), start=1)
         )
     else:
         questions = (Question(
@@ -1313,14 +1313,35 @@ def audit_questions(
     )
 
 
+def _is_learnings_add_prompt(prompt: str) -> bool:
+    return prompt.strip().casefold() in {p.casefold() for p in C.LEARNINGS_ADD_PROMPTS}
+
+
+_AskedRow = tuple[AuditEvent, tuple[str, list[str]]]
+
+
+def _in_asked_order(batch: list[_AskedRow]) -> list[_AskedRow]:
+    """The batch as the chat asked it. The conductor logs the ritual's two rows in either order (the 2026-11-02 run:
+    "Anything to add" first at intent capture and build-and-test, last at requirements and code generation), but §13
+    step 3 asks it after the keep question, and every chat did, so the grouped reply's Q<n> follow the chat."""
+    return sorted(batch, key=lambda pair: _is_learnings_add_prompt(pair[1][0]))
+
+
 def _batch_question(index: int, prompt: str, labels: list[str], raw: str) -> Question:
-    """One question of a same-turn batch, with the choices the engine's chat offers (FORMAT-NOTES §11.8)."""
-    single = prompt == C.LEARNINGS_ADD_PROMPT
-    texts = [label for label in labels if label.lower() != C.AUDIT_OTHER_LABEL.lower()]
-    if not single and C.AUDIT_NONE_LABEL not in texts:
+    """One question of a same-turn batch, with the choices the engine's chat offers (FORMAT-NOTES §11.8).
+
+    The ritual's two questions keep exactly the engine's labels: "anything to add?" is single choice and keeps the
+    harness's ``Other`` escape §13 names; the keep question, opened by the engine's own "Keep none of these", takes
+    any subset and nothing else. Any other row asked alongside gets Studio's "None of these" and ``Other``.
+    """
+    single = _is_learnings_add_prompt(prompt)
+    keep = not single and C.LEARNINGS_KEEP_NONE_LABEL in labels
+    texts = labels if keep else [label for label in labels if label.lower() != C.AUDIT_OTHER_LABEL.lower()]
+    if not single and not keep and C.AUDIT_NONE_LABEL not in texts:
         texts.append(C.AUDIT_NONE_LABEL)
     options = [QuestionOption(chr(65 + i), label, False) for i, label in enumerate(texts)]
-    options.append(QuestionOption(chr(65 + len(options)), C.AUDIT_OTHER_LABEL, True))
+    if not keep:
+        options.append(QuestionOption(chr(65 + len(options)), C.AUDIT_OTHER_LABEL, True))
     return Question(
         index=index, prompt=prompt, options=tuple(options), multi_select=not single,
         answer=None, answered=False, raw=raw,
@@ -1481,10 +1502,15 @@ def _closed_question_receipts(
         if prefix is None:
             return None
         confirmed_digests = {_sha256(_confirmed_content(prefix))}
+    # With plan approval off the engine's record-only sheet closes with its PLAN_APPROVAL_SKIPPED row, bound the
+    # same way. Measured on a poc run (2026-11-02): without it the sheet kept code generation, and every decision
+    # after it (the test-command questions, the learnings ritual) reached the queue only as a conversation reply.
+    plan_off = found.plan_approval is not None and found.plan_approval.answer == C.PLAN_APPROVAL_OFF_ANSWER
     for checkpoint, event_name, heading, answer in (
         (found.summary_confirmation, "SUMMARY_CONFIRMATION_RECORDED",
          C.SUMMARY_CONFIRMATION_HEADING, C.WIRE_LOOKS_CORRECT),
-        (found.plan_approval, "PLAN_APPROVAL_RECORDED", C.PLAN_APPROVAL_HEADING, C.WIRE_APPROVE_PLAN),
+        (found.plan_approval, "PLAN_APPROVAL_SKIPPED" if plan_off else "PLAN_APPROVAL_RECORDED",
+         C.PLAN_APPROVAL_HEADING, C.PLAN_APPROVAL_OFF_ANSWER if plan_off else C.WIRE_APPROVE_PLAN),
     ):
         if checkpoint is None:
             continue
@@ -1493,16 +1519,18 @@ def _closed_question_receipts(
         if not checkpoint.answered or recorded != answer:
             return None
         # Pick the frontier before checking its binding: a newer malformed receipt supersedes an
-        # older valid one, and same-second receipts in different shards cannot be ordered.
+        # older valid one, and same-second receipts in different shards cannot be ordered. The skip row
+        # closes no decision, so it is not in the question history; read it from the audit itself.
         latest = _audit_frontier([
-            e for e in history if e.event == event_name and _audit_question_scope(e, stage, unit)
+            e for e in (audit.events if event_name == "PLAN_APPROVAL_SKIPPED" else history)
+            if e.event == event_name and _audit_question_scope(e, stage, unit)
             and (e.fields.get("Attempt Generation") or None) == generation
         ])
         if len(latest) != 1:
             return None
         receipt = latest[0]
         checkpoint_names = {heading}
-        if event_name == "PLAN_APPROVAL_RECORDED":
+        if checkpoint is found.plan_approval:
             checkpoint_names.update(C.PLAN_APPROVAL_AUDIT_CHECKPOINTS)
         if (
             receipt.fields.get("Questions File") != found.relpath
