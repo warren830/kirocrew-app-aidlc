@@ -565,6 +565,130 @@ def test_gate_approve_without_the_audit_row_stays_processing(svc, scene, fake_ho
     assert status_of(svc, action_id) == "Delivered"
 
 
+TEAM = F.TEAM_UNIT_GATE_INTENT
+
+
+@pytest.fixture
+def team_scene(svc, repo_builder, fake_host):
+    """A team-owned intent at one recorded engine moment, its slot bound. ``make`` writes the in-flight card a
+    submit leaves for a Unit's gate; ``engine_moves_to`` lays the engine's next recorded moment over the folder."""
+    root = repo_builder.with_engine("payload").build()
+    repo = svc.repos.add(str(root))
+    slot_key = f"aidlc-studio-{repo.repo_id}-{TEAM}"
+    fake_host.add_slot(slot_key, project=str(root), agent="aidlc")
+    asyncio.run(svc.sessions.bind(repo, "default", TEAM, slot_key=slot_key, intent_uuid=F.TEAM_UNIT_GATE_UUID))
+
+    def snapshot():
+        return svc.projection.snapshot(svc.repos.get(repo.repo_id), "default", TEAM)
+
+    def make(moment: str, *, stage: str, unit: str = "unit-a", decision: str = "approve", wire_text: str = "Approve",
+             delivering_at: str) -> str:
+        F.team_unit_gate_tree(root, moment)
+        snap = snapshot()
+        [seed] = [s for s in svc.projection.derive_cards(snap, findings=[], binding=None, install=None, breakers=[],
+                                                          live_actions=[]) if s.type == "gate"]
+        captured = seed.captured
+        baseline = svc.reader.presence_baseline(root, "default", TEAM, snap.audit, snap.state_sha256).to_json()
+        action_id = svc.ids.new("a")
+        svc.storage.insert("actions", {
+            "action_id": action_id, "type": "gate", "risk_class": "human_lane", "repo_id": repo.repo_id,
+            "resolved_repo_identity": repo.resolved_identity, "intent_uuid": F.TEAM_UNIT_GATE_UUID,
+            "intent_dir": TEAM, "space": "default", "stage": stage, "unit": unit,
+            "captured_state_hash": captured["state_hash"], "boundary_token": captured["boundary_token"],
+            "question_digest": captured["question_digest"], "stage_attempt": captured["stage_attempt"],
+            "evidence_digest": captured["evidence_digest"], "is_active_captured": int(bool(captured["is_active"])),
+            "payload_json": {"decision": decision, **({"feedback": "tighten the error model"}
+                                                     if decision == "request_changes" else {})},
+            "wire_text": wire_text, "status": "Delivered", "session_key": f"dashboard:{slot_key}",
+            "slot_key": slot_key, "delivery_id": svc.ids.new("dl"), "created_at": delivering_at,
+            "updated_at": delivering_at, "delivering_at": delivering_at, "delivered_at": delivering_at,
+            "deadline_at": "2026-11-02T12:00:00Z", "presence_baseline_json": baseline, "boot_id": BOOT,
+            "evidence_json": dict(seed.evidence, turn_started_at=delivering_at), "source": "studio",
+            "waiting_since": seed.waiting_since, "dedupe_key": seed.dedupe_key})
+        return action_id
+
+    def engine_moves_to(moment: str, *, user_ts: str, reply_ts: str, wire_text: str = "Approve") -> None:
+        F.team_unit_gate_tree(root, moment)
+        marker = F.team_unit_gate_record(root) / ".aidlc-engine" / "human-turn"
+        marker.write_text(f"{user_ts}\n")
+        stamp = time.time_ns()
+        os.utime(marker, ns=(stamp, stamp))
+        finish_turn(fake_host, slot_key, wire_text=wire_text, user_ts=user_ts, reply_ts=reply_ts)
+
+    return SimpleNamespace(root=root, repo=repo, slot_key=slot_key, snapshot=snapshot, make=make,
+                           engine_moves_to=engine_moves_to)
+
+
+@pytest.mark.parametrize("opened,approved,stage,sent,turn", [
+    ("A2-open", "A3-approved", "functional-design", "2026-11-02T03:32:30Z", "2026-11-02T03:32:33Z"),
+    ("B1-open", "B2-approved", "nfr-requirements", "2026-11-02T03:35:30Z", "2026-11-02T03:35:36Z"),
+    ("C1-open", "C2-approved", "functional-design", "2026-11-02T03:38:20Z", "2026-11-02T03:38:26Z"),
+], ids=["main_per_stage", "main_unit_end", "claimed_clone"])
+def test_a_unit_gate_approval_resolves_on_the_engines_own_row(svc, team_scene, opened, approved, stage, sent, turn):
+    """No Stage Progress row completes and `Current Stage` stays put for one Unit's approval: the engine's
+    `GATE_APPROVED` for that stage and Unit is the outcome, in the claim's own shard for a claimed clone."""
+    action_id = team_scene.make(opened, stage=stage, delivering_at=sent)
+    team_scene.engine_moves_to(approved, user_ts=turn, reply_ts="2026-11-02T03:59:00Z")
+    tick(svc)
+    row = svc.storage.get("actions", action_id)
+    assert row["status"] == "StateChanged", row["evidence_json"].get("findings")
+    assert row["resolution_json"]["reason"] == "gate_approved"
+    assert row["resolution_json"]["evidence"]["presence"]["ok"] is True
+    assert row["resolution_json"]["evidence"]["gate_approved"]["fields"]["Unit"] == "unit-a"
+    live = asyncio.run(svc.actions.list_live(repo_id=team_scene.repo.repo_id, include_revision=True))
+    assert [rec for rec in live if rec.type == "gate"] == []
+
+
+def test_a_claimed_clone_finds_its_approval_behind_a_teammates_later_rows(svc, team_scene):
+    """A teammate's gate rows pulled into the clone sort in a later shard and are newer than this Unit's gate. Read
+    from the stage-wide newest boundary, the approval in the claim's own shard would never count as new."""
+    landed = F.team_unit_gate_record(team_scene.root) / "audit" / "zz-host-000000000000.md"
+    landed.parent.mkdir(parents=True, exist_ok=True)
+    landed.write_text("# AI-DLC Audit Log\n" + "".join(
+        F.audit_block(event, "2026-11-02T03:38:15Z", Stage="functional-design", Unit="unit-b",
+                      Gate_Scope="per-stage", Gate_Stages="functional-design")
+        for event in ("STAGE_AWAITING_APPROVAL", "GATE_APPROVED")))
+    action_id = team_scene.make("C1-open", stage="functional-design", delivering_at="2026-11-02T03:38:20Z")
+    assert svc.storage.get("actions", action_id)["evidence_json"]["audit"]["boundary_event"]["shard"] == (
+        "80a99723a8c8-ad98078fcbca.md")
+    team_scene.engine_moves_to("C2-approved", user_ts="2026-11-02T03:38:26Z", reply_ts="2026-11-02T03:59:00Z")
+    tick(svc)
+    assert status_of(svc, action_id) == "StateChanged"
+
+
+def test_a_unit_gate_waits_for_its_own_units_approval(svc, team_scene, fake_host):
+    """Another Unit's approval at the same stage is not this card's outcome."""
+    action_id = team_scene.make("A2-open", stage="functional-design", delivering_at="2026-11-02T03:32:30Z")
+    append_audit_to = F.team_unit_gate_record(team_scene.root) / "audit" / "80a99723a8c8-37870df7b570.md"
+    append_audit_to.write_text(append_audit_to.read_text() + F.audit_text(
+        F.audit_block("HUMAN_TURN", "2026-11-02T03:32:33Z"),
+        F.audit_block("GATE_APPROVED", "2026-11-02T03:32:41Z", Stage="functional-design", Unit="unit-b",
+                      Gate_Scope="per-stage", Gate_Stages="functional-design", User_Input="Approve")))
+    finish_turn(fake_host, team_scene.slot_key, user_ts="2026-11-02T03:32:31Z", reply_ts="2026-11-02T03:59:00Z")
+    tick(svc)
+    assert status_of(svc, action_id) == "Delivered"
+
+
+def test_request_changes_on_a_unit_gate_resolves_to_revising_and_the_reopened_gate_is_a_new_card(svc, team_scene):
+    wire = "Request Changes: tighten the error model"
+    action_id = team_scene.make("A4-open", stage="nfr-requirements", decision="request_changes", wire_text=wire,
+                                delivering_at="2026-11-02T03:33:21Z")
+    first_key = svc.storage.get("actions", action_id)["dedupe_key"]
+    team_scene.engine_moves_to("A5-revising", user_ts="2026-11-02T03:33:21Z", reply_ts="2026-11-02T03:59:00Z",
+                               wire_text=wire)
+    tick(svc)
+    row = svc.storage.get("actions", action_id)
+    assert (row["status"], row["resolution_json"]["reason"]) == ("StateChanged", "gate_rejected")
+    assert row["resolution_json"]["evidence"]["unit_gate"] == {"unit": "unit-a", "status": "revising"}
+    # The engine reworks the Unit and reopens its gate: a card of its own, for the second attempt.
+    F.team_unit_gate_tree(team_scene.root, "A7-reopened")
+    tick(svc)
+    live = asyncio.run(svc.actions.list_live(repo_id=team_scene.repo.repo_id, include_revision=True))
+    [reopened] = [rec for rec in live if rec.type == "gate"]
+    assert reopened.status == "Queued" and reopened.dedupe_key != first_key
+    assert reopened.dedupe_key.startswith(f"gate:{team_scene.repo.repo_id}:{TEAM}:nfr-requirements:unit-a:")
+
+
 def test_question_answers_resolve_no_transition(svc, scene, fake_host):
     """Answering moves the conversation, not the lifecycle: ``ResolvedNoTransition``."""
     snap = scene.snapshot()

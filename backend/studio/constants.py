@@ -226,7 +226,7 @@ ACTION_TYPE = (
 #: happens if you act" sentence. Declared, not read from ``projection.SEED_CONSEQUENCE``: two sites override the seed at
 #: runtime (``gate`` on the last stage, ``run``); ``tests/test_constants.py`` checks seeds and overrides against it.
 CARD_CONSEQUENCE_VARIANTS: dict[str, tuple[str, ...]] = {
-    "gate": ("approve_unlocks", "final_stage"),
+    "gate": ("approve_unlocks", "final_stage", "unit_stage", "unit_end"),
     "question": ("advances_turn", "plan_session_stale"),
     "recovery": ("blocked_until_agree",),
     "delivery_uncertain": ("no_replay",),

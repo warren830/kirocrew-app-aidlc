@@ -41,6 +41,8 @@ from .aidlc_reader import (
     StageNode,
     StageRow,
     StateFile,
+    UnitGate,
+    UnitGateScope,
     boundary_token,
     effective_review_class,
     evidence_digest,
@@ -50,6 +52,7 @@ from .aidlc_reader import (
     latest_review_completion,
     parse_review_section,
     stage_attempt,
+    unit_gate_token,
 )
 from .errors import StudioError
 from .wire import WireRecord
@@ -317,10 +320,27 @@ class IntentSnapshot:
     artifact_dirs_rel: tuple[str, ...] = ()
     # Internal read evidence for audit questions, including after the pending question disappears.
     audit_question_attempt: tuple[str | None, bool] | None = None
+    #: `Unit Ownership: team` only: what the engine's Unit gate fold reads, and every Unit gate it found.
+    unit_gate_scope: UnitGateScope | None = None
+    unit_gates: tuple[UnitGate, ...] = ()
+    #: Evidence for every open team Unit gate that is not the executing `(stage, unit)`.
+    unit_gate_evidence: "Mapping[tuple[str, str], StageEvidence]" = dataclasses_field(default_factory=dict)
 
-    def stage_evidence(self, slug: str | None) -> StageEvidence:
+    def team_gate(self, stage: str | None, unit: str | None) -> bool:
+        """Whether `(stage, unit)` names a team-owned Unit's gate. Only then does a card carry its unit into the
+        boundary it is compared against; every other card keeps the stage-wide formulas."""
+        return (self.unit_gate_scope is not None and bool(stage) and bool(unit)
+                and stage in self.unit_gate_scope.gate_stages)
+
+    def unit_gate(self, stage: str | None, unit: str | None) -> UnitGate | None:
+        return next((gate for gate in self.unit_gates if (gate.stage, gate.unit) == (stage, unit)), None)
+
+    def stage_evidence(self, slug: str | None, unit: str | None = None) -> StageEvidence:
         """The evidence of `slug`, current stage or not: one accessor, so a gate card for a second `[?]` row can
-        never be handed the current stage's artifacts, verdict and questions to approve."""
+        never be handed the current stage's artifacts, verdict and questions to approve. A team Unit gate's
+        evidence is that Unit's own directory, whichever Unit is executing."""
+        if self.team_gate(slug, unit) and (slug, unit) != (self.stage, self.unit):
+            return self.unit_gate_evidence.get((str(slug), str(unit))) or StageEvidence(None, (), None, None)
         if slug is not None and slug != self.stage and slug in self.other_stage_evidence:
             return self.other_stage_evidence[slug]
         return StageEvidence(self.stage_dir_rel, self.stage_artifacts, self.review, self.questions,
@@ -364,7 +384,7 @@ def run_unavailable_reason(
     """
     if not snap.stable or snap.state is None:
         return None
-    if any(row.mark == "?" for row in snap.state.stages):
+    if any(row.mark == "?" for row in snap.state.stages) or _team_gate_open(snap):
         return "approval_pending"
     if snap.questions and (snap.questions.pending_count or snap.questions.pending_checkpoint):
         return "question_pending"
@@ -373,6 +393,11 @@ def run_unavailable_reason(
     if stage is not None and snap.stage is not None and (stage != snap.stage or unit != snap.unit):
         return "stage_changed"
     return None
+
+
+def _team_gate_open(snap: IntentSnapshot) -> bool:
+    """A team-owned Unit's gate waits for a person: the `[?]` its Stage Progress row never shows."""
+    return any(gate.status == "awaiting-approval" for gate in snap.unit_gates)
 
 
 @dataclass(frozen=True, slots=True)
@@ -645,6 +670,14 @@ class Projection:
                 others[boundary.slug] = self._read_stage_evidence(
                     root, engine_dir, space, intent_dir, state, graph, boundary.slug, None, None, audit.events
                 )
+        unit_gate_scope, unit_gates = (None, ()) if state_snap is None or state is None else self._reader.unit_gates(
+            root, space, intent_dir, state_snap, state, audit, graph, grid)
+        unit_gate_evidence = {
+            (gate.stage, gate.unit): self._read_stage_evidence(
+                root, engine_dir, space, intent_dir, state, graph, gate.stage, gate.unit, None, audit.events)
+            for gate in unit_gates
+            if gate.status == "awaiting-approval" and (gate.stage, gate.unit) != (stage, unit)
+        }
         return IntentSnapshot(
             repo_id=repo.repo_id, space=space, intent_dir=intent_dir, intent_key=intent_key_for(space, intent_dir),
             row=row, state_snap=state_snap, state=state, directive=directive, audit=audit, markers=markers,
@@ -656,7 +689,8 @@ class Projection:
             stage_dir_rel=current.stage_dir_rel, units=units, cursor=cursor, active_space=active_space,
             layout=self._reader.layout(root), acceptance_criteria=current.acceptance_criteria,
             other_stage_evidence=others, artifact_dirs_rel=current.artifact_dirs_rel,
-            audit_question_attempt=audit_question_attempt,
+            audit_question_attempt=audit_question_attempt, unit_gate_scope=unit_gate_scope, unit_gates=unit_gates,
+            unit_gate_evidence=unit_gate_evidence,
         )
 
     def _harness(self, root: Path, preferred: str) -> "HarnessDir | None":
@@ -779,29 +813,42 @@ class Projection:
 
     # -- captured / evidence ------------------------------------------------ #
 
-    def captured(self, snap: IntentSnapshot, stage: str | None) -> dict[str, Any]:
+    def captured(self, snap: IntentSnapshot, stage: str | None, *, unit: str | None = None) -> dict[str, Any]:
         """The compare-and-submit set for one boundary (§1.6.4 / C30).
 
         Built the same way for every card type and again at submit time — the only way the null-vs-non-null rule
         can work (review P26.3): a gate captured before its questions file existed must go stale when one appears.
         The digests come from the stage's own directory for every boundary the snapshot read, so a second gate's
         evidence can invalidate it too; a stage the snapshot did not read digests to `None`.
+
+        `unit` counts only for a team-owned Unit's gate: its token and attempt are that gate's own, so another
+        Unit's rows (a teammate's, landing in this audit) neither move it nor count as its rejections.
         """
+        team = snap.team_gate(stage, unit)
         state_sha = snap.state_sha256
         token = None
-        if state_sha:
+        if state_sha and team:
+            token = unit_gate_token(state_sha, snap.unit_gate(stage, unit), str(stage), str(unit))
+        elif state_sha:
             token = boundary_token(
                 state_sha, list(snap.audit.events),
                 snap.state.current_stage if snap.state is not None else None,
                 snap.state.revision_count if snap.state is not None else 0,
             )
-        evidence = snap.stage_evidence(stage)
-        known = stage is not None and (stage == snap.stage or stage in snap.other_stage_evidence)
+        if team:
+            gate = snap.unit_gate(stage, unit)
+            evidence = snap.stage_evidence(stage, unit)
+            known = (stage, unit) == (snap.stage, snap.unit) or (stage, unit) in snap.unit_gate_evidence
+            attempt: int | None = gate.attempt if gate is not None else 1
+        else:
+            evidence = snap.stage_evidence(stage)
+            known = stage is not None and (stage == snap.stage or stage in snap.other_stage_evidence)
+            attempt = stage_attempt(list(snap.audit.events), stage) if stage else None
         return {
             "state_hash": state_sha,
             "boundary_token": token,
             "question_digest": evidence.questions.sha256 if known and evidence.questions is not None else None,
-            "stage_attempt": stage_attempt(list(snap.audit.events), stage) if stage else None,
+            "stage_attempt": attempt,
             "evidence_digest": evidence_digest(list(evidence.artifacts), evidence.review) if known else None,
             "is_active": snap.is_active,
             "captured_at": snap.taken_at,
@@ -811,14 +858,18 @@ class Projection:
     def evidence(
         self, snap: IntentSnapshot, *, findings: Sequence[Any] = (), binding: Any | None = None,
         slot: Any | None = None, git: Any | None = None, host_card: dict | None = None, stage: str | None = None,
+        unit: str | None = None,
     ) -> EvidenceSnapshot:
         """The evidence a card shows, for `stage`'s boundary (default: the current stage).
 
         Only the stage directory differs per boundary: built once and shared, it showed a second `[?]` row's card
-        the current stage's artifacts, verdict and questions, under the right stage's name.
+        the current stage's artifacts, verdict and questions, under the right stage's name. A team Unit gate
+        (`unit`) shows that Unit's directory, and its boundary row is the gate's own newest row: the reconciler
+        reads the decision's outcome after it, and in a claimed checkout that row is in the claim's own shard.
         """
         target = stage if stage is not None else snap.stage
-        bundle = snap.stage_evidence(target)
+        team = snap.team_gate(target, unit)
+        bundle = snap.stage_evidence(target, unit if team else None)
         state, files = snap.state, snap.state_snap
         state_json = None if files is None else {
             "relpath": files.relpath, "sha256": files.sha256, "size": files.size, "mtime_ns": files.mtime_ns,
@@ -830,7 +881,11 @@ class Projection:
         }
         events = list(snap.audit.events)
         last = events[-1] if events else None
-        boundary = latest_event(events, C.BOUNDARY_EVENTS)
+        if team:
+            gate = snap.unit_gate(target, unit)
+            boundary = gate.last if gate is not None else None
+        else:
+            boundary = latest_event(events, C.BOUNDARY_EVENTS)
         audit_json = {
             "shards": [
                 {"relpath": shard.relpath, "size": shard.size, "truncated": shard.truncated}
@@ -872,7 +927,7 @@ class Projection:
             # `met` stays null: whether a criterion is met is the reviewer's call inside AI-DLC.
             acceptance_criteria=tuple({"text": t, "met": None, "why_key": None} for t in bundle.acceptance_criteria),
             findings=tuple(findings), session=self._session_json(binding, slot),
-            questions=self.questions_view(snap, host_card=host_card, stage=target), git=git,
+            questions=self.questions_view(snap, host_card=host_card, stage=target, unit=unit), git=git,
             markers=MarkersView.of(snap.markers).card_json(),
         )
 
@@ -895,12 +950,15 @@ class Projection:
         }
 
     def questions_view(
-        self, snap: IntentSnapshot, *, host_card: dict | None = None, stage: str | None = None
+        self, snap: IntentSnapshot, *, host_card: dict | None = None, stage: str | None = None,
+        unit: str | None = None,
     ) -> QuestionsView | None:
         """The questions a card offers for `stage` (default: the current one). `unit` is known for the current
-        stage only: another boundary's per-unit path was resolved from its own directory."""
+        stage only: another boundary's per-unit path was resolved from its own directory. A team Unit gate's
+        questions are its own Unit's."""
         target = stage if stage is not None else snap.stage
-        questions = snap.stage_evidence(target).questions
+        team = snap.team_gate(target, unit)
+        questions = snap.stage_evidence(target, unit if team else None).questions
         if questions is None or not target:
             return None
         native_wait = host_card is not None and "ask_id" in host_card
@@ -910,7 +968,7 @@ class Projection:
         )
         return QuestionsView(
             relpath=questions.relpath, sha256=questions.sha256, stage=target,
-            unit=snap.unit if target == snap.stage else None,
+            unit=unit if team else snap.unit if target == snap.stage else None,
             # `raw` duplicates prompt and options; every question in a group must be answered.
             questions=tuple({k: v for k, v in q.to_json().items() if k != "raw"} | {"required": True}
                             for q in questions.questions),
@@ -978,6 +1036,8 @@ class Projection:
     def _waiting_for_human(snap: IntentSnapshot) -> bool:
         if snap.state is not None and any(row.mark in ("?", "R", "r") for row in snap.state.stages):
             return True
+        if _team_gate_open(snap):
+            return True
         questions = snap.questions
         return questions is not None and (questions.pending_count > 0 or bool(questions.pending_checkpoint))
 
@@ -1011,6 +1071,8 @@ class Projection:
             reasons.append("state_unstable")
         marker = self._boundary_marker(snap)
         stage = self._boundary_stage(snap, marker)
+        gate = self._open_unit_gate(snap) if marker == "[?]" else None
+        unit = gate.unit if gate is not None and gate.stage == stage else None
         if marker is None:
             reasons.append("not_at_boundary")
         in_flight = ("Delivering", "Delivered", "Processing", "DeliveryUncertain")
@@ -1022,14 +1084,18 @@ class Projection:
             reasons.append("cursor_mismatch")
         return StableBoundary(
             stable=not reasons, reasons=tuple(reasons), stage=stage, marker=marker,
-            boundary_token=self.captured(snap, stage)["boundary_token"], recorded_at=snap.taken_at,
+            boundary_token=self.captured(snap, stage, unit=unit)["boundary_token"], recorded_at=snap.taken_at,
         )
+
+    @staticmethod
+    def _open_unit_gate(snap: IntentSnapshot) -> UnitGate | None:
+        return next((gate for gate in snap.unit_gates if gate.status == "awaiting-approval"), None)
 
     @staticmethod
     def _boundary_marker(snap: IntentSnapshot) -> str | None:
         state = snap.state
         if state is not None:
-            if any(row.mark == "?" for row in state.stages):
+            if any(row.mark == "?" for row in state.stages) or _team_gate_open(snap):
                 return "[?]"
             if any(row.mark in ("R", "r") for row in state.stages):
                 return "[R]"
@@ -1058,7 +1124,8 @@ class Projection:
             for row in snap.state.stages:
                 if row.mark in wanted:
                     return row.slug
-        return snap.stage
+        gate = Projection._open_unit_gate(snap) if marker == "[?]" else None
+        return gate.stage if gate is not None else snap.stage
 
     # -- card derivation ---------------------------------------------------- #
 
@@ -1073,9 +1140,9 @@ class Projection:
         would be the second live row for one decision that PRD §12.1 forbids. `budget_stop` is reserved: there are
         no unattended turns without the machine lane (C16).
         """
-        def evidence(stage: str | None = None) -> dict:
+        def evidence(stage: str | None = None, unit: str | None = None) -> dict:
             return self.evidence(snap, findings=findings, binding=binding, slot=slot, git=git, host_card=host_card,
-                                 stage=stage).to_json()
+                                 stage=stage, unit=unit).to_json()
 
         base = evidence()
         seeds: list[CardSeed] = []
@@ -1120,6 +1187,22 @@ class Projection:
                     self._latest_ts(snap, ("STAGE_REVISING", "GATE_REJECTED"), row.slug), (),
                     {"stage": row.slug, "revision_count": state.revision_count},
                 ))
+
+        # A team-owned Unit's gate is recorded in the audit only: its Stage Progress row is derived from the Units'
+        # columns and never reads `[?]`. One card per Unit gate the engine's own fold finds open, keyed on the row
+        # that opened it, so a gate reopened after Request Changes is a new card and another Unit's rows never
+        # touch this one.
+        for gate in snap.unit_gates:
+            if gate.status != "awaiting-approval" or gate.opened is None:
+                continue
+            opened = gate.opened
+            seeds.append(self._seed(
+                snap, "gate", gate.stage, evidence(gate.stage, gate.unit), opened.timestamp,
+                [d for d in C.DECISIONS["gate"] if d != "accept_as_is" or gate.attempt >= C.ACCEPT_AS_IS_MIN_ATTEMPT],
+                {"stage": gate.stage, "attempt": gate.attempt, "unit": gate.unit},
+                token=f"{gate.unit}:{_sha12(opened.shard, opened.timestamp, opened.raw)}", unit=gate.unit,
+                consequence="unit_end" if snap.unit_gate_scope.rhythm == "unit-end" else "unit_stage",
+            ))
 
         questions, needs_input = snap.questions, bool(_attr(slot, "needs_input", False))
         # A reply already on the wire for this stage's questions: AI-DLC records the answers one by one, and each
@@ -1226,16 +1309,19 @@ class Projection:
         decisions: Sequence[str], headline_params: Mapping[str, Any], *, token: str | None = None,
         fallback: str | None = None, consequence: str | None = "__default__", risk_class: str | None = None,
         reason: str | None = None, related_action_id: str | None = None, space_wide: bool = False,
+        unit: str | None = None,
     ) -> CardSeed:
         """A seed with its type's table defaults. `token` tells this boundary from the next in the dedupe key
-        (`None`: the boundary token, else `fallback`); `space_wide` keys a space-level fact on the space."""
+        (`None`: the boundary token, else `fallback`); `space_wide` keys a space-level fact on the space; `unit`
+        names the team-owned Unit whose gate this is."""
         severity, default_risk, default_variant = _SEED_TABLE[action_type]
-        captured = self.captured(snap, stage)
+        captured = self.captured(snap, stage, unit=unit)
         intent_key = f"{snap.space}~*" if space_wide else snap.intent_key
         return CardSeed(
             type=action_type, repo_id=snap.repo_id, space=snap.space, intent_dir=snap.intent_dir,
             intent_key=snap.intent_key, intent_uuid=snap.row.uuid if snap.row is not None else None, stage=stage,
-            unit=snap.unit if stage == snap.stage else None, severity=severity, risk_class=risk_class or default_risk,
+            unit=unit if snap.team_gate(stage, unit) else snap.unit if stage == snap.stage else None,
+            severity=severity, risk_class=risk_class or default_risk,
             captured=captured,
             # a copy per seed: several share one derivation, and one card's blob must not rewrite another's
             evidence=dict(evidence),
@@ -1244,11 +1330,12 @@ class Projection:
             ),
             waiting_since=waiting_since, decisions=tuple(decisions), headline_params=dict(headline_params),
             consequence_variant=default_variant if consequence == "__default__" else consequence,
-            stage_ref=self.stage_ref(snap, stage), reason=reason, related_action_id=related_action_id,
+            stage_ref=self.stage_ref(snap, stage, unit=unit), reason=reason, related_action_id=related_action_id,
         )
 
-    def stage_ref(self, snap: IntentSnapshot, slug: str | None) -> dict | None:
-        """`{slug, number, name, phase, unit}` for a card's stage (§2.11), or `None`."""
+    def stage_ref(self, snap: IntentSnapshot, slug: str | None, *, unit: str | None = None) -> dict | None:
+        """`{slug, number, name, phase, unit}` for a card's stage (§2.11), or `None`. A team Unit gate names its
+        own Unit; any other card names the executing one, at the executing stage only."""
         if not slug:
             return None
         node, row = snap.node(slug), snap.row_for(slug)
@@ -1257,7 +1344,7 @@ class Projection:
             "number": node.number if node is not None else None,
             "name": node.name if node is not None else None,
             "phase": (node.phase if node is not None else None) or (row.phase if row is not None else None),
-            "unit": snap.unit if slug == snap.stage else None,
+            "unit": unit if snap.team_gate(slug, unit) else snap.unit if slug == snap.stage else None,
         }
 
     def _conversation_reply_seeds(

@@ -850,3 +850,16 @@ def test_projection_snapshot_is_accepted_by_the_engine(studio, engine, make_snap
     assert from_real == ["missing_required_artifact", "missing_required_artifact", "phase_stage_disagreement",
                          "completed_count_mismatch"]
     assert from_real == _codes(engine.evaluate_intent(view_snap, facts))
+
+
+@pytest.mark.parametrize("moment", ["A2-open", "A3-approved", "A4-open", "A7-reopened", "B1-open", "C1-open",
+                                    "C2-approved"])
+def test_nothing_is_flagged_while_a_team_owned_unit_gate_opens_and_closes(studio, engine, make_facts, repo_builder,
+                                                                         clock, moment):
+    """The engine's own rows around a team Unit's gate, in the main checkout and in a claimed clone: an open gate
+    with no Stage Progress `[?]` contradicts nothing, and a card that cannot be cleared would block the intent."""
+    root = F.team_unit_gate_tree(repo_builder.with_engine("payload").build(), moment)
+    snap = studio.projection.Projection(studio.aidlc_reader.AidlcReader(clock), engine, clock).snapshot(
+        repo_record(studio, clock, canonical_path=str(root)), "default", F.TEAM_UNIT_GATE_INTENT)
+    assert snap.stable and snap.unit_gates
+    assert [f.code for f in engine.evaluate_intent(snap, make_facts()) if f.severity != "info"] == []

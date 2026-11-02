@@ -961,7 +961,7 @@ class HumanActionBroker:
         # The boundary is compared before the wire text: answers are encoded against the live file, so a
         # relabelled option or an appended question would otherwise read as the browser's mistake
         # (`invalid_decision`, `answers_incomplete`) and never hand back the card the human must re-read.
-        live_captured = Captured.from_json(self._projection.captured(snap, rec.stage))
+        live_captured = Captured.from_json(self._projection.captured(snap, rec.stage, unit=_gate_unit(rec)))
         if (live_captured.differences(rec.captured) and rec.type in PROMPT_COMMAND_TYPES and rec.status == "Queued"
                 and rec.delivery_id is None and rec.delivering_at is None and snap.stable):
             # No seed refreshes a user-created command card: persist the evidence card() shows, under CAS,
@@ -1504,7 +1504,7 @@ class HumanActionBroker:
             summary = self._projection.summarize(snap)
             intent.update(slug=summary.slug, uuid=summary.uuid or rec.intent_uuid, title=summary.title)
             if open_card:
-                captured = Captured.from_json(self._projection.captured(snap, rec.stage))
+                captured = Captured.from_json(self._projection.captured(snap, rec.stage, unit=_gate_unit(rec)))
                 # Binding and slot are re-read: the UI disables the send exactly when `evidence.session.slot_key`
                 # is absent, and without the slot every conversation would read idle. `stage=rec.stage`, never
                 # the current stage (A20): with two `[?]` rows the person approving one must not be shown the
@@ -1512,9 +1512,9 @@ class HumanActionBroker:
                 binding = await self._sessions.get(rec.repo_id, rec.space, rec.intent_dir)
                 slot = self._host.slot(binding.slot_key) if binding.slot_key else None
                 live = self._projection.evidence(snap, findings=(), binding=binding, slot=slot,
-                                                 stage=rec.stage).to_json()
+                                                 stage=rec.stage, unit=_gate_unit(rec)).to_json()
                 evidence.update({key: live.get(key) for key in LIVE_REFRESHED_EVIDENCE_KEYS})
-                stage_ref = self._projection.stage_ref(snap, rec.stage) or stage_ref
+                stage_ref = self._projection.stage_ref(snap, rec.stage, unit=_gate_unit(rec)) or stage_ref
         evidence.update(presence_baseline=_plain(rec.presence_baseline), presence=rec.evidence.get("presence"),
                         cursor_readback=_plain(rec.cursor_readback))
         if rec.type == "missing_input":
@@ -1817,6 +1817,12 @@ class HumanActionBroker:
 
 
 # ---- small helpers ----------------------------------------------------------- #
+
+
+def _gate_unit(rec: ActionRecord) -> str | None:
+    """The Unit a gate card was raised for. The projection reads a team-owned Unit's gate from that Unit's own
+    rows and directory, and ignores the Unit for every other card."""
+    return rec.unit if rec.type == "gate" else None
 
 
 def _seed_meta(seed: "CardSeed") -> dict[str, Any]:

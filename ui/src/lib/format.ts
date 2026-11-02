@@ -154,6 +154,11 @@ export function ref(i18n: I18n, value: I18nRef | null | undefined, fallbackKey?:
     const phrase = `action.reason.${value.params.reason}`
     if (i18n.has(phrase)) params.reason = i18n.t(phrase)
   }
+  // A team-owned Unit's gate names its Unit: two Units at one stage would otherwise read as the same sentence.
+  if (value.key === 'action.gate.headline' && typeof value.params.unit === 'string' && value.params.unit
+    && i18n.has(`${value.key}.unit`)) {
+    return i18n.t(`${value.key}.unit`, params)
+  }
   if (i18n.has(value.key)) return i18n.t(value.key, params)
   return fallbackKey ? i18n.t(fallbackKey, params) : value.key
 }

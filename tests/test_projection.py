@@ -1565,3 +1565,125 @@ def test_map_unit_receipts_follow_the_units_own_lifecycle_rows(projection, repo_
     inputs = projection.map_inputs(projection.snapshot(repo_record(root), "default", GATE_DIR))
     assert inputs["unit_receipts"] == {"functional-design": {"unit-a": "completed"},
                                        "nfr-requirements": {"unit-a": "in_progress"}}
+
+
+# --- team-owned Unit gates, on what the bundled engine wrote (tests/fixtures/team-unit-gate) ---
+
+TEAM = F.TEAM_UNIT_GATE_INTENT
+CLAIM_SHARD = "80a99723a8c8-ad98078fcbca.md"
+
+
+@pytest.fixture
+def team_snap(projection, repo_record, repo_builder):
+    """A snapshot of one recorded moment; ``edit(root)`` changes the copy first."""
+    def build(moment: str, *, name: str | None = None, edit=None):
+        root = F.team_unit_gate_tree(_builder(repo_builder, name or moment).with_engine("payload").build(), moment)
+        if edit is not None:
+            edit(root)
+        return projection.snapshot(repo_record(root), "default", TEAM)
+
+    return build
+
+
+def gate_seeds(projection, snap):
+    return [seed for seed in _seeds(projection, snap) if seed.type == "gate"]
+
+
+def land_the_claim(root: Path) -> None:
+    """What `unit-merge` brings to the main checkout: the claim's own audit shard, every gate in it approved."""
+    shard = F.team_unit_gate_record(F.TEAM_UNIT_GATE / "C2-approved") / "audit" / CLAIM_SHARD
+    (F.team_unit_gate_record(root) / "audit" / CLAIM_SHARD).write_bytes(shard.read_bytes())
+
+
+def test_a_claimed_checkout_raises_one_card_for_its_units_open_gate(projection, team_snap):
+    snap = team_snap("C1-open")
+    [seed] = gate_seeds(projection, snap)
+    assert (seed.stage, seed.unit, seed.stage_ref["unit"]) == ("functional-design", "unit-a", "unit-a")
+    assert seed.headline_params == {"stage": "functional-design", "attempt": 1, "unit": "unit-a"}
+    assert seed.consequence_variant == "unit_stage"
+    assert seed.dedupe_key.startswith(f"gate:{REPO_ID}:{TEAM}:functional-design:unit-a:")
+    assert seed.waiting_since == "2026-11-02T03:38:11Z"  # the row that opened it, not the scan
+    # The boundary is the gate's own row, in the claim's own shard, where its approval will land too.
+    assert seed.evidence["audit"]["boundary_event"]["shard"] == CLAIM_SHARD
+    paths = [artifact["relpath"] for artifact in seed.evidence["artifacts"]]
+    assert paths and all(f"/{TEAM}/construction/unit-a/functional-design/" in path for path in paths)
+    assert seed.decisions == ("approve", "request_changes")
+
+
+@pytest.mark.parametrize("moment,stage,variant", [
+    ("A2-open", "functional-design", "unit_stage"),
+    ("A4-open", "nfr-requirements", "unit_stage"),
+    ("B1-open", "nfr-requirements", "unit_end"),
+])
+def test_the_main_checkout_raises_the_gate_of_the_unit_it_walks_itself(projection, team_snap, moment, stage, variant):
+    """Claimless team mode: the main checkout runs every Unit, one gate per (stage, Unit) under per-stage and one per
+    Unit on the final per-Unit stage under unit-end."""
+    [seed] = gate_seeds(projection, team_snap(moment))
+    assert (seed.stage, seed.unit, seed.consequence_variant) == (stage, "unit-a", variant)
+
+
+@pytest.mark.parametrize("moment", ["A1-before-gate-start", "A3-approved", "A5-revising", "B2-approved",
+                                    "C2-approved"])
+def test_no_card_before_a_unit_gate_opens_or_once_the_engine_recorded_its_outcome(projection, team_snap, moment):
+    # A1's Unit Progress grid already reads `[?]`: it is not the gate, the audit row is.
+    assert gate_seeds(projection, team_snap(moment)) == []
+
+
+def test_a_unit_gate_reopened_after_request_changes_is_a_new_card(projection, team_snap):
+    [first] = gate_seeds(projection, team_snap("A4-open"))
+    [again] = gate_seeds(projection, team_snap("A7-reopened"))
+    assert (first.stage, again.stage) == ("nfr-requirements", "nfr-requirements")
+    assert first.dedupe_key != again.dedupe_key
+    assert (first.captured["stage_attempt"], again.captured["stage_attempt"]) == (1, 2)
+    assert again.headline_params["attempt"] == 2
+
+
+def test_a_landed_already_approved_gate_raises_no_card_on_the_main_checkout(projection, team_snap):
+    snap = team_snap("C3-main-while-claimed", edit=land_the_claim)
+    assert [gate.status for gate in snap.unit_gates] == ["approved"]
+    assert gate_seeds(projection, snap) == []
+
+
+def test_another_units_rows_never_move_a_unit_gates_capture(projection, team_snap):
+    """A teammate's rows landing in this audit change neither this gate's card nor what it is compared against;
+    the stage-wide boundary would have moved under every other Unit's gate."""
+    before = team_snap("A2-open", name="before")
+
+    def unit_b_moves(root: Path) -> None:
+        shard = F.team_unit_gate_record(root) / "audit" / "zz-host-000000000000.md"
+        shard.write_text("# AI-DLC Audit Log\n" + "".join(
+            F.audit_block(event, "2026-11-02T03:40:00Z", Stage="functional-design", Unit="unit-b",
+                          Gate_Scope="per-stage", Gate_Stages="functional-design")
+            for event in ("STAGE_AWAITING_APPROVAL", "GATE_REJECTED", "STAGE_REVISING")))
+
+    after = team_snap("A2-open", name="after", edit=unit_b_moves)
+    [seed_before] = gate_seeds(projection, before)
+    [seed_after] = gate_seeds(projection, after)
+    assert seed_after.dedupe_key == seed_before.dedupe_key
+    assert projection.captured(after, "functional-design", unit="unit-a") == {
+        **projection.captured(before, "functional-design", unit="unit-a"), "captured_at": after.taken_at}
+    assert (projection.captured(after, "functional-design")["boundary_token"]
+            != projection.captured(before, "functional-design")["boundary_token"])
+    assert projection.captured(after, "functional-design")["stage_attempt"] == 2
+
+
+def test_an_open_unit_gate_waits_for_the_person_and_holds_run(projection, proj_mod, team_snap):
+    snap = team_snap("A2-open")
+    assert projection.operational_state(snap) == "WaitingForYou"
+    assert proj_mod.run_unavailable_reason(snap) == "approval_pending"
+    boundary = projection.stable_boundary(snap)
+    assert (boundary.marker, boundary.stage) == ("[?]", "functional-design")
+    assert boundary.boundary_token == projection.captured(snap, "functional-design", unit="unit-a")["boundary_token"]
+    approved = team_snap("A3-approved")
+    assert projection.operational_state(approved) == "Idle"
+    assert proj_mod.run_unavailable_reason(approved) is None
+
+
+def test_a_solo_card_ignores_a_unit_and_keeps_its_key(projection, proj_mod, gate_snap):
+    """Only a team-owned Unit's gate reads its Unit: every other card's capture, stage and key are what they were."""
+    assert projection.captured(gate_snap, GATE_STAGE, unit="unit-a") == projection.captured(gate_snap, GATE_STAGE)
+    assert projection.stage_ref(gate_snap, GATE_STAGE, unit="unit-a") == projection.stage_ref(gate_snap, GATE_STAGE)
+    [seed] = [seed for seed in _seeds(projection, gate_snap) if seed.type == "gate"]
+    assert seed.dedupe_key == proj_mod.dedupe_key(
+        "gate", REPO_ID, gate_snap.intent_key, GATE_STAGE, projection.captured(gate_snap, GATE_STAGE)["boundary_token"])
+    assert "unit" not in seed.headline_params and seed.consequence_variant == "approve_unlocks"

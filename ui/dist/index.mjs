@@ -24,7 +24,10 @@ var D = Object.defineProperty, O = (e, t) => {
 	"action.force_stop.headline": "Force stop the turn running on {stage}.",
 	"action.gate.consequence.approve_unlocks": "Approving lets AI-DLC close {stage} and start the next stage. Requesting changes sends your note back and reopens the gate.",
 	"action.gate.consequence.final_stage": "Approving closes {stage}, the last stage in this plan, and completes the workflow.",
+	"action.gate.consequence.unit_end": "Approving closes every per-unit stage of unit {unit}, up to {stage}, in one decision. Requesting changes sends your note back and reopens this unit's gate.",
+	"action.gate.consequence.unit_stage": "Approving lets AI-DLC close {stage} for unit {unit} and move that unit on. Requesting changes sends your note back and reopens this unit's gate.",
 	"action.gate.headline": "AI-DLC finished {stage} and is waiting for your approval before it goes on.",
+	"action.gate.headline.unit": "AI-DLC finished {stage} for unit {unit} and is waiting for your approval before that unit goes on.",
 	"action.install_conflict.consequence.nothing_written": "Nothing has been written to your repository, and AI-DLC will not run here until this is resolved.",
 	"action.install_conflict.headline": "A file that Studio manages in {engine_dir} does not match what it installed.",
 	"action.missing_input.headline": "AI-DLC needs something from you before it can start: {reason}.",
@@ -2624,7 +2627,10 @@ var D = Object.defineProperty, O = (e, t) => {
 	"action.force_stop.headline": "强制停止正在运行的 {stage} 这一轮。",
 	"action.gate.consequence.approve_unlocks": "批准后 AI-DLC 会关闭 {stage} 并开始下一个阶段。请求修改会把你的说明送回并重新打开关卡。",
 	"action.gate.consequence.final_stage": "批准后将关闭本计划的最后一个阶段 {stage} 并完成整个流程。",
+	"action.gate.consequence.unit_end": "批准会一次性关闭单元 {unit} 直到 {stage} 的所有按单元阶段。请求修改会把你的说明送回并重新打开该单元的关卡。",
+	"action.gate.consequence.unit_stage": "批准后 AI-DLC 会关闭单元 {unit} 的 {stage}，并让该单元继续推进。请求修改会把你的说明送回并重新打开该单元的关卡。",
 	"action.gate.headline": "AI-DLC 已完成 {stage}，在继续之前等待你的批准。",
+	"action.gate.headline.unit": "AI-DLC 已完成单元 {unit} 的 {stage}，在该单元继续之前等待你的批准。",
 	"action.install_conflict.consequence.nothing_written": "尚未向你的仓库写入任何内容；在此问题解决前，AI-DLC 不会在这里运行。",
 	"action.install_conflict.headline": "{engine_dir} 中由 Studio 管理的文件与其安装的内容不一致。",
 	"action.missing_input.headline": "AI-DLC 需要你提供信息才能开始：{reason}。",
@@ -5707,7 +5713,7 @@ function ze(e, t, n) {
 		let i = `action.reason.${t.params.reason}`;
 		e.has(i) && (r.reason = e.t(i));
 	}
-	return e.has(t.key) ? e.t(t.key, r) : n ? e.t(n, r) : t.key;
+	return t.key === "action.gate.headline" && typeof t.params.unit == "string" && t.params.unit && e.has(`${t.key}.unit`) ? e.t(`${t.key}.unit`, r) : e.has(t.key) ? e.t(t.key, r) : n ? e.t(n, r) : t.key;
 }
 function Be(e, t) {
 	let n = `finding.${t.code}`;

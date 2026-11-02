@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "space": "default",
+  "intent_uuid": "01a19a4a-4f0e-7973-9f06-fcffeb2262ce",
+  "intent_id8": "eb2262ce",
+  "unit": "unit-a",
+  "owner": "alice",
+  "generation": 1,
+  "nonce": "4f2dbc3a-51d1-45fc-9716-4ccaeded1ee6",
+  "claim_ref": "refs/heads/claim/eb2262ce/unit-a",
+  "claim_oid": "c5b05220fd54b3eeb4888c28b48a09593b85950e",
+  "claimed_from_oid": "d4312b93fe39435798f5085893998a1f9d728123",
+  "integration_ref": "refs/remotes/origin/main",
+  "gate_rhythm": "per-stage",
+  "audit_shard": "80a99723a8c8-ad98078fcbca.md"
+}

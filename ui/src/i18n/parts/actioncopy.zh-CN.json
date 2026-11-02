@@ -1,5 +1,6 @@
 {
   "action.gate.headline": "AI-DLC 已完成 {stage}，在继续之前等待你的批准。",
+  "action.gate.headline.unit": "AI-DLC 已完成单元 {unit} 的 {stage}，在该单元继续之前等待你的批准。",
   "action.revision.headline": "{stage} 正在根据你的反馈修订。第 {revision_count} 次修订。",
   "action.question.headline": "{stage} 需要你回答其待解问题后才能继续。仍有 {pending} 个待回答。",
   "action.missing_input.headline": "AI-DLC 需要你提供信息才能开始：{reason}。",
@@ -15,6 +16,8 @@
   "action.prepare_commit.headline": "请会话为当前改动准备一次提交。",
   "action.gate.consequence.approve_unlocks": "批准后 AI-DLC 会关闭 {stage} 并开始下一个阶段。请求修改会把你的说明送回并重新打开关卡。",
   "action.gate.consequence.final_stage": "批准后将关闭本计划的最后一个阶段 {stage} 并完成整个流程。",
+  "action.gate.consequence.unit_stage": "批准后 AI-DLC 会关闭单元 {unit} 的 {stage}，并让该单元继续推进。请求修改会把你的说明送回并重新打开该单元的关卡。",
+  "action.gate.consequence.unit_end": "批准会一次性关闭单元 {unit} 直到 {stage} 的所有按单元阶段。请求修改会把你的说明送回并重新打开该单元的关卡。",
   "action.question.consequence.advances_turn": "你的回答会作为一条消息发送，会话将据此继续。",
   "action.recovery.consequence.blocked_until_agree": "确认仅关闭这条通知。请先修复所报告的原因，再继续任务。",
   "action.delivery_uncertain.consequence.no_replay": "Studio 不会自行重发。它正在观察 AI-DLC 自己的文件以确认结果，重发前一定会先征求你的同意。",

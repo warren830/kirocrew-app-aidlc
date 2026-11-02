@@ -1123,6 +1123,10 @@ class Reconciler:
         ended = self._turn_ended(rec, slot, snap)
         seen: dict[str, Any] = {"turn_ended": ended}
 
+        team_gate = _attr(snap, "team_gate")
+        if action_type == "gate" and team_gate is not None and team_gate(stage, rec.unit):
+            return self._unit_gate_row(rec, snap, decision, seen)
+
         if action_type == "gate" and decision in ("approve", "accept_as_is"):
             approved = self._newest_new(rec, snap, ("GATE_APPROVED",), stage)
             if approved is None:
@@ -1190,6 +1194,36 @@ class Reconciler:
             return Resolution("no_transition", "slot_idle", seen) if seen["slot_idle"] else Resolution(
                 "pending", "stop_in_progress", seen)
 
+        return Resolution("pending", "no_contract_row", seen)
+
+    def _unit_gate_row(self, rec: Any, snap: Any, decision: str, seen: dict[str, Any]) -> Resolution:
+        """A team-owned Unit's gate resolves on the engine's own rows for that stage and Unit, matched as its fold
+        matches them. There is no Stage Progress row to complete and `Current Stage` does not move for one Unit,
+        so the stage rule would hold an approval that landed at `gate_approved_without_row` forever."""
+        stage, unit, scope = rec.stage, rec.unit, snap.unit_gate_scope
+
+        def newest(event_type: str) -> Any:
+            rows = [event for event in self._new_events(rec, snap, (event_type,), None)
+                    if scope.matches(event, stage, unit)]
+            return max(rows, key=lambda event: event.sort_key, default=None)
+
+        gate = snap.unit_gate(stage, unit)
+        seen["unit_gate"] = {"unit": unit, "status": gate.status if gate is not None else "pending"}
+        if decision in ("approve", "accept_as_is"):
+            approved = newest("GATE_APPROVED")
+            if approved is None:
+                return Resolution("pending", "no_gate_approved", seen)
+            seen["gate_approved"] = _json_of(approved)
+            return Resolution("state_changed", "gate_approved", seen)
+        if decision == "request_changes":
+            rejected, revising = newest("GATE_REJECTED"), newest("STAGE_REVISING")
+            seen.update(gate_rejected=_json_of(rejected), stage_revising=_json_of(revising))
+            if rejected is None or revising is None:
+                return Resolution("pending", "no_gate_rejected", seen)
+            # The conductor may finish the revision and reopen the gate in the same turn: the rejection is the
+            # outcome either way, and the reopened gate is a card of its own.
+            returned = gate is None or gate.status != "revising"
+            return Resolution("state_changed", "gate_revision_returned" if returned else "gate_rejected", seen)
         return Resolution("pending", "no_contract_row", seen)
 
     def _commit_since(self, rec: Any, snap: Any) -> dict[str, Any] | None:

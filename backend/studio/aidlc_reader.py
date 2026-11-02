@@ -2137,6 +2137,180 @@ def evidence_digest(
     return _sha256("\n".join(f"{path}:{digest}" for path, digest in rows) + "\n" + _sha256(review_json))
 
 
+# ---- team Unit gates (``Unit Ownership: team``) ----------------------------- #
+
+UNIT_SCOPE_FILENAME = ".aidlc-unit-scope.json"
+CLAIM_GENERATIONS_FILENAME = ".aidlc-claim-generations.json"
+#: The rows ``unitGateStatus`` (aidlc-lib.ts) folds, and the status each one means.
+_UNIT_GATE_STATUS = {
+    "STAGE_AWAITING_APPROVAL": "awaiting-approval",
+    "STAGE_REVISING": "revising",
+    "GATE_REJECTED": "revising",
+    "GATE_APPROVED": "approved",
+}
+#: The rows that return a Unit gate to ``pending``; ``STAGE_JUMPED`` only when its target reaches the stage.
+_UNIT_GATE_RESETS = frozenset({"WORKFLOW_STARTED", "STAGE_JUMPED"})
+_UNIT_SCOPE_STRINGS = (
+    "space", "intent_uuid", "intent_id8", "unit", "owner", "nonce", "claim_ref", "claim_oid",
+    "claimed_from_oid", "integration_ref",
+)
+_AUDIT_SHARD_FILE_RE = re.compile(r"^[A-Za-z0-9._-]+\.md$")
+
+
+def state_field(text: str, name: str) -> str | None:
+    """``getField`` from aidlc-lib.ts: the first ``- **<name>**:`` line anywhere in the state file, trimmed."""
+    match = re.search(rf"^- \*\*{re.escape(name)}\*\*:[ \t]*(.*)$", text, re.MULTILINE)
+    return match.group(1).strip() if match else None
+
+
+def _audit_field(event: AuditEvent, name: str) -> str | None:
+    """``auditBlockField``: the trimmed value, ``None`` when the row has no such line (not when it is blank)."""
+    value = event.fields.get(name)
+    return None if value is None else value.strip()
+
+
+def _unit_scope_stamp(data: Any) -> dict | None:
+    """``readUnitScopeStamp``: a stamp of any other shape is no stamp at all, for the engine as for Studio."""
+    if not isinstance(data, dict) or data.get("version") != 1 or type(data.get("version")) is not int:
+        return None
+    generation = data.get("generation")
+    shard = data.get("audit_shard")
+    if (
+        any(not isinstance(data.get(key), str) for key in _UNIT_SCOPE_STRINGS)
+        or type(generation) is not int or generation < 1
+        or data.get("gate_rhythm") not in ("per-stage", "unit-end")
+        or ("audit_shard" in data and (not isinstance(shard, str) or not _AUDIT_SHARD_FILE_RE.match(shard)))
+    ):
+        return None
+    return data
+
+
+@dataclass(frozen=True, slots=True)
+class UnitGateScope:
+    """What the engine's team Unit gate fold reads besides the audit, for one intent in one checkout.
+
+    ``claim_unit``/``claim_generation`` come from this checkout's claim stamp when it names this intent: a
+    teammate's claimed clone counts only its own Unit's rows of its current claim attempt. Without one (the
+    main checkout, with or without claims) a row stamped with an ``Attempt Generation`` counts only while it is
+    the generation ``.aidlc-claim-generations.json`` records for its Unit, or none is recorded.
+    """
+
+    #: ``per-stage`` or ``unit-end``: a claim's stamped rhythm, else the state file's ``Unit Gate Rhythm``.
+    rhythm: str
+    #: Where a Unit gate can open: every per-Unit Construction stage under ``per-stage``, the last active one
+    #: under ``unit-end`` (the engine refuses a unit-end gate reported against any other stage).
+    gate_stages: tuple[str, ...]
+    claim_unit: str | None
+    claim_generation: int | None
+    #: ``Unit -> generation`` this intent's claim map records, read only without an applicable stamp.
+    generations: dict[str, int]
+    #: The stage graph's slugs in order, for ``stageJumpReaches``.
+    graph_order: tuple[str, ...]
+
+    def matches(self, event: AuditEvent, stage: str, unit: str) -> bool:
+        """Whether a gate row belongs to this Unit's gate at ``stage``: ``gateEventMatchesUnit``, then
+        ``eventMatchesClaimAttempt``, then the rhythm the row was opened under."""
+        named = _audit_field(event, "Gate Stages")
+        if named:
+            stages = [part.strip() for part in named.split(",") if part.strip()]
+        else:
+            own = _audit_field(event, "Stage")
+            stages = [own] if own else []
+        if stage not in stages or _audit_field(event, "Unit") != unit:
+            return False
+        rhythm = _audit_field(event, "Gate Scope")
+        return (rhythm if rhythm is not None else "per-stage") == self.rhythm and self.matches_attempt(event, unit)
+
+    def matches_attempt(self, event: AuditEvent, unit: str) -> bool:
+        """``eventMatchesClaimAttempt``: a released or superseded claim's rows never count again."""
+        recorded = _audit_field(event, "Attempt Generation")
+        if self.claim_unit is not None:
+            event_unit = _audit_field(event, "Unit")
+            return (unit == self.claim_unit and event_unit in (None, self.claim_unit)
+                    and recorded == str(self.claim_generation))
+        generation = self.generations.get(unit)
+        return recorded is None or generation is None or recorded == str(generation)
+
+    def jump_reaches(self, event: AuditEvent, stage: str) -> bool:
+        """``stageJumpReaches``: a jump reopens its target and every later stage; an unknown name reaches all."""
+        target = _audit_field(event, "Target")
+        if not target or target == stage or target not in self.graph_order or stage not in self.graph_order:
+            return True
+        return self.graph_order.index(stage) >= self.graph_order.index(target)
+
+
+@dataclass(frozen=True, slots=True)
+class UnitGate:
+    """One team Unit gate as ``unitGateStatus`` reads it: ``pending``, ``awaiting-approval``, ``revising`` or
+    ``approved``. Stage Progress never shows it (its row is derived from the Units' columns), so this is the
+    only record a card can be raised from."""
+
+    stage: str
+    unit: str
+    status: str
+    #: ``1 + count(STAGE_REVISING)`` of this Unit's gate, as ``stage_attempt`` counts a stage's.
+    attempt: int
+    #: The newest ``STAGE_AWAITING_APPROVAL`` the fold took since its last reset: the gate a card is for.
+    opened: AuditEvent | None
+    #: The newest row the fold took: this gate has moved exactly when this row has.
+    last: AuditEvent | None
+
+
+def unit_gate_status(events: Sequence[AuditEvent], scope: UnitGateScope, stage: str, unit: str) -> UnitGate:
+    """``unitGateStatus`` (aidlc-lib.ts), group for group.
+
+    Rows are read in ``(timestamp, shard, position)`` order, a second at a time. Within one shard append order
+    decides; when the second's relevant rows span shards their order is unknowable, so a reset wins, then
+    ``revising``, then ``awaiting-approval``, and only an all-approved second approves.
+    """
+    rows = sorted((event for event in events if event.event and event.timestamp), key=lambda event: event.sort_key)
+    status, opened, last, revisions = "pending", None, None, 0
+    start = 0
+    while start < len(rows):
+        end = start + 1
+        while end < len(rows) and rows[end].timestamp == rows[start].timestamp:
+            end += 1
+        relevant = [
+            row for row in rows[start:end]
+            if row.event == "WORKFLOW_STARTED"
+            or (row.event == "STAGE_JUMPED" and scope.jump_reaches(row, stage))
+            or (row.event in _UNIT_GATE_STATUS and scope.matches(row, stage, unit))
+        ]
+        start = end
+        if not relevant:
+            continue
+        last = relevant[-1]
+        revisions += sum(1 for row in relevant if row.event == "STAGE_REVISING")
+        if len({row.shard for row in relevant}) > 1:
+            statuses = {_UNIT_GATE_STATUS.get(row.event) for row in relevant}
+            if None in statuses:
+                status, opened = "pending", None
+            elif "revising" in statuses:
+                status = "revising"
+            elif "awaiting-approval" in statuses:
+                status = "awaiting-approval"
+                opened = max((row for row in relevant if row.event == "STAGE_AWAITING_APPROVAL"),
+                             key=lambda row: row.sort_key)
+            else:
+                status = "approved"
+            continue
+        for row in relevant:
+            if row.event in _UNIT_GATE_RESETS:
+                status, opened = "pending", None
+            else:
+                status = _UNIT_GATE_STATUS[row.event]
+                if row.event == "STAGE_AWAITING_APPROVAL":
+                    opened = row
+    return UnitGate(stage=stage, unit=unit, status=status, attempt=1 + revisions, opened=opened, last=last)
+
+
+def unit_gate_token(state_sha256: str, gate: UnitGate | None, stage: str, unit: str) -> str:
+    """The boundary token of one Unit's gate: ``boundary_token``'s shape, from that gate's own rows only, so
+    another Unit's gate (or a teammate's rows landing in this audit) never moves it."""
+    last = gate.last.timestamp if gate is not None and gate.last is not None else "none"
+    return security.composite_token(state_sha256, last, f"{stage}:{unit}", str(gate.attempt if gate else 1))
+
+
 # ---- 1.6.3 repo-level readers ----------------------------------------------- #
 
 
@@ -2863,6 +3037,83 @@ class AidlcReader:
                 return None, False
             values.append(value)
         return (str(max(values)) if values else None), True
+
+    def unit_gates(
+        self, repo: Path, space: str, intent_dir: str, state_snap: Snapshot, state: StateFile, audit: AuditBundle,
+        graph: Sequence[StageNode], grid: dict[str, dict[str, str]],
+    ) -> tuple[UnitGateScope | None, tuple[UnitGate, ...]]:
+        """Every team Unit gate this checkout's audit holds, folded as the engine folds it.
+
+        ``(None, ())`` outside ``Unit Ownership: team``, and when this checkout's claim files exist but cannot be
+        read: without the stamp every Unit's rows would count as the main checkout's. A stamp or claim map the
+        engine would reject is no stamp to it either, so it is none here. Only Units with a gate row are
+        folded: a Unit with none is ``pending``, which raises nothing.
+        """
+        text = state_snap.text
+        if state_field(text, "Unit Ownership") != "team":
+            return None, ()
+        try:
+            row = match_intent_row(self.registry(repo, space), intent_dir)
+        except StudioError:
+            return None, ()
+        uuid = row.uuid if row is not None else None
+        stamp_data, stamp_readable = self._workspace_json(repo, UNIT_SCOPE_FILENAME)
+        claims_data, claims_readable = self._workspace_json(repo, CLAIM_GENERATIONS_FILENAME)
+        if not stamp_readable or not claims_readable:
+            return None, ()
+        stamp = _unit_scope_stamp(stamp_data)
+        if stamp is not None and (uuid is None or stamp["space"] != space or stamp["intent_uuid"] != uuid):
+            stamp = None
+        generations: dict[str, int] = {}
+        if stamp is None and isinstance(claims_data, dict):
+            prefix = f"{space}/{uuid or 'legacy'}/"
+            generations = {
+                key[len(prefix):]: value for key, value in claims_data.items()
+                if key.startswith(prefix) and type(value) is int and value > 0
+            }
+        stated = state_field(text, "Unit Gate Rhythm")
+        rhythm = stamp["gate_rhythm"] if stamp is not None else ("unit-end" if stated == "unit-end" else "per-stage")
+        per_unit = tuple(
+            node.slug for node in graph if node.phase == "construction" and node.for_each == "unit-of-work")
+        if rhythm == "per-stage":
+            gate_stages = per_unit
+        else:
+            # `unitMajorConstructionStageSlugs(scope, state, true).at(-1)`: the plan's last unskipped per-Unit stage.
+            plan = grid.get(state_field(text, "Scope") or "")
+            suffixes = {r.slug: m.group(1) for r in state.stages
+                        if (m := re.match(r"(EXECUTE|SKIP)\b", r.suffix or "")) is not None}
+            active = [
+                slug for slug in per_unit
+                if plan is not None and (state.row(slug) is None or state.row(slug).state != "skipped")
+                and suffixes.get(slug, plan.get(slug)) == "EXECUTE"
+            ]
+            gate_stages = tuple(active[-1:])
+        scope = UnitGateScope(
+            rhythm=rhythm, gate_stages=gate_stages, claim_unit=stamp["unit"] if stamp is not None else None,
+            claim_generation=stamp["generation"] if stamp is not None else None, generations=generations,
+            graph_order=tuple(node.slug for node in graph),
+        )
+        gates: list[UnitGate] = []
+        for stage in gate_stages:
+            units = sorted({
+                unit for event in audit.events
+                if event.event == "STAGE_AWAITING_APPROVAL" and (unit := _audit_field(event, "Unit"))
+                and (scope.claim_unit is None or unit == scope.claim_unit) and scope.matches(event, stage, unit)
+            })
+            gates.extend(unit_gate_status(audit.events, scope, stage, unit) for unit in units)
+        return scope, tuple(gates)
+
+    def _workspace_json(self, repo: Path, name: str) -> tuple[Any, bool]:
+        """``(parsed JSON or None, readable)`` for one ``aidlc/`` file; absent is readable and empty."""
+        try:
+            path = security.resolve_inside(repo, f"{WORKSPACE_DIRNAME}/{name}")
+            path.lstat()
+        except FileNotFoundError:
+            return None, True
+        except (OSError, StudioError):
+            return None, False
+        data = security.bounded_read(path, C.MAX_JSON_BYTES)
+        return (_json_loads(data), True) if data is not None else (None, False)
 
 
 # ---- module-private helpers ------------------------------------------------- #

@@ -470,6 +470,40 @@ describe('the decision pane', () => {
 })
 
 
+describe('a team-owned unit\'s gate', () => {
+  function unitGate(): ActionCard {
+    const base = card({ id: 'a_unit' })
+    const params = { stage: 'functional-design', attempt: 1, unit: 'unit-a' }
+    return {
+      ...base,
+      stage: { ...base.stage!, unit: 'unit-a' },
+      headline: { key: 'action.gate.headline', params },
+      consequence: { key: 'action.gate.consequence.unit_stage', params },
+    }
+  }
+
+  it('names its unit in the row, the headline and what approving does', async () => {
+    installRoutes([unitGate()])
+    mount()
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    const row = rows()[0]!
+    expect(row).toHaveTextContent('AI-DLC finished functional-design for unit unit-a')
+    expect(row.getAttribute('aria-label')).toContain('2.3 functional-design · unit-a')
+
+    await userEvent.click(row)
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Decision/ })).toHaveAttribute('aria-selected', 'true'))
+    expect(screen.getByText(/close functional-design for unit unit-a and move that unit on/)).toBeInTheDocument()
+  })
+
+  it('reads the same in both locales, and a gate without a unit keeps its own sentence', async () => {
+    const { ref } = await import('../lib/format')
+    const headline = unitGate().headline
+    expect(ref(makeI18n('zh-CN'), headline)).toContain('单元 unit-a 的 functional-design')
+    expect(ref(makeI18n('en-US'), { key: 'action.gate.headline', params: { stage: 'functional-design' } })).toBe(
+      'AI-DLC finished functional-design and is waiting for your approval before it goes on.')
+  })
+})
+
 describe('a card\'s kind in words', () => {
   it('names a plan approval as one, not as a question', async () => {
     const { typeLabelOf } = await import('./QueueRow')

@@ -1815,3 +1815,134 @@ def test_a_symlinked_readme_or_manifest_is_skipped_like_the_listing_skips_it(rea
     (repo / "README").write_text("# Plain README\n")  # beside the linked one: the next real name is read
     assert reader.read_workspace_signals(repo).readme_excerpt == "# Plain README\n"
     assert [path.name for path in text_reads] == ["README"]
+
+
+# --- team-owned Unit gates, folded from what the bundled engine itself wrote ---
+
+TEAM = F.TEAM_UNIT_GATE_INTENT
+MAIN_SHARD = "80a99723a8c8-37870df7b570.md"
+CLAIM_SHARD = "80a99723a8c8-ad98078fcbca.md"
+FD, NFR = "functional-design", "nfr-requirements"
+
+
+def team_tree(tmp_path: Path, moment: str, name: str = "team") -> Path:
+    return F.team_unit_gate_tree(RepoBuilder(tmp_path / name).with_engine("payload").build(), moment)
+
+
+def team_gates(reader, root: Path):
+    state_snap, state = reader.read_state(root, "default", TEAM)
+    return reader.unit_gates(root, "default", TEAM, state_snap, state, reader.read_audit(root, "default", TEAM),
+                             reader.read_stage_graph(root, ".kiro"), reader.read_scope_grid(root, ".kiro"))
+
+
+def folded(gates) -> dict:
+    return {(gate.stage, gate.unit): (gate.status, gate.attempt) for gate in gates}
+
+
+def append_team_audit(root: Path, shard: str, *blocks: str) -> None:
+    path = F.team_unit_gate_record(root) / "audit" / shard
+    path.write_text((path.read_text() if path.exists() else "# AI-DLC Audit Log\n") + "".join(blocks))
+
+
+def unit_gate_row(event: str, ts: str, stage: str = FD, unit: str = "unit-a", **fields: str) -> str:
+    return F.audit_block(event, ts, Stage=stage, Unit=unit, Gate_Scope="per-stage", Gate_Stages=stage, **fields)
+
+
+#: What the bundled engine's own `unitGateStatus` answers for each recorded tree (run with bun on these exact
+#: bytes when they were recorded); every other (stage, Unit) is `pending` there and absent here.
+ENGINE_UNIT_GATES = {
+    "A1-before-gate-start": ("per-stage", {}),
+    "A2-open": ("per-stage", {(FD, "unit-a"): ("awaiting-approval", 1)}),
+    "A3-approved": ("per-stage", {(FD, "unit-a"): ("approved", 1)}),
+    "A4-open": ("per-stage", {(FD, "unit-a"): ("approved", 1), (NFR, "unit-a"): ("awaiting-approval", 1)}),
+    "A5-revising": ("per-stage", {(FD, "unit-a"): ("approved", 1), (NFR, "unit-a"): ("revising", 2)}),
+    "A7-reopened": ("per-stage", {(FD, "unit-a"): ("approved", 1), (NFR, "unit-a"): ("awaiting-approval", 2)}),
+    "B1-open": ("unit-end", {(NFR, "unit-a"): ("awaiting-approval", 1)}),
+    "B2-approved": ("unit-end", {(NFR, "unit-a"): ("approved", 1)}),
+    "C1-open": ("per-stage", {(FD, "unit-a"): ("awaiting-approval", 1)}),
+    "C2-approved": ("per-stage", {(FD, "unit-a"): ("approved", 1)}),
+}
+
+
+@pytest.mark.parametrize("moment", sorted(ENGINE_UNIT_GATES))
+def test_unit_gates_fold_what_the_engine_wrote_exactly_as_the_engine_does(reader, tmp_path, moment):
+    rhythm, expected = ENGINE_UNIT_GATES[moment]
+    root = team_tree(tmp_path, moment)
+    scope, gates = team_gates(reader, root)
+    assert scope is not None and scope.rhythm == rhythm
+    assert folded(gates) == expected
+    # Stage Progress never shows a team Unit's gate: the audit is the only record of it.
+    state = reader.read_state(root, "default", TEAM)[1]
+    assert not any(row.mark in ("?", "R", "r") for row in state.stages)
+
+
+def test_the_unit_end_rhythm_gates_only_the_last_unskipped_per_unit_stage(reader, tmp_path):
+    scope, gates = team_gates(reader, team_tree(tmp_path, "B1-open"))
+    # The engine writes every stage of the Unit's chain into the row; the gate is the final one's.
+    assert scope.gate_stages == (NFR,)
+    assert [gate.opened.fields["Gate Stages"] for gate in gates] == [f"{FD},{NFR}"]
+
+
+def test_an_open_unit_gate_names_the_row_that_opened_it(reader, tmp_path):
+    _, gates = team_gates(reader, team_tree(tmp_path, "A7-reopened"))
+    reopened = next(gate for gate in gates if gate.stage == NFR)
+    # `report --result revised` reopens the gate itself, with its own row.
+    assert reopened.opened.fields["Details"] == "Re-entering unit gate after revision"
+    assert reopened.last is reopened.opened
+
+
+def test_a_claimed_checkout_counts_only_its_own_unit_and_claim_attempt(reader, tmp_path):
+    root = team_tree(tmp_path, "C1-open")
+    scope, _ = team_gates(reader, root)
+    assert (scope.claim_unit, scope.claim_generation) == ("unit-a", 1)
+    # Another Unit's gate, and an approval from another attempt at this Unit's claim, are not this clone's.
+    append_team_audit(root, CLAIM_SHARD,
+                      unit_gate_row("STAGE_AWAITING_APPROVAL", "2026-11-02T03:50:00Z", unit="unit-b"),
+                      unit_gate_row("GATE_APPROVED", "2026-11-02T03:50:01Z", Attempt_Generation="2",
+                                    User_Input="Approve"))
+    assert folded(team_gates(reader, root)[1]) == {(FD, "unit-a"): ("awaiting-approval", 1)}
+    # Without the stamp the folder reads as a main checkout: every Unit, filtered by the recorded generations.
+    (root / "aidlc" / ".aidlc-unit-scope.json").unlink()
+    assert folded(team_gates(reader, root)[1]) == {
+        (FD, "unit-a"): ("awaiting-approval", 1), (FD, "unit-b"): ("awaiting-approval", 1)}
+
+
+def test_a_landed_claim_counts_on_main_only_while_its_generation_is_current(reader, tmp_path):
+    root = team_tree(tmp_path, "C3-main-while-claimed")
+    assert team_gates(reader, root)[1] == ()
+    shutil.copy2(F.team_unit_gate_record(F.TEAM_UNIT_GATE / "C2-approved") / "audit" / CLAIM_SHARD,
+                 F.team_unit_gate_record(root) / "audit" / CLAIM_SHARD)
+    assert folded(team_gates(reader, root)[1]) == {(FD, "unit-a"): ("approved", 1)}
+    (root / "aidlc" / ".aidlc-claim-generations.json").write_text(
+        json.dumps({f"default/{F.TEAM_UNIT_GATE_UUID}/unit-a": 2}))
+    assert team_gates(reader, root)[1] == ()
+
+
+@pytest.mark.parametrize("block,status", [
+    (unit_gate_row("GATE_APPROVED", "2026-11-02T03:31:20Z", User_Input="Approve"), "awaiting-approval"),
+    (F.audit_block("WORKFLOW_STARTED", "2026-11-02T03:31:20Z"), "pending"),
+], ids=["approval_tied_with_the_opening", "restart_tied_with_the_opening"])
+def test_same_second_rows_in_two_shards_fold_in_the_engines_precedence(reader, tmp_path, block, status):
+    """Order across shards is unknowable within a second: a reset wins, then revising, then awaiting."""
+    root = team_tree(tmp_path, "A2-open")
+    append_team_audit(root, "zz-host-000000000000.md", block)
+    assert folded(team_gates(reader, root)[1]) == {(FD, "unit-a"): (status, 1)}
+
+
+@pytest.mark.parametrize("target,status", [(FD, "pending"), (NFR, "approved")])
+def test_a_jump_reopens_a_unit_gate_at_or_after_its_target_only(reader, tmp_path, target, status):
+    root = team_tree(tmp_path, "A3-approved")
+    append_team_audit(root, MAIN_SHARD, F.audit_block("STAGE_JUMPED", "2026-11-02T03:50:00Z", Target=target))
+    assert folded(team_gates(reader, root)[1]) == {(FD, "unit-a"): (status, 1)}
+
+
+def test_no_unit_gate_is_read_outside_team_ownership_or_past_an_unreadable_claim(reader, tmp_path):
+    solo = team_tree(tmp_path, "A2-open", "solo")
+    state = F.team_unit_gate_record(solo) / "aidlc-state.md"
+    state.write_text(state.read_text().replace("- **Unit Ownership**: team", "- **Unit Ownership**: solo"))
+    assert team_gates(reader, solo) == (None, ())
+    blocked = team_tree(tmp_path, "C1-open", "blocked")
+    (blocked / "aidlc" / ".aidlc-unit-scope.json").unlink()
+    (blocked / "aidlc" / ".aidlc-unit-scope.json").mkdir()
+    # Unread, the stamp could not narrow the fold to this clone's Unit: no gate rather than everyone's.
+    assert team_gates(reader, blocked) == (None, ())

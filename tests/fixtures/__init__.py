@@ -40,6 +40,15 @@ PAYLOAD_GATE_OPEN = "260901-ledger-export"       # [?] at requirements-analysis,
 PAYLOAD_COMPLETED = "260820-health-probe"        # all EXECUTE rows [x]
 OLDER_INTENT = "260707-trello-plugin"
 
+#: What the bundled engine itself wrote while a team-owned intent (`Unit Ownership: team`, units `unit-a` and
+#: `unit-b`, per-Unit stages functional-design and nfr-requirements) went through its Unit gates, one directory
+#: per moment: `A*` the main checkout walking every Unit itself (claimless, per-stage rhythm), `B*` the unit-end
+#: rhythm, `C*` a teammate's clone that claimed `unit-a`. Driven with `bun` and real `HUMAN_TURN` rows (2026-11-02);
+#: only the files a Studio read needs were kept.
+TEAM_UNIT_GATE = FIXTURES / "team-unit-gate"
+TEAM_UNIT_GATE_INTENT = "261102-ledger"
+TEAM_UNIT_GATE_UUID = "01a19a4a-4f0e-7973-9f06-fcffeb2262ce"
+
 _CHECKBOX_LINE = re.compile(r"^- \[([ xXsSrR?\-])\] (\S+)(?:\s*(?:—|–|--)\s*(.*))?$", re.MULTILINE)
 _FIELD_LINE = re.compile(r"^- \*\*(.+?)\*\*:[ \t]*(.*?)[ \t]*$", re.MULTILINE)
 
@@ -92,6 +101,28 @@ def state_path(tree: Path, intent_dir: str, *, space: str = "default") -> Path:
 def audit_paths(tree: Path, intent_dir: str, *, space: str = "default") -> list[Path]:
     audit = tree / "aidlc" / "spaces" / space / "intents" / intent_dir / "audit"
     return sorted(audit.glob("*.md")) if audit.is_dir() else []
+
+
+def team_unit_gate_tree(root: Path, moment: str) -> Path:
+    """Copy one ``TEAM_UNIT_GATE`` moment into ``root`` with its intent selected.
+
+    A claimed clone keeps no cursor files (the engine git-ignores them) and Studio's submit writes them through
+    the engine, so the copy reads as it does once the intent has been selected.
+    """
+    import shutil
+
+    shutil.copytree(TEAM_UNIT_GATE / moment, root, dirs_exist_ok=True)
+    space = root / "aidlc" / "active-space"
+    if not space.is_file():
+        space.write_text("default\n")
+    cursor = root / "aidlc" / "spaces" / "default" / "intents" / "active-intent"
+    if not cursor.is_file():
+        cursor.write_text(f"{TEAM_UNIT_GATE_INTENT}\n")
+    return root
+
+
+def team_unit_gate_record(root: Path) -> Path:
+    return root / "aidlc" / "spaces" / "default" / "intents" / TEAM_UNIT_GATE_INTENT
 
 
 def real_state(tree: Path = DEVDELTA, intent_dir: str = DEVDELTA_POC) -> str:

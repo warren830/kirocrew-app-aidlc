@@ -396,6 +396,22 @@ def test_a_scan_announces_each_new_gate_and_question_once(sv, fake_host, gate_re
     assert not {action_id for _, action_id in later} & {action_id for _, action_id in first}
 
 
+def test_a_team_owned_units_gate_is_announced_once_like_any_gate(sv, fake_host, repo_builder):
+    """Recorded engine moments: the main checkout opens unit-a's Functional Design gate, then (approved) its NFR
+    Requirements gate. Each Unit gate is one card, announced when it opens and never again while it waits."""
+    root = F.team_unit_gate_tree(repo_builder.with_engine("payload").build(), "A2-open")
+    repo = sv.repos.add(str(root), "ledger")
+    _scan(sv, repo)
+    _scan(sv, repo)
+    first = _announced(fake_host)
+    assert [kind for kind, _ in first] == ["gate"]
+    F.team_unit_gate_tree(root, "A4-open")
+    _scan(sv, repo)
+    _scan(sv, repo)
+    later = _announced(fake_host)[len(first):]
+    assert [kind for kind, _ in later] == ["gate"] and later[0][1] != first[0][1]
+
+
 def test_cards_an_earlier_process_minted_are_not_announced_after_a_restart(sv, fake_host, gate_repo, studio,
                                                                           monkeypatch):
     """An upgrade from v1 (which never announced gates) or any restart must not replay the whole queue."""

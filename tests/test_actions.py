@@ -78,7 +78,10 @@ def _questions(single: bool = False) -> str:
     return F.questions_text(stage=STAGE, questions=[("Which store?", ["Postgres", "SQLite"])])
 
 
-def _build_repo(builder, *, extra_intent=False, revising=0, questions=None, second_gate=False, runnable=False):
+def _build_repo(builder, *, extra_intent=False, revising=0, questions=None, second_gate=False, runnable=False,
+                team=None):
+    if team:  # a recorded moment of the bundled engine's team-owned intent instead (tests/fixtures/team-unit-gate)
+        return F.team_unit_gate_tree(builder.with_engine("payload").build(), team)
     if runnable:
         audit = F.audit_text(F.audit_block("HUMAN_TURN", TS), F.audit_block("STAGE_STARTED", F._plus(TS, 1), Stage=STAGE))
     else:
@@ -719,6 +722,62 @@ async def test_accept_as_is_is_refused_before_the_fourth_attempt(world, E):
     with refused(E, "invalid_decision") as exc:
         await submit(world, gate, payload={"decision": "accept_as_is"}, wire="Accept as-is")
     assert exc.value.details["min_attempt"] == 4
+
+
+TEAM = F.TEAM_UNIT_GATE_INTENT
+CLAIM_SHARD = "80a99723a8c8-ad98078fcbca.md"
+MAIN_SHARD = "80a99723a8c8-37870df7b570.md"
+
+
+async def team_gate(w):
+    """Bind the team-owned intent's conversation, then seed and return its one Unit gate card."""
+    await w.binder.bind(w.repo, "default", TEAM, slot_key=SLOT, intent_uuid=F.TEAM_UNIT_GATE_UUID)
+    return pick(await seed(w, TEAM), "gate")
+
+
+def team_rows(w, shard: str, unit: str, *events: str, ts: str = "2026-11-02T03:50:00Z") -> None:
+    path = F.team_unit_gate_record(w.root) / "audit" / shard
+    path.write_text(path.read_text() + "".join(
+        F.audit_block(event, ts, Stage="functional-design", Unit=unit, Gate_Scope="per-stage",
+                      Gate_Stages="functional-design", **({"Attempt_Generation": "1"} if shard == CLAIM_SHARD else {}))
+        for event in events))
+
+
+@pytest.mark.parametrize("repo_options", [{"team": "C1-open"}])
+@aio
+async def test_a_team_units_gate_is_approved_through_its_checkouts_conversation_like_any_gate(world, C):
+    gate = await team_gate(world)
+    assert (gate.stage, gate.unit) == ("functional-design", "unit-a")
+    card = await world.broker.card(gate, snapshot(world, TEAM))
+    assert card["stage"]["unit"] == "unit-a" and card["headline"]["params"]["unit"] == "unit-a"
+    assert card["consequence"]["key"] == "action.gate.consequence.unit_stage"
+    assert card["captured"] == {**gate.captured.to_json(), "captured_at": card["captured"]["captured_at"]}
+    receipt = await submit(world, gate)
+    # The wire text is the plain gate reply: the conductor takes the Unit from its own directive.
+    assert (receipt.status, receipt.wire_text, receipt.slot_key) == ("Delivering", C.WIRE_APPROVE, SLOT)
+
+
+@pytest.mark.parametrize("repo_options", [{"team": "C1-open"}])
+@aio
+async def test_a_browser_that_saw_a_team_units_gate_before_it_moved_is_stale(world, A, E):
+    gate = await team_gate(world)
+    body = captured_of(gate, A)
+    # The Unit's gate moved in the audit alone (a rejection recorded in the claim's own shard).
+    team_rows(world, CLAIM_SHARD, "unit-a", "GATE_REJECTED", "STAGE_REVISING")
+    with refused(E, "action_stale") as exc:
+        await submit(world, gate, captured=body)
+    assert {"boundary_token", "stage_attempt"} <= set(exc.value.details["fields"])
+    assert (await world.broker.get(gate.action_id)).status == "Queued"
+
+
+@pytest.mark.parametrize("repo_options", [{"team": "A2-open"}])
+@aio
+async def test_another_units_gate_moving_does_not_make_a_team_units_card_stale(world):
+    """The main checkout walking every Unit: rows of another Unit's gate are not this card's boundary."""
+    gate = await team_gate(world)
+    team_rows(world, MAIN_SHARD, "unit-b", "STAGE_AWAITING_APPROVAL", "GATE_REJECTED", "STAGE_REVISING")
+    receipt = await submit(world, gate)
+    assert receipt.status == "Delivering"
 
 
 @aio
