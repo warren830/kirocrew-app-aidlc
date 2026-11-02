@@ -567,6 +567,11 @@ for a stage directory called `none`.
   marker must end a paragraph and start a sentence (or stand alone); a background mention such as "(select all that
   apply) is another format" is not an instruction. Soft line breaks and paired emphasis do not change an instruction's
   meaning; that normalization is detection-only, and the displayed context keeps its original Markdown.
+  The engine names one marker: stage-protocol.md §3 Step 1 tells the stage to add "(select all that apply)" to the
+  question text, and the person writes several letters (`[Answer]: A, B, E`); no engine tool reads the marker or
+  checks the letters. `(multi-select)` (2.3.0 payload) and `（可多选）` (older, DevDelta,
+  `question-fallback/multi-select-zh.md`) are conductor spellings Studio already read. `(pick any)` (tasklist
+  practices-discovery Q6, 2026-11-02) is neither, so that question stays single choice.
 - `question_digest` is over the whole file: any edit anywhere changes what the human was shown, which is exactly what
   compare-and-submit must notice (C30). Engine confirmation receipts may use a different, explicitly named content-hash
   scope; those are checked separately.

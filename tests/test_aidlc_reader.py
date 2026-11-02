@@ -826,14 +826,32 @@ def test_legacy_constructors_default_the_newer_fields(R):
 
 
 @pytest.mark.parametrize("marker", ["(multi-select)", "(MULTI SELECT)", "[multi-select]", "(select all that apply)",
-                                    "（select all that apply）", "（多选）", "（可多选）"])
+                                    "（select all that apply）", "（多选）", "（可多选）", "(pick any)", "(Pick any)"])
 def test_questions_explicit_multi_select_spellings(pq, marker):
     assert only_question(pq, f"Choose applicable changes {marker}", ["Docs", "Tests"]).multi_select is True
+
+
+@pytest.mark.parametrize("path,multi", [
+    # The engine's one marker (stage-protocol.md §3 Step 1): "(select all that apply)" in the question text.
+    (F.CHAT_ONLY_REPLY / "aidlc/spaces/default/intents" / F.CHAT_ONLY_REPLY_INTENT
+     / "ideation/intent-capture/intent-capture-questions.md", [6]),
+    # A conductor's "（可多选）", read as multi before the engine named its marker (FORMAT-NOTES §11.8).
+    (FIXTURES / "question-fallback" / "multi-select-zh.md", [1, 3, 5]),
+    # A conductor's "(pick any)" on the 2026-11-02 practices sheet: Q6 offered several firm rules to pick from.
+    (F.PRACTICES_BATCH / "aidlc/spaces/default/intents" / F.PRACTICES_BATCH_INTENT / F.PRACTICES_BATCH_QUESTIONS,
+     [6]),
+])
+def test_real_questions_files_are_multi_select_only_where_marked(pq, path, multi):
+    parsed = pq(path.read_text("utf-8"))
+    assert [q.index for q in parsed.questions if q.multi_select] == multi
+    assert len(parsed.questions) >= 6
 
 
 def test_questions_multi_select_comes_from_the_prompt_never_an_option_or_background(pq):
     assert only_question(pq, "Which ones apply? (multi-select)").multi_select is True
     assert only_question(pq, "Pick one", ["a"]).multi_select is False
+    # One of them, not several: only the bare "(pick any)" says the person may keep more than one.
+    assert only_question(pq, "Which store? (pick any one)", ["a"]).multi_select is False
     parsed = pq("### Q1. Pick one\n\nBackground: (select all that apply) is another format.\n"
                 "- A. Describe (multi-select)\n- X. Other\n\n[Answer]:\n")
     assert parsed.questions[0].multi_select is False

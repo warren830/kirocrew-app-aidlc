@@ -952,6 +952,35 @@ describe('questions template', () => {
     expect(screen.getAllByRole('checkbox').length).toBe(3)
   })
 
+  it('lets the person keep several picks on a real "(select all that apply)" question', async () => {
+    setApiRoutes({})
+    // Q6 of the 2026-11-02 intent-capture sheet (tests/fixtures/chat-only-reply), as the reader serves it.
+    const view = questionsView({ questions: [question({
+      index: 6, prompt: 'What should this first version leave out? (select all that apply)', multi_select: true,
+      options: [
+        { letter: 'A', text: 'Reminders or alerts (only marking in the list output)', is_other: false },
+        { letter: 'B', text: 'Due times (date only, no hour or minute)', is_other: false },
+        { letter: 'C', text: 'Sorting or filtering tasks by due date', is_other: false },
+        { letter: 'D', text: 'Editing or removing a due date after the task is added', is_other: false },
+        { letter: 'E', text: 'None: nothing specific to leave out', is_other: false },
+        { letter: 'X', text: 'Other (please specify)', is_other: true },
+      ],
+    })] })
+    const value = questionCard(view)
+    const { draft } = mount(QuestionsTemplate, value)
+    expect(screen.getByText(en.t('template.questions.selectAny'))).toBeInTheDocument()
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    const reminders = screen.getByRole('checkbox', { name: /Reminders or alerts/ })
+    const times = screen.getByRole('checkbox', { name: /Due times/ })
+    await userEvent.click(reminders)
+    await userEvent.click(times)
+    expect(reminders).toBeChecked()
+    expect(times).toBeChecked()
+    expect(draft().answers).toEqual({ '6': { option_letters: ['A', 'B'], free_text: null } })
+    expect(wireTextFor(payloadFor('answers', value, draft())!, view, false)).toBe(
+      'Reminders or alerts (only marking in the list output), Due times (date only, no hour or minute)')
+  })
+
   const noteView = () => questionsView({
     origin: { kind: 'audit', event: 'DECISION_RECORDED', shard: '000.md', pos: 42,
       timestamp: '2026-09-10T08:00:00Z', stage: 'requirements-analysis', unit: null,

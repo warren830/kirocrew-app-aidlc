@@ -7,6 +7,7 @@ import asyncio
 import dataclasses
 import json
 import logging
+import re
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -399,6 +400,38 @@ def test_multi_select_joins_labels_and_a_single_select_refuses_two(A, E, studio)
     assert _answers(A, multi, ans(1, ["A", "C"])) == "Postgres, Redis"
     with refused(E, "invalid_decision"):
         _answers(A, _parse(studio, _questions(single=True)), ans(1, ["A", "B"]))
+
+
+def _reopened(path: Path, *indexes: int) -> str:
+    """A real sheet with the named questions' answers blanked again, as they were when Studio raised them."""
+    sections = path.read_text("utf-8").split("\n## ")
+    for at, section in enumerate(sections):
+        heading = re.match(r"Q(?:uestion )?(\d+)[.:]", section)
+        if heading and int(heading.group(1)) in indexes:
+            sections[at] = "\n".join("[Answer]:" if line.startswith("[Answer]:") else line
+                                     for line in section.split("\n"))
+    return "\n## ".join(sections)
+
+
+def test_a_real_select_all_that_apply_question_sends_every_picked_label(A, E, studio):
+    """The 2026-11-02 sheet whose Q6 carries the engine's marker: several picks go out as one answer line."""
+    path = (F.CHAT_ONLY_REPLY / "aidlc/spaces/default/intents" / F.CHAT_ONLY_REPLY_INTENT
+            / "ideation/intent-capture/intent-capture-questions.md")
+    questions = _parse(studio, _reopened(path, 5, 6))
+    assert [q.index for q in questions.questions if not q.answered] == [5, 6]
+    picks = "Reminders or alerts (only marking in the list output), Due times (date only, no hour or minute)"
+    assert _answers(A, _parse(studio, _reopened(path, 6)), ans(6, ["A", "B"])) == picks
+    assert _answers(A, questions, ans(5, ["A"]), ans(6, ["A", "B"]), grouped=True) == (
+        f"Q5: None: no updates needed\nQ6: {picks}" + studio.constants.WIRE_GROUPED_ANSWER_SUFFIX)
+
+
+def test_a_real_pick_any_question_sends_every_picked_option(A, studio):
+    """The practices sheet's "(pick any)" Q6 let the person keep only one firm rule; it takes several now."""
+    path = F.PRACTICES_BATCH / "aidlc/spaces/default/intents" / F.PRACTICES_BATCH_INTENT / F.PRACTICES_BATCH_QUESTIONS
+    questions = _parse(studio, _reopened(path, 6))
+    assert _answers(A, questions, ans(6, ["A", "B"])) == (
+        "Old `tasks.json` files (no due date) must always still load, "
+        "Use only the Python standard library — no new packages in the app")
 
 
 def test_the_other_option_sends_free_text_and_refuses_a_blank_one(A, E, studio):
