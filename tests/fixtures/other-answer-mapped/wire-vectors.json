@@ -1,0 +1,440 @@
+{
+  "$comment": "The real run of 2026-11-02 (v2-full, intent 261102-add-an-optional): the two sheets as AI-DLC wrote them (the .md files beside this one), the person's answers as Studio's form submitted them, `sent` = the user turn Studio delivered then (KiroCrew transcript, verbatim), and `lines` = what Studio sends for the same answers now, before WIRE_GROUPED_ANSWER_SUFFIX. AI-DLC wrote both Other answers as option A. tests/test_actions.py and ui/src/actions/submit.test.ts both build `lines` from `questions` + `answers`.",
+  "sheets": [
+    {
+      "file": "intent-capture-questions.md",
+      "sent": "Q1: Just me: a single person who keeps a personal task list and misses deadlines\nQ2: A task can be added with a due date, and tasks without one still work as before, The list clearly marks tasks whose due date has passed and are not done\nQ3: A real deadline was missed recently\nQ4: Only me; I decide, and no updates are needed\nQ5: Reminders or notifications, Times of day (dates only)\n\nStudio grouped-answer delivery: this is one human reply. Apply each Q<n> answer to its matching [Answer] tag. Record all Q<n> answers together in ONE aidlc-log.ts answer --details call, preserving their text; do not record separate answer receipts for each question. Then present the next human checkpoint and wait.",
+      "questions": [
+        {
+          "index": 1,
+          "prompt": "What problem does this solve, and for whom?",
+          "multi_select": false,
+          "options": [
+            {
+              "letter": "A",
+              "text": "I (a single person using the task list) forget tasks that have a deadline",
+              "is_other": false
+            },
+            {
+              "letter": "B",
+              "text": "A small team sharing one task file loses track of deadlines",
+              "is_other": false
+            },
+            {
+              "letter": "C",
+              "text": "It is a demo or proof of concept; there is no real user pain yet",
+              "is_other": false
+            },
+            {
+              "letter": "D",
+              "text": "Not yet defined",
+              "is_other": false
+            },
+            {
+              "letter": "X",
+              "text": "Other (please specify)",
+              "is_other": true
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "prompt": "How will we know the proof of concept worked? (select all that apply)",
+          "multi_select": true,
+          "options": [
+            {
+              "letter": "A",
+              "text": "A task can be added with a due date, and tasks without one still work as before",
+              "is_other": false
+            },
+            {
+              "letter": "B",
+              "text": "The list clearly marks tasks whose due date has passed and are not done",
+              "is_other": false
+            },
+            {
+              "letter": "C",
+              "text": "Existing task files keep working with no change needed",
+              "is_other": false
+            },
+            {
+              "letter": "D",
+              "text": "The existing tests still pass",
+              "is_other": false
+            },
+            {
+              "letter": "E",
+              "text": "Not yet defined",
+              "is_other": false
+            },
+            {
+              "letter": "X",
+              "text": "Other (please specify)",
+              "is_other": true
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "prompt": "Why now?",
+          "multi_select": false,
+          "options": [
+            {
+              "letter": "A",
+              "text": "A real deadline was missed recently",
+              "is_other": false
+            },
+            {
+              "letter": "B",
+              "text": "To try out this way of working on a small, safe change",
+              "is_other": false
+            },
+            {
+              "letter": "C",
+              "text": "A user or teammate asked for it",
+              "is_other": false
+            },
+            {
+              "letter": "D",
+              "text": "Not identified",
+              "is_other": false
+            },
+            {
+              "letter": "X",
+              "text": "Other (please specify)",
+              "is_other": true
+            }
+          ]
+        },
+        {
+          "index": 4,
+          "prompt": "Who decides scope, and does anyone need progress updates?",
+          "multi_select": false,
+          "options": [
+            {
+              "letter": "A",
+              "text": "Only me; I decide, and no updates are needed",
+              "is_other": false
+            },
+            {
+              "letter": "B",
+              "text": "I decide; I share a short note when it is done",
+              "is_other": false
+            },
+            {
+              "letter": "C",
+              "text": "Someone else decides (please name the role)",
+              "is_other": false
+            },
+            {
+              "letter": "D",
+              "text": "Not yet defined",
+              "is_other": false
+            },
+            {
+              "letter": "X",
+              "text": "Other (please specify)",
+              "is_other": true
+            }
+          ]
+        },
+        {
+          "index": 5,
+          "prompt": "What should this first version leave out? (select all that apply)",
+          "multi_select": true,
+          "options": [
+            {
+              "letter": "A",
+              "text": "Reminders or notifications",
+              "is_other": false
+            },
+            {
+              "letter": "B",
+              "text": "Times of day (dates only)",
+              "is_other": false
+            },
+            {
+              "letter": "C",
+              "text": "Sorting or filtering the list by due date",
+              "is_other": false
+            },
+            {
+              "letter": "D",
+              "text": "Changing or removing a due date after a task is added",
+              "is_other": false
+            },
+            {
+              "letter": "E",
+              "text": "None; nothing is ruled out yet",
+              "is_other": false
+            },
+            {
+              "letter": "X",
+              "text": "Other (please specify)",
+              "is_other": true
+            }
+          ]
+        }
+      ],
+      "answers": [
+        {
+          "index": 1,
+          "option_letters": [
+            "X"
+          ],
+          "free_text": "Just me: a single person who keeps a personal task list and misses deadlines"
+        },
+        {
+          "index": 2,
+          "option_letters": [
+            "A",
+            "B"
+          ],
+          "free_text": null
+        },
+        {
+          "index": 3,
+          "option_letters": [
+            "A"
+          ],
+          "free_text": null
+        },
+        {
+          "index": 4,
+          "option_letters": [
+            "A"
+          ],
+          "free_text": null
+        },
+        {
+          "index": 5,
+          "option_letters": [
+            "A",
+            "B"
+          ],
+          "free_text": null
+        }
+      ],
+      "lines": [
+        "Q1: X. Other (please specify): Just me: a single person who keeps a personal task list and misses deadlines",
+        "Q2: A, B — A. A task can be added with a due date, and tasks without one still work as before; B. The list clearly marks tasks whose due date has passed and are not done",
+        "Q3: A. A real deadline was missed recently",
+        "Q4: A. Only me; I decide, and no updates are needed",
+        "Q5: A, B — A. Reminders or notifications; B. Times of day (dates only)"
+      ]
+    },
+    {
+      "file": "requirements-analysis-questions.md",
+      "sent": "Q1: An optional flag: `python tasklist.py add \"pay rent\" --due 2026-11-30` (date as YYYY-MM-DD)\nQ2: Not overdue on its due date; it shows as overdue from the next calendar day\nQ3: No; done tasks are never marked overdue\nQ4: Show the due date, and add `OVERDUE` when late: `1. [ ] pay rent (due 2026-11-01) OVERDUE`\nQ5: Print an error, exit with code 1, and save nothing\nQ6: Task files saved before this change must still load and list unchanged, The existing tests must still pass, Sorting or filtering by due date is out of scope, Changing or removing a due date after adding is out of scope\n\nStudio grouped-answer delivery: this is one human reply. Apply each Q<n> answer to its matching [Answer] tag. Record all Q<n> answers together in ONE aidlc-log.ts answer --details call, preserving their text; do not record separate answer receipts for each question. Then present the next human checkpoint and wait.",
+      "questions": [
+        {
+          "index": 1,
+          "prompt": "How should a due date be given when adding a task?",
+          "multi_select": false,
+          "options": [
+            {
+              "letter": "A",
+              "text": "An optional flag: `python tasklist.py add \"pay rent\" --due 2026-11-30` (date as YYYY-MM-DD)",
+              "is_other": false
+            },
+            {
+              "letter": "B",
+              "text": "An optional second argument: `python tasklist.py add \"pay rent\" 2026-11-30`",
+              "is_other": false
+            },
+            {
+              "letter": "X",
+              "text": "Other (please specify)",
+              "is_other": true
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "prompt": "Is a task due today already overdue?",
+          "multi_select": false,
+          "options": [
+            {
+              "letter": "A",
+              "text": "No; it becomes overdue the day after its due date",
+              "is_other": false
+            },
+            {
+              "letter": "B",
+              "text": "Yes; it is overdue from the start of its due date",
+              "is_other": false
+            },
+            {
+              "letter": "X",
+              "text": "Other (please specify)",
+              "is_other": true
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "prompt": "Can a task that is done be marked overdue?",
+          "multi_select": false,
+          "options": [
+            {
+              "letter": "A",
+              "text": "No; done tasks are never marked overdue",
+              "is_other": false
+            },
+            {
+              "letter": "B",
+              "text": "Yes; a done task past its due date is still marked",
+              "is_other": false
+            },
+            {
+              "letter": "X",
+              "text": "Other (please specify)",
+              "is_other": true
+            }
+          ]
+        },
+        {
+          "index": 4,
+          "prompt": "What should `list` print for tasks with a due date?",
+          "multi_select": false,
+          "options": [
+            {
+              "letter": "A",
+              "text": "Show the due date, and add `OVERDUE` when late: `1. [ ] pay rent (due 2026-11-01) OVERDUE`",
+              "is_other": false
+            },
+            {
+              "letter": "B",
+              "text": "Show nothing extra unless late, then add `OVERDUE`: `1. [ ] pay rent OVERDUE`",
+              "is_other": false
+            },
+            {
+              "letter": "C",
+              "text": "Put a `!` in front of late tasks and show the date: `! 1. [ ] pay rent (due 2026-11-01)`",
+              "is_other": false
+            },
+            {
+              "letter": "X",
+              "text": "Other (please specify)",
+              "is_other": true
+            }
+          ]
+        },
+        {
+          "index": 5,
+          "prompt": "What should happen if the due date is not a real date (for example `2026-13-40` or `tomorrow`)?",
+          "multi_select": false,
+          "options": [
+            {
+              "letter": "A",
+              "text": "Print an error, exit with code 1, and save nothing",
+              "is_other": false
+            },
+            {
+              "letter": "B",
+              "text": "Save the task without a due date and print a warning",
+              "is_other": false
+            },
+            {
+              "letter": "X",
+              "text": "Other (please specify)",
+              "is_other": true
+            }
+          ]
+        },
+        {
+          "index": 6,
+          "prompt": "Which of these also apply to this first version? (select all that apply)",
+          "multi_select": true,
+          "options": [
+            {
+              "letter": "A",
+              "text": "Task files saved before this change must still load and list unchanged",
+              "is_other": false
+            },
+            {
+              "letter": "B",
+              "text": "The existing tests must still pass",
+              "is_other": false
+            },
+            {
+              "letter": "C",
+              "text": "Sorting or filtering by due date is out of scope",
+              "is_other": false
+            },
+            {
+              "letter": "D",
+              "text": "Changing or removing a due date after adding is out of scope",
+              "is_other": false
+            },
+            {
+              "letter": "E",
+              "text": "None of these",
+              "is_other": false
+            },
+            {
+              "letter": "X",
+              "text": "Other (please specify)",
+              "is_other": true
+            }
+          ]
+        }
+      ],
+      "answers": [
+        {
+          "index": 1,
+          "option_letters": [
+            "A"
+          ],
+          "free_text": null
+        },
+        {
+          "index": 2,
+          "option_letters": [
+            "X"
+          ],
+          "free_text": "Not overdue on its due date; it shows as overdue from the next calendar day"
+        },
+        {
+          "index": 3,
+          "option_letters": [
+            "A"
+          ],
+          "free_text": null
+        },
+        {
+          "index": 4,
+          "option_letters": [
+            "A"
+          ],
+          "free_text": null
+        },
+        {
+          "index": 5,
+          "option_letters": [
+            "A"
+          ],
+          "free_text": null
+        },
+        {
+          "index": 6,
+          "option_letters": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ],
+          "free_text": null
+        }
+      ],
+      "lines": [
+        "Q1: A. An optional flag: `python tasklist.py add \"pay rent\" --due 2026-11-30` (date as YYYY-MM-DD)",
+        "Q2: X. Other (please specify): Not overdue on its due date; it shows as overdue from the next calendar day",
+        "Q3: A. No; done tasks are never marked overdue",
+        "Q4: A. Show the due date, and add `OVERDUE` when late: `1. [ ] pay rent (due 2026-11-01) OVERDUE`",
+        "Q5: A. Print an error, exit with code 1, and save nothing",
+        "Q6: A, B, C, D — A. Task files saved before this change must still load and list unchanged; B. The existing tests must still pass; C. Sorting or filtering by due date is out of scope; D. Changing or removing a due date after adding is out of scope"
+      ]
+    }
+  ]
+}

@@ -50,7 +50,13 @@ describe('WIRE', () => {
   it('reproduces the golden grouped-answer example', () => {
     const line = (index: number, answer: string) =>
       WIRE.ANSWER_LINE.replace('{index}', String(index)).replace('{answer}', answer)
-    const grouped = [line(1, 'B'), line(2, ['A', 'C'].join(WIRE.MULTI_SELECT_JOINER)), line(3, 'Use the existing worker queue.')]
+    const option = (letter: string, label: string) =>
+      WIRE.OPTION_ANSWER.replace('{letter}', letter).replace('{label}', label)
+    const several = WIRE.MULTI_SELECT_ANSWER.replace('{letters}', ['A', 'B'].join(WIRE.MULTI_SELECT_JOINER))
+      .replace('{options}', [option('A', 'Lint'), option('B', 'Unit tests, fast ones only')].join(WIRE.MULTI_SELECT_OPTION_JOINER))
+    const other = WIRE.OTHER_ANSWER.replace('{option}', option('X', 'Other (please specify)'))
+      .replace('{text}', 'Use the existing worker queue.')
+    const grouped = [line(1, option('B', 'Aurora, with read replicas')), line(2, several), line(3, other)]
       .join(WIRE.ANSWER_JOINER) + WIRE.GROUPED_ANSWER_SUFFIX
     expect(grouped).toBe(doc.golden['grouped_answers_example'])
   })

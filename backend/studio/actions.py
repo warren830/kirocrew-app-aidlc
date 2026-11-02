@@ -50,7 +50,7 @@ from .wire import WireRecord
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .activity import ActivityProjector
-    from .aidlc_reader import AidlcReader, QuestionsFile
+    from .aidlc_reader import AidlcReader, Question, QuestionsFile
     from .consistency import ConsistencyEngine
     from .engine import EngineRunner
     from .events import EventLog
@@ -113,7 +113,10 @@ WIRE_TEXT_TEMPLATES: dict[str, str | None] = {
     "confirm_summary.request_changes": f"{C.WIRE_SUMMARY_REQUEST_CHANGES_PREFIX}<feedback>",
     "accept_assumptions": C.WIRE_ACCEPT_ASSUMPTIONS,
     "convert_assumptions": C.WIRE_CONVERT_ASSUMPTIONS,
-    "answers.single": "<label>[, <label>...] | <free text when X. Other>",
+    "answers.single": (
+        "<letter>. <label> | <letter>, <letter>... — <letter>. <label>; <letter>. <label>... "
+        "| X. <Other label>: <free text> (an audit question: <label>[, <label>...] | <free text>)"
+    ),
     "answers.grouped": (
         "Q<n>: <answer>\\nQ<m>: <answer> + WIRE_GROUPED_ANSWER_SUFFIX (file-backed group; one audit receipt)"
     ),
@@ -523,10 +526,32 @@ def _feedback(payload: Mapping[str, Any], key: str) -> str:
     return text
 
 
+def _file_answer_text(question: "Question", letters: list[str], free_text: str) -> str:
+    """One questions-file answer, naming each option as the file does: ``B. Aurora``,
+    ``X. Other (please specify): <their words>``, several as ``A, C — A. <label>; C. <label>``.
+
+    Never a bare letter, which a revision may re-letter, and never a bare label: the conductor takes words that
+    match an option for that option (question-rendering annex), so an Other answer without its ``X.`` was
+    recorded as option A on 2026-11-02, and labels joined by commas cannot be told apart from labels with them.
+    """
+    picked = [option for option in question.options if option.letter in letters]
+    chosen = [option for option in picked if not option.is_other] + [option for option in picked if option.is_other]
+    parts = [C.WIRE_OPTION_ANSWER.format(letter=option.letter, label=option.text) for option in chosen]
+    if chosen[-1].is_other:
+        # Last, so everything after its marker is the person's, whatever their words contain.
+        parts[-1] = C.WIRE_OTHER_ANSWER.format(option=parts[-1], text=free_text)
+    if len(parts) == 1:
+        return parts[0]
+    return C.WIRE_MULTI_SELECT_ANSWER.format(
+        letters=C.WIRE_MULTI_SELECT_JOINER.join(option.letter for option in chosen),
+        options=C.WIRE_MULTI_SELECT_OPTION_JOINER.join(parts))
+
+
 def _answers_wire_text(payload: Mapping[str, Any], questions: "QuestionsFile | None", grouped_enabled: bool) -> str:
-    """Encode a question group's answers (C14, P18): option **labels**, never letters, which a revision may
-    re-letter. One pending question sends its answer alone (research 05 §5.1); more use the verified
-    file-backed ``Q<n>:`` form, or the audit form when the engine asked them together (A37)."""
+    """Encode a question group's answers (C14, P18): a questions file's options by letter **and** label
+    (``_file_answer_text``), an audit question's by its exact recorded labels, which its receipt must repeat.
+    One pending question sends its answer alone (research 05 §5.1); more use the verified file-backed
+    ``Q<n>:`` form, or the audit form when the engine asked them together (A37)."""
     if questions is None:
         _refuse("answers_incomplete", "there is no questions file to answer", reason="no_questions")
     pending = [q for q in questions.questions if not q.answered]
@@ -587,10 +612,13 @@ def _answers_wire_text(payload: Mapping[str, Any], questions: "QuestionsFile | N
             if not free_text or (text_input and is_audit_text_label(free_text)):
                 _refuse("answers_incomplete", "this answer needs free text", index=question.index,
                         reason="free_text_required")
-            parts = [free_text if known[letter].is_other else known[letter].text for letter in letters]
-            text = C.WIRE_MULTI_SELECT_JOINER.join(parts) if letters else free_text
+        if not letters:
+            text = free_text
+        elif questions.origin is None:
+            text = _file_answer_text(question, letters, free_text)
         else:
-            text = C.WIRE_MULTI_SELECT_JOINER.join(known[letter].text for letter in letters)
+            text = C.WIRE_MULTI_SELECT_JOINER.join(
+                free_text if known[letter].is_other else known[letter].text for letter in letters)
         if len(text) > C.MAX_ANSWER_CHARS:
             _refuse("too_large", f"answer {question.index} is longer than {C.MAX_ANSWER_CHARS} characters",
                     index=question.index, cap=C.MAX_ANSWER_CHARS)

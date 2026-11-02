@@ -388,16 +388,16 @@ def ans(index: int, letters, free_text=None) -> dict:
     return {"index": index, "option_letters": letters, "free_text": free_text}
 
 
-def test_one_pending_question_sends_the_label_alone(A, studio):
+def test_one_pending_question_sends_its_option_alone_as_the_file_writes_it(A, studio):
     questions = _parse(studio, _questions(single=True))
     assert questions.pending_count == 1
-    assert _answers(A, questions, ans(1, ["B"])) == "SQLite"
+    assert _answers(A, questions, ans(1, ["B"])) == "B. SQLite"
 
 
-def test_multi_select_joins_labels_and_a_single_select_refuses_two(A, E, studio):
+def test_multi_select_sends_letters_then_options_and_a_single_select_refuses_two(A, E, studio):
     multi = _parse(studio, F.questions_text(stage=STAGE, questions=[
         ("Which stores? (multi-select)", ["Postgres", "SQLite", "Redis"])]))
-    assert _answers(A, multi, ans(1, ["A", "C"])) == "Postgres, Redis"
+    assert _answers(A, multi, ans(1, ["A", "C"])) == "A, C — A. Postgres; C. Redis"
     with refused(E, "invalid_decision"):
         _answers(A, _parse(studio, _questions(single=True)), ans(1, ["A", "B"]))
 
@@ -419,10 +419,11 @@ def test_a_real_select_all_that_apply_question_sends_every_picked_label(A, E, st
             / "ideation/intent-capture/intent-capture-questions.md")
     questions = _parse(studio, _reopened(path, 5, 6))
     assert [q.index for q in questions.questions if not q.answered] == [5, 6]
-    picks = "Reminders or alerts (only marking in the list output), Due times (date only, no hour or minute)"
+    picks = ("A, B — A. Reminders or alerts (only marking in the list output); "
+             "B. Due times (date only, no hour or minute)")
     assert _answers(A, _parse(studio, _reopened(path, 6)), ans(6, ["A", "B"])) == picks
     assert _answers(A, questions, ans(5, ["A"]), ans(6, ["A", "B"]), grouped=True) == (
-        f"Q5: None: no updates needed\nQ6: {picks}" + studio.constants.WIRE_GROUPED_ANSWER_SUFFIX)
+        f"Q5: A. None: no updates needed\nQ6: {picks}" + studio.constants.WIRE_GROUPED_ANSWER_SUFFIX)
 
 
 def test_a_real_pick_any_question_sends_every_picked_option(A, studio):
@@ -430,14 +431,69 @@ def test_a_real_pick_any_question_sends_every_picked_option(A, studio):
     path = F.PRACTICES_BATCH / "aidlc/spaces/default/intents" / F.PRACTICES_BATCH_INTENT / F.PRACTICES_BATCH_QUESTIONS
     questions = _parse(studio, _reopened(path, 6))
     assert _answers(A, questions, ans(6, ["A", "B"])) == (
-        "Old `tasks.json` files (no due date) must always still load, "
-        "Use only the Python standard library — no new packages in the app")
+        "A, B — A. Old `tasks.json` files (no due date) must always still load; "
+        "B. Use only the Python standard library — no new packages in the app")
 
 
-def test_the_other_option_sends_free_text_and_refuses_a_blank_one(A, E, studio):
+def _wire_vectors() -> dict:
+    return json.loads((F.OTHER_ANSWER_MAPPED / "wire-vectors.json").read_text("utf-8"))
+
+
+@pytest.mark.parametrize("sheet", _wire_vectors()["sheets"], ids=lambda sheet: sheet["file"])
+def test_a_real_sheets_other_answers_go_out_as_other_and_its_picks_by_letter(A, studio, sheet):
+    """The 2026-11-02 sheets whose Other answers AI-DLC wrote as option A: Studio had sent the person's words bare
+    and picks joined by the commas their labels hold. The UI builds the same text from the same vectors."""
+    questions = _parse(studio, _reopened(F.OTHER_ANSWER_MAPPED / sheet["file"], *range(1, len(sheet["lines"]) + 1)))
+    assert [{"index": q.index, "prompt": q.prompt, "multi_select": q.multi_select,
+             "options": [{"letter": o.letter, "text": o.text, "is_other": o.is_other} for o in q.options]}
+            for q in questions.questions] == sheet["questions"]
+    text = _answers(A, questions, *sheet["answers"], grouped=True)
+    assert text == "\n".join(sheet["lines"]) + studio.constants.WIRE_GROUPED_ANSWER_SUFFIX
+
+    before = sheet["sent"].split("\n\n", 1)[0].split("\n")
+    for answer, old, new in zip(sheet["answers"], before, sheet["lines"]):
+        if answer["option_letters"] == ["X"]:
+            # Then: the words alone, which AI-DLC matched to option A. Now: the same words, after the file's Other.
+            assert old == f"Q{answer['index']}: {answer['free_text']}"
+            assert new == f"Q{answer['index']}: X. Other (please specify): {answer['free_text']}"
+        elif len(answer["option_letters"]) > 1:
+            question = next(q for q in sheet["questions"] if q["index"] == answer["index"])
+            labels = {o["letter"]: o["text"] for o in question["options"]}
+            picked = [labels[letter] for letter in answer["option_letters"]]
+            # Then: labels joined by commas, which split back into the picks only where no label held one.
+            assert old == f"Q{answer['index']}: " + ", ".join(picked)
+            assert (old.split(": ", 1)[1].split(", ") == picked) is not any(", " in label for label in picked)
+            # Now: the letters before the first dash are the picks, whatever the labels hold.
+            letters, options = new.split(": ", 1)[1].split(" — ", 1)
+            assert letters.split(", ") == answer["option_letters"]
+            assert options == "; ".join(f"{letter}. {labels[letter]}" for letter in answer["option_letters"])
+
+
+def test_answer_text_fills_its_templates_once_whatever_the_answer_holds(A, studio):
+    """The browser's ``fill`` mirrors ``str.format``: the same bytes, ``$&`` and ``{answer}`` included."""
+    questions = _parse(studio, "## Q1. Pick?\nA. Costs $& more, {answer}\nX. Other\n[Answer]:\n\n"
+                               "## Q2. Retries?\nA. DynamoDB\nX. Other\n[Answer]:\n")
+    assert _answers(A, questions, ans(1, ["A"]), ans(2, ["X"], "save $$5 and {text}"), grouped=True) == (
+        "Q1: A. Costs $& more, {answer}\nQ2: X. Other: save $$5 and {text}" + studio.constants.WIRE_GROUPED_ANSWER_SUFFIX)
+
+
+def test_an_audit_questions_answer_keeps_its_exact_labels(A, studio):
+    """Its receipt must repeat the sent text, and its letters are Studio's own: no letters, no Other marker."""
+    asked = (studio.aidlc_reader._batch_question(1, "Which notes should I keep?", ["c1", "c2"], "raw"),
+             studio.aidlc_reader._batch_question(2, studio.constants.LEARNINGS_ADD_PROMPT, ["Nothing to add"], "raw"))
+    assert [o.text for o in asked[1].options] == ["Nothing to add", "Other"] and asked[1].options[1].is_other
+    audit = dataclasses.replace(_parse(studio, "## Q1: Unused?\nA. A\n[Answer]:\n"), questions=asked,
+                                origin={"kind": "audit", "batch_size": 2})
+    assert _answers(A, audit, ans(1, ["B", "A"]), ans(2, ["B"], "Keep notes short")) == (
+        "Q1: c2, c1\nQ2: Keep notes short" + studio.constants.WIRE_AUDIT_GROUPED_ANSWER_SUFFIX)
+
+
+def test_the_other_option_sends_free_text_as_other_and_refuses_a_blank_one(A, E, studio):
+    """Bare words that match an option are that option to the conductor: they go out as the file's Other."""
     questions = _parse(studio, F.questions_text(stage=STAGE, questions=[("Which store?", ["Postgres"])]))
     assert questions.questions[0].options[-1].is_other
-    assert _answers(A, questions, ans(1, ["X"], " DynamoDB ")) == "DynamoDB"
+    assert _answers(A, questions, ans(1, ["X"], " DynamoDB ")) == "X. Other (please specify): DynamoDB"
+    assert _answers(A, questions, ans(1, ["X"], "Postgres")) == "X. Other (please specify): Postgres"
     with refused(E, "answers_incomplete") as exc:
         _answers(A, questions, ans(1, ["X"], ""))
     assert exc.value.details["reason"] == "free_text_required"
@@ -450,7 +506,7 @@ def test_the_other_option_sends_free_text_and_refuses_a_blank_one(A, E, studio):
 def test_free_text_is_trimmed_exactly_as_the_browser_trims_it(A, C, studio, raw, sent):
     """``client_wire_text`` comes from JavaScript's ``.trim()``: any other edge set makes the text unsendable."""
     questions = _parse(studio, F.questions_text(stage=STAGE, questions=[("Which store?", ["Postgres"])]))
-    assert _answers(A, questions, ans(1, ["X"], raw)) == sent
+    assert _answers(A, questions, ans(1, ["X"], raw)) == "X. Other (please specify): " + sent
     assert A.wire_text_for("request_changes", {"feedback": raw}, questions=None, grouped_answers_enabled=False) == (
         C.WIRE_REQUEST_CHANGES_PREFIX + sent)
 
@@ -473,7 +529,7 @@ def test_nothing_chosen_answers_only_a_question_without_options(A, E, studio):
 def test_body_multi_select_submits_labels_without_explanatory_context(A, studio, context):
     questions = _parse(studio, f"## Q1. Which capabilities are out?\n\n{context}\n\n"
                                "A. Pause all jobs\nB. Pause with expiry\nX. Other\n\n[Answer]:\n")
-    assert _answers(A, questions, ans(1, ["A", "B"])) == "Pause all jobs, Pause with expiry"
+    assert _answers(A, questions, ans(1, ["A", "B"])) == "A, B — A. Pause all jobs; B. Pause with expiry"
 
 
 def test_an_unanswered_pending_question_and_an_unknown_letter_are_both_refused(A, E, studio):
@@ -490,14 +546,18 @@ def test_an_unanswered_pending_question_and_an_unknown_letter_are_both_refused(A
 def test_grouped_answers_are_gated_and_golden_when_enabled(A, E, studio):
     """The grouped form is specified but off until S1/S2 (C14): a misaligned reply is unrecoverable."""
     questions = _parse(studio, F.questions_text(stage=STAGE, questions=[
-        ("First? ", ["A", "B"]), ("Second? (multi-select)", ["A", "B", "C"]), ("Third?", ["Something else"])]))
-    answers = (ans(1, ["B"]), ans(2, ["A", "C"]), ans(3, ["X"], "Use the existing worker queue."))
+        ("Which store? ", ["Postgres", "Aurora, with read replicas"]),
+        ("Which checks? (multi-select)", ["Lint", "Unit tests, fast ones only", "Type check"]),
+        ("Where do retries run?", ["In the request"])]))
+    answers = (ans(1, ["B"]), ans(2, ["B", "A"]), ans(3, ["X"], "Use the existing worker queue."))
     with refused(E, "grouped_answers_unavailable") as exc:
         _answers(A, questions, *answers)
     assert exc.value.details["reason"] == "s1_s2_unverified"
     text = _answers(A, questions, *answers, grouped=True)
     assert text == pinned()["golden"]["grouped_answers_example"]
-    assert text == "Q1: B\nQ2: A, C\nQ3: Use the existing worker queue." + studio.constants.WIRE_GROUPED_ANSWER_SUFFIX
+    assert text == (
+        "Q1: B. Aurora, with read replicas\nQ2: A, B — A. Lint; B. Unit tests, fast ones only\n"
+        "Q3: X. Other (please specify): Use the existing worker queue." + studio.constants.WIRE_GROUPED_ANSWER_SUFFIX)
 
 
 def test_the_verified_capability_enables_grouped_file_answers(world):
@@ -512,9 +572,10 @@ def test_answer_indexes_must_identify_each_pending_question_once(A, studio, inde
 
 
 def test_multi_select_preserves_regular_choices_alongside_other(A, studio):
+    """In file order with Other last, whatever order they were ticked in: everything after its marker is theirs."""
     questions = _parse(studio, "## Q1: Checks? (select all that apply)\nA. Alpha\nC. Gamma\nX. Other\n[Answer]:\n")
     assert _answers(A, questions, ans(1, ["A", "X", "C"], 'Custom, "quoted".\nSecond line.'), grouped=True) == (
-        'Alpha, Custom, "quoted".\nSecond line., Gamma')
+        'A, C, X — A. Alpha; C. Gamma; X. Other: Custom, "quoted".\nSecond line.')
 
 
 @pytest.mark.parametrize("letters", [["A", "A"], "A"])
@@ -547,7 +608,7 @@ async def test_file_answer_rechecks_after_cursor_switch(world, E, monkeypatch, c
     code = {"question_file": "action_stale", "native_question": "slot_busy", "host_unavailable": "host_unavailable"}
     with refused(E, code[change]):
         await submit(world, question, payload={"decision": "answers", "answers": [{"index": 1, "option_letters": ["B"]}]},
-                     wire="SQLite")
+                     wire="B. SQLite")
     assert (await world.broker.get(question.action_id)).delivery_id is None
 
 
@@ -653,13 +714,13 @@ async def test_a_questions_file_edited_before_submit_is_stale_and_hands_back_the
     # The same file and a browser that displayed other text: that one is still the browser's mistake.
     with refused(E, "invalid_decision") as exc:
         await submit(world, question, payload=answer, wire="Postgres")
-    assert exc.value.details["expected"] == "SQLite"
+    assert exc.value.details["expected"] == "B. SQLite"
     path = world.builder.record(INTENT) / QUESTIONS_REL
     text = path.read_text()
     path.write_text(text.replace("SQLite", "Changed choice") if edit == "relabel"
                     else text + "\n## Q2. Another?\n\nA. Yes\nB. No\n\n[Answer]:\n")
     with refused(E, "action_stale") as exc:
-        await submit(world, question, payload=answer, wire="SQLite")
+        await submit(world, question, payload=answer, wire="B. SQLite")
     assert "question_digest" in exc.value.details["fields"]
     card = exc.value.details["card"]
     assert card["action_id"] == question.action_id
@@ -856,11 +917,11 @@ async def test_every_command_decision_sends_its_own_pinned_wire_text(world, C):
 @pytest.mark.parametrize("repo_options", [{"questions": _questions(single=True)}])
 @aio
 async def test_a_single_pending_question_is_answered_with_the_option_label(world):
-    """The one answer mapping research 05 §5.1 verified: one reply, one label, no letters."""
+    """The one answer mapping research 05 §5.1 verified: one reply, one option, named as the file names it."""
     card = await bound_card(world, "question")
     assert card.captured.question_digest is not None
-    receipt = await submit(world, card, payload={"decision": "answers", "answers": [ans(1, ["B"])]}, wire="SQLite")
-    assert receipt.wire_text == "SQLite" and receipt.host.body["message"] == "SQLite"
+    receipt = await submit(world, card, payload={"decision": "answers", "answers": [ans(1, ["B"])]}, wire="B. SQLite")
+    assert receipt.wire_text == "B. SQLite" and receipt.host.body["message"] == "B. SQLite"
     rec = await world.broker.get(card.action_id)
     assert rec.status == "Delivering"
     assert rec.human_text is None, "picking an option is not prose"
@@ -1576,15 +1637,15 @@ async def test_clock_only_refresh_during_submit_keeps_one_delivery(world, E, mon
         refreshes.append(pick(await seed(world), "question"))
         if competing_submit:  # the first request holds the lease but has not committed Delivering yet
             with refused(E, "repo_busy"):
-                await submit(world, rec, payload=payload, wire="SQLite", user="owner-2")
+                await submit(world, rec, payload=payload, wire="B. SQLite", user="owner-2")
 
     before_the_delivering_cas(world, monkeypatch, refresh_before_cas)
-    receipt = await submit(world, rec, payload=payload, wire="SQLite")
+    receipt = await submit(world, rec, payload=payload, wire="B. SQLite")
     assert len(refreshes) == 1 and refreshes[0].status_generation == rec.status_generation
     after = await world.broker.get(rec.action_id)
     assert after.status == receipt.status == "Delivering"
     assert after.status_generation == rec.status_generation + 1
-    assert (after.delivery_id, after.wire_text) == (receipt.delivery_id, "SQLite")
+    assert (after.delivery_id, after.wire_text) == (receipt.delivery_id, "B. SQLite")
     assert after.captured.captured_at == rec.captured.captured_at
     C = world.S.constants
     assert C.epoch_from_iso(receipt.expires_at) - C.epoch_from_iso(after.delivering_at) == C.DELIVERY_ACK_DEADLINE_SECS
@@ -1610,7 +1671,7 @@ async def test_meaningful_refresh_during_submit_still_refuses_the_original_gener
     before_the_delivering_cas(world, monkeypatch, change_evidence)
     with pytest.raises(E.StaleGeneration) as exc:
         await submit(world, rec, payload={"decision": "answers", "answers": [{"index": 1, "option_letters": ["B"]}]},
-                     wire="SQLite")
+                     wire="B. SQLite")
     assert (exc.value.details["expected"], exc.value.details["actual"]) == (
         rec.status_generation, rec.status_generation + 1)
     after = await world.broker.get(rec.action_id)

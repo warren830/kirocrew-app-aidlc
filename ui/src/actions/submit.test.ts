@@ -15,6 +15,8 @@ import { useStudioApi } from '../lib/api'
 import { WIRE } from '../lib/wire.generated'
 import type { ActionCard, Question, QuestionsView, HostSlot, SubmitReceipt } from '../lib/types'
 import { answerText, AUDIT_NONE_LABEL, preflightRefusal, useSubmit, wireTextFor } from './useSubmit'
+// The 2026-11-02 sheets whose Other answers AI-DLC wrote as option A; `test_actions.py` builds the same lines.
+import vectors from '../../../tests/fixtures/other-answer-mapped/wire-vectors.json'
 
 const BASE = '/api/apps/aidlc-studio'
 const SEND_PATH = '/api/chat?ws=1'
@@ -163,15 +165,17 @@ describe('wireTextFor', () => {
     expect(wireTextFor({ decision: 'provide_input', kind: 'free_text', text: ' ' }, null, false)).toBeNull()
   })
 
-  it('answers with the option label, never the letter', () => {
+  it('answers with the option as the file writes it, letter and label', () => {
     const q = question()
-    expect(answerText({ index: 1, option_letters: ['B'], free_text: null }, q)).toBe('Aurora')
-    // Multi-select joins labels; a single-select question refuses two.
+    expect(answerText({ index: 1, option_letters: ['B'], free_text: null }, q)).toBe('B. Aurora')
+    // Multi-select names the letters, then each option in file order; a single-select question refuses two.
     expect(answerText({ index: 1, option_letters: ['A', 'B'], free_text: null }, q)).toBeNull()
-    expect(answerText({ index: 1, option_letters: ['A', 'B'], free_text: null }, question({ multi_select: true })))
-      .toBe('DynamoDB, Aurora')
-    // `is_other` sends the human's own words, and needs them.
-    expect(answerText({ index: 1, option_letters: ['X'], free_text: ' use the queue ' }, q)).toBe('use the queue')
+    expect(answerText({ index: 1, option_letters: ['B', 'A'], free_text: null }, question({ multi_select: true })))
+      .toBe('A, B — A. DynamoDB; B. Aurora')
+    // `is_other` sends the human's own words, after the file's Other, and needs them: words that match a
+    // label are still not that option.
+    expect(answerText({ index: 1, option_letters: ['X'], free_text: ' use the queue ' }, q)).toBe('X. Other: use the queue')
+    expect(answerText({ index: 1, option_letters: ['X'], free_text: 'Aurora' }, q)).toBe('X. Other: Aurora')
     expect(answerText({ index: 1, option_letters: ['X'], free_text: null }, q)).toBeNull()
     // An option the question does not offer is never guessed at.
     expect(answerText({ index: 1, option_letters: ['Z'], free_text: null }, q)).toBeNull()
@@ -180,7 +184,7 @@ describe('wireTextFor', () => {
   it('sends one pending answer alone and gates the grouped form', () => {
     const one = view([question()])
     expect(wireTextFor({ decision: 'answers', answers: [{ index: 1, option_letters: ['A'], free_text: null }] }, one, false))
-      .toBe('DynamoDB')
+      .toBe('A. DynamoDB')
 
     const two = view([question(), question({ index: 2, prompt: 'Retries?' })])
     const answers = [
@@ -189,7 +193,7 @@ describe('wireTextFor', () => {
     ]
     expect(wireTextFor({ decision: 'answers', answers }, two, false)).toBeNull()
     expect(wireTextFor({ decision: 'answers', answers }, two, true))
-      .toBe('Q1: Aurora\nQ2: DynamoDB' + WIRE.GROUPED_ANSWER_SUFFIX)
+      .toBe('Q1: B. Aurora\nQ2: A. DynamoDB' + WIRE.GROUPED_ANSWER_SUFFIX)
   })
 
   it('refuses an incomplete group instead of sending a partial reply', () => {
@@ -214,9 +218,51 @@ describe('wireTextFor', () => {
       .toBe('Looks correct')
   })
 
-  it('retains selected labels alongside multiline Other text', () => {
-    expect(answerText({ index: 1, option_letters: ['A', 'X'], free_text: 'Custom, 中文.\nLine 2.' },
-      question({ multi_select: true }))).toBe('DynamoDB, Custom, 中文.\nLine 2.')
+  it('retains selected options alongside multiline Other text, which comes last', () => {
+    expect(answerText({ index: 1, option_letters: ['X', 'A'], free_text: 'Custom, 中文.\nLine 2.' },
+      question({ multi_select: true }))).toBe('A, X — A. DynamoDB; X. Other: Custom, 中文.\nLine 2.')
+  })
+
+  it('sends a real sheet\'s Other answers as Other and its picks by letter, as the server does', () => {
+    for (const sheet of vectors.sheets) {
+      const real = view(sheet.questions.map((q) => question(q)))
+      expect(wireTextFor({ decision: 'answers', answers: sheet.answers }, real, true))
+        .toBe(sheet.lines.join(WIRE.ANSWER_JOINER) + WIRE.GROUPED_ANSWER_SUFFIX)
+    }
+  })
+
+  it('fills templates as the server does, whatever the answer holds', () => {
+    // `String.replace` would read `$&` and `$$` as patterns, and find `{answer}` inside a label.
+    const q = question({ options: [
+      { letter: 'A', text: 'Costs $& more, {answer}', is_other: false },
+      { letter: 'X', text: 'Other', is_other: true },
+    ] })
+    const two = view([q, question({ index: 2, prompt: 'Retries?' })])
+    expect(wireTextFor({ decision: 'answers', answers: [
+      { index: 1, option_letters: ['A'], free_text: null },
+      { index: 2, option_letters: ['X'], free_text: 'save $$5 and {text}' },
+    ] }, two, true)).toBe('Q1: A. Costs $& more, {answer}\nQ2: X. Other: save $$5 and {text}' + WIRE.GROUPED_ANSWER_SUFFIX)
+  })
+
+  it('keeps an audit question to its exact recorded labels, in the order picked', () => {
+    // Its receipt must repeat the sent text, and its letters are Studio's own (`actions.py` the same).
+    const audit = {
+      ...view([
+        question({ multi_select: true, options: [
+          { letter: 'A', text: 'c1', is_other: false }, { letter: 'B', text: 'c2', is_other: false },
+          { letter: 'C', text: AUDIT_NONE_LABEL, is_other: false }, { letter: 'D', text: 'Other', is_other: true },
+        ] }),
+        question({ index: 2, options: [
+          { letter: 'A', text: 'Nothing to add', is_other: false }, { letter: 'B', text: 'Other', is_other: true },
+        ] }),
+      ]),
+      origin: { kind: 'audit', event: 'DECISION_RECORDED', shard: '000.md', pos: 2, timestamp: 't',
+        stage: 'intent-capture', unit: null, workflow: null, attempt_generation: null, decision_sha256: 'd',
+        batch_size: 2 },
+    } as unknown as QuestionsView
+    expect(wireTextFor({ decision: 'answers', answers: [
+      { index: 1, option_letters: ['B', 'A'], free_text: null }, { index: 2, option_letters: ['B'], free_text: 'Keep notes short' },
+    ] }, audit, false)).toBe('Q1: c2, c1\nQ2: Keep notes short' + WIRE.AUDIT_GROUPED_ANSWER_SUFFIX)
   })
 
   it('refuses ambiguous indexes, duplicate choices, and stale drafts in degraded mode', () => {
@@ -232,13 +278,13 @@ describe('wireTextFor', () => {
   it('trims and counts free text exactly as the server does', () => {
     // `actions._ECMASCRIPT_WHITESPACE`: U+FEFF and U+3000 go, U+001C and U+0085 stay (`str.strip()` disagreed).
     const other = (free_text: string) => answerText({ index: 1, option_letters: ['X'], free_text }, question())
-    expect(other('\uFEFFDynamoDB\u3000')).toBe('DynamoDB')
-    expect(other('\u001CDynamoDB\u0085')).toBe('\u001CDynamoDB\u0085')
+    expect(other('\uFEFFDynamoDB\u3000')).toBe('X. Other: DynamoDB')
+    expect(other('\u001CDynamoDB\u0085')).toBe('X. Other: \u001CDynamoDB\u0085')
     expect(wireTextFor({ decision: 'request_changes', feedback: '\uFEFFFix it\u0085' }, null, false))
       .toBe('Request Changes: Fix it\u0085')
     // Python's `len` counts code points: 5000 emoji are 10000 UTF-16 units and still within the 8000 cap.
     const emoji = '😀'.repeat(5000)
-    expect(other(emoji)).toBe(emoji)
+    expect(other(emoji)).toBe(`X. Other: ${emoji}`)
     expect(wireTextFor({ decision: 'request_changes', feedback: emoji }, null, false)).toBe(`Request Changes: ${emoji}`)
     expect(other('😀'.repeat(8001))).toBeNull()
   })
@@ -254,7 +300,7 @@ describe('wireTextFor', () => {
   it('skips questions the file already records as answered', () => {
     const mixed = view([question({ answered: true, answer: 'DynamoDB' }), question({ index: 2 })])
     expect(wireTextFor({ decision: 'answers', answers: [{ index: 2, option_letters: ['B'], free_text: null }] }, mixed, false))
-      .toBe('Aurora')
+      .toBe('B. Aurora')
   })
 })
 

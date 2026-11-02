@@ -404,7 +404,7 @@
       "requires": [
        "answers"
       ],
-      "wire_text_template": "<label>[, <label>...] | <free text when X. Other>"
+      "wire_text_template": "<letter>. <label> | <letter>, <letter>... — <letter>. <label>; <letter>. <label>... | X. <Other label>: <free text> (an audit question: <label>[, <label>...] | <free text>)"
      }
     ],
     "dedupe_key": "question:r_000000000001:260901-ledger-export:requirements-analysis:93bced32300db1187327053c93b7beb1e7a244ccea2effcaa87b193061c0f26e",

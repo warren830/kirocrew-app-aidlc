@@ -675,11 +675,21 @@ WIRE_ANSWER_LINE = "Q{index}: {answer}"                    # one line per questi
 WIRE_ANSWER_JOINER = "\n"
 WIRE_GROUPED_ANSWER_SUFFIX = (
     "\n\nStudio grouped-answer delivery: this is one human reply. Apply each Q<n> answer to its "
-    "matching [Answer] tag. Record all Q<n> answers together in ONE aidlc-log.ts answer --details "
-    "call, preserving their text; do not record separate answer receipts for each question. "
-    "Then present the next human checkpoint and wait."
+    "matching [Answer] tag; an X. Other answer is the person's own words, so write X. and those words "
+    "verbatim, never another option's letter. Record all Q<n> answers together in ONE aidlc-log.ts "
+    "answer --details call, preserving their text; do not record separate answer receipts for each "
+    "question. Then present the next human checkpoint and wait."
 )
-WIRE_MULTI_SELECT_JOINER = ", "                            # multi-select labels inside one answer
+WIRE_MULTI_SELECT_JOINER = ", "                            # a file answer's letters; an audit answer's labels
+# A questions-file answer names each option as the file writes it (``B. Aurora``): the letter is what AI-DLC
+# writes in ``[Answer]:`` (``A, B, E`` for several, stage-protocol §3), the label keeps a re-lettered sheet
+# from taking it for another option, and ``X. Other …`` says the words after it are the person's own.
+WIRE_OPTION_ANSWER = "{letter}. {label}"
+WIRE_OTHER_ANSWER = "{option}: {text}"
+# Several options: their letters first, then each option in file order (Other last), so a label's own commas
+# never split it.
+WIRE_MULTI_SELECT_ANSWER = "{letters} — {options}"
+WIRE_MULTI_SELECT_OPTION_JOINER = "; "
 # Several audit-log questions asked in one turn (A37): one reply, one receipt.
 WIRE_AUDIT_GROUPED_ANSWER_SUFFIX = (
     "\n\nStudio grouped-answer delivery: this is one human reply to the questions you asked together, "

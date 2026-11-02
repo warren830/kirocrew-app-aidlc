@@ -400,9 +400,11 @@ export function inputKind(card: ActionCard): 'scope' | 'free_text' {
  * Mirrors `answerText` in `actions/useSubmit.ts` from the input side: it must refuse exactly what
  * cannot become wire text, or the bar would enable a send the confirmation then cannot build.
  */
-export function answerComplete(question: Question, letters: string[], freeText: string | null, textInput = false): boolean {
+export function answerComplete(
+  question: Question, letters: string[], freeText: string | null, textInput = false, fromFile = true,
+): boolean {
   if (letters.length === 0) return false
-  return answerText({ index: question.index, option_letters: letters, free_text: freeText }, question, textInput) !== null
+  return answerText({ index: question.index, option_letters: letters, free_text: freeText }, question, textInput, fromFile) !== null
 }
 
 // --------------------------------------------------------------------------- //

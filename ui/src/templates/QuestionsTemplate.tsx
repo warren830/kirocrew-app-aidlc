@@ -340,7 +340,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
             const freeText = stored?.free_text ?? ''
             const other = question.options.find((option) => option.is_other)
             const textInput = view?.origin?.kind === 'audit' && question.options.length === 1 && !!other
-            const complete = answerComplete(question, letters, freeText, textInput)
+            const complete = answerComplete(question, letters, freeText, textInput, !view?.origin)
             const groupName = `${card.action_id}/${question.index}`
             return (
               <div className="studio-q" key={question.index} data-answered={String(question.answered)}>

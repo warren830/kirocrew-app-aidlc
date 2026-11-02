@@ -313,7 +313,11 @@ WIRE_LOOKS_CORRECT = "Looks correct"                        # consolidated summa
 WIRE_SUMMARY_REQUEST_CHANGES_PREFIX = "Request changes: "   # consolidated summary confirmation (lower-case c)
 WIRE_ANSWER_LINE = "Q{index}: {answer}"                     # one line per question in a grouped submit (S1/S2-gated, §1.12)
 WIRE_ANSWER_JOINER = "\n"
-WIRE_MULTI_SELECT_JOINER = ", "                             # multi-select labels inside one answer
+WIRE_MULTI_SELECT_JOINER = ", "                             # a file answer's letters; an audit answer's labels
+WIRE_OPTION_ANSWER = "{letter}. {label}"                    # one chosen option of a questions file, as the file writes it
+WIRE_OTHER_ANSWER = "{option}: {text}"                      # the file's `X. Other …` option, then the person's words
+WIRE_MULTI_SELECT_ANSWER = "{letters} — {options}"          # several options: their letters, then each option
+WIRE_MULTI_SELECT_OPTION_JOINER = "; "
 WIRE_RUN = "/aidlc"
 WIRE_RESUME = "/aidlc --resume"
 WIRE_SCOPE_PREFIX = "/aidlc --scope "
@@ -1603,18 +1607,25 @@ def wire_text_for(decision: str, payload: dict, *, questions: QuestionsFile | No
 
 **Answer encoding** (review P18; 05 §5.1 + addendum A8). `payload.answers[] = {index: int, option_letters: [str],
 free_text: str | null}`. For each pending question in **file order**: `option_letters` must all exist among that
-question's options; more than one letter is legal only when `question.multi_select`; the answer text is the option
-**labels** from the file (never the letters) joined by `WIRE_MULTI_SELECT_JOINER`; when `option_letters == ["X"]`
-(the `Other` line) the answer text is `free_text`, which must be non-blank. Every pending question must be present
-(`answers_incomplete`). Then:
+question's options; more than one letter is legal only when `question.multi_select`. A questions-file answer names
+each chosen option as the file writes it, letter **and** label (`WIRE_OPTION_ANSWER`, `B. Aurora`): the letter is what
+AI-DLC writes in `[Answer]:`, the label keeps a re-lettered sheet from taking it for another option. The `Other` line
+adds the person's `free_text`, which must be non-blank (`WIRE_OTHER_ANSWER`, `X. Other (please specify): <text>`):
+bare words that match an option are that option to the conductor, which recorded two Other answers as option A on
+2026-11-02. Several options are their letters joined by `WIRE_MULTI_SELECT_JOINER`, then each option in file order,
+Other last, joined by `WIRE_MULTI_SELECT_OPTION_JOINER` (`WIRE_MULTI_SELECT_ANSWER`, `A, C — A. Lint; C. Type
+check`), so a label's own commas never split it. An audit question keeps its exact recorded labels (its receipt
+repeats them), joined by `WIRE_MULTI_SELECT_JOINER`, and its `Other` sends `free_text` alone. Every pending
+question must be present (`answers_incomplete`). Then:
 
 - exactly **one** pending question → the wire text is that answer text alone (this is the rendering research 05 §5.1
-  verifies: the conductor maps one reply to one label);
+  verifies: the conductor maps one reply to one option);
 - more than one pending question → `Q<n>: <answer>` lines in file order, followed by
-  `WIRE_GROUPED_ANSWER_SUFFIX`. The suffix directs one complete audit receipt for the one human reply,
-  then a stop at the next human checkpoint. The file-backed form is verified and available by default.
+  `WIRE_GROUPED_ANSWER_SUFFIX`. The suffix says an `X. Other` answer is written as `X.` and the person's words
+  verbatim, directs one complete audit receipt for the one human reply, then a stop at the next human checkpoint.
+  The file-backed form is verified and available by default.
   Duplicate/extra indexes and duplicate options are rejected. A multi-select containing Other preserves
-  the regular labels alongside the free text. Unsupported files and native blocking waits remain degraded.
+  the regular options alongside the free text. Unsupported files and native blocking waits remain degraded.
   The capability-off path still refuses `409 grouped_answers_unavailable`.
 
 Both strings are pinned in `docs/design/wire-text.json` and mirrored by `wireTextFor` in `ui/src/lib/wire.ts`.

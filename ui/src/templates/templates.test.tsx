@@ -734,7 +734,7 @@ describe('questions template', () => {
     expect(payload).toEqual({ decision: 'answers', answers: [
       { index: 3, option_letters: ['A', 'B'], free_text: null },
     ] })
-    expect(wireTextFor(payload!, view, false)).toBe('Capabilities 1 and 2, Capability 3')
+    expect(wireTextFor(payload!, view, false)).toBe('A, B — A. Capabilities 1 and 2; B. Capability 3')
     expect(apiCalls.filter((call) => call.method !== 'GET')).toHaveLength(0)
   })
 
@@ -978,7 +978,7 @@ describe('questions template', () => {
     expect(times).toBeChecked()
     expect(draft().answers).toEqual({ '6': { option_letters: ['A', 'B'], free_text: null } })
     expect(wireTextFor(payloadFor('answers', value, draft())!, view, false)).toBe(
-      'Reminders or alerts (only marking in the list output), Due times (date only, no hour or minute)')
+      'A, B — A. Reminders or alerts (only marking in the list output); B. Due times (date only, no hour or minute)')
   })
 
   const noteView = () => questionsView({

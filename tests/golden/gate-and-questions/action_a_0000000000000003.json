@@ -35,7 +35,7 @@
      "requires": [
       "answers"
      ],
-     "wire_text_template": "<label>[, <label>...] | <free text when X. Other>"
+     "wire_text_template": "<letter>. <label> | <letter>, <letter>... — <letter>. <label>; <letter>. <label>... | X. <Other label>: <free text> (an audit question: <label>[, <label>...] | <free text>)"
     },
     {
      "decision": "confirm_summary",

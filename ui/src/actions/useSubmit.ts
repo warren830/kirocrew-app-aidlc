@@ -62,14 +62,44 @@ export function charCount(text: string): number {
 export const AUDIT_NONE_LABEL = 'None of these'
 
 /**
+ * A pinned template filled in one pass, as Python's `str.format` fills it. `String.replace` with a string
+ * reads `$&` and `$$` in the value as patterns, and a second `.replace` finds a placeholder inside the
+ * first value: either way the browser would show bytes the server then refuses.
+ */
+function fill(template: string, values: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (placeholder, key: string) => values[key] ?? placeholder)
+}
+
+/**
+ * A questions-file answer naming each option as the file does (`_file_answer_text` in `actions.py`):
+ * `B. Aurora`, `X. Other (please specify): <their words>`, several as `A, C — A. <label>; C. <label>`.
+ * Never a bare letter, which a revision may re-letter (FR-Q-007), and never a bare label: the conductor
+ * takes words that match an option for that option, and labels joined by commas cannot be told apart
+ * from labels with them.
+ */
+function fileAnswerText(question: Question, letters: string[], free: string): string {
+  const picked = question.options.filter((option) => letters.includes(option.letter))
+  const chosen = [...picked.filter((option) => !option.is_other), ...picked.filter((option) => option.is_other)]
+  const parts = chosen.map((option) => fill(WIRE.OPTION_ANSWER, { letter: option.letter, label: option.text }))
+  // Last, so everything after its marker is the person's, whatever their words contain.
+  const last = chosen.length - 1
+  if (chosen[last]?.is_other) parts[last] = fill(WIRE.OTHER_ANSWER, { option: parts[last] ?? '', text: free })
+  if (parts.length === 1) return parts[0] ?? ''
+  return fill(WIRE.MULTI_SELECT_ANSWER, {
+    letters: chosen.map((option) => option.letter).join(WIRE.MULTI_SELECT_JOINER),
+    options: parts.join(WIRE.MULTI_SELECT_OPTION_JOINER),
+  })
+}
+
+/**
  * One answer as the conductor will read it, or `null` when it cannot be encoded.
  *
- * Labels, never letters (FR-Q-007): the option letters are re-assigned when a stage is revised, so a
- * recorded `B` would be an answer to a question that no longer exists. `is_other` and the
+ * A questions file's options go by letter and label (`fileAnswerText`); an audit question's
+ * (`fromFile` false) by its exact recorded labels, which its receipt must repeat. `is_other` and the
  * option-less (free-form) question both send the human's own words — this mirrors
  * `_answers_wire_text` in `actions.py` exactly, because `client_wire_text` is compared byte-for-byte.
  */
-export function answerText(answer: AnswerInput, question: Question, textInput = false): string | null {
+export function answerText(answer: AnswerInput, question: Question, textInput = false, fromFile = true): string | null {
   const known = new Map(question.options.map((option) => [option.letter, option]))
   const letters = answer.option_letters
   if (known.size !== question.options.length || new Set(letters).size !== letters.length) return null
@@ -82,7 +112,7 @@ export function answerText(answer: AnswerInput, question: Question, textInput = 
   if (letters.length === 0 && question.options.length > 0) return null
   const chosenOther = letters.some((letter) => known.get(letter)?.is_other === true)
   if ((chosenOther || letters.length === 0) && !free) return null
-  const text = letters.length === 0 ? free : letters
+  const text = letters.length === 0 ? free : fromFile ? fileAnswerText(question, letters, free) : letters
     .map((letter) => known.get(letter)?.is_other ? free : known.get(letter)?.text ?? '')
     .join(WIRE.MULTI_SELECT_JOINER)
   if (!text) return null
@@ -153,6 +183,7 @@ export function wireTextFor(
         const text = answer ? answerText(
           answer, question, questions?.origin?.kind === 'audit'
             && question.options.length === 1 && question.options[0]?.is_other === true,
+          !questions?.origin,
         ) : null
         if (text === null) return null
         texts.push(text)
@@ -160,7 +191,7 @@ export function wireTextFor(
       if (texts.length === 1) return texts[0] ?? null
       const lines = pending
         .map((question, position) =>
-          WIRE.ANSWER_LINE.replace('{index}', String(question.index)).replace('{answer}', texts[position] ?? ''),
+          fill(WIRE.ANSWER_LINE, { index: String(question.index), answer: texts[position] ?? '' }),
         )
         .join(WIRE.ANSWER_JOINER)
       // Questions AI-DLC asked together in one turn take one reply, with no capability gate (A37).
@@ -174,11 +205,7 @@ export function wireTextFor(
       }
       // The backend advertises compatibility for this file-backed grouped reply.
       if (!groupedAnswers) return null
-      return pending
-        .map((question, position) =>
-          WIRE.ANSWER_LINE.replace('{index}', String(question.index)).replace('{answer}', texts[position] ?? ''),
-        )
-        .join(WIRE.ANSWER_JOINER) + WIRE.GROUPED_ANSWER_SUFFIX
+      return lines + WIRE.GROUPED_ANSWER_SUFFIX
     }
     case 'provide_input': {
       if (payload.kind === 'scope') {

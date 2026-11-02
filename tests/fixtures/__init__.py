@@ -59,6 +59,12 @@ CHAT_ONLY_REPLY_INTENT = "261102-add-an-optional"
 #: the question card was raised from.
 CHAT_ONLY_REPLY_SHARD = "80a99723a8c8-498d2b12f686.md"
 
+#: A UI-driven run that day (v2-full, the same intent name): the person answered intent-capture's Q1 and
+#: requirements-analysis's Q2 with Other, Studio sent only their words, and AI-DLC wrote both as option A
+#: (``A. I (…) — "Just me…"``, ``A — "Not overdue…"``). The two sheets as AI-DLC wrote them, and
+#: ``wire-vectors.json``: what Studio sent then (the transcript's user turns) and sends now, shared with the UI tests.
+OTHER_ANSWER_MAPPED = FIXTURES / "other-answer-mapped"
+
 #: The other real run of that day (tasklist, practices-discovery): Studio delivered the person's answers to the
 #: sheet's six questions, the conductor recorded them as the mode answer ("Chat"), logged the sheet's questions as
 #: one decision ("Practices interview Q1-Q6 …", Options "Q1 A/B/C/X,…"), had its answer refused (no reply since that
