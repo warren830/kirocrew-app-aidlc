@@ -20,7 +20,7 @@
 
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '../i18n'
 import { StudioApp } from '../shell/StudioApp'
@@ -1504,6 +1504,22 @@ describe('a confirmation opened from Maintenance', () => {
   async function maintenanceBlock() {
     return (await screen.findByRole('heading', { name: 'Maintenance' })).closest('section')!
   }
+
+  it('scrolls a confirmation that fits the window until its last control shows', async () => {
+    const reveal = vi.fn()
+    const original = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = reveal
+    try {
+      mountDetail()
+      const maintenance = await maintenanceBlock()
+      await userEvent.click(within(maintenance).getByRole('button', { name: 'Unregister' }))
+      const confirm = within(maintenance).getByRole('heading', { name: 'Unregister checkout-web?' }).closest('section')!
+      expect(reveal).toHaveBeenCalledWith({ block: 'nearest' })
+      expect(reveal.mock.contexts.at(-1)).toContainElement(confirm)
+    } finally {
+      Element.prototype.scrollIntoView = original
+    }
+  })
 
   it('opens Unregister under its button, and keeps its refusal there rather than at the top of the page', async () => {
     const busy = /Another operation holds this repository/

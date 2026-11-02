@@ -9929,7 +9929,7 @@ function Pi(e, t, n) {
 	].join(" ").toLowerCase();
 }
 function Fi({ route: e, go: t }) {
-	let n = G(), { t: r } = n, { api: a, actions: s, settings: c, setQueueCount: u } = Ju(), f = c.refresh, p = i((e) => {
+	let n = G(), { t: r } = n, { api: a, actions: s, settings: c, setQueueCount: u } = Yu(), f = c.refresh, p = i((e) => {
 		a.putSettings({ queue_organize: e }).then(() => f(), () => void 0);
 	}, [a, f]), [g, _] = bi(c.data?.settings.queue_organize, p), [v, y] = d(""), x = l(() => s.data ? _t(s.data) : null, [s.data]), S = x?.actions ?? [], C = x?.counts.total ?? null, w = l(() => {
 		let e = v.trim().toLowerCase();
@@ -15355,7 +15355,7 @@ async function os(e, t, n, r, i) {
 	};
 }
 function ss({ route: e, go: t }) {
-	let n = G(), { t: r } = n, { api: a, repos: s } = Ju(), c = oe(), [u, f] = d(as), [p, g] = d(""), [_, v] = d(null), [y, b] = d(null), [x, S] = d(null), [C, w] = d(null);
+	let n = G(), { t: r } = n, { api: a, repos: s } = Yu(), c = oe(), [u, f] = d(as), [p, g] = d(""), [_, v] = d(null), [y, b] = d(null), [x, S] = d(null), [C, w] = d(null);
 	o(() => {
 		w(null);
 	}, [e.repo]), o(() => {
@@ -17197,7 +17197,7 @@ function ic({ phases: e, intentLabel: t, selectedStage: n, onSelect: r }) {
 	});
 }
 function ac({ route: e, go: t }) {
-	let n = Ju();
+	let n = Yu();
 	return /* @__PURE__ */ m(tc, {
 		api: n.api,
 		route: e,
@@ -18534,7 +18534,7 @@ function Jc(e) {
 	return e.availability === "available" ? e.install.status === "recovery_required" ? "recovery_required" : e.install.status === "not_installed" ? "not_installed" : null : "availability";
 }
 function Yc({ route: e, go: t }) {
-	let n = G(), { t: r } = n, { api: a, repos: s, health: c, settings: f } = Ju(), p = f.data ? f.data.settings.advisor.enabled && f.data.capabilities.advisor.available : null, g = s.data?.repos ?? [], [_, v] = d("work"), [y, b] = d(!1), [x, S] = d(() => ({
+	let n = G(), { t: r } = n, { api: a, repos: s, health: c, settings: f } = Yu(), p = f.data ? f.data.settings.advisor.enabled && f.data.capabilities.advisor.available : null, g = s.data?.repos ?? [], [_, v] = d("work"), [y, b] = d(!1), [x, S] = d(() => ({
 		...Ic,
 		repo: e.repo
 	})), [C, w] = d(null), [T, E] = d(null), [D, O] = d(!1), [k, A] = d(!1), [j, M] = d(null), [N, P] = d(null), [F, I] = d(null), [L, R] = d(!1), [z, B] = d([]), [V, ee] = d(null), [H, U] = d({}), [te, ne] = d(0), W = g.find((e) => e.repo_id === x.repo) ?? null, re = W ? Jc(W) : null, ie = Y(W && !re ? `wizard-spaces:${W.repo_id}` : null, i((e) => a.intents(x.repo, {}, { signal: e }), [a, x.repo]), {
@@ -21845,8 +21845,11 @@ function _u(e) {
 	let n = e.querySelector("h2, h3");
 	return n && (n.tabIndex = -1), n;
 }
-function vu({ route: e, go: t }) {
-	let n = G(), { t: r } = n, { api: a, repos: s } = Ju(), c = hu(), [l, f] = d(gu), [g, _] = d(null), [v, y] = d(null), [b, x] = d(null), [S, C] = d(null), w = u(0), T = u(0), [E, D] = d(""), [O, k] = d(""), [A, j] = d(!1), [M, N] = d(""), P = Y(A || l.kind === "add" ? "repos-with-archived" : null, i((e) => a.repos(!0, { signal: e }), [a]), { revalidateOn: [
+function vu(e) {
+	typeof e.scrollIntoView == "function" && e.scrollIntoView({ block: e.getBoundingClientRect().height <= window.innerHeight ? "nearest" : "start" });
+}
+function yu({ route: e, go: t }) {
+	let n = G(), { t: r } = n, { api: a, repos: s } = Yu(), c = hu(), [l, f] = d(gu), [g, _] = d(null), [v, y] = d(null), [b, x] = d(null), [S, C] = d(null), w = u(0), T = u(0), [E, D] = d(""), [O, k] = d(""), [A, j] = d(!1), [M, N] = d(""), P = Y(A || l.kind === "add" ? "repos-with-archived" : null, i((e) => a.repos(!0, { signal: e }), [a]), { revalidateOn: [
 		"repo.updated",
 		"repo.removed",
 		"reset"
@@ -21877,7 +21880,7 @@ function vu({ route: e, go: t }) {
 			(e?.isConnected ? e : t ? document.querySelector(`[data-repo-action="${t}"]`) : null)?.focus();
 			return;
 		}
-		H !== "add" && te.current && _u(te.current)?.focus();
+		H !== "add" && te.current && (_u(te.current)?.focus({ preventScroll: !0 }), vu(te.current));
 	}, [H, l]), o(() => (_(null), y(null), x((t) => t && t.repoId === e.repo ? t : null), N(""), C(null), ae("top"), T.current += 1, w.current += 1, () => {
 		w.current += 1;
 	}), [e.repo]);
@@ -22396,13 +22399,13 @@ function vu({ route: e, go: t }) {
 }
 //#endregion
 //#region src/views/repos/index.tsx
-var yu = /* @__PURE__ */ O({ default: () => vu });
+var bu = /* @__PURE__ */ O({ default: () => yu });
 //#endregion
 //#region src/settings/AboutPanel.tsx
-function bu({ health: e, versions: t, onOpenActivity: n }) {
+function xu({ health: e, versions: t, onOpenActivity: n }) {
 	let r = G(), { t: i } = r, a = i("common.unavailable"), o = t?.studio ?? e?.version ?? a, s = t?.bundled_engine ?? e?.bundled_engine_version ?? a, c = t?.min_kirocrew ?? e?.min_kirocrew_version ?? a, l = t?.host ?? e?.host_version ?? null;
 	return /* @__PURE__ */ h(p, { children: [
-		/* @__PURE__ */ m(Fu, {
+		/* @__PURE__ */ m(Iu, {
 			id: "aidlc-about-versions",
 			title: i("settings.about.title"),
 			description: i("settings.about.desc"),
@@ -22441,13 +22444,13 @@ function bu({ health: e, versions: t, onOpenActivity: n }) {
 						className: "studio-evgrid-pair",
 						children: [/* @__PURE__ */ m("dt", { children: i("settings.about.platform") }), /* @__PURE__ */ m("dd", {
 							className: "studio-mono",
-							children: xu() || a
+							children: Su() || a
 						})]
 					})
 				]
 			})
 		}),
-		/* @__PURE__ */ m(Fu, {
+		/* @__PURE__ */ m(Iu, {
 			id: "aidlc-about-update",
 			title: i("settings.about.updateState"),
 			description: i("settings.about.updateDesc"),
@@ -22456,7 +22459,7 @@ function bu({ health: e, versions: t, onOpenActivity: n }) {
 				children: i("settings.about.updateChip")
 			})
 		}),
-		e ? /* @__PURE__ */ m(Fu, {
+		e ? /* @__PURE__ */ m(Iu, {
 			id: "aidlc-about-health",
 			title: i("settings.about.status"),
 			description: e.issues.length > 0 ? e.issues.map((e) => {
@@ -22536,12 +22539,12 @@ function bu({ health: e, versions: t, onOpenActivity: n }) {
 		}) : null
 	] });
 }
-function xu() {
+function Su() {
 	return typeof navigator > "u" ? "" : navigator.userAgentData?.platform || navigator.platform || "";
 }
 //#endregion
 //#region src/settings/BunSetting.tsx
-function Su({ status: e, busy: t, onLink: n }) {
+function Cu({ status: e, busy: t, onLink: n }) {
 	let { t: r } = G(), [i, a] = d(!1);
 	if (e.found) return /* @__PURE__ */ h("p", {
 		className: "studio-row studio-wrapchips",
@@ -22613,7 +22616,7 @@ function Su({ status: e, busy: t, onLink: n }) {
 		]
 	});
 }
-function Cu({ api: e, tool: t, onChanged: n }) {
+function wu({ api: e, tool: t, onChanged: n }) {
 	let { t: r, has: i } = G(), [a, s] = d(t?.configured_path ?? ""), [c, l] = d(!1), [u, f] = d(!1), [p, g] = d(""), [_, v] = d(null), [y, b] = d(!1), x = _ ?? t;
 	o(() => {
 		v(null);
@@ -22632,7 +22635,7 @@ function Cu({ api: e, tool: t, onChanged: n }) {
 			f(!1);
 		}
 	};
-	return /* @__PURE__ */ m(Fu, {
+	return /* @__PURE__ */ m(Iu, {
 		id: "aidlc-bun",
 		title: r("settings.bun.title"),
 		description: r("settings.bun.desc"),
@@ -22694,7 +22697,7 @@ function Cu({ api: e, tool: t, onChanged: n }) {
 					"aria-live": "polite",
 					children: p || (y && x ? r(x.found ? "settings.bun.ready" : "settings.bun.missing") : "")
 				}),
-				x?.found && x.conversations ? /* @__PURE__ */ m(Su, {
+				x?.found && x.conversations ? /* @__PURE__ */ m(Cu, {
 					status: x.conversations,
 					busy: u,
 					onLink: () => void S("link")
@@ -22705,19 +22708,19 @@ function Cu({ api: e, tool: t, onChanged: n }) {
 }
 //#endregion
 //#region src/settings/AdvisorSetting.tsx
-function wu({ control: e, repos: t }) {
+function Tu({ control: e, repos: t }) {
 	let n = G(), { t: r } = n, i = e.capabilities.advisor, a = i?.available !== !1, o = e.values.advisor.auto_draft_repo_ids, s = t ?? [], c = new Set(s.map((e) => e.repo_id)), l = t === null ? [] : o.filter((e) => !c.has(e)), u = e.busy || !a || !e.values.advisor.enabled, d = (t, n) => {
 		let r = n ? [...o, t] : o.filter((e) => e !== t);
 		e.save({ advisor: { auto_draft_repo_ids: [...new Set(r)] } });
 	};
 	return /* @__PURE__ */ h(p, { children: [
-		/* @__PURE__ */ m(Fu, {
+		/* @__PURE__ */ m(Iu, {
 			id: "aidlc-set-advisor",
 			title: r("settings.advisor.title"),
 			description: r("settings.advisor.desc"),
 			children: (t) => /* @__PURE__ */ h("div", {
 				className: "studio-row studio-wrapchips",
-				children: [a ? null : /* @__PURE__ */ m(Lu, { capability: i }), /* @__PURE__ */ h("label", {
+				children: [a ? null : /* @__PURE__ */ m(Ru, { capability: i }), /* @__PURE__ */ h("label", {
 					className: "studio-check",
 					children: [/* @__PURE__ */ m("input", {
 						type: "checkbox",
@@ -22729,7 +22732,7 @@ function wu({ control: e, repos: t }) {
 				})]
 			})
 		}),
-		/* @__PURE__ */ m(Fu, {
+		/* @__PURE__ */ m(Iu, {
 			id: "aidlc-set-advisor-auto",
 			title: r("settings.advisor.autoDraft.title"),
 			description: r("settings.advisor.autoDraft.desc"),
@@ -22782,7 +22785,7 @@ function wu({ control: e, repos: t }) {
 				})] })
 			})
 		}),
-		/* @__PURE__ */ m(Fu, {
+		/* @__PURE__ */ m(Iu, {
 			id: "aidlc-set-advisor-model",
 			title: r("settings.advisor.model.title"),
 			description: r("settings.advisor.model.desc"),
@@ -22796,24 +22799,24 @@ function wu({ control: e, repos: t }) {
 }
 //#endregion
 //#region src/settings/AutomationSetting.tsx
-var Tu = {
+var Eu = {
 	lo: 1,
 	hi: 8
 };
-function Eu({ control: e }) {
+function Du({ control: e }) {
 	let t = G(), { t: n } = t;
-	return /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ m(Fu, {
+	return /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ m(Iu, {
 		id: "aidlc-set-concurrency",
 		title: n("settings.concurrency.title"),
 		description: n("settings.concurrency.desc"),
 		children: (r) => /* @__PURE__ */ h("div", {
 			className: "studio-row studio-wrapchips",
-			children: [/* @__PURE__ */ m(zu, {
+			children: [/* @__PURE__ */ m(Bu, {
 				id: "aidlc-set-concurrency-input",
 				label: n("settings.concurrency.label"),
 				value: e.values.global_concurrency_cap,
-				lo: Tu.lo,
-				hi: Tu.hi,
+				lo: Eu.lo,
+				hi: Eu.hi,
 				disabled: e.busy,
 				describedBy: r,
 				onCommit: (t) => e.save({ global_concurrency_cap: t })
@@ -22822,7 +22825,7 @@ function Eu({ control: e }) {
 				children: J(t, "settings.concurrency.value", e.values.global_concurrency_cap)
 			})]
 		})
-	}), /* @__PURE__ */ m(Fu, {
+	}), /* @__PURE__ */ m(Iu, {
 		id: "aidlc-set-doctor",
 		title: n("settings.doctor.title"),
 		description: n("settings.doctor.desc"),
@@ -22847,25 +22850,25 @@ function Eu({ control: e }) {
 }
 //#endregion
 //#region src/settings/DiagnosticsSetting.tsx
-var Du = {
+var Ou = {
 	lo: 1,
 	hi: 30
 };
-function Ou({ control: e }) {
+function ku({ control: e }) {
 	let t = G(), { t: n } = t, r = e.values.diagnostics.export_include_human_text;
 	return /* @__PURE__ */ h(p, { children: [
-		/* @__PURE__ */ m(Fu, {
+		/* @__PURE__ */ m(Iu, {
 			id: "aidlc-set-retention",
 			title: n("settings.diagnostics.retention.title"),
 			description: n("settings.diagnostics.retention.desc"),
 			children: (r) => /* @__PURE__ */ h("div", {
 				className: "studio-row studio-wrapchips",
-				children: [/* @__PURE__ */ m(zu, {
+				children: [/* @__PURE__ */ m(Bu, {
 					id: "aidlc-set-retention-input",
 					label: n("settings.diagnostics.retention.label"),
 					value: e.values.diagnostics.retention_days,
-					lo: Du.lo,
-					hi: Du.hi,
+					lo: Ou.lo,
+					hi: Ou.hi,
 					disabled: e.busy,
 					describedBy: r,
 					onCommit: (t) => e.save({ diagnostics: { retention_days: t } })
@@ -22875,7 +22878,7 @@ function Ou({ control: e }) {
 				})]
 			})
 		}),
-		/* @__PURE__ */ m(Fu, {
+		/* @__PURE__ */ m(Iu, {
 			id: "aidlc-set-humantext",
 			title: n("settings.diagnostics.humanText.title"),
 			description: n("settings.diagnostics.humanText.desc"),
@@ -22897,18 +22900,18 @@ function Ou({ control: e }) {
 				] })]
 			})
 		}),
-		/* @__PURE__ */ m(Fu, {
+		/* @__PURE__ */ m(Iu, {
 			id: "aidlc-set-humanretention",
 			title: n("settings.diagnostics.humanRetention.title"),
 			description: n("settings.diagnostics.humanRetention.desc"),
 			children: (r) => /* @__PURE__ */ h("div", {
 				className: "studio-row studio-wrapchips",
-				children: [/* @__PURE__ */ m(zu, {
+				children: [/* @__PURE__ */ m(Bu, {
 					id: "aidlc-set-humanretention-input",
 					label: n("settings.diagnostics.humanRetention.label"),
 					value: e.values.human_text_retention_days,
-					lo: Du.lo,
-					hi: Du.hi,
+					lo: Ou.lo,
+					hi: Ou.hi,
 					disabled: e.busy,
 					describedBy: r,
 					onCommit: (t) => e.save({ human_text_retention_days: t })
@@ -22923,16 +22926,16 @@ function Ou({ control: e }) {
 }
 //#endregion
 //#region src/settings/LocaleSetting.tsx
-var ku = [
+var Au = [
 	"auto",
 	"en-US",
 	"zh-CN"
-], Au = ["compact", "comfortable"];
-function ju({ control: e }) {
+], ju = ["compact", "comfortable"];
+function Mu({ control: e }) {
 	let { t } = G(), n = ie(), r = e.values.locale, i = (t) => {
 		ae(t === "auto" ? null : t), W(t), e.save({ locale: t });
 	};
-	return /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ m(Fu, {
+	return /* @__PURE__ */ h(p, { children: [/* @__PURE__ */ m(Iu, {
 		id: "aidlc-set-locale",
 		title: t("settings.locale.title"),
 		description: t("settings.locale.desc"),
@@ -22948,7 +22951,7 @@ function ju({ control: e }) {
 					disabled: e.busy,
 					"aria-describedby": a,
 					onChange: (e) => i(e.target.value),
-					children: ku.map((e) => /* @__PURE__ */ m("option", {
+					children: Au.map((e) => /* @__PURE__ */ m("option", {
 						value: e,
 						children: t(e === "auto" ? "settings.locale.auto" : `settings.locale.${e}`)
 					}, e))
@@ -22958,7 +22961,7 @@ function ju({ control: e }) {
 				children: r === "auto" ? t("settings.locale.following", { locale: t(`settings.locale.${n}`) }) : t("settings.locale.overridden")
 			})]
 		})
-	}), /* @__PURE__ */ m(Fu, {
+	}), /* @__PURE__ */ m(Iu, {
 		id: "aidlc-set-density",
 		title: t("settings.density.title"),
 		description: t("settings.density.desc"),
@@ -22972,7 +22975,7 @@ function ju({ control: e }) {
 				disabled: e.busy,
 				"aria-describedby": n,
 				onChange: (t) => e.save({ density: t.target.value }),
-				children: Au.map((e) => /* @__PURE__ */ m("option", {
+				children: ju.map((e) => /* @__PURE__ */ m("option", {
 					value: e,
 					children: t(`settings.density.${e}`)
 				}, e))
@@ -22982,20 +22985,20 @@ function ju({ control: e }) {
 }
 //#endregion
 //#region src/settings/QueueSetting.tsx
-var Mu = [
+var Nu = [
 	"priority",
 	"repo",
 	"type",
 	"oldest"
 ];
-function Nu({ control: e }) {
+function Pu({ control: e }) {
 	let { t } = G(), n = (t) => {
 		try {
 			localStorage.setItem(R, t);
 		} catch {}
 		e.save({ queue_organize: t });
 	};
-	return /* @__PURE__ */ m(Fu, {
+	return /* @__PURE__ */ m(Iu, {
 		id: "aidlc-set-organize",
 		title: t("settings.queue.title"),
 		description: t("settings.queue.desc"),
@@ -23011,7 +23014,7 @@ function Nu({ control: e }) {
 					disabled: e.busy,
 					"aria-describedby": r,
 					onChange: (e) => n(e.target.value),
-					children: Mu.map((e) => /* @__PURE__ */ m("option", {
+					children: Nu.map((e) => /* @__PURE__ */ m("option", {
 						value: e,
 						children: t(`settings.queue.${e}`)
 					}, e))
@@ -23025,19 +23028,19 @@ function Nu({ control: e }) {
 }
 //#endregion
 //#region src/settings/SlackSetting.tsx
-function Pu({ control: e, repos: t }) {
+function Fu({ control: e, repos: t }) {
 	let n = G(), { t: r } = n, i = e.capabilities.slack, a = i?.available !== !1, o = e.values.slack.muted_repo_ids, s = new Set(t.map((e) => e.repo_id)), c = o.filter((e) => !s.has(e)), l = (t, n) => {
 		let r = n ? [...o, t] : o.filter((e) => e !== t);
 		e.save({ slack: { muted_repo_ids: [...new Set(r)] } });
 	};
 	return /* @__PURE__ */ h(p, { children: [
-		/* @__PURE__ */ m(Fu, {
+		/* @__PURE__ */ m(Iu, {
 			id: "aidlc-set-slack",
 			title: r("settings.slack.title"),
 			description: r("settings.slack.desc"),
 			children: (t) => /* @__PURE__ */ h("div", {
 				className: "studio-row studio-wrapchips",
-				children: [a ? null : /* @__PURE__ */ m(Lu, { capability: i }), /* @__PURE__ */ h("label", {
+				children: [a ? null : /* @__PURE__ */ m(Ru, { capability: i }), /* @__PURE__ */ h("label", {
 					className: "studio-check",
 					children: [/* @__PURE__ */ m("input", {
 						type: "checkbox",
@@ -23056,13 +23059,13 @@ function Pu({ control: e, repos: t }) {
 				})]
 			})
 		}),
-		/* @__PURE__ */ m(Fu, {
+		/* @__PURE__ */ m(Iu, {
 			id: "aidlc-set-slack-quick",
 			title: r("settings.slack.quickActions.title"),
 			description: r("settings.slack.quickActions.desc"),
-			children: () => /* @__PURE__ */ m(Lu, { capability: e.capabilities.slack_quick_actions })
+			children: () => /* @__PURE__ */ m(Ru, { capability: e.capabilities.slack_quick_actions })
 		}),
-		/* @__PURE__ */ m(Fu, {
+		/* @__PURE__ */ m(Iu, {
 			id: "aidlc-set-slack-mute",
 			title: r("settings.slack.mute.title"),
 			description: r("settings.slack.mute.desc"),
@@ -23112,7 +23115,7 @@ function Pu({ control: e, repos: t }) {
 				})] })
 			})
 		}),
-		/* @__PURE__ */ m(Fu, {
+		/* @__PURE__ */ m(Iu, {
 			id: "aidlc-set-dashboard",
 			title: r("settings.dashboard.title"),
 			description: r("settings.dashboard.desc"),
@@ -23131,7 +23134,7 @@ function Pu({ control: e, repos: t }) {
 }
 //#endregion
 //#region src/settings/SettingsView.tsx
-function Fu({ id: e, title: t, description: n, children: r }) {
+function Iu({ id: e, title: t, description: n, children: r }) {
 	let i = `${e}-desc`;
 	return /* @__PURE__ */ h("div", {
 		className: "studio-mrow",
@@ -23152,7 +23155,7 @@ function Fu({ id: e, title: t, description: n, children: r }) {
 		})]
 	});
 }
-function Iu({ title: e, children: t }) {
+function Lu({ title: e, children: t }) {
 	return /* @__PURE__ */ h("section", {
 		className: "studio-block",
 		children: [/* @__PURE__ */ m("h3", { children: e }), /* @__PURE__ */ m("div", {
@@ -23161,21 +23164,21 @@ function Iu({ title: e, children: t }) {
 		})]
 	});
 }
-function Lu({ capability: e }) {
+function Ru({ capability: e }) {
 	let { t, has: n } = G(), r = e?.reason ?? null;
 	return /* @__PURE__ */ m(Z, {
 		tone: "warn",
 		icon: "warn",
-		children: r ? t("settings.unavailableWhy", { reason: t(Ru(n, r)) }) : t("settings.unavailable")
+		children: r ? t("settings.unavailableWhy", { reason: t(zu(n, r)) }) : t("settings.unavailable")
 	});
 }
-function Ru(e, t) {
+function zu(e, t) {
 	let n = `settings.reason.${t}`;
 	if (e(n)) return n;
 	let r = t.indexOf(":"), i = r > 0 ? `settings.reason.${t.slice(0, r)}` : null;
 	return i && e(i) ? i : "settings.reason.other";
 }
-function zu({ id: e, label: t, value: n, lo: r, hi: i, disabled: a, describedBy: s, onCommit: c }) {
+function Bu({ id: e, label: t, value: n, lo: r, hi: i, disabled: a, describedBy: s, onCommit: c }) {
 	let [l, u] = d(String(n));
 	o(() => u(String(n)), [n]);
 	let f = () => {
@@ -23210,14 +23213,14 @@ function zu({ id: e, label: t, value: n, lo: r, hi: i, disabled: a, describedBy:
 		})]
 	});
 }
-function Bu(e, t) {
+function Vu(e, t) {
 	return e ? t ? (e.updated_at ?? "") >= (t.updated_at ?? "") ? e : t : e : t;
 }
-function Vu({ go: e }) {
+function Hu({ go: e }) {
 	let t = G(), { t: n } = t, r = Te(), a = Y("settings", i((e) => r.settings({ signal: e }), [r]), {
 		interval: 0,
 		revalidateOn: ["settings.updated", "reset"]
-	}), o = Y("health", i((e) => r.health({ signal: e }), [r]), { interval: 6e4 }), s = Y("repos", i((e) => r.repos(!1, { signal: e }), [r]), { interval: 6e4 }), c = a.refresh, [u, f] = d(null), [g, _] = d(!1), [v, y] = d(null), b = Bu(u, a.data), x = i((e) => {
+	}), o = Y("health", i((e) => r.health({ signal: e }), [r]), { interval: 6e4 }), s = Y("repos", i((e) => r.repos(!1, { signal: e }), [r]), { interval: 6e4 }), c = a.refresh, [u, f] = d(null), [g, _] = d(!1), [v, y] = d(null), b = Vu(u, a.data), x = i((e) => {
 		_(!0), y({ key: "settings.page.saving" }), r.putSettings(e).then((e) => {
 			f(e), y({ key: "settings.page.saved" });
 		}).catch((e) => {
@@ -23291,47 +23294,47 @@ function Vu({ go: e }) {
 					]
 				}) : null,
 				S ? /* @__PURE__ */ h(p, { children: [
-					/* @__PURE__ */ m(Iu, {
+					/* @__PURE__ */ m(Lu, {
 						title: n("settings.section.locale"),
-						children: /* @__PURE__ */ m(ju, { control: S })
+						children: /* @__PURE__ */ m(Mu, { control: S })
 					}),
-					/* @__PURE__ */ m(Iu, {
+					/* @__PURE__ */ m(Lu, {
 						title: n("settings.section.queue"),
-						children: /* @__PURE__ */ m(Nu, { control: S })
+						children: /* @__PURE__ */ m(Pu, { control: S })
 					}),
-					/* @__PURE__ */ m(Iu, {
+					/* @__PURE__ */ m(Lu, {
 						title: n("settings.section.automation"),
-						children: /* @__PURE__ */ m(Eu, { control: S })
+						children: /* @__PURE__ */ m(Du, { control: S })
 					}),
-					/* @__PURE__ */ m(Iu, {
+					/* @__PURE__ */ m(Lu, {
 						title: n("settings.section.advisor"),
-						children: /* @__PURE__ */ m(wu, {
+						children: /* @__PURE__ */ m(Tu, {
 							control: S,
 							repos: s.data?.repos ?? null
 						})
 					}),
-					/* @__PURE__ */ m(Iu, {
+					/* @__PURE__ */ m(Lu, {
 						title: n("settings.section.notifications"),
-						children: /* @__PURE__ */ m(Pu, {
+						children: /* @__PURE__ */ m(Fu, {
 							control: S,
 							repos: s.data?.repos ?? []
 						})
 					}),
-					/* @__PURE__ */ m(Iu, {
+					/* @__PURE__ */ m(Lu, {
 						title: n("settings.section.diagnostics"),
-						children: /* @__PURE__ */ m(Ou, { control: S })
+						children: /* @__PURE__ */ m(ku, { control: S })
 					})
 				] }) : /* @__PURE__ */ m("p", {
 					className: "studio-muted",
 					children: n("settings.page.reading")
 				}),
-				/* @__PURE__ */ h(Iu, {
+				/* @__PURE__ */ h(Lu, {
 					title: n("settings.section.about"),
-					children: [/* @__PURE__ */ m(Cu, {
+					children: [/* @__PURE__ */ m(wu, {
 						api: r,
 						tool: o.data?.tools?.bun ?? null,
 						onChanged: () => void o.refresh()
-					}), /* @__PURE__ */ m(bu, {
+					}), /* @__PURE__ */ m(xu, {
 						health: o.data,
 						versions: b?.versions ?? null,
 						onOpenActivity: () => e({ view: "activity" })
@@ -23343,16 +23346,16 @@ function Vu({ go: e }) {
 }
 //#endregion
 //#region src/views/settings/index.tsx
-var Hu = /* @__PURE__ */ O({ default: () => Vu }), Uu = /* @__PURE__ */ new Map();
-function Wu() {
+var Uu = /* @__PURE__ */ O({ default: () => Hu }), Wu = /* @__PURE__ */ new Map();
+function Gu() {
 	let e = /* @__PURE__ */ new Map(), t = /* #__PURE__ */ Object.assign({
 		"../views/actions/index.tsx": Ra,
 		"../views/activity/index.tsx": oo,
 		"../views/intents/index.tsx": ls,
 		"../views/map/index.tsx": oc,
 		"../views/new-intent/index.tsx": Zc,
-		"../views/repos/index.tsx": yu,
-		"../views/settings/index.tsx": Hu
+		"../views/repos/index.tsx": bu,
+		"../views/settings/index.tsx": Uu
 	});
 	for (let [n, r] of Object.entries(t)) {
 		let t = /\/views\/([^/]+)\/index\.tsx$/.exec(n)?.[1];
@@ -23360,19 +23363,19 @@ function Wu() {
 		let i = r.default;
 		typeof i == "function" && e.set(t, i);
 	}
-	for (let [t, n] of Uu) e.set(t, n);
+	for (let [t, n] of Wu) e.set(t, n);
 	return e;
 }
-function Gu(e) {
+function Ku(e) {
 	return e === "new-intent" ? "nav.newIntent" : `nav.${e}`;
 }
-function Ku({ route: e, go: t }) {
-	let { t: n } = G(), r = l(() => Wu(), [e.view]).get(e.view);
+function qu({ route: e, go: t }) {
+	let { t: n } = G(), r = l(() => Gu(), [e.view]).get(e.view);
 	if (r) return /* @__PURE__ */ m(r, {
 		route: e,
 		go: t
 	});
-	let i = n(Gu(e.view));
+	let i = n(Ku(e.view));
 	return /* @__PURE__ */ h("div", {
 		className: "studio-page studio-placeholder",
 		children: [/* @__PURE__ */ h("h1", { children: [
@@ -23390,20 +23393,20 @@ function Ku({ route: e, go: t }) {
 }
 //#endregion
 //#region src/shell/StudioApp.tsx
-var qu = t(null);
-function Ju() {
-	let e = a(qu);
+var Ju = t(null);
+function Yu() {
+	let e = a(Ju);
 	if (!e) throw Error("useShellData() must be called inside StudioApp");
 	return e;
 }
-function Yu() {
+function Xu() {
 	let e = Te(), t = i((t) => e.pollEvents(t), [e]);
 	return /* @__PURE__ */ m(qe, {
 		poll: t,
-		children: /* @__PURE__ */ m(Xu, { api: e })
+		children: /* @__PURE__ */ m(Zu, { api: e })
 	});
 }
-function Xu({ api: e }) {
+function Zu({ api: e }) {
 	let t = G(), { t: n } = t, r = H(), [a, s] = zt(), c = Ye(), u = v(), [f, p] = d(null), [g, _] = d(!1), y = Y(`actions:${a.repo}:${a.intent}`, i((t) => e.actions({
 		repo: a.repo || void 0,
 		intent: a.intent || void 0
@@ -23446,7 +23449,7 @@ function Xu({ api: e }) {
 	o(() => {
 		M !== void 0 && W(M);
 	}, [M]);
-	let N = Mt(a), P = n(Gu(a.view)), F = S.data && S.data.status !== "healthy" ? S.data.issues.length : 0, I = x.data?.settings.density ?? "compact";
+	let N = Mt(a), P = n(Ku(a.view)), F = S.data && S.data.status !== "healthy" ? S.data.issues.length : 0, I = x.data?.settings.density ?? "compact";
 	return /* @__PURE__ */ h("div", {
 		className: "studio",
 		"data-mode": r,
@@ -23528,12 +23531,12 @@ function Xu({ api: e }) {
 			/* @__PURE__ */ m("main", {
 				className: "studio-view",
 				id: "studio-view",
-				children: /* @__PURE__ */ h(qu.Provider, {
+				children: /* @__PURE__ */ h(Ju.Provider, {
 					value: j,
 					children: [/* @__PURE__ */ m(Bt, {
 						where: P,
 						resetKey: a.view,
-						children: /* @__PURE__ */ m(Ku, {
+						children: /* @__PURE__ */ m(qu, {
 							route: a,
 							go: s
 						})
@@ -23560,8 +23563,8 @@ function Xu({ api: e }) {
 //#endregion
 //#region src/main.tsx
 ce();
-function Zu() {
-	return /* @__PURE__ */ m(me, { children: /* @__PURE__ */ m(Yu, {}) });
+function Qu() {
+	return /* @__PURE__ */ m(me, { children: /* @__PURE__ */ m(Xu, {}) });
 }
 //#endregion
-export { Zu as default };
+export { Qu as default };

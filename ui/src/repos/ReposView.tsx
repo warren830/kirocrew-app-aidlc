@@ -109,6 +109,19 @@ function flowFocusTarget(region: HTMLElement): HTMLElement | null {
   return heading
 }
 
+/**
+ * Scroll an opened confirmation into view with the least movement that shows what the user must act on.
+ *
+ * Focus alone is not enough: focusing the heading scrolls only until the heading's own line shows, so a
+ * confirmation opened near the foot of the window had its confirm button under the fold. One that fits is
+ * scrolled until its last control shows; one taller than the window (an install plan) until its heading is
+ * at the top, since it is read from there down.
+ */
+function revealFlow(region: HTMLElement) {
+  if (typeof region.scrollIntoView !== 'function') return
+  region.scrollIntoView({ block: region.getBoundingClientRect().height <= window.innerHeight ? 'nearest' : 'start' })
+}
+
 export function ReposView({ route, go }: ViewProps) {
   const i18n = useI18n()
   const { t } = i18n
@@ -172,8 +185,8 @@ export function ReposView({ route, go }: ViewProps) {
         : 'none'
   const closeFlow = useCallback(() => setFlowState(NO_FLOW), [])
 
-  // Opening a confirmation moves focus into it, so a keyboard user lands on what opened and a flow whose
-  // button is pressed again after scrolling away comes back into view. Cancel hands focus back.
+  // Opening a confirmation moves focus into it and scrolls it into view, so a keyboard user lands on what opened
+  // and a flow whose button is pressed again after scrolling away comes back. Cancel hands focus back.
   const flowRegion = useRef<HTMLDivElement | null>(null)
   const flowOpener = useRef<HTMLElement | null>(null)
   const returnFocusTo = useRef<HTMLElement | null>(null)
@@ -206,7 +219,10 @@ export function ReposView({ route, go }: ViewProps) {
       return
     }
     // The add dialog is modal and manages its own focus.
-    if (flow !== 'add' && flowRegion.current) flowFocusTarget(flowRegion.current)?.focus()
+    if (flow !== 'add' && flowRegion.current) {
+      flowFocusTarget(flowRegion.current)?.focus({ preventScroll: true })
+      revealFlow(flowRegion.current)
+    }
     // `flowState` as well as `flow`: pressing the button of a confirmation that is already open, and has
     // been scrolled away from, has to bring it back too.
   }, [flow, flowState])
