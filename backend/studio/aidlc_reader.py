@@ -1116,6 +1116,8 @@ _AUDIT_QUESTION_FLOORS = frozenset(
     ("STAGE_STARTED", "STAGE_REVISING", "STAGE_AWAITING_APPROVAL", "GATE_REJECTED",
      "STAGE_COMPLETED", "GATE_APPROVED", "WORKFLOW_STARTED", "STAGE_JUMPED")
 )
+#: aidlc-lib.ts ``DECISION_CLOSING_EVENTS``: each closes whichever decision is open.
+_DECISION_CLOSING_EVENTS = _AUDIT_QUESTION_ANSWERS | {"VERIFICATION_COMMAND_RECORDED", "CONSTRUCTION_POLICY_RECORDED"}
 
 
 def _audit_follows(candidate: AuditEvent, boundary: AuditEvent) -> bool | None:
@@ -1168,6 +1170,42 @@ def _audit_question_history(audit: AuditBundle, stage: str, unit: str | None) ->
         or (_audit_question_scope(e, stage, unit)
             and e.event in _AUDIT_QUESTION_ANSWERS | {"DECISION_RECORDED"})
     ]
+
+
+def _is_answer_mode_decision(event: AuditEvent) -> bool:
+    """aidlc-lib.ts ``isAnswerModeDecision``: the mode question, by the wording the protocol logs or its three ways."""
+    if event.event != "DECISION_RECORDED" or "Checkpoint" in event.fields:
+        return False
+    if event.fields.get("Decision", "").strip().startswith(C.ANSWER_MODE_QUESTION_PREFIX):
+        return True
+
+    def plain(text: str) -> str:
+        return text.strip().replace("\u2019", "'").lower()
+
+    offered = [option for option in map(plain, event.fields.get("Options", "").split(",")) if option]
+    labels = [plain(label) for label in C.ANSWER_MODE_LABELS]
+    return len(offered) == len(labels) and all(label in offered for label in labels)
+
+
+def _answers_mode_question(audit: AuditBundle, answer: AuditEvent, stage: str, unit: str | None) -> bool | None:
+    """Does ``answer`` close the mode question? The engine pairs an answer with the decision open before it
+    (``nextOpenDecision``): its stage's newest decision or closing row. ``None`` when that order is not provable."""
+    earlier: list[AuditEvent] = []
+    for event in audit.events:
+        if (
+            (event.shard, event.pos) == (answer.shard, answer.pos) or not _audit_question_scope(event, stage, unit)
+            or (event.event != "DECISION_RECORDED" and event.event not in _DECISION_CLOSING_EVENTS)
+        ):
+            continue
+        follows = _audit_follows(answer, event)
+        if follows is None:
+            return None
+        if follows:
+            earlier.append(event)
+    latest = _audit_frontier(earlier)
+    if len(latest) > 1:
+        return None
+    return bool(latest) and _is_answer_mode_decision(latest[0])
 
 
 def _audit_question_generation(audit: AuditBundle, unit: str | None) -> str | None:
@@ -1427,6 +1465,13 @@ def _closed_question_receipts(
             and all(_audit_follows(e, floor) is True for floor in floors)
         ])
         if len(answered) != 1 or not (answered[0].fields.get("Details") or "").strip():
+            return None
+        # The mode answer says how the person will answer the sheet, not what: a decision logged after it, while
+        # the sheet's own answers were still unrecorded, belongs to the sheet's round, and the sheet's answers
+        # close it. Measured twice, the conductor logged the sheet's questions as one decision after the reply had
+        # arrived ("Practices interview Q1-Q6", Options "Q1 A/B/C/X,…"), the engine refused the answer, and the
+        # card offered "Q1" for six questions.
+        if _answers_mode_question(audit, answered[0], stage, unit) is not False:
             return None
         return [answered[0]]
     if assumption is not None:

@@ -4,6 +4,10 @@ The conductor logged a decision after the person's grouped answers had already a
 questions", Options "Q1,…,Q6"); Studio raised it, a driver chose "Q1", and AI-DLC replied only in the conversation:
 "Your reply came through as just "Q1"… Please send all six answers again". No receipt, no reply suggestions. The card
 sat at Delivered with nothing for the person to act on.
+
+That decision belongs to the questions file's round and no longer raises a card (test_questions_file_round.py). The
+record here carries the receipt for the file's answers the conductor tried to write first, so the decision is a
+question of its own and the delivery it gets is the one the run made.
 """
 
 from __future__ import annotations
@@ -35,7 +39,7 @@ def clock():
 @pytest.fixture
 def repo_dir(repo_builder):
     root = repo_builder.with_engine("payload").with_workspace().with_git().build()
-    return F.chat_only_reply_tree(root, replied=False)
+    return F.chat_only_reply_tree(root, replied=False, sheet_receipt=True)
 
 
 @pytest.fixture
@@ -74,7 +78,7 @@ def deliver_q1(sv, routes, fake_host, scene, clock) -> dict:
 
 def ai_dlc_replies_in_chat(scene, clock, reply=REPLY) -> None:
     """The prompt hook records the reply; the conductor records nothing for it and answers in the conversation."""
-    F.chat_only_reply_tree(scene.root, replied=True)
+    F.chat_only_reply_tree(scene.root, replied=True, sheet_receipt=True)
     marker = F.chat_only_reply_record(scene.root) / ".aidlc-engine" / "human-turn"
     later = marker.stat().st_mtime_ns + 1_000_000_000
     os.utime(marker, ns=(later, later))

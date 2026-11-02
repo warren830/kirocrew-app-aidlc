@@ -685,6 +685,10 @@ WIRE_AUDIT_GROUPED_ANSWER_SUFFIX = (
 AUDIT_NONE_LABEL = "None of these"       # Studio's own choice on a multi-select audit question (A37)
 AUDIT_OTHER_LABEL = "Other"              # free-text escape on an audit question asked with others (A37)
 LEARNINGS_ADD_PROMPT = "Learnings: anything to add?"   # the engine's mandated single-choice prompt
+# The engine's mode question, asked with a stage's questions file (aidlc-lib.ts ``isAnswerModeDecision``): its answer
+# says how the person answers the file, not what they answered.
+ANSWER_MODE_QUESTION_PREFIX = "How would you like to answer"
+ANSWER_MODE_LABELS = ("Guide me", "I'll edit the file", "Chat")
 WIRE_RUN = "/aidlc"
 WIRE_RESUME = "/aidlc --resume"
 WIRE_SCOPE_PREFIX = "/aidlc --scope "

@@ -59,6 +59,32 @@ CHAT_ONLY_REPLY_INTENT = "261102-add-an-optional"
 #: the question card was raised from.
 CHAT_ONLY_REPLY_SHARD = "80a99723a8c8-498d2b12f686.md"
 
+#: The other real run of that day (tasklist, practices-discovery): Studio delivered the person's answers to the
+#: sheet's six questions, the conductor recorded them as the mode answer ("Chat"), logged the sheet's questions as
+#: one decision ("Practices interview Q1-Q6 …", Options "Q1 A/B/C/X,…"), had its answer refused (no reply since that
+#: decision), wrote the answers into the file and told the person their answer had not reached AI-DLC. Studio raised
+#: that decision as a one-question card. The tree is the record once the person had answered again in chat and
+#: AI-DLC asked the learnings questions (10:18:29); the state is the one Studio captured on every card of the stage
+#: (sha256 ``3abb2762…``: the later gate-start changed only the checkbox). ``questions-as-asked.md`` is the sheet as
+#: created at 08:43:44, from the transcript (Studio's question digest of the time); ``conversation.jsonl`` is
+#: KiroCrew's transcript from the stage's start, the project path written as ``<project-dir>``.
+PRACTICES_BATCH = FIXTURES / "practices-batch-decision"
+PRACTICES_BATCH_INTENT = "261102-due-dates"
+PRACTICES_BATCH_SHARD = "80a99723a8c8-17f552fbc793.md"
+PRACTICES_BATCH_QUESTIONS = "inception/practices-discovery/practices-discovery-questions.md"
+PRACTICES_BATCH_DECISION = ("Practices interview Q1-Q6 (merge flow, thin slice first, test order and coverage, "
+                            "Python and pytest, formatter/linter, firm rules)")
+#: Each moment as (the shard's last row, the human-turn marker, the turn counter, the transcript's last row): the mode
+#: question asked with the sheet, the batch decision pending with the sheet still open, the sheet filled in with that
+#: decision still pending (the conductor's write at 09:24:24 went through ``bun -e``, so no row logged it), and the
+#: learnings asked once the person had answered again.
+PRACTICES_BATCH_MOMENTS = {
+    "asked": ("2026-11-02T08:43:44Z", "2026-11-02T08:41:05Z", 3, "2026-11-02T08:43:51"),
+    "open": ("2026-11-02T09:24:14Z", "2026-11-02T09:23:42Z", 4, "2026-11-02T09:24:14"),
+    "filled": ("2026-11-02T09:24:14Z", "2026-11-02T09:23:42Z", 4, "2026-11-02T09:24:29"),
+    "learnings": ("2026-11-02T10:18:29Z", "2026-11-02T10:16:17Z", 5, "2026-11-02T10:18:35"),
+}
+
 _CHECKBOX_LINE = re.compile(r"^- \[([ xXsSrR?\-])\] (\S+)(?:\s*(?:—|–|--)\s*(.*))?$", re.MULTILINE)
 _FIELD_LINE = re.compile(r"^- \*\*(.+?)\*\*:[ \t]*(.*?)[ \t]*$", re.MULTILINE)
 
@@ -139,17 +165,22 @@ def chat_only_reply_record(root: Path) -> Path:
     return root / "aidlc" / "spaces" / "default" / "intents" / CHAT_ONLY_REPLY_INTENT
 
 
-def chat_only_reply_tree(root: Path, *, replied: bool) -> Path:
+def chat_only_reply_tree(root: Path, *, replied: bool, sheet_receipt: bool = False) -> Path:
     """Copy the ``CHAT_ONLY_REPLY`` record into ``root``: as it was when the card was raised, or with ``replied`` once
     the "Q1" it delivered reached AI-DLC. The earlier moment is the later one without what that reply wrote: the
     shard's final ``HUMAN_TURN``, its marker stamp and its turn-counter bump. Copies take the time of the copy, so the
-    later moment's marker reads as the newer one, as it does when the hook writes it."""
+    later moment's marker reads as the newer one, as it does when the hook writes it.
+
+    As recorded, the batch decision belongs to the sheet's round and raises no card. ``sheet_receipt`` adds, after the
+    mode answer, the receipt for the sheet's six answers the conductor tried to record at 07:08:15 (the engine takes a
+    second answer from one reply when nothing was asked in between): the decision after it is then a question of its
+    own, for the tests of what happens to an answer Studio delivers to one."""
     import shutil
 
     shutil.copytree(CHAT_ONLY_REPLY / "aidlc", root / "aidlc", dirs_exist_ok=True, copy_function=shutil.copyfile)
+    record = chat_only_reply_record(root)
+    shard = record / "audit" / CHAT_ONLY_REPLY_SHARD
     if not replied:
-        record = chat_only_reply_record(root)
-        shard = record / "audit" / CHAT_ONLY_REPLY_SHARD
         text = shard.read_text("utf-8")
         head, _, tail = text.rpartition("\n## Human Turn\n")
         assert head and "**Timestamp**: 2026-11-02T07:09:18Z" in tail
@@ -157,6 +188,14 @@ def chat_only_reply_tree(root: Path, *, replied: bool) -> Path:
         (record / ".aidlc-engine" / "human-turn").write_text("2026-11-02T07:07:49Z\n")
         counter = root / "aidlc" / ".aidlc-turn-counter"
         counter.write_text(str(int(counter.read_text().strip()) - 1) + "\n")
+    if sheet_receipt:
+        text = shard.read_text("utf-8")
+        mode_answer = text.index("**Timestamp**: 2026-11-02T07:08:23Z\n**Event**: QUESTION_ANSWERED")
+        refused = text.index("**Command**: aidlc-log answer --stage intent-capture --details Q1: ")
+        details = text[refused:text.index("\n", refused)].split("--details ", 1)[1]
+        cut = text.index("\n---\n", mode_answer) + len("\n---\n")
+        receipt = audit_block("QUESTION_ANSWERED", "2026-11-02T07:08:23Z", Stage="intent-capture", Details=details)
+        shard.write_text(text[:cut] + receipt + text[cut:], "utf-8")
     return root
 
 
@@ -165,6 +204,38 @@ def chat_only_reply_rows() -> list[dict]:
     rows = [json.loads(line) for line in (CHAT_ONLY_REPLY / "conversation.jsonl").read_text("utf-8").splitlines()
             if line.strip()]
     return [row for row in rows if "role" in row]
+
+
+def practices_batch_record(root: Path) -> Path:
+    return root / "aidlc" / "spaces" / "default" / "intents" / PRACTICES_BATCH_INTENT
+
+
+def practices_batch_tree(root: Path, moment: str) -> Path:
+    """Copy the ``PRACTICES_BATCH`` record into ``root`` as it was at one of ``PRACTICES_BATCH_MOMENTS``. An earlier
+    moment is the later record without what came after: the shard cut after its last row, that moment's human-turn
+    marker and turn counter, and before 09:24:24 the sheet as created. The diary stays the learnings' one: nothing
+    read before then depends on it."""
+    import shutil
+
+    last_row, human_turn, counter, _ = PRACTICES_BATCH_MOMENTS[moment]
+    shutil.copytree(PRACTICES_BATCH / "aidlc", root / "aidlc", dirs_exist_ok=True, copy_function=shutil.copyfile)
+    record = practices_batch_record(root)
+    shard = record / "audit" / PRACTICES_BATCH_SHARD
+    text = shard.read_text("utf-8")
+    shard.write_text(text[:text.index("\n---\n", text.rindex(f"**Timestamp**: {last_row}")) + len("\n---\n")], "utf-8")
+    (record / ".aidlc-engine" / "human-turn").write_text(f"{human_turn}\n")
+    (root / "aidlc" / ".aidlc-turn-counter").write_text(f"{counter}\n")
+    if moment in ("asked", "open"):
+        shutil.copyfile(PRACTICES_BATCH / "questions-as-asked.md", record / PRACTICES_BATCH_QUESTIONS)
+    return root
+
+
+def practices_batch_rows(moment: str) -> list[dict]:
+    """The transcript's message rows up to the end of ``moment``, oldest first."""
+    end = PRACTICES_BATCH_MOMENTS[moment][3]
+    rows = [json.loads(line) for line in (PRACTICES_BATCH / "conversation.jsonl").read_text("utf-8").splitlines()
+            if line.strip()]
+    return [row for row in rows if "role" in row and row["ts"][:19] <= end]
 
 
 def real_state(tree: Path = DEVDELTA, intent_dir: str = DEVDELTA_POC) -> str:

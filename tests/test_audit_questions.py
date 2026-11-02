@@ -1388,6 +1388,71 @@ def test_a_plain_sheet_keeps_ownership_without_its_answer_receipt(closed_sheet_s
     assert questions is None or questions.origin is None
 
 
+MODE_ASKED, MODE_ANSWERED, BATCH_ASKED = "2026-09-04T09:30:00Z", "2026-09-04T09:58:00Z", "2026-09-04T09:58:30Z"
+
+
+def mode_question(ts=MODE_ASKED, **fields):
+    return F.audit_block("DECISION_RECORDED", ts, **{
+        "Stage": STAGE, "Decision": "How would you like to answer the questions?", "Options": ",".join(ROUTING_LABELS),
+        **fields})
+
+
+@pytest.mark.parametrize("asked", [
+    {}, {"Decision": ROUTING_PROMPT},
+    # The engine's own test: the three ways decide whatever the wording, as the agent copied them.
+    {"Decision": "I've created 3 questions. Which way suits you?", "Options": "Chat, I’ll edit the file,guide me"},
+], ids=["protocol_wording", "agent_wording", "three_ways"])
+def test_the_mode_answer_alone_leaves_an_answered_sheet_its_round(closed_sheet_scene, asked):
+    """The real runs' shape: the reply carrying the sheet's answers was recorded as the mode ("Chat"), and a decision
+    logged after it is the sheet's questions again. The sheet's answers close it; no card."""
+    install_plain_sheet(closed_sheet_scene, mode_question(**asked), sheet_answer(MODE_ANSWERED, Details="Chat"),
+                        decision(Decision="Q1-Q3 requirements questions", Options="Q1,Q2,Q3"))
+    questions = closed_sheet_questions(closed_sheet_scene)
+    assert questions is not None and questions.origin is None and questions.pending_count == 0
+
+
+@pytest.mark.parametrize("tail", ["answers_after_the_mode", "answer_to_a_batch", "checkpoint_wording"])
+def test_the_sheets_own_answer_after_the_mode_answer_still_hands_on_the_ritual(closed_sheet_scene, tail):
+    blocks = {
+        # A second answer from the same reply, nothing asked in between: the engine records it unpaired.
+        "answers_after_the_mode": (mode_question(), sheet_answer(MODE_ANSWERED, Details="Chat"), sheet_answer()),
+        # The batch decision answered at last (the practices run at 10:16:27), then the ritual.
+        "answer_to_a_batch": (mode_question(), sheet_answer(MODE_ANSWERED, Details="Chat"),
+                              decision(BATCH_ASKED, Decision="Q1-Q3 requirements questions", Options="Q1,Q2,Q3"),
+                              sheet_answer()),
+        # A checkpoint is never the mode question, whatever it says.
+        "checkpoint_wording": (mode_question(Checkpoint="Consolidated Summary Confirmation"), sheet_answer()),
+    }[tail]
+    install_plain_sheet(closed_sheet_scene, *blocks, decision())
+    questions = closed_sheet_questions(closed_sheet_scene)
+    assert questions.origin["kind"] == "audit" and questions.questions[0].prompt == PROMPT
+
+
+def test_an_answer_whose_question_cannot_be_ordered_closes_nothing(closed_sheet_scene):
+    """The mode question in another shard in the answer's own second: what the answer closed is not provable."""
+    install_plain_sheet(closed_sheet_scene, sheet_answer(), decision())
+    append(closed_sheet_scene, mode_question(SHEET_ANSWERED_AT), shard="zz-mode.md")
+    assert_not_audit_owned(closed_sheet_questions(closed_sheet_scene))
+
+
+def test_a_checkpoint_receipt_closes_its_sheet_after_a_mode_answer_too(closed_sheet_scene):
+    """Protected checkpoints keep their own proof: the summary receipt binds the sheet, the mode answer is beside it."""
+    rewrite_audit(closed_sheet_scene, mode_question(), sheet_answer("2026-09-04T09:40:00Z", Details="Chat"),
+                  closed_sheet_receipt(closed_sheet_scene), decision())
+    questions = closed_sheet_questions(closed_sheet_scene)
+    assert questions.origin["kind"] == "audit" and questions.questions[0].prompt == PROMPT
+
+
+def test_the_mode_question_and_closing_rows_mirror_the_bundled_engine(C, studio):
+    lib = (Path(__file__).resolve().parents[1] / "payload/aidlc-kiro/.kiro/tools/aidlc-lib.ts").read_text("utf-8")
+    assert f'export const ANSWER_MODE_QUESTION_PREFIX = "{C.ANSWER_MODE_QUESTION_PREFIX}";' in lib
+    start = lib.index("export const ANSWER_MODE_LABELS")
+    assert re.findall(r'"([^"]+)"', lib[start:lib.index("};", start)]) == list(C.ANSWER_MODE_LABELS)
+    start = lib.index("export const DECISION_CLOSING_EVENTS")
+    engine = set(re.findall(r'"([A-Z_]+)"', lib[start:lib.index("]);", start)]))
+    assert engine and studio.aidlc_reader._DECISION_CLOSING_EVENTS == engine
+
+
 def test_an_answered_plain_sheet_with_a_newer_ritual_reaches_the_api(sv, routes, fake_host, scene):
     install_plain_sheet(scene, sheet_answer(), decision())
     card = question_card(sv, routes, fake_host, scene)

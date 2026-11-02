@@ -863,8 +863,10 @@ def test_a_question_asked_without_suggestions_still_gets_a_reply_card(projection
 def test_a_decision_whose_answer_went_unrecorded_yields_to_the_conversations_question(
         projection, repo_record, repo_builder, conversation):
     """The real run of 2026-11-02 (tests/fixtures/chat-only-reply): Studio sent "Q1" to the decision, AI-DLC recorded
-    nothing and asked in chat. Its question is the card; the decision returns only when the chat cannot be read."""
-    root = F.chat_only_reply_tree(_builder(repo_builder, "chat-only").with_engine("payload").build(), replied=True)
+    nothing and asked in chat. Its question is the card; the decision returns only when the chat cannot be read. With
+    the file's receipt before it, the decision is a question of its own (as recorded it raises no card at all)."""
+    root = F.chat_only_reply_tree(_builder(repo_builder, "chat-only").with_engine("payload").build(), replied=True,
+                                  sheet_receipt=True)
     snap = projection.snapshot(repo_record(root), "default", F.CHAT_ONLY_REPLY_INTENT)
     [question] = _seeds(projection, snap)
     assert question.type == "question"

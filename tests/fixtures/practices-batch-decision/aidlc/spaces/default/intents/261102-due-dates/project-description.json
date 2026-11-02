@@ -1,0 +1,1 @@
+"Add an optional due date to tasks and mark overdue tasks in the list output\n\nDates are ISO 8601 (YYYY-MM-DD). Existing tasks.json files without a due date must keep working."

@@ -584,7 +584,11 @@ Audit-backed questions (a decision the engine asked in the chat, with no open qu
   full normalized content is verified. AI-DLC 2.10 appends `## Assumption Confirmation` after the summary is
   confirmed, so that receipt binds only the content before the heading (A37). That portion is accepted only when the
   section is the last one in the file, its own tag is answered, and a `QUESTION_ANSWERED` receipt carrying the same
-  answer sits between the summary receipt and the decision. Every other byte stays bound.
+  answer sits between the summary receipt and the decision. Every other byte stays bound. A sheet of plain questions
+  closes with the `QUESTION_ANSWERED` before the decision, unless that row answers the mode question (paired as the
+  engine's `nextOpenDecision` pairs it, recognised as its `isAnswerModeDecision` does): the mode says how the sheet is
+  answered, and a decision logged after it while the sheet's answers were unrecorded belongs to the sheet's round
+  (`practices-batch-decision/`, `chat-only-reply/`).
 
 ### 11.9 Review sections
 
