@@ -11,7 +11,7 @@ never around it.
 
 > **This is the v2 branch (2.0.0 beta).** Same features as 1.x on a backend 40% smaller, for KiroCrew 0.8+.
 > It installs next to 1.x as **AI-DLC Studio v2** (`aidlc-studio-v2`) and keeps its own database: install this
-> folder from KiroCrew's Apps page, or run `bash scripts/dev-install.sh`. Because the two do not share install
+> folder from KiroCrew's Apps page. Because the two do not share install
 > receipts, upgrade or uninstall the repositories 1.x installed from 1.x, and answer each intent's decisions in one
 > Studio only (each opens its own conversation). Progress and what changed: [`docs/plan.md`](docs/plan.md).
 
@@ -134,14 +134,10 @@ cd kirocrew-app-aidlc
 pwd
 ```
 
-Then either:
+Then in KiroCrew, **Discover → Add source → Install from Path**, paste the `pwd` output, **Install**, then
+**Library → AI-DLC Studio v2 → Enable** (grant trust to this app only if asked).
 
-- in KiroCrew, **Discover → Add source → Install from Path**, paste the `pwd` output, **Install**, then
-  **Library → AI-DLC Studio v2 → Enable** (grant trust to this app only if asked); or
-- run `bash scripts/dev-install.sh --no-build` in the clone. For a gateway other than the macOS desktop
-  app, set `KC_PY` to the gateway's Python and `KC_PORT` to its port.
-
-The repository includes the built UI, so neither needs Node.js or npm.
+The repository includes the built UI, so installing needs neither Node.js nor npm.
 
 ### 3. Check Bun from Studio
 
@@ -155,8 +151,8 @@ Open **AI-DLC Studio v2 → Settings → About → Bun executable**. It must sho
   includes; delete it to undo. A desktop-launched gateway gives conversations a `PATH` without
   `~/.bun/bin`, and without this link AI-DLC records no human turn and refuses every decision.
 
-To update later, `git pull --ff-only` in the clone, then **Library → AI-DLC Studio v2 → ⋯ → Sync** (or
-rerun the helper). See the [user guide](docs/user-guide.md#update-rebuild-or-uninstall-studio).
+To update later, `git pull --ff-only` in the clone, then **Library → AI-DLC Studio v2 → ⋯ → Sync**.
+See the [user guide](docs/user-guide.md#update-rebuild-or-uninstall-studio).
 
 ## First run
 

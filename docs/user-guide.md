@@ -110,7 +110,7 @@ You need Windows 10 version 2004 (build 19041) or newer, or Windows 11.
    Channels, first-run setup and upgrades are in
    [KiroCrew's install guide](https://github.com/kirodotdev/KiroCrew/blob/main/docs/guides/install.md).
 5. Continue with [Step 1](#step-1-install-studio-into-kirocrew) inside WSL: clone into the Linux file system (for
-   example `~/work`). With the helper script, set `KC_PY` to the Python that runs the gateway in WSL.
+   example `~/work`).
 6. Open `http://localhost:5476` in a Windows browser. WSL 2 forwards localhost ports to Windows by default. Then do
    [Step 2](#step-2-check-the-installation) as usual.
 
@@ -203,7 +203,7 @@ pwd
 ```
 
 `-b v2` matters: the repository's default branch, `main`, is the 1.x line. The repository includes the
-built UI, so none of the methods below needs Node.js or npm. Choose one.
+built UI, so installing needs neither Node.js nor npm.
 
 ### Option A: Install from Path in Discover (recommended)
 
@@ -228,35 +228,7 @@ built UI, so none of the methods below needs Node.js or npm. Choose one.
 
 The path must be a directory on the gateway's machine.
 
-### Option B: The helper script
-
-Use this from a terminal, inside a Docker container, or for a remote gateway. It needs Git, Bash, `curl`
-and the gateway's Python. In the clone, run:
-
-```bash
-bash scripts/dev-install.sh --no-build
-```
-
-The helper installs or updates this checkout in the **local running gateway**, grants trust to
-`aidlc-studio-v2` only, enables its backend, and prints hook and app health. The final health check
-should report `"status": "healthy"`.
-
-Its defaults match the KiroCrew desktop app on an Apple Silicon Mac: port `5476`, and the Python bundled
-in `/Applications/KiroCrew.app`. The Python it uses is `KC_PY` when set (a path, or a command name on
-`PATH`), otherwise that bundled Python when present, otherwise `python3` on `PATH`. On Linux, an Intel
-Mac, or a source or virtual-environment installation, point `KC_PY` at the **Python that runs your
-gateway**, and set `KC_PORT` if the gateway uses another port:
-
-```bash
-# Replace the interpreter path with your gateway's actual Python executable.
-KC_PY=/path/to/kirocrew/.venv/bin/python KC_PORT=5476 \
-  bash scripts/dev-install.sh --no-build
-```
-
-In the official KiroCrew Docker image, `python3` on `PATH` is the gateway's Python, so run the plain
-command inside the container.
-
-### Option C: The GitHub registry (installs 1.x, not v2)
+### Option B: The GitHub registry (installs 1.x, not v2)
 
 This repository is also an app registry, but its `app-registry.json` lists the `release` branch, which
 is the 1.x **AI-DLC Studio** (`aidlc-studio`). To install 1.x this way, add
@@ -725,9 +697,8 @@ Update when no Studio operation is running. Pull the new code into your clone fi
 git pull --ff-only
 ```
 
-- Installed from a path: **Library → AI-DLC Studio v2 → ⋯ → Sync**. KiroCrew re-syncs from the
-  directory and reloads the backend.
-- Installed with the helper: rerun `bash scripts/dev-install.sh --no-build`.
+Then use **Library → AI-DLC Studio v2 → ⋯ → Sync**. KiroCrew re-syncs from the directory and reloads the
+backend.
 
 A new Studio may bundle a newer AI-DLC. Repositories then show **Upgrade available** on the Repos page;
 upgrade each one when you choose.
@@ -737,11 +708,10 @@ upgrade each one when you choose.
 Only after editing the UI source. The locked Vite dependency needs Node.js `^20.19.0 || >=22.12.0`:
 
 ```bash
-(cd ui && npm ci)
-bash scripts/dev-install.sh       # builds ui/dist/index.mjs, then installs
+(cd ui && npm ci && npm run build)   # builds ui/dist/index.mjs
 ```
 
-`bash scripts/dev-install.sh --dev` also enables UI live reload.
+Then use **Library → AI-DLC Studio v2 → ⋯ → Sync**.
 
 ### Uninstall
 
@@ -760,10 +730,6 @@ make a safe uninstall possible are kept in Studio's own storage. Then use
 | "~/.local/bin is not on this gateway's conversation PATH" | Add Bun's directory to KiroCrew's agent environment (`agent.env` `PATH`) and restart the gateway |
 | Install from Path says `source is not a directory` | Use the absolute path of the clone on the gateway's machine (`pwd` in the clone) |
 | Enable in Library opens the app's details | Grant trust to AI-DLC Studio v2 there; click **Enable** again if needed |
-| Helper: `gateway Python not found` | Set `KC_PY` to the Python that runs the gateway |
-| Helper: `could not mint a token` | Check KiroCrew is running, `KC_PY` is its Python, and you are the user running it |
-| Helper: `cookie exchange failed` | Check `KC_PORT` matches the gateway, and that you are not reaching another KiroCrew instance |
-| Helper: `node` not found | Use `--no-build`; Node.js is needed only to rebuild the UI |
 | **New intent** cannot choose a repository | Install AI-DLC in it, or complete its install recovery, on the Repos page |
 | A decision is refused: "This intent has no conversation bound yet" | **Intents → Bind a conversation** |
 | "Another operation holds this repository" | Wait for the install, doctor or turn to finish, then send again. Nothing was sent |

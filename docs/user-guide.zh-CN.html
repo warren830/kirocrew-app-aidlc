@@ -187,8 +187,7 @@ WSL 里的 Gateway 和会话都用不到。</p>
 <p>版本选择、首次设置和升级，见 <a href="https://github.com/kirodotdev/KiroCrew/blob/main/docs/guides/install.md">KiroCrew 安装指南</a>。</p>
 </li>
 <li>
-<p>继续在 WSL 里做 <a href="#step-1">第 1 步</a>：把仓库克隆到 Linux 文件系统里（例如 <code>~/work</code>）。用安装脚本时，把 <code>KC_PY</code> 设为
-WSL 里运行 Gateway 的 Python。</p>
+<p>继续在 WSL 里做 <a href="#step-1">第 1 步</a>：把仓库克隆到 Linux 文件系统里（例如 <code>~/work</code>）。</p>
 </li>
 <li>
 <p>在 Windows 的浏览器里打开 <code>http://localhost:5476</code>。WSL 2 默认会把 localhost 端口转发给 Windows。然后照常做
@@ -255,8 +254,8 @@ KiroCrew 给每个会话的 <code>PATH</code> 本来就包含这两个目录。<
 cd kirocrew-app-aidlc
 pwd
 </code></pre>
-<p><code>-b v2</code> 不能省：仓库的默认分支 <code>main</code> 是 1.x 版本。仓库里已经带了构建好的 UI，下面几种方式都不需要 Node.js
-或 npm，任选其一。</p>
+<p><code>-b v2</code> 不能省：仓库的默认分支 <code>main</code> 是 1.x 版本。仓库里已经带了构建好的 UI，安装不需要 Node.js
+或 npm。</p>
 <h3>方式一：在 Discover 中从本地路径安装（推荐）</h3>
 <ol>
 <li>
@@ -280,22 +279,7 @@ pwd
 </li>
 </ol>
 <p>路径必须是 Gateway 所在机器上的目录。</p>
-<h3>方式二：使用安装脚本</h3>
-<p>适合命令行、Docker 容器或远程 Gateway，需要 Git、Bash、<code>curl</code> 和 Gateway 所用的 Python。在克隆目录中执行：</p>
-<pre><code class="language-bash">bash scripts/dev-install.sh --no-build
-</code></pre>
-<p>脚本会把当前代码安装或更新到<strong>本机正在运行的 Gateway</strong>，只为 <code>aidlc-studio-v2</code> 授予信任，启用后端，并输出
-hook 和应用的健康检查结果，最后应返回 <code>&quot;status&quot;: &quot;healthy&quot;</code>。</p>
-<p>默认配置对应 Apple Silicon Mac 上的 KiroCrew 桌面版：端口 <code>5476</code>，Python 用 <code>/Applications/KiroCrew.app</code>
-自带的。脚本选用 Python 的顺序是：设置了 <code>KC_PY</code> 就用它（可以是路径，也可以是 <code>PATH</code> 里的命令名）；否则若存在
-桌面版自带的 Python 就用它；否则用 <code>PATH</code> 里的 <code>python3</code>。Linux、Intel Mac、源码安装或虚拟环境安装时，把
-<code>KC_PY</code> 设为<strong>实际运行 Gateway 的 Python</strong>；端口不同时同时设置 <code>KC_PORT</code>：</p>
-<pre><code class="language-bash"># 将路径替换为当前 KiroCrew Gateway 实际使用的 Python。
-KC_PY=/path/to/kirocrew/.venv/bin/python KC_PORT=5476 \
-  bash scripts/dev-install.sh --no-build
-</code></pre>
-<p>官方 KiroCrew Docker 镜像里，<code>PATH</code> 中的 <code>python3</code> 就是 Gateway 的 Python，进入容器后直接执行上面不带变量的命令即可。</p>
-<h3>方式三：添加 GitHub registry（装的是 1.x，不是 v2）</h3>
+<h3>方式二：添加 GitHub registry（装的是 1.x，不是 v2）</h3>
 <p>本仓库本身也是一个应用 registry，但 <code>app-registry.json</code> 指向 <code>release</code> 分支，也就是 1.x 版
 <strong>AI-DLC Studio</strong>（<code>aidlc-studio</code>）。如需用这种方式安装 1.x：在 <strong>Discover → Add source → Add Registry</strong> 添加
 <code>https://github.com/warren830/kirocrew-app-aidlc</code>，分支填 <code>release</code>，然后在 <strong>Discover → AI-DLC Studio →
@@ -843,17 +827,13 @@ Studio 只读 Git：从不提交、推送、检出、stash 或 reset。</p>
 <p>请在没有 Studio 操作进行时更新。先在克隆目录里拉取新代码：</p>
 <pre><code class="language-bash">git pull --ff-only
 </code></pre>
-<ul>
-<li>从本地路径安装的：<strong>Library → AI-DLC Studio v2 → ⋯ → Sync</strong>，KiroCrew 会从原目录重新同步并重新加载后端。</li>
-<li>用安装脚本安装的：重新执行 <code>bash scripts/dev-install.sh --no-build</code>。</li>
-</ul>
+<p>然后 <strong>Library → AI-DLC Studio v2 → ⋯ → Sync</strong>，KiroCrew 会从原目录重新同步并重新加载后端。</p>
 <p>新版 Studio 可能内置更新的 AI-DLC，这时仓库页会显示 <strong>有可用升级</strong>，可以按需逐个升级。</p>
 <h3>重新构建 UI</h3>
 <p>只有修改了 UI 源码才需要。仓库锁定的 Vite 依赖要求 Node.js <code>^20.19.0 || &gt;=22.12.0</code>：</p>
-<pre><code class="language-bash">(cd ui &amp;&amp; npm ci)
-bash scripts/dev-install.sh       # 先构建 ui/dist/index.mjs，再安装
+<pre><code class="language-bash">(cd ui &amp;&amp; npm ci &amp;&amp; npm run build)   # 构建 ui/dist/index.mjs
 </code></pre>
-<p><code>bash scripts/dev-install.sh --dev</code> 会同时开启 UI 热重载。</p>
+<p>然后 <strong>Library → AI-DLC Studio v2 → ⋯ → Sync</strong>。</p>
 <h3>卸载</h3>
 <p>如果也想把 AI-DLC 从仓库中移除，请先在 <strong>仓库 → 卸载引擎</strong> 中操作：安全卸载所依赖的安装凭据保存在 Studio 自己的存储里。
 然后再 <strong>Library → AI-DLC Studio v2 → ⋯ → Uninstall</strong>。</p>
@@ -894,22 +874,6 @@ bash scripts/dev-install.sh       # 先构建 ui/dist/index.mjs，再安装
 <tr>
 <td>在 Library 点 Enable 后跳到应用详情</td>
 <td>在详情中为 AI-DLC Studio v2 授予信任；必要时再点一次 <strong>Enable</strong></td>
-</tr>
-<tr>
-<td>脚本报 <code>gateway Python not found</code></td>
-<td>把 <code>KC_PY</code> 设为实际运行 Gateway 的 Python</td>
-</tr>
-<tr>
-<td>脚本报 <code>could not mint a token</code></td>
-<td>确认 KiroCrew 已启动、<code>KC_PY</code> 是它的 Python，并由运行 Gateway 的同一用户执行</td>
-</tr>
-<tr>
-<td>脚本报 <code>cookie exchange failed</code></td>
-<td>确认 <code>KC_PORT</code> 与 Gateway 一致，没有连到另一套 KiroCrew</td>
-</tr>
-<tr>
-<td>脚本报找不到 <code>node</code></td>
-<td>使用 <code>--no-build</code>；只有重新构建 UI 才需要 Node.js</td>
 </tr>
 <tr>
 <td><strong>新建意图</strong> 里选不了某个仓库</td>

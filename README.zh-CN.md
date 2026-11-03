@@ -10,7 +10,7 @@ AI-DLC 自己的会话送回去，从不绕过它。
 
 > **这是 v2 分支（2.0.0 测试版）。** 功能与 1.x 相同，后端代码少了 40%，需要 KiroCrew 0.8+。
 > 它以 **AI-DLC Studio v2**（`aidlc-studio-v2`）的名字与 1.x 并排安装，用自己的数据库：在 KiroCrew 的应用页
-> 直接从这个文件夹安装，或运行 `bash scripts/dev-install.sh`。两者不共享安装凭据，所以 1.x 装过的仓库
+> 直接从这个文件夹安装。两者不共享安装凭据，所以 1.x 装过的仓库
 > 请在 1.x 里升级或卸载；同一个 intent 的决定只在一个 Studio 里回答（各自会开自己的会话）。进展与改动见
 > [`docs/plan.md`](docs/plan.md)。
 
@@ -108,8 +108,6 @@ pwd
 1. **Discover → Add source**，把上面的路径填入 **Install from Path**，点 **Install**。
 2. **Library → AI-DLC Studio v2 → Enable**。如果提示授予信任，只为这个应用授予即可。
 
-不方便用界面时，也可以在克隆目录中执行 `bash scripts/dev-install.sh --no-build`。
-
 ### 3. 在 Studio 里确认 Bun
 
 打开 **AI-DLC Studio v2 → 设置 → 关于 → Bun 可执行文件**，必须显示 Bun 的路径和版本，以及 **AI-DLC 对话可以运行 Bun**：
@@ -125,7 +123,7 @@ pwd
 3. **新建意图**：依次完成「工作、预设、计划、复核」四步。创建时不会运行任何东西。
 4. 在 **意图** 页点 **绑定会话 → 创建会话并继续运行**。工作流跑到第一个需要你决定的地方时，它会出现在待办中心。
 
-完整的安装方式（安装脚本、Docker、GitHub registry）、安装后检查、逐页功能说明和常见问题，见
+完整的安装方式（本地路径、Docker、GitHub registry）、安装后检查、逐页功能说明和常见问题，见
 [使用指南](docs/user-guide.zh-CN.md)。
 
 ## 文档

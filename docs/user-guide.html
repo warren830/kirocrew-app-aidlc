@@ -193,7 +193,7 @@ same Linux user:</p>
 </li>
 <li>
 <p>Continue with <a href="#step-1-install-studio-into-kirocrew">Step 1</a> inside WSL: clone into the Linux file system (for
-example <code>~/work</code>). With the helper script, set <code>KC_PY</code> to the Python that runs the gateway in WSL.</p>
+example <code>~/work</code>).</p>
 </li>
 <li>
 <p>Open <code>http://localhost:5476</code> in a Windows browser. WSL 2 forwards localhost ports to Windows by default. Then do
@@ -263,7 +263,7 @@ cd kirocrew-app-aidlc
 pwd
 </code></pre>
 <p><code>-b v2</code> matters: the repository's default branch, <code>main</code>, is the 1.x line. The repository includes the
-built UI, so none of the methods below needs Node.js or npm. Choose one.</p>
+built UI, so installing needs neither Node.js nor npm.</p>
 <h3>Option A: Install from Path in Discover (recommended)</h3>
 <ol>
 <li>
@@ -290,26 +290,7 @@ trust is not needed.</p>
 </li>
 </ol>
 <p>The path must be a directory on the gateway's machine.</p>
-<h3>Option B: The helper script</h3>
-<p>Use this from a terminal, inside a Docker container, or for a remote gateway. It needs Git, Bash, <code>curl</code>
-and the gateway's Python. In the clone, run:</p>
-<pre><code class="language-bash">bash scripts/dev-install.sh --no-build
-</code></pre>
-<p>The helper installs or updates this checkout in the <strong>local running gateway</strong>, grants trust to
-<code>aidlc-studio-v2</code> only, enables its backend, and prints hook and app health. The final health check
-should report <code>&quot;status&quot;: &quot;healthy&quot;</code>.</p>
-<p>Its defaults match the KiroCrew desktop app on an Apple Silicon Mac: port <code>5476</code>, and the Python bundled
-in <code>/Applications/KiroCrew.app</code>. The Python it uses is <code>KC_PY</code> when set (a path, or a command name on
-<code>PATH</code>), otherwise that bundled Python when present, otherwise <code>python3</code> on <code>PATH</code>. On Linux, an Intel
-Mac, or a source or virtual-environment installation, point <code>KC_PY</code> at the <strong>Python that runs your
-gateway</strong>, and set <code>KC_PORT</code> if the gateway uses another port:</p>
-<pre><code class="language-bash"># Replace the interpreter path with your gateway's actual Python executable.
-KC_PY=/path/to/kirocrew/.venv/bin/python KC_PORT=5476 \
-  bash scripts/dev-install.sh --no-build
-</code></pre>
-<p>In the official KiroCrew Docker image, <code>python3</code> on <code>PATH</code> is the gateway's Python, so run the plain
-command inside the container.</p>
-<h3>Option C: The GitHub registry (installs 1.x, not v2)</h3>
+<h3>Option B: The GitHub registry (installs 1.x, not v2)</h3>
 <p>This repository is also an app registry, but its <code>app-registry.json</code> lists the <code>release</code> branch, which
 is the 1.x <strong>AI-DLC Studio</strong> (<code>aidlc-studio</code>). To install 1.x this way, add
 <code>https://github.com/warren830/kirocrew-app-aidlc</code> with branch <code>release</code> in <strong>Discover → Add source →
@@ -927,19 +908,15 @@ from a phone. Registering a repository and installing, upgrading or recovering A
 <p>Update when no Studio operation is running. Pull the new code into your clone first:</p>
 <pre><code class="language-bash">git pull --ff-only
 </code></pre>
-<ul>
-<li>Installed from a path: <strong>Library → AI-DLC Studio v2 → ⋯ → Sync</strong>. KiroCrew re-syncs from the
-directory and reloads the backend.</li>
-<li>Installed with the helper: rerun <code>bash scripts/dev-install.sh --no-build</code>.</li>
-</ul>
+<p>Then use <strong>Library → AI-DLC Studio v2 → ⋯ → Sync</strong>. KiroCrew re-syncs from the directory and reloads the
+backend.</p>
 <p>A new Studio may bundle a newer AI-DLC. Repositories then show <strong>Upgrade available</strong> on the Repos page;
 upgrade each one when you choose.</p>
 <h3>Rebuild the UI</h3>
 <p>Only after editing the UI source. The locked Vite dependency needs Node.js <code>^20.19.0 || &gt;=22.12.0</code>:</p>
-<pre><code class="language-bash">(cd ui &amp;&amp; npm ci)
-bash scripts/dev-install.sh       # builds ui/dist/index.mjs, then installs
+<pre><code class="language-bash">(cd ui &amp;&amp; npm ci &amp;&amp; npm run build)   # builds ui/dist/index.mjs
 </code></pre>
-<p><code>bash scripts/dev-install.sh --dev</code> also enables UI live reload.</p>
+<p>Then use <strong>Library → AI-DLC Studio v2 → ⋯ → Sync</strong>.</p>
 <h3>Uninstall</h3>
 <p>To remove AI-DLC from a repository too, use <strong>Repos → Uninstall harness</strong> first: the install receipts that
 make a safe uninstall possible are kept in Studio's own storage. Then use
@@ -980,22 +957,6 @@ make a safe uninstall possible are kept in Studio's own storage. Then use
 <tr>
 <td>Enable in Library opens the app's details</td>
 <td>Grant trust to AI-DLC Studio v2 there; click <strong>Enable</strong> again if needed</td>
-</tr>
-<tr>
-<td>Helper: <code>gateway Python not found</code></td>
-<td>Set <code>KC_PY</code> to the Python that runs the gateway</td>
-</tr>
-<tr>
-<td>Helper: <code>could not mint a token</code></td>
-<td>Check KiroCrew is running, <code>KC_PY</code> is its Python, and you are the user running it</td>
-</tr>
-<tr>
-<td>Helper: <code>cookie exchange failed</code></td>
-<td>Check <code>KC_PORT</code> matches the gateway, and that you are not reaching another KiroCrew instance</td>
-</tr>
-<tr>
-<td>Helper: <code>node</code> not found</td>
-<td>Use <code>--no-build</code>; Node.js is needed only to rebuild the UI</td>
 </tr>
 <tr>
 <td><strong>New intent</strong> cannot choose a repository</td>

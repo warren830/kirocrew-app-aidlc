@@ -106,8 +106,7 @@ KiroCrew，先退出它：两边默认都用 5476 端口。
    ```
 
    版本选择、首次设置和升级，见 [KiroCrew 安装指南](https://github.com/kirodotdev/KiroCrew/blob/main/docs/guides/install.md)。
-5. 继续在 WSL 里做 [第 1 步](#step-1)：把仓库克隆到 Linux 文件系统里（例如 `~/work`）。用安装脚本时，把 `KC_PY` 设为
-   WSL 里运行 Gateway 的 Python。
+5. 继续在 WSL 里做 [第 1 步](#step-1)：把仓库克隆到 Linux 文件系统里（例如 `~/work`）。
 6. 在 Windows 的浏览器里打开 `http://localhost:5476`。WSL 2 默认会把 localhost 端口转发给 Windows。然后照常做
    [第 2 步](#step-2)。
 
@@ -199,8 +198,8 @@ cd kirocrew-app-aidlc
 pwd
 ```
 
-`-b v2` 不能省：仓库的默认分支 `main` 是 1.x 版本。仓库里已经带了构建好的 UI，下面几种方式都不需要 Node.js
-或 npm，任选其一。
+`-b v2` 不能省：仓库的默认分支 `main` 是 1.x 版本。仓库里已经带了构建好的 UI，安装不需要 Node.js
+或 npm。
 
 ### 方式一：在 Discover 中从本地路径安装（推荐）
 
@@ -222,31 +221,7 @@ pwd
 
 路径必须是 Gateway 所在机器上的目录。
 
-### 方式二：使用安装脚本
-
-适合命令行、Docker 容器或远程 Gateway，需要 Git、Bash、`curl` 和 Gateway 所用的 Python。在克隆目录中执行：
-
-```bash
-bash scripts/dev-install.sh --no-build
-```
-
-脚本会把当前代码安装或更新到**本机正在运行的 Gateway**，只为 `aidlc-studio-v2` 授予信任，启用后端，并输出
-hook 和应用的健康检查结果，最后应返回 `"status": "healthy"`。
-
-默认配置对应 Apple Silicon Mac 上的 KiroCrew 桌面版：端口 `5476`，Python 用 `/Applications/KiroCrew.app`
-自带的。脚本选用 Python 的顺序是：设置了 `KC_PY` 就用它（可以是路径，也可以是 `PATH` 里的命令名）；否则若存在
-桌面版自带的 Python 就用它；否则用 `PATH` 里的 `python3`。Linux、Intel Mac、源码安装或虚拟环境安装时，把
-`KC_PY` 设为**实际运行 Gateway 的 Python**；端口不同时同时设置 `KC_PORT`：
-
-```bash
-# 将路径替换为当前 KiroCrew Gateway 实际使用的 Python。
-KC_PY=/path/to/kirocrew/.venv/bin/python KC_PORT=5476 \
-  bash scripts/dev-install.sh --no-build
-```
-
-官方 KiroCrew Docker 镜像里，`PATH` 中的 `python3` 就是 Gateway 的 Python，进入容器后直接执行上面不带变量的命令即可。
-
-### 方式三：添加 GitHub registry（装的是 1.x，不是 v2）
+### 方式二：添加 GitHub registry（装的是 1.x，不是 v2）
 
 本仓库本身也是一个应用 registry，但 `app-registry.json` 指向 `release` 分支，也就是 1.x 版
 **AI-DLC Studio**（`aidlc-studio`）。如需用这种方式安装 1.x：在 **Discover → Add source → Add Registry** 添加
@@ -659,8 +634,7 @@ Studio 没有无人值守模式。对 AI-DLC 来说，任何往会话里发文�
 git pull --ff-only
 ```
 
-- 从本地路径安装的：**Library → AI-DLC Studio v2 → ⋯ → Sync**，KiroCrew 会从原目录重新同步并重新加载后端。
-- 用安装脚本安装的：重新执行 `bash scripts/dev-install.sh --no-build`。
+然后 **Library → AI-DLC Studio v2 → ⋯ → Sync**，KiroCrew 会从原目录重新同步并重新加载后端。
 
 新版 Studio 可能内置更新的 AI-DLC，这时仓库页会显示 **有可用升级**，可以按需逐个升级。
 
@@ -669,11 +643,10 @@ git pull --ff-only
 只有修改了 UI 源码才需要。仓库锁定的 Vite 依赖要求 Node.js `^20.19.0 || >=22.12.0`：
 
 ```bash
-(cd ui && npm ci)
-bash scripts/dev-install.sh       # 先构建 ui/dist/index.mjs，再安装
+(cd ui && npm ci && npm run build)   # 构建 ui/dist/index.mjs
 ```
 
-`bash scripts/dev-install.sh --dev` 会同时开启 UI 热重载。
+然后 **Library → AI-DLC Studio v2 → ⋯ → Sync**。
 
 ### 卸载
 
@@ -693,10 +666,6 @@ bash scripts/dev-install.sh       # 先构建 ui/dist/index.mjs，再安装
 | 提示“~/.local/bin 不在本 gateway 的对话 PATH 里” | 把 Bun 所在目录加入 KiroCrew 的 agent 环境（`agent.env` 的 `PATH`），然后重启 Gateway |
 | Install from Path 提示 `source is not a directory` | 填写 Gateway 机器上克隆目录的绝对路径（在克隆目录中运行 `pwd`） |
 | 在 Library 点 Enable 后跳到应用详情 | 在详情中为 AI-DLC Studio v2 授予信任；必要时再点一次 **Enable** |
-| 脚本报 `gateway Python not found` | 把 `KC_PY` 设为实际运行 Gateway 的 Python |
-| 脚本报 `could not mint a token` | 确认 KiroCrew 已启动、`KC_PY` 是它的 Python，并由运行 Gateway 的同一用户执行 |
-| 脚本报 `cookie exchange failed` | 确认 `KC_PORT` 与 Gateway 一致，没有连到另一套 KiroCrew |
-| 脚本报找不到 `node` | 使用 `--no-build`；只有重新构建 UI 才需要 Node.js |
 | **新建意图** 里选不了某个仓库 | 到仓库页给它安装 AI-DLC，或完成安装恢复 |
 | 决定被拒绝：“该意图尚未绑定会话” | **意图 → 绑定会话** |
 | 提示“另一操作正占用该仓库” | 等安装、doctor 或回合结束后重新发送。没有任何内容被发出 |
