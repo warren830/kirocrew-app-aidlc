@@ -393,7 +393,7 @@ CLOSED_CONTENT_SHA = "57380ab3e835228c56dae5993bc4dceab9993a4b7ea0cbeafd41bef535
 CLOSED_AT = "2026-09-04T09:59:10Z"
 
 
-def closed_sheet_receipt(scene, timestamp=CLOSED_AT, *, scope="confirmed-content-v1", **fields):
+def closed_sheet_receipt(scene, timestamp=CLOSED_AT, *, scope="confirmed-content-v2", **fields):
     values = {"Stage": STAGE, "Details": "Looks correct", "Checkpoint": "Consolidated Summary Confirmation",
               "Questions File": str((_record_dir(scene.root) / QUESTIONS_REL).relative_to(scene.root)),
               "Questions SHA-256": CLOSED_CONTENT_SHA if scope else CLOSED_SHEET_SHA}
@@ -402,7 +402,7 @@ def closed_sheet_receipt(scene, timestamp=CLOSED_AT, *, scope="confirmed-content
     return F.audit_block("SUMMARY_CONFIRMATION_RECORDED", timestamp, **{**values, **fields})
 
 
-def install_closed_sheet(scene, *, scope="confirmed-content-v1"):
+def install_closed_sheet(scene, *, scope="confirmed-content-v2"):
     path = write_questions(scene, ANSWERED_H3_QUESTIONS)
     assert F.sha256(ANSWERED_H3_QUESTIONS) == CLOSED_SHEET_SHA
     rewrite_audit(scene, closed_sheet_receipt(scene, scope=scope), decision())
@@ -428,7 +428,8 @@ def assert_not_audit_owned(questions):
     assert questions is None or questions.origin is None
 
 
-@pytest.mark.parametrize("scope", ["confirmed-content-v1", None], ids=["scoped", "legacy_whole_file"])
+@pytest.mark.parametrize("scope", ["confirmed-content-v2", "confirmed-content-v1", None],
+                         ids=["scoped", "scoped_v1", "legacy_whole_file"])
 def test_closed_sheet_yields_to_newer_audit_through_api_submit_and_reconcile(sv, routes, fake_host, scene, scope):
     path = install_closed_sheet(scene, scope=scope)
     original = _tree_digest(scene.root)
@@ -457,7 +458,7 @@ def test_closed_sheet_scoped_hash_uses_engine_normalization(closed_sheet_scene, 
 
 @pytest.mark.parametrize("fields", [
     {"Questions File": "another-intent/requirements-analysis-questions.md"}, {"Questions SHA-256": "0" * 64},
-    {"Questions SHA-256": CLOSED_SHEET_SHA}, {"Hash Scope": "unknown-v2"}, {"Details": "Request changes"},
+    {"Questions SHA-256": CLOSED_SHEET_SHA}, {"Hash Scope": "confirmed-content-v3"}, {"Details": "Request changes"},
     {"Checkpoint": "Plan Approval"}, {"Stage": "user-stories"}, {"Unit": "unit-other"},
     {"Workflow": f"single-stage:{STAGE}"}, {"Attempt Generation": "2"},
 ])
@@ -1621,3 +1622,13 @@ def test_a_turn_that_ends_asking_something_else_settles_the_unrecorded_answer(sv
     [reply] = _queue(sv, routes, fake_host)
     assert (reply["type"], reply["headline"]["params"]["reason"]) == ("missing_input", "conversation_reply")
     assert reply["headline"]["params"]["options"] == options
+
+
+def test_summary_hash_scopes_mirror_the_bundled_engine(C):
+    """The 2.11 engine writes confirmed-content-v2. Missing it, every stage with a summary confirmation kept its
+    answered sheet in charge, and the learnings ritual asked after it reached the queue only as a conversation reply
+    built from the chat's quick replies (local-s3, 2026-11-03)."""
+    lib = (Path(__file__).resolve().parent.parent / "payload" / "aidlc-kiro" / ".kiro" / "tools" / "aidlc-lib.ts").read_text("utf-8")
+    current = re.search(r'SUMMARY_CONFIRMATION_HASH_SCOPE = "([^"]+)"', lib).group(1)
+    legacy = re.findall(r'"([^"]+)"', re.search(r"LEGACY_SUMMARY_CONFIRMATION_HASH_SCOPES[^=]*= \[([^\]]*)\]", lib).group(1))
+    assert set(C.SUMMARY_CONFIRMATION_HASH_SCOPES) == {current, *legacy}

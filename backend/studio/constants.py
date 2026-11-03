@@ -388,6 +388,10 @@ OTHER_OPTION_LETTER = "X"
 ANSWER_CONTINUATION_RE = re.compile(r"^- (.*)$")
 #: Checkpoint headings: the reader maps a heading to a checkpoint kind and the pattern below matches it.
 SUMMARY_CONFIRMATION_HEADING = "Consolidated Summary Confirmation"
+# The Hash Scope values a summary-confirmation receipt can carry (aidlc-lib.ts SUMMARY_CONFIRMATION_HASH_SCOPE and
+# LEGACY_SUMMARY_CONFIRMATION_HASH_SCOPES). The engine checks both under its current Markdown semantics, which differ
+# from v1 only for raw HTML; Studio compares the trimmed file, so a file where they differ fails closed.
+SUMMARY_CONFIRMATION_HASH_SCOPES = ("confirmed-content-v2", "confirmed-content-v1")
 #: The intent's own setting for that checkpoint, under ``## Scope Configuration``: ``on (from scope feature)``,
 #: ``off (set by you)``, ``on (set by a command)``. The engine writes it and reads only its value (2.11
 #: ``CEREMONY_FIELDS``, ``parseCeremonyStateLine``); an environment kill switch can still force it off unrecorded.

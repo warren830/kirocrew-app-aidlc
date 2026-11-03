@@ -1562,7 +1562,7 @@ def _closed_question_receipts(
         scope = receipt.fields.get("Hash Scope")
         if scope is None:
             digest = found.sha256
-        elif scope == "confirmed-content-v1" and event_name == "SUMMARY_CONFIRMATION_RECORDED":
+        elif scope in C.SUMMARY_CONFIRMATION_HASH_SCOPES and event_name == "SUMMARY_CONFIRMATION_RECORDED":
             digest = receipt.fields.get("Questions SHA-256")
             if digest not in confirmed_digests:
                 return None
@@ -1597,7 +1597,7 @@ _CONFIRMED_CONTENT_TRAILING = (
 
 
 def _confirmed_content(normalized: str) -> str:
-    """The engine's confirmed-content-v1 input: newline-normalized, ECMAScript trailing trim."""
+    """The engine's confirmed-content input: newline-normalized, ECMAScript trailing trim."""
     return normalized.rstrip(_CONFIRMED_CONTENT_TRAILING)
 
 
