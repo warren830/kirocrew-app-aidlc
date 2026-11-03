@@ -14,14 +14,18 @@
 
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider, makeI18n } from '../i18n'
 import { apiCalls, setApiRoutes, StubApiError, type RouteHandler } from '../test/stubs/app-sdk'
 import { EMPTY_ROUTE, type RoutePatch } from '../lib/route'
-import type { AdvisorDraft, EffectivePlan, HealthResponse, PlanProposal, PlanRequest, PlanStage, ReposResponse } from '../lib/types'
+import type {
+  AdvisorDraft, EffectivePlan, HealthResponse, PlanProposal, PlanRequest, PlanStage, ReposResponse, SettingsResponse,
+} from '../lib/types'
 import type { Resource } from '../lib/useResource'
-import { EMPTY_WIZARD, canonicalJson, planDigest, sha256Hex, slugifyObjective, WizardView } from './WizardView'
+import {
+  EMPTY_WIZARD, canonicalJson, planBody, planDigest, sha256Hex, slugifyObjective, summaryFlagSupported, WizardView,
+} from './WizardView'
 import { StepWork } from './StepWork'
 
 /**
@@ -55,6 +59,9 @@ const HEALTH = {
 
 export const navigated: RoutePatch[] = []
 
+/** What `useShellData().settings` answers; `null` (unread) unless a test sets it. */
+let shellSettings: SettingsResponse | null = null
+
 function resource<T>(data: T | null): Resource<T> {
   return { data, error: null, loading: false, stale: false, refresh: async () => {}, refetch: async () => {} }
 }
@@ -69,7 +76,7 @@ vi.mock('../shell/StudioApp', async () => {
       repos: resource(REPOS),
       health: resource(HEALTH),
       actions: resource(null),
-      settings: resource(null),
+      settings: resource(shellSettings),
       setQueueCount: () => {},
     }),
   }
@@ -1558,5 +1565,82 @@ describe('the Work step when bun was not found', () => {
     expect(banner).toHaveTextContent('bun was not found on PATH or in the usual install locations')
     expect(banner).toHaveTextContent('Install bun, or start KiroCrew from a shell whose PATH has bun.')
     expect(screen.queryByText(/Studio looked in:/)).not.toBeInTheDocument()
+  })
+})
+
+
+// ---- summary confirmation at creation ---- //
+
+describe('summary confirmation at creation', () => {
+  const repo = REPOS.repos[0] as unknown as { installed_engine_version?: string | null }
+  const group = () => screen.queryByRole('group', { name: 'Summary confirmation' })
+  const creates = () => apiCalls.filter((call) => call.method === 'POST' && call.path === `${BASE}/repos/r_1/intents`)
+  const withDefault = (value: 'scope' | 'on' | 'off') => {
+    shellSettings = {
+      settings: { advisor: { enabled: false }, new_intent: { summary_confirmation: value } },
+      capabilities: { advisor: { available: false, reason: null } },
+    } as unknown as SettingsResponse
+  }
+
+  afterEach(() => {
+    delete repo.installed_engine_version
+    shellSettings = null
+  })
+
+  it('is taken only by engines from 2.10 on, and an unreadable version is not new enough', () => {
+    const at = (version: string | null) => summaryFlagSupported({ installed_engine_version: version } as never)
+    expect([at('2.10.0'), at('2.11.0'), at('3.0'), at('2.10.0-beta.1')]).toEqual([true, true, true, true])
+    expect([at('2.9.9'), at('2.7.1'), at('2.6.2'), at(null), at(''), at('next')]).toEqual([false, false, false, false, false, false])
+    expect(summaryFlagSupported(null)).toBe(false)
+  })
+
+  it('leaves the request as it was when the scope decides', () => {
+    expect(planBody({ ...EMPTY_WIZARD, scope: 'feature' }, 'default', false)).not.toHaveProperty('summary_confirmation')
+    expect(planBody({ ...EMPTY_WIZARD, scope: 'feature', summaryConfirmation: 'off' }, 'default', false))
+      .toMatchObject({ summary_confirmation: 'off' })
+  })
+
+  it('is not offered, and nothing is sent, where the engine cannot take it', async () => {
+    withDefault('off')  // even with a standing default: the repository's AI-DLC is 2.6.2
+    installRoutes()
+    mount()
+    await toPreset()
+    await pickScope('feature')
+    expect(group()).not.toBeInTheDocument()
+    await continueToCreate()
+    await waitFor(() => expect(creates()).toHaveLength(1))
+    expect(creates()[0]?.body).not.toHaveProperty('summary_confirmation')
+  })
+
+  it('starts from the Settings default and sends it with the preview and with Create', async () => {
+    repo.installed_engine_version = '2.11.0'
+    withDefault('off')
+    installRoutes({ [`POST ${PREVIEW}`]: previewWith(() => ({ meta: { summary_confirmation: 'on' } })) })
+    mount()
+    await toPreset()
+    await pickScope('feature')
+    const row = group()
+    expect(row).toBeInTheDocument()
+    expect(within(row as HTMLElement).getByRole('button', { name: /^Off/ })).toHaveAttribute('aria-pressed', 'true')
+    // "From the scope" names what the scope would do, so turning it off is a visible change from that.
+    await waitFor(() =>
+      expect(within(row as HTMLElement).getByRole('button', { name: /^From the scope/ })).toHaveTextContent('The scope asks for On.'))
+    await waitFor(() => expect(previewBodies().at(-1)).toMatchObject({ summary_confirmation: 'off' }))
+    await continueToCreate()
+    await waitFor(() => expect(creates()).toHaveLength(1))
+    expect(creates()[0]?.body).toMatchObject({ summary_confirmation: 'off' })
+  })
+
+  it('sends nothing once the person hands it back to the scope', async () => {
+    repo.installed_engine_version = '2.11.0'
+    withDefault('off')
+    installRoutes()
+    mount()
+    await toPreset()
+    await pickScope('feature')
+    await userEvent.click(within(group() as HTMLElement).getByRole('button', { name: /^From the scope/ }))
+    await continueToCreate()
+    await waitFor(() => expect(creates()).toHaveLength(1))
+    expect(creates()[0]?.body).not.toHaveProperty('summary_confirmation')
   })
 })

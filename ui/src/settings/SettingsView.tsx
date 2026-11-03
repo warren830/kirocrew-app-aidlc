@@ -30,6 +30,7 @@ import { AdvisorSetting } from './AdvisorSetting'
 import { AutomationSetting } from './AutomationSetting'
 import { DiagnosticsSetting } from './DiagnosticsSetting'
 import { LocaleSetting } from './LocaleSetting'
+import { NewIntentSetting } from './NewIntentSetting'
 import { QueueSetting } from './QueueSetting'
 import { SlackSetting } from './SlackSetting'
 
@@ -286,13 +287,17 @@ export function SettingsView({ go }: SettingsViewProps) {
               <QueueSetting control={control} />
             </SettingsSection>
 
+            <SettingsSection title={t('settings.section.newIntent')}>
+              <NewIntentSetting control={control} />
+            </SettingsSection>
+
             <SettingsSection title={t('settings.section.automation')}>
               <AutomationSetting control={control} />
             </SettingsSection>
 
             <SettingsSection title={t('settings.section.advisor')}>
               {/* `null`, not `[]`: an unread list must not make every live grant look orphaned. */}
-              <AdvisorSetting control={control} repos={repos.data?.repos ?? null} />
+              <AdvisorSetting api={api} control={control} repos={repos.data?.repos ?? null} />
             </SettingsSection>
 
             <SettingsSection title={t('settings.section.notifications')}>

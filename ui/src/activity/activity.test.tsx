@@ -81,9 +81,10 @@ const SETTINGS: SettingsResponse = {
     slack: { enabled: false, muted_repo_ids: [] },
     diagnostics: { retention_days: 30, export_include_human_text: false },
     human_text_retention_days: 30,
-    advisor: { enabled: true, auto_draft_repo_ids: [] },
+    advisor: { enabled: true, auto_draft_repo_ids: [], model: '' },
     installer: { run_doctor_after_install: false },
     notifications: { dashboard: true },
+    new_intent: { summary_confirmation: 'scope' },
   },
   capabilities: {
     slack: { available: true, reason: null },

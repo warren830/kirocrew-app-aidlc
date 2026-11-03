@@ -1,0 +1,10 @@
+{
+  "model.notListed": "{model}（你的账号目前不提供）",
+  "model.unavailable": "模型列表不可用",
+  "model.effort.inherit": "默认",
+  "model.effort.low": "低",
+  "model.effort.medium": "中",
+  "model.effort.high": "高",
+  "model.effort.xhigh": "很高",
+  "model.effort.max": "最高"
+}

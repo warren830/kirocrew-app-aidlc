@@ -549,6 +549,59 @@ def test_create_intent_runs_one_verb_verifies_disk_and_starts_nothing(studio, P,
     assert result.summary.operational_state == "Idle"
 
 
+@pytest.fixture
+def current_repo(studio, deps, repo_builder):
+    """``fresh_repo`` on an engine whose ``intent-create`` takes the per-work summary-confirmation switch."""
+    return repo_row(studio, deps.store, repo_builder.with_engine("payload").with_workspace().build(),
+                    engine_version="2.11.0")
+
+
+@pytest.mark.parametrize("value", ["off", "on"])
+def test_create_intent_passes_a_summary_confirmation_choice_to_the_engine(P, deps, current_repo, value):
+    result = run(deps.svc.create_intent(current_repo, request(P, "poc", summary_confirmation=value)))
+    argv = list(result.engine.argv)
+    assert argv[argv.index("--summary-confirmation") + 1] == value
+    # The record says what was asked, so "who turned it off" has an answer later.
+    created = [row for row in deps.store.select("activity") if row["kind"] == "intent.created"]
+    assert [row["params_json"]["summary_confirmation"] for row in created] == [value]
+
+
+def test_create_intent_sends_no_summary_flag_when_the_scope_decides(P, deps, current_repo):
+    result = run(deps.svc.create_intent(current_repo, request(P, "poc")))
+    assert "--summary-confirmation" not in list(result.engine.argv)
+
+
+@pytest.mark.parametrize("version", ["2.6.2", "2.7.1", None, "unknown"])
+def test_create_intent_refuses_a_summary_choice_an_older_engine_would_not_take(
+    studio, P, deps, repo_builder, errors, version,
+):
+    repo = repo_row(studio, deps.store, repo_builder.with_engine("payload").with_workspace().build(),
+                    engine_version=version)
+    with pytest.raises(errors.StudioError) as excinfo:
+        run(deps.svc.create_intent(repo, request(P, "poc", summary_confirmation="off")))
+    assert excinfo.value.code == "bad_param"
+    assert excinfo.value.details["reason"] == "engine_too_old"
+    nothing_created(deps, repo)
+
+
+def test_a_summary_choice_is_on_off_or_absent(P, errors):
+    with pytest.raises(errors.StudioError) as excinfo:
+        request(P, summary_confirmation="maybe")
+    assert excinfo.value.code == "bad_body"
+    # Absent stays absent on the wire, so every plan digest computed before the field existed still matches.
+    assert "summary_confirmation" not in request(P).to_json()
+    assert request(P, summary_confirmation="off").to_json()["summary_confirmation"] == "off"
+
+
+def test_turning_summary_confirmation_off_takes_its_turns_out_of_the_estimate(P, deps, current_repo):
+    engine_dir = deps.svc.engine_dir(current_repo, None)
+    asked = deps.svc.effective_plan(current_repo, engine_dir, request(P, "feature"))
+    off = deps.svc.effective_plan(current_repo, engine_dir, request(P, "feature", summary_confirmation="off"))
+    assert off.stages == asked.stages and off.exact == asked.exact  # the plan itself does not change
+    assert off.estimate.to_json() != asked.estimate.to_json()
+    assert off.digest() != asked.digest()  # what Create confirms includes the choice
+
+
 def test_create_intent_releases_the_admin_lease_and_records_it(studio, P, deps, fresh_repo):
     run(deps.svc.create_intent(fresh_repo, request(P, "poc")))
     assert run(deps.scheduler.get(IDENTITY)) is None

@@ -385,6 +385,14 @@ def test_the_spawn_uses_the_apps_own_agent_and_is_silent(wiring, A):
     assert draft.to_json()["status"] == "running"
 
 
+def test_the_spawn_names_the_model_the_person_picked_and_only_that_one(wiring, A):
+    """No pick leaves the host's own resolution standing (asserted above); a pick is passed verbatim."""
+    wiring.store.pref_set("settings", {"values": {"advisor": {"model": "claude-sonnet-5.5"}}, "updated_at": NOW})
+    wiring.settings.load()
+    request_draft(wiring, A)
+    assert [call["model"] for call in wiring.ctx.spawn.spawned] == ["claude-sonnet-5.5"]
+
+
 def test_no_spawn_seam_is_advisor_unavailable_and_writes_no_draft(wiring, A, E):
     wiring.ctx.spawn = None
     with pytest.raises(E.StudioError) as excinfo:

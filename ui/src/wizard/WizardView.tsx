@@ -57,6 +57,26 @@ export const WIZARD_STEPS = ['work', 'preset', 'plan', 'review'] as const
 export type WizardStep = (typeof WIZARD_STEPS)[number]
 
 export type ReviewCap = 'none' | 'advisory' | 'adversarial'
+export type SummaryChoice = 'on' | 'off'
+
+/**
+ * The first engine whose `intent-create` takes `--summary-confirmation` (2.7.1 has no per-work ceremony
+ * switches; 2.10.0 does). The backend refuses the flag below it, so the choice is not offered there.
+ */
+const SUMMARY_FLAG_MIN_ENGINE = [2, 10] as const
+
+/** Whether this repository's installed AI-DLC can take a summary-confirmation choice at creation. */
+export function summaryFlagSupported(repo: RepoRecord | null): boolean {
+  const parts = (repo?.installed_engine_version ?? '').split('.').map((chunk) => /^\d+/.exec(chunk)?.[0])
+  if (parts.length === 0 || parts.some((part) => part === undefined)) return false
+  const version = parts.map(Number)
+  for (let i = 0; i < SUMMARY_FLAG_MIN_ENGINE.length; i += 1) {
+    const have = version[i] ?? 0
+    const need = SUMMARY_FLAG_MIN_ENGINE[i] ?? 0
+    if (have !== need) return have > need
+  }
+  return true
+}
 
 export interface WizardState {
   repo: string
@@ -69,6 +89,8 @@ export interface WizardState {
   depth: PlanDepth
   testStrategy: PlanDepth | null
   reviewCap: ReviewCap | null
+  /** AI-DLC's per-stage summary confirmation for this work; `null` sends nothing, so the scope's default applies. */
+  summaryConfirmation: SummaryChoice | null
   /** Only the stages the user moved away from the scope's own selection. */
   overrides: Record<string, boolean>
 }
@@ -84,6 +106,7 @@ export const EMPTY_WIZARD: WizardState = {
   depth: 'Standard',
   testStrategy: null,
   reviewCap: null,
+  summaryConfirmation: null,
   overrides: {},
 }
 
@@ -131,6 +154,8 @@ export function planBody(state: WizardState, space: string, withText: boolean): 
     objective: withText ? norm(state.objective) : null,
     label: withText ? norm(state.label) : null,
     context: withText ? norm(state.context) : null,
+    // Left out, not sent as null, when the scope decides: the request then reads exactly as it did before.
+    ...(state.summaryConfirmation ? { summary_confirmation: state.summaryConfirmation } : {}),
   }
 }
 
@@ -256,6 +281,25 @@ export function WizardView({ route, go }: WizardViewProps) {
 
   const repo = repos.find((candidate) => candidate.repo_id === state.repo) ?? null
   const blocked = repo ? repoBlockReason(repo) : null
+
+  // The summary-confirmation choice starts from Settings → New intents and follows it until the person picks
+  // here. A repository whose engine cannot take the flag gets no choice at all, so nothing is sent there.
+  const summarySupported = summaryFlagSupported(repo)
+  const summaryDefault = settings.data?.settings.new_intent?.summary_confirmation ?? 'scope'
+  const summaryTouched = useRef(false)
+  useEffect(() => {
+    setState((current) => {
+      const next: SummaryChoice | null = !summarySupported
+        ? null
+        : summaryTouched.current ? current.summaryConfirmation : summaryDefault === 'scope' ? null : summaryDefault
+      return next === current.summaryConfirmation ? current : { ...current, summaryConfirmation: next }
+    })
+  }, [summarySupported, summaryDefault])
+  const pickSummary = useCallback((summaryConfirmation: SummaryChoice | null) => {
+    summaryTouched.current = true
+    setCreateError(null)
+    setState((current) => ({ ...current, summaryConfirmation }))
+  }, [])
 
   // Spaces and the cursor's own space. `intent-create` has no --space flag, so the active space is not a
   // preference: it is the only place a new record can land, and the wizard must show which one that is.
@@ -696,6 +740,8 @@ export function WizardView({ route, go }: WizardViewProps) {
             unreadable={Boolean(previewError)}
             onPickScope={pickScope}
             onPatch={patch}
+            summarySupported={summarySupported}
+            onPickSummary={pickSummary}
             advisorPanel={
               <PlanAdvisorPanel
                 advisor={planAdvisor}

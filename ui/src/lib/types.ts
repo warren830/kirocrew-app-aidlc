@@ -98,6 +98,11 @@ export const SLOT_IDLE = 'idle'
  * send (`in_stage_execution` is the host's `orchestrating`; sub-agent deliveries are not exposed at all).
  */
 export interface HostSlot { key: string; title: string; project: string; agent: string; app: string; running: boolean; orchestrating: boolean; stopping: boolean; queue_depth: number; pending_approval: boolean; needs_input: boolean; subagents_running: number }
+/**
+ * One row of the host's own `GET /api/models`, limited to the keys the UI reads. `model_id` is what the host
+ * accepts back; the rest only describe it. The list is the signed-in account's, so it differs per person.
+ */
+export interface HostModel { model_id: string; model_name: string; description?: string | null; rate_multiplier?: number | null; rate_unit?: string | null }
 export type BusyReason = 'running' | 'stage_execution' | 'stopping' | 'queued' | 'approval_pending' | 'subagents' | 'deliveries_inflight'
 export interface BindingView { repo_id: string; space: string; intent_dir: string; intent_key: string; intent_uuid: string | null; slot_key: string | null; session_key: string | null; binding_generation: number; archive_state: 'active' | 'archived'; paused: boolean; paused_at: string | null; interrupted_at: string | null; keep_moving: boolean; last_stable_boundary: StableBoundary | null; updated_at: string }
 
@@ -274,7 +279,7 @@ export interface ResolveResponse { ok: true; action: ActionCard; created_action_
 
 // ---- plan / estimates ----
 export type PlanDepth = 'Minimal' | 'Standard' | 'Comprehensive'
-export interface PlanRequest { space: string; scope: string; depth: PlanDepth; test_strategy: PlanDepth | null; review_cap: 'none' | 'advisory' | 'adversarial' | null; project_type: 'Greenfield' | 'Brownfield' | null; overrides: Record<string, boolean>; objective: string | null; label: string | null; context: string | null }
+export interface PlanRequest { space: string; scope: string; depth: PlanDepth; test_strategy: PlanDepth | null; review_cap: 'none' | 'advisory' | 'adversarial' | null; project_type: 'Greenfield' | 'Brownfield' | null; overrides: Record<string, boolean>; objective: string | null; label: string | null; context: string | null; summary_confirmation?: 'on' | 'off' }
 export interface PlanStage { slug: string; number: string; name: string; phase: string; execution: 'ALWAYS' | 'CONDITIONAL'; in_grid: boolean; enabled: boolean; locked: boolean; lock_reason: string | null; gate: boolean; review_class: string | null; reviewer: string | null; per_unit: boolean; produces: string[]; consumes: string[]; depends_on: string[]; conditional_on: string | null; state: StageState | null }
 export interface Range { low: number; high: number; unit: 'turns' | 'secs'; source: 'rule_band' | 'assumption'; confidence: 'low' }
 export interface ExactCounts { stages: number; gates: number; artifacts: number; review_intensity: Record<'none' | 'advisory' | 'adversarial', number>; assumes_units: number | null }
@@ -313,7 +318,7 @@ export interface PlanProposal { scope: string | null; depth: PlanDepth | null; t
 export interface PlanAdviseRequest { space: string; objective: string; context: string | null; project_type: 'Greenfield' | 'Brownfield' | null; locale: string; current: Pick<PlanRequest, 'scope' | 'depth' | 'test_strategy' | 'review_cap' | 'overrides'> }
 /** `plan_proposal` is on the wire only for card-less kinds (`ADVISOR_CARDLESS_KINDS`), null until the draft is ready. */
 export interface AdvisorDraft { draft_id: string; action_id: string; kind: AdvisorKind; status: 'queued' | 'running' | 'ready' | 'failed' | 'expired'; request: { action_id: string; kind: string; question_index: number | null; locale: string; auto: boolean }; result: DraftResult | null; error: string | null; created_at: string; updated_at: string; expires_at: string; neutrality: Record<string, unknown> | null; plan_proposal?: PlanProposal | null }
-export interface SettingsValues { locale: 'auto' | 'en-US' | 'zh-CN'; density: 'compact' | 'comfortable'; queue_organize: Organize; global_concurrency_cap: number; slack: { enabled: boolean; muted_repo_ids: string[] }; diagnostics: { retention_days: number; export_include_human_text: boolean }; human_text_retention_days: number; advisor: { enabled: boolean; auto_draft_repo_ids: string[] }; installer: { run_doctor_after_install: boolean }; notifications: { dashboard: boolean } }
+export interface SettingsValues { locale: 'auto' | 'en-US' | 'zh-CN'; density: 'compact' | 'comfortable'; queue_organize: Organize; global_concurrency_cap: number; slack: { enabled: boolean; muted_repo_ids: string[] }; diagnostics: { retention_days: number; export_include_human_text: boolean }; human_text_retention_days: number; advisor: { enabled: boolean; auto_draft_repo_ids: string[]; model: string }; installer: { run_doctor_after_install: boolean }; notifications: { dashboard: boolean }; new_intent: { summary_confirmation: 'scope' | 'on' | 'off' } }
 export interface Capability { available: boolean; reason: string | null }
 /** Whether AI-DLC's hooks can start `bun` inside a conversation (`engine.ConversationBun`). */
 export interface ConversationBun { found: boolean; path: string | null; exact: boolean; link: { path: string; target: string | null; available: boolean; blocked_reason: 'already_found' | 'bun_missing' | 'link_dir_not_on_path' | 'link_exists' | null } }

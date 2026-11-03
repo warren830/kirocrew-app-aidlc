@@ -92,8 +92,9 @@ CONTRACT_DEFAULTS = {
     "locale": "auto", "density": "compact", "queue_organize": "priority", "global_concurrency_cap": 2,
     "slack": {"enabled": False, "muted_repo_ids": []},
     "diagnostics": {"retention_days": 30, "export_include_human_text": False}, "human_text_retention_days": 30,
-    "advisor": {"enabled": True, "auto_draft_repo_ids": []}, "installer": {"run_doctor_after_install": False},
-    "notifications": {"dashboard": True},
+    "advisor": {"enabled": True, "auto_draft_repo_ids": [], "model": ""},
+    "installer": {"run_doctor_after_install": False},
+    "notifications": {"dashboard": True}, "new_intent": {"summary_confirmation": "scope"},
 }
 
 
@@ -183,9 +184,18 @@ def test_the_auto_draft_grant_and_the_advisor_switch_are_written_independently(s
     """Two decisions from two controls: the per-leaf merge must hold in both directions."""
     run(svc.put({"advisor": {"enabled": False}}))
     settings = run(svc.put({"advisor": {"auto_draft_repo_ids": ["r_000000000001"]}}))
-    assert settings.values["advisor"] == {"enabled": False, "auto_draft_repo_ids": ["r_000000000001"]}
+    assert settings.values["advisor"] == {"enabled": False, "auto_draft_repo_ids": ["r_000000000001"], "model": ""}
     settings = run(svc.put({"advisor": {"enabled": True}}))
-    assert settings.values["advisor"] == {"enabled": True, "auto_draft_repo_ids": ["r_000000000001"]}
+    assert settings.values["advisor"] == {"enabled": True, "auto_draft_repo_ids": ["r_000000000001"], "model": ""}
+
+
+def test_the_advisor_model_is_inherited_until_picked_and_can_be_handed_back(svc):
+    """"" is the inherited choice, not a missing one: picking it again must undo a pick, not keep it."""
+    assert run(svc.get()).values["advisor"]["model"] == ""
+    for model in ("claude-sonnet-5.5", "auto", "us.anthropic.claude-opus-5-5:0", "org/model@v2+fast"):
+        assert run(svc.put({"advisor": {"model": model}})).values["advisor"]["model"] == model
+    assert run(svc.get()).values["advisor"]["model"] == "org/model@v2+fast"
+    assert run(svc.put({"advisor": {"model": ""}})).values["advisor"]["model"] == ""
 
 
 def test_updated_at_moves_only_on_a_real_change(svc, clock):
@@ -282,6 +292,16 @@ def test_a_stored_v1_night_window_is_ignored_on_read_and_dropped_on_write(svc, s
     ({"advisor": {"auto_draft_repo_ids": "r_000000000001"}}, "advisor.auto_draft_repo_ids", "type"),
     ({"advisor": {"auto_draft_repo_ids": [1]}}, "advisor.auto_draft_repo_ids", "type"),
     ({"advisor": {"auto_draft_repo_ids": [""]}}, "advisor.auto_draft_repo_ids", "type"),
+    ({"new_intent": {"summary_confirmation": "maybe"}}, "new_intent.summary_confirmation", "not_allowed"),
+    ({"new_intent": {"summary_confirmation": False}}, "new_intent.summary_confirmation", "type"),
+    ({"advisor": {"model": None}}, "advisor.model", "type"),
+    ({"advisor": {"model": 5}}, "advisor.model", "type"),
+    # Handed to the host verbatim, so nothing a CLI argument or a log line could read as something else.
+    ({"advisor": {"model": " claude-sonnet-5.5"}}, "advisor.model", "not_allowed"),
+    ({"advisor": {"model": "claude sonnet"}}, "advisor.model", "not_allowed"),
+    ({"advisor": {"model": "-model"}}, "advisor.model", "not_allowed"),
+    ({"advisor": {"model": "m\nx"}}, "advisor.model", "not_allowed"),
+    ({"advisor": {"model": "m" * 129}}, "advisor.model", "not_allowed"),
 ])
 def test_put_rejects_bad_values_by_key(svc, patch, key, reason):
     with pytest.raises(Exception) as excinfo:
@@ -340,8 +360,9 @@ def test_valid_values_round_trip(svc, M):
         "locale": "zh-CN", "density": "comfortable", "queue_organize": "repo", "global_concurrency_cap": 8,
         "slack": {"enabled": True, "muted_repo_ids": ["r_000000000001"]},
         "diagnostics": {"retention_days": 1, "export_include_human_text": True}, "human_text_retention_days": 30,
-        "advisor": {"enabled": False, "auto_draft_repo_ids": ["r_000000000001"]},
+        "advisor": {"enabled": False, "auto_draft_repo_ids": ["r_000000000001"], "model": "claude-sonnet-5.5"},
         "installer": {"run_doctor_after_install": True}, "notifications": {"dashboard": False},
+        "new_intent": {"summary_confirmation": "off"},
     }
     assert run(svc.put(patch)).values == patch
     assert run(svc.get()).values == patch
@@ -428,13 +449,13 @@ def test_sync_accessors_serve_defaults_before_load_then_the_stored_values(M, sto
     svc = M.SettingsService(store, Bridge(), clock)
     assert svc.global_concurrency_cap() == 2
     assert svc.human_text_retention_days() == 30
-    assert svc.advisor() == {"enabled": True, "auto_draft_repo_ids": []}
+    assert svc.advisor() == {"enabled": True, "auto_draft_repo_ids": [], "model": ""}
     run(svc.get())
     assert svc.global_concurrency_cap() == 4
     assert svc.human_text_retention_days() == 3
     assert svc.slack() == {"enabled": True, "muted_repo_ids": ["r_000000000001"]}
     assert svc.installer() == {"run_doctor_after_install": True}
-    assert svc.advisor() == {"enabled": True, "auto_draft_repo_ids": ["r_000000000001"]}
+    assert svc.advisor() == {"enabled": True, "auto_draft_repo_ids": ["r_000000000001"], "model": ""}
     assert svc.diagnostics() == {"retention_days": 30, "export_include_human_text": False}
     assert svc.notifications() == {"dashboard": True}
     assert svc.locale() == "auto"

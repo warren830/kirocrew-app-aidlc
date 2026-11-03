@@ -23,8 +23,9 @@ export function settingsResponse(): SettingsResponse {
       locale: 'auto', density: 'compact', queue_organize: 'priority', global_concurrency_cap: 2,
       slack: { enabled: false, muted_repo_ids: [] },
       diagnostics: { retention_days: 30, export_include_human_text: false },
-      human_text_retention_days: 30, advisor: { enabled: true, auto_draft_repo_ids: [] },
+      human_text_retention_days: 30, advisor: { enabled: true, auto_draft_repo_ids: [], model: '' },
       installer: { run_doctor_after_install: false }, notifications: { dashboard: true },
+    new_intent: { summary_confirmation: 'scope' },
     },
     capabilities: {
       slack: { available: false, reason: 'host_seam_unavailable' },

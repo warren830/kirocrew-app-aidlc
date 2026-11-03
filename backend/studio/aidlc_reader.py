@@ -901,6 +901,8 @@ class ScopeMeta(WireRecord):
     description: str | None
     plugin: str | None
     project_owned: bool
+    #: ``on``/``off`` as the scope's frontmatter declares it; ``None`` when absent or anything else.
+    summary_confirmation: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -970,12 +972,14 @@ def parse_scope_frontmatter(text: str, filename: str) -> ScopeMeta | None:
 
     runner_raw = one("runner")
     keywords = front.get("keywords")
+    summary = (one("summary_confirmation", "summaryConfirmation") or "").lower()
     return ScopeMeta(
         name=one("name") or derived, depth=one("depth"), test_strategy=one("testStrategy", "test_strategy"),
         review_cap=one("review_cap", "reviewCap"), skeleton=one("skeleton"),
         runner=None if runner_raw is None else runner_raw.lower() in ("true", "yes", "on"),
         keywords=tuple(str(item) for item in keywords) if isinstance(keywords, list) else (),
         description=one("description"), plugin=one("plugin"), project_owned=derived not in STOCK_SCOPES,
+        summary_confirmation=summary if summary in C.SUMMARY_CONFIRMATION_VALUES else None,
     )
 
 

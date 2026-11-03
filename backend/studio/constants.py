@@ -743,6 +743,10 @@ WIRE_PREPARE_COMMIT = "Please prepare a commit for the current AI-DLC changes. D
 # description, so the prompt hook applies ``off`` as the person's own (``Summary Confirmation: off (set by you)``)
 # before the conductor reads it, and forwards ``on`` to the conductor's ``next``. Words beside it would make it a
 # flag of new work instead, so these are sent exactly, on their own turn.
+#: ``intent-create --summary-confirmation`` values, and the first bundled engine whose creation takes the flag
+#: (2.7.1 has no per-work ceremony switches; 2.10.0 does). An older engine would refuse the unknown flag.
+SUMMARY_CONFIRMATION_VALUES = ("on", "off")
+SUMMARY_CONFIRMATION_CREATE_MIN_ENGINE = (2, 10)
 WIRE_SUMMARY_CONFIRMATION_OFF = "/aidlc --summary-confirmation off"
 WIRE_SUMMARY_CONFIRMATION_ON = "/aidlc --summary-confirmation on"
 # The same typed switch for the learnings ritual. The engine counts learnings as the agent's own ritual, not a decision

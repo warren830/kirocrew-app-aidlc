@@ -14,8 +14,9 @@
  *    committed a `Delivering` record on the server, so "cancelling" it would only hide a delivery the
  *    user is accountable for (§2.4 at-most-once). Mutations therefore expose no signal.
  * 3. **Every path is absolute and inside the declared prefixes.** The SDK allowlist is prefix-based
- *    over `permissions.api` (`/api/apps/aidlc-studio`, `/api/chat`); a relative path is resolved
- *    against `http://localhost` and silently becomes the wrong URL.
+ *    over `permissions.api` (`/api/apps/aidlc-studio`, `/api/chat`, and the host's read-only
+ *    `/api/models` and `/api/effort-levels`); a relative path is resolved against `http://localhost`
+ *    and silently becomes the wrong URL.
  */
 
 import { useMemo } from 'react'
@@ -33,15 +34,18 @@ import type {
   PlanRequest, PlanScopesResponse, PreflightResponse, PreviewPlanResponse,
   RecomposePreviewResponse, RecomposeResponse, RemoveRepoResponse, RepoDetailResponse,
   RepoGitResponse, RepoResponse, ReposResponse, RescanResponse, ResolvePayload, ResolveResponse,
-  ReviewResponse, SettingsResponse, SettingsValues, SourceChangesResponse, SubmitReceipt, HostSlot,
+  ReviewResponse, SettingsResponse, SettingsValues, SourceChangesResponse, SubmitReceipt, HostModel, HostSlot,
   SubmitRequest, TakeoverPreviewResponse, TransactionAcceptedResponse, TransactionResponse, TransactionKind,
 } from './types'
 import { APP_NAME } from './app'
 
 /** Studio's own routes. The host mounts `AppRoute.path`s under this prefix (`01 §1.2`). */
 export const API_BASE = `/api/apps/${APP_NAME}`
-/** The host's chat API — the only other prefix in `permissions.api` (§2.13). */
+/** The host's chat API (§2.13). */
 export const CHAT_BASE = '/api/chat'
+/** The host's model catalogue and effort levels: GET-only, each declared as its own path in `permissions.api`. */
+export const MODELS_PATH = '/api/models'
+export const EFFORT_LEVELS_PATH = '/api/effort-levels'
 
 /**
  * The host dispatches this when the session cookie is gone (`07 §1.6`). Every request after it will
@@ -276,11 +280,23 @@ export interface StudioApi extends WorkspaceApi {
   setSlotProject(slotKey: string, project: string): Promise<Record<string, unknown>>
   /** As a provider template (`agent_kind`), so a crew member of the same name never takes the slot. Older hosts ignore the field. */
   setSlotAgent(slotKey: string, agent: string): Promise<Record<string, unknown>>
+  /**
+   * The model a slot's session runs on. On a slot with no session yet (the only place Studio calls it) the
+   * host records it for the first turn; it answers `409 turn_in_flight` rather than reset a running turn.
+   */
+  setSlotModel(slotKey: string, model: string): Promise<Record<string, unknown>>
+  /** The slot's reasoning effort, one of `listEffortLevels()`; `""` is the host's default. */
+  setSlotEffort(slotKey: string, effort: string): Promise<Record<string, unknown>>
   listFolders(o?: ReadOptions): Promise<ChatFolder[]>
   createFolder(body: { name: string; parent_id?: string; project_dir?: string }): Promise<ChatFolder>
   setSlotFolder(slotKey: string, folderId: string): Promise<Record<string, unknown>>
   /** The exact `SubmitReceipt.host` call. Body is passed through byte-for-byte — never rebuilt. */
   sendToHost(path: string, body: Record<string, unknown>): Promise<HostChatReceipt>
+
+  // -- host model catalogue (read-only) ---------------------------------- //
+  /** The signed-in account's models; the host answers 503 while it cannot list them (signed out, cold start). */
+  listModels(o?: ReadOptions): Promise<HostModel[]>
+  listEffortLevels(o?: ReadOptions): Promise<string[]>
 }
 
 export type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] }
@@ -449,6 +465,10 @@ export function useStudioApi(): StudioApi {
         chatPost(api, `${CHAT_BASE}/slots/${encodeURIComponent(slotKey)}/project`, { project }),
       setSlotAgent: (slotKey, agent) =>
         chatPost(api, `${CHAT_BASE}/slots/${encodeURIComponent(slotKey)}/agent`, { agent, agent_kind: 'template' }),
+      setSlotModel: (slotKey, model) =>
+        chatPost(api, `${CHAT_BASE}/slots/${encodeURIComponent(slotKey)}/model`, { model }),
+      setSlotEffort: (slotKey, effort) =>
+        chatPost(api, `${CHAT_BASE}/slots/${encodeURIComponent(slotKey)}/reasoning-effort`, { reasoning_effort: effort }),
       listFolders: async (o) => {
         try {
           return await api.get<ChatFolder[]>(`${CHAT_BASE}/folders`, o?.signal ? { signal: o.signal } : undefined)
@@ -470,6 +490,23 @@ export function useStudioApi(): StudioApi {
         }
       },
       sendToHost: (path, body) => chatPost<HostChatReceipt>(api, path, body),
+
+      listModels: async (o) => {
+        try {
+          return await api.get<HostModel[]>(MODELS_PATH, o?.signal ? { signal: o.signal } : undefined)
+        } catch (error) {
+          if (isAbort(error)) throw error
+          throw decodeError(error)
+        }
+      },
+      listEffortLevels: async (o) => {
+        try {
+          return await api.get<string[]>(EFFORT_LEVELS_PATH, o?.signal ? { signal: o.signal } : undefined)
+        } catch (error) {
+          if (isAbort(error)) throw error
+          throw decodeError(error)
+        }
+      },
     }
   }, [api])
 }

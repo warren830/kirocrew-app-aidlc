@@ -104,6 +104,7 @@ ENGINE_ALLOWLIST: dict[str, EngineVerb] = {verb.key: verb for verb in (
     _writer("utility.intent_create", (
         "intent-create", "--scope", "{scope}", "--arguments", "{arguments}", "--label", "{label}",
         "?--depth", "{depth}", "?--test-strategy", "{test_strategy}", "?--review", "{review}", "?--repos", "{repos}",
+        "?--summary-confirmation", "{summary_confirmation}",
     )),
     EngineVerb(
         "runtime.compile", "aidlc-runtime.ts", ("compile",), lease="admin", mutates_audit=True, json_output=True,
@@ -142,6 +143,7 @@ _TOKEN_RE = re.compile(r"^[A-Za-z][A-Za-z0-9-]{0,31}$")  # a config word; plan.p
 _KWARG_RE = {
     "dir_name": C.INTENT_DIR_RE, "slug": C.SPACE_RE, "scope": C.STAGE_SLUG_RE, "arg": C.STAGE_SLUG_RE,
     "depth": _TOKEN_RE, "test_strategy": _TOKEN_RE, "review": _TOKEN_RE,
+    "summary_confirmation": re.compile(r"^(?:on|off)$"),
 }
 #: Comma-separated kwargs: the grammar of each item and the noun a refusal names.
 _KWARG_LISTS = {

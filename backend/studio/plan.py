@@ -11,7 +11,7 @@ import asyncio
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
@@ -98,6 +98,17 @@ def _document_marker_reason(text: str) -> tuple[str | None, int]:
     return None, 0
 
 
+def _version_tuple(text: str | None) -> tuple[int, ...] | None:
+    """``"2.11.0"`` → ``(2, 11, 0)``; ``None`` when absent or not dotted-numeric (unknown is not "new enough")."""
+    parts: list[int] = []
+    for chunk in (text or "").strip().split("."):
+        digits = re.match(r"\d+", chunk)
+        if digits is None:
+            return None
+        parts.append(int(digits.group()))
+    return tuple(parts) or None
+
+
 def _sha256_json(payload: Any, **dumps: Any) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, **dumps).encode("utf-8")).hexdigest()
 
@@ -106,8 +117,9 @@ def _sha256_json(payload: Any, **dumps: Any) -> str:
 class PlanRequest(WireRecord):
     """What the user asked for. ``repo_id`` is the path parameter, not part of the JSON body (§2.3)."""
 
+    #: ``summary_confirmation?`` drops ``None``, so a request that leaves it to the scope digests as before.
     _wire_keys = ("space", "scope", "depth", "test_strategy", "review_cap", "project_type", "overrides", "objective",
-                  "label", "context")
+                  "label", "context", "summary_confirmation?")
     repo_id: str
     space: str
     scope: str
@@ -119,6 +131,8 @@ class PlanRequest(WireRecord):
     objective: str | None
     label: str | None
     context: str | None
+    #: ``on``/``off`` for this piece of work, or ``None`` to keep the scope's own default (nothing is sent).
+    summary_confirmation: str | None = None
 
     @classmethod
     def from_json(cls, body: Mapping[str, Any] | None, *, repo_id: str) -> "PlanRequest":
@@ -138,13 +152,17 @@ class PlanRequest(WireRecord):
                 raise StudioError("bad_body", "override value must be a boolean",
                                   details={"key": f"overrides.{slug}"})
             overrides[slug] = value
+        summary = data.get("summary_confirmation")
+        if summary is not None and summary not in C.SUMMARY_CONFIRMATION_VALUES:
+            raise StudioError("bad_body", "summary_confirmation must be on, off or null",
+                              details={"key": "summary_confirmation", "value": str(summary)})
         return cls(
             repo_id=repo_id, space=_opt_str(data.get("space")) or C.DEFAULT_SPACE,
             scope=_opt_str(data.get("scope")) or "", depth=_opt_str(data.get("depth")) or "",
             test_strategy=_opt_str(data.get("test_strategy")), review_cap=_opt_str(data.get("review_cap")),
             project_type=_opt_str(data.get("project_type")), overrides=overrides,
             objective=_opt_str(data.get("objective")), label=_opt_str(data.get("label")),
-            context=_opt_str(data.get("context")),
+            context=_opt_str(data.get("context")), summary_confirmation=summary,
         )
 
 
@@ -379,9 +397,12 @@ class PlanService:
         issues.extend(self.validate(stages, graph, project_type=req.project_type))
         units = self._units(repo, snap)
         engine_version = snap.engine.engine_version if snap is not None and snap.engine is not None else None
+        # Turned off for this piece of work, no stage stops for a summary confirmation, so none is estimated.
+        estimated = (tuple(replace(s, summary_confirmation=None) for s in stages)
+                     if req.summary_confirmation == "off" else stages)
         return EffectivePlan(
             request=req, scope_meta=scope_meta, stages=stages, exact=self._exact_counts(stages, units),
-            estimate=self._estimates.estimate(stages, depth=depth, units=units, scope=scope),
+            estimate=self._estimates.estimate(estimated, depth=depth, units=units, scope=scope),
             diff=tuple(PlanDiffEntry(s.slug, s.in_grid, s.enabled, DIFF_REASON_OVERRIDE)
                        for s in stages if s.in_grid != s.enabled),
             issues=tuple(issues), valid=not issues,
@@ -462,6 +483,7 @@ class PlanService:
                               details={"reason": "plan_digest_mismatch", "expected": plan.digest()})
         label = self._require_label(req)
         arguments = self._require_arguments(req)
+        self._require_summary_flag(repo, req)
 
         transaction_id = self._ids.new("tx")
         grant = await self._scheduler.acquire_admin(
@@ -474,7 +496,7 @@ class PlanService:
             result = await self.engine.run(
                 "utility.intent_create", root, engine_dir, scope=req.scope, arguments=arguments, label=label,
                 depth=req.depth or "", test_strategy=req.test_strategy or "", review=req.review_cap or "",
-                **lease,
+                summary_confirmation=req.summary_confirmation or "", **lease,
             )
             self.require_engine_ok(result)
             intent_dir, verified = await asyncio.to_thread(self._verify_created, root, space, before)
@@ -537,7 +559,8 @@ class PlanService:
         await self._activity.record(
             kind="intent.created", repo_id=repo.repo_id, space=space, intent_dir=intent_dir,
             params={"scope": req.scope, "depth": req.depth, "test_strategy": req.test_strategy,
-                    "review_cap": req.review_cap, "label": label, "transaction_id": transaction_id,
+                    "review_cap": req.review_cap, "summary_confirmation": req.summary_confirmation,
+                    "label": label, "transaction_id": transaction_id,
                     "state_version": verified.get("state_version")},
         )
         await self._announce(repo, intent_key, summary)
@@ -987,6 +1010,21 @@ class PlanService:
         raise StudioError("state_inconsistent", "the AI-DLC engine refused the operation",
                           details={"verb_key": result.verb_key, "exit_code": result.exit_code,
                                    "stderr": result.stderr[-2000:]})
+
+    @staticmethod
+    def _require_summary_flag(repo: "RepoRecord", req: PlanRequest) -> None:
+        """Refuse a summary-confirmation choice the installed engine's ``intent-create`` would not take, before
+        the lease: an unknown flag fails the creation after nothing useful happened."""
+        if req.summary_confirmation is None:
+            return
+        version = _version_tuple(repo.installed_engine_version)
+        if version is None or version < C.SUMMARY_CONFIRMATION_CREATE_MIN_ENGINE:
+            raise StudioError(
+                "bad_param", "this repository's AI-DLC cannot set summary confirmation when creating an intent",
+                details={"key": "summary_confirmation", "reason": "engine_too_old",
+                         "engine_version": repo.installed_engine_version,
+                         "minimum": ".".join(str(n) for n in C.SUMMARY_CONFIRMATION_CREATE_MIN_ENGINE)},
+            )
 
     @staticmethod
     def require_ready(repo: "RepoRecord") -> None:

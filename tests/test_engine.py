@@ -186,9 +186,10 @@ GOLDEN = {
     "utility.space_create": ({"slug": "alt"}, ["space-create", "alt"]),
     "utility.intent_create": (
         {"scope": "poc", "arguments": "Ship the ledger export", "label": "ledger-export", "depth": "Standard",
-         "test_strategy": "Minimal", "review": "advisory", "repos": "api,web"},
+         "test_strategy": "Minimal", "review": "advisory", "repos": "api,web", "summary_confirmation": "off"},
         ["intent-create", "--scope", "poc", "--arguments", "Ship the ledger export", "--label", "ledger-export",
-         "--depth", "Standard", "--test-strategy", "Minimal", "--review", "advisory", "--repos", "api,web"]),
+         "--depth", "Standard", "--test-strategy", "Minimal", "--review", "advisory", "--repos", "api,web",
+         "--summary-confirmation", "off"]),
     # The mutating verbs name their record explicitly: omitted, 2.7.1 resolves it from the session binding first.
     "utility.recompose": (
         {"skip": "nfr-design", "add": "user-stories", "dir_name": ALPHA, "slug": "default"},
@@ -216,10 +217,18 @@ def test_golden_argv(engine_mod, runner, repo, key, fake_bun):
     assert isinstance(argv, list) and all(isinstance(t, str) for t in argv)
 
 
+@pytest.mark.parametrize("value", ["maybe", "On", "off ", "true"])
+def test_summary_confirmation_is_only_the_engines_two_words(engine_mod, runner, repo, value):
+    with pytest.raises(ValueError):
+        runner.build_argv(engine_mod.ENGINE_ALLOWLIST["utility.intent_create"], repo, ".kiro", scope="poc",
+                          arguments="x", label="a-b", summary_confirmation=value)
+
+
 def test_optional_flags_are_omitted_when_absent_or_empty(engine_mod, runner, repo):
     argv = runner.build_argv(engine_mod.ENGINE_ALLOWLIST["utility.intent_create"], repo, ".kiro", scope="poc",
                              arguments="x", label="a-b", depth="", review=None)
     assert "--depth" not in argv and "--review" not in argv and "--repos" not in argv
+    assert "--summary-confirmation" not in argv
     bare = runner.build_argv(engine_mod.ENGINE_ALLOWLIST["utility.config_change"], repo, ".kiro")
     assert bare[-2:] == ["--project-dir", str(repo)] and bare[2] == "config-change" and len(bare) == 5
 

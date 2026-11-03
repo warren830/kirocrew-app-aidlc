@@ -189,6 +189,7 @@
     "review_cap": "advisory",
     "runner": null,
     "skeleton": "on",
+    "summary_confirmation": "on",
     "test_strategy": null
    },
    "stages": [

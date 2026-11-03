@@ -187,6 +187,7 @@
     "review_cap": null,
     "runner": null,
     "skeleton": null,
+    "summary_confirmation": null,
     "test_strategy": null
    },
    "stages": [

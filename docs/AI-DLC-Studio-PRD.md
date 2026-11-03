@@ -497,8 +497,9 @@ Settings include:
 - Queue organization preference.
 - Night work window, turn cap, and observable credit cap.
 - Global concurrency cap; per-repo execution remains one.
+- New-intent defaults: AI-DLC's per-stage summary confirmation follows the scope, or starts on or off; the wizard still shows the choice per intent, and only engines whose `intent-create` takes the flag (2.10 and later) are offered it.
 - Slack notification enablement and per-repo mute.
-- Advisor model inherited through KiroCrew role resolution; no hardcoded model id.
+- Advisor model inherited through KiroCrew role resolution by default, or a model the person picks from the host's own list for their account; no hardcoded model id. A new intent conversation may likewise start on a picked model and reasoning effort, or on Kiro's default.
 - Diagnostic retention and export.
 - App version, bundled AI-DLC version, supported platform, and update state.
 

@@ -33,9 +33,10 @@ const SETTINGS: SettingsResponse = {
     slack: { enabled: true, muted_repo_ids: [] },
     diagnostics: { retention_days: 30, export_include_human_text: false },
     human_text_retention_days: 30,
-    advisor: { enabled: true, auto_draft_repo_ids: [] },
+    advisor: { enabled: true, auto_draft_repo_ids: [], model: '' },
     installer: { run_doctor_after_install: false },
     notifications: { dashboard: true },
+    new_intent: { summary_confirmation: 'scope' },
   },
   capabilities: {
     slack: { available: true, reason: null },
@@ -46,6 +47,13 @@ const SETTINGS: SettingsResponse = {
   versions: { studio: '1.0.0', bundled_engine: '2.7.1', min_kirocrew: '0.3.0', host: '0.5.0-insider.9' },
   updated_at: '2026-09-05T09:00:00+00:00',
 }
+
+/** The host's `GET /api/models` rows, with the fields Studio reads plus one it ignores. */
+const MODELS = [
+  { model_name: 'auto', model_id: 'auto', description: 'Models chosen by task', rate_multiplier: 1.0, rate_unit: 'Credit' },
+  { model_name: 'claude-sonnet-5.5', model_id: 'claude-sonnet-5.5', rate_multiplier: 1.3, context_window_tokens: 1000000 },
+  { model_name: 'broken row without an id' },
+]
 
 const HEALTH = {
   app: 'aidlc-studio',
@@ -72,8 +80,8 @@ const REPO = {
 } as unknown as RepoRecord
 
 /** The same settings with a different advisor leaf; the grant list is the server's, never local state. */
-function advisorSettings(grants: string[], enabled = true): SettingsResponse {
-  const advisor = { enabled, auto_draft_repo_ids: grants }
+function advisorSettings(grants: string[], enabled = true, model = ''): SettingsResponse {
+  const advisor = { enabled, auto_draft_repo_ids: grants, model }
   return { ...SETTINGS, settings: { ...SETTINGS.settings, advisor } }
 }
 
@@ -139,15 +147,67 @@ describe('Automation and budgets', () => {
   })
 })
 
-describe('Advisor', () => {
-  it('says the model is inherited and shows no model id anywhere', async () => {
-    routes()
+describe('New intents', () => {
+  it('starts from the scope and patches new_intent.summary_confirmation alone', async () => {
+    const puts = routes()
     await renderSettings()
 
-    const model = row('Advisor model')
-    expect(within(model).getByText('Inherited')).toBeInTheDocument()
-    // Nothing that looks like a model id may appear on the page.
-    expect(document.body.textContent).not.toMatch(/claude-|gpt-|sonnet|haiku|opus/i)
+    const select = screen.getByRole('combobox', { name: 'Summary confirmation for new intents' })
+    expect(select).toHaveValue('scope')
+    expect(within(select).getAllByRole('option').map((option) => option.textContent)).toEqual(['From the scope', 'Off', 'On'])
+    await userEvent.selectOptions(select, 'off')
+    await waitFor(() => expect(puts).toEqual([{ new_intent: { summary_confirmation: 'off' } }]))
+  })
+})
+
+describe('Advisor', () => {
+  it('starts inherited and offers only the models the host lists for this account', async () => {
+    routes({ 'GET /api/models': () => MODELS })
+    await renderSettings()
+
+    const select = within(row('Advisor model')).getByRole('combobox', { name: 'The model Advisor drafts run on' })
+    expect(select).toHaveValue('')
+    await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3))
+    expect(within(select).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Inherited from KiroCrew', 'auto · 1×', 'claude-sonnet-5.5 · 1.3×',
+    ])
+  })
+
+  it('patches advisor.model alone when a model is picked, and "" when it is handed back', async () => {
+    const puts = routes({ 'GET /api/models': () => MODELS })
+    await renderSettings()
+
+    const select = within(row('Advisor model')).getByRole('combobox', { name: 'The model Advisor drafts run on' })
+    await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3))
+    await userEvent.selectOptions(select, 'claude-sonnet-5.5')
+    await waitFor(() => expect(puts).toEqual([{ advisor: { model: 'claude-sonnet-5.5' } }]))
+  })
+
+  it('keeps a saved pick the account no longer offers, labelled, instead of showing "inherited"', async () => {
+    routes({
+      'GET /api/apps/aidlc-studio/settings': () => advisorSettings([], true, 'claude-retired-1'),
+      'GET /api/models': () => MODELS,
+    })
+    await renderSettings()
+
+    const select = within(row('Advisor model')).getByRole('combobox', { name: 'The model Advisor drafts run on' })
+    expect(select).toHaveValue('claude-retired-1')
+    expect(within(select).getByRole('option', { name: 'claude-retired-1 (not offered by your account now)' }))
+      .toBeInTheDocument()
+  })
+
+  it('says why only "inherited" is offered when the host cannot list models', async () => {
+    routes({
+      'GET /api/models': () => {
+        throw new StubApiError(503, { error: 'model list unavailable' })
+      },
+    })
+    await renderSettings()
+
+    expect(
+      await screen.findByText('KiroCrew could not list your models right now, so only the inherited choice and your saved pick are offered.'),
+    ).toBeInTheDocument()
+    expect(within(row('Advisor model')).getByRole('combobox')).toHaveValue('')
   })
 
   it('patches auto_draft_repo_ids and nothing else when a repository is granted', async () => {

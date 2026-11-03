@@ -15,8 +15,9 @@
  *   2. `PATCH  /api/chat/slots/{key}/title {"title": "<repo label> / <intent slug>"}` (host)
  *   3. `POST   /api/chat/slots/{key}/project {"project": <canonical_path>}` (host; only when not inherited)
  *   4. `POST   /api/chat/slots/{key}/agent {"agent": "aidlc"}`            (host)
- *   5. `POST   …/{intent}/session {"slot_key": key}`                       (Studio; verifies 1-4)
- *   6. `PATCH  /api/chat/slots/{key}/folder {"folder_id": …}`              (host; only if birth ignored it)
+ *   5. `POST   /api/chat/slots/{key}/model` and `…/reasoning-effort`       (host; only what the person picked)
+ *   6. `POST   …/{intent}/session {"slot_key": key}`                       (Studio; verifies 1-4)
+ *   7. `PATCH  /api/chat/slots/{key}/folder {"folder_id": …}`              (host; only if birth ignored it)
  *
  * The primary button then starts the workflow: it names the text it sends (`/aidlc`), queues the run and
  * sends it through the Action Center's own two-phase submit (`StartRun.tsx`), so "create, bind and start"
@@ -30,8 +31,9 @@
  * is not part of the binding: a refusal here leaves the intent bound and says so.
  *
  * The order is load-bearing, not cosmetic: the project must be set before Studio checks it (§2.13), and
- * step 4 refuses `slot_mismatch` unless `slot.agent == "aidlc"` and `realpath(slot.project) ==
- * repo.canonical_path` (§1.11). Each failure is reported BY STEP NUMBER together with the server's own
+ * the bind step refuses `slot_mismatch` unless `slot.agent == "aidlc"` and `realpath(slot.project) ==
+ * repo.canonical_path` (§1.11). The model comes after the agent and before the first turn: on a slot with
+ * no session yet the host only records it, so nothing is reset, and an agent switch cannot undo it. Each failure is reported BY STEP NUMBER together with the server's own
  * words, because "could not bind" without naming the host call that refused is precisely the silence
  * that made this capability look absent.
  *
@@ -58,6 +60,7 @@ import { StartStatus, hasProgress, startBlockedReason, startKind, startText, use
 import { StoppedTurnNotice } from './StoppedTurn'
 import { APP_NAME } from '../lib/app'
 import { useResource } from '../lib/useResource'
+import { EffortSelect, ModelSelect, useEffortLevels, useHostModels } from '../shell/ModelSelect'
 
 /** The agent an AI-DLC conversation runs. `SessionBinder.bind` refuses every other one (§1.11). */
 const AIDLC_AGENT = 'aidlc'
@@ -68,6 +71,7 @@ const STEP_KEYS = [
   'intents.session.step.title',
   'intents.session.step.project',
   'intents.session.step.agent',
+  'intents.session.step.model',
   'intents.session.step.bind',
   'intents.session.step.folder',
 ] as const
@@ -77,6 +81,35 @@ const STEPS = STEP_KEYS.length
 
 /** Binding an existing conversation is this same step, so its refusal is numbered like one. */
 const BIND_STEP = STEP_KEYS.indexOf('intents.session.step.bind') + 1
+
+/** The model and effort a new conversation runs on; `""` is "inherit", which sends nothing. */
+export interface ConversationPick { model: string; effort: string }
+
+/** Remembered per browser, so the next intent's conversation starts from the last pick instead of "inherit". */
+export const CONVERSATION_PICK_KEY = `${APP_NAME}:conversation-model`
+
+/** A stored value Studio did not write (or cannot read) is "inherit", never a guess. */
+export function readConversationPick(): ConversationPick {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(CONVERSATION_PICK_KEY) ?? 'null')
+    if (raw && typeof raw === 'object') {
+      const { model, effort } = raw as Record<string, unknown>
+      return { model: typeof model === 'string' ? model : '', effort: typeof effort === 'string' ? effort : '' }
+    }
+  } catch {
+    // unreadable storage reads as no pick
+  }
+  return { model: '', effort: '' }
+}
+
+function saveConversationPick(pick: ConversationPick): void {
+  try {
+    if (!pick.model && !pick.effort) localStorage.removeItem(CONVERSATION_PICK_KEY)
+    else localStorage.setItem(CONVERSATION_PICK_KEY, JSON.stringify(pick))
+  } catch {
+    // a browser that refuses storage still creates the conversation; it just forgets the pick
+  }
+}
 
 /**
  * `constants.SLOT_KEY_TEMPLATE` (`aidlc-studio-{repo_id}-{intent_dir}`) mirrored, because the slot is
@@ -221,6 +254,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
    * unbound state until a refresh happens to land.
    */
   const [confirmed, setConfirmed] = useState<{ value: Bound | null } | null>(null)
+  const [pick, setPick] = useState<ConversationPick>(readConversationPick)
 
   const row = fromSession(intent.session)
   // The confirmation outranks the row only until the row names the same conversation. From then on the row
@@ -255,6 +289,9 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
   const blocked = startBlockedReason(bound && !caughtUp ? { ...intent, session: null } : intent, t)
     ?? (bound?.running || started || turning ? t('intents.run.disabledRunning') : null)
   const stepLabel = (step: number): string => t(STEP_KEYS[step - 1] ?? STEP_KEYS[0])
+  // Only an unbound intent offers the pickers, so only it reads the host's lists.
+  const models = useHostModels(api, !bound)
+  const efforts = useEffortLevels(api, !bound)
 
   const fail = useCallback((caught: unknown, step: number) => {
     setFailedAt(step)
@@ -287,6 +324,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
   /** The whole sequence, in order, reporting the step that refused; `andRun` then starts the workflow. */
   const create = useCallback(async (andRun: boolean) => {
     start('create')
+    saveConversationPick(pick)
     let step = 1
     setAt(step)
     try {
@@ -322,11 +360,17 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
       await api.setSlotAgent(key, AIDLC_AGENT)
       step = 5
       setAt(step)
+      // Only a pick is sent: "inherit" leaves the host's own default, which is what every conversation ran on
+      // before there was a choice. Model first, because the effort levels a model offers are its own.
+      if (pick.model) await api.setSlotModel(key, pick.model)
+      if (pick.effort) await api.setSlotEffort(key, pick.effort)
+      step = 6
+      setAt(step)
       const answer = await api.setSession(intent.repo_id, intent.intent_key, key)
       remember(answer.binding, answer.slot, title)
       setSlots(null)
       onChanged(t('intents.session.done.bound', { slot: answer.binding.slot_key ?? key }))
-      step = 6
+      step = 7
       setAt(step)
       if (folder === null) {
         setFolderError(folderFailure)
@@ -347,7 +391,7 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
       setBusy(null)
       setAt(0)
     }
-  }, [api, wanted, repo, intent, remember, onChanged, t, fail, start, run, kind])
+  }, [api, wanted, repo, intent, remember, onChanged, t, fail, start, run, kind, pick])
 
   const list = useCallback(async () => {
     start('list')
@@ -506,6 +550,30 @@ export function SessionPanel({ api, repo, intent, onClose, onChanged }: SessionP
               { key: 'slot', label: t('intents.session.fact.willCreate'), value: wanted, mono: true },
             ]}
           />
+
+          <div className="studio-row studio-wrap">
+            <ModelSelect
+              visibleLabel
+              label={t('intents.session.model.label')}
+              inheritLabel={t('intents.session.model.inherit')}
+              value={pick.model}
+              models={models.data}
+              loading={models.loading}
+              failed={models.error !== null}
+              disabled={busy !== null}
+              onChange={(model) => setPick((prev) => ({ ...prev, model }))}
+            />
+            <EffortSelect
+              label={t('intents.session.effort.label')}
+              value={pick.effort}
+              levels={efforts.data}
+              disabled={busy !== null}
+              onChange={(effort) => setPick((prev) => ({ ...prev, effort }))}
+            />
+          </div>
+          <p className="studio-muted studio-small">
+            {models.error !== null ? t('intents.session.model.unavailable') : t('intents.session.model.hint')}
+          </p>
 
           <div className="studio-row studio-wrap">
             {blocked === null ? (

@@ -22,8 +22,10 @@ PAYLOAD_MANIFEST = APP_ROOT / "payload" / "manifest.json"
 #: v2 installs beside the 1.x Studio (``aidlc-studio``) instead of replacing it, so it has a name of its own:
 #: KiroCrew refuses to install a folder whose manifest names an app that is already installed.
 APP_NAME = "aidlc-studio-v2"
-# §4.3 verbatim, compared as equality: an added prefix is as much a finding as a missing one
-EXPECTED_API_PREFIXES = [f"/api/apps/{APP_NAME}", "/api/chat"]
+# §4.3 verbatim, compared as equality: an added prefix is as much a finding as a missing one. The last two are the
+# host's model catalogue and effort levels, GET-only routes with nothing beneath them, read so a new AI-DLC
+# conversation and the Advisor can run on a model the person picked.
+EXPECTED_API_PREFIXES = [f"/api/apps/{APP_NAME}", "/api/chat", "/api/models", "/api/effort-levels"]
 EXPECTED_EVENTS = [f"{APP_NAME}:action", f"{APP_NAME}:repo", f"{APP_NAME}:transaction"]
 
 
@@ -90,8 +92,8 @@ def test_the_single_ui_page_is_the_apps_own_route(raw):
 
 
 # --- permissions ---
-def test_the_api_permission_is_exactly_two_prefixes(raw):
-    """Studio's own namespace and ``/api/chat``. Nothing else (review R13/C27)."""
+def test_the_api_permission_is_exactly_the_declared_prefixes(raw):
+    """Studio's own namespace, ``/api/chat`` and the two read-only model lists. Nothing else (review R13/C27)."""
     assert raw["permissions"]["api"] == EXPECTED_API_PREFIXES
 
 

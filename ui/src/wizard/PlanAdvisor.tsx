@@ -74,6 +74,8 @@ export interface ScopeMetaView {
   depth: PlanDepth | null
   testStrategy: PlanDepth | null
   reviewCap: ReviewCap | null
+  /** The scope's own default for AI-DLC's per-stage summary confirmation, when its frontmatter says. */
+  summaryConfirmation: 'on' | 'off' | null
   description: string | null
   keywords: string[]
   projectOwned: boolean
@@ -104,6 +106,8 @@ export function readScopeMeta(raw: Record<string, unknown> | null): ScopeMetaVie
     depth: depth && (DEPTHS as readonly string[]).includes(depth) ? (depth as PlanDepth) : null,
     testStrategy: test && (DEPTHS as readonly string[]).includes(test) ? (test as PlanDepth) : null,
     reviewCap: cap && (CAPS as readonly string[]).includes(cap) ? (cap as ReviewCap) : null,
+    summaryConfirmation: raw['summary_confirmation'] === 'on' || raw['summary_confirmation'] === 'off'
+      ? raw['summary_confirmation'] : null,
     description: str(raw['description']),
     keywords,
     projectOwned: raw['project_owned'] === true,

@@ -61,7 +61,9 @@
   "permissions": {
     "api": [
       "/api/apps/aidlc-studio-v2",
-      "/api/chat"
+      "/api/chat",
+      "/api/models",
+      "/api/effort-levels"
     ],
     "events": [
       "aidlc-studio-v2:action",

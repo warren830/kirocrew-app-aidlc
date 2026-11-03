@@ -1033,6 +1033,19 @@ def test_scope_frontmatter_stock_and_project_owned(R):
     assert R.parse_scope_frontmatter("# no frontmatter\n", "aidlc-x.md") is None
 
 
+def test_scope_frontmatter_reads_the_scopes_own_summary_confirmation(R):
+    """The wizard's "from the scope" choice names this value; anything but the engine's two words reads as unknown."""
+    root = Path(__file__).resolve().parent.parent / "payload" / "aidlc-kiro" / ".kiro" / "scopes"
+
+    def summary(name):
+        return R.parse_scope_frontmatter((root / f"aidlc-{name}.md").read_text("utf-8"),
+                                         f"aidlc-{name}.md").summary_confirmation
+
+    assert (summary("feature"), summary("bugfix"), summary("express")) == ("on", "off", "off")
+    odd = R.parse_scope_frontmatter("---\nname: x\nsummary_confirmation: sometimes\n---\n", "aidlc-x.md")
+    assert odd.summary_confirmation is None
+
+
 def test_read_scopes_and_grid_from_a_repo(reader, devdelta_repo):
     scopes = reader.read_scopes(devdelta_repo, ".kiro")
     assert [scope.name for scope in scopes][:3] == ["bugfix", "enterprise", "feature"] and len(scopes) == 10

@@ -621,7 +621,11 @@ class AdvisorBroker:
         )
         task = self.render_task(package)
         try:
-            spawn_id = await spawn.run(task=task, agent=ADVISOR_AGENT_NAME, silent=True)
+            # Only a model the person picked is named: without one the host's own resolution stands.
+            model = self._model()
+            spawn_id = await spawn.run(
+                task=task, agent=ADVISOR_AGENT_NAME, silent=True, **({"model": model} if model else {})
+            )
         except Exception as exc:
             await self._finish(draft_id, status="failed", error="spawn_failed", detail=str(exc))
             raise StudioError("advisor_unavailable", "the host declined to start the advisor agent",
@@ -1406,6 +1410,15 @@ class AdvisorBroker:
             return bool(self._settings.advisor().get("enabled", True))
         except (AttributeError, TypeError, KeyError):  # pragma: no cover - defensive
             return True
+
+    def _model(self) -> str:
+        """The person's Advisor model pick, or "" to leave the choice to KiroCrew. Read defensively, like
+        ``_granted``: before settings load, "no pick" is the only honest reading."""
+        try:
+            model = self._settings.advisor().get("model") if self._settings is not None else ""
+        except Exception:
+            return ""
+        return model if isinstance(model, str) else ""
 
     def _granted(self) -> frozenset[str]:
         """Repositories whose owner granted drafts ahead of the click (A24). Read defensively: before settings

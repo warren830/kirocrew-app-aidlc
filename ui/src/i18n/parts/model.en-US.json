@@ -1,0 +1,10 @@
+{
+  "model.notListed": "{model} (not offered by your account now)",
+  "model.unavailable": "Model list unavailable",
+  "model.effort.inherit": "Default",
+  "model.effort.low": "Low",
+  "model.effort.medium": "Medium",
+  "model.effort.high": "High",
+  "model.effort.xhigh": "Extra high",
+  "model.effort.max": "Max"
+}

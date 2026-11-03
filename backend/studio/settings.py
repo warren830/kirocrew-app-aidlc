@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import re
 import sys
 import threading
 from dataclasses import dataclass
@@ -36,9 +37,14 @@ DEFAULTS: dict[str, Any] = {
     "human_text_retention_days": C.HUMAN_TEXT_RETENTION_DAYS_DEFAULT,
     # The standing grant FR-ADV-001 permits: empty means the Advisor runs only on a click. An id here is one
     # repository whose owner asked for drafts ahead of time — revocable by unchecking, never retroactive.
-    "advisor": {"enabled": True, "auto_draft_repo_ids": []},
+    # ``model`` is the person's own pick for the Advisor's spawn; "" leaves it to KiroCrew (``apps.<name>.model``
+    # or the agent's own default). Studio never fills it in by itself.
+    "advisor": {"enabled": True, "auto_draft_repo_ids": [], "model": ""},
     "installer": {"run_doctor_after_install": False},
     "notifications": {"dashboard": True},
+    # What the new-intent wizard starts from for AI-DLC's per-stage summary confirmation. "scope" sends nothing,
+    # so the scope's own default applies, as before this setting existed; the wizard can still change it per intent.
+    "new_intent": {"summary_confirmation": "scope"},
 }
 
 PREF_KEY = "settings"
@@ -68,7 +74,7 @@ PROBLEM_TOO_MANY = "too_many"
 class _Field:
     """One storable leaf: how to check it, and how to explain the check to a human."""
 
-    kind: str  # enum | bool | int | repo_ids
+    kind: str  # enum | bool | int | repo_ids | model_id
     choices: tuple[str, ...] = ()
     lo: int = 0
     hi: int = 0
@@ -80,10 +86,18 @@ class _Field:
             return f"integer {self.lo}..{self.hi}"
         if self.kind == "repo_ids":
             return f"list of at most {C.MAX_REPOS} repo ids"
+        if self.kind == "model_id":
+            return f'"" (inherit) or a model id of at most {MODEL_ID_MAX} letters, digits and . _ - : / @ +'
         return "boolean"
 
 
 _DAYS = _Field("int", lo=RETENTION_DAYS_RANGE[0], hi=RETENTION_DAYS_RANGE[1])
+
+#: A model id is handed to the host verbatim, so only the plain id shape the host's own lists use is storable:
+#: no whitespace, no quoting, nothing a log line or a CLI argument could read as something else. Whether the
+#: account offers it is the host's question, asked when the Advisor is spawned.
+MODEL_ID_MAX = 128
+_MODEL_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@+-]*")
 
 SCHEMA: dict[str, _Field] = {
     "locale": _Field("enum", choices=("auto", "en-US", "zh-CN")),
@@ -99,8 +113,10 @@ SCHEMA: dict[str, _Field] = {
     "human_text_retention_days": _DAYS,
     "advisor.enabled": _Field("bool"),
     "advisor.auto_draft_repo_ids": _Field("repo_ids"),
+    "advisor.model": _Field("model_id"),
     "installer.run_doctor_after_install": _Field("bool"),
     "notifications.dashboard": _Field("bool"),
+    "new_intent.summary_confirmation": _Field("enum", choices=("scope", "on", "off")),
 }
 
 #: Dotted paths whose default is an object: a patch may address them, and a scalar there is a type error.
@@ -130,6 +146,12 @@ def _check(field: _Field, value: Any) -> str | None:
         if not isinstance(value, str):
             return PROBLEM_TYPE
         return None if value in field.choices else PROBLEM_NOT_ALLOWED
+    if field.kind == "model_id":
+        if not isinstance(value, str):
+            return PROBLEM_TYPE
+        if value == "":
+            return None
+        return None if len(value) <= MODEL_ID_MAX and _MODEL_ID_RE.fullmatch(value) else PROBLEM_NOT_ALLOWED
     if not isinstance(value, list) or any(not isinstance(item, str) or not item for item in value):
         return PROBLEM_TYPE
     return None if len(value) <= C.MAX_REPOS else PROBLEM_TOO_MANY

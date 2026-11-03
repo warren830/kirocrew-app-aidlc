@@ -28,7 +28,7 @@ import { StoppedTurnNotice } from './StoppedTurn'
 import { IntentList } from './IntentList'
 import { activityText } from './IntentRow'
 import { readInventory } from './IntentsView'
-import { intentFolder, repoFolder, SessionPanel } from './SessionPanel'
+import { CONVERSATION_PICK_KEY, intentFolder, repoFolder, SessionPanel } from './SessionPanel'
 
 const INTENT = {
   repo_id: 'r_1', repo_label: 'checkout-web', space: 'default', intent_dir: '250901-guest-checkout',
@@ -645,7 +645,18 @@ const mount = (intent: IntentSummary, onChanged?: (message?: string) => void) =>
 const folder = (over: Partial<ChatFolder>): ChatFolder =>
   ({ id: 'f', name: 'f', parent_id: '', project_dir: '', order: 0, ...over }) as ChatFolder
 
-/** Steps 1-5 answered, and a host folder store that hands out ids in order. */
+/** The host's model and effort lists, which the unbound panel reads on its own whenever it opens. */
+const HOST_LISTS = ['/api/models', '/api/effort-levels']
+/** What the panel SENT, without those reads: the create-and-bind sequence the host saw, in order. */
+const sent = () => apiCalls.filter((call) => !HOST_LISTS.includes(call.path))
+
+const MODELS = [
+  { model_name: 'auto', model_id: 'auto', rate_multiplier: 1.0 },
+  { model_name: 'claude-sonnet-5.5', model_id: 'claude-sonnet-5.5', rate_multiplier: 1.3 },
+]
+const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
+
+/** Steps 1-6 answered, and a host folder store that hands out ids in order. */
 function bindRoutes(folders: ChatFolder[], extra: Record<string, (body: unknown) => unknown> = {}) {
   let made = 0
   setApiRoutes({
@@ -706,7 +717,7 @@ describe('the canonical conversation panel', () => {
     expect(
       await screen.findByText('Filed in the sidebar under Checkout / 250901-guest-checkout.'),
     ).toBeInTheDocument()
-    expect(apiCalls).toEqual([
+    expect(sent()).toEqual([
       { method: 'GET', path: `${CHAT}/folders`, body: undefined },
       {
         method: 'POST', path: `${CHAT}/folders`,
@@ -822,7 +833,7 @@ describe('the canonical conversation panel', () => {
     expect(
       await screen.findByText('Filed in the sidebar under Checkout / 250901-guest-checkout.'),
     ).toBeInTheDocument()
-    expect(apiCalls).toEqual([{ method: 'GET', path: `${CHAT}/folders`, body: undefined }, ...slotCalls('f_intent')])
+    expect(sent()).toEqual([{ method: 'GET', path: `${CHAT}/folders`, body: undefined }, ...slotCalls('f_intent')])
   })
 
   it('creates the conversation in its folder, so a slot born with the repository is not pointed at it again', async () => {
@@ -856,7 +867,7 @@ describe('the canonical conversation panel', () => {
     expect(
       await screen.findByText('Filed in the sidebar under checkout-web / 250901-guest-checkout.'),
     ).toBeInTheDocument()
-    expect(apiCalls).toEqual([
+    expect(sent()).toEqual([
       { method: 'GET', path: `${CHAT}/folders`, body: undefined },
       { method: 'POST', path: `${CHAT}/folders`, body: { name: 'checkout-web', project_dir: '/work/checkout-web' } },
       {
@@ -920,7 +931,7 @@ describe('the canonical conversation panel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Create and bind the conversation' }))
 
     expect(
-      await screen.findByText(/Step 3 of 6 was refused \(point it at this repository\)/),
+      await screen.findByText(/Step 3 of 7 was refused \(point it at this repository\)/),
     ).toBeInTheDocument()
     // The host's own words, verbatim: a 403 with no code would otherwise read as "you are not the owner".
     expect(screen.getByText(/refusing a sensitive path: \/work\/checkout-web/)).toBeInTheDocument()
@@ -981,9 +992,102 @@ describe('the canonical conversation panel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Create and bind the conversation' }))
 
     expect(
-      await screen.findByText(/Step 4 of 6 was refused \(switch it to the aidlc agent\)/),
+      await screen.findByText(/Step 4 of 7 was refused \(switch it to the aidlc agent\)/),
     ).toBeInTheDocument()
     expect(apiCalls.map((call) => call.path)).not.toContain(`${INTENT_PATH}/session`)
+  })
+
+  it('offers Kiro default first and sends no model when it is kept', async () => {
+    bindRoutes([], { [`GET /api/models`]: () => MODELS, [`GET /api/effort-levels`]: () => EFFORTS })
+    mount(UNBOUND)
+
+    const model = screen.getByRole('combobox', { name: 'Model' })
+    expect(model).toHaveValue('')
+    await waitFor(() => expect(within(model).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Kiro default', 'auto · 1×', 'claude-sonnet-5.5 · 1.3×',
+    ]))
+    expect(screen.getByRole('combobox', { name: 'Reasoning effort' })).toHaveValue('')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create and bind the conversation' }))
+    await waitFor(() => expect(sent().map((call) => call.path)).toContain(`${INTENT_PATH}/session`))
+    const paths = sent().map((call) => call.path)
+    expect(paths).not.toContain(`${CHAT}/slots/${SLOT}/model`)
+    expect(paths).not.toContain(`${CHAT}/slots/${SLOT}/reasoning-effort`)
+  })
+
+  it('sets the picked model, then the effort, after the agent and before the bind, and remembers the pick', async () => {
+    bindRoutes([], {
+      [`GET /api/models`]: () => MODELS,
+      [`GET /api/effort-levels`]: () => EFFORTS,
+      [`POST ${CHAT}/slots/${SLOT}/model`]: (body) => ({ ok: true, ...(body as object) }),
+      [`POST ${CHAT}/slots/${SLOT}/reasoning-effort`]: (body) => ({ ok: true, ...(body as object) }),
+    })
+    mount(UNBOUND)
+
+    const model = screen.getByRole('combobox', { name: 'Model' })
+    await waitFor(() => expect(within(model).getAllByRole('option')).toHaveLength(3))
+    await userEvent.selectOptions(model, 'claude-sonnet-5.5')
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Reasoning effort' }), 'high')
+    await userEvent.click(screen.getByRole('button', { name: 'Create and bind the conversation' }))
+
+    await waitFor(() => expect(sent().map((call) => call.path)).toContain(`${INTENT_PATH}/session`))
+    const order = sent().map((call) => `${call.method} ${call.path}`)
+    const at = (entry: string) => order.indexOf(entry)
+    expect(at(`POST ${CHAT}/slots/${SLOT}/agent`)).toBeLessThan(at(`POST ${CHAT}/slots/${SLOT}/model`))
+    expect(at(`POST ${CHAT}/slots/${SLOT}/model`)).toBeLessThan(at(`POST ${CHAT}/slots/${SLOT}/reasoning-effort`))
+    expect(at(`POST ${CHAT}/slots/${SLOT}/reasoning-effort`)).toBeLessThan(at(`POST ${INTENT_PATH}/session`))
+    expect(sent().find((call) => call.path.endsWith('/model'))?.body).toEqual({ model: 'claude-sonnet-5.5' })
+    expect(sent().find((call) => call.path.endsWith('/reasoning-effort'))?.body).toEqual({ reasoning_effort: 'high' })
+    expect(JSON.parse(localStorage.getItem(CONVERSATION_PICK_KEY) ?? 'null'))
+      .toEqual({ model: 'claude-sonnet-5.5', effort: 'high' })
+  })
+
+  it('starts from the remembered pick, and keeps one the account no longer lists', async () => {
+    localStorage.setItem(CONVERSATION_PICK_KEY, JSON.stringify({ model: 'claude-retired-1', effort: 'max' }))
+    bindRoutes([], { [`GET /api/models`]: () => MODELS, [`GET /api/effort-levels`]: () => EFFORTS })
+    mount(UNBOUND)
+
+    const model = screen.getByRole('combobox', { name: 'Model' })
+    expect(model).toHaveValue('claude-retired-1')
+    expect(within(model).getByRole('option', { name: 'claude-retired-1 (not offered by your account now)' }))
+      .toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Reasoning effort' })).toHaveValue('max')
+  })
+
+  it('names a refused model as its own step and binds nothing', async () => {
+    localStorage.setItem(CONVERSATION_PICK_KEY, JSON.stringify({ model: 'claude-sonnet-5.5', effort: '' }))
+    bindRoutes([], {
+      [`GET /api/models`]: () => MODELS,
+      [`POST ${CHAT}/slots/${SLOT}/model`]: () => {
+        throw new StubApiError(400, { error: 'model not available for this account', code: 'model_unavailable' })
+      },
+    })
+    mount(UNBOUND)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create and bind the conversation' }))
+
+    expect(await screen.findByText(/Step 5 of 7 was refused \(set the model you picked\)/)).toBeInTheDocument()
+    expect(screen.getByText(/model not available for this account/)).toBeInTheDocument()
+    expect(sent().map((call) => call.path)).not.toContain(`${INTENT_PATH}/session`)
+  })
+
+  it('says why only Kiro default is offered when the host cannot list models, and still creates', async () => {
+    bindRoutes([], {
+      [`GET /api/models`]: () => {
+        throw new StubApiError(503, { error: 'model list unavailable' })
+      },
+    })
+    mount(UNBOUND)
+
+    expect(await screen.findByText(/KiroCrew could not list your models right now/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Create and bind the conversation' }))
+    await waitFor(() => expect(sent().map((call) => call.path)).toContain(`${INTENT_PATH}/session`))
+  })
+
+  it('reads no model list for an intent that is already bound', () => {
+    setApiRoutes({ [`GET ${CHAT}/slots`]: () => [] })
+    mount(INTENT)
+    expect(apiCalls.map((call) => call.path).filter((path) => HOST_LISTS.includes(path))).toEqual([])
   })
 
   it('numbers a refused bind of an existing conversation as the bind step', async () => {
@@ -998,7 +1102,7 @@ describe('the canonical conversation panel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Bind an existing conversation' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Bind this one' }))
 
-    expect(await screen.findByText(/Step 5 of 6 was refused \(bind it to this intent\)/)).toBeInTheDocument()
+    expect(await screen.findByText(/Step 6 of 7 was refused \(bind it to this intent\)/)).toBeInTheDocument()
   })
 
   it('shows the bound conversation and unbinds it', async () => {

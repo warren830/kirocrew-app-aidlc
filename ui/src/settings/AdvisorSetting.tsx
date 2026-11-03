@@ -3,10 +3,10 @@
  *
  * Three things this file is careful about:
  *
- *  1. **No model id, ever.** The model row exists to state that Studio hardcodes none (PRD §9.21,
- *     FR-ADV-002) — the Advisor's model comes from KiroCrew's role resolution and Studio never learns,
- *     stores or displays it. Showing an id here, even a read-only one, would make the App look like it chose
- *     the model.
+ *  1. **No hardcoded model id.** Studio ships no model and picks none (PRD §9.21): the model row offers
+ *     "inherit", which leaves the Advisor's model to KiroCrew, and then the host's own model list for the
+ *     signed-in account. Only a model the person picked is stored and passed to the spawn
+ *     (`advisor.model`); the list itself is never stored, because it differs per account.
  *  2. **Drafting ahead is an opt-in, per repository, off on every install** (FR-ADV-010). It spends model
  *     usage on cards nobody has opened yet, so it is a grant the repository's owner makes deliberately and
  *     can never be a global default. Note the inversion against the Slack list below it: there a ticked box
@@ -25,18 +25,20 @@
  */
 
 import { useI18n } from '../i18n'
+import type { StudioApi } from '../lib/api'
 import { plural } from '../lib/format'
 import type { RepoRecord } from '../lib/types'
-import { Chip } from '../shell/Chip'
+import { ModelSelect, useHostModels } from '../shell/ModelSelect'
 import { SettingRow, UnavailableChip, type SettingsControl } from './SettingsView'
 
 export interface AdvisorSettingProps {
+  api: StudioApi
   control: SettingsControl
   /** `null` while the repository list has not been read; `[]` only when there really are none. */
   repos: RepoRecord[] | null
 }
 
-export function AdvisorSetting({ control, repos }: AdvisorSettingProps) {
+export function AdvisorSetting({ api, control, repos }: AdvisorSettingProps) {
   const i18n = useI18n()
   const { t } = i18n
   const capability = control.capabilities.advisor
@@ -50,6 +52,8 @@ export function AdvisorSetting({ control, repos }: AdvisorSettingProps) {
   const orphans = repos === null ? [] : granted.filter((id) => !known.has(id))
   // Drafting ahead runs through the Advisor and nothing else, so both switches above gate the grant.
   const grantDisabled = control.busy || !advisorAvailable || !control.values.advisor.enabled
+  const models = useHostModels(api)
+  const model = control.values.advisor.model ?? ''
 
   const setGranted = (repoId: string, grant: boolean) => {
     const next = grant ? [...granted, repoId] : granted.filter((id) => id !== repoId)
@@ -142,10 +146,23 @@ export function AdvisorSetting({ control, repos }: AdvisorSettingProps) {
         title={t('settings.advisor.model.title')}
         description={t('settings.advisor.model.desc')}
       >
-        {() => (
-          <Chip icon="advisor" tone="aim">
-            {t('settings.advisor.model.chip')}
-          </Chip>
+        {(describedBy) => (
+          <div className="studio-col">
+            <ModelSelect
+              label={t('settings.advisor.model.label')}
+              inheritLabel={t('settings.advisor.model.inherit')}
+              value={model}
+              models={models.data}
+              loading={models.loading}
+              failed={models.error !== null}
+              disabled={control.busy}
+              describedBy={describedBy}
+              onChange={(next) => control.save({ advisor: { model: next } })}
+            />
+            {models.error !== null ? (
+              <span className="studio-muted studio-small">{t('settings.advisor.model.unavailable')}</span>
+            ) : null}
+          </div>
         )}
       </SettingRow>
     </>

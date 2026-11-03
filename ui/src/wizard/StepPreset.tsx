@@ -9,8 +9,10 @@
  * from a table in a design document would be exactly the kind of number that goes stale, so none is shown
  * when the repository cannot be read.
  *
- * Test strategy and review cap have a "From the scope" choice that sends nothing, so the engine's own
- * default applies. Depth does not: the wire contract requires one of the three values, so the selected
+ * Test strategy, review cap and summary confirmation have a "From the scope" choice that sends nothing, so the
+ * engine's own default applies. Summary confirmation starts from Settings → New intents rather than from the
+ * scope card, and a scope pick leaves it alone: it is the person's standing preference, not part of a preset.
+ * It is offered only where the repository's engine takes it at creation (`summarySupported`). Depth does not: the wire contract requires one of the three values, so the selected
  * card is always the concrete depth that will be sent, and the help line says where it came from.
  *
  * The Advisor panel is a prop, not a child this step owns (FR-NEW-006): its state lives in the wizard so a
@@ -24,10 +26,11 @@ import { Chip } from '../shell/Chip'
 import { Icon } from '../shell/Icon'
 import { useI18n } from '../i18n'
 import type { EffectivePlan, PlanDepth, PlanScopesResponse } from '../lib/types'
-import type { ReviewCap, ScopeMetaView, WizardState } from './WizardView'
+import type { ReviewCap, ScopeMetaView, SummaryChoice, WizardState } from './WizardView'
 
 const DEPTHS: readonly PlanDepth[] = ['Minimal', 'Standard', 'Comprehensive']
 const CAPS: readonly ReviewCap[] = ['none', 'advisory', 'adversarial']
+const SUMMARY_CHOICES: readonly SummaryChoice[] = ['on', 'off']
 
 export interface StepPresetProps {
   state: WizardState
@@ -41,9 +44,15 @@ export interface StepPresetProps {
   onPatch: (patch: Partial<WizardState>) => void
   /** `PlanAdvisorPanel`, rendered first: the offer to skip the questionnaire comes before the questionnaire. */
   advisorPanel: ReactNode
+  /** The repository's engine takes a summary-confirmation choice at creation; without it the row is not shown. */
+  summarySupported?: boolean
+  onPickSummary?: (value: SummaryChoice | null) => void
 }
 
-export function StepPreset({ state, scopes, catalog = null, meta, plan, unreadable, onPickScope, onPatch, advisorPanel }: StepPresetProps) {
+export function StepPreset({
+  state, scopes, catalog = null, meta, plan, unreadable, onPickScope, onPatch, advisorPanel, summarySupported = false,
+  onPickSummary,
+}: StepPresetProps) {
   const i18n = useI18n()
   const { t } = i18n
   // The selected scope may not be in the discovered list (a scope this repo defines but the last refusal
@@ -188,6 +197,38 @@ export function StepPreset({ state, scopes, catalog = null, meta, plan, unreadab
           ))}
         </div>
       </PickRow>
+
+      {summarySupported && onPickSummary ? (
+        <PickRow label={t('wizard.preset.summary')} help={t('wizard.preset.summaryHelp')}>
+          <div className="studio-picks">
+            <button
+              type="button"
+              className="studio-pick"
+              aria-pressed={state.summaryConfirmation === null}
+              onClick={() => onPickSummary(null)}
+            >
+              <span className="studio-pick-l">{t('wizard.preset.fromScope')}</span>
+              <span className="studio-pick-d">
+                {meta?.summaryConfirmation
+                  ? t('wizard.preset.fromScopeValue', { value: t(`wizard.preset.summary.${meta.summaryConfirmation}`) })
+                  : t('wizard.preset.fromScopeUnset')}
+              </span>
+            </button>
+            {SUMMARY_CHOICES.map((value) => (
+              <button
+                type="button"
+                className="studio-pick"
+                key={value}
+                aria-pressed={state.summaryConfirmation === value}
+                onClick={() => onPickSummary(value)}
+              >
+                <span className="studio-pick-l">{t(`wizard.preset.summary.${value}`)}</span>
+                <span className="studio-pick-d">{t(`wizard.preset.summary.${value}.desc`)}</span>
+              </button>
+            ))}
+          </div>
+        </PickRow>
+      ) : null}
     </div>
   )
 }
