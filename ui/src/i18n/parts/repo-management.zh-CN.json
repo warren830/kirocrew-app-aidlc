@@ -13,5 +13,6 @@
   "repos.directory.parent": "上一级目录",
   "repos.directory.select": "使用此目录",
   "repos.directory.list": "目录列表",
+  "repos.directory.empty": "这个目录下没有子目录。",
   "repos.directory.truncated": "目录列表已限量显示。可填写更具体的路径，打开未显示的目录。"
 }

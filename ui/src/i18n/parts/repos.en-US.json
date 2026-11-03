@@ -30,7 +30,7 @@
   "repos.add.pathHelp": "The absolute path of the repository root, for example /Users/you/work/checkout-web. Studio expands a leading ~, resolves symlinks, and writes nothing while looking.",
   "repos.add.pathLabel": "Absolute path",
   "repos.add.pathNotAbsolute": "The path has to be absolute: it must start with / or ~.",
-  "repos.add.pathRequired": "An absolute path is required.",
+  "repos.add.pathRequired": "An absolute path is required: type one, or choose a directory with Browse directories.",
   "repos.add.preflight": "Run preflight",
   "repos.add.preflightRunning": "Reading the directory…",
   "repos.add.register": "Register this path",

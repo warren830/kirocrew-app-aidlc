@@ -210,7 +210,8 @@ export function AddRepoDialog({ api, repos, onClose, onRegistered, onOpenRepo }:
           <p className="studio-help" id="studio-add-repo-path-help">
             {t('repos.add.pathHelp')}
           </p>
-          <DirectoryPicker api={api} initialPath={path} onSelect={changePath} disabled={phase !== 'idle'} />
+          <DirectoryPicker api={api} initialPath={path} onSelect={changePath} onBrowse={changePath}
+            disabled={phase !== 'idle'} />
           {localError ? (
             <p className="studio-note" data-tone="danger" role="alert">
               <Icon name="warn" size={13} /> {localError}

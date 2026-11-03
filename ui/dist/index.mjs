@@ -1712,7 +1712,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"repos.add.pathHelp": "The absolute path of the repository root, for example /Users/you/work/checkout-web. Studio expands a leading ~, resolves symlinks, and writes nothing while looking.",
 	"repos.add.pathLabel": "Absolute path",
 	"repos.add.pathNotAbsolute": "The path has to be absolute: it must start with / or ~.",
-	"repos.add.pathRequired": "An absolute path is required.",
+	"repos.add.pathRequired": "An absolute path is required: type one, or choose a directory with Browse directories.",
 	"repos.add.preflight": "Run preflight",
 	"repos.add.preflightRunning": "Reading the directory…",
 	"repos.add.register": "Register this path",
@@ -1775,6 +1775,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"repos.desktopOnly.body": "Choosing an absolute path, reading a preflight and confirming an installation need a wider screen than this one. Open Studio on a desktop to register a repository or to install, upgrade or recover AI-DLC. Everything already registered stays readable here.",
 	"repos.desktopOnly.title": "Registration, installation and upgrade are desktop-only",
 	"repos.detail.back": "All repositories",
+	"repos.directory.empty": "No folders inside this one.",
 	"repos.directory.help": "Choose a directory on the machine running KiroCrew.",
 	"repos.directory.list": "Directories",
 	"repos.directory.open": "Browse directories",
@@ -4363,7 +4364,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"repos.add.pathHelp": "仓库根目录的绝对路径，例如 /Users/you/work/checkout-web。Studio 会展开开头的 ~ 并解析符号链接；查看过程不写入任何内容。",
 	"repos.add.pathLabel": "绝对路径",
 	"repos.add.pathNotAbsolute": "路径必须是绝对路径：需以 / 或 ~ 开头。",
-	"repos.add.pathRequired": "必须填写绝对路径。",
+	"repos.add.pathRequired": "必须填写绝对路径：直接输入，或用「浏览目录」选一个目录。",
 	"repos.add.preflight": "运行预检",
 	"repos.add.preflightRunning": "正在读取目录…",
 	"repos.add.register": "注册该路径",
@@ -4426,6 +4427,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"repos.desktopOnly.body": "选择绝对路径、阅读预检报告并确认安装，需要比当前更宽的屏幕。请在桌面端打开 Studio 来注册仓库，或安装、升级、恢复 AI-DLC。已经注册的内容在这里仍然可以查看。",
 	"repos.desktopOnly.title": "注册、安装与升级仅支持桌面端",
 	"repos.detail.back": "全部仓库",
+	"repos.directory.empty": "这个目录下没有子目录。",
 	"repos.directory.help": "选择运行 KiroCrew 的机器上的目录。",
 	"repos.directory.list": "目录列表",
 	"repos.directory.open": "浏览目录",
@@ -20074,15 +20076,16 @@ function xl({ report: e, duplicateLabel: t, children: n }) {
 }
 //#endregion
 //#region src/repos/DirectoryPicker.tsx
-function Sl({ api: e, initialPath: t, onSelect: n, disabled: r = !1 }) {
-	let { t: i } = W(), [a, o] = d(null), [s, c] = d(!1), [l, u] = d(!1), [f, g] = d(null), _ = async (t) => {
-		c(!0), u(!0), g(null);
+function Sl({ api: e, initialPath: t, onSelect: n, onBrowse: r, disabled: i = !1 }) {
+	let { t: a } = W(), [o, s] = d(null), [c, l] = d(!1), [u, f] = d(!1), [g, _] = d(null), v = async (t, n = !1) => {
+		l(!0), f(!0), _(null);
 		try {
-			o(await e.directories(t));
+			let i = await e.directories(t);
+			s(i), n && r?.(i.path);
 		} catch (e) {
-			g(Ce(e));
+			_(Ce(e));
 		} finally {
-			u(!1);
+			f(!1);
 		}
 	};
 	return /* @__PURE__ */ h("div", {
@@ -20090,63 +20093,67 @@ function Sl({ api: e, initialPath: t, onSelect: n, disabled: r = !1 }) {
 		children: [/* @__PURE__ */ m("button", {
 			type: "button",
 			className: "studio-btn",
-			disabled: r || l,
-			onClick: () => void _(t.trim() || null),
-			children: i("repos.directory.open")
-		}), s ? /* @__PURE__ */ h("div", {
+			disabled: i || u,
+			onClick: () => void v(t.trim() || null),
+			children: a("repos.directory.open")
+		}), c ? /* @__PURE__ */ h("div", {
 			className: "studio-block",
-			"aria-busy": l,
+			"aria-busy": u,
 			children: [
 				/* @__PURE__ */ m("p", {
 					className: "studio-note",
-					children: i("repos.directory.help")
+					children: a("repos.directory.help")
 				}),
-				f ? /* @__PURE__ */ m(gl, { error: f }) : null,
-				a ? /* @__PURE__ */ h(p, { children: [
+				g ? /* @__PURE__ */ m(gl, { error: g }) : null,
+				o ? /* @__PURE__ */ h(p, { children: [
 					/* @__PURE__ */ m("p", {
 						className: "studio-mono studio-wrap-any",
-						children: a.path
+						children: o.path
 					}),
 					/* @__PURE__ */ h("div", {
 						className: "studio-row",
 						children: [/* @__PURE__ */ m("button", {
 							type: "button",
 							className: "studio-btn",
-							disabled: l || !a.parent,
-							onClick: () => void _(a.parent),
-							children: i("repos.directory.parent")
+							disabled: u || !o.parent,
+							onClick: () => void v(o.parent, !0),
+							children: a("repos.directory.parent")
 						}), /* @__PURE__ */ m("button", {
 							type: "button",
 							className: "studio-btn",
-							disabled: l,
+							disabled: u,
 							onClick: () => {
-								n(a.path), c(!1);
+								n(o.path), l(!1);
 							},
-							children: i("repos.directory.select")
+							children: a("repos.directory.select")
 						})]
 					}),
 					/* @__PURE__ */ m("ul", {
 						className: "studio-directory-list",
-						"aria-label": i("repos.directory.list"),
-						children: a.directories.map((e) => /* @__PURE__ */ m("li", { children: /* @__PURE__ */ m("button", {
+						"aria-label": a("repos.directory.list"),
+						children: o.directories.map((e) => /* @__PURE__ */ m("li", { children: /* @__PURE__ */ m("button", {
 							type: "button",
 							className: "studio-btn",
-							disabled: l,
-							onClick: () => void _(e.path),
+							disabled: u,
+							onClick: () => void v(e.path, !0),
 							children: e.name
 						}) }, e.path))
 					}),
-					a.truncated ? /* @__PURE__ */ m("p", {
+					o.directories.length === 0 ? /* @__PURE__ */ m("p", {
 						className: "studio-note",
-						children: i("repos.directory.truncated")
+						children: a("repos.directory.empty")
+					}) : null,
+					o.truncated ? /* @__PURE__ */ m("p", {
+						className: "studio-note",
+						children: a("repos.directory.truncated")
 					}) : null
 				] }) : null,
 				/* @__PURE__ */ m("button", {
 					type: "button",
 					className: "studio-btn",
-					disabled: l,
-					onClick: () => c(!1),
-					children: i("common.close")
+					disabled: u,
+					onClick: () => l(!1),
+					children: a("common.close")
 				})
 			]
 		}) : null]
@@ -20282,6 +20289,7 @@ function wl({ api: e, repos: t, onClose: n, onRegistered: r, onOpenRepo: a }) {
 							api: e,
 							initialPath: c,
 							onSelect: j,
+							onBrowse: j,
 							disabled: S !== "idle"
 						}),
 						b ? /* @__PURE__ */ h("p", {

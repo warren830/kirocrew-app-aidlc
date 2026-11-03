@@ -13,5 +13,6 @@
   "repos.directory.parent": "Parent directory",
   "repos.directory.select": "Use this directory",
   "repos.directory.list": "Directories",
+  "repos.directory.empty": "No folders inside this one.",
   "repos.directory.truncated": "This list is limited. Enter a more specific path to open a directory that is not shown."
 }

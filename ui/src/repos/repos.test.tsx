@@ -464,10 +464,40 @@ describe('adding a repository', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Browse directories' }))
     await userEvent.click(await screen.findByRole('button', { name: 'my repo' }))
     await waitFor(() => expect(screen.getByText('/work/my repo')).toBeInTheDocument())
+    expect(screen.getByText('No folders inside this one.')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Use this directory' }))
     expect(screen.getByLabelText('Absolute path')).toHaveValue('/work/my repo')
     expect(screen.getByRole('button', { name: /Register this path/ })).toBeDisabled()
     expect(apiCalls.filter((call) => call.path.endsWith('/directories'))).toHaveLength(2)
+  })
+
+  it('puts the directory being browsed in the path field, so a preflight never runs on an empty one', async () => {
+    setApiRoutes({
+      ...shellRoutes(),
+      [`GET ${BASE}/repos`]: () => ({ repos: [], totals: {} }),
+      [`POST ${BASE}/directories`]: (body) => {
+        const path = (body as { path: string | null }).path ?? '/work'
+        return { path, parent: path === '/work' ? '/' : '/work', directories: path === '/work'
+          ? [{ name: 'local-s3', path: '/work/local-s3' }] : [], truncated: false }
+      },
+      [`POST ${BASE}/repos/preflight`]: () => ({ preflight: preflight() }),
+    })
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: /Add repository/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Run preflight/ }))
+    expect(screen.getByRole('alert')).toHaveTextContent(/choose a directory with Browse directories/)
+    await userEvent.click(screen.getByRole('button', { name: 'Browse directories' }))
+    // Opening the picker lists a directory without choosing it.
+    await screen.findByRole('button', { name: 'local-s3' })
+    expect(screen.getByLabelText('Absolute path')).toHaveValue('')
+    await userEvent.click(screen.getByRole('button', { name: 'local-s3' }))
+    await waitFor(() => expect(screen.getByLabelText('Absolute path')).toHaveValue('/work/local-s3'))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Parent directory' }))
+    await waitFor(() => expect(screen.getByLabelText('Absolute path')).toHaveValue('/work'))
+    await userEvent.click(screen.getByRole('button', { name: /Run preflight/ }))
+    const sent = apiCalls.filter((call) => call.path.endsWith('/repos/preflight'))
+    expect(sent.map((call) => (call.body as { path: string }).path)).toEqual(['/work'])
   })
 
   it('runs a read-only preflight before anything can be registered', async () => {
