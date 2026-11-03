@@ -8,7 +8,7 @@ import { ref } from '../lib/format'
 import { EMPTY_ROUTE } from '../lib/route'
 import { actionCard, API_BASE, decisionSpec } from '../test/fixtures'
 import type { ActionCard } from '../lib/types'
-import { apiCalls, setApiRoutes } from '../test/stubs/app-sdk'
+import { apiCalls, navigations, setApiRoutes } from '../test/stubs/app-sdk'
 import '../templates/TemplateRegistry'
 import { DetailShell } from './DetailShell'
 
@@ -191,5 +191,45 @@ describe('recovery notices explain the actual cause and lifecycle', () => {
       ...EMPTY_ROUTE, view: 'actions', repo: card.repo.repo_id, space: card.space, intent: card.intent.intent_key,
     })
     expect(apiCalls.filter((call) => call.method !== 'GET')).toEqual([])
+  })
+})
+
+describe('a gate the audit opened but the state file does not show', () => {
+  const finding = (params: Record<string, unknown>) => ({
+    code: 'audit_gate_without_checkbox', severity: 'blocking' as const, message_key: 'finding.audit_gate_without_checkbox',
+    params: { stage: 'rough-mockups', mark: '-', row_state: 'in_progress', ...params }, evidence: [],
+  })
+  function gateCard(params: Record<string, unknown>, running: boolean) {
+    const base = actionCard()
+    return {
+      headline: { key: 'action.recovery.headline', params: { stage: 'rough-mockups', codes: ['audit_gate_without_checkbox'] } },
+      evidence: { ...base.evidence, findings: [finding(params)],
+        session: { ...(base.evidence.session ?? { slot_key: 's1', session_key: 'k', stop_state: 'idle', last_turn_ts: null,
+          queue_depth: 0, busy_reasons: [] }), slot_key: 'aidlc-studio-v2-r_1-261103-x', running } },
+    } as Partial<ActionCard>
+  }
+
+  it('says the task-list sync put the gate back, and opens the conversation where AI-DLC is waiting', async () => {
+    document.documentElement.lang = 'en-US'
+    show(false, gateCard({ reverted_by: 'aidlc-sync-workflow-state.ts', reverted_at: '2026-11-03T13:35:52Z' }, false))
+    expect(await screen.findByText(/its own task-list hook \(sync-workflow-state, a known AI-DLC 2\.11 issue\)/))
+      .toBeInTheDocument()
+    navigations.length = 0
+    await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }))
+    expect(navigations).toEqual(['/chat?sid=aidlc-studio-v2-r_1-261103-x'])
+  })
+
+  it('without the write log it still sends the person to the idle conversation', async () => {
+    document.documentElement.lang = 'en-US'
+    show(false, gateCard({}, false))
+    expect(await screen.findByText(/The conversation is idle, so AI-DLC is most likely waiting for your answer about rough-mockups/))
+      .toBeInTheDocument()
+  })
+
+  it('says nothing of the kind while AI-DLC is still working', async () => {
+    document.documentElement.lang = 'en-US'
+    show(false, gateCard({ reverted_by: 'aidlc-sync-workflow-state.ts' }, true))
+    await screen.findAllByText(/needs recovery|recovery/i)
+    expect(screen.queryByRole('button', { name: 'Open the conversation' })).not.toBeInTheDocument()
   })
 })

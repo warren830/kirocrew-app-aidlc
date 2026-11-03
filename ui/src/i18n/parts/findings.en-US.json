@@ -16,7 +16,7 @@
   "finding.gate_without_audit_row.title": "Approval gate not confirmed by the audit trail",
   "finding.gate_without_audit_row.body": "aidlc-state.md marks {stage} as waiting for approval, but the audit trail has no matching entry since the stage last started or had changes requested. Studio will not send a decision for this intent until the two agree. If AI-DLC is still working, this clears on its own.",
   "finding.audit_gate_without_checkbox.title": "Audit trail shows a gate the state file does not",
-  "finding.audit_gate_without_checkbox.body": "The audit trail says {stage} is waiting for approval, but aidlc-state.md does not mark it that way. Studio will not send a decision for this intent until the two agree. If AI-DLC is still working, this clears on its own.",
+  "finding.audit_gate_without_checkbox.body": "The audit trail says {stage} is waiting for approval, but aidlc-state.md does not mark it that way. Studio will not send a decision for this intent until the two agree. If AI-DLC is still working, this clears on its own; if its conversation is idle, AI-DLC is waiting for your answer there.",
   "finding.missing_required_artifact.title": "A required output is missing",
   "finding.missing_required_artifact.body": "{stage} is waiting for approval, but its required output {artifact} was not found. Studio holds back decisions for this intent until the file is there. Ask AI-DLC in the conversation to produce it.",
   "finding.state_version_unsupported.title": "State file version does not match the engine",

@@ -464,12 +464,19 @@ class ConsistencyEngine:
                 and _attr(row, "state") in _NON_GATE_STAGE_STATES
                 and not _team_unit_gate(state, current, latest_gate)
             ):
+                # AI-DLC 2.11's task-list sync can put the checkbox back right after the gate opened: say so, so the
+                # card can tell the person the gate is waiting for them in the conversation.
+                reverted = _attr(snap, "checkbox_reverted")
+                reverted = reverted if isinstance(reverted, Mapping) and reverted.get("stage") == current else None
                 out.append(self._finding(
                     "audit_gate_without_checkbox",
                     {"stage": current, "mark": _attr(row, "mark"), "row_state": _attr(row, "state"),
-                     "awaiting_at": _attr(latest_gate, "timestamp")},
+                     "awaiting_at": _attr(latest_gate, "timestamp"),
+                     **({"reverted_by": reverted["by"], "reverted_at": reverted["at"]} if reverted else {})},
                     (_audit_ref(latest_gate),
-                     EvidenceRef("file", state_rel, f"row [{_attr(row, 'mark')}] {current}")),
+                     EvidenceRef("file", state_rel, f"row [{_attr(row, 'mark')}] {current}"),
+                     *((EvidenceRef("file", f"{self._record_rel(snap)}/{reverted['log']}",
+                                    f"{reverted['by']} set the checkbox back at {reverted['at']}"),) if reverted else ())),
                 ))
 
         if not complete:

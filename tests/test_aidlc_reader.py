@@ -1966,3 +1966,40 @@ def test_no_unit_gate_is_read_outside_team_ownership_or_past_an_unreadable_claim
     (blocked / "aidlc" / ".aidlc-unit-scope.json").mkdir()
     # Unread, the stamp could not narrow the fold to this clone's Unit: no gate rather than everyone's.
     assert team_gates(reader, blocked) == (None, ())
+
+
+def _state_writes(tmp_path, writes):
+    log = tmp_path / "aidlc/spaces/default/intents/261103-x/.aidlc-engine/state-writes.json"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text(json.dumps(writes) if not isinstance(writes, str) else writes)
+    return tmp_path
+
+
+GATE = {"at": "2026-11-03T13:35:52Z", "by": "aidlc-state.ts gate-start rough-mockups", "changed": ["rough-mockups checkbox"]}
+SYNC = {"at": "2026-11-03T13:35:52Z", "by": "aidlc-sync-workflow-state.ts", "changed": ["rough-mockups checkbox"]}
+
+
+def test_a_gate_checkbox_put_back_by_the_task_list_sync_is_read_from_the_engines_write_log(reader, tmp_path):
+    """The two writes of local-s3's Rough Mockups gate (2026-11-03): gate-start, then the sync's revert."""
+    repo = _state_writes(tmp_path, [{"at": "2026-11-03T13:09:44Z", "by": "aidlc.ts", "changed": ["Summary Confirmation"]},
+                                    GATE, SYNC])
+    assert reader.checkbox_reverted_by_sync(repo, "default", "261103-x", "rough-mockups") == {
+        "stage": "rough-mockups", "by": "aidlc-sync-workflow-state.ts", "at": "2026-11-03T13:35:52Z",
+        "gate_at": "2026-11-03T13:35:52Z", "log": ".aidlc-engine/state-writes.json"}
+
+
+@pytest.mark.parametrize("writes", [
+    pytest.param([GATE], id="gate-open-nothing-after"),
+    pytest.param([SYNC], id="sync-without-a-gate"),
+    pytest.param([GATE, SYNC, {**GATE, "at": "2026-11-03T13:40:00Z"}], id="gate-opened-again"),
+    pytest.param([{**GATE, "by": "aidlc-state.ts gate-start user-stories"}, SYNC], id="another-stages-gate"),
+    pytest.param("not json", id="unreadable"),
+    pytest.param({"writes": []}, id="not-a-list"),
+])
+def test_no_task_list_revert_is_claimed_without_both_writes_in_that_order(reader, tmp_path, writes):
+    repo = _state_writes(tmp_path, writes)
+    assert reader.checkbox_reverted_by_sync(repo, "default", "261103-x", "rough-mockups") is None
+
+
+def test_no_write_log_is_no_revert(reader, tmp_path):
+    assert reader.checkbox_reverted_by_sync(tmp_path, "default", "261103-x", "rough-mockups") is None

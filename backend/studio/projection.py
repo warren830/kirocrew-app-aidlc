@@ -328,6 +328,8 @@ class IntentSnapshot:
     unit_gates: tuple[UnitGate, ...] = ()
     #: Evidence for every open team Unit gate that is not the executing `(stage, unit)`.
     unit_gate_evidence: "Mapping[tuple[str, str], StageEvidence]" = dataclasses_field(default_factory=dict)
+    #: The current stage's gate checkbox put back by AI-DLC's task-list sync (``checkbox_reverted_by_sync``).
+    checkbox_reverted: Mapping[str, str] | None = None
 
     def team_gate(self, stage: str | None, unit: str | None) -> bool:
         """Whether `(stage, unit)` names a team-owned Unit's gate. Only then does a card carry its unit into the
@@ -687,6 +689,9 @@ class Projection:
             for gate in unit_gates
             if gate.status == "awaiting-approval" and (gate.stage, gate.unit) != (stage, unit)
         }
+        current_stage = (state.current_stage or "").strip() if state is not None else ""
+        checkbox_reverted = (
+            self._reader.checkbox_reverted_by_sync(root, space, intent_dir, current_stage) if current_stage else None)
         return IntentSnapshot(
             repo_id=repo.repo_id, space=space, intent_dir=intent_dir, intent_key=intent_key_for(space, intent_dir),
             row=row, state_snap=state_snap, state=state, directive=directive, audit=audit, markers=markers,
@@ -699,7 +704,7 @@ class Projection:
             layout=self._reader.layout(root), acceptance_criteria=current.acceptance_criteria,
             other_stage_evidence=others, artifact_dirs_rel=current.artifact_dirs_rel,
             audit_question_attempt=audit_question_attempt, unit_gate_scope=unit_gate_scope, unit_gates=unit_gates,
-            unit_gate_evidence=unit_gate_evidence,
+            unit_gate_evidence=unit_gate_evidence, checkbox_reverted=checkbox_reverted,
         )
 
     def _harness(self, root: Path, preferred: str) -> "HarnessDir | None":

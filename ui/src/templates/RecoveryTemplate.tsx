@@ -15,6 +15,8 @@
  *    body explains each one and the bar sends exactly the one the user picks.
  */
 
+import { useNavigate } from '@kirocrew/app-sdk'
+
 import { useI18n } from '../i18n'
 import { at, count } from '../lib/format'
 import { isClosedAction } from '../lib/actionQueue'
@@ -69,6 +71,11 @@ export function RecoveryTemplate({ card, detail, api, go }: TemplateProps) {
   const hooksSilent = evidence.findings.some(
     (finding) => finding.code === 'human_presence_anomaly' && finding.params?.hooks_silent === true,
   )
+  // A gate the audit opened but the state file does not show, with the conversation idle: AI-DLC is waiting for the
+  // person's answer in the conversation, and Studio cannot send it. AI-DLC 2.11's task-list sync is the known cause.
+  const gateMismatch = evidence.findings.find((finding) => finding.code === 'audit_gate_without_checkbox')
+  const gateWaitsInChat = gateMismatch !== undefined && evidence.session !== null && !evidence.session.running
+  const navigate = useNavigate()
   const deliveryConfirmed = delivery.delivery_confirmed === true
   const needsReconciliation = card.status === 'ReconciliationRequired' || delivery.outcome === 'uncertain'
 
@@ -106,6 +113,20 @@ export function RecoveryTemplate({ card, detail, api, go }: TemplateProps) {
             <p>{t('template.recovery.hooksSilent')}</p>
             <button type="button" className="studio-btn" onClick={() => go({ ...EMPTY_ROUTE, view: 'settings' })}>
               {t('template.recovery.openBunSettings')}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {gateWaitsInChat && !closed && evidence.session ? (
+        <div className="studio-consequence">
+          <Icon name="link" size={14} />
+          <div>
+            <p>{t(gateMismatch?.params?.reverted_by ? 'template.recovery.gateReverted' : 'template.recovery.gateWaiting',
+              { stage: String(gateMismatch?.params?.stage ?? card.stage?.slug ?? '') })}</p>
+            <button type="button" className="studio-btn"
+              onClick={() => navigate(`/chat?sid=${encodeURIComponent(evidence.session?.slot_key ?? '')}`)}>
+              {t('template.recovery.openConversation')}
             </button>
           </div>
         </div>

@@ -93,6 +93,7 @@ class SnapView:
     is_active: bool = True
     dangling_cursor: bool = False
     first_unreadable_at: str | None = None
+    checkbox_reverted: Any = None
 
 
 def parse_state(text: str, constants: Any) -> StateView:
@@ -503,6 +504,24 @@ def test_audit_gate_without_checkbox(ev, make_facts, gate_state, gate_audit):
     assert finding.params["stage"] == "requirements-analysis" and finding.params["row_state"] == "in_progress"
     assert "audit_gate_without_checkbox" not in _codes(ev(gate_state, facts, intent_dir=F.PAYLOAD_GATE_OPEN,
                                                           audit_shards=(gate_audit,)))
+
+
+def test_audit_gate_without_checkbox_names_the_task_list_sync_that_put_it_back(ev, make_facts, gate_audit):
+    """AI-DLC 2.11's task-list sync turns ``[?]`` back into ``[-]`` right after the gate opens (local-s3,
+    2026-11-03); the finding says so, with the engine's own write log as evidence, so the card can send the person
+    to the conversation where the gate is waiting."""
+    reverted = {"stage": "requirements-analysis", "by": "aidlc-sync-workflow-state.ts", "at": "2026-09-03T14:00:01Z",
+                "gate_at": "2026-09-03T14:00:01Z", "log": ".aidlc-engine/state-writes.json"}
+    finding = _one(ev(in_progress_gate(), make_facts(engine_state_version=7), intent_dir=F.PAYLOAD_GATE_OPEN,
+                      audit_shards=(gate_audit,), checkbox_reverted=reverted), "audit_gate_without_checkbox")
+    assert finding.params["reverted_by"] == "aidlc-sync-workflow-state.ts"
+    assert finding.params["reverted_at"] == "2026-09-03T14:00:01Z"
+    assert any(ref.ref.endswith("/.aidlc-engine/state-writes.json") for ref in finding.evidence)
+    # Another stage's revert is not this gate's cause.
+    other = _one(ev(in_progress_gate(), make_facts(engine_state_version=7), intent_dir=F.PAYLOAD_GATE_OPEN,
+                    audit_shards=(gate_audit,), checkbox_reverted={**reverted, "stage": "user-stories"}),
+                 "audit_gate_without_checkbox")
+    assert "reverted_by" not in other.params
 
 
 def test_a_team_owned_unit_gate_is_not_a_checkbox_contradiction(ev, make_facts):

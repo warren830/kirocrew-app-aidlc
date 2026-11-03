@@ -68,6 +68,10 @@ ENGINE_RECORD_NAMES: dict[str, str] = {
 }
 #: Legacy names the engine still falls back to; the rest are pre-2.9 leftovers (FORMAT-NOTES §11.2).
 ENGINE_LEGACY_READS = frozenset({DIRECTIVE_FILENAME, HOOKS_HEALTH_DIRNAME, ".aidlc-sensors"})
+#: The engine's log of its own state-file writes (2.11 ``recordStateWrite``): who wrote, when, and what changed.
+STATE_WRITES_REL = f"{ENGINE_DIRNAME}/state-writes.json"
+#: The hook that mirrors a task list's "in progress" into the state file (hooks/aidlc-sync-workflow-state.ts).
+STATE_SYNC_WRITER = "aidlc-sync-workflow-state.ts"
 
 
 def record_file(repo: Path, record: str, legacy_rel: str) -> Path:
@@ -2874,6 +2878,35 @@ class AidlcReader:
         return metas
 
     # -- markers, baselines, boundary --------------------------------------
+    def checkbox_reverted_by_sync(self, repo: Path, space: str, intent_dir: str, stage: str) -> dict[str, str] | None:
+        """Did AI-DLC's task-list sync put ``stage``'s checkbox back right after its gate opened?
+
+        2.11's ``setStatus`` sets the checkbox to in-progress whatever it was, so a task list still saying "in
+        progress" turns ``[?]`` back into ``[-]`` while the audit keeps the gate open (local-s3, 2026-11-03): the
+        gate then cannot be answered from Studio. The engine logs each state write; the newest one touching this
+        checkbox being the sync, right after this stage's gate-start, is that case. Evidence only, never authority.
+        """
+        record = self.record_rel(space, intent_dir)
+        try:
+            data = security.bounded_read(security.resolve_inside(repo, f"{record}/{STATE_WRITES_REL}"), C.MAX_JSON_BYTES)
+            writes = json.loads(data) if data is not None else None
+        except (OSError, StudioError, ValueError):
+            return None
+        if not isinstance(writes, list):
+            return None
+        changed = f"{stage} checkbox"
+        touching = [
+            w for w in writes
+            if isinstance(w, dict) and isinstance(w.get("by"), str) and isinstance(w.get("at"), str)
+            and isinstance(w.get("changed"), list) and changed in w["changed"]
+        ]
+        if len(touching) < 2:
+            return None
+        gate, last = touching[-2], touching[-1]
+        if last["by"] != STATE_SYNC_WRITER or gate["by"] != f"aidlc-state.ts gate-start {stage}":
+            return None
+        return {"stage": stage, "by": last["by"], "at": last["at"], "gate_at": gate["at"], "log": STATE_WRITES_REL}
+
     def read_markers(self, repo: Path, space: str, intent_dir: str) -> Markers:
         """The runtime markers around a record. ``.aidlc-goal-stop`` is presence only: AI-DLC never writes it."""
         record = self.record_rel(space, intent_dir)

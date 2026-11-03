@@ -973,7 +973,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"estimate.source.rule_band": "rule-based band",
 	"estimate.source.unknown": "source not stated",
 	"estimate.turns": "Turns",
-	"finding.audit_gate_without_checkbox.body": "The audit trail says {stage} is waiting for approval, but aidlc-state.md does not mark it that way. Studio will not send a decision for this intent until the two agree. If AI-DLC is still working, this clears on its own.",
+	"finding.audit_gate_without_checkbox.body": "The audit trail says {stage} is waiting for approval, but aidlc-state.md does not mark it that way. Studio will not send a decision for this intent until the two agree. If AI-DLC is still working, this clears on its own; if its conversation is idle, AI-DLC is waiting for your answer there.",
 	"finding.audit_gate_without_checkbox.title": "Audit trail shows a gate the state file does not",
 	"finding.audit_incomplete.body": "The audit trail is long, so Studio read only its most recent part. Anything that depends on older history may be incomplete; nothing needs doing.",
 	"finding.audit_incomplete.title": "Only part of the audit trail was read",
@@ -2458,6 +2458,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"template.recovery.diskUnknown": "Whether those files changed is not recorded.",
 	"template.recovery.evidence": "Evidence from every source",
 	"template.recovery.findings": "What disagrees",
+	"template.recovery.gateReverted": "AI-DLC opened the approval gate for {stage}, then its own task-list hook (sync-workflow-state, a known AI-DLC 2.11 issue) set the stage back to in progress a moment later. The audit trail and the state file now disagree, so Studio cannot send the approval. AI-DLC is waiting for your answer in the conversation: reply there with one of its own choices, such as Approve or Request Changes, and it records the gate again.",
+	"template.recovery.gateWaiting": "The conversation is idle, so AI-DLC is most likely waiting for your answer about {stage} there. Reply in the conversation with one of its own choices; once it records the gate again, this clears.",
 	"template.recovery.gitClean": "Working tree clean. No Git write was performed.",
 	"template.recovery.gitDirty": "{n} files changed in the working tree. No Git write was performed.",
 	"template.recovery.hooksSilent": "AI-DLC's prompt hook did not run in this conversation: its turn counter never moved. The usual cause is that the conversation cannot find Bun. Make Bun available to conversations in Settings, then send the next decision; acknowledging only dismisses this notice.",
@@ -2466,6 +2468,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"template.recovery.markerSub": "Last human turn {at} · presence {presence}",
 	"template.recovery.no": "no",
 	"template.recovery.openBunSettings": "Open Bun settings",
+	"template.recovery.openConversation": "Open the conversation",
 	"template.recovery.outcome.confirmed": "the conversation received the message",
 	"template.recovery.outcome.delivered": "KiroCrew accepted it",
 	"template.recovery.outcome.not_delivered": "KiroCrew refused it",
@@ -3664,7 +3667,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"estimate.source.rule_band": "基于规则的区间",
 	"estimate.source.unknown": "未说明来源",
 	"estimate.turns": "回合数",
-	"finding.audit_gate_without_checkbox.body": "审计记录显示 {stage} 正在等待批准，但 aidlc-state.md 没有这样标记。两者一致之前，Studio 不会为该意图发送决定。如果 AI-DLC 仍在工作，这会自行消失。",
+	"finding.audit_gate_without_checkbox.body": "审计记录显示 {stage} 正在等待批准，但 aidlc-state.md 没有这样标记。两者一致之前，Studio 不会为该意图发送决定。如果 AI-DLC 仍在工作，这会自行消失；如果会话是空闲的，AI-DLC 正在会话里等你回答。",
 	"finding.audit_gate_without_checkbox.title": "审计记录中的审批关卡未体现在状态文件中",
 	"finding.audit_incomplete.body": "审计记录很长，Studio 只读取了最近的一部分。依赖更早历史的判断可能不完整；无需处理。",
 	"finding.audit_incomplete.title": "只读取了部分审计记录",
@@ -5149,6 +5152,8 @@ var D = Object.defineProperty, O = (e, t) => {
 	"template.recovery.diskUnknown": "那些文件是否变化没有被记录。",
 	"template.recovery.evidence": "来自每个来源的证据",
 	"template.recovery.findings": "存在分歧的地方",
+	"template.recovery.gateReverted": "AI-DLC 已经为 {stage} 打开了审批关卡，但紧接着它自己的任务清单钩子（sync-workflow-state，AI-DLC 2.11 的已知问题）又把阶段改回了「进行中」。审计记录和状态文件因此对不上，Studio 没法替你发审批。AI-DLC 正在会话里等你回答：在会话里点它给的选项（比如 Approve 或 Request Changes），它会重新记录关卡。",
+	"template.recovery.gateWaiting": "会话现在是空闲的，AI-DLC 很可能正在那里等你回答 {stage} 的问题。在会话里点它给的选项回复；它重新记录关卡后，这里会自动消失。",
 	"template.recovery.gitClean": "工作区干净。Studio 没有执行任何 Git 写操作。",
 	"template.recovery.gitDirty": "工作区有 {n} 个文件被改动。Studio 没有执行任何 Git 写操作。",
 	"template.recovery.hooksSilent": "AI-DLC 的提示词 hook 没有在这个对话里运行：它的回合计数一次都没变。通常是对话找不到 Bun。请在设置中让对话可以使用 Bun，然后再发送下一个决策；确认只会关闭这条通知。",
@@ -5157,6 +5162,7 @@ var D = Object.defineProperty, O = (e, t) => {
 	"template.recovery.markerSub": "最后一次人类发言 {at} · 在场证据 {presence}",
 	"template.recovery.no": "否",
 	"template.recovery.openBunSettings": "打开 Bun 设置",
+	"template.recovery.openConversation": "打开会话",
 	"template.recovery.outcome.confirmed": "会话已收到消息",
 	"template.recovery.outcome.delivered": "KiroCrew 已接受",
 	"template.recovery.outcome.not_delivered": "KiroCrew 已拒绝",
@@ -12682,19 +12688,19 @@ function uo(e) {
 	return e.unit ?? (Array.isArray(e.units) ? e.units.join(", ") : "");
 }
 function fo({ card: e, detail: t, api: n, go: r }) {
-	let i = W(), { t: a } = i, o = va(e, n, t?.drafts), s = e.evidence, c = e.delivery, l = ht(e), u = e.headline.params.codes, d = Array.isArray(u) && u.includes("session_lost_mid_stage") || e.headline.params.reason === "session_lost_mid_stage", f = s.findings.some((e) => e.code === "human_presence_anomaly" && e.params?.hooks_silent === !0), p = c.delivery_confirmed === !0, g = e.status === "ReconciliationRequired" || c.outcome === "uncertain";
+	let i = W(), { t: a } = i, o = va(e, n, t?.drafts), s = e.evidence, c = e.delivery, l = ht(e), u = e.headline.params.codes, d = Array.isArray(u) && u.includes("session_lost_mid_stage") || e.headline.params.reason === "session_lost_mid_stage", f = s.findings.some((e) => e.code === "human_presence_anomaly" && e.params?.hooks_silent === !0), p = s.findings.find((e) => e.code === "audit_gate_without_checkbox"), g = p !== void 0 && s.session !== null && !s.session.running, _ = y(), v = c.delivery_confirmed === !0, b = e.status === "ReconciliationRequired" || c.outcome === "uncertain";
 	return /* @__PURE__ */ h("section", {
 		className: "studio-template",
 		"data-type": e.type,
 		"aria-label": oa(i, e),
 		children: [
-			g ? /* @__PURE__ */ h("p", {
+			b ? /* @__PURE__ */ h("p", {
 				className: "studio-alert",
 				role: "alert",
 				children: [/* @__PURE__ */ m(Y, {
 					name: "warn",
 					size: 15
-				}), /* @__PURE__ */ m("span", { children: a(p ? "template.recovery.confirmedAlert" : "template.recovery.uncertainAlert") })]
+				}), /* @__PURE__ */ m("span", { children: a(v ? "template.recovery.confirmedAlert" : "template.recovery.uncertainAlert") })]
 			}) : null,
 			/* @__PURE__ */ m(ra, { card: e }),
 			d && !l ? /* @__PURE__ */ h("div", {
@@ -12728,6 +12734,18 @@ function fo({ card: e, detail: t, api: n, go: r }) {
 						view: "settings"
 					}),
 					children: a("template.recovery.openBunSettings")
+				})] })]
+			}) : null,
+			g && !l && s.session ? /* @__PURE__ */ h("div", {
+				className: "studio-consequence",
+				children: [/* @__PURE__ */ m(Y, {
+					name: "link",
+					size: 14
+				}), /* @__PURE__ */ h("div", { children: [/* @__PURE__ */ m("p", { children: a(p?.params?.reverted_by ? "template.recovery.gateReverted" : "template.recovery.gateWaiting", { stage: String(p?.params?.stage ?? e.stage?.slug ?? "") }) }), /* @__PURE__ */ m("button", {
+					type: "button",
+					className: "studio-btn",
+					onClick: () => _(`/chat?sid=${encodeURIComponent(s.session?.slot_key ?? "")}`),
+					children: a("template.recovery.openConversation")
 				})] })]
 			}) : null,
 			/* @__PURE__ */ m(Q, {
@@ -12783,12 +12801,12 @@ function fo({ card: e, detail: t, api: n, go: r }) {
 					/* @__PURE__ */ m($i, {
 						src: a("template.recovery.src.delivery"),
 						icon: "send",
-						value: p ? a("template.recovery.outcome.confirmed") : c.outcome ? a(`template.recovery.outcome.${c.outcome}`) : a(`enum.actionStatus.${e.status}`),
+						value: v ? a("template.recovery.outcome.confirmed") : c.outcome ? a(`template.recovery.outcome.${c.outcome}`) : a(`enum.actionStatus.${e.status}`),
 						sub: a("template.recovery.deliverySub", {
-							confirmed: a(p ? "template.recovery.yes" : "template.recovery.no"),
+							confirmed: a(v ? "template.recovery.yes" : "template.recovery.no"),
 							at: c.delivered_at ? K(i, c.delivered_at) : a("common.unavailable")
 						}),
-						conflict: g && !p
+						conflict: b && !v
 					}),
 					/* @__PURE__ */ m($i, {
 						src: a("template.recovery.src.marker"),
@@ -12815,18 +12833,18 @@ function fo({ card: e, detail: t, api: n, go: r }) {
 					}) : null
 				] })
 			}),
-			g ? /* @__PURE__ */ m(Q, {
-				title: a(p ? "template.recovery.confirmedTitle" : "template.recovery.contradiction"),
+			b ? /* @__PURE__ */ m(Q, {
+				title: a(v ? "template.recovery.confirmedTitle" : "template.recovery.contradiction"),
 				icon: "warn",
 				children: /* @__PURE__ */ h(Ji, {
 					tone: "danger",
-					children: [/* @__PURE__ */ m("p", { children: a(p ? "template.recovery.confirmedBody" : "template.recovery.contradictionBody") }), /* @__PURE__ */ m(Yi, {
+					children: [/* @__PURE__ */ m("p", { children: a(v ? "template.recovery.confirmedBody" : "template.recovery.contradictionBody") }), /* @__PURE__ */ m(Yi, {
 						icon: "warn",
 						tone: "warn",
 						children: a("template.recovery.contradictionChecks", {
 							row: c.transcript_row ? a("template.recovery.rowFound", { at: K(i, c.transcript_row.ts) }) : a("template.recovery.rowAbsent"),
 							disk: c.disk_baseline_unchanged === null ? a("template.recovery.diskUnknown") : c.disk_baseline_unchanged ? a("template.recovery.diskUnchanged") : a("template.recovery.diskChanged"),
-							boot: c.boot_id_unchanged === null ? a("template.recovery.bootUnknown") : c.boot_id_unchanged ? a("template.recovery.bootSame") : a(p ? "template.recovery.bootRestartedConfirmed" : "template.recovery.bootRestarted")
+							boot: c.boot_id_unchanged === null ? a("template.recovery.bootUnknown") : c.boot_id_unchanged ? a("template.recovery.bootSame") : a(v ? "template.recovery.bootRestartedConfirmed" : "template.recovery.bootRestarted")
 						})
 					})]
 				})
