@@ -572,6 +572,9 @@ button.studio-chip:hover { border-color: var(--border-hover); }
   color: var(--warn);
 }
 .studio-banner .studio-btn { background: transparent; }
+/* A notice of several lines keeps its icon beside the first one, not halfway down the text. */
+.studio-banner:has(> .studio-col) { align-items: flex-start; }
+.studio-banner:has(> .studio-col) > svg { flex: none; margin-top: 3px; }
 
 /* ---------- placeholder and failure pages ---------- */
 
