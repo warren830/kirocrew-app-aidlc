@@ -836,6 +836,8 @@ def _pending_approval(info: Any) -> dict[str, str]:
         "tool": security.redact(_text(info.get("tool")))[:_APPROVAL_TEXT_LIMIT],
         "tool_input": security.redact(_text(info.get("tool_input")))[:_APPROVAL_TEXT_LIMIT],
         "request_id": _text(info.get("request_id")),
+        # What the model said the call is for: the one line a person can judge the request by.
+        "purpose": security.redact(_text(info.get("tool_purpose")))[:_APPROVAL_TEXT_LIMIT],
     }
 
 
@@ -917,7 +919,8 @@ class SessionRef:
 
     def to_json(self) -> dict[str, Any]:
         approval = (
-            {"tool": self.approval.get("tool", ""), "tool_input": self.approval.get("tool_input", "")}
+            {"tool": self.approval.get("tool", ""), "tool_input": self.approval.get("tool_input", ""),
+             "purpose": self.approval.get("purpose", "")}
             if self.waiting_approval and self.approval is not None else None
         )
         return {"slot_key": self.slot_key, "session_key": self.session_key, "running": self.running,
@@ -1088,6 +1091,7 @@ class SessionBinder:
                 "repo_id": _text(row.get("repo_id")), "space": space, "intent_dir": intent_dir,
                 "intent_key": C.intent_key_for(space, intent_dir), "slot_key": slot_key,
                 "tool": _text(approval.get("tool")), "tool_input": _text(approval.get("tool_input")),
+                "purpose": _text(approval.get("purpose")),
             })
         return out
 

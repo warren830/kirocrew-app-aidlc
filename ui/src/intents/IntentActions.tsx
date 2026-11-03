@@ -322,6 +322,8 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
           slotKey={intent.session.slot_key}
           tool={intent.session.approval?.tool ?? ''}
           toolInput={intent.session.approval?.tool_input ?? ''}
+          purpose={intent.session.approval?.purpose ?? ''}
+          repoId={intent.repo_id}
         />
       ) : null}
 

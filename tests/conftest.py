@@ -237,13 +237,19 @@ class FakeSlot:
                 meta = json.loads(message.get("cls") or "{}")
                 if meta.get("resolved"):
                     continue
-                return {"tool": message.get("content") or "", "tool_input": meta.get("tool_input", ""),
+                info = {"tool": message.get("content") or "", "tool_input": meta.get("tool_input", ""),
                         "tool_kind": meta.get("tool_kind", ""),
                         "request_id": meta.get("approval_id", meta.get("request_id", ""))}
+                if meta.get("tool_purpose"):
+                    info["tool_purpose"] = meta["tool_purpose"]
+                return info
         if self.coordinator_approvals:
             record = self.coordinator_approvals[0]
-            return {"tool": record.get("tool", ""), "tool_input": record.get("tool_input", ""),
+            info = {"tool": record.get("tool", ""), "tool_input": record.get("tool_input", ""),
                     "tool_kind": "", "request_id": record.get("id", "")}
+            if record.get("tool_purpose"):
+                info["tool_purpose"] = record["tool_purpose"]
+            return info
         return None
 
     def to_dict(self) -> dict[str, Any]:

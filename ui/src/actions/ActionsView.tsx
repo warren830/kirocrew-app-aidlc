@@ -144,6 +144,8 @@ export function ActionsView({ route, go }: ViewProps) {
             slotKey={wait.slot_key}
             tool={wait.tool}
             toolInput={wait.tool_input}
+            purpose={wait.purpose ?? ''}
+            repoId={wait.repo_id}
             label={`${wait.repo_label} / ${wait.intent_dir}`}
           />
         ))}

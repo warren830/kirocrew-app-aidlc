@@ -72,6 +72,11 @@ export function useShellData(): ShellData {
   return value
 }
 
+/** The shell's data where a component may also render outside it (a notice in a test, say). */
+export function useShellDataOrNull(): ShellData | null {
+  return useContext(ShellDataContext)
+}
+
 export function StudioApp() {
   const api = useStudioApi()
   // The stream lives above the resources so `useResource` can subscribe to it, and `pollEvents` is

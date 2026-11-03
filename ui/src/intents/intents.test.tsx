@@ -336,6 +336,36 @@ describe('the intents inventory', () => {
     expect(navigations).toEqual(['/chat?sid=s1'])
   })
 
+  it('says what a waiting call is for, and warns when it reaches into another registered repository', () => {
+    // The local-s3 conversation's request of 2026-11-03, as the host listed it: JSON arguments, cut at 500.
+    const toolInput = JSON.stringify({
+      __tool_use_purpose: 'See how the learnings questions were recorded in an earlier finished run',
+      command: 'grep -rn -i -A 3 "keep\\|anything to add" /work/v2-feature/aidlc/spaces/default/intents/x/audit',
+    }).slice(0, 200)
+    const repos = [
+      { repo_id: 'r_s3', label: 'local-s3', canonical_path: '/work/local-s3' },
+      { repo_id: 'r_v2', label: 'v2-feature', canonical_path: '/work/v2-feature' },
+    ] as RepoRecord[]
+    render(<I18nProvider><ApprovalWaitNotice slotKey="s1" tool="Running: grep" toolInput={toolInput} repoId="r_s3"
+      repos={repos} /></I18nProvider>)
+    expect(screen.getByText(/What it is for, in its own words: See how the learnings questions were recorded/))
+      .toBeInTheDocument()
+    expect(screen.getByText(/^grep -rn -i -A 3/)).toBeInTheDocument()
+    expect(screen.queryByText(/__tool_use_purpose/)).not.toBeInTheDocument()
+    expect(screen.getByText(/It reaches into another registered repository: v2-feature \(\/work\/v2-feature\)/))
+      .toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveAttribute('data-tone', 'danger')
+    expect(screen.getByText(/YOLO stops asking in every conversation on this computer/)).toBeInTheDocument()
+  })
+
+  it('says when a waiting call stays inside its repository', () => {
+    const repos = [{ repo_id: 'r_s3', label: 'local-s3', canonical_path: '/work/local-s3' }] as RepoRecord[]
+    render(<I18nProvider><ApprovalWaitNotice slotKey="s1" tool="" repoId="r_s3" repos={repos}
+      toolInput={JSON.stringify({ command: 'bun .kiro/tools/aidlc.ts engine now > /dev/null' })} /></I18nProvider>)
+    expect(screen.getByText('It names no path outside this repository.')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveAttribute('data-tone', 'warn')
+  })
+
   it('names the intent when the wait is listed away from its row', () => {
     render(<I18nProvider><ApprovalWaitNotice slotKey="aidlc studio/1" tool="" toolInput="go test ./..."
       label="devlake / 261001-servicenow-plugin" /></I18nProvider>)

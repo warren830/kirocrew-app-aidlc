@@ -104,8 +104,11 @@ class Slot:
             meta = json.loads(message.get("cls") or "{}")
             if meta.get("resolved"):
                 continue
-            return {"tool": message.get("content") or "", "tool_input": meta.get("tool_input", ""),
+            info = {"tool": message.get("content") or "", "tool_input": meta.get("tool_input", ""),
                     "tool_kind": "", "request_id": meta.get("approval_id", meta.get("request_id", ""))}
+            if meta.get("tool_purpose"):
+                info["tool_purpose"] = meta["tool_purpose"]
+            return info
         return None
 
     def to_dict(self) -> dict:
@@ -1004,6 +1007,7 @@ def test_session_ref_and_the_queue_see_a_conversation_parked_on_a_tool_approval(
          "cls": '{"tool_input": "cat old.txt", "approval_id": "req-0", "resolved": "approved"}'},
         {"role": "permission", "content": "Locate the load-steering instructions",
          "cls": '{"tool_input": "grep -n steering .kiro/skills/aidlc/SKILL.md token=sk-live-abcdefghijklmnop", '
+                '"tool_purpose": "Find where the skill says to steer token=sk-live-abcdefghijklmnop", '
                 '"approval_id": "req-1"}'},
     ])
     slot._approval_futures = {"req-1": SimpleNamespace(done=lambda: False)}
@@ -1012,6 +1016,9 @@ def test_session_ref_and_the_queue_see_a_conversation_parked_on_a_tool_approval(
     assert ref["approval"]["tool"] == "Locate the load-steering instructions"
     assert ref["approval"]["tool_input"].startswith("grep -n steering .kiro/skills/aidlc/SKILL.md")
     assert "sk-live-abcdefghijklmnop" not in ref["approval"]["tool_input"]  # redacted
+    # What the call is for travels with it, redacted like the rest.
+    assert ref["approval"]["purpose"].startswith("Find where the skill says to steer")
+    assert "sk-live-abcdefghijklmnop" not in ref["approval"]["purpose"]
     waits = run(binder.waiting_approvals())
     assert [(w["intent_key"], w["slot_key"], w["tool"]) for w in waits] == [
         (INTENT, SLOT, "Locate the load-steering instructions")]

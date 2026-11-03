@@ -6,8 +6,10 @@ from test_e2e_gate import INTENT, _get, _rescan, repo_dir, scene  # noqa: F401
 from test_handlers_auth import common, routes, sv  # noqa: F401
 
 TOOL, TOOL_INPUT = "Locate the load-steering instructions", "grep -n steering .kiro/skills/aidlc/SKILL.md"
+PURPOSE = "Find where the skill says to steer the load"
 PERMISSION = {"role": "permission", "ts": "2026-09-04T10:00:30Z", "content": TOOL,
-              "cls": '{"tool_input": "grep -n steering .kiro/skills/aidlc/SKILL.md", "approval_id": "req-1"}'}
+              "cls": '{"tool_input": "grep -n steering .kiro/skills/aidlc/SKILL.md", '
+                     '"tool_purpose": "Find where the skill says to steer the load", "approval_id": "req-1"}'}
 
 
 class Pending:
@@ -39,14 +41,15 @@ def test_the_queue_lists_a_parked_conversation_with_what_it_asks(sv, routes, fak
     assert status == 200
     assert body["approval_waits"] == [{
         "repo_id": scene.repo_id, "repo_label": "ledger", "space": "default", "intent_dir": INTENT,
-        "intent_key": INTENT, "slot_key": scene.slot_key, "tool": TOOL, "tool_input": TOOL_INPUT}]
+        "intent_key": INTENT, "slot_key": scene.slot_key, "tool": TOOL, "tool_input": TOOL_INPUT,
+        "purpose": PURPOSE}]
     # The queue's own filter applies: another repository's queue does not show it.
     status, body = _get(sv, routes, fake_host, "/actions", repo="r_other")
     assert status == 200 and body["approval_waits"] == []
     status, body = _get(sv, routes, fake_host, f"/repos/{scene.repo_id}/intents")
     session = next(i for i in body["intents"] if i["intent_dir"] == INTENT)["session"]
     assert session["waiting_approval"] is True
-    assert session["approval"] == {"tool": TOOL, "tool_input": TOOL_INPUT}
+    assert session["approval"] == {"tool": TOOL, "tool_input": TOOL_INPUT, "purpose": PURPOSE}
 
 
 def test_a_scan_notifies_once_per_approval_with_a_link_to_the_conversation(sv, routes, fake_host, scene):
