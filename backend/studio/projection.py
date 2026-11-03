@@ -95,7 +95,7 @@ PRIORITY_GROUP: dict[str, int] = {
     **dict.fromkeys(("gate", "question", "missing_input"), 2),
     **dict.fromkeys(("circuit_breaker", "failure", "install_conflict"), 3),
     **dict.fromkeys(("budget_stop", "revision", "run", "resume", "force_stop", "prepare_commit",
-                     "set_summary_confirmation"), 4),
+                     "set_summary_confirmation", "set_learnings"), 4),
 }
 
 #: `critical` first: those are the cards where Studio does not know what happened.
@@ -142,7 +142,7 @@ SCHEDULING_FINDINGS: frozenset[str] = frozenset({"lease_conflict"})
 #: Action types that represent a turn Studio asked for, as opposed to a boundary it observed. Only
 #: these make an intent `Queued` (review P08).
 COMMAND_ACTION_TYPES: frozenset[str] = frozenset(
-    {"run", "resume", "prepare_commit", "set_summary_confirmation", "force_stop"})
+    {"run", "resume", "prepare_commit", "set_summary_confirmation", "set_learnings", "force_stop"})
 #: A question card in these is a reply AI-DLC has received or may be recording.
 _ANSWER_IN_FLIGHT_STATUSES: frozenset[str] = frozenset({"Delivering", "Delivered", "ReconciliationRequired"})
 
@@ -377,6 +377,8 @@ class DiskState(WireRecord):
     last_updated: str | None
     #: The intent's ``Summary Confirmation`` line (`aidlc_reader.CeremonySetting`), read-only: the engine's word.
     summary_confirmation: Any | None = None
+    #: The intent's ``Learnings`` line, read the same way.
+    learnings: Any | None = None
 
 
 def run_unavailable_reason(
@@ -887,6 +889,8 @@ class Projection:
             "stable": snap.stable,
             # A summary-confirmation card says whether AI-DLC will ask again after this one: the engine's own line.
             "summary_confirmation": _json_of(ceremony_setting(state, C.SUMMARY_CONFIRMATION_FIELD)),
+            # So does a learnings question card, about the ritual it belongs to.
+            "learnings": _json_of(ceremony_setting(state, C.LEARNINGS_FIELD)),
         }
         events = list(snap.audit.events)
         last = events[-1] if events else None
@@ -1636,6 +1640,7 @@ class Projection:
             last_updated=(state.sections.get("Current Status", {}).get("Last Updated")
                           or state.project.get("Last Updated") or None),
             summary_confirmation=ceremony_setting(state, C.SUMMARY_CONFIRMATION_FIELD),
+            learnings=ceremony_setting(state, C.LEARNINGS_FIELD),
         )
 
     # -- artifacts ---------------------------------------------------------- #

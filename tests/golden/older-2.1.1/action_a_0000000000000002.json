@@ -342,6 +342,7 @@
     "session": null,
     "state": {
      "current_stage": "feasibility",
+     "learnings": null,
      "lifecycle_phase": "IDEATION",
      "mtime_ns": "<volatile>",
      "relpath": "aidlc/spaces/default/intents/260707-trello-plugin/aidlc-state.md",

@@ -171,6 +171,7 @@
     "session": null,
     "state": {
      "current_stage": "requirements-analysis",
+     "learnings": null,
      "lifecycle_phase": "INCEPTION",
      "mtime_ns": "<volatile>",
      "relpath": "aidlc/spaces/default/intents/260904-gate-demo/aidlc-state.md",

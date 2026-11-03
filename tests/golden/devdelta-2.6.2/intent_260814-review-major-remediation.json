@@ -553,6 +553,7 @@
     "completed": 3,
     "current_stage": "reverse-engineering",
     "last_updated": "2026-08-14T16:55:53Z",
+    "learnings": null,
     "lifecycle_phase": "INCEPTION",
     "next_stage": "requirements-analysis",
     "parked_at": null,

@@ -37,6 +37,7 @@ import { IntentSettingsPanel } from '../plan/IntentSettingsPanel'
 import { IntentActions } from './IntentActions'
 import { IntentList } from './IntentList'
 import { SessionPanel } from './SessionPanel'
+import { LearningsSwitch, learningsSwitchBlockedReason } from './LearningsSwitch'
 import { SummaryConfirmationSwitch, summarySwitchBlockedReason } from './SummaryConfirmationSwitch'
 
 interface Failure {
@@ -359,6 +360,12 @@ export function IntentsView({ route, go }: IntentsViewProps) {
               <SummaryConfirmationSwitch api={api} repoId={settingsIntent.repo_id} intentKey={settingsIntent.intent_key}
                 setting={settingsIntent.disk.summary_confirmation}
                 blockedReason={summarySwitchBlockedReason(settingsIntent, t)}
+                onSettled={() => void inventory.refresh()} />
+            ) : null}
+            learnings={settingsIntent ? (
+              <LearningsSwitch api={api} repoId={settingsIntent.repo_id} intentKey={settingsIntent.intent_key}
+                setting={settingsIntent.disk.learnings}
+                blockedReason={learningsSwitchBlockedReason(settingsIntent, t)}
                 onSettled={() => void inventory.refresh()} />
             ) : null} />
         ) : null}

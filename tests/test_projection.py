@@ -1359,7 +1359,7 @@ def test_intent_summary_wire_shape(projection, gate_snap, C):
     assert set(body) == SUMMARY_KEYS
     assert set(body["disk"]) == {"status", "lifecycle_phase", "current_stage", "next_stage", "state_version",
                                  "total_stages", "completed", "revision_count", "parked_at", "last_updated",
-                                 "summary_confirmation"}
+                                 "summary_confirmation", "learnings"}
     assert set(body["counts"]) == {"total", "done", "planned", "planned_done", *C.STAGE_STATE}
     assert body["open_actions"] == 1  # the revision card is not a queue item (C18)
     assert body["blocking_findings"] == 1 and body["warn_findings"] == 1

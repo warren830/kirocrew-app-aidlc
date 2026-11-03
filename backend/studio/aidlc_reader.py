@@ -3090,7 +3090,7 @@ class AidlcReader:
             return (
                 question.prompt.strip().lower().startswith("learnings")
                 or _is_learnings_add_prompt(question.prompt)
-                or any(option.text == C.LEARNINGS_KEEP_NONE for option in question.options)
+                or any(option.text == C.LEARNINGS_KEEP_NONE_LABEL for option in question.options)
                 or any(LEARNING_ID_RE.match(option.text) for option in question.options)
             )
 

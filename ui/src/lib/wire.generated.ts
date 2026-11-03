@@ -23,6 +23,8 @@ export const WIRE = {
   PREPARE_COMMIT: "Please prepare a commit for the current AI-DLC changes. Do not push.",
   SUMMARY_CONFIRMATION_OFF: "/aidlc --summary-confirmation off",
   SUMMARY_CONFIRMATION_ON: "/aidlc --summary-confirmation on",
+  LEARNINGS_OFF: "/aidlc --learnings off",
+  LEARNINGS_ON: "/aidlc --learnings on",
   GROUPED_ANSWER_SUFFIX: "\n\nStudio grouped-answer delivery: this is one human reply. Apply each Q<n> answer to its matching [Answer] tag; an X. Other answer is the person's own words, so write X. and those words verbatim, never another option's letter. Record all Q<n> answers together in ONE aidlc-log.ts answer --details call, preserving their text; do not record separate answer receipts for each question. Then present the next human checkpoint and wait.",
   ACCEPT_ASSUMPTIONS: "A. Accept assumptions",
   CONVERT_ASSUMPTIONS: "B. Convert to follow-up questions",

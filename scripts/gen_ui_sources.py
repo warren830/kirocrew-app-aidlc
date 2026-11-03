@@ -151,6 +151,15 @@ def gen_enums() -> str:
         + "]",
         "",
     ]
+    lines += [
+        "/** The learnings ritual's own words (stage-protocol-learnings.md §13): its add question, and the keep",
+        " *  question's first option. A question asked in them is the ritual's. */",
+        "export const LEARNINGS_ADD_PROMPTS: readonly string[] = ["
+        + ", ".join(ts_string(v) for v in C.LEARNINGS_ADD_PROMPTS)
+        + "]",
+        f"export const LEARNINGS_KEEP_NONE_LABEL = {ts_string(C.LEARNINGS_KEEP_NONE_LABEL)}",
+        "",
+    ]
     return "\n".join(lines)
 
 

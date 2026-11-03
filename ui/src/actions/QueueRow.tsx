@@ -47,6 +47,7 @@ export const TYPE_ICON: Record<ActionType, IconName> = {
   force_stop: 'pause',
   prepare_commit: 'git',
   set_summary_confirmation: 'check',
+  set_learnings: 'doc',
 }
 
 /** Severity → chip tone (visual spec §3.2). `info` stays neutral: it is not a warning. */
@@ -75,10 +76,10 @@ export function isRefreshing(card: ActionCard): boolean {
 /**
  * A card about the intent as a whole. A commit request carries the stage the state file named when it was
  * made (often the last, skipped one), and printing it beside the request reads as a stage operation; so does a
- * summary-confirmation setting, which is the intent's from that turn on.
+ * ceremony setting (summary confirmation, learnings), which is the intent's from that turn on.
  */
 export function isIntentWide(card: Pick<ActionCard, 'type'>): boolean {
-  return card.type === 'prepare_commit' || card.type === 'set_summary_confirmation'
+  return card.type === 'prepare_commit' || card.type === 'set_summary_confirmation' || card.type === 'set_learnings'
 }
 
 /** `2.3 functional-design`, or just the slug, or the unavailable string. */

@@ -225,6 +225,8 @@ export function wireTextFor(
     case 'set_summary_confirmation':
       return payload.value === 'on' ? WIRE.SUMMARY_CONFIRMATION_ON
         : payload.value === 'off' ? WIRE.SUMMARY_CONFIRMATION_OFF : null
+    case 'set_learnings':
+      return payload.value === 'on' ? WIRE.LEARNINGS_ON : payload.value === 'off' ? WIRE.LEARNINGS_OFF : null
   }
 }
 

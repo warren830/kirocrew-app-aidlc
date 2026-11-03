@@ -214,10 +214,11 @@ export function payloadFor(decision: Decision, card: ActionCard, draft: ActionDr
     case 'run': return { decision: 'run' }
     case 'resume': return { decision: 'resume' }
     case 'prepare_commit': return { decision: 'prepare_commit' }
-    case 'set_summary_confirmation': {
+    case 'set_summary_confirmation':
+    case 'set_learnings': {
       // The card asks for the one value it was created for, which it names in its headline params.
       const value = card.headline.params['value']
-      return value === 'on' || value === 'off' ? { decision: 'set_summary_confirmation', value } : null
+      return value === 'on' || value === 'off' ? { decision, value } : null
     }
     default: return null
   }

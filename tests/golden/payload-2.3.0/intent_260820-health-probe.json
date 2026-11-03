@@ -582,6 +582,7 @@
     "completed": 8,
     "current_stage": "build-and-test",
     "last_updated": "2026-08-21T16:40:09Z",
+    "learnings": null,
     "lifecycle_phase": "CONSTRUCTION",
     "next_stage": null,
     "parked_at": null,

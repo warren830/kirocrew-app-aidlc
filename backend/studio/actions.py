@@ -85,13 +85,13 @@ CLIENT_PREFLIGHT_CODES = ("slot_missing", "slot_mismatch_preflight")
 #: Types Studio creates because a human asked for a turn, as opposed to types derived from a boundary on
 #: disk. The distinction decides who may cancel a card and what ``retire_stale`` sweeps.
 COMMAND_ACTION_TYPES: frozenset[str] = frozenset(
-    {"run", "resume", "prepare_commit", "set_summary_confirmation", "force_stop"})
+    {"run", "resume", "prepare_commit", "set_summary_confirmation", "set_learnings", "force_stop"})
 #: Derived cards that stand for a stop of AI-DLC's own; every other derived card reports a condition Studio found.
 BOUNDARY_CARD_TYPES: frozenset[str] = frozenset({"gate", "revision", "question", "missing_input"})
 #: Command types that use the two-phase prompt lane (``force_stop`` uses the stop endpoint).
-PROMPT_COMMAND_TYPES: tuple[str, ...] = ("run", "resume", "prepare_commit", "set_summary_confirmation")
-#: What a summary-confirmation request may ask for: the engine's own two words for the ceremony.
-SUMMARY_CONFIRMATION_VALUES: tuple[str, ...] = ("off", "on")
+PROMPT_COMMAND_TYPES: tuple[str, ...] = ("run", "resume", "prepare_commit", "set_summary_confirmation", "set_learnings")
+#: What a ceremony-switch request (``C.CEREMONY_SWITCHES``) may ask for: the engine's own two words for a ceremony.
+CEREMONY_SETTING_VALUES: tuple[str, ...] = ("off", "on")
 
 #: Nothing has been handed to the host yet: a decision may be submitted, and live evidence joined.
 SUBMITTABLE_STATUSES: frozenset[str] = frozenset({"Queued", "NotDelivered"})
@@ -131,6 +131,8 @@ WIRE_TEXT_TEMPLATES: dict[str, str | None] = {
     "prepare_commit": C.WIRE_PREPARE_COMMIT,
     "set_summary_confirmation.off": C.WIRE_SUMMARY_CONFIRMATION_OFF,
     "set_summary_confirmation.on": C.WIRE_SUMMARY_CONFIRMATION_ON,
+    "set_learnings.off": C.WIRE_LEARNINGS_OFF,
+    "set_learnings.on": C.WIRE_LEARNINGS_ON,
     "force_stop": None,
     "pick_intent": None,
 }
@@ -138,6 +140,7 @@ WIRE_TEXT_TEMPLATES: dict[str, str | None] = {
 _DEFAULT_TEMPLATE = {
     "confirm_summary": "confirm_summary.looks_correct", "answers": "answers.single",
     "provide_input": "provide_input.free_text", "set_summary_confirmation": "set_summary_confirmation.off",
+    "set_learnings": "set_learnings.off",
 }
 #: Decisions whose wire text is a constant.
 _FIXED_WIRE: dict[str, str] = {
@@ -155,6 +158,7 @@ _CHOICE_WIRE: dict[str, tuple[str, dict[str, tuple[str, str | None]]]] = {
     "set_summary_confirmation": ("value", {
         "off": (C.WIRE_SUMMARY_CONFIRMATION_OFF, None), "on": (C.WIRE_SUMMARY_CONFIRMATION_ON, None),
     }),
+    "set_learnings": ("value", {"off": (C.WIRE_LEARNINGS_OFF, None), "on": (C.WIRE_LEARNINGS_ON, None)}),
 }
 
 #: What the UI must collect before a decision can be sent (§2.11 ``DecisionSpec.requires``).
@@ -838,24 +842,24 @@ class HumanActionBroker:
         self, type: str, repo: RepoRecord, space: str, intent_dir: str, *, snap: "IntentSnapshot",
         source: str = "studio", value: str | None = None,
     ) -> ActionRecord:
-        """Create the ``run``/``resume``/``prepare_commit``/``set_summary_confirmation`` card a human asked for. A
-        second click while the first card is live returns it: one live command per boundary (and, for a setting,
-        per value asked for)."""
+        """Create the ``run``/``resume``/``prepare_commit`` card a human asked for, or a ceremony switch's
+        (``set_summary_confirmation``/``set_learnings``, with the ``value`` asked for). A second click while the first
+        card is live returns it: one live command per boundary (and, for a setting, per value asked for)."""
         if type not in PROMPT_COMMAND_TYPES:
             raise ValueError(f"{type!r} is not a prompt command type; force_stop uses create_force_stop")
-        if (type == "set_summary_confirmation") != (value is not None):
-            raise ValueError("a value goes with set_summary_confirmation, and only with it")
-        if value is not None and value not in SUMMARY_CONFIRMATION_VALUES:
-            _refuse("invalid_decision", f"summary confirmation is {' or '.join(SUMMARY_CONFIRMATION_VALUES)}",
+        if (type in C.CEREMONY_SWITCHES) != (value is not None):
+            raise ValueError("a value goes with a ceremony switch, and only with one")
+        if value is not None and value not in CEREMONY_SETTING_VALUES:
+            _refuse("invalid_decision", f"{_ceremony_name(type)} is {' or '.join(CEREMONY_SETTING_VALUES)}",
                     decision=type, value=value)
         binding = await self._sessions.get(repo.repo_id, space, intent_dir)
         await self._assert_dispatchable(binding, decision=type, intent_key=snap.intent_key, repo_id=repo.repo_id)
         findings = await self._assert_consistent(repo, snap, binding)
         if value is not None:
-            await self._assert_setting_wanted(snap, value)
+            await self._assert_setting_wanted(type, snap, value)
         if type in ("run", "resume"):
             await self._assert_run_current(type, snap)
-        if type in ("run", "resume", "set_summary_confirmation"):
+        if type in ("run", "resume") or type in C.CEREMONY_SWITCHES:
             slot = self._host.slot(binding.slot_key) if binding.slot_key else None
             if slot is not None and busy_reasons(slot):
                 _refuse("slot_busy", "the canonical conversation is already busy",
@@ -915,17 +919,18 @@ class HumanActionBroker:
         _refuse("run_not_applicable", "open the intent's current checkpoint instead of this run", reason=reason,
                 current_stage=snap.stage, **({"card": await self.card(rec, snap)} if rec is not None else {}))
 
-    async def _assert_setting_wanted(self, snap: "IntentSnapshot", value: str, rec: ActionRecord | None = None) -> None:
-        """A summary-confirmation request must still change the intent's line. Sent again, AI-DLC only says it is
-        already so, and that is a turn of the person's spent on nothing; a never-sent card asking for what the line
-        now says is retired on the way out, as a stale Run is."""
-        current = ceremony_setting(snap.state, C.SUMMARY_CONFIRMATION_FIELD)
+    async def _assert_setting_wanted(self, type: str, snap: "IntentSnapshot", value: str,
+                                     rec: ActionRecord | None = None) -> None:
+        """A ceremony-switch request must still change the intent's line. Sent again, AI-DLC only says it is already
+        so, and that is a turn of the person's spent on nothing; a never-sent card asking for what the line now says
+        is retired on the way out, as a stale Run is."""
+        current = ceremony_setting(snap.state, C.CEREMONY_SWITCHES[type])
         if current is None or current.value != value:
             return
         if rec is not None and rec.status == "Queued" and not rec.delivery_id and not rec.delivering_at:
             await self._transition(rec, "Cancelled", reason="command_superseded",
                                    evidence={"superseded": True, "setting_already": current.line})
-        _refuse("invalid_decision", f"summary confirmation is already {value} for this intent", reason="already_set",
+        _refuse("invalid_decision", f"{_ceremony_name(type)} is already {value} for this intent", reason="already_set",
                 value=value, current=current.line)
 
     async def _assert_plan_session(self, decision: str, snap: "IntentSnapshot", rec: ActionRecord,
@@ -1000,8 +1005,8 @@ class HumanActionBroker:
         if decision == "accept_as_is" and int(rec.captured.stage_attempt or 1) < C.ACCEPT_AS_IS_MIN_ATTEMPT:
             _refuse("invalid_decision", "Accept as-is only exists after three rejection cycles", decision=decision,
                     stage_attempt=rec.captured.stage_attempt, min_attempt=C.ACCEPT_AS_IS_MIN_ATTEMPT)
-        setting = rec.card_meta.get("setting_value") if rec.type == "set_summary_confirmation" else None
-        if rec.type == "set_summary_confirmation" and payload.get("value") != setting:
+        setting = rec.card_meta.get("setting_value") if rec.type in C.CEREMONY_SWITCHES else None
+        if rec.type in C.CEREMONY_SWITCHES and payload.get("value") != setting:
             # The card was confirmed as one request: the other value is a different card, never this one's payload.
             _refuse("invalid_decision", "this card asks for the setting it was created for", decision=decision,
                     value=payload.get("value"), expected=setting)
@@ -1016,7 +1021,7 @@ class HumanActionBroker:
         snap = await self._snapshot(repo, rec.space, rec.intent_dir)
         await self._assert_run_current(decision, snap, rec)
         if setting is not None:
-            await self._assert_setting_wanted(snap, setting, rec)
+            await self._assert_setting_wanted(rec.type, snap, setting, rec)
         await self._assert_plan_session(decision, snap, rec, self._host.slot(binding.slot_key) if binding.slot_key
                                         else None)
         card_questions = rec.evidence.get("questions") or {}
@@ -1295,7 +1300,7 @@ class HumanActionBroker:
         repo = await self._repo(rec.repo_id)
         snap = await self._snapshot(repo, rec.space, rec.intent_dir)
         # A setting is retried as the same request: the value its card was confirmed for.
-        value = rec.card_meta.get("setting_value") if rec.type == "set_summary_confirmation" else None
+        value = rec.card_meta.get("setting_value") if rec.type in C.CEREMONY_SWITCHES else None
         created = await self.create_command(rec.type, repo, rec.space, rec.intent_dir, snap=snap, source=rec.source,
                                             value=value)
         await self.patch_evidence(rec, {"superseded": True, "retried_as": created.action_id})
@@ -1959,6 +1964,11 @@ def _template_for(decision: str, value: str | None = None) -> str | None:
     if value is not None and f"{decision}.{value}" in WIRE_TEXT_TEMPLATES:
         return WIRE_TEXT_TEMPLATES[f"{decision}.{value}"]
     return WIRE_TEXT_TEMPLATES.get(decision, WIRE_TEXT_TEMPLATES.get(_DEFAULT_TEMPLATE.get(decision, "")))
+
+
+def _ceremony_name(type: str) -> str:
+    """A ceremony switch's setting in words, for a refusal: ``set_summary_confirmation`` -> ``summary confirmation``."""
+    return type.removeprefix("set_").replace("_", " ")
 
 
 def _submitted_answers(rec: ActionRecord) -> list[dict[str, Any]] | None:

@@ -222,6 +222,7 @@ ACTION_TYPE = (
     "force_stop",
     "prepare_commit",
     "set_summary_confirmation",
+    "set_learnings",
 )
 #: Every consequence variant each card type may emit, so the i18n gate proves no card reaches a person without a "what
 #: happens if you act" sentence. Declared, not read from ``projection.SEED_CONSEQUENCE``: two sites override the seed at
@@ -272,6 +273,7 @@ DECISION_KIND = (
     "resume",
     "prepare_commit",
     "set_summary_confirmation",
+    "set_learnings",
     "force_stop",
     "rebind_session",
     "mark_not_delivered",
@@ -299,6 +301,7 @@ HUMAN_LANE_DECISIONS = frozenset(
         "resume",
         "prepare_commit",
         "set_summary_confirmation",
+        "set_learnings",
     }
 )
 HOST_CONTROL_DECISIONS = frozenset({"force_stop"})
@@ -338,6 +341,7 @@ DECISIONS: dict[str, tuple[str, ...]] = {
     "force_stop": ("force_stop",),
     "prepare_commit": ("prepare_commit",),
     "set_summary_confirmation": ("set_summary_confirmation",),
+    "set_learnings": ("set_learnings",),
 }
 
 #: Legal action-state transitions (PRD §11.1, with ``Processing`` folded into ``Delivered`` and
@@ -396,6 +400,16 @@ SUMMARY_CONFIRMATION_HASH_SCOPES = ("confirmed-content-v2", "confirmed-content-v
 #: ``off (set by you)``, ``on (set by a command)``. The engine writes it and reads only its value (2.11
 #: ``CEREMONY_FIELDS``, ``parseCeremonyStateLine``); an environment kill switch can still force it off unrecorded.
 SUMMARY_CONFIRMATION_FIELD = "Summary Confirmation"
+#: The same kind of line for the learnings ritual (stage-protocol-learnings.md §13), ``- **Learnings**: on (from scope
+#: feature)``: while it is on, each stage asks which of its diary notes to keep, and what to add, before its approval.
+LEARNINGS_FIELD = "Learnings"
+#: The per-intent ceremony switches Studio offers: the command card that sends one, to the line it is resolved on. The
+#: setting's own name (``summary_confirmation``, ``learnings``) is the card type without ``set_``; it names the card's
+#: resolution reasons, its evidence key and the intent's ``disk`` field.
+CEREMONY_SWITCHES: dict[str, str] = {
+    "set_summary_confirmation": SUMMARY_CONFIRMATION_FIELD,
+    "set_learnings": LEARNINGS_FIELD,
+}
 CEREMONY_LINE_RE = re.compile(r"^(on|off)\b(?:\s*\((.*)\))?\s*$", re.IGNORECASE)
 PLAN_APPROVAL_HEADING = "Plan Approval"
 #: The engine's audit name for the same checkpoint differs from the Markdown heading.
@@ -714,8 +728,6 @@ AUDIT_OTHER_LABEL = "Other"              # free-text escape on an audit question
 # The learnings ritual's mandated single-choice question, in both spellings the bundled engine tells the conductor
 # to log (stage-protocol-learnings.md §13 step 3, skills/aidlc/SKILL.md). The chat asks it after the keep question.
 LEARNINGS_ADD_PROMPTS = ("Anything to add for next time?", "Learnings: anything to add?")
-# stage-protocol-learnings.md §13 step 3: the keep question's first option, its labels the notes verbatim.
-LEARNINGS_KEEP_NONE = "Keep none of these"
 # §13 step 3 puts this first in every call of the keep question: the engine's own empty pick, which may sit beside
 # kept notes. That question takes any subset of its labels and nothing else; its free-text channel is the add question.
 LEARNINGS_KEEP_NONE_LABEL = "Keep none of these"
@@ -733,6 +745,12 @@ WIRE_PREPARE_COMMIT = "Please prepare a commit for the current AI-DLC changes. D
 # flag of new work instead, so these are sent exactly, on their own turn.
 WIRE_SUMMARY_CONFIRMATION_OFF = "/aidlc --summary-confirmation off"
 WIRE_SUMMARY_CONFIRMATION_ON = "/aidlc --summary-confirmation on"
+# The same typed switch for the learnings ritual. The engine counts learnings as the agent's own ritual, not a decision
+# of the person's, so its prompt hook applies neither value itself: it records the turn as a command, answering no open
+# question, and forwards it to the conductor's ``next``, whose setter writes the line (``Learnings: off (set by a
+# command)``). Beside other words it is a flag of new work, so these too are sent exactly, on their own turn.
+WIRE_LEARNINGS_OFF = "/aidlc --learnings off"
+WIRE_LEARNINGS_ON = "/aidlc --learnings on"
 WIRE_ACCEPT_ASSUMPTIONS = "A. Accept assumptions"
 WIRE_CONVERT_ASSUMPTIONS = "B. Convert to follow-up questions"
 # There is deliberately NO wire text for picking the active intent: ``/aidlc intent <name>`` as a prompt would mint a

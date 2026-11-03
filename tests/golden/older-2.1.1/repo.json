@@ -21,6 +21,7 @@
      "completed": 5,
      "current_stage": "feasibility",
      "last_updated": "2026-07-10T07:00:47Z",
+     "learnings": null,
      "lifecycle_phase": "IDEATION",
      "next_stage": "scope-definition",
      "parked_at": null,

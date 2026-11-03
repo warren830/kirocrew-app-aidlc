@@ -254,6 +254,8 @@ export interface StudioApi extends WorkspaceApi {
    * confirmation off or back on. Queued, not sent: the send is the two-phase submit.
    */
   summaryConfirmation(repoId: string, intentKey: string, value: 'on' | 'off'): Promise<CommandResponse>
+  /** `POST …/learnings`: the same card for the intent's learnings ritual. Queued, not sent. */
+  learnings(repoId: string, intentKey: string, value: 'on' | 'off'): Promise<CommandResponse>
   pause(repoId: string, intentKey: string, paused: boolean): Promise<PauseResponse>
   forceStop(repoId: string, intentKey: string): Promise<SubmitReceipt>
   /** Bind, move (a takeover, when already bound elsewhere) or, with `null`, forget the intent's slot. */
@@ -401,6 +403,7 @@ export function useStudioApi(): StudioApi {
       prepareCommit: (repoId, intentKey) => post(intentPath(repoId, intentKey, '/prepare-commit'), {}),
       summaryConfirmation: (repoId, intentKey, value) =>
         post(intentPath(repoId, intentKey, '/summary-confirmation'), { value }),
+      learnings: (repoId, intentKey, value) => post(intentPath(repoId, intentKey, '/learnings'), { value }),
       pause: (repoId, intentKey, paused) => post(intentPath(repoId, intentKey, '/pause'), { paused }),
       forceStop: (repoId, intentKey) =>
         post(intentPath(repoId, intentKey, '/force-stop'), { confirm: true }),

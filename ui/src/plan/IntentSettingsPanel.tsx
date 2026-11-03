@@ -18,6 +18,8 @@ export interface IntentSettingsPanelProps {
    * an engine call this panel previews and applies.
    */
   summaryConfirmation?: ReactNode
+  /** The intent's learnings control (`LearningsSwitch`), beside it and for the same reason. */
+  learnings?: ReactNode
 }
 
 const DEPTHS: IntentDepth[] = ['Minimal', 'Standard', 'Comprehensive']
@@ -27,7 +29,9 @@ export function IntentSettingsPanel(props: IntentSettingsPanelProps) {
   return <SettingsEditor key={`${props.repoId}:${props.intentKey}`} {...props} />
 }
 
-function SettingsEditor({ api, repoId, intentKey, intentLabel, onApplied, onClose, summaryConfirmation }: IntentSettingsPanelProps) {
+function SettingsEditor({
+  api, repoId, intentKey, intentLabel, onApplied, onClose, summaryConfirmation, learnings,
+}: IntentSettingsPanelProps) {
   const { t } = useI18n()
   const [draft, setDraft] = useState<IntentSettings | null>(null)
   const [scopes, setScopes] = useState<string[]>([])
@@ -142,6 +146,9 @@ function SettingsEditor({ api, repoId, intentKey, intentLabel, onApplied, onClos
       </div>
       {summaryConfirmation ? (
         <section className="studio-workspace-ceremony" aria-label={t('summarySwitch.title')}>{summaryConfirmation}</section>
+      ) : null}
+      {learnings ? (
+        <section className="studio-workspace-ceremony" aria-label={t('learningsSwitch.title')}>{learnings}</section>
       ) : null}
       {busy ? <p role="status">{t('common.loading')}</p> : null}
       {error ? <p className="studio-failure-detail" role="alert">{errorText}</p> : null}

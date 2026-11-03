@@ -327,16 +327,34 @@ async def summary_confirmation(services: Any, request: web.Request) -> web.Respo
     checkpoint's reply: the engine applies it as the person's when the prompt arrives and treats the turn as a
     command, so a confirmation already open stays open and is answered as before. Sending is ``submit``'s.
     """
+    return await _ceremony_switch(services, request, "set_summary_confirmation", "summary confirmation",
+                                  "a finished workflow has no stage left to confirm")
+
+
+async def learnings(services: Any, request: web.Request) -> web.Response:
+    """``{"value": "off"|"on"}``: create the card that asks AI-DLC, in the person's own turn, to stop (or go back to)
+    asking before each stage's approval which of its notes to keep for next time (201).
+
+    The text is AI-DLC's typed switch on its own (`/aidlc --learnings off`), never folded into a reply: the engine
+    records the turn as a command and its conductor sets the line, so a learnings question already open stays open
+    and is answered as before. Sending is ``submit``'s.
+    """
+    return await _ceremony_switch(services, request, "set_learnings", "learnings",
+                                  "a finished workflow has no stage left to learn from")
+
+
+async def _ceremony_switch(services: Any, request: web.Request, action_type: str, name: str,
+                           finished: str) -> web.Response:
+    """The card for one ceremony switch (``C.CEREMONY_SWITCHES``): an initialized, unfinished intent only."""
     value = body_choice(await read_json(request, required=("value",)), "value", ("off", "on"))
     repo, snap = await repo_and_snapshot(services, request)
     if snap.state is None or snap.state.header_only:
-        raise StudioError("state_inconsistent", "summary confirmation is set on an initialized intent",
+        raise StudioError("state_inconsistent", f"{name} is set on an initialized intent",
                           details={"intent_key": snap.intent_key})
     if (snap.state.status or "").strip().lower() == "completed":
-        raise StudioError("invalid_decision", "a finished workflow has no stage left to confirm",
+        raise StudioError("invalid_decision", finished,
                           details={"intent_key": snap.intent_key, "reason": "intent_completed"})
-    rec = await services.actions.create_command("set_summary_confirmation", repo, snap.space, snap.intent_dir,
-                                                snap=snap, value=value)
+    rec = await services.actions.create_command(action_type, repo, snap.space, snap.intent_dir, snap=snap, value=value)
     return json_ok({"ok": True, "action_id": rec.action_id, "status": rec.status, "action": await card_of(services, rec)},
                    status=201)
 

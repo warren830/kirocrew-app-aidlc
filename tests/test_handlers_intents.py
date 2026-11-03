@@ -98,7 +98,7 @@ def test_listing_intents_reports_the_summary_the_spaces_and_the_cursor(api, repo
     assert set(summary) == SUMMARY_KEYS and summary["intent_key"] == INTENT and summary["is_active_cursor"] is True
     assert set(summary["disk"]) == {"status", "lifecycle_phase", "current_stage", "next_stage", "state_version",
                                     "total_stages", "completed", "revision_count", "parked_at", "last_updated",
-                                    "summary_confirmation"}
+                                    "summary_confirmation", "learnings"}
 
 
 def test_listing_intents_does_not_mint_any_action_card(sv, api, repo):

@@ -154,7 +154,7 @@ export interface RepoScan { repo_id: string; availability: Availability; install
  * set it, `line` the whole text. Studio shows it and never re-words it.
  */
 export interface CeremonySetting { value: 'on' | 'off'; source: string | null; line: string }
-export interface DiskState { status: string | null; lifecycle_phase: string | null; current_stage: string | null; next_stage: string | null; state_version: number | null; total_stages: number | null; completed: number | null; revision_count: number; parked_at: string | null; last_updated: string | null; summary_confirmation?: CeremonySetting | null }
+export interface DiskState { status: string | null; lifecycle_phase: string | null; current_stage: string | null; next_stage: string | null; state_version: number | null; total_stages: number | null; completed: number | null; revision_count: number; parked_at: string | null; last_updated: string | null; summary_confirmation?: CeremonySetting | null; learnings?: CeremonySetting | null }
 export interface StageCounts { total: number; not_started: number; in_progress: number; awaiting_approval: number; revising: number; completed: number; skipped: number; done: number; unknown: number; planned: number; planned_done: number }
 export interface IntentSummary { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; uuid: string | null; slug: string; scope: string | null; registry_status: string | null; title: string | null; operational_state: IntentState; disk: DiskState; counts: StageCounts; open_actions: number; blocking_findings: number; warn_findings: number; session: SessionRef | null; archived: boolean; paused: boolean; interrupted: boolean; last_activity_at: string | null; stable_boundary: StableBoundary | null; unstable: boolean; is_active_cursor: boolean; executing_stage?: string | null }
 export interface StageRow { slug: string; mark: string; state: StageState; phase: string | null; suffix: string | null }
@@ -211,7 +211,7 @@ export interface CursorReadback { ok: boolean; space: string; dir_name: string; 
 export interface HostCall { method: 'POST'; path: string; body: Record<string, unknown> }
 export interface DecisionSpec { decision: Decision; label_key: string; lane: Lane; wire_text_template: string | null; requires: ('feedback' | 'answers' | 'confirm')[] }
 export interface ActionEvidence {
-  state: { relpath: string; sha256: string; size: number; mtime_ns: number; current_stage: string | null; status: string | null; lifecycle_phase: string | null; revision_count: number; stable: boolean; summary_confirmation?: CeremonySetting | null } | null
+  state: { relpath: string; sha256: string; size: number; mtime_ns: number; current_stage: string | null; status: string | null; lifecycle_phase: string | null; revision_count: number; stable: boolean; summary_confirmation?: CeremonySetting | null; learnings?: CeremonySetting | null } | null
   audit: { shards: { relpath: string; size: number; truncated: boolean }[]; last_event: { type: string; ts: string } | null; boundary_event: { type: string; ts: string; stage: string | null; shard: string; pos: number } | null; complete: boolean }
   directive: DirectiveEvidence | null; artifacts: ArtifactMeta[]
   review: { verdict: string | null; findings: ReviewFinding[]; reviewer: string | null; review_class: string | null; iteration: number | null; findings_parsed?: boolean; unreadable?: boolean } | null
@@ -260,7 +260,7 @@ export type SubmitPayload =
   | { decision: 'accept_assumptions' } | { decision: 'convert_assumptions' }
   | { decision: 'provide_input'; kind: 'scope'; scope: string } | { decision: 'provide_input'; kind: 'free_text'; text: string }
   | { decision: 'run' } | { decision: 'resume' } | { decision: 'prepare_commit' }
-  | { decision: 'set_summary_confirmation'; value: 'on' | 'off' }
+  | { decision: 'set_summary_confirmation'; value: 'on' | 'off' } | { decision: 'set_learnings'; value: 'on' | 'off' }
 export type ResolvePayload =
   | { decision: 'resubmit'; acknowledged_evidence_sha256: string } | { decision: 'pick_intent'; intent_dir: string }
   | { decision: 'mark_not_delivered'; evidence?: { receipt?: HostChatReceipt; http_status?: number } }

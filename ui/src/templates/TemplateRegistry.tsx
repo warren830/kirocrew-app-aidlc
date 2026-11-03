@@ -75,7 +75,8 @@ export { InstallConflictTemplate } from './InstallConflictTemplate'
 export { BudgetStopTemplate } from './BudgetStopTemplate'
 
 /**
- * `run`, `resume`, `prepare_commit`, `set_summary_confirmation`, `force_stop`: a turn the user asked for.
+ * `run`, `resume`, `prepare_commit`, `set_summary_confirmation`, `set_learnings`, `force_stop`: a turn the user
+ * asked for.
  *
  * There is no evidence to weigh — the decision was made by pressing Run — so the body states what will be
  * dispatched, into which session, and what the repo lease means for it. It lives here rather than in its
@@ -87,6 +88,8 @@ export function CommandTemplate({ card }: TemplateProps) {
   const session = card.evidence.session
   // A sent or closed card is a record of a dispatch, not a preview of one.
   const sent = !['Queued', 'NotDelivered'].includes(card.status)
+  // A ceremony setting is the intent's, so the stage it captured is only where AI-DLC was when it was asked.
+  const setting = card.type === 'set_summary_confirmation' || card.type === 'set_learnings'
   return (
     <section className="studio-template" data-type={card.type} aria-label={templateLabel(i18n, card)}>
       <DecisionBrief card={card} />
@@ -111,7 +114,7 @@ export function CommandTemplate({ card }: TemplateProps) {
             icon="gate"
             value={card.stage?.slug ?? t('common.none')}
             sub={t(card.type === 'prepare_commit' ? 'template.command.stageSubCommit'
-              : card.type === 'set_summary_confirmation' ? 'template.command.stageSubSetting'
+              : setting ? 'template.command.stageSubSetting'
               : sent ? 'template.command.stageSubSent' : 'template.command.stageSub')}
           />
         </EvidenceGrid>
@@ -144,6 +147,7 @@ const TEMPLATES: Record<ActionType, TemplateComponent> = {
   force_stop: CommandTemplate,
   prepare_commit: CommandTemplate,
   set_summary_confirmation: CommandTemplate,
+  set_learnings: CommandTemplate,
 }
 
 /** The template for a card, including the re-typed-in-the-queue case. */

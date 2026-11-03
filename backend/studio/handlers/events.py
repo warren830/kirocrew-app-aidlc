@@ -90,9 +90,9 @@ async def _named(services: Any, items: list[dict[str, Any]]) -> list[dict[str, A
     """Name each row's repository, and drop links to actions that are gone.
 
     Unregistering a repository deletes its actions and keeps its Activity rows: such a row then names no
-    repository label, and offers no link to a card that can no longer open. A row about a commit request or a summary
-    confirmation setting names no stage: the request is about the whole intent, and the stage it recorded is wherever
-    the state file pointed.
+    repository label, and offers no link to a card that can no longer open. A row about a commit request or a ceremony
+    setting (summary confirmation, learnings) names no stage: the request is about the whole intent, and the stage it
+    recorded is wherever the state file pointed.
     """
     repo_ids = sorted({item["refs"]["repo"]["repo_id"] for item in items if "repo" in item["refs"]})
     action_ids = sorted({item["refs"]["action_id"] for item in items if "action_id" in item["refs"]})
@@ -101,7 +101,7 @@ async def _named(services: Any, items: list[dict[str, Any]]) -> list[dict[str, A
     labels = {str(row.get("id")): row.get("label") for row in repos}
     live = {str(row.get("action_id")) for row in actions}
     intent_wide = {str(row.get("action_id")) for row in actions
-                   if row.get("type") in ("prepare_commit", "set_summary_confirmation")}
+                   if row.get("type") == "prepare_commit" or row.get("type") in C.CEREMONY_SWITCHES}
     for item in items:
         refs = item["refs"]
         if "repo" in refs:

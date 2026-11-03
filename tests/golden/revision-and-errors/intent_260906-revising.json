@@ -84,6 +84,7 @@
       "session": null,
       "state": {
        "current_stage": "requirements-analysis",
+       "learnings": null,
        "lifecycle_phase": "INCEPTION",
        "mtime_ns": "<volatile>",
        "relpath": "aidlc/spaces/default/intents/260906-revising/aidlc-state.md",
@@ -241,6 +242,7 @@
     "completed": 7,
     "current_stage": "requirements-analysis",
     "last_updated": "2026-08-30T08:43:44Z",
+    "learnings": null,
     "lifecycle_phase": "INCEPTION",
     "next_stage": "user-stories",
     "parked_at": null,

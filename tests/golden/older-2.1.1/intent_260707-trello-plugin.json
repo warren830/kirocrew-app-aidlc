@@ -334,6 +334,7 @@
       "session": null,
       "state": {
        "current_stage": "feasibility",
+       "learnings": null,
        "lifecycle_phase": "IDEATION",
        "mtime_ns": "<volatile>",
        "relpath": "aidlc/spaces/default/intents/260707-trello-plugin/aidlc-state.md",
@@ -698,6 +699,7 @@
       "session": null,
       "state": {
        "current_stage": "feasibility",
+       "learnings": null,
        "lifecycle_phase": "IDEATION",
        "mtime_ns": "<volatile>",
        "relpath": "aidlc/spaces/default/intents/260707-trello-plugin/aidlc-state.md",
@@ -1278,6 +1280,7 @@
     "completed": 5,
     "current_stage": "feasibility",
     "last_updated": "2026-07-10T07:00:47Z",
+    "learnings": null,
     "lifecycle_phase": "IDEATION",
     "next_stage": "scope-definition",
     "parked_at": null,

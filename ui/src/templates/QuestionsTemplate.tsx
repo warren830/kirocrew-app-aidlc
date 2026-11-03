@@ -28,6 +28,7 @@ import { MarkdownRenderer } from '@kirocrew/app-sdk/ui'
 
 import { ArtifactViewer, useArtifactBody } from '../artifacts/ArtifactViewer'
 import { useI18n } from '../i18n'
+import { LearningsSwitch, cardLearningsSwitchBlockedReason, openLearningsQuestions } from '../intents/LearningsSwitch'
 import { SummaryConfirmationSwitch, cardSummarySwitchBlockedReason } from '../intents/SummaryConfirmationSwitch'
 import { pendingQuestions } from '../actions/useSubmit'
 import { withInlineCode } from '../lib/inlineCode'
@@ -141,6 +142,8 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
   // A card that is only a checkpoint has no question group to show: "0 of 0 unanswered" was noise.
   const showGroup = questions.length > 0 || unsupportedPending > 0 || !checkpoint?.present
   const offersSummaryChoice = card.decisions.some((spec) => spec.decision === 'confirm_summary')
+  // AI-DLC's learnings ritual, still asking: the card offers to stop it for the stages after this one.
+  const learningsAsked = answerable && openLearningsQuestions(card)
 
   const setAnswer = (index: number, letters: string[], freeText: string | null) =>
     setDraft({
@@ -484,6 +487,20 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
               </div>
             )
           })}
+
+        {learningsAsked ? (
+          // Turning the ritual off is a turn of its own, never part of this reply: beside an answer, the conductor
+          // reads the flag as one for new work. The questions asked stay open, and AI-DLC still records the answers.
+          <LearningsSwitch
+            api={api}
+            repoId={card.repo.repo_id}
+            intentKey={card.intent.intent_key}
+            setting={card.evidence.state?.learnings}
+            blockedReason={refreshing ? t('learningsSwitch.blocked.refreshing') : cardLearningsSwitchBlockedReason(card, t)}
+            pending
+            onSettled={reload}
+          />
+        ) : null}
 
         {view ? (
           <Consequence icon="lock">{t(answerable ? 'template.questions.neverEdits' : 'template.questions.neverEditsClosed', { path: view.relpath })}</Consequence>

@@ -1221,21 +1221,23 @@ class Reconciler:
                 return Resolution("no_transition", "turn_stopped_on_error", seen)
             return Resolution("no_transition", "commit_made" if seen["new_commit"] else "turn_ended_no_commit", seen)
 
-        if action_type == "set_summary_confirmation":
+        if action_type in C.CEREMONY_SWITCHES:
             if not ended:
                 return Resolution(*_TURN_OUTCOME[False], seen)
-            # The prompt hook writes the person's switch into the intent's line before the conductor runs, and the
-            # conductor's own setter writes `on`: the line is the engine's record of what took effect.
+            # The prompt hook writes the person's summary-confirmation off into the intent's line before the conductor
+            # runs, and the conductor's own setter writes the rest (`on`, and either learnings value): the line is the
+            # engine's record of what took effect.
+            setting = action_type.removeprefix("set_")
             wanted = str((rec.payload or {}).get("value") or "")
-            current = ceremony_setting(_attr(snap, "state"), C.SUMMARY_CONFIRMATION_FIELD)
-            seen["summary_confirmation"] = current.line if current is not None else None
+            current = ceremony_setting(_attr(snap, "state"), C.CEREMONY_SWITCHES[action_type])
+            seen[setting] = current.line if current is not None else None
             if current is not None and current.value == wanted:
-                return Resolution("state_changed", "summary_confirmation_set", seen)
+                return Resolution("state_changed", f"{setting}_set", seen)
             stopped = self._stopped_after(rec)
             if stopped is not None:
                 seen["host_error"] = stopped
                 return Resolution("no_transition", "turn_stopped_on_error", seen)
-            return Resolution("no_transition", "summary_confirmation_unchanged", seen)
+            return Resolution("no_transition", f"{setting}_unchanged", seen)
 
         if action_type == "force_stop":
             if slot is None:

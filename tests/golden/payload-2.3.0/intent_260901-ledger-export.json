@@ -282,6 +282,7 @@
       "session": null,
       "state": {
        "current_stage": "requirements-analysis",
+       "learnings": null,
        "lifecycle_phase": "INCEPTION",
        "mtime_ns": "<volatile>",
        "relpath": "aidlc/spaces/default/intents/260901-ledger-export/aidlc-state.md",
@@ -600,6 +601,7 @@
       "session": null,
       "state": {
        "current_stage": "requirements-analysis",
+       "learnings": null,
        "lifecycle_phase": "INCEPTION",
        "mtime_ns": "<volatile>",
        "relpath": "aidlc/spaces/default/intents/260901-ledger-export/aidlc-state.md",
@@ -1239,6 +1241,7 @@
     "completed": 12,
     "current_stage": "requirements-analysis",
     "last_updated": "2026-09-03T14:22:41Z",
+    "learnings": null,
     "lifecycle_phase": "INCEPTION",
     "next_stage": "user-stories",
     "parked_at": null,

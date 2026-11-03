@@ -7,8 +7,8 @@ export const ACTION_STATUSES: readonly ActionStatus[] = ["Queued", "Delivering",
 export type IntentState = "Idle" | "Queued" | "Running" | "WaitingForYou" | "Paused" | "Parked" | "Interrupted" | "ReconciliationRequired" | "RetryEligible" | "CircuitOpen" | "Failed" | "Completed" | "Archived"
 export const INTENT_STATES: readonly IntentState[] = ["Idle", "Queued", "Running", "WaitingForYou", "Paused", "Parked", "Interrupted", "ReconciliationRequired", "RetryEligible", "CircuitOpen", "Failed", "Completed", "Archived"]
 
-export type ActionType = "gate" | "revision" | "question" | "missing_input" | "recovery" | "delivery_uncertain" | "failure" | "circuit_breaker" | "install_conflict" | "budget_stop" | "run" | "resume" | "force_stop" | "prepare_commit" | "set_summary_confirmation"
-export const ACTION_TYPES: readonly ActionType[] = ["gate", "revision", "question", "missing_input", "recovery", "delivery_uncertain", "failure", "circuit_breaker", "install_conflict", "budget_stop", "run", "resume", "force_stop", "prepare_commit", "set_summary_confirmation"]
+export type ActionType = "gate" | "revision" | "question" | "missing_input" | "recovery" | "delivery_uncertain" | "failure" | "circuit_breaker" | "install_conflict" | "budget_stop" | "run" | "resume" | "force_stop" | "prepare_commit" | "set_summary_confirmation" | "set_learnings"
+export const ACTION_TYPES: readonly ActionType[] = ["gate", "revision", "question", "missing_input", "recovery", "delivery_uncertain", "failure", "circuit_breaker", "install_conflict", "budget_stop", "run", "resume", "force_stop", "prepare_commit", "set_summary_confirmation", "set_learnings"]
 
 export type Severity = "critical" | "blocking" | "attention" | "info"
 export const SEVERITIES: readonly Severity[] = ["critical", "blocking", "attention", "info"]
@@ -37,8 +37,8 @@ export const OWNERSHIP_KINDS: readonly Ownership[] = ["framework", "framework-mu
 export type StageState = "not_started" | "in_progress" | "awaiting_approval" | "revising" | "completed" | "skipped" | "unknown"
 export const STAGE_STATES: readonly StageState[] = ["not_started", "in_progress", "awaiting_approval", "revising", "completed", "skipped", "unknown"]
 
-export type Decision = "approve" | "request_changes" | "accept_as_is" | "approve_plan" | "request_plan_changes" | "confirm_summary" | "accept_assumptions" | "convert_assumptions" | "answers" | "provide_input" | "run" | "resume" | "prepare_commit" | "set_summary_confirmation" | "force_stop" | "rebind_session" | "mark_not_delivered" | "acknowledge" | "reconcile" | "resubmit" | "retry_now" | "keep_paused" | "run_now" | "pick_intent"
-export const DECISIONS: readonly Decision[] = ["approve", "request_changes", "accept_as_is", "approve_plan", "request_plan_changes", "confirm_summary", "accept_assumptions", "convert_assumptions", "answers", "provide_input", "run", "resume", "prepare_commit", "set_summary_confirmation", "force_stop", "rebind_session", "mark_not_delivered", "acknowledge", "reconcile", "resubmit", "retry_now", "keep_paused", "run_now", "pick_intent"]
+export type Decision = "approve" | "request_changes" | "accept_as_is" | "approve_plan" | "request_plan_changes" | "confirm_summary" | "accept_assumptions" | "convert_assumptions" | "answers" | "provide_input" | "run" | "resume" | "prepare_commit" | "set_summary_confirmation" | "set_learnings" | "force_stop" | "rebind_session" | "mark_not_delivered" | "acknowledge" | "reconcile" | "resubmit" | "retry_now" | "keep_paused" | "run_now" | "pick_intent"
+export const DECISIONS: readonly Decision[] = ["approve", "request_changes", "accept_as_is", "approve_plan", "request_plan_changes", "confirm_summary", "accept_assumptions", "convert_assumptions", "answers", "provide_input", "run", "resume", "prepare_commit", "set_summary_confirmation", "set_learnings", "force_stop", "rebind_session", "mark_not_delivered", "acknowledge", "reconcile", "resubmit", "retry_now", "keep_paused", "run_now", "pick_intent"]
 
 export type Phase = "initialization" | "ideation" | "inception" | "construction" | "operation"
 export const PHASES: readonly Phase[] = ["initialization", "ideation", "inception", "construction", "operation"]
@@ -60,3 +60,8 @@ export const MANIFEST_APP_NAME = "aidlc-studio-v2"
 
 /** Stages run once per Construction unit: the map's unit lanes for a stage the graph does not know. */
 export const PER_UNIT_STAGES: readonly string[] = ["functional-design", "nfr-requirements", "nfr-design", "infrastructure-design", "code-generation"]
+
+/** The learnings ritual's own words (stage-protocol-learnings.md §13): its add question, and the keep
+ *  question's first option. A question asked in them is the ritual's. */
+export const LEARNINGS_ADD_PROMPTS: readonly string[] = ["Anything to add for next time?", "Learnings: anything to add?"]
+export const LEARNINGS_KEEP_NONE_LABEL = "Keep none of these"
