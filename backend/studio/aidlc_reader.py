@@ -151,7 +151,9 @@ _QUESTION_CODE_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 # "(select all that apply)" is the engine's one marker (stage-protocol.md §3 Step 1); the others are spellings real
 # conductors wrote for the same thing ("(pick any)" on a 2026-11-02 practices sheet), FORMAT-NOTES §11.8.
 _QUESTION_MULTI_SELECT_RE = re.compile(
-    r"[(（\[]\s*(?:(?:multi[- ]select|pick\s+any|多选|可多选)\s*|"
+    # A marker may carry a note after a separator, "（可多选，中国区和 Global 不一样就都选）" (local-s3, 2026-11-03);
+    # without one the words must end the parenthesis, so "(pick any one)" stays a single choice.
+    r"[(（\[]\s*(?:(?:multi[- ]select|pick\s+any|多选|可多选)(?:\s*[,，;；:：、][^()\[\]（）\r\n]*)?\s*|"
     r"select\s+all\b[^()\[\]（）\r\n]*)[)）\]]",
     re.IGNORECASE,
 )

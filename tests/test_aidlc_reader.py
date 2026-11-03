@@ -826,7 +826,8 @@ def test_legacy_constructors_default_the_newer_fields(R):
 
 
 @pytest.mark.parametrize("marker", ["(multi-select)", "(MULTI SELECT)", "[multi-select]", "(select all that apply)",
-                                    "（select all that apply）", "（多选）", "（可多选）", "(pick any)", "(Pick any)"])
+                                    "（select all that apply）", "（多选）", "（可多选）", "(pick any)", "(Pick any)",
+                                    "（可多选，中国区和 Global 不一样就都选）", "（多选；最多三项）", "(multi-select, up to two)"])
 def test_questions_explicit_multi_select_spellings(pq, marker):
     assert only_question(pq, f"Choose applicable changes {marker}", ["Docs", "Tests"]).multi_select is True
 
@@ -852,6 +853,7 @@ def test_questions_multi_select_comes_from_the_prompt_never_an_option_or_backgro
     assert only_question(pq, "Pick one", ["a"]).multi_select is False
     # One of them, not several: only the bare "(pick any)" says the person may keep more than one.
     assert only_question(pq, "Which store? (pick any one)", ["a"]).multi_select is False
+    assert only_question(pq, "Which store? （不可多选）", ["a"]).multi_select is False
     parsed = pq("### Q1. Pick one\n\nBackground: (select all that apply) is another format.\n"
                 "- A. Describe (multi-select)\n- X. Other\n\n[Answer]:\n")
     assert parsed.questions[0].multi_select is False
