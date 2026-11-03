@@ -1438,6 +1438,25 @@ def test_the_anything_to_add_question_lists_the_candidates_it_is_about(sv, route
     assert all("detail" not in o for o in question["options"])
 
 
+def test_the_keep_question_shows_its_notes_once_when_the_notes_are_the_options(sv, routes, fake_host, scene):
+    """2.11 asks "Which notes should I keep for next time?" with the notes themselves as options, beside "Anything
+    to add for next time?". Neither starts with "Learnings", so the card showed AI-DLC's notes to itself with no
+    word on what keeping one does (local-s3, 2026-11-03)."""
+    _with_memory(scene)
+    note = 'Read "overdue" as strictly before today'  # the entry's summary, as surface gives it
+    rewrite_audit(scene, decision(Decision="Anything to add for next time?", Options="Nothing to add,Add a note"),
+                  decision(ts="2026-09-04T09:59:31Z", Decision="Which notes should I keep for next time?",
+                           Options=f"Keep none of these,{note}"))
+    card = question_card(sv, routes, fake_host, scene)
+    keep, add = card["evidence"]["questions"]["questions"]
+    assert keep["prompt"] == "Which notes should I keep for next time?" and keep["multi_select"] is True
+    assert [c["id"] for c in keep["learning_candidates"]] == ["c1"]
+    assert keep["learnings_memory"].endswith(f"inception/{STAGE}/memory.md")
+    assert [o["text"] for o in keep["options"]][:2] == ["Keep none of these", note]
+    # Asked beside it, "anything to add" does not list the same notes again.
+    assert add["prompt"] == "Anything to add for next time?" and "learning_candidates" not in add
+
+
 def test_a_question_without_a_diary_is_left_alone(sv, routes, fake_host, scene):
     card = question_card(sv, routes, fake_host, scene)
     question = card["evidence"]["questions"]["questions"][0]

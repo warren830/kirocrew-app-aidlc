@@ -714,6 +714,8 @@ AUDIT_OTHER_LABEL = "Other"              # free-text escape on an audit question
 # The learnings ritual's mandated single-choice question, in both spellings the bundled engine tells the conductor
 # to log (stage-protocol-learnings.md §13 step 3, skills/aidlc/SKILL.md). The chat asks it after the keep question.
 LEARNINGS_ADD_PROMPTS = ("Anything to add for next time?", "Learnings: anything to add?")
+# stage-protocol-learnings.md §13 step 3: the keep question's first option, its labels the notes verbatim.
+LEARNINGS_KEEP_NONE = "Keep none of these"
 # §13 step 3 puts this first in every call of the keep question: the engine's own empty pick, which may sit beside
 # kept notes. That question takes any subset of its labels and nothing else; its free-text channel is the add question.
 LEARNINGS_KEEP_NONE_LABEL = "Keep none of these"

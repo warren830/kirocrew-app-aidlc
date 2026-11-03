@@ -3085,8 +3085,13 @@ class AidlcReader:
         and so is the digest: what is compared before sending is still the decision AI-DLC recorded.
         """
         def ritual(question: Question) -> bool:
-            return question.prompt.strip().lower().startswith("learnings") or any(
-                LEARNING_ID_RE.match(option.text) for option in question.options
+            # 2.11 asks "Which notes should I keep…?" with the notes themselves as options, then "Anything to add
+            # for next time?": neither starts with "learnings", and the card showed AI-DLC's notes to itself bare.
+            return (
+                question.prompt.strip().lower().startswith("learnings")
+                or _is_learnings_add_prompt(question.prompt)
+                or any(option.text == C.LEARNINGS_KEEP_NONE for option in question.options)
+                or any(LEARNING_ID_RE.match(option.text) for option in question.options)
             )
 
         if questions is None or not any(ritual(q) for q in questions.questions):
@@ -3102,10 +3107,18 @@ class AidlcReader:
         candidates = {c.id: c for c in parse_learning_candidates(text or "")}
         if not candidates:
             return questions
+        by_summary = {c.summary: c for c in candidates.values()}
+
+        def named_in(question: Question) -> list[str]:
+            return [(candidates.get(o.text) or by_summary[o.text]).id for o in question.options
+                    if o.text in candidates or o.text in by_summary]
+
+        # Asked together, the keep question shows the notes; the "anything to add" beside it need not repeat them.
+        shown = any(named_in(q) for q in questions.questions)
         annotated: list[Question] = []
         for question in questions.questions:
-            named = [o.text for o in question.options if o.text in candidates]
-            if not named and ritual(question):
+            named = named_in(question)
+            if not named and ritual(question) and not shown:
                 # "Learnings: anything to add?" is asked about the candidates the chat just listed, often
                 # without naming them in the recorded options; the card still has to show what they are.
                 named = list(candidates)
