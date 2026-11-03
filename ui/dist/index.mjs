@@ -10062,57 +10062,57 @@ function Vi(e, t, n) {
 //#endregion
 //#region src/intents/ApprovalWait.tsx
 function Hi({ slotKey: e, tool: t, toolInput: n, purpose: r, repoId: i, label: a, repos: o }) {
-	let { t: s } = W(), c = y(), l = vd()?.repos.data?.repos, u = o ?? l ?? [], d = Ii(n), f = Li(r, n), p = i && u.length ? Vi(`${d}\n${t}`, i, u) : null, g = p !== null && p.otherRepos.length > 0;
+	let { t: s } = W(), c = y(), l = vd()?.repos.data?.repos, u = o ?? l ?? [], d = Ii(n), f = Li(r, n), p = i && u.length ? Vi(`${d}\n${t}`, i, u) : null, g = p !== null && p.otherRepos.length > 0, _ = t && !(d && t.includes(d)) ? t : "";
 	return /* @__PURE__ */ h("div", {
 		className: "studio-banner",
 		"data-tone": g ? "danger" : "warn",
 		role: "status",
-		children: [
-			/* @__PURE__ */ m(Y, {
-				name: "warn",
-				size: 13
-			}),
-			/* @__PURE__ */ h("div", {
-				className: "studio-grow studio-col",
-				children: [
-					/* @__PURE__ */ m("span", { children: a ? s("intents.approval.waitingFor", { label: a }) : s("intents.approval.waiting") }),
-					f ? /* @__PURE__ */ m("span", { children: s("intents.approval.purpose", { purpose: f }) }) : null,
-					t ? /* @__PURE__ */ m("span", {
-						className: "studio-muted studio-wrap-any",
-						children: t
-					}) : null,
-					d ? /* @__PURE__ */ m("code", {
-						className: "studio-mono studio-wrap-any",
-						children: d
-					}) : null,
-					g ? /* @__PURE__ */ m("strong", {
-						className: "studio-wrap-any",
-						children: s("intents.approval.otherRepo", { repos: p.otherRepos.map((e) => `${e.label} (${e.path})`).join(", ") })
-					}) : null,
-					p && p.outside.length > 0 ? /* @__PURE__ */ m("span", {
-						className: "studio-wrap-any",
-						children: s("intents.approval.outside", { paths: p.outside.join(", ") })
-					}) : null,
-					p && !g && p.outside.length === 0 ? /* @__PURE__ */ m("span", {
-						className: "studio-muted",
-						children: s("intents.approval.inside")
-					}) : null,
-					/* @__PURE__ */ m("span", {
-						className: "studio-muted",
-						children: s("intents.approval.where")
+		children: [/* @__PURE__ */ m(Y, {
+			name: "warn",
+			size: 13
+		}), /* @__PURE__ */ h("div", {
+			className: "studio-grow studio-col",
+			children: [
+				/* @__PURE__ */ m("span", { children: a ? s("intents.approval.waitingFor", { label: a }) : s("intents.approval.waiting") }),
+				f ? /* @__PURE__ */ m("span", { children: s("intents.approval.purpose", { purpose: f }) }) : null,
+				_ ? /* @__PURE__ */ m("span", {
+					className: "studio-muted studio-wrap-any",
+					children: _
+				}) : null,
+				d ? /* @__PURE__ */ m("code", {
+					className: "studio-mono studio-wrap-any",
+					children: d
+				}) : null,
+				g ? /* @__PURE__ */ m("strong", {
+					className: "studio-wrap-any",
+					children: s("intents.approval.otherRepo", { repos: p.otherRepos.map((e) => `${e.label} (${e.path})`).join(", ") })
+				}) : null,
+				p && p.outside.length > 0 ? /* @__PURE__ */ m("strong", {
+					className: "studio-wrap-any",
+					children: s("intents.approval.outside", { paths: p.outside.join(", ") })
+				}) : null,
+				p && !g && p.outside.length === 0 ? /* @__PURE__ */ m("span", {
+					className: "studio-muted",
+					children: s("intents.approval.inside")
+				}) : null,
+				/* @__PURE__ */ m("span", {
+					className: "studio-muted",
+					children: s("intents.approval.where")
+				}),
+				/* @__PURE__ */ m("div", {
+					className: "studio-row",
+					children: /* @__PURE__ */ h("button", {
+						type: "button",
+						className: "studio-btn studio-btn-sm",
+						onClick: () => c(`/chat?sid=${encodeURIComponent(e)}`),
+						children: [/* @__PURE__ */ m(Y, {
+							name: "link",
+							size: 13
+						}), s("intents.approval.open")]
 					})
-				]
-			}),
-			/* @__PURE__ */ h("button", {
-				type: "button",
-				className: "studio-btn studio-btn-sm",
-				onClick: () => c(`/chat?sid=${encodeURIComponent(e)}`),
-				children: [/* @__PURE__ */ m(Y, {
-					name: "link",
-					size: 13
-				}), s("intents.approval.open")]
-			})
-		]
+				})
+			]
+		})]
 	});
 }
 //#endregion

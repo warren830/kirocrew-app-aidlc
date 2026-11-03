@@ -358,6 +358,16 @@ describe('the intents inventory', () => {
     expect(screen.getByText(/YOLO stops asking in every conversation on this computer/)).toBeInTheDocument()
   })
 
+  it('shows a shell call once when the host titles it with its command', () => {
+    const command = 'cat /work/notes.md'
+    render(<I18nProvider><ApprovalWaitNotice slotKey="s1" tool={`Running: ${command}`} repoId="r_s3"
+      repos={[{ repo_id: 'r_s3', label: 'local-s3', canonical_path: '/work/local-s3' }] as RepoRecord[]}
+      toolInput={JSON.stringify({ command })} /></I18nProvider>)
+    expect(screen.getByText(command, { selector: 'code' })).toBeInTheDocument()
+    expect(screen.queryByText(`Running: ${command}`)).not.toBeInTheDocument()
+    expect(screen.getByText(/It also names paths outside this repository: \/work\/notes\.md/)).toBeInTheDocument()
+  })
+
   it('says when a waiting call stays inside its repository', () => {
     const repos = [{ repo_id: 'r_s3', label: 'local-s3', canonical_path: '/work/local-s3' }] as RepoRecord[]
     render(<I18nProvider><ApprovalWaitNotice slotKey="s1" tool="" repoId="r_s3" repos={repos}

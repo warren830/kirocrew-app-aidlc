@@ -40,13 +40,15 @@ export function ApprovalWaitNotice(
   const why = approvalPurpose(purpose, toolInput)
   const reach = repoId && repos.length ? approvalReach(`${command}\n${tool}`, repoId, repos) : null
   const crosses = reach !== null && reach.otherRepos.length > 0
+  // The host titles a shell call "Running: <command>": the command below already says it.
+  const title = tool && !(command && tool.includes(command)) ? tool : ''
   return (
     <div className="studio-banner" data-tone={crosses ? 'danger' : 'warn'} role="status">
       <Icon name="warn" size={13} />
       <div className="studio-grow studio-col">
         <span>{label ? t('intents.approval.waitingFor', { label }) : t('intents.approval.waiting')}</span>
         {why ? <span>{t('intents.approval.purpose', { purpose: why })}</span> : null}
-        {tool ? <span className="studio-muted studio-wrap-any">{tool}</span> : null}
+        {title ? <span className="studio-muted studio-wrap-any">{title}</span> : null}
         {command ? <code className="studio-mono studio-wrap-any">{command}</code> : null}
         {crosses ? (
           <strong className="studio-wrap-any">
@@ -56,21 +58,26 @@ export function ApprovalWaitNotice(
           </strong>
         ) : null}
         {reach && reach.outside.length > 0 ? (
-          <span className="studio-wrap-any">{t('intents.approval.outside', { paths: reach.outside.join(', ') })}</span>
+          <strong className="studio-wrap-any">
+            {t('intents.approval.outside', { paths: reach.outside.join(', ') })}
+          </strong>
         ) : null}
         {reach && !crosses && reach.outside.length === 0 ? (
           <span className="studio-muted">{t('intents.approval.inside')}</span>
         ) : null}
         <span className="studio-muted">{t('intents.approval.where')}</span>
+        {/* Under the text, not beside it: in the queue's column a button alongside left the text a word wide. */}
+        <div className="studio-row">
+          <button
+            type="button"
+            className="studio-btn studio-btn-sm"
+            onClick={() => navigate(`/chat?sid=${encodeURIComponent(slotKey)}`)}
+          >
+            <Icon name="link" size={13} />
+            {t('intents.approval.open')}
+          </button>
+        </div>
       </div>
-      <button
-        type="button"
-        className="studio-btn studio-btn-sm"
-        onClick={() => navigate(`/chat?sid=${encodeURIComponent(slotKey)}`)}
-      >
-        <Icon name="link" size={13} />
-        {t('intents.approval.open')}
-      </button>
     </div>
   )
 }
