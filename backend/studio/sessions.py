@@ -206,7 +206,8 @@ class SlotView(WireRecord):
     subagents_running: int = 0
     subagents_queued: int = 0
     deliveries_inflight: int = 0
-    #: The newest unresolved tool approval (``tool``, ``tool_input``, ``request_id``); not on the wire.
+    #: The newest unresolved tool approval (``tool``, ``tool_input``, ``request_id``, and from KiroCrew 0.11 the row
+    #: instance ``request_mid`` and ``origin``); not on the wire.
     approval: Mapping[str, str] | None = None
     #: Does the host still hold this slot's session? ``False``: it ended an idle one, and the next message starts a
     #: new session, where a reply AI-DLC bound to the old one is refused. ``None`` when it cannot say; not on the wire.
@@ -296,6 +297,7 @@ class HostBridge:
         self._caps: dict[str, HostCapability] = {}
         self._probed_at: float | None = None
         self._turn_timeout: int | None = None
+        self._turn_timeout_at = 0.0
         self._queued: dict[str, int] = {}
         self._queued_at: dict[str, float] = {}
         self._queued_reads: dict[str, asyncio.Task[None]] = {}
@@ -478,11 +480,24 @@ class HostBridge:
         owner = _text(getattr(self._state, "owner_id", ""))
         return bool(caller) and (caller == owner if owner else caller in _LOCAL_OWNER_SUBJECTS)
 
-    def turn_timeout_secs(self) -> int:
-        """The host's chat-turn ceiling, capped by ``PROCESSING_DEADLINE_CAP_SECS``. Resolved once: it is a
-        config read from disk, and the reconciler asks every tick."""
-        if self._turn_timeout is None:
-            cap = int(C.PROCESSING_DEADLINE_CAP_SECS)
+    def turn_timeout_secs(self, slot_key: str | None = None) -> int:
+        """The limit the host runs this conversation's turns under, capped by ``PROCESSING_DEADLINE_CAP_SECS``.
+        KiroCrew 0.11 lets a conversation carry its own limit (``turn_dispatch.session_turn_timeout_secs``), which
+        wins over ``agent.chat_turn_timeout_secs``; the global value is a config read from disk, so it is reused for
+        ``TURN_TIMEOUT_CACHE_SECS`` (the reconciler asks every tick), and a settings change still reaches Studio."""
+        cap = int(C.PROCESSING_DEADLINE_CAP_SECS)
+        if slot_key:
+            own = _host_symbol("kiro_crew.dashboard.turn_dispatch", "session_turn_timeout_secs")
+            slot = self._raw_slot(slot_key) if own is not None else None
+            if slot is not None:
+                try:
+                    value = own(slot)
+                except Exception as exc:  # the host's, and its slot's metadata may be anything
+                    self._log.debug("conversation turn limit unreadable: %s", exc)
+                    value = None
+                if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+                    return max(1, min(value, cap))
+        if self._turn_timeout is None or self._clock.monotonic() - self._turn_timeout_at > C.TURN_TIMEOUT_CACHE_SECS:
             value = float(cap)
             config = _host_symbol("kiro_crew.config", "KiroCrewConfig")
             if config is not None:
@@ -491,6 +506,7 @@ class HostBridge:
                 except Exception as exc:  # the config file is the host's, and may be anything
                     self._log.debug("chat turn ceiling unreadable, using the cap: %s", exc)
             self._turn_timeout = max(1, min(int(value), cap)) if value > 0 else cap
+            self._turn_timeout_at = self._clock.monotonic()
         return self._turn_timeout
 
     def subagent(self, spawn_id: str) -> dict | None:
@@ -832,12 +848,22 @@ def _pending_approval(info: Any) -> dict[str, str]:
     """What the waiting tool approval asks for, from the host's ``pending_approval_info`` (redacted model
     text). An approval nothing describes still waits, so the answer is then empty, never ``None``."""
     info = info if isinstance(info, Mapping) else {}
+    tool_input = security.redact(_text(info.get("tool_input")))
     return {
         "tool": security.redact(_text(info.get("tool")))[:_APPROVAL_TEXT_LIMIT],
-        "tool_input": security.redact(_text(info.get("tool_input")))[:_APPROVAL_TEXT_LIMIT],
+        # The whole call, up to a bound: the notice's Allow once answers for every character, and its reach is read
+        # from this text. Cut at 500, a 900-character `python3 -c` program showed half and still said it named no
+        # path outside the repository (2026-11-04 feature run).
+        "tool_input": tool_input[:C.MAX_APPROVAL_INPUT_CHARS],
+        "tool_input_truncated": "1" if len(tool_input) > C.MAX_APPROVAL_INPUT_CHARS else "",
         "request_id": _text(info.get("request_id")),
         # What the model said the call is for: the one line a person can judge the request by.
         "purpose": security.redact(_text(info.get("tool_purpose")))[:_APPROVAL_TEXT_LIMIT],
+        # KiroCrew 0.11: which row asked (``native``: the conversation's own permission row, ``coordinator``: a
+        # sub-agent's), and that row's instance. The host answers a native approval only for the very row the person
+        # saw: ``{origin: "native", request_id, request_mid}`` (its own attention card's call).
+        "origin": _text(info.get("origin")),
+        "request_mid": _text(info.get("request_mid")),
     }
 
 
@@ -920,7 +946,9 @@ class SessionRef:
     def to_json(self) -> dict[str, Any]:
         approval = (
             {"tool": self.approval.get("tool", ""), "tool_input": self.approval.get("tool_input", ""),
-             "purpose": self.approval.get("purpose", "")}
+             "tool_input_truncated": self.approval.get("tool_input_truncated") == "1",
+             "purpose": self.approval.get("purpose", ""), "request_id": self.approval.get("request_id", ""),
+             "request_mid": self.approval.get("request_mid", ""), "origin": self.approval.get("origin", "")}
             if self.waiting_approval and self.approval is not None else None
         )
         return {"slot_key": self.slot_key, "session_key": self.session_key, "running": self.running,
@@ -1091,7 +1119,11 @@ class SessionBinder:
                 "repo_id": _text(row.get("repo_id")), "space": space, "intent_dir": intent_dir,
                 "intent_key": C.intent_key_for(space, intent_dir), "slot_key": slot_key,
                 "tool": _text(approval.get("tool")), "tool_input": _text(approval.get("tool_input")),
+                "tool_input_truncated": _text(approval.get("tool_input_truncated")) == "1",
                 "purpose": _text(approval.get("purpose")),
+                # The target the notice's Allow once / Reject answer; empty when the host names no native row.
+                "request_id": _text(approval.get("request_id")), "request_mid": _text(approval.get("request_mid")),
+                "origin": _text(approval.get("origin")),
             })
         return out
 

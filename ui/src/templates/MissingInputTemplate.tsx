@@ -155,7 +155,8 @@ export function MissingInputTemplate({ card, detail, draft, setDraft, api, go }:
           </p>
           {/* The same sanitising renderer as a question's context: this is evidence, not a draft. */}
           <div className="msg-content studio-md studio-reply-quote">
-            <MarkdownRenderer content={wrapQuotedFences(reply.text)} />
+            {/* `softBreaks`, as the conversation renders it: AI-DLC puts "Stage:", "Why now:" on lines of their own. */}
+            <MarkdownRenderer content={wrapQuotedFences(reply.text)} softBreaks />
           </div>
           <button type="button" className="studio-btn" onClick={() => go({ tab: 'conversation' })}>
             {t('template.missingInput.openConversation')}

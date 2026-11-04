@@ -131,6 +131,23 @@ describe('a decision whose intent has no canonical conversation', () => {
   })
 })
 
+describe('the embedded conversation', () => {
+  it('leaves out the host chat’s Stop and queue, so a stop goes through Studio’s own Force stop', async () => {
+    const card = actionCard()
+    setApiRoutes({ [`GET ${API_BASE}/actions/${card.action_id}`]: () => ({ action: card, transitions: [], drafts: [] }) })
+    function Harness() {
+      const api = useStudioApi()
+      return (
+        <DetailShell actionId={card.action_id} queueCard={card} api={api}
+          route={{ ...EMPTY_ROUTE, action: card.action_id, tab: 'conversation' }} go={() => {}}
+          groupedAnswers={false} onQueueChanged={() => {}} />
+      )
+    }
+    render(<I18nProvider><Harness /></I18nProvider>)
+    expect(await screen.findByTestId('chat-embed')).toHaveAttribute('data-hide', 'stop queue')
+  })
+})
+
 describe('a refusal the server did return', () => {
   it('retires a confirmation when the queue advances beyond the cached detail', async () => {
     const card = actionCard()
@@ -170,6 +187,25 @@ describe('a refusal the server did return', () => {
     await waitFor(() => expect(apiCalls.some((call) => call.path.endsWith(`/actions/${second.action_id}`))).toBe(true))
     expect(screen.queryByText(en.t('errors.slot_busy'))).not.toBeInTheDocument()
     expect(screen.queryByText(en.t('detail.nothingSent'))).not.toBeInTheDocument()
+  })
+
+  it('opens another card at its top, not at the scroll offset the last card was left at', async () => {
+    // Enterprise run, 2026-11-04: after answering a learnings card scrolled to its end, the gate opened next showed
+    // its Advisor and Approve, with the artifact and the reviewer's findings out of view above.
+    const first = actionCard()
+    const second = actionCard({ action_id: 'a_second' })
+    setApiRoutes({
+      [`GET ${API_BASE}/actions/${first.action_id}`]: () => ({ action: first, transitions: [], drafts: [] }),
+      [`GET ${API_BASE}/actions/${second.action_id}`]: () => ({ action: second, transitions: [], drafts: [] }),
+    })
+    const view = mount(first)
+    await screen.findByRole('button', { name: /^Approve/ })
+    const body = () => document.querySelector('.studio-detail-body') as HTMLElement
+    body().scrollTop = 900
+    expect(body().scrollTop).toBe(900)
+    view.select(second)
+    await waitFor(() => expect(apiCalls.some((call) => call.path.endsWith(`/actions/${second.action_id}`))).toBe(true))
+    expect(body().scrollTop).toBe(0)
   })
 
   it('ignores a late stale-card response while another action is loading', async () => {

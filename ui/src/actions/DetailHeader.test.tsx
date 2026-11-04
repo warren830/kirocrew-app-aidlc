@@ -34,6 +34,18 @@ describe('the decision header', () => {
     expect(crumbs).not.toHaveTextContent('deployment-execution')
   })
 
+  it('counts only this stage\'s revisions: the state file\'s Revision Count is for the whole workflow', () => {
+    // Enterprise run, 2026-11-04: intent-capture was sent back once, and every later stage's card read "revision 1".
+    const card = actionCard({ type: 'gate' })
+    expect(card.evidence.state?.revision_count).toBe(2)
+    expect(facts(card)).not.toHaveTextContent(/revision/)
+  })
+
+  it('says how many times this stage was sent back', () => {
+    const card = actionCard({ type: 'gate' })
+    expect(facts({ ...card, captured: { ...card.captured, stage_attempt: 3 } })).toHaveTextContent('revision 2')
+  })
+
   it('keeps the stage in a gate\'s breadcrumb', () => {
     const stage = { slug: 'code-generation', number: '3.5', name: null, phase: 'construction', unit: null }
     render(<I18nProvider><DetailHeader card={actionCard({ type: 'gate', stage } as never)} /></I18nProvider>)

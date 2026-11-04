@@ -219,6 +219,16 @@
               "AIDLC_DISABLE_SUMMARY_CONFIRMATION"
             ]
           }
+        },
+        "statusline": {
+          "enum": [
+            "on",
+            "off",
+            "kept"
+          ]
+        },
+        "statuslineReplaced": {
+          "type": "object"
         }
       }
     }

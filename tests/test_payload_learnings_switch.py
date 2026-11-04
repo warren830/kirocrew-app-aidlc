@@ -5,9 +5,8 @@ inside KiroCrew's prompt envelope. These run the real payload with bun, the way 
 (``engine adapter kiro verb-intercept``), then the conductor's own calls, on a throwaway feature-scope intent:
 
 * the switch alone is recorded as a command, so it answers no open question, and is forwarded verbatim to the
-  conductor's ``next``. The hook does not apply it: the engine counts learnings as the agent's own ritual rather than
-  a decision of the person's (aidlc-guard-switch.ts), so unlike summary confirmation off it needs nobody's word and is
-  not labelled the person's. The conductor's setter writes ``Learnings: off (set by a command)``;
+  conductor's ``next``. The hook does not apply it (2.11.2 applies no setting at prompt time); the conductor's
+  ``config set`` writes ``Learnings: off (set by you)`` (2.11.0 labelled it ``set by a command``);
 * the stage the conductor runs next carries the ritual off and no longer loads its protocol module;
 * the same switch beside other words (a question's reply) is a flag of new work: why Studio never bundles it;
 * with a learnings question already asked, the switch leaves it open, and the person's later reply is still recorded;
@@ -62,17 +61,17 @@ def test_the_switch_alone_is_a_command_the_hook_forwards(repo):
 def test_the_conductor_sets_it_off_as_a_command(repo):
     send(repo, OFF)
     said = conductor_applies(repo, "off")
-    assert said.strip() == "Learnings changed: on (from scope feature) to off (set by a command)"
-    assert line(repo) == "off (set by a command)"
+    assert said.strip() == "Learnings changed: on (from scope feature) to off (set by you)"
+    assert line(repo) == "off (set by you)"
     [ceremony] = rows(repo, "CEREMONY_SET")
     assert (ceremony["Key"], ceremony["Old"], ceremony["New"], ceremony["Source"]) == (
-        "learnings", "on", "off", "command")
+        "learnings", "on", "off", "you")
     # The stage it runs next has no learnings ritual: the module that asks the two questions is not loaded.
     stage = directive(repo)
     assert (stage["kind"], stage["stage"], stage["ceremony"]["learnings"]) == ("run-stage", STAGE, "off")
     assert "learnings" not in stage["protocol_modules"]
     # Asked again, AI-DLC only says it is so: why Studio refuses a request for what the line already says.
-    assert "Learnings is already off (set by a command)" in config_set(repo, "off")
+    assert "Learnings is already off (set by you)" in config_set(repo, "off")
 
 
 @pytest.mark.parametrize("turn", [f"{OFF} Nothing to add", f"{OFF}\nNothing to add"], ids=["same-line", "next-line"])
@@ -91,7 +90,7 @@ def test_an_open_learnings_question_stays_open_and_is_still_answered(repo):
         "--options", "Nothing to add,Add a note")
     send(repo, OFF)
     conductor_applies(repo, "off")
-    assert line(repo) == "off (set by a command)"
+    assert line(repo) == "off (set by you)"
     receipt = ("engine", "log", "answer", "--stage", STAGE, "--details", "Nothing to add")
     # The switch was no reply to it: a receipt now is refused, as for any turn that answered nothing.
     refused = subprocess.run([BUN, ".kiro/tools/aidlc.ts", *receipt], cwd=repo, text=True, capture_output=True,
@@ -109,8 +108,8 @@ def test_back_on_is_the_conductors_setter_too(repo):
     send(repo, OFF)
     conductor_applies(repo, "off")
     context = send(repo, ON)
-    assert line(repo) == "off (set by a command)"
+    assert line(repo) == "off (set by you)"
     assert "engine orchestrate next --learnings on" in context
     assert conductor_applies(repo, "on").strip() == (
-        "Learnings changed: off (set by a command) to on (set by a command)")
-    assert line(repo) == "on (set by a command)"
+        "Learnings changed: off (set by you) to on (set by you)")
+    assert line(repo) == "on (set by you)"

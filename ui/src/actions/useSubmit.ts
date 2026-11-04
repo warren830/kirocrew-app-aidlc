@@ -191,13 +191,16 @@ export function wireTextFor(
       // AI-DLC's mode question is still open beside the file: the reply chooses Chat too, and says so (`wire_text_for`).
       const mode = !questions?.origin && questions?.answer_mode_pending === true ? WIRE.ANSWER_MODE_CHAT_NOTE : ''
       if (texts.length === 1) return texts[0] === undefined ? null : texts[0] + mode
+      const batch = questions?.origin?.kind === 'audit' && (questions.origin.batch_size ?? 1) > 1
       const lines = pending
         .map((question, position) =>
-          fill(WIRE.ANSWER_LINE, { index: String(question.index), answer: texts[position] ?? '' }),
+          // The file's own name for a prefixed question (RMQ1), else Q<n>: the same label `wire_text_for` sends.
+          fill(WIRE.ANSWER_LINE, { label: question.label ?? `Q${question.index}`, answer: texts[position] ?? '' }),
         )
-        .join(WIRE.ANSWER_JOINER)
+        // An audit menu's answers in the engine's one-line form (`Q1: …; Q2: …`); a file's, one per [Answer] tag.
+        .join(batch ? WIRE.AUDIT_ANSWER_JOINER : WIRE.ANSWER_JOINER)
       // Questions AI-DLC asked together in one turn take one reply, with no capability gate (A37).
-      if (questions?.origin?.kind === 'audit' && (questions.origin.batch_size ?? 1) > 1) {
+      if (batch) {
         const contradictory = payload.answers.some((answer) => {
           const question = pending.find((candidate) => candidate.index === answer.index)
           return answer.option_letters.length > 1 && answer.option_letters.some((letter) =>

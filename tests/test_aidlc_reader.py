@@ -2016,3 +2016,51 @@ def test_no_task_list_revert_is_claimed_without_both_writes_in_that_order(reader
 
 def test_no_write_log_is_no_revert(reader, tmp_path):
     assert reader.checkbox_reverted_by_sync(tmp_path, "default", "261103-x", "rough-mockups") is None
+
+
+STORY_PLAN_SHEET = """# User Stories: Questions
+
+**Decides:** Who the stories are written for and how they are split.
+
+## Story Plan
+
+- The outline below is the split Q2 recommends.
+
+| Story | What it covers |
+|---|---|
+| US1.1 | Add a task with a due date |
+
+## Q1. [Product owner] How the stories are split
+
+A. Thirteen small stories; the outline above shows them (Recommended)
+B. Five larger stories
+X. Other (please specify)
+
+[Answer]:
+"""
+
+
+def test_a_sheets_text_before_its_questions_is_its_preamble_without_the_title(pq):
+    """The feature run's user-stories sheet (2026-11-04): Q2 pointed at "the outline above", which no card showed."""
+    preamble = pq(STORY_PLAN_SHEET).preamble
+    assert preamble.startswith("**Decides:** Who the stories are written for")
+    assert "| US1.1 | Add a task with a due date |" in preamble
+    assert "# User Stories" not in preamble and "## Q1." not in preamble and "[Answer]" not in preamble
+
+
+@pytest.mark.parametrize("text", [
+    "# Title\n\n## Q1. Pick\n\nA. a\nB. b\n\n[Answer]:\n",
+    "## Q1. Pick\n\nA. a\n\n[Answer]:\n",
+    "# Only a title and prose\n\nNo questions here.\n",
+], ids=["title_only", "nothing_before", "no_questions"])
+def test_a_sheet_with_nothing_before_its_questions_has_no_preamble(pq, text):
+    assert pq(text).preamble is None
+
+
+def test_a_long_preamble_is_cut_at_a_line(pq, studio):
+    C = studio.constants
+    line = "- " + "x" * 98
+    text = "# T\n\n" + "\n".join([line] * (C.MAX_QUESTIONS_PREAMBLE_CHARS // 100 + 50)) + "\n\n## Q1. Pick\n\nA. a\n\n[Answer]:\n"
+    preamble = pq(text).preamble
+    assert len(preamble) <= C.MAX_QUESTIONS_PREAMBLE_CHARS + 3 and preamble.endswith("\n\n…")
+    assert all(row == line for row in preamble.split("\n")[:-2])

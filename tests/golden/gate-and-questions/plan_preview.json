@@ -2,7 +2,7 @@
  "body": {
   "plan": {
    "diff": [],
-   "engine_version": "2.11.0",
+   "engine_version": "2.11.2",
    "estimate": {
     "active_secs": {
      "confidence": "low",
@@ -123,7 +123,7 @@
     }
    },
    "exact": {
-    "artifacts": 25,
+    "artifacts": 22,
     "assumes_units": 1,
     "gates": 5,
     "review_intensity": {
@@ -149,14 +149,11 @@
     "component-inventory",
     "cross-unit-traceability",
     "dependencies",
-    "integration-test-instructions",
     "intent-capture-questions",
     "intent-statement",
-    "performance-test-instructions",
     "requirements",
     "requirements-analysis-questions",
     "reverse-engineering-timestamp",
-    "security-test-instructions",
     "stakeholder-map",
     "technology-stack",
     "traceability",
@@ -779,6 +776,7 @@
      "consumes": [
       "unit-of-work",
       "unit-of-work-story-map",
+      "stories",
       "requirements",
       "components",
       "contract-summary"
@@ -986,9 +984,6 @@
      "phase": "construction",
      "produces": [
       "build-instructions",
-      "integration-test-instructions",
-      "performance-test-instructions",
-      "security-test-instructions",
       "build-and-test-summary",
       "build-test-results",
       "cross-unit-traceability"

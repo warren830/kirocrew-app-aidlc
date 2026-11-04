@@ -95,7 +95,7 @@ Studio removes that cost without weakening the method.
 | | |
 |---|---|
 | **Bun** | **Install it first, before anything else** ([below](#1-install-bun-first)), on the gateway's machine |
-| KiroCrew | 0.8.0 or newer (`minKiroCrewVersion`) |
+| KiroCrew | 0.11.0 or newer (`minKiroCrewVersion`) |
 | Platform | macOS or Linux. KiroCrew also runs on Windows, but Studio does not yet: on Windows, run the gateway in WSL 2 ([guide](docs/user-guide.md#windows-run-it-in-wsl-2)), not yet validated end to end |
 | For running AI-DLC in a repository | a signed-in `kiro-cli`, and a paid Kiro plan for the models AI-DLC expects |
 | For Git observation | `git` on `PATH` (optional; Studio degrades to "Git unavailable" without it) |
@@ -240,11 +240,11 @@ lifecycle progress.
 
 ## Bundled AI-DLC
 
-`payload/aidlc-kiro/` holds the AI-DLC Workflows Kiro CLI distribution, version **2.11.0** (the
-copy-runtime release asset built from `release/2.11` at `6a378b53`, the `v2.11.0` tag), under the MIT
-No Attribution licence (`payload/AIDLC-LICENSE`). One Studio-maintained local patch, to the requirement
-traceability sensor, is kept; the KiroCrew-reply adapter and testing-posture patches carried with 2.10.0
-are retired, because 2.11 reads a KiroCrew reply in the person's own words itself. Both are documented in
+`payload/aidlc-kiro/` holds the AI-DLC Workflows Kiro CLI distribution, version **2.11.2** (the
+copy-runtime release asset of the `v2.11.2` tag, `10a9bc9d`), under the MIT No Attribution licence
+(`payload/AIDLC-LICENSE`). Three Studio-maintained local patches are kept: the requirement traceability
+sensor, the Kiro adapter hook reading a KiroCrew turn sent without its context envelope, and one sentence of
+the onboarding steering that keeps each tool call a command of its own. All three are documented in
 `THIRD_PARTY_NOTICES.md`. Every file is inventoried with its SHA-256 in `payload/manifest.json`, which is
 also what the installer verifies before and after writing. Studio's own version and the bundled AI-DLC
 version are shown separately in Settings. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
@@ -295,10 +295,10 @@ never submits anything. It analyses an evidence package Studio passes to it and 
 cd ui && npm run check      # tsc --noEmit && vitest run && vite build
 
 # regenerate the bundled payload inventory after changing payload/aidlc-kiro/
-python3 scripts/build_payload_manifest.py --version 2.11.0 \
-  --source-ref "release/2.11 @ 6a378b53 (= v2.11.0) + Studio requirement-traceability patch" \
-  --source-commit 6a378b53c0a4fe0641ed7d8de8dfff94264d5b6a \
-  --dist-path "aidlc-copy-runtime-2.11.0.tar.gz:runtime/kiro" --state-versions 8
+python3 scripts/build_payload_manifest.py --version 2.11.2 \
+  --source-ref "v2.11.2 @ 10a9bc9d + Studio requirement-traceability, KiroCrew host-turn and onboarding patches" \
+  --source-commit 10a9bc9d85395a601de2624cf5bdd35292c10db4 \
+  --dist-path "aidlc-copy-runtime-2.11.2.tar.gz:runtime/kiro" --state-versions 8
 ```
 
 Keep `--source-commit` pinned to the upstream base and describe local patches in `--source-ref`

@@ -114,6 +114,22 @@ def test_the_delivered_answer_settles_and_the_conversations_question_is_the_next
     assert "Please send all six answers again" in quoted["text"]
 
 
+def test_a_turn_the_app_restart_cut_off_is_no_question_for_the_person(sv, routes, fake_host, scene, clock):
+    """KiroCrew 0.11 writes an error row when the gateway restarts mid-turn. The assistant's last words before it were a
+    progress line, not a question: no conversation-reply card, the stopped-turn notice says how to go on (A38).
+    Measured on an enterprise run, "Now working on Contract Design…" came back as a card waiting for a reply."""
+    card = deliver_q1(sv, routes, fake_host, scene, clock)
+    ai_dlc_replies_in_chat(scene, clock)
+    reconcile(sv, card)
+    assert [c["type"] for c in cards(sv, routes, fake_host, scene)] == ["missing_input"]
+    scene.slot.messages.append({
+        "role": "error", "ts": "2026-11-04T02:17:45Z",
+        "content": "This turn was interrupted when the app restarted. Review the partial output above, then resume to "
+                   "continue.", "meta": {"kind": "gateway_restart_interruption"},
+    })
+    assert [c for c in cards(sv, routes, fake_host, scene) if c["type"] == "missing_input"] == []
+
+
 def test_a_turn_still_running_keeps_the_lease(sv, routes, fake_host, scene, clock):
     card = deliver_q1(sv, routes, fake_host, scene, clock)
     ai_dlc_replies_in_chat(scene, clock)

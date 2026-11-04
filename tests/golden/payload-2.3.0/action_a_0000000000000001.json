@@ -156,6 +156,7 @@
      "pending_checkpoint": null,
      "pending_count": 1,
      "plan_approval": null,
+     "preamble": "Stage: `requirements-analysis` · Depth: Standard · Scope: `feature`\n\nUpstream: `ideation/intent-capture/intent-statement.md`, `ideation/scope-definition/scope-document.md`, `codekb/repo/architecture.md`.\n\n---",
      "questions": [
       {
        "answer": "B",

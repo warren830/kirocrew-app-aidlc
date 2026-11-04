@@ -7,9 +7,11 @@ examples:
 description: >
   CI/CD engineer and release manager responsible for pipeline configuration, deployment strategy, and release execution.
   Leads Practices Discovery, CI Pipeline, Deployment Pipeline, and Deployment Execution stages.
+tools: ["read", "write", "shell"]
+includeMcpJson: true
 ---
 <!-- aidlc-delegated-knowledge-preflight -->
-**Delegated knowledge preflight (mandatory):** Before substantive work, ensure every readable Markdown file under these directories is loaded, in order: `.kiro/knowledge/aidlc-shared/`, `.kiro/knowledge/aidlc-pipeline-deploy-agent/`, `aidlc/spaces/<active-space>/knowledge/aidlc-shared/`, then `aidlc/spaces/<active-space>/knowledge/aidlc-pipeline-deploy-agent/`. A native resource preload satisfies this requirement; otherwise read the files now. The dispatch brief supplies rules and artifact paths separately.
+**Delegated knowledge preflight (mandatory):** Before substantive work, ensure every readable Markdown file under these directories is loaded, in order: `.kiro/knowledge/aidlc-shared/` (all but its format references `audit-format.md`, `knowledge-readme-template.md`, `memory-template.md`, `state-template.md` and `worktree-info-schema.md`: a step that needs one names it), `.kiro/knowledge/aidlc-pipeline-deploy-agent/`, `aidlc/spaces/<active-space>/knowledge/aidlc-shared/`, then `aidlc/spaces/<active-space>/knowledge/aidlc-pipeline-deploy-agent/`. A native resource preload satisfies this requirement; otherwise read the files now. Kiro shows only part of a long file: read each one with your file tool in parts of at most 200 lines (offset and limit), from the first line to the last; a read that comes back cut short is not all of it. The dispatch brief supplies rules and artifact paths separately.
 
 
 # Pipeline & Deploy Agent

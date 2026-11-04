@@ -155,7 +155,7 @@ describe('wireTextFor', () => {
       { index: 1, option_letters: first, free_text: null }, { index: 2, option_letters: ['A'], free_text: null },
     ] })
     expect(wireTextFor(answers(['A']), view, false))
-      .toBe('Q1: c1\nQ2: Nothing to add' + WIRE.AUDIT_GROUPED_ANSWER_SUFFIX)
+      .toBe('Q1: c1; Q2: Nothing to add' + WIRE.AUDIT_GROUPED_ANSWER_SUFFIX)
     expect(wireTextFor(answers(['A', 'B']), view, false)).toBeNull()
   })
 
@@ -194,6 +194,17 @@ describe('wireTextFor', () => {
     expect(wireTextFor({ decision: 'answers', answers }, two, false)).toBeNull()
     expect(wireTextFor({ decision: 'answers', answers }, two, true))
       .toBe('Q1: B. Aurora\nQ2: A. DynamoDB' + WIRE.GROUPED_ANSWER_SUFFIX)
+  })
+
+  it('names a prefixed question as the file does, as `wire_text_for` sends it', () => {
+    // Enterprise run, 2026-11-04: from Refined Mockups on the conductor numbered its questions RMQ1, RMQ2.
+    const two = view([question({ label: 'RMQ1' }), question({ index: 2, prompt: 'Retries?', label: 'RMQ2' })])
+    const answers = [
+      { index: 1, option_letters: ['B'], free_text: null },
+      { index: 2, option_letters: ['A'], free_text: null },
+    ]
+    expect(wireTextFor({ decision: 'answers', answers }, two, true))
+      .toBe('RMQ1: B. Aurora\nRMQ2: A. DynamoDB' + WIRE.GROUPED_ANSWER_SUFFIX)
   })
 
   it("names AI-DLC's open mode question as Chat, before the delivery note and after a single answer", () => {
@@ -276,7 +287,7 @@ describe('wireTextFor', () => {
     } as unknown as QuestionsView
     expect(wireTextFor({ decision: 'answers', answers: [
       { index: 1, option_letters: ['B', 'A'], free_text: null }, { index: 2, option_letters: ['B'], free_text: 'Keep notes short' },
-    ] }, audit, false)).toBe('Q1: c2, c1\nQ2: Keep notes short' + WIRE.AUDIT_GROUPED_ANSWER_SUFFIX)
+    ] }, audit, false)).toBe('Q1: c2, c1; Q2: Keep notes short' + WIRE.AUDIT_GROUPED_ANSWER_SUFFIX)
   })
 
   it('refuses ambiguous indexes, duplicate choices, and stale drafts in degraded mode', () => {

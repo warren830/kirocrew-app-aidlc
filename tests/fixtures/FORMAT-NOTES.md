@@ -603,6 +603,39 @@ Audit-backed questions (a decision the engine asked in the chat, with no open qu
 - While the mode question is the stage's open decision, a pending sheet says so (`answer_mode_pending`) and its
   answers choose Chat in the same reply; the mode answer is never the sheet's receipt (`mode-question-reply/`).
 
+#### 11.8.1 AI-DLC 2.11.2
+
+- **Question kinds.** `DECISION_RECORDED` may carry `**Question Kind**:` (`answer-mode`, `learnings-note`,
+  `assumption-confirmation`); when present it alone says which of the engine's own questions a row is. Without it the
+  mode question is the row offering exactly Guide me / I'll edit the file / Chat; its wording never decides (a stage's
+  own "How would you like to answer support tickets?" is not it). The mode question is asked by the stage directive's
+  `answer_mode_note`, logged with `--question-kind answer-mode`; 2.11.0's `answer_mode: {ask: true}` is gone.
+- **Options.** A list that starts with `|` is `|`-separated, so a choice may hold a comma
+  (`|Yes, for this project|Yes, for the team|No`); any other list is comma-separated, as before (`optionsList`).
+- **Learnings.** Asked only after the person corrected the agent in the stage, one question per correction:
+  `You asked me to <their change>. Keep that for next time?`, single choice, exactly the three choices above, logged
+  `--question-kind learnings-note`; a correction holding quotes or a `$` goes through
+  `--decision-file .aidlc-engine/answer-text/question-<n>.txt`, whose write the hook logs as `ARTIFACT_CREATED`
+  between the decisions. The 2.11.0 pair (which notes to keep, anything to add) is still read in older records.
+  After Request changes the question comes before `report --result revised`, so after the gate's own floors
+  (`STAGE_AWAITING_APPROVAL`, `GATE_REJECTED`, `STAGE_REVISING`), while the stage's sheet was closed before the gate.
+  A receipt that only those floors follow still closes its sheet in this round (`_closes_this_round`); any other floor
+  after it (a stage start, approval, completion, jump or new workflow) does not, and the receipt still binds the bytes.
+- **Menus.** One reply answers every decision logged since the last answer (`openDecisionMenu`, which reads only
+  decision, answer and gate rows), recorded as `--details 'Q1: <choice>; Q2: <choice>'`; the learnings step reads that
+  `Details` split on `;` and `,`.
+- **Receipts and turns.** An answer row carries `**Message Id**:` naming the person's turn, whose `HUMAN_TURN` now has
+  fields (`Session`, `Origin` `person`/…, `Source`, `Reply`, `Message Id`); the words live in the engine's message
+  store outside the record (2.11.0 copied them in as `Person Reply`). Every audit value is masked for key or password
+  shapes before the shard keeps it (`[masked]`). At the plan question and a protected checkpoint the hook keeps the
+  person's words (`words`, `replies`) and infers no choice: the conductor records it.
+- **Switches.** `/aidlc --summary-confirmation off` and `/aidlc --learnings off` are applied by nobody at prompt time:
+  the hook hands the conductor `next --<setting> <value>`, which has it run `config set …` in that turn, writing
+  `off (set by you)` (2.11.0 wrote learnings as `set by a command`); turning summary confirmation off then asks whether
+  the person wants it off for the whole project.
+- **Accept as-is** is offered from the third `GATE_REJECTED` at a gate (one Unit's, for a Unit gate) since its last
+  `GATE_APPROVED`, a rejection with `Reopen` other than `change` starting over (`stageRevisionCycles`).
+
 ### 11.9 Review sections
 
 `parse_review_section` reads the LAST `## Review` section, because a re-reviewed artifact accumulates sections and

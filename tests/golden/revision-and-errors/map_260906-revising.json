@@ -38,7 +38,7 @@
    },
    "current_stage": "requirements-analysis",
    "directive_stage": null,
-   "graph_version": "2.11.0",
+   "graph_version": "2.11.2",
    "intent_key": "260906-revising",
    "nodes": [
     {
@@ -550,6 +550,7 @@
      "consumes": [
       "unit-of-work",
       "unit-of-work-story-map",
+      "stories",
       "requirements",
       "components",
       "contract-summary"
@@ -731,9 +732,6 @@
      "phase": "construction",
      "produces": [
       "build-instructions",
-      "integration-test-instructions",
-      "performance-test-instructions",
-      "security-test-instructions",
       "build-and-test-summary",
       "build-test-results",
       "cross-unit-traceability"

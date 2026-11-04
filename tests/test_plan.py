@@ -122,11 +122,13 @@ def plan_for(P, deps, repo, scope: str = "poc", **over):
 #: (source, scope) -> (stages, gates, artifacts, review_intensity) from the installed graph and grid. FR-EST-001
 #: calls these exact, so any drift must be a visible diff.
 GOLDEN_COUNTS = {
-    ("payload", "poc"): (8, 5, 25, {"none": 5, "advisory": 3, "adversarial": 0}),
-    ("payload", "feature"): (33, 30, 128, {"none": 20, "advisory": 8, "adversarial": 5}),
+    # 2.11.2 lists build-and-test's three test-instruction files as `optional_produces` (written by test strategy),
+    # so a plan no longer counts them: three fewer artifacts in every scope that runs build-and-test.
+    ("payload", "poc"): (8, 5, 22, {"none": 5, "advisory": 3, "adversarial": 0}),
+    ("payload", "feature"): (33, 30, 125, {"none": 20, "advisory": 8, "adversarial": 5}),
     # 2.7.1 runs both deployment stages for `bugfix` and `refactor`; only `bugfix` caps review at advisory.
-    ("payload", "bugfix"): (9, 6, 30, {"none": 7, "advisory": 2, "adversarial": 0}),
-    ("payload", "refactor"): (10, 7, 34, {"none": 7, "advisory": 1, "adversarial": 2}),
+    ("payload", "bugfix"): (9, 6, 27, {"none": 7, "advisory": 2, "adversarial": 0}),
+    ("payload", "refactor"): (10, 7, 31, {"none": 7, "advisory": 1, "adversarial": 2}),
     # The 32-stage graph has no `review_class` key at all: a reviewer alone means "advisory".
     ("payload230", "poc"): (8, 5, 23, {"none": 6, "advisory": 2, "adversarial": 0}),
     ("payload230", "feature"): (32, 29, 120, {"none": 21, "advisory": 11, "adversarial": 0}),
@@ -153,7 +155,7 @@ def test_exact_counts_are_golden(studio, P, deps, source, scope):
 def test_counts_track_the_unit_fan_out(P, deps, shipped):
     plan = plan_for(P, deps, shipped, "poc")
     assert [s.slug for s in plan.stages if s.enabled and s.per_unit] == ["code-generation"]
-    assert plan.exact.artifacts == 25  # units unknown: priced for one
+    assert plan.exact.artifacts == 22  # units unknown: priced for one
 
 
 def test_products_are_the_union_of_enabled_produces(P, deps, shipped):

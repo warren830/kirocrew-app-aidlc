@@ -51,6 +51,9 @@ from .settings import SettingsService
 from .storage import Storage
 
 _LOG = logging.getLogger("kirocrew.app.aidlc-studio")
+#: Startup issues that mean the start itself failed, the only ones Studio reports to the host as degraded: KiroCrew
+#: 0.11 answers a degraded mark by stopping the app and starting it again.
+STARTUP_RETRY_ISSUE_PREFIXES = ("startup_failed:",)
 
 #: ``payload/manifest.json`` relative to the app root.
 PAYLOAD_DIRNAME = "payload"
@@ -238,6 +241,12 @@ class Services:
         best-effort: an app that cannot verify its payload or reach the host is degraded, still serving reads and
         saying why, rather than gone.
         """
+        if self.started_at is not None and not self._stopped:
+            # KiroCrew 0.11 may run the app's startup again on a container that is already running (a gateway boot
+            # that saw no degraded mark retries it): a second store open and a second reconciler loop would race the
+            # first. Re-attach the host and keep the running services.
+            self.attach_host(_module_dashboard_state())
+            return
         issues: list[str] = []
         await asyncio.to_thread(self.storage.open)
         await asyncio.to_thread(self.settings.load)
@@ -269,7 +278,12 @@ class Services:
         )
         self.started_at = self.clock.iso()
         self.startup_issues = tuple(dict.fromkeys(issues))
+        # KiroCrew 0.11 reads a degraded mark as "this start failed": it shuts the app down and starts it again. Only
+        # a start that raised is worth that; a deferred first scan, settled transactions or a payload a restart
+        # cannot repair stay in ``/health``'s issues, with the app serving, or the retry would loop.
         for issue in self.startup_issues:
+            if not issue.startswith(STARTUP_RETRY_ISSUE_PREFIXES):
+                continue
             with contextlib.suppress(AttributeError):
                 self.ctx.health.mark_degraded(f"aidlc-studio: {issue}")
 

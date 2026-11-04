@@ -848,12 +848,17 @@ class Reconciler:
         return cards[0] if cards else None
 
     def _last_reply(self, slot: Any) -> Any | None:
-        """The idle conversation's newest row, when it is the assistant's: AI-DLC spoke last and waits."""
+        """The idle conversation's newest row, when it is the assistant's: AI-DLC spoke last and waits. Not when its
+        last turn stopped on a host error (a model failure, or KiroCrew 0.11's ``gateway_restart_interruption`` when
+        the app restarted mid-turn): the assistant's last words are then a progress line, not a question, and the
+        stopped-turn notice (A38) says how to go on. Measured on an enterprise run, "Now working on Contract Design…"
+        came back as a card waiting for the person's reply."""
         if slot is None or _attr(slot, "running", False):
             return None
-        rows = self._s.host.recent_rows(
-            str(_attr(slot, "key") or ""), since_ts="", roles=("user", "queued", "assistant"), limit=1,
-        )
+        key = str(_attr(slot, "key") or "")
+        if self._s.host.last_turn_error(key) is not None:
+            return None
+        rows = self._s.host.recent_rows(key, since_ts="", roles=("user", "queued", "assistant"), limit=1)
         return rows[0] if rows and rows[0].role == "assistant" else None
 
     async def _answer_unrecorded(self, snap: Any) -> bool:
@@ -996,7 +1001,7 @@ class Reconciler:
 
     async def _reconcile_delivered(self, rec: Any, snap: Any, slot: Any) -> Any:
         """Wait for a queued message's turn to start (P22), then look for the resolution it declared."""
-        timeout = self._turn_timeout()
+        timeout = self._turn_timeout(rec.slot_key)
         if not rec.evidence.get("turn_started_at"):
             now = self._s.clock.iso()
             if self._turn_started(rec, slot, snap):
@@ -1224,9 +1229,9 @@ class Reconciler:
         if action_type in C.CEREMONY_SWITCHES:
             if not ended:
                 return Resolution(*_TURN_OUTCOME[False], seen)
-            # The prompt hook writes the person's summary-confirmation off into the intent's line before the conductor
-            # runs, and the conductor's own setter writes the rest (`on`, and either learnings value): the line is the
-            # engine's record of what took effect.
+            # 2.11.2's prompt hook applies neither setting: it hands the conductor `next --<setting> <value>`, which has
+            # it run the engine's own `config set` in that turn (`off (set by you)`). The line is the engine's record
+            # of what took effect.
             setting = action_type.removeprefix("set_")
             wanted = str((rec.payload or {}).get("value") or "")
             current = ceremony_setting(_attr(snap, "state"), C.CEREMONY_SWITCHES[action_type])
@@ -1435,6 +1440,21 @@ class Reconciler:
         if digest_changed and _attr(plan, "answered", False) and plan_approval_choice(answer).startswith(
                 C.WIRE_APPROVE_PLAN):
             return Resolution("no_transition", "plan_approved", seen)
+        # A conductor may ask its own plan as an ordinary decision (no Checkpoint), list the choices as `A. Approve
+        # Plan`, write the letter alone into the tag and record the reply with `log answer`: on an enterprise run
+        # the stage went on approved while the card waited for a PLAN_APPROVAL_RECORDED that never comes, turned
+        # ReconciliationRequired, and held back the next questions' card. The engine's own receipt for this
+        # dispatch's reply, naming the approval, with the file's plan section answered, is that proof.
+        if digest_changed and _attr(plan, "answered", False):
+            receipt = next((
+                event for event in sorted(self._new_events(rec, snap, ("QUESTION_ANSWERED",), stage),
+                                          key=lambda e: _attr(e, "sort_key", ("", 0, 0)), reverse=True)
+                if (fields := _attr(event, "fields", {}) or {}).get("Unit") in (None, "", rec.unit)
+                and plan_approval_choice(str(fields.get("Details") or "").strip()) == C.WIRE_APPROVE_PLAN
+            ), None)
+            if receipt is not None:
+                seen["question_answered"] = _json_of(receipt)
+                return Resolution("no_transition", "plan_approved", seen)
         # A later Learnings prompt can own `snap.questions` by now; the reader keeps the closed file and its
         # validated receipts from the same snapshot, matched on the plan's path, scope and dispatch boundary.
         closed, origin = _attr(questions, "closed_file"), _attr(questions, "origin") or {}
@@ -2105,8 +2125,13 @@ class Reconciler:
     def _past_deadline(self, rec: Any) -> bool:
         return bool(rec.deadline_at) and str(self._s.clock.iso()) > str(rec.deadline_at)
 
-    def _turn_timeout(self) -> int:
-        return int(min(self._s.host.turn_timeout_secs(), C.PROCESSING_DEADLINE_CAP_SECS))
+    def _turn_timeout(self, slot_key: str | None = None) -> int:
+        """The limit the host runs this conversation's turns under (KiroCrew 0.11: its own, else the global one)."""
+        try:
+            value = self._s.host.turn_timeout_secs(slot_key)
+        except TypeError:  # a host bridge from before per-conversation limits
+            value = self._s.host.turn_timeout_secs()
+        return int(min(value, C.PROCESSING_DEADLINE_CAP_SECS))
 
     @staticmethod
     def _deadline_from(iso: str, seconds: int) -> str:

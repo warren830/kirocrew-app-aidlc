@@ -387,6 +387,8 @@
 .studio-trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A person's own words keep their spacing: collapsed, "hello  world" claims a different bug. */
 .studio-verbatim { white-space: pre-wrap; }
+/* A waiting tool call's command or diff keeps its lines; a long one scrolls inside the notice, not the queue. */
+.studio-approval-cmd { display: block; max-height: 240px; overflow: auto; }
 .studio-trunc.studio-verbatim { white-space: pre; }
 .studio-wrap-any { overflow-wrap: anywhere; }
 .studio-muted { color: var(--muted); }

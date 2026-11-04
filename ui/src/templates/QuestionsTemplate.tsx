@@ -28,9 +28,12 @@ import { MarkdownRenderer } from '@kirocrew/app-sdk/ui'
 
 import { ArtifactViewer, useArtifactBody } from '../artifacts/ArtifactViewer'
 import { useI18n } from '../i18n'
-import { LearningsSwitch, cardLearningsSwitchBlockedReason, openLearningsQuestions } from '../intents/LearningsSwitch'
+import {
+  LearningsSwitch, cardLearningsSwitchBlockedReason, isLearningsCorrectionQuestion, openLearningsQuestions,
+} from '../intents/LearningsSwitch'
 import { SummaryConfirmationSwitch, cardSummarySwitchBlockedReason } from '../intents/SummaryConfirmationSwitch'
 import { pendingQuestions } from '../actions/useSubmit'
+import { at } from '../lib/format'
 import { withInlineCode } from '../lib/inlineCode'
 import type { DraftResult, Question } from '../lib/types'
 import { Chip } from '../shell/Chip'
@@ -47,6 +50,7 @@ import {
   type AnswerDraft,
   type TemplateProps,
 } from './DecisionControls'
+import { wrapQuotedFences } from './MissingInputTemplate'
 
 type Suggestion = DraftResult['suggested_answers'][number]
 
@@ -142,6 +146,8 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
   // A card that is only a checkpoint has no question group to show: "0 of 0 unanswered" was noise.
   const showGroup = questions.length > 0 || unsupportedPending > 0 || !checkpoint?.present
   const offersSummaryChoice = card.decisions.some((spec) => spec.decision === 'confirm_summary')
+  // AI-DLC's last message, which an open summary confirmation carries: the summary it asks about.
+  const summaryMessage = card.evidence.conversation_reply ?? null
   // AI-DLC's learnings ritual, still asking: the card offers to stop it for the stages after this one.
   const learningsAsked = answerable && openLearningsQuestions(card)
 
@@ -300,6 +306,19 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
         </Block>
       ) : null}
 
+      {showGroup && view?.preamble?.trim() ? (
+        // What the sheet says before its questions: 2.11.2 puts there what the options point at ("the outline above
+        // shows them"), so the person cannot choose without it. The same sanitising renderer as a question's context.
+        <Block title={t('template.questions.preambleTitle')} icon="doc">
+          <details className="studio-preamble" open>
+            <summary className="studio-help">{t('template.questions.preambleHint')}</summary>
+            <div className="msg-content studio-md">
+              <MarkdownRenderer content={view.preamble} />
+            </div>
+          </details>
+        </Block>
+      ) : null}
+
       {showGroup ? (
       <Block title={t(questions.length === 1 ? 'template.questions.single' : 'template.questions.group')} icon="question">
         <div className="studio-qmetas">
@@ -349,13 +368,19 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
               <div className="studio-q" key={question.index} data-answered={String(question.answered)}>
                 {/* The prompt is the engine's sentence, numbered as the file numbers it. */}
                 <p className="studio-q-prompt">
-                  {question.index}. {withInlineCode(question.prompt)}
+                  {question.label ?? question.index}. {withInlineCode(question.prompt)}
                 </p>
                 {question.context?.trim() ? (
                   // Use the same sanitising renderer as artifacts. Context is evidence, never a draft answer.
                   <div className="msg-content studio-md">
                     <MarkdownRenderer content={question.context} />
                   </div>
+                ) : null}
+                {isLearningsCorrectionQuestion(question) ? (
+                  // AI-DLC 2.11.2 asks this only about a change the person asked for in this stage.
+                  <p className="studio-help studio-learnings" role="note">
+                    {t('template.questions.learnings.correction')}
+                  </p>
                 ) : null}
                 {question.learning_candidates?.length ? (
                   // The ritual asked with ids only; this is what each id is, read from the stage diary.
@@ -511,6 +536,29 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
       {checkpoint?.present ? (
         <Block title={t(`template.questions.checkpoint.${checkpoint.kind}`)} icon="gate">
           <p className="studio-q-prompt">{t(`template.questions.checkpoint.${checkpoint.kind}.${answerable ? 'body' : 'bodyClosed'}`)}</p>
+          {checkpoint.kind === 'summary_confirmation' && !checkpoint.answered && answerable ? (
+            // The summary is written only in the conversation: the file's section holds the question and its two
+            // answers. Without it here the person would confirm text this card never showed them.
+            summaryMessage?.text ? (
+              <>
+                <p className="studio-help">{t('template.questions.summaryMessageHelp', { at: at(i18n, summaryMessage.ts) })}</p>
+                {/* The same sanitising renderer as a question's context, with the conversation's own line breaks. */}
+                <div className="msg-content studio-md studio-reply-quote">
+                  <MarkdownRenderer content={wrapQuotedFences(summaryMessage.text)} softBreaks />
+                </div>
+                <button type="button" className="studio-btn" onClick={() => go({ tab: 'conversation' })}>
+                  {t('template.questions.openConversation')}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="studio-help">{t('template.questions.summaryMessageMissing')}</p>
+                <button type="button" className="studio-btn" onClick={() => go({ tab: 'conversation' })}>
+                  {t('template.questions.openConversation')}
+                </button>
+              </>
+            )
+          ) : null}
           {checkpoint.context?.trim() ? (
             // What is being accepted, in the engine's words: the human cannot choose without reading it.
             // The same sanitising renderer as a question's context.

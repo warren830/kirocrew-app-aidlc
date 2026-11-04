@@ -82,19 +82,22 @@ def test_units_generation_maps_requirement_groups_and_details(workspace):
     assert run_sensor(workspace, "units-generation", {"FR1": "alpha", "FR1.1": "U1", "FR2": "beta"}) == PASS
 
 
-@pytest.mark.parametrize("rows, gap", [
-    ([("FR1.1", "U1"), ("FR2", "U2")], True),
-    ([("FR1", "U2"), ("FR1.1", "U1"), ("FR2", "U2")], False),
-    ([("FR1", "U99"), ("FR1.1", "U1"), ("FR2", "U2")], True),
-    (None, True),
+# Since 2.11.1 a requirement with sub-requirements is traced through them (#2210, "traceability follows
+# sub-requirements under their parent"): FR1 is covered by FR1.1's row, so a missing FR1 row is no gap of its own.
+# Its wrong or unknown unit is still an invalid target, and the stage still fails.
+@pytest.mark.parametrize("rows, gaps", [
+    ([("FR1.1", "U1"), ("FR2", "U2")], []),
+    ([("FR1", "U2"), ("FR1.1", "U1"), ("FR2", "U2")], []),
+    ([("FR1", "U99"), ("FR1.1", "U1"), ("FR2", "U2")], []),
+    (None, ["FR1.1", "FR2"]),
 ], ids=["missing-row", "wrong-unit", "unknown-unit", "missing-map"])
-def test_units_generation_rejects_missing_or_wrong_requirement_assignment(workspace, rows, gap):
+def test_units_generation_rejects_missing_or_wrong_requirement_assignment(workspace, rows, gaps):
     if rows is not None:
         write_map(workspace, rows)
     result = run_sensor(workspace, "units-generation", {"FR1": "U1", "FR1.1": "U1", "FR2": "U2"})
     assert not result["pass"], result
     assert any(item.startswith("FR1:") for item in result["invalid_targets"]), result
-    assert ("FR1" in result["gaps"]) if gap else (result["gaps"] == []), result
+    assert sorted(result["gaps"]) == gaps, result
 
 
 @pytest.mark.parametrize("target", ["U2", "U99"])

@@ -49,7 +49,7 @@ describe('WIRE', () => {
 
   it('reproduces the golden grouped-answer example', () => {
     const line = (index: number, answer: string) =>
-      WIRE.ANSWER_LINE.replace('{index}', String(index)).replace('{answer}', answer)
+      WIRE.ANSWER_LINE.replace('{label}', `Q${index}`).replace('{answer}', answer)
     const option = (letter: string, label: string) =>
       WIRE.OPTION_ANSWER.replace('{letter}', letter).replace('{label}', label)
     const several = WIRE.MULTI_SELECT_ANSWER.replace('{letters}', ['A', 'B'].join(WIRE.MULTI_SELECT_JOINER))

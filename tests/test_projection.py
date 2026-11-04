@@ -681,18 +681,44 @@ def test_dedupe_key_follows_the_boundary(projection, snap_of, gate_repo):
     assert before.dedupe_key != _by_type(_seeds(projection, snap_of(gate_repo)))["gate"].dedupe_key
 
 
-def test_accept_as_is_is_offered_only_from_the_fourth_attempt(projection, snap_of, repo_builder, C):
-    """C29 / review P24: the conductor adds `Accept as-is` after three rejection cycles."""
-    def gate_after(revisions: int) -> Any:
-        audit = F.gate_open_audit(GATE_STAGE) + "".join(
-            F.audit_block("STAGE_REVISING", f"2026-09-04T09:1{i}:00Z", Stage=GATE_STAGE, Revision_count=str(i + 1))
-            for i in range(revisions))
-        return _by_type(_seeds(projection, snap_of(build(repo_builder, f"attempt-{revisions}", audit=audit))))["gate"]
+def _rejected(i: int, **fields) -> str:
+    return F.audit_block("GATE_REJECTED", f"2026-09-04T09:1{i}:00Z", Stage=GATE_STAGE, **fields) + F.audit_block(
+        "STAGE_REVISING", f"2026-09-04T09:1{i}:01Z", Stage=GATE_STAGE, Revision_count=str(i + 1))
 
-    third, fourth = gate_after(2), gate_after(3)
-    assert third.captured["stage_attempt"] == 3 and "accept_as_is" not in third.decisions
-    assert fourth.captured["stage_attempt"] == C.ACCEPT_AS_IS_MIN_ATTEMPT == 4
-    assert fourth.decisions == ("approve", "request_changes", "accept_as_is")
+
+def test_accept_as_is_is_offered_from_the_engines_third_change_request(projection, snap_of, repo_builder, C):
+    """C29 / review P24, as 2.11.2 counts it (``stageRevisionCycles``): the gate's change requests since it was last
+    approved or freshly reopened, from the third. Studio's own attempt count never resets, so it cannot decide."""
+    def gate_after(tag: str, *rows: str) -> Any:
+        audit = F.gate_open_audit(GATE_STAGE) + "".join(rows)
+        return _by_type(_seeds(projection, snap_of(build(repo_builder, f"cycles-{tag}", audit=audit))))["gate"]
+
+    second = gate_after("2", _rejected(0), _rejected(1))
+    assert "accept_as_is" not in second.decisions
+    third = gate_after("3", _rejected(0), _rejected(1), _rejected(2))
+    assert third.captured["stage_attempt"] == 4 and C.ACCEPT_AS_IS_REVISION_CYCLES == 3
+    assert third.decisions == ("approve", "request_changes", "accept_as_is")
+    approved = F.audit_block("GATE_APPROVED", "2026-09-04T09:13:30Z", Stage=GATE_STAGE)
+    after_approval = gate_after("approved", _rejected(0), _rejected(1), _rejected(2), approved, _rejected(4))
+    assert "accept_as_is" not in after_approval.decisions
+    jumped = gate_after("jump", _rejected(0), _rejected(1, Reopen="jump"), _rejected(2))
+    assert "accept_as_is" not in jumped.decisions  # a jump or redo is a fresh attempt
+    changed = gate_after("change", _rejected(0), _rejected(1, Reopen="change"), _rejected(2))
+    assert "accept_as_is" in changed.decisions  # `Reopen: change` is the person's change request
+    other_unit = gate_after("unit", _rejected(0, Unit="u1"), _rejected(1, Unit="u1"), _rejected(2, Unit="u1"))
+    assert "accept_as_is" not in other_unit.decisions
+
+
+def test_a_gate_opened_by_a_turn_still_writing_waits_for_the_turn_to_end(projection, gate_snap):
+    """The engine opens the gate mid-turn and the conductor then writes what it presents: no Approve can be sent into
+    a running conversation (`slot_busy`). Enterprise run, 2026-11-04: 75 s of a live Approve while the chat streamed.
+    A gate card already open is refreshed as before; a host waiting on the person is not a turn still writing."""
+    gates = lambda **over: [s for s in _seeds(projection, gate_snap, **over) if s.type == "gate"]  # noqa: E731
+    assert gates(slot=SlotStub(running=True)) == []
+    assert len(gates(slot=SlotStub(running=True, needs_input=True))) == 1
+    assert len(gates(slot=SlotStub(running=False))) == 1
+    open_card = ActionStub(type="gate", stage=GATE_STAGE, status="Queued")
+    assert len(gates(slot=SlotStub(running=True), live_actions=[open_card])) == 1
 
 
 def test_revision_card_is_informational(projection, snap_of, revising_repo):
@@ -1717,3 +1743,33 @@ def test_a_solo_card_ignores_a_unit_and_keeps_its_key(projection, proj_mod, gate
     assert seed.dedupe_key == proj_mod.dedupe_key(
         "gate", REPO_ID, gate_snap.intent_key, GATE_STAGE, projection.captured(gate_snap, GATE_STAGE)["boundary_token"])
     assert "unit" not in seed.headline_params and seed.consequence_variant == "approve_unlocks"
+
+
+PLAN_ASK_SHEET = (Path(__file__).resolve().parent / "fixtures" / "plan-approval-ask"
+                  / "code-generation-questions.md").read_text("utf-8")
+
+
+def test_a_plan_approval_ask_directive_carries_the_units_plan_card(projection, snap_of, repo_builder):
+    """2.11.2 writes the code plan's approval as an `ask` directive naming code-generation and the Unit, while
+    unit-major Construction keeps `Current Stage` on functional-design. Refusing the kind left the plan approval to
+    a conversation-reply card (2026-11-04 feature run)."""
+    snap = snap_of(build(
+        repo_builder, "directive-ask",
+        state=F.state_text(marks={"functional-design": "-"}, fields={
+            "Current Stage": "functional-design", "Status": "Running", "Lifecycle Phase": "CONSTRUCTION"}),
+        audit=F.audit_block("STAGE_STARTED", "2026-09-04T09:00:02Z", Stage="functional-design"),
+        directive={"version": 2, "kind": "ask", "ask_type": "plan-approval", "stage": "code-generation",
+                   "unit": "u1-due-date-list", "state_sha256": "AUTO"},
+        questions={"construction/u1-due-date-list/code-generation/code-generation-questions.md": PLAN_ASK_SHEET}))
+    assert (snap.directive.kind, snap.directive.matches_state) == ("ask", True)
+    assert snap.stage == "code-generation" and snap.questions is not None
+    assert snap.questions.pending_checkpoint == "plan_approval"
+    seeds = _seeds(projection, snap)
+    assert seeds and seeds[0].stage == "code-generation"
+    assert "approve_plan" in seeds[0].decisions
+
+
+def test_an_ask_directive_naming_no_stage_still_names_none(studio):
+    """A scope question (`ask_type: scope-confirm`) carries no stage: it says nothing about where work stands."""
+    marker = json.dumps({"version": 2, "kind": "ask", "ask_type": "scope-confirm", "state_sha256": "0" * 64}).encode()
+    assert studio.aidlc_reader.parse_directive(marker, "0" * 64) is None

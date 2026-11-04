@@ -15,7 +15,7 @@ import { EMPTY_DRAFT, payloadFor, type ActionDraft } from '../actions/DetailShel
 import { wireTextFor } from '../actions/useSubmit'
 import { I18nProvider, makeI18n } from '../i18n'
 import { useStudioApi, StudioApiError, type StudioApi } from '../lib/api'
-import { LEARNINGS_ADD_PROMPTS, LEARNINGS_KEEP_NONE_LABEL } from '../lib/enums.generated'
+import { LEARNINGS_ADD_PROMPTS, LEARNINGS_CORRECTION_CHOICES, LEARNINGS_KEEP_NONE_LABEL } from '../lib/enums.generated'
 import { EMPTY_ROUTE } from '../lib/route'
 import type { ActionCard, CeremonySetting, IntentSummary, Question, QuestionsView, SlotView } from '../lib/types'
 import { WIRE } from '../lib/wire.generated'
@@ -24,7 +24,8 @@ import { QuestionsTemplate } from '../templates/QuestionsTemplate'
 import { API_BASE, actionCard, decisionSpec } from '../test/fixtures'
 import { apiCalls, setApiRoutes } from '../test/stubs/app-sdk'
 import {
-  LearningsSwitch, cardLearningsSwitchBlockedReason, isLearningsQuestion, learningsSwitchBlockedReason,
+  LearningsSwitch, cardLearningsSwitchBlockedReason, isLearningsCorrectionQuestion, isLearningsQuestion,
+  learningsSwitchBlockedReason,
   learningsSwitchText, openLearningsQuestions,
 } from './LearningsSwitch'
 import { SummaryConfirmationSwitch, summarySwitchBlockedReason } from './SummaryConfirmationSwitch'
@@ -271,6 +272,19 @@ describe('which questions are the ritual’s', () => {
       learning_candidates: [{ id: 'c1', heading: 'Tradeoffs', summary: 'Picked JSON', context: '' }] }))).toBe(true)
     expect(isLearningsQuestion(question({ prompt: 'Which store?', options: [option('A', 'SQLite')] }))).toBe(false)
     expect(isLearningsQuestion(question({ prompt: 'Anything else?', options: [option('A', 'Keep none')] }))).toBe(false)
+  })
+
+  it('reads 2.11.2’s question about one correction by its ending and its exact three choices', () => {
+    const correction = (prompt: string, labels: readonly string[] = LEARNINGS_CORRECTION_CHOICES) => question({
+      prompt, options: labels.map((label, i) => option(String.fromCharCode(65 + i), label)),
+    })
+    const asked = 'You asked me to name test files after the module they test. Keep that for next time?'
+    expect(isLearningsCorrectionQuestion(correction(asked))).toBe(true)
+    expect(isLearningsQuestion(correction(asked))).toBe(true)
+    expect(isLearningsCorrectionQuestion(correction('Keep that for next time?'))).toBe(false)
+    expect(isLearningsCorrectionQuestion(correction(asked, ['Yes', 'No']))).toBe(false)
+    expect(isLearningsQuestion(correction('Should the list keep its order?', ['Yes, for this project', 'No'])))
+      .toBe(false)
   })
 
   it('counts only a question still open', () => {

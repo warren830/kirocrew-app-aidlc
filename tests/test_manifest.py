@@ -51,13 +51,14 @@ def test_identity_matches_the_constants_module(raw, studio):
     C = studio.constants
     assert (raw["name"], raw["version"], raw["minKiroCrewVersion"]) == (C.APP_NAME, C.APP_VERSION,
                                                                         C.MIN_KIROCREW_VERSION)
-    assert C.MIN_KIROCREW_VERSION == "0.8.0"
+    assert C.MIN_KIROCREW_VERSION == "0.11.0"
 
 
-def test_the_kirocrew_floor_is_the_loader_the_entry_points_need(raw):
-    """0.8 registers the app's parent packages, which is what ``from . import studio`` relies on."""
+def test_the_kirocrew_floor_is_the_host_studio_is_verified_against(raw):
+    """0.11: native approval answers, per-conversation turn limits, the embed's ``hide``, degraded-means-restart. Its
+    loader also registers the app's parent packages (since 0.8), which ``from . import studio`` relies on."""
     assert "from . import studio" in (APP_ROOT / "backend" / "routes.py").read_text("utf-8")
-    assert raw["minKiroCrewVersion"] == "0.8.0"
+    assert raw["minKiroCrewVersion"] == "0.11.0"
 
 
 # --- hooks and UI entry ---

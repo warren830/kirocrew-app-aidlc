@@ -260,5 +260,16 @@
   "activity.row.repoGone": "已取消注册的仓库",
   "activity.conversation.error": "KiroCrew 在会话里报告了错误：{text}",
   "activity.notification.sent.approval": "Studio 提醒你：会话在等你批准一个工具调用。",
-  "activity.notification.sent.completion": "Studio 提醒你：这个意图已经完成。"
+  "activity.notification.sent.completion": "Studio 提醒你：这个意图已经完成。",
+  "audit.HOST_TURN": "宿主自己发送的一轮（不是本人的回复）。",
+  "audit.SUBAGENT_DISPATCHED": "派出了一个专家子代理。",
+  "audit.SENSOR_COULD_NOT_RUN": "有一项检查没能运行；AI-DLC 记为未运行，而不是通过。",
+  "audit.STAGE_OUTPUT_AMENDED": "某个阶段的文档在评审之后被修改。",
+  "audit.STATE_TRANSITION_BLOCKED": "AI-DLC 拒绝了一次规则不允许的流程推进。",
+  "audit.STAGE_RULES_BLOCKED": "按项目规则，某个阶段暂时不能继续。",
+  "audit.REVIEW_VERDICT_DICTATED": "评审结论不是由评审者本人写下的。",
+  "audit.STAGE_DEFINITION_CHANGED": "工作进行中，某个阶段的定义发生了变化。",
+  "audit.SOURCE_WORK_NOT_FOUND": "某一步提到的源工作没有找到。",
+  "audit.INTENT_REPOS_CHANGED": "这项工作涉及的仓库发生了变化。",
+  "audit.INTENT_CHECKOUTS_CHANGED": "这项工作代码所在的检出目录发生了变化。"
 }

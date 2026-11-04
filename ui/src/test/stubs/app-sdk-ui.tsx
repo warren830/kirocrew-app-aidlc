@@ -66,5 +66,7 @@ export function SegmentedControl<T extends string>({
     </div>
   )
 }
-export const MarkdownRenderer = ({ content }: { content: string }) => <pre data-testid="markdown">{content}</pre>
+export const MarkdownRenderer = ({ content, softBreaks }: { content: string; softBreaks?: boolean }) => (
+  <pre data-testid="markdown" data-soft-breaks={softBreaks ? 'true' : undefined}>{content}</pre>
+)
 export const AimBadge = undefined

@@ -416,6 +416,23 @@ describe('gate template', () => {
     expect(screen.getByText(en.t('review.quotedVerbatim'))).toBeInTheDocument()
   })
 
+  it('marks the artifact with this stage\'s revisions, not the workflow-global Revision Count', async () => {
+    // Enterprise run, 2026-11-04: one stage sent back made every later gate's artifact read as revised.
+    const body = () => ({
+      artifact: artifact(), content: '# Functional design\n\nBody.', encoding: 'utf-8', truncated: false, review: null,
+      toc: [], prior: { available: false, source: null, diff: null },
+    })
+    setApiRoutes({ [`GET ${BASE}/repos/r_1/intents/default~250901-guest/artifacts/art_1`]: body })
+    const fresh = card({ evidence: { ...card().evidence, artifacts: [artifact()] } })
+    expect(fresh.evidence.state?.revision_count).toBe(2)
+    const first = mount(GateTemplate, fresh)
+    expect(await screen.findByText(/Body\./)).toBeInTheDocument()
+    expect(screen.queryByText(/^revision \d/)).toBeNull()
+    first.unmount()
+    mount(GateTemplate, { ...fresh, captured: { ...fresh.captured, stage_attempt: 2 } })
+    expect(await screen.findByText(en.t('detail.revision', { n: 1 }))).toBeInTheDocument()
+  })
+
   it('quotes reviewer findings verbatim and offers the artifact anchor', async () => {
     setApiRoutes({
       [`GET ${BASE}/repos/r_1/intents/default~250901-guest/artifacts/art_1`]: () => ({
@@ -736,6 +753,27 @@ describe('questions template', () => {
     ] })
     expect(wireTextFor(payload!, view, false)).toBe('A, B — A. Capabilities 1 and 2; B. Capability 3')
     expect(apiCalls.filter((call) => call.method !== 'GET')).toHaveLength(0)
+  })
+
+  it('shows the sheet\'s own text before its questions, which an option may point at', () => {
+    // The user-stories sheet of 2026-11-04: Q2's recommended option ends "the outline above shows them".
+    setApiRoutes({})
+    const preamble = '## Story Plan\n\n| Story | What it covers |\n|---|---|\n| US1.1 | Add a task with a due date |'
+    mount(QuestionsTemplate, questionCard(questionsView({ preamble, questions: [question({
+      index: 2, prompt: 'How the stories are split',
+      options: [{ letter: 'A', text: 'Thirteen small stories; the outline above shows them', is_other: false }],
+    })] })))
+    const shown = screen.getAllByTestId('markdown').find((node) => node.textContent === preamble)
+    expect(shown).toBeDefined()
+    expect(screen.getByText(en.t('template.questions.preambleTitle'))).toBeInTheDocument()
+    const option = screen.getByRole('radio', { name: /the outline above shows them/ })
+    expect(shown!.compareDocumentPosition(option) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('shows no preamble block for a sheet without one', () => {
+    setApiRoutes({})
+    mount(QuestionsTemplate, questionCard(questionsView({ preamble: null })))
+    expect(screen.queryByText(en.t('template.questions.preambleTitle'))).toBeNull()
   })
 
   it('sets AI-DLC\'s backtick spans as code and counts what is still to choose in this form', async () => {
@@ -1093,6 +1131,33 @@ describe('questions template', () => {
     })))
     expect(screen.queryByRole('button', { name: en.t('advisor.action.question_draft') })).not.toBeInTheDocument()
     expect(screen.getByText(en.t('template.questions.checkpoint.summary_confirmation'))).toBeInTheDocument()
+  })
+
+  it('shows the summary a confirmation asks about, which AI-DLC writes only in the conversation', async () => {
+    setApiRoutes({})
+    const view = questionsView({
+      questions: [question({ answered: true, answer: 'At-least-once' })],
+      pending_count: 0,
+      pending_checkpoint: 'summary_confirmation',
+      summary_confirmation: { kind: 'summary_confirmation', present: true, answered: false,
+        answer: null, options: ['Looks correct', 'Request changes'] },
+    })
+    const quoted = questionCard(view)
+    quoted.evidence.conversation_reply = {
+      text: '- **Delivery:** at-least-once, retried from the outbox (Q1)', ts: '2026-11-03T16:50:32Z',
+    }
+    const first = mount(QuestionsTemplate, quoted)
+    expect(screen.getByText(/at-least-once, retried from the outbox/)).toHaveAttribute('data-soft-breaks', 'true')
+    expect(screen.queryByText(en.t('template.questions.summaryMessageMissing'))).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: en.t('template.questions.openConversation') }))
+    expect(first.patches.at(-1)).toEqual({ tab: 'conversation' })
+    first.unmount()
+
+    // Not readable now (the conversation is running, or the person spoke last): say where the summary is.
+    const second = mount(QuestionsTemplate, questionCard(view))
+    expect(screen.getByText(en.t('template.questions.summaryMessageMissing'))).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: en.t('template.questions.openConversation') }))
+    expect(second.patches.at(-1)).toEqual({ tab: 'conversation' })
   })
 
   it('shows the assumptions an Assumption Confirmation asks about', () => {
@@ -1676,7 +1741,9 @@ describe('budget and missing input templates', () => {
     })
     const { draft } = mount(MissingInputTemplate, value)
     expect(screen.getByText(en.t('template.missingInput.lastReply'))).toBeInTheDocument()
-    expect(screen.getByText('Keeping setuptools>=61 will likely fail in Build and Test.')).toBeInTheDocument()
+    // Rendered as the conversation renders it: a single line break is a line break, not a space.
+    expect(screen.getByText('Keeping setuptools>=61 will likely fail in Build and Test.'))
+      .toHaveAttribute('data-soft-breaks', 'true')
     // The quote replaces "read the question in the conversation"; the conversation stays one click away.
     expect(screen.queryByText(en.t('template.missingInput.reason.conversation_reply'))).toBeNull()
     expect(screen.getByRole('button', { name: en.t('template.missingInput.openConversation') })).toBeInTheDocument()

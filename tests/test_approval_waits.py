@@ -1,4 +1,4 @@
-"""A run parked on a host tool approval is visible in Studio and notified, but answered in the chat."""
+"""A run parked on a host tool approval is visible in Studio and notified; a native request can be answered from its notice."""
 
 import asyncio
 
@@ -42,14 +42,18 @@ def test_the_queue_lists_a_parked_conversation_with_what_it_asks(sv, routes, fak
     assert body["approval_waits"] == [{
         "repo_id": scene.repo_id, "repo_label": "ledger", "space": "default", "intent_dir": INTENT,
         "intent_key": INTENT, "slot_key": scene.slot_key, "tool": TOOL, "tool_input": TOOL_INPUT,
-        "purpose": PURPOSE}]
+        # Shown whole, so the notice may offer Allow once and say where it reaches.
+        "tool_input_truncated": False, "purpose": PURPOSE,
+        # What the notice's Allow once / Reject answer, as the host's own card does (KiroCrew 0.11).
+        "request_id": "req-1", "request_mid": "mid-req-1", "origin": "native"}]
     # The queue's own filter applies: another repository's queue does not show it.
     status, body = _get(sv, routes, fake_host, "/actions", repo="r_other")
     assert status == 200 and body["approval_waits"] == []
     status, body = _get(sv, routes, fake_host, f"/repos/{scene.repo_id}/intents")
     session = next(i for i in body["intents"] if i["intent_dir"] == INTENT)["session"]
     assert session["waiting_approval"] is True
-    assert session["approval"] == {"tool": TOOL, "tool_input": TOOL_INPUT, "purpose": PURPOSE}
+    assert session["approval"] == {"tool": TOOL, "tool_input": TOOL_INPUT, "tool_input_truncated": False, "purpose": PURPOSE,
+                                   "request_id": "req-1", "request_mid": "mid-req-1", "origin": "native"}
 
 
 def test_a_scan_notifies_once_per_approval_with_a_link_to_the_conversation(sv, routes, fake_host, scene):

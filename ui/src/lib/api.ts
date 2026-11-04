@@ -287,6 +287,14 @@ export interface StudioApi extends WorkspaceApi {
   setSlotModel(slotKey: string, model: string): Promise<Record<string, unknown>>
   /** The slot's reasoning effort, one of `listEffortLevels()`; `""` is the host's default. */
   setSlotEffort(slotKey: string, effort: string): Promise<Record<string, unknown>>
+  /**
+   * Answer the conversation's waiting tool approval as the person, in the host's own card shape
+   * (`POST /api/chat/slots/{slot}/approve`, `origin: "native"`): the host checks the request is still waiting and is
+   * the very row the person saw (`request_mid`), else 404 `approval_not_pending`. `rejected_once` refuses only this
+   * call; trusting a command or the conversation stays in the conversation.
+   */
+  answerApproval(slotKey: string, target: { request_id: string; request_mid: string },
+    action: 'approved' | 'rejected_once'): Promise<Record<string, unknown>>
   listFolders(o?: ReadOptions): Promise<ChatFolder[]>
   createFolder(body: { name: string; parent_id?: string; project_dir?: string }): Promise<ChatFolder>
   setSlotFolder(slotKey: string, folderId: string): Promise<Record<string, unknown>>
@@ -469,6 +477,10 @@ export function useStudioApi(): StudioApi {
         chatPost(api, `${CHAT_BASE}/slots/${encodeURIComponent(slotKey)}/model`, { model }),
       setSlotEffort: (slotKey, effort) =>
         chatPost(api, `${CHAT_BASE}/slots/${encodeURIComponent(slotKey)}/reasoning-effort`, { reasoning_effort: effort }),
+      answerApproval: (slotKey, target, action) =>
+        chatPost(api, `${CHAT_BASE}/slots/${encodeURIComponent(slotKey)}/approve`, {
+          origin: 'native', request_id: target.request_id, request_mid: target.request_mid, action,
+        }),
       listFolders: async (o) => {
         try {
           return await api.get<ChatFolder[]>(`${CHAT_BASE}/folders`, o?.signal ? { signal: o.signal } : undefined)

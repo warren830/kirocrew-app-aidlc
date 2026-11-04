@@ -15,7 +15,7 @@
   "summarySwitch.recorded": "AI-DLC 的记录：",
   "summarySwitch.explain.on": "AI-DLC 在写出每个阶段的文件之前，会先问你它对你答案的摘要是否正确。关闭它不影响任何审批和问题。",
   "summarySwitch.explain.off": "AI-DLC 直接根据你的答案写出每个阶段的文件，不再问摘要是否正确。审批和问题不变。",
-  "summarySwitch.explain.offPending": "此意图的摘要确认已关闭，之后的阶段不会再问。这一次是在关闭之前问的，仍在等你回答。",
+  "summarySwitch.explain.offPending": "此意图的摘要确认已关闭：AI-DLC 也不再等这一次的确认，会直接根据你的答案写出本阶段的文件；之后的阶段也不会再问。",
   "summarySwitch.action.off": "不再要求摘要确认",
   "summarySwitch.action.on": "重新要求摘要确认",
   "summarySwitch.confirm.off.title": "为此意图关闭摘要确认？",

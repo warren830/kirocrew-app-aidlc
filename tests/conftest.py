@@ -228,8 +228,9 @@ class FakeSlot:
         self.options: list[str] = []
 
     def _pending_approval_info(self, slot_pending: bool) -> dict[str, str] | None:
-        # The host's own reading (`slot_projection.to_dict`): the newest unresolved permission row for a
-        # slot-level approval, else the oldest coordinator record.
+        # The host's own reading (0.11.1 `slot_projection.to_dict`): the newest unresolved permission row whose
+        # future still waits, as a `native` request naming that row's instance (`request_mid`), else the oldest
+        # coordinator record.
         if slot_pending:
             for message in reversed(self.messages):
                 if message.get("role") != "permission":
@@ -237,16 +238,17 @@ class FakeSlot:
                 meta = json.loads(message.get("cls") or "{}")
                 if meta.get("resolved"):
                     continue
-                info = {"tool": message.get("content") or "", "tool_input": meta.get("tool_input", ""),
-                        "tool_kind": meta.get("tool_kind", ""),
-                        "request_id": meta.get("approval_id", meta.get("request_id", ""))}
+                request_id = meta.get("approval_id", meta.get("request_id", ""))
+                info = {"origin": "native", "tool": message.get("content") or "",
+                        "tool_input": meta.get("tool_input", ""), "tool_kind": meta.get("tool_kind", ""),
+                        "request_id": request_id, "request_mid": meta.get("mid", f"mid-{request_id}")}
                 if meta.get("tool_purpose"):
                     info["tool_purpose"] = meta["tool_purpose"]
                 return info
         if self.coordinator_approvals:
             record = self.coordinator_approvals[0]
-            info = {"tool": record.get("tool", ""), "tool_input": record.get("tool_input", ""),
-                    "tool_kind": "", "request_id": record.get("id", "")}
+            info = {"origin": "coordinator", "tool": record.get("tool", ""),
+                    "tool_input": record.get("tool_input", ""), "tool_kind": "", "request_id": record.get("id", "")}
             if record.get("tool_purpose"):
                 info["tool_purpose"] = record["tool_purpose"]
             return info

@@ -210,7 +210,7 @@ class NotificationAdapter:
         )
         label = _text(intent_label or intent_key, 60)
         body = f"{_text(repo_label or repo_id, 60)} · {label} — {_text(approval.get('tool')) or 'a tool call'}"
-        command = _text(approval.get("tool_input"))
+        command = _text(approval.get("tool_input"), 500)
         return _Message(
             kind="approval", dedupe_key=f"approval:{_text(slot_key)}:{identity}",
             link=self._intent_link(repo_id, intent_key),

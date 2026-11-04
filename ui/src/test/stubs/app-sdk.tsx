@@ -124,7 +124,9 @@ export function useAppApiContext(): AppApi | null {
   return useContext(AppApiContext)
 }
 
-export const ChatEmbed = ({ slotKey }: { slotKey: string }) => <div data-testid="chat-embed">{slotKey}</div>
+export const ChatEmbed = ({ slotKey, hide }: { slotKey: string; hide?: readonly string[] }) => (
+  <div data-testid="chat-embed" data-hide={hide?.join(' ')}>{slotKey}</div>
+)
 export const ChatPanel = ChatEmbed
 export const ChatMessageList = ({ messages }: { messages: unknown[] }) => (
   <div data-testid="chat-messages">{messages.length}</div>

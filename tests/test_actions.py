@@ -87,7 +87,11 @@ def _build_repo(builder, *, extra_intent=False, revising=0, questions=None, seco
         audit = F.audit_text(F.audit_block("HUMAN_TURN", TS), F.audit_block("STAGE_STARTED", F._plus(TS, 1), Stage=STAGE))
     else:
         audit = F.gate_open_audit(STAGE)
-    audit += "".join(F.audit_block("STAGE_REVISING", F._plus(TS, 100 + i), Stage=STAGE, Revision_count=str(i + 1))
+    # Each revision as the engine records a gate's Request Changes: GATE_REJECTED, then STAGE_REVISING, then the gate
+    # open again on the revised work.
+    audit += "".join(F.audit_block("GATE_REJECTED", F._plus(TS, 100 + 3 * i), Stage=STAGE)
+                     + F.audit_block("STAGE_REVISING", F._plus(TS, 101 + 3 * i), Stage=STAGE, Revision_count=str(i + 1))
+                     + F.audit_block("STAGE_AWAITING_APPROVAL", F._plus(TS, 102 + 3 * i), Stage=STAGE)
                      for i in range(revising))
     builder = builder.with_engine("payload").with_workspace()
     if extra_intent:  # written first, and the cursor points at it, so the cursor switch has to move
@@ -485,7 +489,7 @@ def test_an_audit_questions_answer_keeps_its_exact_labels(A, studio):
     audit = dataclasses.replace(_parse(studio, "## Q1: Unused?\nA. A\n[Answer]:\n"), questions=asked,
                                 origin={"kind": "audit", "batch_size": 2})
     assert _answers(A, audit, ans(1, ["B", "A"]), ans(2, ["B"], "Keep notes short")) == (
-        "Q1: c2, c1\nQ2: Keep notes short" + studio.constants.WIRE_AUDIT_GROUPED_ANSWER_SUFFIX)
+        "Q1: c2, c1; Q2: Keep notes short" + studio.constants.WIRE_AUDIT_GROUPED_ANSWER_SUFFIX)
 
 
 def test_the_other_option_sends_free_text_as_other_and_refuses_a_blank_one(A, E, studio):
@@ -798,7 +802,7 @@ async def test_an_open_breaker_blocks_run_but_leaves_a_gate_decision_alone(world
 
 @pytest.mark.parametrize("repo_options", [{"revising": 3}])
 @aio
-async def test_accept_as_is_appears_only_from_the_fourth_attempt(world):
+async def test_accept_as_is_appears_from_the_third_change_request(world):
     gate = await bound_card(world)
     assert gate.captured.stage_attempt == 4
     card = await world.broker.card(gate, snapshot(world))
@@ -808,14 +812,14 @@ async def test_accept_as_is_appears_only_from_the_fourth_attempt(world):
 
 
 @aio
-async def test_accept_as_is_is_refused_before_the_fourth_attempt(world, E):
+async def test_accept_as_is_is_refused_before_the_third_change_request(world, E):
     gate = await bound_card(world)
     assert gate.captured.stage_attempt == 1
     card = await world.broker.card(gate, snapshot(world))
     assert "accept_as_is" not in [d["decision"] for d in card["decisions"]]
     with refused(E, "invalid_decision") as exc:
         await submit(world, gate, payload={"decision": "accept_as_is"}, wire="Accept as-is")
-    assert exc.value.details["min_attempt"] == 4
+    assert exc.value.details["min_cycles"] == 3
 
 
 TEAM = F.TEAM_UNIT_GATE_INTENT
@@ -2065,3 +2069,23 @@ async def test_an_approval_in_flight_is_not_shadowed_by_a_fresh_gate_card(world)
     gates = [rec for rec in await seed(world) if rec.type == "gate"]
     assert [rec.action_id for rec in gates] == [receipt.action_id]
     assert gates[0].status not in ("Queued", "NotDelivered")
+
+
+@pytest.mark.parametrize("stored", [
+    {"code": "human_presence_anomaly", "params": {"human_turn_delta": 2, "partial": False, "marker_advanced": True}},
+    "human_presence_anomaly",
+], ids=["reconciler_shape", "bare_code"])
+def test_a_stored_finding_reaches_the_card_in_the_finding_shape(A, stored):
+    """2026-11-04: the reconciler's ``{code, params}`` went onto an answered question's card as it was, and the Action
+    Center failed to render on its missing ``evidence``."""
+    [view] = A._merge_findings([stored], [])
+    assert set(view) == {"code", "severity", "message_key", "params", "evidence"}
+    assert (view["code"], view["severity"], view["message_key"]) == (
+        "human_presence_anomaly", "blocking", "finding.human_presence_anomaly")
+    assert view["evidence"] == [] and view["params"] == (stored["params"] if isinstance(stored, dict) else {})
+
+
+def test_a_fresh_finding_with_the_same_code_wins_over_the_stored_copy(A):
+    fresh = {"code": "wrong_slot", "severity": "blocking", "message_key": "finding.wrong_slot", "params": {"a": 1},
+             "evidence": [{"kind": "studio", "ref": "action:a_1", "detail": "wrong_slot"}]}
+    assert A._merge_findings([{"code": "wrong_slot", "params": {}}], [fresh]) == [fresh]

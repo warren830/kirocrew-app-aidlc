@@ -702,18 +702,35 @@ def _config(timeout: int, calls: list | None = None) -> SimpleNamespace:
     return SimpleNamespace(KiroCrewConfig=Config)
 
 
-def test_turn_timeout_is_capped_and_resolved_once(C, bridge, monkeypatch):
+def test_turn_timeout_is_capped_and_reread_only_after_its_cache(C, bridge, monkeypatch):
     # Neither host module in this process: Studio's own cap answers, never the developer's real config.
     monkeypatch.delitem(sys.modules, "kiro_crew.config", raising=False)
     monkeypatch.delitem(sys.modules, "kiro_crew.constants", raising=False)
     assert bridge.turn_timeout_secs() == C.PROCESSING_DEADLINE_CAP_SECS
-    fresh = type(bridge)(SimpleNamespace(iso=lambda: TS, now=lambda: 0.0, monotonic=lambda: 0.0),
+    clock = SimpleNamespace(t=0.0)
+    fresh = type(bridge)(SimpleNamespace(iso=lambda: TS, now=lambda: 0.0, monotonic=lambda: clock.t),
                          logging.getLogger("test.sessions"))
     calls: list[int] = []
     monkeypatch.setitem(sys.modules, "kiro_crew.config", _config(600, calls))
     assert fresh.turn_timeout_secs() == 600
     assert fresh.turn_timeout_secs() == 600
     assert calls == [1], "the ceiling is a config read; it must not happen per tick"
+    clock.t = C.TURN_TIMEOUT_CACHE_SECS + 1  # a change in the host's settings still reaches Studio
+    monkeypatch.setitem(sys.modules, "kiro_crew.config", _config(1200, calls))
+    assert fresh.turn_timeout_secs() == 1200 and calls == [1, 1]
+
+
+def test_a_conversations_own_turn_limit_wins(C, bridge, monkeypatch):
+    """KiroCrew 0.11: a conversation can carry its own limit (``turn_dispatch.session_turn_timeout_secs``)."""
+    monkeypatch.setitem(sys.modules, "kiro_crew.config", _config(600))
+    limits = {"long": 20000, "huge": 10 ** 7}
+    monkeypatch.setitem(sys.modules, "kiro_crew.dashboard.turn_dispatch", SimpleNamespace(
+        session_turn_timeout_secs=lambda slot: limits.get(slot)))
+    monkeypatch.setattr(bridge, "_raw_slot", lambda key: key)
+    assert bridge.turn_timeout_secs("long") == 20000
+    assert bridge.turn_timeout_secs("huge") == C.PROCESSING_DEADLINE_CAP_SECS
+    assert bridge.turn_timeout_secs("unset") == 600
+    assert bridge.turn_timeout_secs() == 600
 
 
 def test_a_config_over_the_cap_is_clamped(C, bridge, monkeypatch):
@@ -1328,3 +1345,15 @@ def test_the_bridge_never_assigns_a_host_attribute():
             if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id != "self":
                 written.append(f"{target.value.id}.{target.attr}")
     assert written == [], f"the bridge wrote to a foreign object: {written}"
+
+
+def test_a_waiting_call_is_kept_whole_up_to_the_bound_and_flagged_past_it(studio):
+    """The notice reads its reach from this text and Allow once answers for all of it (2026-11-04: a 907-character
+    program was cut at 500)."""
+    S, C = studio.sessions, studio.constants
+    program = "python3 -c \"" + "x = 1\n" * 150 + "\""
+    whole = S._pending_approval({"tool": "Running: python3 -c", "tool_input": program, "request_id": "r1"})
+    assert whole["tool_input"] == program and whole["tool_input_truncated"] == ""
+    long = "y" * (C.MAX_APPROVAL_INPUT_CHARS + 10)
+    cut = S._pending_approval({"tool": "Running: y", "tool_input": long})
+    assert len(cut["tool_input"]) == C.MAX_APPROVAL_INPUT_CHARS and cut["tool_input_truncated"] == "1"

@@ -143,6 +143,7 @@
      "pending_checkpoint": null,
      "pending_count": 6,
      "plan_approval": null,
+     "preamble": "> 阶段：Ideation / Feasibility & Constraints　|　Scope：feature　|　Depth：Standard\n> 上游输入：`../intent-capture/intent-statement.md`、`../market-research/`（竞品分析 / 市场趋势 / build-vs-buy）\n> 本文件是决策的权威记录。\n\n---",
      "questions": [
       {
        "answer": null,

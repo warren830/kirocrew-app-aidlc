@@ -62,7 +62,8 @@ or the code is what disagrees with it.
   user's composed key, `plugins` selection and operator config byte-for-byte (`contracts.md` §1.14, C21, architecture
   A27). `framework-mutable` was rejected for both: it is non-blocking but it overwrites, which would have deleted the
   composed scope's grid and silently re-enabled plugins the user disabled.
-- **`.kiro/skills/aidlc/SKILL.md` is the third file of that class and is still `framework`, so it still blocks.** Its
+- **2.11.2 closed this hole: the generated tables moved to `.kiro/skills/aidlc/tables.md`, which is `framework-mutable` (the engine routes from the compiled grid and graph, never from that file), and SKILL.md has no generated region left.** Through 2.11.0:
+  **`.kiro/skills/aidlc/SKILL.md` is the third file of that class and is still `framework`, so it still blocks.** Its
   two generated regions (`stage-table`, `scope-table`) are rewritten in place by the same selection-surface pass
   (`replaceGeneratedRegion` writes the installed SKILL.md), so a repository that has composed a scope and then runs
   `/aidlc gen scope-table`, `/aidlc plugin select` or a plugin compose drifts by exactly one table row and reads

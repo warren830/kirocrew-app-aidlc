@@ -34,7 +34,7 @@ def workspace(builder, stage, *, space="default", unit=None, test_strategy=None)
 def write_outputs(root, rel, node):
     directory = root / rel
     directory.mkdir(parents=True, exist_ok=True)
-    for name in node["produces"]:
+    for name in (*node["produces"], *node.get("optional_produces", ())):
         (directory / f"{name}.md").write_text(f"# {name}\n\nVerified output.\n")
     return directory
 
@@ -52,9 +52,21 @@ def findings(projection, repo_record):
     return of
 
 
-def build_and_test(repo_builder, strategy):
-    """Build-and-test with every output written, its results under the engine's ``test-results.md`` alias."""
+def build_and_test(repo_builder, strategy, graph="2.11.2"):
+    """Build-and-test with every output written, its results under the engine's ``test-results.md`` alias.
+
+    ``graph="2.11.0"`` lists the three test-instruction files in ``produces``, as engines before 2.11.2 did;
+    2.11.2 moved them to ``optional_produces`` (its stage file makes them CONDITIONAL on the test strategy)."""
     root, node = workspace(repo_builder, "build-and-test", test_strategy=strategy)
+    if graph == "2.11.0":
+        path = root / ".kiro/tools/data/stage-graph.json"
+        nodes = json.loads(path.read_text())
+        for item in nodes:
+            if item["slug"] == "build-and-test":
+                optional = [n for n in item.pop("optional_produces", []) if n in BUILD_EXTRA_INSTRUCTIONS]
+                item["produces"] = [item["produces"][0], *sorted(optional), *item["produces"][1:]]
+                node = item
+        path.write_text(json.dumps(nodes, indent=2))
     directory = write_outputs(root, BUILD_REL, node)
     (directory / "build-test-results.md").rename(directory / "test-results.md")
     return root, directory
@@ -68,13 +80,23 @@ def build_and_test(repo_builder, strategy):
     ("Custom", BUILD_EXTRA_INSTRUCTIONS),
 ])
 def test_build_artifact_requirements_follow_the_test_strategy(repo_builder, findings, strategy, missing):
-    """Build-and-Test Steps 3–7 explicitly require no extra instructions for Minimal."""
-    root, directory = build_and_test(repo_builder, strategy)
+    """Build-and-Test Steps 3–7 explicitly require no extra instructions for Minimal (a 2.11.0 graph, which lists
+    every test-instruction file in ``produces``)."""
+    root, directory = build_and_test(repo_builder, strategy, graph="2.11.0")
     for name in BUILD_EXTRA_INSTRUCTIONS:
         (directory / f"{name}.md").unlink()
     found = findings(root)
     assert {f.params["artifact"] for f in found} == missing
     assert all(f.severity == "blocking" for f in found)
+
+
+@pytest.mark.parametrize("strategy", ["Minimal", "Standard", "Comprehensive", ""])
+def test_the_bundled_graph_never_requires_a_test_instruction_file(repo_builder, findings, strategy):
+    """2.11.2 lists them as optional outputs: the engine's gate does not wait for them, so neither does Studio."""
+    root, directory = build_and_test(repo_builder, strategy)
+    for name in BUILD_EXTRA_INSTRUCTIONS:
+        (directory / f"{name}.md").unlink()
+    assert findings(root) == []
 
 
 @pytest.mark.parametrize("strategy", ["Minimal", "Standard"])

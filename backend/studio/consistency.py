@@ -376,6 +376,12 @@ class ConsistencyEngine:
             # A finished workflow never writes the note again, so "normal right after a state update" would stay on
             # every card for good: there is no running stage left for the note to be about.
             return []
+        stage = _attr(directive, "stage")
+        if stage and any(_attr(row, "slug") == stage and _attr(row, "mark") == "?"
+                         for row in (_attr(state, "stages", ()) or ())):
+            # Opening a gate rewrites the state after the note, and the note is written again only once the person
+            # answers: measured on an enterprise run, every gate card carried this "nothing needs doing" note.
+            return []
         actual = _attr(_attr(snap, "state_snap"), "sha256")
         marker = _attr(directive, "marker_name") or DIRECTIVE_FILENAME
         return [self._finding(

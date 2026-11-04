@@ -144,9 +144,12 @@ export function ActionsView({ route, go }: ViewProps) {
             slotKey={wait.slot_key}
             tool={wait.tool}
             toolInput={wait.tool_input}
+            toolInputTruncated={wait.tool_input_truncated === true}
             purpose={wait.purpose ?? ''}
             repoId={wait.repo_id}
             label={`${wait.repo_label} / ${wait.intent_dir}`}
+            target={{ request_id: wait.request_id, request_mid: wait.request_mid, origin: wait.origin }}
+            onAnswered={() => void actions.refresh()}
           />
         ))}
 

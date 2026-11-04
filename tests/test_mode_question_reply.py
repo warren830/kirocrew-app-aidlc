@@ -261,14 +261,16 @@ def asked(tmp_path_factory) -> Path:
     while directive["kind"] == "load-steering":
         directive = json.loads(subprocess.run(directive["next"].split(), cwd=root, capture_output=True, text=True,
                                               env=_env(), timeout=120).stdout)
-    assert (directive["kind"], directive["stage"], directive["answer_mode"]["ask"]) == (
-        "run-stage", "intent-capture", True)
+    # 2.11.2 asks the mode question by a note in the stage directive, with its own question kind (2.11.0 carried
+    # `answer_mode: {ask: true}`).
+    assert (directive["kind"], directive["stage"]) == ("run-stage", "intent-capture")
+    assert "--question-kind answer-mode" in directive["answer_mode_note"]
     record = next((root / "aidlc" / "spaces" / "default" / "intents").glob("*-due-dates"))
     questions = record / F.MODE_QUESTION_REPLY_QUESTIONS
     questions.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(F.MODE_QUESTION_REPLY / "questions-as-asked.md", questions)
     logged = _engine(root, "engine", "log", "decision", "--stage", "intent-capture", "--decision", MODE_PROMPT,
-                     "--options", "Guide me,I'll edit the file,Chat")
+                     "--options", "Guide me,I'll edit the file,Chat", "--question-kind", "answer-mode")
     assert logged.returncode == 0, logged.stderr
     return root
 
@@ -304,14 +306,16 @@ def test_the_engine_records_the_mode_and_the_answers_from_the_one_reply(replied)
     assert replied.receipts() == ["Chat", replied.answers]
 
 
-def test_the_engine_refuses_the_answers_after_a_decision_logged_since_the_reply(replied):
-    """The live run's order, 12:16:46-56: the decision is a question asked after the reply, which no answer closes."""
+def test_a_decision_logged_since_the_reply_takes_that_reply(replied):
+    """The live run's order, 12:16:46-56: a question logged after the reply. 2.11.0 refused its answers ("no new
+    human reply has arrived"); 2.11.2 records them: "A question you log after the person already replied takes that
+    reply" (stage-protocol §2)."""
     assert replied.answer("Chat").returncode == 0
     assert replied.decision("Q1-Q5 intent capture questions",
                             "Q1: A-D,X; Q2: A-E,X; Q3: A-D,X; Q4: A-D,X; Q5: A-E,X").returncode == 0
-    refused = replied.answer(replied.answers)
-    assert refused.returncode == 1 and "no new human reply has arrived" in refused.stderr
-    assert replied.receipts() == ["Chat"]
+    recorded = replied.answer(replied.answers)
+    assert recorded.returncode == 0, recorded.stderr
+    assert replied.receipts() == ["Chat", replied.answers]
 
 
 def test_the_engine_refuses_the_answers_as_the_mode_answer(replied):

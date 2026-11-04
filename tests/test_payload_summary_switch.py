@@ -4,12 +4,13 @@ Studio's summary-confirmation control sends ``WIRE_SUMMARY_CONFIRMATION_OFF`` (`
 into the intent's conversation, inside KiroCrew's prompt envelope. These run the real payload with bun, the way kiro-cli
 runs its userPromptSubmit hook (``engine adapter kiro verb-intercept``), on a throwaway feature-scope intent:
 
-* the switch alone is applied at prompt time as the person's own, ``Summary Confirmation: off (set by you)``, and the
-  turn is recorded as a command, so it answers no open question;
+* the switch alone is the person's turn, recorded as a command, so it answers no open question; 2.11.2's hook applies
+  nothing itself and hands the conductor ``next --summary-confirmation off``, whose ``config set`` writes
+  ``Summary Confirmation: off (set by you)`` and asks whether the person wants it off for the whole project;
 * the same switch beside other words (a checkpoint's reply) is new-work text, not a switch: why Studio never bundles it;
 * with a summary confirmation already asked, the switch leaves it open, the next stage directive carries the ceremony
   off, and the person's later ``Looks correct`` is still recorded;
-* ``on`` is forwarded to the conductor's ``next``, whose setter writes it.
+* ``on`` takes the same path, and the setter records it as the person's too.
 """
 
 import json
@@ -121,22 +122,33 @@ def directive(repo: Path, *args: str) -> dict:
     return answer
 
 
+def apply_switch(repo: Path, setting: str, value: str) -> str:
+    """The conductor's turn after a switch, as 2.11.2 hands it: ``next --<setting> <value>`` prints the engine's own
+    ``config set`` call, whose output the agent then says. Returns that output."""
+    printed = json.loads(bun(repo, ".kiro/tools/aidlc.ts", "engine", "orchestrate", "next", f"--{setting}",
+                             value).stdout)
+    assert printed["kind"] == "print", printed
+    command = re.search(r"`bun (\.kiro/tools/aidlc\.ts engine config set [^`]+)`", printed["message"])
+    assert command, printed
+    return bun(repo, *command.group(1).split()).stdout
+
+
 def test_the_switch_alone_is_the_persons_and_answers_nothing(repo):
     assert line(repo) == "on (from scope feature)"
     context = send(repo, C.WIRE_SUMMARY_CONFIRMATION_OFF)
+    # 2.11.2's prompt hook applies nothing ("Nothing is applied here"): it hands the conductor the exact call.
+    assert line(repo) == "on (from scope feature)"
+    assert "engine orchestrate next --summary-confirmation off" in context
+    # One human turn, the person's, recorded as a command: no checkpoint pairs with it.
+    turn = rows(repo, "HUMAN_TURN")[-1]
+    assert (turn["Origin"], turn["Reply"]) == ("person", "command")
+    said = apply_switch(repo, "summary-confirmation", "off")
     assert line(repo) == "off (set by you)"
     [ceremony] = rows(repo, "CEREMONY_SET")
     assert (ceremony["Key"], ceremony["Old"], ceremony["New"], ceremony["Source"]) == (
         "summary_confirmation", "on", "off", "you")
-    # One human turn, recorded as a command: no checkpoint pairs with it.
-    assert rows(repo, "HUMAN_TURN")[-1]["Reply"] == "command"
-    assert "the switch is already applied" in context
-    # The conductor's own follow-up keeps the person's label.
-    assert json.loads(bun(repo, ".kiro/tools/aidlc.ts", "engine", "orchestrate", "next", "--summary-confirmation",
-                          "off").stdout)["kind"] == "print"
-    assert "already off (set by you)" in bun(repo, ".kiro/tools/aidlc.ts", "engine", "config", "set",
-                                             "summary-confirmation", "off").stdout
-    assert line(repo) == "off (set by you)"
+    # The engine's own follow-up, which the person then answers in the chat.
+    assert "Do you want it off for the whole project instead?" in said
 
 
 @pytest.mark.parametrize("turn", [
@@ -152,6 +164,7 @@ def test_the_switch_beside_a_reply_is_not_a_switch(repo, turn):
 def test_an_open_confirmation_stays_open_and_is_still_answered(repo):
     relpath = ask_summary(repo)
     send(repo, C.WIRE_SUMMARY_CONFIRMATION_OFF)
+    apply_switch(repo, "summary-confirmation", "off")
     assert line(repo) == "off (set by you)"
     assert rows(repo, "SUMMARY_CONFIRMATION_RECORDED") == []
     assert (repo / relpath).read_text().rstrip().endswith("[Answer]:")
@@ -174,11 +187,10 @@ def test_an_open_confirmation_stays_open_and_is_still_answered(repo):
 
 def test_back_on_is_the_conductors_setter(repo):
     send(repo, C.WIRE_SUMMARY_CONFIRMATION_OFF)
+    apply_switch(repo, "summary-confirmation", "off")
     context = send(repo, C.WIRE_SUMMARY_CONFIRMATION_ON)
-    # Turning a check on needs nobody's word: the hook leaves it to the conductor's `next`.
+    # The hook leaves `on` to the conductor's `next` too; the setter records it as the person's (2.11.0: a command's).
     assert line(repo) == "off (set by you)"
     assert "engine orchestrate next --summary-confirmation on" in context
-    printed = directive(repo, "--summary-confirmation", "on")
-    assert "config set summary-confirmation on" in printed["message"]
-    bun(repo, ".kiro/tools/aidlc.ts", "engine", "config", "set", "summary-confirmation", "on")
-    assert line(repo) == "on (set by a command)"
+    apply_switch(repo, "summary-confirmation", "on")
+    assert line(repo) == "on (set by you)"

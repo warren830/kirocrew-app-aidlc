@@ -34,11 +34,13 @@ def _installed_name(module_name: str) -> str:
 APP_NAME = _installed_name(__name__)
 #: Must equal ``app.json`` ``version`` (pinned by tests/test_manifest.py).
 APP_VERSION = "2.0.0-beta.1"
-#: Must equal ``app.json`` ``minKiroCrewVersion``: the 0.8 loader registers the app's parent packages, which is
-#: what lets ``backend/routes.py`` import ``studio`` relatively.
-MIN_KIROCREW_VERSION = "0.8.0"
+#: Must equal ``app.json`` ``minKiroCrewVersion``. 0.11 is the host Studio is built and verified against: a tool
+#: approval answered from Studio names the row the person saw (``origin: native`` + ``request_mid``), a conversation
+#: may carry its own turn limit, the embedded chat takes ``hide``, and a degraded mark means "restart the app". (0.8's
+#: loader already registered the app's parent packages, which lets ``backend/routes.py`` import ``studio``.)
+MIN_KIROCREW_VERSION = "0.11.0"
 #: Must equal ``payload/manifest.json`` ``engineVersion``.
-BUNDLED_ENGINE_VERSION = "2.11.0"
+BUNDLED_ENGINE_VERSION = "2.11.2"
 #: State-file versions the parsers accept: wider than what the bundled engine writes, because a registered repo may
 #: run an older AI-DLC and refusing to read it would hide work the user can still see on disk.
 SUPPORTED_STATE_VERSIONS = (7, 8)
@@ -58,6 +60,13 @@ MAX_AUDIT_TAIL_BYTES = 256 * 1024
 #: The same aggregate as the former 64 × 256 KiB shard windows.
 MAX_AUDIT_HISTORY_BYTES = 16 * 1024 * 1024
 MAX_QUESTIONS_BYTES = 256 * 1024
+#: What a card shows of a questions sheet's text before its first question (``QuestionsFile.preamble``); the file is
+#: one click away for the rest.
+MAX_QUESTIONS_PREAMBLE_CHARS = 16 * 1024
+#: How much of a waiting tool call's input the approval notice shows (``sessions._pending_approval``): a
+#: ``python3 -c`` program or a file write's diff runs past the 500 characters a notification repeats. A longer one is
+#: flagged ``tool_input_truncated``, and the notice offers no Allow once on text it cannot show whole.
+MAX_APPROVAL_INPUT_CHARS = 16 * 1024
 MAX_TEXT_PREVIEW_BYTES = 64 * 1024
 MAX_ARTIFACTS_PER_INTENT = 2000
 MAX_INTENTS_PER_REPO = 256
@@ -91,8 +100,13 @@ SCAN_CONCURRENCY = 2
 SCAN_TICK_BUDGET_SECS = 4.0
 #: How long the UI has to report its host submission before the reconciler looks for evidence instead.
 DELIVERY_ACK_DEADLINE_SECS = 90
-#: Upper bound for "the turn should have finished by now": ``min(agent.chat_turn_timeout_secs, this)``.
-PROCESSING_DEADLINE_CAP_SECS = 7200
+#: Upper bound for "the turn should have finished by now": ``min(<the host's limit for that conversation's turns>,
+#: this)``. KiroCrew 0.11 defaults ``agent.chat_turn_timeout_secs`` to 4 h, takes 300 s to 24 h, and lets a
+#: conversation set its own limit (``turn_timeout_secs``), so the cap is the host's own maximum: a healthy turn is
+#: never declared overdue before the host itself would end it.
+PROCESSING_DEADLINE_CAP_SECS = 86400
+#: How long the host's global turn limit is reused before it is read from its config again.
+TURN_TIMEOUT_CACHE_SECS = 60.0
 #: A message the host accepted behind a running turn has not started its own yet, so it may wait this multiple of
 #: the turn timeout in ``Delivered`` before it counts as uncertain.
 DELIVERED_QUEUED_WAIT_FACTOR = 2
@@ -321,7 +335,7 @@ STUDIO_ONLY_DECISIONS = frozenset(
 
 #: Action type → every decision it may carry (§1.12): ``projection`` offers from this table and the broker validates
 #: against it, so a card cannot offer a decision answered ``invalid_decision``. A row is what is *legal*; what is
-#: *offered* can be narrower (``accept_as_is`` from ``ACCEPT_AS_IS_MIN_ATTEMPT``, question decisions per checkpoint).
+#: *offered* can be narrower (``accept_as_is`` from ``ACCEPT_AS_IS_REVISION_CYCLES``, question decisions per checkpoint).
 DECISIONS: dict[str, tuple[str, ...]] = {
     "gate": ("approve", "request_changes", "accept_as_is"),
     "question": (
@@ -384,7 +398,11 @@ BLANK_ANSWER_RE = re.compile(r"^\[Answer\]:[ \t]*_*[ \t]*$", re.MULTILINE)
 PENDING_ANSWER_TAG_RE = re.compile(r"^(?:[-*+][ \t]+)?\[Answer\]:[ \t]*_*[ \t]*$")
 #: ``## Q1. …`` in every file before 2.10; a 2.10 conductor also writes ``## Question 1: …`` (the protocol fixes the
 #: answer tags and options, not the heading), and either may separate the title with a dash.
-QUESTION_HEADING_RE = re.compile(r"^## Q(?:uestion)?[ \t]*(\d+)(?:[.:]|[ \t]+[—–-])?\s*(.*)$", re.MULTILINE)
+#: A conductor may number a later stage's questions with its own prefix (``## RMQ1.``, ``## FQ6.``): the engine keys a
+#: question by its ``[Answer]:`` section, not by the letters before ``Q``.
+QUESTION_HEADING_RE = re.compile(r"^## (?:[A-Z]{1,4})?Q(?:uestion)?[ \t]*(\d+)(?:[.:]|[ \t]+[—–-])?\s*(.*)$", re.MULTILINE)
+#: The prefix such a heading carries, kept so a grouped reply names the question as the file does.
+QUESTION_LABEL_PREFIX_RE = re.compile(r"^#{2,3} ([A-Z]{1,4})Q[ \t]*\d")
 #: ``- A. Some option`` / ``A. Some option`` / ``- X. Other (please specify)``.
 OPTION_LINE_RE = re.compile(r"^(?:- )?([A-Z])\.[ \t]+(.*)$", re.MULTILINE)
 OTHER_OPTION_LETTER = "X"
@@ -689,7 +707,7 @@ WIRE_ACCEPT_AS_IS = "Accept as-is"                         # revision-loop escap
 WIRE_APPROVE_PLAN = "Approve Plan"                         # code-generation plan-approval checkpoint
 WIRE_LOOKS_CORRECT = "Looks correct"                       # consolidated summary confirmation
 WIRE_SUMMARY_REQUEST_CHANGES_PREFIX = "Request changes: "  # summary confirmation (lower-case c — not a typo)
-WIRE_ANSWER_LINE = "Q{index}: {answer}"                    # one line per question in a grouped submit
+WIRE_ANSWER_LINE = "{label}: {answer}"                    # one line per question in a grouped submit; label Q<n>, or the file's own (RMQ1)
 WIRE_ANSWER_JOINER = "\n"
 WIRE_GROUPED_ANSWER_SUFFIX = (
     "\n\nStudio grouped-answer delivery: this is one human reply. Apply each Q<n> answer to its "
@@ -723,36 +741,54 @@ WIRE_AUDIT_GROUPED_ANSWER_SUFFIX = (
     "in the order you asked them. Record all Q<n> answers together in ONE aidlc-log.ts answer --details "
     "call, preserving their text. Then continue the stage."
 )
+#: The answers of an audit batch, in one line: 2.11.2's stage-protocol §2 records one reply to a menu as
+#: ``--details 'Q1: <choice>; Q2: <choice>'``, and its learnings step reads that ``Details`` split on ``;`` and ``,``.
+WIRE_AUDIT_ANSWER_JOINER = "; "
 AUDIT_NONE_LABEL = "None of these"       # Studio's own choice on a multi-select audit question (A37)
 AUDIT_OTHER_LABEL = "Other"              # free-text escape on an audit question asked with others (A37)
-# The learnings ritual's mandated single-choice question, in both spellings the bundled engine tells the conductor
-# to log (stage-protocol-learnings.md §13 step 3, skills/aidlc/SKILL.md). The chat asks it after the keep question.
+#: What 2.11.2's audit writer puts in place of anything shaped like a key or password (aidlc-audit.ts ``SECRET_MASK``).
+AUDIT_SECRET_MASK = "[masked]"
+#: The ``DECISION_RECORDED`` field naming which of the engine's own questions a row is (2.11.2 ``QUESTION_KIND_FIELD``);
+#: when present it alone decides the kind, whatever the row's wording or options.
+AUDIT_QUESTION_KIND_FIELD = "Question Kind"
+ANSWER_MODE_QUESTION_KIND = "answer-mode"
+LEARNINGS_NOTE_QUESTION_KIND = "learnings-note"
+ASSUMPTION_CONFIRMATION_QUESTION_KIND = "assumption-confirmation"
+#: 2.11.2's learnings step asks only after the person corrected the agent in the stage, one question per correction
+#: (stage-protocol-learnings.md §13 step 3): "You asked me to <their change>. Keep that for next time?", single choice,
+#: logged with ``--options '|Yes, for this project|Yes, for the team|No' --question-kind learnings-note``.
+LEARNINGS_CORRECTION_ASK = "Keep that for next time?"
+LEARNINGS_CORRECTION_CHOICES = ("Yes, for this project", "Yes, for the team", "No")
+# The questions the step asked at every gate before 2.11.2, still read in records that hold them (a stage left open
+# across the upgrade). Its single-choice question, in both spellings the 2.11.0 engine told the conductor to log; the
+# chat asked it after the keep question.
 LEARNINGS_ADD_PROMPTS = ("Anything to add for next time?", "Learnings: anything to add?")
-# §13 step 3 puts this first in every call of the keep question: the engine's own empty pick, which may sit beside
-# kept notes. That question takes any subset of its labels and nothing else; its free-text channel is the add question.
+LEARNINGS_NOTE_CHOICES = ("Nothing to add", "Add a note")
+# The keep question's first label in every call: the engine's own empty pick, which may sit beside kept notes. That
+# question takes any subset of its labels and nothing else; its free-text channel is the add question.
 LEARNINGS_KEEP_NONE_LABEL = "Keep none of these"
 # The engine's mode question, asked with a stage's questions file (aidlc-lib.ts ``isAnswerModeDecision``): its answer
-# says how the person answers the file, not what they answered.
-ANSWER_MODE_QUESTION_PREFIX = "How would you like to answer"
+# says how the person answers the file, not what they answered. 2.11.2 tells it by its Question Kind, or, on a row
+# logged before the field existed, by offering exactly these three ways; its wording never decides.
 ANSWER_MODE_LABELS = ("Guide me", "I'll edit the file", "Chat")
 WIRE_RUN = "/aidlc"
 WIRE_RESUME = "/aidlc --resume"
 WIRE_SCOPE_PREFIX = "/aidlc --scope "
 WIRE_PREPARE_COMMIT = "Please prepare a commit for the current AI-DLC changes. Do not push."
-# The person's typed switch for this intent's ceremony (2.11 ``parseTypedGuardSwitchRequest``): settings alone, no
-# description, so the prompt hook applies ``off`` as the person's own (``Summary Confirmation: off (set by you)``)
-# before the conductor reads it, and forwards ``on`` to the conductor's ``next``. Words beside it would make it a
-# flag of new work instead, so these are sent exactly, on their own turn.
+# The person's typed switch for this intent's ceremony: settings alone, no description. 2.11.2's prompt hook applies
+# nothing itself ("Nothing is applied here"): it hands the conductor ``next --summary-confirmation off``, whose reply
+# has it run ``config set summary-confirmation off --verbatim`` in that turn (``Summary Confirmation: off (set by
+# you)``) and then ask whether the person wants it off for the whole project instead. Words beside it would make it a
+# flag of new work, so these are sent exactly, on their own turn.
 #: ``intent-create --summary-confirmation`` values, and the first bundled engine whose creation takes the flag
 #: (2.7.1 has no per-work ceremony switches; 2.10.0 does). An older engine would refuse the unknown flag.
 SUMMARY_CONFIRMATION_VALUES = ("on", "off")
 SUMMARY_CONFIRMATION_CREATE_MIN_ENGINE = (2, 10)
 WIRE_SUMMARY_CONFIRMATION_OFF = "/aidlc --summary-confirmation off"
 WIRE_SUMMARY_CONFIRMATION_ON = "/aidlc --summary-confirmation on"
-# The same typed switch for the learnings ritual. The engine counts learnings as the agent's own ritual, not a decision
-# of the person's, so its prompt hook applies neither value itself: it records the turn as a command, answering no open
-# question, and forwards it to the conductor's ``next``, whose setter writes the line (``Learnings: off (set by a
-# command)``). Beside other words it is a flag of new work, so these too are sent exactly, on their own turn.
+# The same typed switch for the learnings step, by the same path: the conductor's ``next --learnings off`` has it run
+# ``config set learnings off``, which writes ``Learnings: off (set by you)`` (2.11.0 wrote ``set by a command``). The
+# turn answers no open question. Beside other words it is a flag of new work, so these too are sent exactly, alone.
 WIRE_LEARNINGS_OFF = "/aidlc --learnings off"
 WIRE_LEARNINGS_ON = "/aidlc --learnings on"
 WIRE_ACCEPT_ASSUMPTIONS = "A. Accept assumptions"
@@ -760,8 +796,11 @@ WIRE_CONVERT_ASSUMPTIONS = "B. Convert to follow-up questions"
 # There is deliberately NO wire text for picking the active intent: ``/aidlc intent <name>`` as a prompt would mint a
 # human turn for a navigation step, so the cursor switch is an admin-lane engine verb.
 
-#: ``accept_as_is`` is a conductor option only after three rejections, so Studio offers it from the fourth attempt.
-ACCEPT_AS_IS_MIN_ATTEMPT = 4
+#: ``accept_as_is`` is on the engine's gate from the third change request at that gate (one Unit's, for a Unit gate)
+#: since it was last approved or freshly reopened: aidlc-lib.ts ``ACCEPT_AS_IS_REVISION_CYCLES`` over
+#: ``stageRevisionCycles`` (2.11.2; ``aidlc_reader.stage_revision_cycles``). Not ``Revision Count``, which is
+#: workflow-global, and not the stage's attempt, which never resets.
+ACCEPT_AS_IS_REVISION_CYCLES = 3
 
 # ---- host integration ----------------------------------------------------- #
 

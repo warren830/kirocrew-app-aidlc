@@ -356,9 +356,10 @@ export function ConsistencyFindings({ card, title }: { card: ActionCard; title: 
               </div>
               <p className="studio-finding-title">{copy ? copy.title : t('template.common.findingFallback')}</p>
               {copy?.body ? <p className="studio-finding-text">{copy.body}</p> : null}
-              {finding.evidence.length > 0 ? (
+              {/* A finding stored before 2026-11-04 may have no evidence list; one finding must not take down the view. */}
+              {(finding.evidence ?? []).length > 0 ? (
                 <ul className="studio-list studio-mono">
-                  {finding.evidence.map((entry, j) => (
+                  {(finding.evidence ?? []).map((entry, j) => (
                     <li key={j} className="studio-wrap-any">
                       {entry.kind}: {entry.ref}
                       {entry.detail ? ` — ${entry.detail}` : ''}

@@ -91,6 +91,8 @@ declare module '@kirocrew/app-sdk' {
     frameless?: boolean
     startAtBottom?: boolean
     onSend?: (message: string) => Promise<unknown> | void
+    /** KiroCrew 0.11: parts of the chat the host leaves out; older hosts ignore it. */
+    hide?: readonly ('header' | 'attach' | 'stop' | 'queue' | 'toolDetails' | 'followUps')[]
   }) => ReactNode
   export const ChatPanel: (props: { slotKey: string }) => ReactNode
   export interface MessageRenderContext {

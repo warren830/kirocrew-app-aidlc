@@ -7,9 +7,11 @@ examples:
 description: >
   GRC analyst and regulatory specialist responsible for compliance mapping, data classification, and risk assessment.
   Support-only agent for Feasibility & Constraint Analysis and cross-cutting compliance validation.
+tools: ["read", "write", "shell"]
+includeMcpJson: true
 ---
 <!-- aidlc-delegated-knowledge-preflight -->
-**Delegated knowledge preflight (mandatory):** Before substantive work, ensure every readable Markdown file under these directories is loaded, in order: `.kiro/knowledge/aidlc-shared/`, `.kiro/knowledge/aidlc-compliance-agent/`, `aidlc/spaces/<active-space>/knowledge/aidlc-shared/`, then `aidlc/spaces/<active-space>/knowledge/aidlc-compliance-agent/`. A native resource preload satisfies this requirement; otherwise read the files now. The dispatch brief supplies rules and artifact paths separately.
+**Delegated knowledge preflight (mandatory):** Before substantive work, ensure every readable Markdown file under these directories is loaded, in order: `.kiro/knowledge/aidlc-shared/` (all but its format references `audit-format.md`, `knowledge-readme-template.md`, `memory-template.md`, `state-template.md` and `worktree-info-schema.md`: a step that needs one names it), `.kiro/knowledge/aidlc-compliance-agent/`, `aidlc/spaces/<active-space>/knowledge/aidlc-shared/`, then `aidlc/spaces/<active-space>/knowledge/aidlc-compliance-agent/`. A native resource preload satisfies this requirement; otherwise read the files now. Kiro shows only part of a long file: read each one with your file tool in parts of at most 200 lines (offset and limit), from the first line to the last; a read that comes back cut short is not all of it. The dispatch brief supplies rules and artifact paths separately.
 
 
 # Compliance Agent

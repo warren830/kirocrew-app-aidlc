@@ -79,7 +79,7 @@ export interface GitObservation { available: boolean; reason: string | null; bra
 export interface LeaseView { kind: LeaseKind; repo_id: string; resolved_repo_identity: string; generation: number; acquired_at: string; heartbeat_at: string; intent_uuid: string | null; intent_key: string | null; session_key: string | null; action_id: string | null; operation_type: string | null; transaction_id: string | null; observed_busy_state: string | null; orphaned: boolean }
 export interface StableBoundary { stable: boolean; reasons: string[]; stage: string | null; marker: string | null; boundary_token: string | null; recorded_at: string }
 /** `waiting_approval`: the conversation is parked on a host tool approval; `approval` says what it asks. */
-export interface SessionRef { slot_key: string; session_key: string; running: boolean; bound_at: string; waiting_approval?: boolean; approval?: { tool: string; tool_input: string; purpose?: string } | null; stopped_on_error?: StoppedOnError | null }
+export interface SessionRef { slot_key: string; session_key: string; running: boolean; bound_at: string; waiting_approval?: boolean; approval?: { tool: string; tool_input: string; /** Longer than Studio shows: the notice offers no Allow once. */ tool_input_truncated?: boolean; purpose?: string; request_id?: string; request_mid?: string; origin?: string } | null; stopped_on_error?: StoppedOnError | null }
 /** The host error an idle conversation's last turn stopped on; `kind` is the host's row kind, often empty. */
 export interface StoppedOnError { at: string; text: string; kind: string }
 /**
@@ -180,12 +180,12 @@ export interface MarkersView { human_turn_at: string | null; engine_touch_at: st
 export interface QuestionOption { letter: string; text: string; is_other: boolean; detail?: string }
 /** A learnings-ritual candidate from the stage diary, numbered as AI-DLC numbers it (`aidlc_reader`). */
 export interface LearningCandidate { id: string; heading: 'Interpretations' | 'Deviations' | 'Tradeoffs' | string; summary: string; context: string }
-export interface Question { index: number; prompt: string; context?: string; options: QuestionOption[]; multi_select: boolean; answer: string | null; answered: boolean; required: true; learning_candidates?: LearningCandidate[]; learnings_memory?: string | null }
+export interface Question { index: number; prompt: string; context?: string; options: QuestionOption[]; multi_select: boolean; answer: string | null; answered: boolean; required: true; learning_candidates?: LearningCandidate[]; learnings_memory?: string | null; /** The file's own name for a prefixed question (`RMQ1`); absent for a plain `Q<n>`. */ label?: string | null }
 /** `context` is the section's own text before its options; sent for an Assumption Confirmation, whose assumptions are what the human accepts. */
 export interface Checkpoint { kind: 'summary_confirmation' | 'assumption_confirmation' | 'plan_approval'; present: boolean; answered: boolean; answer: string | null; options: string[]; context?: string | null }
 export interface HostQuestionCard { ask_id?: string; card_id?: string; slot: string; questions: { question: string; header?: string; options: { label: string; description?: string }[]; multiSelect?: boolean }[]; ts: number }
 export interface AuditQuestionOrigin { kind: 'audit'; event: string; shard: string; pos: number; timestamp: string; stage: string; unit: string | null; workflow: null; attempt_generation: string | null; decision_sha256: string; batch_size?: number }
-export interface QuestionsView { relpath: string; sha256: string; stage: string; unit: string | null; questions: Question[]; summary_confirmation: Checkpoint | null; plan_approval: Checkpoint | null; assumption_confirmation?: Checkpoint | null; pending_count: number; unsupported_pending_count?: number; pending_checkpoint: 'summary_confirmation' | 'assumption_confirmation' | 'plan_approval' | null; mode: 'degraded' | 'structured'; host_card: HostQuestionCard | null; origin?: AuditQuestionOrigin; answer_mode_pending?: boolean }
+export interface QuestionsView { relpath: string; sha256: string; stage: string; unit: string | null; questions: Question[]; summary_confirmation: Checkpoint | null; plan_approval: Checkpoint | null; assumption_confirmation?: Checkpoint | null; pending_count: number; unsupported_pending_count?: number; pending_checkpoint: 'summary_confirmation' | 'assumption_confirmation' | 'plan_approval' | null; mode: 'degraded' | 'structured'; host_card: HostQuestionCard | null; origin?: AuditQuestionOrigin; answer_mode_pending?: boolean; /** The file's own text before its first question, as written; its options may point at it. */ preamble?: string | null }
 export interface IntentDetail extends IntentSummary { state_sections: Record<string, Record<string, string>>; phases: [string, string][]; stages: StageRow[]; findings: Finding[]; actions: ActionCard[]; directive: Directive | null; recovery: Record<string, string> | null; markers: MarkersView; audit_tail: AuditEventView[]; questions: QuestionsView | null; artifacts_count: number; artifacts_truncated: boolean; git: GitObservation | null; binding: BindingView | null; engine: HarnessDir | null; active_directive_stage: string | null }
 
 // ---- map ----
@@ -225,7 +225,8 @@ export interface ActionEvidence {
   session: { slot_key: string; session_key: string; running: boolean; stop_state: string; last_turn_ts: string | null; queue_depth: number; busy_reasons: BusyReason[]; options?: string[] } | null
   questions: QuestionsView | null; git: GitObservation | null; markers: Pick<MarkersView, 'human_turn_at' | 'engine_touch_at' | 'turn_counter' | 'goal_stop_present' | 'recovery'>
   presence_baseline: PresenceBaseline | null; presence: PresenceCheck | null; cursor_readback: CursorReadback | null
-  /** A `conversation_reply` card's question: AI-DLC's last message, redacted, without its `[OPTIONS: …]` line. */
+  /** AI-DLC's last message, redacted, without its `[OPTIONS: …]` line: a `conversation_reply` card's question, or the
+   *  summary an open summary confirmation asks about. */
   conversation_reply?: { text: string; ts: string | null } | null
 }
 export interface Delivery { lane: Lane | null; delivery_id: string | null; slot_key: string | null; session_key: string | null; wire_text: string | null; host: HostCall | null; delivering_at: string | null; delivered_at: string | null; queued_at: string | null; turn_started_at?: string; deadline_at: string | null; receipt: Record<string, unknown> | null; outcome: 'delivered' | 'not_delivered' | 'uncertain' | null; delivery_confirmed: boolean; boot_id_unchanged: boolean | null; transcript_row: { slot_key: string; ts: string; role: string } | null; slot_ran_since: boolean | null; disk_baseline_unchanged: boolean | null }
@@ -251,7 +252,7 @@ export interface ActionCard {
 }
 export interface ActionGroup { key: string; label_key: string; action_ids: string[] }
 /** A bound conversation parked on a host tool approval (architecture A31). Answered in the chat, not here. */
-export interface ApprovalWait { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; slot_key: string; tool: string; tool_input: string; purpose?: string }
+export interface ApprovalWait { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; slot_key: string; tool: string; tool_input: string; tool_input_truncated?: boolean; purpose?: string; request_id?: string; request_mid?: string; origin?: string }
 export interface StoppedTurn extends StoppedOnError { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; slot_key: string }
 export interface ActionsResponse { actions: ActionCard[]; organize: Organize; groups: ActionGroup[]; counts: { total: number; critical: number; blocking: number; attention: number; info: number }; approval_waits?: ApprovalWait[]; stopped_turns?: StoppedTurn[]; generated_at: string }
 export interface ActionTransition { from_status: ActionStatus | null; to_status: ActionStatus; generation: number; at: string; reason: string | null; evidence: Record<string, unknown> }

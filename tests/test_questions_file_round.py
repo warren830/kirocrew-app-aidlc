@@ -95,9 +95,13 @@ def assert_the_files_questions(card: dict, relpath: str, prompts: list[str]) -> 
 
 @at("2026-11-02T09:24:15Z")
 def test_while_the_file_is_open_its_six_questions_are_the_card(sv, routes, fake_host, scene):
-    """09:24:14: the batch decision is pending and its answer refused; the file still has its blank tags."""
-    built = practices(scene, "open", running=True)
+    """09:24:14: the batch decision is pending and its answer refused; the file still has its blank tags. The card was
+    raised when the round was asked; the turn running now keeps it (a turn still writing raises none of its own)."""
+    built = practices(scene, "open")
+    [raised] = cards(sv, routes, fake_host, built)
+    built.slot.running = True
     [card] = cards(sv, routes, fake_host, built)
+    assert card["action_id"] == raised["action_id"]
     assert_the_files_questions(card, F.PRACTICES_BATCH_QUESTIONS, FILE_PROMPTS)
     assert [[o["letter"] for o in q["options"]] for q in card["evidence"]["questions"]["questions"]] == FILE_LETTERS
 

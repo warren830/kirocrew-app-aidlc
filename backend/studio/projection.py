@@ -53,6 +53,7 @@ from .aidlc_reader import (
     latest_review_completion,
     parse_review_section,
     stage_attempt,
+    stage_revision_cycles,
     unit_gate_token,
 )
 from .errors import StudioError
@@ -145,6 +146,8 @@ COMMAND_ACTION_TYPES: frozenset[str] = frozenset(
     {"run", "resume", "prepare_commit", "set_summary_confirmation", "set_learnings", "force_stop"})
 #: A question card in these is a reply AI-DLC has received or may be recording.
 _ANSWER_IN_FLIGHT_STATUSES: frozenset[str] = frozenset({"Delivering", "Delivered", "ReconciliationRequired"})
+#: A question card the person can still answer: one open for the stage keeps its place while a turn runs.
+_QUESTION_OPEN_STATUSES: frozenset[str] = frozenset({"Queued", "NotDelivered", "Draft"})
 
 #: Statuses that re-type a card as `delivery_uncertain` in the queue (§2.11).
 UNCERTAIN_STATUSES: frozenset[str] = frozenset({"ReconciliationRequired"})
@@ -240,6 +243,17 @@ def _host_stamp(value: str) -> str | None:
 
 def _sha12(*parts: str) -> str:
     return hashlib.sha256(":".join(parts).encode("utf-8")).hexdigest()[:12]
+
+
+def reply_excerpt(row: Any | None) -> dict | None:
+    """AI-DLC's message as a card quotes it, or ``None`` when it says nothing: the bridge's redacted row, without
+    the ``[OPTIONS: …]`` line the card renders as choices, cut at ``MAX_REPLY_EXCERPT_CHARS``."""
+    text = OPTIONS_LINE_RE.sub("", str(_attr(row, "content", "") or "")).strip()
+    if not text:
+        return None
+    if len(text) > MAX_REPLY_EXCERPT_CHARS:
+        text = text[:MAX_REPLY_EXCERPT_CHARS].rstrip() + "…"
+    return {"text": text, "ts": _host_stamp(str(_attr(row, "ts", "") or "")) or None}
 
 
 def _capped(read: Any, default: Any) -> tuple[Any, bool]:
@@ -479,7 +493,7 @@ class QuestionsView(WireRecord):
     _wire_keys = (
         "relpath", "sha256", "stage", "unit", "questions", "summary_confirmation", "plan_approval",
         "assumption_confirmation?", "pending_count", "unsupported_pending_count", "pending_checkpoint", "mode",
-        "host_card", "origin?", "answer_mode_pending?",
+        "host_card", "origin?", "answer_mode_pending?", "preamble?",
     )
     relpath: str
     sha256: str
@@ -497,6 +511,8 @@ class QuestionsView(WireRecord):
     assumption_confirmation: Any | None = None
     #: The engine's mode question is open with this file: the answers' wire text names the mode (``wire_text_for``).
     answer_mode_pending: bool | None = None
+    #: The sheet's own text before its questions (``QuestionsFile.preamble``), which its options may point at.
+    preamble: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -997,6 +1013,7 @@ class Projection:
             host_card=dict(host_card) if host_card else None, origin=questions.origin,
             unsupported_pending_count=questions.unsupported_pending_count,
             answer_mode_pending=getattr(questions, "answer_mode_pending", None),
+            preamble=getattr(questions, "preamble", None),
         )
 
     # -- operational state -------------------------------------------------- #
@@ -1168,6 +1185,14 @@ class Projection:
         base = evidence()
         seeds: list[CardSeed] = []
         state, events = snap.state, list(snap.audit.events)
+        writing = bool(_attr(slot, "running", False)) and not bool(_attr(slot, "needs_input", False))
+
+        def gate_open(stage: str, unit: str | None = None) -> bool:
+            return any(
+                str(_attr(action, "type", "")) == "gate" and str(_attr(action, "stage", "") or "") == stage
+                and (_attr(action, "unit", None) or None) == unit
+                and str(_attr(action, "status", "")) in _QUESTION_OPEN_STATUSES for action in live_actions
+            )
 
         # One recovery card for every blocking finding a human must agree on: the move is the same however many
         # contradictions there are, and N critical cards for one broken intent would bury every other repository.
@@ -1192,13 +1217,21 @@ class Projection:
                 continue
             # A second open boundary shows its own stage's evidence, or its card would show another stage's work.
             own = base if row.slug == snap.stage or row.slug not in snap.other_stage_evidence else evidence(row.slug)
+            if row.mark == "?" and writing and not gate_open(row.slug):
+                # The engine opens the gate mid-turn (`report --result awaiting-approval`) and the conductor then
+                # writes what it presents; nothing can be sent into a running conversation, so a new gate card waits
+                # for the turn to end, as a question card does. Measured on an enterprise run: 75 s of a live Approve
+                # while the chat still streamed, which a send would have met with `slot_busy`.
+                continue
             if row.mark == "?":
                 # The mark is the gate: only AI-DLC clears it, so the card cannot be dismissed (FR-ACT-007).
-                # "Accept as-is" exists after three rejection cycles (05 §5.1), so Studio offers it then (C29/P24).
+                # "Accept as-is" is the engine's from the third change request at this gate (C29/P24).
                 attempt = stage_attempt(events, row.slug)
+                cycles = stage_revision_cycles(events, row.slug)
                 seeds.append(self._seed(
                     snap, "gate", row.slug, own, self._gate_opened_at(snap, row.slug),
-                    [d for d in C.DECISIONS["gate"] if d != "accept_as_is" or attempt >= C.ACCEPT_AS_IS_MIN_ATTEMPT],
+                    [d for d in C.DECISIONS["gate"]
+                     if d != "accept_as_is" or cycles >= C.ACCEPT_AS_IS_REVISION_CYCLES],
                     {"stage": row.slug, "attempt": attempt},
                     consequence="final_stage" if self._is_final_stage(snap, row.slug) else "approve_unlocks",
                 ))
@@ -1216,10 +1249,14 @@ class Projection:
         for gate in snap.unit_gates:
             if gate.status != "awaiting-approval" or gate.opened is None:
                 continue
+            if writing and not gate_open(gate.stage, gate.unit):
+                continue  # the same wait as a stage gate's, above
             opened = gate.opened
             seeds.append(self._seed(
                 snap, "gate", gate.stage, evidence(gate.stage, gate.unit), opened.timestamp,
-                [d for d in C.DECISIONS["gate"] if d != "accept_as_is" or gate.attempt >= C.ACCEPT_AS_IS_MIN_ATTEMPT],
+                [d for d in C.DECISIONS["gate"] if d != "accept_as_is"
+                 or stage_revision_cycles(list(snap.audit.events), gate.stage, gate.unit)
+                 >= C.ACCEPT_AS_IS_REVISION_CYCLES],
                 {"stage": gate.stage, "attempt": gate.attempt, "unit": gate.unit},
                 token=f"{gate.unit}:{_sha12(opened.shard, opened.timestamp, opened.raw)}", unit=gate.unit,
                 consequence="unit_end" if snap.unit_gate_scope.rhythm == "unit-end" else "unit_stage",
@@ -1259,13 +1296,26 @@ class Projection:
                 ),
                 reason=checkpoint or ("needs_input" if needs_input and pending == 0 else "questions"),
             )
+            # A turn still writing its questions has not asked them yet: the conductor asks when it ends the turn,
+            # and nothing can be sent into a running conversation. Measured on an enterprise run, a questions file
+            # rewritten 20 seconds after it was first written raised two cards and two notifications, the first for
+            # a card cancelled as it opened. A card already open for this stage keeps being refreshed as before, and
+            # a host that is waiting on the person (`needs_input`) is not a turn still writing.
+            asking = (
+                bool(_attr(slot, "running", False)) and not needs_input
+                and not any(
+                    str(_attr(action, "type", "")) == "question"
+                    and str(_attr(action, "stage", "") or "") == (snap.stage or "")
+                    and str(_attr(action, "status", "")) in _QUESTION_OPEN_STATUSES for action in live_actions
+                )
+            )
             # An audit decision is one row written before asking; once the answer Studio sent it went unrecorded and
             # AI-DLC replied in the conversation instead, that reply is what it waits on. Offering the decision's
             # choices again invites the answer AI-DLC just set aside, so the conversation-reply card speaks for it,
             # and the decision comes back only when the conversation cannot be read.
             if answer_unrecorded and (questions.origin or {}).get("kind") == "audit":
                 held = question
-            else:
+            elif not asking:
                 seeds.append(question)
 
         if snap.dangling_cursor or snap.cursor is None:
@@ -1418,10 +1468,7 @@ class Projection:
         if not holds_question and questions is not None and (questions.pending_count or questions.pending_checkpoint):
             return []
         asked_at = str(_attr(slot, "last_turn_ts", "") or "") or snap.taken_at
-        text = OPTIONS_LINE_RE.sub("", str(_attr(last_reply, "content", "") or "")).strip()
-        if len(text) > MAX_REPLY_EXCERPT_CHARS:
-            text = text[:MAX_REPLY_EXCERPT_CHARS].rstrip() + "…"
-        reply = {"text": text, "ts": _host_stamp(str(_attr(last_reply, "ts", "") or "")) or None} if text else None
+        reply = reply_excerpt(last_reply)
         return [self._seed(
             snap, "missing_input", snap.stage, {**base, "conversation_reply": reply},
             _host_stamp(asked_at) or snap.taken_at, ("provide_input",),

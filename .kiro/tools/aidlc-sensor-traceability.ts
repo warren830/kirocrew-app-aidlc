@@ -1,0 +1,861 @@
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { isAbsolute, join, relative, resolve } from "node:path";
+import {
+  errorMessage,
+  getField,
+  parseCheckboxes,
+  parseStateStageSuffixes,
+  readStateFile,
+  recordDir,
+  resolveBoltDag,
+  resolveProjectDir,
+  usesStageLevelPerUnitArtifacts,
+} from "./aidlc-lib.ts";
+
+const VALID_STATUSES = new Set(["OK", "GAP", "ORPHAN", "Deferred", "N/A"]);
+
+interface CoverageEntry {
+  id: string;
+  status: string;
+  target?: string;
+}
+
+interface TraceabilityData {
+  stage?: string;
+  unit?: string;
+  upstream_ids: string[];
+  coverage: CoverageEntry[];
+  reverse: CoverageEntry[];
+}
+
+interface Result {
+  pass: boolean;
+  gaps: string[];
+  orphans: string[];
+  missing_from_table: string[];
+  missing_from_upstream_ids: string[];
+  invalid_entries: string[];
+  invalid_targets: string[];
+  findings_count: number;
+  reason?: string;
+}
+
+interface Flags {
+  outputPath?: string;
+  stage?: string;
+}
+
+interface UnitContext {
+  unitName: string;
+  units: string[];
+  unitIds: Map<string, string>;
+}
+
+interface UpstreamResolution {
+  ids: Set<string>;
+  reasons: string[];
+  extraGaps: string[];
+  unitContext?: UnitContext;
+  storyAssignments?: Map<string, Set<string>>;
+  /** The whole selected source when `ids` is one unit's share of it. */
+  sourceIds?: Set<string>;
+  // IDs a stage may declare and cover without being required to (2.10.0: NFR rows in a
+  // stories-less units-generation map). Still bounded by what the upstream artifact names.
+  optionalIds?: Set<string>;
+}
+
+interface StoryAssignments {
+  assignments: Map<string, Set<string>>;
+  reason?: string;
+  /** The map was read but maps no source ID to a declared unit. */
+  empty: boolean;
+}
+
+const ID_PATTERNS = {
+  FR: /\bFR\d+(?:\.\d+)?\b/g,
+  NFR: /\bNFR\d+\b(?!\.\d)/g,
+  NFR_DETAIL: /\bNFR\d+\.\d+\b/g,
+  US: /\bUS\d+\.\d+\b/g,
+  AC: /\bAC\d+\.\d+\.\d+\b/g,
+  BR: /\bBR\d+\.\d+\b/g,
+};
+
+function parseFlags(argv: string[]): Flags {
+  const out: Flags = {};
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--stage") out.stage = argv[++i];
+    else if (arg === "--output-path") out.outputPath = argv[++i];
+  }
+  return out;
+}
+
+function fail(message: string): never {
+  process.stderr.write(`aidlc-sensor-traceability: ${message}\n`);
+  process.exit(1);
+}
+
+function emit(result: Result): void {
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+}
+
+function failedResult(reason: string): Result {
+  return {
+    pass: false,
+    gaps: [],
+    orphans: [],
+    missing_from_table: [],
+    missing_from_upstream_ids: [],
+    invalid_entries: [],
+    invalid_targets: [],
+    findings_count: 1,
+    reason,
+  };
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/");
+}
+
+function parseJson(content: string): unknown {
+  try {
+    return JSON.parse(content) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+function validateEntry(value: unknown, field: string, index: number): string | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return `${field}[${index}] must be an object`;
+  }
+  const entry = value as Record<string, unknown>;
+  if (typeof entry.id !== "string" || entry.id.trim() === "") {
+    return `${field}[${index}].id must be a non-empty string`;
+  }
+  if (typeof entry.status !== "string" || entry.status.trim() === "") {
+    return `${field}[${index}].status must be a non-empty string`;
+  }
+  if ("target" in entry && entry.target !== undefined && typeof entry.target !== "string") {
+    return `${field}[${index}].target must be a string when present`;
+  }
+  return null;
+}
+
+function validateTraceability(value: unknown): { ok: true; data: TraceabilityData } | { ok: false; reason: string } {
+  if (value === undefined) return { ok: false, reason: "invalid JSON in traceability file" };
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return { ok: false, reason: "traceability.json must contain a JSON object" };
+  }
+  const obj = value as Record<string, unknown>;
+  if (!Array.isArray(obj.upstream_ids) || !obj.upstream_ids.every((id) => typeof id === "string" && id.trim() !== "")) {
+    return { ok: false, reason: "upstream_ids must be an array of non-empty strings" };
+  }
+  if (!Array.isArray(obj.coverage)) {
+    return { ok: false, reason: "coverage must be an array" };
+  }
+  if ("reverse" in obj && !Array.isArray(obj.reverse)) {
+    return { ok: false, reason: "reverse must be an array when present" };
+  }
+  const reverse = (obj.reverse ?? []) as unknown[];
+  for (const [field, entries] of [["coverage", obj.coverage], ["reverse", reverse]] as const) {
+    for (let i = 0; i < entries.length; i++) {
+      const error = validateEntry(entries[i], field, i);
+      if (error) return { ok: false, reason: error };
+    }
+  }
+  if ("stage" in obj && obj.stage !== undefined && typeof obj.stage !== "string") {
+    return { ok: false, reason: "stage must be a string when present" };
+  }
+  if ("unit" in obj && obj.unit !== undefined && typeof obj.unit !== "string") {
+    return { ok: false, reason: "unit must be a string when present" };
+  }
+  return {
+    ok: true,
+    data: {
+      stage: obj.stage as string | undefined,
+      unit: obj.unit as string | undefined,
+      upstream_ids: obj.upstream_ids as string[],
+      coverage: obj.coverage as CoverageEntry[],
+      reverse: reverse as CoverageEntry[],
+    },
+  };
+}
+
+function readText(path: string): { content: string | null; reason?: string } {
+  try {
+    if (!existsSync(path)) return { content: null, reason: `required upstream artifact is missing: ${path}` };
+    if (!statSync(path).isFile()) return { content: null, reason: `required upstream artifact is not a file: ${path}` };
+    return { content: readFileSync(path, "utf-8") };
+  } catch (error) {
+    return { content: null, reason: `cannot read upstream artifact ${path}: ${errorMessage(error)}` };
+  }
+}
+
+function extractIds(content: string, patterns: RegExp[]): Set<string> {
+  const ids = new Set<string>();
+  for (const pattern of patterns) {
+    const regex = new RegExp(pattern.source, "g");
+    for (const match of content.matchAll(regex)) ids.add(match[0]);
+  }
+  return ids;
+}
+
+function idsFromFile(path: string, patterns: RegExp[], label: string): { ids: Set<string>; reason?: string } {
+  const read = readText(path);
+  if (read.content === null) return { ids: new Set(), reason: read.reason };
+  const ids = extractIds(read.content, patterns);
+  if (ids.size === 0) return { ids, reason: `${label} contains no traceable IDs: ${path}` };
+  return { ids };
+}
+
+function extractUnitName(outputPath: string): string | null {
+  const normalized = normalizePath(outputPath);
+  const match = normalized.match(/\/construction\/([^/]+)\/[^/]+\/traceability\.json$/);
+  return match?.[1] ?? null;
+}
+
+function isTableSeparator(line: string): boolean {
+  return line.trimStart().startsWith("|") && line.includes("-") && /^\s*\|?[\s:|-]+\|?\s*$/.test(line);
+}
+
+// When the plan has no Units, the engine writes every per-Unit stage's
+// artifacts directly under construction/<stage>/, with no Unit segment. A path
+// that names the stage's own folder is that location, so any per-Unit stage
+// with a resolver below is covered without a second stage list.
+function isZeroUnitOutput(stage: string, outputPath: string): boolean {
+  return stage !== "" &&
+    normalizePath(outputPath).endsWith(`/construction/${stage}/traceability.json`);
+}
+
+// Per-Unit artifacts live under construction/<unit>/<stage>/; a zero-Unit run
+// keeps the stage-level construction/<stage>/ location.
+function constructionDir(docsDir: string, unit: string, stage: string): string {
+  return unit ? join(docsDir, "construction", unit, stage) : join(docsDir, "construction", stage);
+}
+
+function unitLabel(unit: string): string {
+  return unit ? `unit "${unit}"` : "the zero-Unit run";
+}
+
+function readPlanState(projectDir: string): string | null {
+  try {
+    return readStateFile(projectDir);
+  } catch {
+    return null;
+  }
+}
+
+// The engine places per-Unit artifacts at stage level whenever the approved
+// plan skips Units Generation, and then ignores any Unit DAG left on disk (for
+// example after a scope change). Follow the plan when the state records it.
+function planSkipsUnits(stateContent: string | null): boolean {
+  if (stateContent === null || !parseStateStageSuffixes(stateContent).has("units-generation")) return false;
+  return usesStageLevelPerUnitArtifacts(getField(stateContent, "Scope"), stateContent);
+}
+
+// True when the approved plan (a SKIP suffix) or the run (a skipped [S]
+// checkbox) left the stage out. No readable state, or no Stage Progress line,
+// counts as having run, so that stage's missing files still fail closed.
+function stageDidNotRun(stateContent: string | null, slug: string): boolean {
+  if (stateContent === null) return false;
+  if (parseStateStageSuffixes(stateContent).get(slug) === "SKIP") return true;
+  return parseCheckboxes(stateContent).some((entry) => entry.slug === slug && entry.state === "skipped");
+}
+
+const NFR_REQUIREMENT_FILES = ["performance-requirements.md", "security-requirements.md", "scalability-requirements.md", "reliability-requirements.md"];
+const NFR_DESIGN_FILES = ["performance-design.md", "security-design.md", "scalability-design.md", "reliability-design.md", "logical-components.md"];
+
+// NFRx.y IDs from one NFR stage's artifacts, or null when none of them exists.
+function detailedNfrIds(dir: string, names: string[]): Set<string> | null {
+  let sawFile = false;
+  const ids = new Set<string>();
+  for (const name of names) {
+    const path = join(dir, name);
+    if (!existsSync(path)) continue;
+    sawFile = true;
+    const read = readText(path);
+    if (read.content !== null) {
+      for (const id of extractIds(read.content, [ID_PATTERNS.NFR_DETAIL])) ids.add(id);
+    }
+  }
+  return sawFile ? ids : null;
+}
+
+function markdownCells(line: string): string[] {
+  if (!line.trimStart().startsWith("|") || /^\s*\|?[\s:|-]+\|?\s*$/.test(line)) return [];
+  return line.split("|").slice(1, -1).map((cell) => cell.trim());
+}
+
+interface ColumnRoles {
+  ids: number[];
+  units: number[];
+}
+
+// Columns a story-map header names. Notes, rationale and dependency columns mention other IDs and
+// units in passing; they never map one.
+function columnRoles(header: string[]): ColumnRoles | null {
+  const roles: ColumnRoles = { ids: [], units: [] };
+  header.forEach((raw, index) => {
+    const name = raw.replace(/[`*_]/g, " ").trim().toLowerCase();
+    if (/\b(?:notes?|comments?|remarks?|rationale|reasons?|descriptions?|depend\w*|related|see also)\b/.test(name)) return;
+    if (/\b(?:units?|director(?:y|ies))\b/.test(name)) roles.units.push(index);
+    else if (/\b(?:stor(?:y|ies)|requirements?|upstream|ids?|frs?|uss?)\b/.test(name)) roles.ids.push(index);
+  });
+  return roles.ids.length > 0 && roles.units.length > 0 ? roles : null;
+}
+
+function unitIdMap(unitFile: string, units: string[]): Map<string, string> {
+  const map = new Map<string, string>();
+  const read = readText(unitFile);
+  if (read.content === null) return map;
+  for (const line of read.content.split(/\r?\n/)) {
+    const cells = markdownCells(line);
+    if (cells.length === 0) continue;
+    const id = cells.flatMap((cell) => cell.match(/\bU\d+\b/gi) ?? [])[0]?.toUpperCase();
+    if (!id) continue;
+    const unit = units.find((candidate) => cells.some((cell) => cell === candidate || cell === `\`${candidate}\``));
+    if (unit) map.set(unit, id);
+  }
+  return map;
+}
+
+function tokenPresent(cell: string, token: string): boolean {
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[\\s,;/])${escaped}(?:$|[\\s,;/])`, "i").test(cell);
+}
+
+function storyAssignments(
+  storyMapPath: string,
+  units: string[],
+  ids: Map<string, string>,
+  sourceIds: ReadonlySet<string>,
+): StoryAssignments {
+  const read = readText(storyMapPath);
+  if (read.content === null) return { assignments: new Map(), reason: read.reason, empty: false };
+  const assignments = new Map<string, Set<string>>();
+  const lines = read.content.split(/\r?\n/);
+  let roles: ColumnRoles | null = null;
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    const cells = markdownCells(line);
+    if (cells.length === 0) {
+      if (!line.trimStart().startsWith("|")) roles = null;
+      continue;
+    }
+    if (isTableSeparator(lines[index + 1] ?? "")) {
+      roles = columnRoles(cells);
+      continue;
+    }
+    // Units may map FRs when user-stories was skipped. Only the selected
+    // upstream artifact can authorize an ID; the map cannot invent one.
+    // Without a recognised header, the first cell naming a source ID is the
+    // row's ID cell, so a later note cannot assign the IDs it mentions.
+    const idCells = roles
+      ? roles.ids.map((column) => cells[column] ?? "")
+      : cells.filter((cell) => [...extractIds(cell, [ID_PATTERNS.US, ID_PATTERNS.FR, ID_PATTERNS.NFR])]
+        .some((id) => sourceIds.has(id))).slice(0, 1);
+    const unitCells = roles ? roles.units.map((column) => cells[column] ?? "") : cells;
+    const stories = [...extractIds(idCells.join(" | "), [ID_PATTERNS.US, ID_PATTERNS.FR, ID_PATTERNS.NFR])]
+      .filter((id) => sourceIds.has(id));
+    if (stories.length === 0) continue;
+    for (const unit of units) {
+      const aliases = [unit, ids.get(unit)].filter((value): value is string => value !== undefined);
+      if (!unitCells.some((cell) => aliases.some((alias) => tokenPresent(cell, alias)))) continue;
+      for (const story of stories) {
+        const mapped = assignments.get(story) ?? new Set<string>();
+        mapped.add(unit);
+        assignments.set(story, mapped);
+      }
+    }
+  }
+  return assignments.size === 0
+    ? {
+      assignments,
+      reason: `unit-of-work-story-map.md contains no upstream-ID-to-unit mappings: ${storyMapPath}`,
+      empty: true,
+    }
+    : { assignments, empty: false };
+}
+
+function unitShare(assignments: Map<string, Set<string>>, unit: string): Set<string> {
+  return new Set([...assignments.entries()].filter(([, units]) => units.has(unit)).map(([id]) => id));
+}
+
+function resolveUnitContext(
+  projectDir: string,
+  outputPath: string,
+  docsDir: string,
+  stage: string,
+  stateContent: string | null,
+): { context?: UnitContext; reason?: string } {
+  const unitName = extractUnitName(outputPath);
+  if (!unitName && !isZeroUnitOutput(stage, outputPath)) {
+    return { reason: `cannot derive the construction unit from output path: ${outputPath}` };
+  }
+  if (!unitName && planSkipsUnits(stateContent)) {
+    return { context: { unitName: "", units: [], unitIds: new Map() } };
+  }
+  const dag = resolveBoltDag(projectDir);
+  if (dag.state === "malformed") {
+    return { reason: `unit-of-work-dependency.md is ${dag.reason}: ${dag.detail}` };
+  }
+  if (!unitName) {
+    if (dag.state === "ok") {
+      return { reason: `cannot derive the construction unit from output path while unit-of-work-dependency.md declares Units: ${outputPath}` };
+    }
+    return { context: { unitName: "", units: [], unitIds: new Map() } };
+  }
+  const units = dag.state === "ok" ? dag.units : [unitName];
+  if (dag.state === "ok" && !units.includes(unitName)) {
+    return { reason: `unit "${unitName}" is not declared in unit-of-work-dependency.md` };
+  }
+  return {
+    context: {
+      unitName,
+      units,
+      unitIds: unitIdMap(join(docsDir, "inception", "units-generation", "unit-of-work.md"), units),
+    },
+  };
+}
+
+function addSource(result: UpstreamResolution, source: { ids: Set<string>; reason?: string }): Set<string> {
+  if (source.reason) result.reasons.push(source.reason);
+  for (const id of source.ids) result.ids.add(id);
+  return source.ids;
+}
+
+// NFR Design traces NFR Requirements' NFRx.y IDs; Infrastructure Design traces
+// NFR Design's, or NFR Requirements' when NFR Design did not run. Without NFR
+// Requirements no NFRx.y IDs exist, so both trace the NFRn IDs in
+// requirements.md, as nfr-requirements itself does. A source stage that ran
+// but left no artifacts still fails closed.
+function resolveNfrUpstream(
+  result: UpstreamResolution,
+  stage: "nfr-design" | "infrastructure-design",
+  docsDir: string,
+  unit: string,
+  requirements: string,
+  stateContent: string | null,
+): void {
+  const requirementsDir = constructionDir(docsDir, unit, "nfr-requirements");
+  const requirementIds = detailedNfrIds(requirementsDir, NFR_REQUIREMENT_FILES);
+  const requirementsRan = requirementIds !== null || !stageDidNotRun(stateContent, "nfr-requirements");
+  let source = { label: "NFR requirement", dir: requirementsDir, ids: requirementIds, ran: requirementsRan };
+  if (stage === "infrastructure-design") {
+    const designDir = constructionDir(docsDir, unit, "nfr-design");
+    const designIds = detailedNfrIds(designDir, NFR_DESIGN_FILES);
+    if (designIds !== null || !stageDidNotRun(stateContent, "nfr-design")) {
+      source = { label: "NFR design", dir: designDir, ids: designIds, ran: true };
+    }
+  }
+  if (source.ids === null) {
+    if (source.ran) {
+      result.reasons.push(`required upstream ${source.label} artifacts are missing under ${source.dir}`);
+    } else {
+      addSource(result, idsFromFile(requirements, [ID_PATTERNS.NFR], "requirements.md"));
+    }
+    return;
+  }
+  if (!requirementsRan) {
+    addSource(result, idsFromFile(requirements, [ID_PATTERNS.NFR], "requirements.md"));
+    return;
+  }
+  for (const id of source.ids) result.ids.add(id);
+  if (source.ids.size === 0) {
+    result.reasons.push(`${source.label} artifacts for ${unitLabel(unit)} contain no NFRx.y IDs`);
+  }
+}
+
+function resolveUpstream(stage: string, projectDir: string, outputPath: string): UpstreamResolution {
+  const result: UpstreamResolution = { ids: new Set(), reasons: [], extraGaps: [] };
+  const docsDir = recordDir(projectDir);
+  if (!docsDir) {
+    result.reasons.push("cannot resolve the active intent record directory");
+    return result;
+  }
+  const requirements = join(docsDir, "inception", "requirements-analysis", "requirements.md");
+  const stories = join(docsDir, "inception", "user-stories", "stories.md");
+  const storyMap = join(docsDir, "inception", "units-generation", "unit-of-work-story-map.md");
+
+  if (stage === "user-stories") {
+    addSource(result, idsFromFile(requirements, [ID_PATTERNS.FR, ID_PATTERNS.NFR], "requirements.md"));
+    return result;
+  }
+  if (stage === "domain-design") {
+    addSource(
+      result,
+      existsSync(stories)
+        ? idsFromFile(stories, [ID_PATTERNS.US], "stories.md")
+        : idsFromFile(requirements, [ID_PATTERNS.FR], "requirements.md"),
+    );
+    return result;
+  }
+  if (stage === "units-generation") {
+    const hasStories = existsSync(stories);
+    const source = hasStories
+      ? idsFromFile(stories, [ID_PATTERNS.US], "stories.md")
+      : idsFromFile(requirements, [ID_PATTERNS.FR], "requirements.md");
+    const sourceIds = addSource(result, source);
+    const dag = resolveBoltDag(projectDir);
+    if (dag.state === "malformed") {
+      result.reasons.push(`unit-of-work-dependency.md is ${dag.reason}: ${dag.detail}`);
+      return result;
+    }
+    if (dag.state === "none") {
+      result.reasons.push("unit-of-work-dependency.md is missing; cannot verify traceability targets");
+      return result;
+    }
+    const context: UnitContext = {
+      unitName: "",
+      units: dag.units,
+      unitIds: unitIdMap(join(docsDir, "inception", "units-generation", "unit-of-work.md"), dag.units),
+    };
+    result.unitContext = context;
+    // Without stories the required set stays FR-only, but a scope that also traces NFRs must not
+    // have its correctly mapped NFR rows reported as unmapped targets (2.10.0), so the join may
+    // also accept the NFR IDs requirements.md itself names. The map still cannot invent one.
+    const optionalIds = hasStories
+      ? new Set<string>()
+      : new Set([...idsFromFile(requirements, [ID_PATTERNS.NFR], "requirements.md").ids]
+        .filter((id) => !sourceIds.has(id)));
+    result.optionalIds = optionalIds;
+    const joinIds = new Set([...sourceIds, ...optionalIds]);
+    const mapped = storyAssignments(storyMap, context.units, context.unitIds, joinIds);
+    if (mapped.reason) result.reasons.push(mapped.reason);
+    result.storyAssignments = mapped.assignments;
+    for (const id of sourceIds) {
+      if (!mapped.assignments.has(id)) result.extraGaps.push(id);
+    }
+    return result;
+  }
+
+  const stateContent = readPlanState(projectDir);
+  const resolvedUnit = resolveUnitContext(projectDir, outputPath, docsDir, stage, stateContent);
+  if (!resolvedUnit.context) {
+    result.reasons.push(resolvedUnit.reason ?? "cannot resolve construction unit");
+    return result;
+  }
+  result.unitContext = resolvedUnit.context;
+  const unit = resolvedUnit.context.unitName;
+
+  if (stage === "functional-design") {
+    if (existsSync(storyMap)) {
+      const hasStories = existsSync(stories);
+      const source = hasStories
+        ? idsFromFile(stories, [ID_PATTERNS.US], "stories.md")
+        : idsFromFile(requirements, [ID_PATTERNS.FR], "requirements.md");
+      if (source.reason) result.reasons.push(source.reason);
+      const mapped = storyAssignments(storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds, source.ids);
+      if (!hasStories && mapped.empty) {
+        // A map written before requirement rows were understood names none. It scopes nothing,
+        // so keep the earlier rule — every requirement for every unit — instead of failing.
+        for (const id of source.ids) result.ids.add(id);
+        return result;
+      }
+      if (mapped.reason) result.reasons.push(mapped.reason);
+      result.storyAssignments = mapped.assignments;
+      result.sourceIds = source.ids;
+      const unitStories = unitShare(mapped.assignments, unit);
+      if (unitStories.size === 0) {
+        result.reasons.push(`no ${hasStories ? "stories" : "requirements"} in unit-of-work-story-map.md map to unit "${unit}"`);
+        return result;
+      }
+      if (!hasStories) {
+        for (const id of unitStories) result.ids.add(id);
+        return result;
+      }
+      const storyRead = readText(stories);
+      if (storyRead.content === null) {
+        result.reasons.push(storyRead.reason ?? `cannot read ${stories}`);
+        return result;
+      }
+      result.sourceIds = extractIds(storyRead.content, [ID_PATTERNS.AC]);
+      for (const ac of result.sourceIds) {
+        const [group, story] = ac.slice(2).split(".");
+        if (unitStories.has(`US${group}.${story}`)) result.ids.add(ac);
+      }
+      if (result.ids.size === 0) result.reasons.push(`stories mapped to unit "${unit}" contain no acceptance-criterion IDs`);
+    } else {
+      addSource(result, idsFromFile(requirements, [ID_PATTERNS.FR], "requirements.md"));
+    }
+    return result;
+  }
+  if (stage === "nfr-requirements") {
+    addSource(result, idsFromFile(requirements, [ID_PATTERNS.NFR], "requirements.md"));
+    return result;
+  }
+  if (stage === "nfr-design" || stage === "infrastructure-design") {
+    resolveNfrUpstream(result, stage, docsDir, unit, requirements, stateContent);
+    return result;
+  }
+  if (stage === "code-generation") {
+    if (existsSync(stories)) {
+      if (unit && existsSync(storyMap)) {
+        const mapped = storyAssignments(
+          storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds,
+          idsFromFile(stories, [ID_PATTERNS.US], "stories.md").ids,
+        );
+        if (mapped.reason) result.reasons.push(mapped.reason);
+        result.storyAssignments = mapped.assignments;
+        const unitStories = unitShare(mapped.assignments, unit);
+        const storyRead = readText(stories);
+        if (storyRead.content !== null) {
+          for (const ac of extractIds(storyRead.content, [ID_PATTERNS.AC])) {
+            const [group, story] = ac.slice(2).split(".");
+            if (unitStories.has(`US${group}.${story}`)) result.ids.add(ac);
+          }
+        }
+      } else {
+        addSource(result, idsFromFile(stories, [ID_PATTERNS.AC], "stories.md"));
+      }
+    } else {
+      const source = idsFromFile(requirements, [ID_PATTERNS.FR, ID_PATTERNS.NFR], "requirements.md");
+      if (source.reason) result.reasons.push(source.reason);
+      const requirementIds = new Set([...source.ids].filter((id) => !id.startsWith("NFR")));
+      // Scope FRs to this unit exactly as functional-design does, so the two stages agree on what
+      // a unit owns. A missing or requirement-free map keeps every FR, as before.
+      const mapped = existsSync(storyMap)
+        ? storyAssignments(storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds, requirementIds)
+        : null;
+      if (mapped !== null && !mapped.empty && !mapped.reason) {
+        result.storyAssignments = mapped.assignments;
+        const unitRequirements = unitShare(mapped.assignments, unit);
+        if (unitRequirements.size === 0) {
+          result.reasons.push(`no requirements in unit-of-work-story-map.md map to unit "${unit}"`);
+        }
+        for (const id of unitRequirements) result.ids.add(id);
+      } else {
+        for (const id of requirementIds) result.ids.add(id);
+      }
+      for (const id of source.ids) if (id.startsWith("NFR")) result.ids.add(id);
+    }
+    const nfrDir = constructionDir(docsDir, unit, "nfr-requirements");
+    for (const name of ["performance-requirements.md", "security-requirements.md", "scalability-requirements.md", "reliability-requirements.md"]) {
+      const path = join(nfrDir, name);
+      if (existsSync(path)) {
+        const read = readText(path);
+        if (read.content !== null) {
+          for (const id of extractIds(read.content, [ID_PATTERNS.NFR_DETAIL])) result.ids.add(id);
+        }
+      }
+    }
+    const brPath = join(constructionDir(docsDir, unit, "functional-design"), "rules.md");
+    if (existsSync(brPath)) {
+      const read = readText(brPath);
+      if (read.content !== null) {
+        for (const id of extractIds(read.content, [ID_PATTERNS.BR])) result.ids.add(id);
+      }
+    }
+    if (result.ids.size === 0) {
+      result.reasons.push(unit ? `upstream ID set is empty for unit "${unit}"` : "upstream ID set is empty for the zero-Unit code-generation run");
+    }
+    return result;
+  }
+
+  result.reasons.push(`stage "${stage}" has no traceability upstream resolver`);
+  return result;
+}
+
+function verifyTargets(
+  stage: string,
+  data: TraceabilityData,
+  projectDir: string,
+  outputPath: string,
+  upstream: UpstreamResolution,
+): { invalidTargets: string[]; derivedOrphans: string[]; reasons: string[] } {
+  const invalidTargets: string[] = [];
+  const derivedOrphans: string[] = [];
+  const reasons: string[] = [];
+  const docsDir = recordDir(projectDir);
+  const okEntries = data.coverage.filter((entry) => entry.status === "OK");
+
+  if (stage === "user-stories" && docsDir) {
+    const storiesPath = join(docsDir, "inception", "user-stories", "stories.md");
+    const stories = idsFromFile(storiesPath, [ID_PATTERNS.US], "stories.md");
+    if (stories.reason) reasons.push(stories.reason);
+    for (const entry of okEntries) {
+      const targets = extractIds(entry.target ?? "", [ID_PATTERNS.US]);
+      if (targets.size === 0) invalidTargets.push(`${entry.id}: target must name at least one USx.y ID`);
+      for (const target of targets) {
+        if (!stories.ids.has(target)) invalidTargets.push(`${entry.id}: target ${target} is absent from stories.md`);
+      }
+    }
+  }
+
+  if (stage === "units-generation" && upstream.unitContext && upstream.storyAssignments) {
+    const reverseUnitIds = new Map([...upstream.unitContext.unitIds.entries()].map(([unit, id]) => [id, unit]));
+    for (const entry of okEntries) {
+      const rawTarget = entry.target?.trim() ?? "";
+      const unit = upstream.unitContext.units.includes(rawTarget)
+        ? rawTarget
+        : reverseUnitIds.get(rawTarget.toUpperCase());
+      if (!unit) {
+        invalidTargets.push(`${entry.id}: target "${rawTarget}" is not a declared unit`);
+      } else if (!upstream.storyAssignments.get(entry.id)?.has(unit)) {
+        invalidTargets.push(`${entry.id}: target "${rawTarget}" is not mapped in unit-of-work-story-map.md`);
+      }
+    }
+  }
+
+  if (stage === "functional-design" && docsDir) {
+    const unit = upstream.unitContext?.unitName ?? extractUnitName(outputPath);
+    if (unit !== null) {
+      const brPath = join(constructionDir(docsDir, unit, "functional-design"), "rules.md");
+      const rules = idsFromFile(brPath, [ID_PATTERNS.BR], "rules.md");
+      if (rules.reason) reasons.push(rules.reason);
+      const targeted = new Set<string>();
+      for (const entry of okEntries) {
+        const targets = extractIds(entry.target ?? "", [ID_PATTERNS.BR]);
+        if (targets.size === 0) invalidTargets.push(`${entry.id}: target must name at least one BRx.y ID`);
+        for (const target of targets) {
+          targeted.add(target);
+          if (!rules.ids.has(target)) invalidTargets.push(`${entry.id}: target ${target} is absent from rules.md`);
+        }
+      }
+      const explained = new Set(data.reverse.map((entry) => entry.id));
+      for (const rule of rules.ids) {
+        if (!targeted.has(rule) && !explained.has(rule)) derivedOrphans.push(rule);
+      }
+    }
+  }
+
+  if (stage === "code-generation") {
+    const projectRoot = resolve(projectDir);
+    for (const entry of okEntries) {
+      const target = normalizePath(entry.target?.trim() ?? "");
+      const driveAbsolute = /^[A-Za-z]:\//.test(target);
+      if (target === "" || isAbsolute(target) || driveAbsolute) {
+        invalidTargets.push(`${entry.id}: target must be a workspace-relative file path`);
+        continue;
+      }
+      const absolute = resolve(projectRoot, target);
+      const rel = relative(projectRoot, absolute);
+      if (rel.startsWith("..") || isAbsolute(rel)) {
+        invalidTargets.push(`${entry.id}: target escapes the project directory`);
+        continue;
+      }
+      try {
+        if (!existsSync(absolute) || !statSync(absolute).isFile()) {
+          invalidTargets.push(`${entry.id}: target file does not exist: ${target}`);
+        }
+      } catch {
+        invalidTargets.push(`${entry.id}: target file is unreadable: ${target}`);
+      }
+    }
+  }
+
+  return { invalidTargets, derivedOrphans, reasons };
+}
+
+function uniqueSorted(values: string[]): string[] {
+  return [...new Set(values)].sort();
+}
+
+export function main(argv: string[]): void {
+  const flags = parseFlags(argv);
+  if (!flags.outputPath) fail("--output-path is required");
+  const outputPath = normalizePath(flags.outputPath);
+  if (!existsSync(outputPath)) fail(`--output-path not found: ${flags.outputPath}`);
+
+  let body: string;
+  try {
+    body = readFileSync(outputPath, "utf-8");
+  } catch (error) {
+    fail(`failed to read --output-path ${flags.outputPath}: ${errorMessage(error)}`);
+  }
+
+  const validated = validateTraceability(parseJson(body));
+  if (!validated.ok) {
+    emit(failedResult(validated.reason));
+    return;
+  }
+  const data = validated.data;
+  if (data.coverage.length === 0) {
+    emit(failedResult("no coverage entries found in traceability.json"));
+    return;
+  }
+
+  const stage = flags.stage ?? data.stage ?? "";
+  const projectDir = resolveProjectDir();
+  const gaps: string[] = [];
+  const orphans: string[] = [];
+  const invalidEntries: string[] = [];
+  const reasons: string[] = [];
+
+  for (const [field, entries] of [["coverage", data.coverage], ["reverse", data.reverse]] as const) {
+    for (const entry of entries) {
+      if (!VALID_STATUSES.has(entry.status)) {
+        invalidEntries.push(`${field}:${entry.id}: unknown status "${entry.status}"`);
+        continue;
+      }
+      if (entry.status === "GAP") gaps.push(entry.id);
+      if (entry.status === "ORPHAN") orphans.push(entry.id);
+      if (["OK", "Deferred", "N/A"].includes(entry.status) && !entry.target?.trim()) {
+        invalidEntries.push(`${field}:${entry.id}: status ${entry.status} requires a non-empty target`);
+      }
+    }
+  }
+
+  const declared = new Set(data.upstream_ids);
+  const covered = new Set(data.coverage.map((entry) => entry.id));
+  const missingFromTable = [...declared].filter((id) => !covered.has(id));
+  for (const entry of data.coverage) {
+    if (!declared.has(entry.id)) invalidEntries.push(`coverage:${entry.id}: id is absent from upstream_ids`);
+  }
+
+  const upstream = resolveUpstream(stage, projectDir, outputPath);
+  reasons.push(...upstream.reasons);
+  gaps.push(...upstream.extraGaps);
+  if (stage === "units-generation" || stage === "functional-design") {
+    // Another unit's ID may be listed only as N/A, the way a complete requirement table reads.
+    const notApplicable = new Set(data.coverage.filter((entry) => entry.status === "N/A").map((entry) => entry.id));
+    const claimed = new Set(data.coverage.filter((entry) => entry.status !== "N/A").map((entry) => entry.id));
+    for (const id of declared) {
+      if (upstream.ids.has(id) || upstream.optionalIds?.has(id)) continue;
+      if (!upstream.sourceIds?.has(id)) {
+        invalidEntries.push(`upstream_ids:${id}: id is absent from the resolved upstream source`);
+      } else if (!notApplicable.has(id) || claimed.has(id)) {
+        invalidEntries.push(`upstream_ids:${id}: id is mapped to another unit; mark it N/A or remove it`);
+      }
+    }
+  }
+  const missingFromUpstreamIds = [...upstream.ids].filter((id) => !declared.has(id));
+  if (upstream.ids.size === 0 && upstream.reasons.length === 0) {
+    reasons.push(`upstream ID set is empty for stage "${stage}"`);
+  }
+
+  const targetChecks = verifyTargets(stage, data, projectDir, outputPath, upstream);
+  reasons.push(...targetChecks.reasons);
+  orphans.push(...targetChecks.derivedOrphans);
+
+  const result: Result = {
+    pass: false,
+    gaps: uniqueSorted(gaps),
+    orphans: uniqueSorted(orphans),
+    missing_from_table: uniqueSorted(missingFromTable),
+    missing_from_upstream_ids: uniqueSorted(missingFromUpstreamIds),
+    invalid_entries: uniqueSorted(invalidEntries),
+    invalid_targets: uniqueSorted(targetChecks.invalidTargets),
+    findings_count: 0,
+  };
+  result.findings_count =
+    result.gaps.length +
+    result.orphans.length +
+    result.missing_from_table.length +
+    result.missing_from_upstream_ids.length +
+    result.invalid_entries.length +
+    result.invalid_targets.length +
+    reasons.length;
+  result.pass = result.findings_count === 0;
+  if (reasons.length > 0) result.reason = uniqueSorted(reasons).join("; ");
+  emit(result);
+}
+
+if (import.meta.main) {
+  try {
+    main(process.argv.slice(2));
+  } catch (error) {
+    emit(failedResult(`traceability sensor failed safely: ${errorMessage(error)}`));
+  }
+}

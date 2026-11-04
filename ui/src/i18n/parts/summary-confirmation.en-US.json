@@ -15,7 +15,7 @@
   "summarySwitch.recorded": "AI-DLC's record:",
   "summarySwitch.explain.on": "Before writing each stage's files, AI-DLC asks whether its summary of your answers is correct. Turning this off keeps every approval and question.",
   "summarySwitch.explain.off": "AI-DLC writes each stage's files straight from your answers, without asking whether its summary is correct. Approvals and questions are unchanged.",
-  "summarySwitch.explain.offPending": "Summary confirmation is off for this intent, so no later stage asks. This one was asked before it was turned off and still waits for your answer.",
+  "summarySwitch.explain.offPending": "Summary confirmation is off for this intent, so AI-DLC no longer waits for this one either: it writes the stage's files from your answers. No later stage asks.",
   "summarySwitch.action.off": "Stop asking for summary confirmation",
   "summarySwitch.action.on": "Ask for summary confirmation again",
   "summarySwitch.confirm.off.title": "Turn summary confirmation off for this intent?",

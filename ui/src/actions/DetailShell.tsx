@@ -522,6 +522,9 @@ export function DetailShell({
       <DetailTabs tabs={tabs} active={activeTab} onSelect={(tab) => go({ tab })} />
 
       <div
+        // One body per card: the pane is the scroll container, and a reused one kept the last card's offset, so a
+        // gate opened after a learnings answer showed its bottom (Advisor, Approve) and not its artifact and review.
+        key={card.action_id}
         className="studio-detail-body"
         id={`studio-panel-${activeTab}`}
         role="tabpanel"
@@ -773,6 +776,13 @@ function TransitionList({ createdAt, transitions, type }: {
  * user's session, which is the only way a message in this pane is a real human turn. Studio does not
  * render its own transcript, because a second renderer would have to decide what a message means.
  */
+/**
+ * What the embedded chat leaves out (KiroCrew 0.11's `hide`; older hosts ignore it). Its Stop would cancel or kill
+ * AI-DLC's turn with no interruption on Studio's record, so a stop goes through Studio's own Force stop, which keeps
+ * one; its queue would let a message wait behind the turn outside the decisions Studio tracks.
+ */
+export const CHAT_EMBED_HIDDEN = ['stop', 'queue'] as const
+
 function Conversation({ slotKey }: { slotKey: string }) {
   const { t } = useI18n()
   if (!slotKey) {
@@ -789,7 +799,7 @@ function Conversation({ slotKey }: { slotKey: string }) {
       </h3>
       <p className="studio-muted studio-conv-note">{t('detail.conversation.note')}</p>
       <div className="studio-conv">
-        <ChatEmbed slotKey={slotKey} />
+        <ChatEmbed slotKey={slotKey} hide={CHAT_EMBED_HIDDEN} />
       </div>
     </section>
   )

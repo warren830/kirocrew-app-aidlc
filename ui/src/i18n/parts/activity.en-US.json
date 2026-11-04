@@ -260,5 +260,16 @@
   "activity.row.repoGone": "unregistered repository",
   "activity.conversation.error": "KiroCrew reported an error in the conversation: {text}",
   "activity.notification.sent.approval": "Studio told you the conversation is waiting for a tool approval.",
-  "activity.notification.sent.completion": "Studio told you the intent finished."
+  "activity.notification.sent.completion": "Studio told you the intent finished.",
+  "audit.HOST_TURN": "A turn the host sent on its own (not the person's).",
+  "audit.SUBAGENT_DISPATCHED": "A specialist subagent was dispatched.",
+  "audit.SENSOR_COULD_NOT_RUN": "A check could not run; AI-DLC recorded it as not run, not as passed.",
+  "audit.STAGE_OUTPUT_AMENDED": "A stage's document was amended after its review.",
+  "audit.STATE_TRANSITION_BLOCKED": "AI-DLC refused a workflow move that its rules do not allow.",
+  "audit.STAGE_RULES_BLOCKED": "A stage could not go ahead under the project's rules.",
+  "audit.REVIEW_VERDICT_DICTATED": "A review verdict was written by someone other than the reviewer.",
+  "audit.STAGE_DEFINITION_CHANGED": "A stage's definition changed during the work.",
+  "audit.SOURCE_WORK_NOT_FOUND": "The source work a step referred to was not found.",
+  "audit.INTENT_REPOS_CHANGED": "The repositories this work covers changed.",
+  "audit.INTENT_CHECKOUTS_CHANGED": "The checkouts this work's code lives in changed."
 }

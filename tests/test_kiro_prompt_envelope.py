@@ -52,7 +52,8 @@ def intercept(project: Path, prompt: str) -> str:
 @pytest.mark.parametrize("header", ["--", "—"])
 def test_a_command_inside_the_envelope_dispatches_like_the_typed_one(project, header):
     typed = intercept(project, "/aidlc --version")
-    assert "has ALREADY been run by the harness" in typed
+    # 2.11.2 says "The command `/aidlc --version` has already run; …" (2.11.0: "has ALREADY been run by the harness").
+    assert "has already run" in typed.lower() and "--- OUTPUT <marker> ---" in typed
     wrapped = intercept(project, ENVELOPE.replace("--", header) + "/aidlc --version")
     assert wrapped == typed
 

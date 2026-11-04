@@ -601,7 +601,136 @@ def batch_payload(rules, add, **other):
 
 
 def grouped(*lines, C):
-    return "\n".join(lines) + C.WIRE_AUDIT_GROUPED_ANSWER_SUFFIX
+    """An audit menu's one reply: its answers on one line, as 2.11.2 records them (``Q1: …; Q2: …``)."""
+    return C.WIRE_AUDIT_ANSWER_JOINER.join(lines) + C.WIRE_AUDIT_GROUPED_ANSWER_SUFFIX
+
+
+CORRECTION = "You asked me to name test files after the module they test. Keep that for next time?"
+CORRECTION_2 = "You asked me to keep the list's \"OVERDUE\" mark at the end of the line. Keep that for next time?"
+
+
+def correction(prompt=CORRECTION, ts=ASKED):
+    """2.11.2's learnings question about one correction, logged as its step tells the conductor to."""
+    return decision(ts, Decision=prompt, Options="|Yes, for this project|Yes, for the team|No",
+                    **{"Question Kind": "learnings-note"})
+
+
+def test_a_learnings_correction_question_takes_one_of_the_engines_three_choices(sv, routes, fake_host, scene, C):
+    """Its choices hold commas, so the row separates them with `|`; Studio offers exactly those, one to pick."""
+    install_closed_sheet(scene)
+    rewrite_audit(scene, closed_sheet_receipt(scene), correction())
+    card = question_card(sv, routes, fake_host, scene)
+    [question] = card["evidence"]["questions"]["questions"]
+    assert (question["prompt"], question["multi_select"]) == (CORRECTION, False)
+    assert [o["text"] for o in question["options"]] == list(C.LEARNINGS_CORRECTION_CHOICES)
+    assert not any(o["is_other"] for o in question["options"])
+    receipt = submit_ok(sv, routes, fake_host, card, "Yes, for the team", answer_payload("B"))
+    assert receipt["wire_text"] == "Yes, for the team"
+
+
+def test_corrections_asked_together_stay_single_choice_and_take_one_line(sv, routes, fake_host, scene, C):
+    """Two corrections, the second written to a file first for its quotes: the write the hook logs between them is
+    no row of the engine's menu, so both are asked together, each with its own three choices."""
+    install_closed_sheet(scene)
+    rewrite_audit(scene, closed_sheet_receipt(scene), correction(),
+                  F.audit_block("ARTIFACT_CREATED", ASKED, Stage=STAGE,
+                                Path="aidlc/.aidlc-engine/answer-text/question-1.txt"),
+                  correction(CORRECTION_2))
+    card = question_card(sv, routes, fake_host, scene)
+    view = card["evidence"]["questions"]
+    assert view["origin"]["batch_size"] == 2 and [q["prompt"] for q in view["questions"]] == [CORRECTION, CORRECTION_2]
+    for question in view["questions"]:
+        assert question["multi_select"] is False
+        assert [o["text"] for o in question["options"]] == list(C.LEARNINGS_CORRECTION_CHOICES)
+    status, body = _submit(sv, routes, fake_host, card, payload=batch_payload(["A", "B"], ["C"]), wire_text="x")
+    assert status == 400 and body["code"] == "invalid_decision", body  # one choice per correction
+    wire = grouped("Q1: Yes, for this project", "Q2: No", C=C)
+    assert wire.startswith("Q1: Yes, for this project; Q2: No")
+    receipt = submit_ok(sv, routes, fake_host, card, wire, batch_payload(["A"], ["C"]))
+    assert receipt["wire_text"] == wire
+
+
+def change_requested(at="2026-09-04T09:59:20Z"):
+    """The stage's gate presented, then Request changes: the floors between the sheet's receipt and the learnings
+    question 2.11.2 asks about that change before ``report --result revised`` re-presents the gate."""
+    return (F.audit_block("STAGE_AWAITING_APPROVAL", "2026-09-04T09:59:12Z", Stage=STAGE),
+            F.audit_block("GATE_REJECTED", at, Stage=STAGE), F.audit_block("STAGE_REVISING", at, Stage=STAGE))
+
+
+def test_a_correction_asked_after_request_changes_is_a_question_card(sv, routes, fake_host, scene, C):
+    """The feature run's market-research gate (2026-11-04): Request changes, then "You asked me to …. Keep that for
+    next time?". The sheet's summary receipt came before the gate, and the card was a conversation reply."""
+    install_closed_sheet(scene)
+    rewrite_audit(scene, closed_sheet_receipt(scene), *change_requested(), correction())
+    card = question_card(sv, routes, fake_host, scene)
+    [question] = card["evidence"]["questions"]["questions"]
+    assert (question["prompt"], question["multi_select"]) == (CORRECTION, False)
+    assert [o["text"] for o in question["options"]] == list(C.LEARNINGS_CORRECTION_CHOICES)
+    receipt = submit_ok(sv, routes, fake_host, card, "Yes, for this project", answer_payload("A"))
+    assert receipt["wire_text"] == "Yes, for this project"
+
+
+def test_a_plain_sheet_answered_before_the_gate_hands_on_the_correction_too(closed_sheet_scene):
+    scene = closed_sheet_scene
+    install_plain_sheet(scene, sheet_answer(), *change_requested(), correction())
+    questions = closed_sheet_questions(scene)
+    assert questions.origin["kind"] == "audit" and questions.questions[0].prompt == CORRECTION
+
+
+@pytest.mark.parametrize("between", [
+    F.audit_block("STAGE_STARTED", "2026-09-04T09:59:25Z", Stage=STAGE),
+    F.audit_block("GATE_APPROVED", "2026-09-04T09:59:25Z", Stage=STAGE),
+    F.audit_block("STAGE_COMPLETED", "2026-09-04T09:59:25Z", Stage=STAGE),
+    F.audit_block("STAGE_JUMPED", "2026-09-04T09:59:25Z", Stage="user-stories"),
+    F.audit_block("WORKFLOW_STARTED", "2026-09-04T09:59:25Z"),
+], ids=["stage_started", "gate_approved", "stage_completed", "stage_jumped", "workflow_started"])
+def test_only_the_gates_own_floors_leave_the_sheets_receipt_in_its_round(closed_sheet_scene, between):
+    scene = closed_sheet_scene
+    rewrite_audit(scene, closed_sheet_receipt(scene), *change_requested(), between, correction())
+    assert_not_audit_owned(closed_sheet_questions(scene))
+    install_plain_sheet(scene, sheet_answer(), *change_requested(), between, correction())
+    assert_not_audit_owned(closed_sheet_questions(scene))
+
+
+def test_a_sheet_the_revision_edited_keeps_ownership_after_request_changes(closed_sheet_scene):
+    """The receipt binds the sheet's bytes: a revision that changed an answer leaves it to the engine to confirm again."""
+    scene = closed_sheet_scene
+    rewrite_audit(scene, closed_sheet_receipt(scene), *change_requested(), correction())
+    path = _record_dir(scene.root) / QUESTIONS_REL
+    path.write_text(path.read_text().replace("[Answer]: A", "[Answer]: B", 1))
+    assert_not_audit_owned(closed_sheet_questions(scene))
+
+
+def _events(studio, *blocks):
+    return studio.aidlc_reader.parse_audit_shard(F.audit_text(*blocks), "s.md", 0)
+
+
+def test_the_mode_question_is_known_by_its_kind_not_its_wording(studio):
+    """aidlc-lib.ts ``isAnswerModeDecision`` (2.11.2): the Question Kind decides; without one, the three ways decide."""
+    R = studio.aidlc_reader
+    kinded, own, legacy = _events(
+        studio,
+        decision(Decision="How would you like to answer the questions?", Options="Guide me,I'll edit the file,Chat",
+                 **{"Question Kind": "answer-mode"}),
+        decision(Decision="How would you like to answer support tickets?", Options="Email,Chat"),
+        decision(Decision="Pick one", Options="|Guide me|I'll edit the file|Chat"),
+    )
+    assert [R._is_answer_mode_decision(e) for e in (kinded, own, legacy)] == [True, False, True]
+    [other_kind] = _events(studio, decision(Options="Guide me,I'll edit the file,Chat",
+                                            **{"Question Kind": "learnings-note"}))
+    assert R._is_answer_mode_decision(other_kind) is False
+
+
+@pytest.mark.parametrize("recorded, expected, match", [
+    ("Q1: X. my key is password=[masked] ok", "Q1: X. my key is password=hunter2! ok", True),
+    ("Q1: X. Bearer [masked]", "Q1: X. Bearer abc123def456ghi", True),
+    ("Q1: X. password=[masked] ok", "Q1: X. password=hunter2! fine", False),
+    ("Q1: X. [masked]", "Q1: X. ", False),
+    ("Q1: A", "Q1: A", True),
+], ids=["password", "bearer", "other-words", "empty-mask", "plain"])
+def test_a_masked_receipt_still_binds_to_our_words(studio, recorded, expected, match):
+    """2.11.2 masks key-shaped text in every audit value before the shard keeps it (``maskSecretShapes``)."""
+    assert studio.aidlc_reader.recorded_details_match(recorded, expected) is match
 
 
 def test_questions_asked_in_one_turn_are_answered_together_and_resolve(sv, routes, fake_host, scene, C):
@@ -626,7 +755,7 @@ def test_questions_asked_in_one_turn_are_answered_together_and_resolve(sv, route
     receipt = submit_ok(sv, routes, fake_host, card, wire, batch_payload(["A", "B"], ["A"]))
     assert receipt["wire_text"] == wire
     turn_reported(sv, routes, fake_host, scene, card, receipt, wire)
-    answer_on_disk(scene, Details="Q1: c1, c2\\nQ2: Nothing to add")
+    answer_on_disk(scene, Details="Q1: c1, c2; Q2: Nothing to add")
     row = reconcile(sv, card)
     assert row["status"] == "ResolvedNoTransition"
     assert row["resolution_json"]["reason"] == "question_answered", row["resolution_json"]["reason"]
@@ -705,11 +834,23 @@ def test_the_ritual_card_sends_its_answers_in_the_order_asked(sv, routes, fake_h
     assert receipt["wire_text"] == wire
 
 
-def test_a_row_between_two_decisions_leaves_only_the_newest_asked(closed_sheet_scene):
+def test_a_row_the_engines_menu_does_not_read_keeps_both_questions_open(closed_sheet_scene):
+    """aidlc-lib.ts ``openDecisionMenu`` reads only decision and answer rows: a file write between two questions (2.11.2
+    writes a question holding quotes to a file first) leaves both open, and one reply answers both."""
     scene = closed_sheet_scene
     rewrite_audit(scene, closed_sheet_receipt(scene),
                   decision("2026-09-04T09:59:20Z", Decision="Older question?", Options="Yes,No"),
                   F.audit_block("ARTIFACT_UPDATED", "2026-09-04T09:59:25Z", Stage=STAGE), decision())
+    questions = closed_sheet_questions(scene)
+    assert [q.prompt for q in questions.questions] == ["Older question?", PROMPT]
+    assert questions.origin["batch_size"] == 2 and questions.unsupported_pending_count == 0
+
+
+def test_an_answer_between_two_decisions_leaves_only_the_newest_asked(closed_sheet_scene):
+    scene = closed_sheet_scene
+    rewrite_audit(scene, closed_sheet_receipt(scene),
+                  decision("2026-09-04T09:59:20Z", Decision="Older question?", Options="Yes,No"),
+                  F.audit_block("QUESTION_ANSWERED", "2026-09-04T09:59:25Z", Stage=STAGE, Details="Yes"), decision())
     questions = closed_sheet_questions(scene)
     assert [q.prompt for q in questions.questions] == [PROMPT]
     assert questions.unsupported_pending_count == 0
@@ -1569,12 +1710,27 @@ def test_a_checkpoint_receipt_closes_its_sheet_after_a_mode_answer_too(closed_sh
 
 def test_the_mode_question_and_closing_rows_mirror_the_bundled_engine(C, studio):
     lib = (Path(__file__).resolve().parents[1] / "payload/aidlc-kiro/.kiro/tools/aidlc-lib.ts").read_text("utf-8")
-    assert f'export const ANSWER_MODE_QUESTION_PREFIX = "{C.ANSWER_MODE_QUESTION_PREFIX}";' in lib
     start = lib.index("export const ANSWER_MODE_LABELS")
     assert re.findall(r'"([^"]+)"', lib[start:lib.index("};", start)]) == list(C.ANSWER_MODE_LABELS)
     start = lib.index("export const DECISION_CLOSING_EVENTS")
     engine = set(re.findall(r'"([A-Z_]+)"', lib[start:lib.index("]);", start)]))
     assert engine and studio.aidlc_reader._DECISION_CLOSING_EVENTS == engine
+    # 2.11.2 names its own questions by kind, and a choice list may be `|`-separated (``optionsList``).
+    for name, value in (("QUESTION_KIND_FIELD", C.AUDIT_QUESTION_KIND_FIELD),
+                        ("ANSWER_MODE_QUESTION_KIND", C.ANSWER_MODE_QUESTION_KIND),
+                        ("LEARNINGS_NOTE_QUESTION_KIND", C.LEARNINGS_NOTE_QUESTION_KIND),
+                        ("ASSUMPTION_CONFIRMATION_QUESTION_KIND", C.ASSUMPTION_CONFIRMATION_QUESTION_KIND),
+                        ("LEARNINGS_CORRECTION_ASK", C.LEARNINGS_CORRECTION_ASK),
+                        ("LEARNINGS_NOTE_QUESTION", C.LEARNINGS_ADD_PROMPTS[0]),
+                        ("LEARNINGS_KEEP_NONE", C.LEARNINGS_KEEP_NONE_LABEL)):
+        assert f'export const {name} = "{value}";' in lib, name
+    for name, values in (("LEARNINGS_CORRECTION_CHOICES", C.LEARNINGS_CORRECTION_CHOICES),
+                         ("LEARNINGS_NOTE_CHOICES", C.LEARNINGS_NOTE_CHOICES)):
+        assert f"export const {name} = [{', '.join(f'{chr(34)}{v}{chr(34)}' for v in values)}] as const;" in lib, name
+    assert 'value.startsWith("|") ? value.slice(1).split("|") : value.split(",")' in lib
+    assert studio.aidlc_reader.audit_options_list("|Yes, for this project|Yes, for the team|No") == list(
+        C.LEARNINGS_CORRECTION_CHOICES)
+    assert studio.aidlc_reader.audit_options_list(" Guide me, I'll edit the file,Chat") == list(C.ANSWER_MODE_LABELS)
 
 
 def test_an_answered_plain_sheet_with_a_newer_ritual_reaches_the_api(sv, routes, fake_host, scene):
@@ -1651,3 +1807,57 @@ def test_summary_hash_scopes_mirror_the_bundled_engine(C):
     current = re.search(r'SUMMARY_CONFIRMATION_HASH_SCOPE = "([^"]+)"', lib).group(1)
     legacy = re.findall(r'"([^"]+)"', re.search(r"LEGACY_SUMMARY_CONFIRMATION_HASH_SCOPES[^=]*= \[([^\]]*)\]", lib).group(1))
     assert set(C.SUMMARY_CONFIRMATION_HASH_SCOPES) == {current, *legacy}
+
+
+@pytest.mark.parametrize("folder, name", [
+    ("v2-feat2", "v2-feat2"), ("portal app", "portal-app"), ("Café & Co", "Cafe-Co"), ("--x--", "x"),
+    ("it's here", "it-s-here"), ("日本", ""),
+])
+def test_the_code_knowledge_base_is_keyed_by_the_engines_folder_name(studio, folder, name):
+    """aidlc-lib.ts ``folderRepoName`` (2.11.2): Studio looks for the store where the engine writes it."""
+    assert studio.aidlc_reader.folder_repo_name(folder) == name
+
+
+def test_a_chat_mode_stamp_under_an_answer_is_not_part_of_it(studio):
+    """The conductor writes "**Mode:** chat (answered <time>)" under each answer it took from the chat."""
+    text = ("## Q1. [Product owner] The problem this solves\n\nWhat problem does this solve? (select all that apply)\n\n"
+            "A. Missed deadlines\nB. Late tasks hard to spot\nX. Other (please specify)\n\n[Answer]: A, B\n"
+            "**Mode:** chat (answered 2026-11-04T06:21:09Z)\n\n## Q2. Who\n\nWho uses it?\n\nA. Me\nB. Others\n\n"
+            "[Answer]: A\n**Mode:** chat (answered 2026-11-04T06:21:09Z)\n")
+    parsed = studio.aidlc_reader.parse_questions_file(text, "q.md", "sha")
+    assert [q.answer for q in parsed.questions] == ["A, B", "A"]
+
+
+VERIFY_COMMAND = ("uv run --no-project --python 3.10 --with pytest --with pytest-cov python -m pytest --cov=tasklist "
+                  "--cov-report=term-missing --cov-fail-under=80")
+
+
+def verification_command(label=VERIFY_COMMAND):
+    """2.11.2's Construction verification command, logged as delivery-planning logged it on 2026-11-04."""
+    return decision(Decision="Use this command to verify each completed Unit?", Options="Approve,Request Changes",
+                    Checkpoint="Construction Verification Command", **{
+                        "Command SHA-256": "95fa7a8744772f569975ddfb57710e65df96d299513cd7b82726680462eeea18",
+                        "Command Label": label})
+
+
+def test_the_verification_command_card_shows_the_command_it_approves(sv, routes, fake_host, scene):
+    """The card asked "Use this command to verify each completed Unit?" with only Approve / Request Changes."""
+    install_closed_sheet(scene)
+    rewrite_audit(scene, closed_sheet_receipt(scene), verification_command())
+    card = question_card(sv, routes, fake_host, scene)
+    [question] = card["evidence"]["questions"]["questions"]
+    assert question["context"] == f"```sh\n{VERIFY_COMMAND}\n```"
+    assert [o["text"] for o in question["options"]] == ["Approve", "Request Changes"]
+
+
+def test_a_command_holding_backticks_gets_a_longer_fence(closed_sheet_scene):
+    scene = closed_sheet_scene
+    rewrite_audit(scene, closed_sheet_receipt(scene), verification_command("echo ```x``` && pytest"))
+    [question] = closed_sheet_questions(scene).questions
+    assert question.context == "````sh\necho ```x``` && pytest\n````"
+
+
+def test_a_decision_naming_no_command_keeps_an_empty_context(closed_sheet_scene):
+    scene = closed_sheet_scene
+    rewrite_audit(scene, closed_sheet_receipt(scene), decision())
+    assert closed_sheet_questions(scene).questions[0].context == ""

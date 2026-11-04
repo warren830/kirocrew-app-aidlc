@@ -73,6 +73,11 @@ OWNERSHIP_RULES: list[tuple[str, str]] = [
     # let an upgrade overwrite the file and silently re-enable plugins the user
     # disabled.
     (".kiro/tools/data/harness.json", "merge"),
+    # 2.11.2 moved the skill's two generated tables (``stage-table``, ``scope-table``) out of SKILL.md into this file,
+    # which ``replaceGeneratedRegion`` rewrites in place (``gen scope-table``, ``plugin select``, ``config``). The
+    # engine routes from the compiled grid and graph, never from it, so an upgrade that overwrites it loses at most a
+    # regenerated row until the next pass: ``framework-mutable`` reports the drift as the engine's, not a conflict.
+    (".kiro/skills/aidlc/tables.md", "framework-mutable"),
     (".kiro/agents/", "framework-mutable"),
     (".kiro/", "framework"),
 ]

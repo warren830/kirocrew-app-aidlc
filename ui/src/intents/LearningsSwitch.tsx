@@ -1,18 +1,20 @@
 /**
- * Turn AI-DLC's learnings ritual off, or back on, for one intent (`CeremonySwitch`).
+ * Turn AI-DLC's learnings step off, or back on, for one intent (`CeremonySwitch`).
  *
- * The ritual (stage-protocol-learnings.md §13) asks before every stage's approval which of the agent's diary notes to
- * keep and whether the person has anything to add: two questions per stage, every stage. The setting is
- * `- **Learnings**: on (from scope feature)` in the intent's state file. A person turns it off by typing
- * `/aidlc --learnings off` with nothing beside it. AI-DLC counts the ritual as its own, not a decision of the
- * person's, so the prompt hook does not apply it: it records the turn as a command, answering no open question, and
- * forwards it to the conductor's `next`, whose setter writes the line (`off (set by a command)`). Typed beside other
- * words it is a flag of new work instead, so it is never folded into a learnings question's reply; a learnings
- * question already open stays open, and AI-DLC still records the answer to it.
+ * The step (stage-protocol-learnings.md §13) asks, from AI-DLC 2.11.2, only when the person corrected the agent in a
+ * stage: before that stage's approval, "You asked me to …. Keep that for next time?" once per correction. Records
+ * from before 2.11.2 hold its old pair, which notes to keep and whether there is anything to add, at every stage. The
+ * setting is `- **Learnings**: on (from scope feature)` in the intent's state file. A person turns it off by typing
+ * `/aidlc --learnings off` with nothing beside it. The prompt hook applies nothing: it records the turn as a command,
+ * answering no open question, and hands the conductor `next --learnings off`, whose `config set` writes the line
+ * (`off (set by you)`). Typed beside other words it is a flag of new work instead, so it is never folded into a
+ * learnings question's reply; a learnings question already open stays open, and AI-DLC still records the answer.
  */
 
 import type { ActionCard, IntentSummary, Question } from '../lib/types'
-import { LEARNINGS_ADD_PROMPTS, LEARNINGS_KEEP_NONE_LABEL } from '../lib/enums.generated'
+import {
+  LEARNINGS_ADD_PROMPTS, LEARNINGS_CORRECTION_ASK, LEARNINGS_CORRECTION_CHOICES, LEARNINGS_KEEP_NONE_LABEL,
+} from '../lib/enums.generated'
 import {
   CeremonySwitch, cardCeremonySwitchBlockedReason, ceremonySwitchBlockedReason, ceremonySwitchText,
   type CeremonySwitchProps,
@@ -26,11 +28,23 @@ export function learningsSwitchText(value: 'on' | 'off'): string {
 }
 
 /**
- * Is this one of the ritual's own questions? The keep question opens with the engine's "Keep none of these", the add
- * question is asked in one of its two spellings, and a keep question asked by id carries the diary's candidates.
+ * AI-DLC 2.11.2's learnings question about one correction the person made: "You asked me to …. Keep that for next
+ * time?", single choice, with exactly Yes, for this project / Yes, for the team / No.
+ */
+export function isLearningsCorrectionQuestion(question: Pick<Question, 'prompt' | 'options'>): boolean {
+  return question.prompt.trimEnd().endsWith(` ${LEARNINGS_CORRECTION_ASK}`)
+    && question.options.length === LEARNINGS_CORRECTION_CHOICES.length
+    && question.options.every((option, position) => option.text === LEARNINGS_CORRECTION_CHOICES[position])
+}
+
+/**
+ * Is this one of the step's own questions? 2.11.2 asks one per correction (`isLearningsCorrectionQuestion`). Records
+ * from before it hold the old two: the keep question opens with the engine's "Keep none of these", the add question
+ * is asked in one of its two spellings, and a keep question asked by id carries the diary's candidates.
  */
 export function isLearningsQuestion(question: Pick<Question, 'prompt' | 'options' | 'learning_candidates'>): boolean {
-  return (question.learning_candidates?.length ?? 0) > 0
+  return isLearningsCorrectionQuestion(question)
+    || (question.learning_candidates?.length ?? 0) > 0
     || ADD_PROMPTS.has(question.prompt.trim().toLowerCase())
     || question.options.some((option) => option.text === LEARNINGS_KEEP_NONE_LABEL)
 }

@@ -591,6 +591,7 @@
       "pending_checkpoint": "summary_confirmation",
       "pending_count": 4,
       "plan_approval": null,
+      "preamble": "Stage: `requirements-analysis` · Depth: Minimal · Scope: `poc`\n\n上游依据：`ideation/intent-capture/intent-statement.md`（含 `## Post-approval Amendment`）、`codekb/DevDelta/business-overview.md`、`codekb/DevDelta/architecture.md`、`codekb/DevDelta/code-structure.md`。\n\n---",
       "questions": [
        {
         "answer": null,

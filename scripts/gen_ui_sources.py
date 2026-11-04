@@ -138,7 +138,7 @@ def gen_enums() -> str:
         + ", ".join(ts_string(v) for v in C.TERMINAL_ACTION_STATUS)
         + "]",
         "",
-        f"export const ACCEPT_AS_IS_MIN_ATTEMPT = {C.ACCEPT_AS_IS_MIN_ATTEMPT}",
+        f"export const ACCEPT_AS_IS_REVISION_CYCLES = {C.ACCEPT_AS_IS_REVISION_CYCLES}",
         f"export const DEEP_LINK_BASE = {ts_string(C.DEEP_LINK_BASE)}",
         "/** The name `app.json` installs this tree under: running as it, Studio is not a side copy. */",
         f"export const MANIFEST_APP_NAME = {ts_string(C.APP_NAME)}",
@@ -158,6 +158,11 @@ def gen_enums() -> str:
         + ", ".join(ts_string(v) for v in C.LEARNINGS_ADD_PROMPTS)
         + "]",
         f"export const LEARNINGS_KEEP_NONE_LABEL = {ts_string(C.LEARNINGS_KEEP_NONE_LABEL)}",
+        "/** 2.11.2's learnings question, one per correction: \"You asked me to …. Keep that for next time?\" */",
+        f"export const LEARNINGS_CORRECTION_ASK = {ts_string(C.LEARNINGS_CORRECTION_ASK)}",
+        "export const LEARNINGS_CORRECTION_CHOICES: readonly string[] = ["
+        + ", ".join(ts_string(v) for v in C.LEARNINGS_CORRECTION_CHOICES)
+        + "]",
         "",
     ]
     return "\n".join(lines)

@@ -76,6 +76,11 @@ _EXTRA_AUDIT_EVENTS: tuple[str, ...] = (
     "CONSTRUCTION_POLICY_RECORDED", "GUARD_DISABLED", "GUARD_POLICY_SET", "GUARD_RESTORED", "GUARD_STOOD_ASIDE",
     "PLAN_APPROVAL_OVERRIDDEN", "SOURCE_COMMITTED", "VERIFICATION_COMMAND_RECORDED", "WORKFLOW_ARCHIVED",
     "WORKFLOW_UNARCHIVED",
+    # AI-DLC 2.11.2: host turns, subagent dispatch, checks that could not run, amended outputs, blocked moves, review
+    # provenance, definition changes and the repositories or checkouts a piece of work covers.
+    "HOST_TURN", "SUBAGENT_DISPATCHED", "SENSOR_COULD_NOT_RUN", "STAGE_OUTPUT_AMENDED", "STATE_TRANSITION_BLOCKED",
+    "STAGE_RULES_BLOCKED", "REVIEW_VERDICT_DICTATED", "STAGE_DEFINITION_CHANGED", "SOURCE_WORK_NOT_FOUND",
+    "INTENT_REPOS_CHANGED", "INTENT_CHECKOUTS_CHANGED",
 )
 
 #: Every event with an ``audit.<EVENT>`` key, derived from the engine taxonomy so the catalog cannot lag it.
@@ -86,7 +91,8 @@ AUDIT_EVENTS: tuple[str, ...] = tuple(
 _AUDIT_EVENT_SET = frozenset(AUDIT_EVENTS)
 UNKNOWN_AUDIT_MESSAGE_KEY = "audit.unknown_event"
 
-_ATTENTION_AUDIT_EVENTS = frozenset({C.ERROR_EVENT, "SENSOR_FAILED"})
+_ATTENTION_AUDIT_EVENTS = frozenset({C.ERROR_EVENT, "SENSOR_FAILED", "SENSOR_COULD_NOT_RUN", "STATE_TRANSITION_BLOCKED",
+                                     "STAGE_RULES_BLOCKED", "REVIEW_VERDICT_DICTATED"})
 
 #: Per-value cap for an audit field in ``params``: a ``Feedback`` value has no bound, and the full block is in
 #: ``raw`` for the Evidence drawer.

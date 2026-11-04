@@ -37,12 +37,12 @@ from . import security
 from .aidlc_reader import (
     PresenceBaseline, audit_question_accepts_text, ceremony_setting, file_questions_support_forms, is_audit_text_label,
 )
-from .consistency import ACTION_STORED_FINDING_CODES, RepoFacts
+from .consistency import ACTION_STORED_FINDING_CODES, FINDING_SEVERITIES, RepoFacts
 from .engine import CursorReadback, conversation_bun
 from .errors import IllegalTransition, StaleGeneration, StudioError
 from .projection import (
     SEED_SEVERITY, SEVERITY_RANK, UNCERTAIN_STATUSES, dedupe_key, priority_group_for, queue_type_for,
-    plan_session_stale, run_unavailable_reason,
+    plan_session_stale, reply_excerpt, run_unavailable_reason,
 )
 from .repo_registry import RepoRecord
 from .sessions import busy_reasons
@@ -587,7 +587,7 @@ def _answers_wire_text(payload: Mapping[str, Any], questions: "QuestionsFile | N
 
     text_input = audit_question_accepts_text(questions)
     batch = questions.origin is not None and int(questions.origin.get("batch_size") or 1) > 1
-    texts: list[tuple[int, str]] = []
+    texts: list[tuple[int, str, str]] = []
     for question in pending:
         answer = supplied[question.index]
         letters = answer.get("option_letters") or []
@@ -630,19 +630,21 @@ def _answers_wire_text(payload: Mapping[str, Any], questions: "QuestionsFile | N
         if len(text) > C.MAX_ANSWER_CHARS:
             _refuse("too_large", f"answer {question.index} is longer than {C.MAX_ANSWER_CHARS} characters",
                     index=question.index, cap=C.MAX_ANSWER_CHARS)
-        texts.append((question.index, text))
+        texts.append((question.index, getattr(question, "label", None) or f"Q{question.index}", text))
 
     # The engine's mode question is still open beside the file: this reply chooses Chat as well, and says so, or the
     # conductor records the answers as the mode and logs a question after the reply that no answer can then close.
     mode = C.WIRE_ANSWER_MODE_CHAT_NOTE if questions.origin is None and getattr(
         questions, "answer_mode_pending", None) else ""
     if len(texts) == 1:
-        return texts[0][1] + mode
+        return texts[0][2] + mode
     if not batch and not grouped_enabled:
         _refuse("grouped_answers_unavailable", "answering several questions in one prompt is not verified yet",
-                pending=[index for index, _ in texts], reason="s1_s2_unverified")
-    lines = C.WIRE_ANSWER_JOINER.join(C.WIRE_ANSWER_LINE.format(index=index, answer=text) for index, text in texts)
-    # An audit batch is one engine question expecting one reply (A37): no file mapping is involved.
+                pending=[index for index, _, _ in texts], reason="s1_s2_unverified")
+    # An audit batch is one engine menu expecting one reply (A37), in the engine's own one-line form; a file's answers
+    # go one per line, each to its own [Answer] tag.
+    joiner = C.WIRE_AUDIT_ANSWER_JOINER if batch else C.WIRE_ANSWER_JOINER
+    lines = joiner.join(C.WIRE_ANSWER_LINE.format(label=label, answer=text) for _, label, text in texts)
     return lines + (C.WIRE_AUDIT_GROUPED_ANSWER_SUFFIX if batch else mode + C.WIRE_GROUPED_ANSWER_SUFFIX)
 
 
@@ -1002,9 +1004,11 @@ class HumanActionBroker:
         if decision not in HUMAN_LANE_DECISIONS:
             _refuse("invalid_decision", f"{decision!r} is not submitted through the human lane",
                     decision=decision, lane=lane_for(decision))
-        if decision == "accept_as_is" and int(rec.captured.stage_attempt or 1) < C.ACCEPT_AS_IS_MIN_ATTEMPT:
-            _refuse("invalid_decision", "Accept as-is only exists after three rejection cycles", decision=decision,
-                    stage_attempt=rec.captured.stage_attempt, min_attempt=C.ACCEPT_AS_IS_MIN_ATTEMPT)
+        if decision == "accept_as_is" and decision not in (rec.card_meta.get("decisions") or ()):
+            # Only the gate the engine offers it on: from the third change request there (stage_revision_cycles).
+            _refuse("invalid_decision", "Accept as-is only exists after three change requests at this gate",
+                    decision=decision, stage_attempt=rec.captured.stage_attempt,
+                    min_cycles=C.ACCEPT_AS_IS_REVISION_CYCLES)
         setting = rec.card_meta.get("setting_value") if rec.type in C.CEREMONY_SWITCHES else None
         if rec.type in C.CEREMONY_SWITCHES and payload.get("value") != setting:
             # The card was confirmed as one request: the other value is a different card, never this one's payload.
@@ -1210,7 +1214,7 @@ class HumanActionBroker:
         if receipt.get("ok") is not True:
             _refuse("delivery_ack_invalid", "a delivered report must carry the host's ok receipt",
                     receipt=dict(receipt))
-        now, queued, timeout = self._clock.iso(), bool(receipt.get("queued")), self._turn_timeout()
+        now, queued, timeout = self._clock.iso(), bool(receipt.get("queued")), self._turn_timeout(rec.slot_key)
         started = "queued_at" if queued else "turn_started_at"
         return await self._transition(
             rec, "Delivered", reason="delivery_report_delivered",
@@ -1583,6 +1587,7 @@ class HumanActionBroker:
         evidence = {key: rec.evidence.get(key) for key in EVIDENCE_SNAPSHOT_KEYS}
         intent = {"intent_dir": rec.intent_dir, "intent_key": rec.intent_key, "slug": rec.intent_dir,
                   "uuid": rec.intent_uuid, "title": None}
+        summary_message: dict | None = None
         if snap is not None:
             # `summarize` owns the slug/title rules, so the card names the intent exactly as the rail does.
             summary = self._projection.summarize(snap)
@@ -1599,11 +1604,15 @@ class HumanActionBroker:
                                                  stage=rec.stage, unit=_gate_unit(rec)).to_json()
                 evidence.update({key: live.get(key) for key in LIVE_REFRESHED_EVIDENCE_KEYS})
                 stage_ref = self._projection.stage_ref(snap, rec.stage, unit=_gate_unit(rec)) or stage_ref
+                if rec.type == "question":
+                    summary_message = self._summary_message(live.get("questions"), slot)
         evidence.update(presence_baseline=_plain(rec.presence_baseline), presence=rec.evidence.get("presence"),
                         cursor_readback=_plain(rec.cursor_readback))
         if rec.type == "missing_input":
             # The question a chat-only reply card answers; only that card carries it (seeded, not live).
             evidence["conversation_reply"] = rec.evidence.get("conversation_reply")
+        elif summary_message is not None:
+            evidence["conversation_reply"] = summary_message
         # Every §2.11 key has its kind of empty value: the UI type has no optional members.
         if not isinstance(evidence.get("audit"), Mapping):
             evidence["audit"] = {}
@@ -1663,6 +1672,23 @@ class HumanActionBroker:
                                                      "presence": evidence.get("presence")}),
             "submitted_answers": _submitted_answers(rec),
         }
+
+    def _summary_message(self, questions: Any, slot: Any | None) -> dict | None:
+        """The summary an open summary confirmation asks about, or ``None``.
+
+        AI-DLC writes that summary only in the conversation: the file's section holds the question and its two
+        answers, never the summary, so a card that showed the file alone asked the person to confirm text they
+        could not see there. It is the newest message of an idle conversation when that message is AI-DLC's, the
+        same reading a conversation-reply card quotes, and it is never stored: what was confirmed is the file's
+        recorded answer, and an older card must not quote a later message.
+        """
+        if (not isinstance(questions, Mapping) or questions.get("pending_checkpoint") != "summary_confirmation"
+                or questions.get("pending_count") or slot is None
+                or C.attr(slot, "running", False) or C.attr(slot, "queue_depth", 0)):
+            return None
+        rows = self._host.recent_rows(str(C.attr(slot, "key", "") or ""), since_ts="",
+                                      roles=("user", "queued", "assistant"), limit=1)
+        return reply_excerpt(rows[0]) if rows and rows[0].role == "assistant" else None
 
     def _offered_decisions(self, rec: ActionRecord, meta: Mapping[str, Any]) -> list[dict[str, Any]]:
         """What this card may do right now. An uncertain delivery offers the uncertain vocabulary, not the gate
@@ -1793,8 +1819,11 @@ class HumanActionBroker:
             _refuse("action_stale", "the captured audit question is no longer provably pending",
                     fields=["question_digest"])
 
-    def _turn_timeout(self) -> int:
+    def _turn_timeout(self, slot_key: str | None = None) -> int:
+        """The limit the host runs this conversation's turns under (its own, else the global one)."""
         try:
+            return int(self._host.turn_timeout_secs(slot_key))
+        except TypeError:  # a host bridge from before per-conversation limits
             return int(self._host.turn_timeout_secs())
         except Exception:  # the host owns this value; a missing accessor must not fail a delivery
             return int(C.PROCESSING_DEADLINE_CAP_SECS)
@@ -1929,9 +1958,26 @@ def _merge_findings(stored: Any, fresh: Any) -> list[Any]:
     for item in stored if isinstance(stored, list) else []:
         code = item.get("code") if isinstance(item, Mapping) else item
         if isinstance(code, str) and code in ACTION_STORED_FINDING_CODES and code not in codes:
-            out.append(item)
+            out.append(_stored_finding_view(code, item))
             codes.add(code)
     return out
+
+
+def _stored_finding_view(code: str, item: Any) -> dict[str, Any]:
+    """A stored finding in the card's finding shape. The reconciler stores only ``{code, params}``; shown as it was,
+    the card's findings block read its missing ``evidence`` and the whole Action Center failed to render (2026-11-04,
+    a ``human_presence_anomaly`` on an answered question)."""
+    raw = item if isinstance(item, Mapping) else {}
+    params = raw.get("params")
+    evidence = raw.get("evidence")
+    return {
+        "code": code,
+        "severity": raw.get("severity") if raw.get("severity") in ("blocking", "warn", "info")
+        else FINDING_SEVERITIES.get(code, "blocking"),
+        "message_key": raw.get("message_key") or f"finding.{code}",
+        "params": dict(params) if isinstance(params, Mapping) else {},
+        "evidence": list(evidence) if isinstance(evidence, list) else [],
+    }
 
 
 def _finding_codes(evidence: Mapping[str, Any]) -> set[str]:

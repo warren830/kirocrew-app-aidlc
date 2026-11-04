@@ -368,12 +368,83 @@ describe('the intents inventory', () => {
     expect(screen.getByText(/It also names paths outside this repository: \/work\/notes\.md/)).toBeInTheDocument()
   })
 
+  it('keeps a multi-line command and a file write diff line by line', () => {
+    // Enterprise run, 2026-11-04: a `python3 -c` program and a "Creating sample-tasks.json" diff were shown on one
+    // line, the program's indentation and the diff's `+` lines run together.
+    const program = "python3 -c \"\nfor f in ['tw-tags']:\n    t=open('/tmp/mr/'+f+'.html').read()\n    print(t[:60])\n\""
+    const diff = '--- /private/tmp/fs/sample-tasks.json\n+++ /private/tmp/fs/sample-tasks.json\n@@ -0,0 +1,2 @@\n+[\n+]'
+    const repos = [{ repo_id: 'r_s3', label: 'local-s3', canonical_path: '/work/local-s3' }] as RepoRecord[]
+    const { unmount } = render(<I18nProvider><ApprovalWaitNotice slotKey="s1" tool="Running: python3 -c" repoId="r_s3"
+      repos={repos} toolInput={JSON.stringify({ command: program })} /></I18nProvider>)
+    const code = screen.getByText((_, el) => el?.tagName === 'CODE' && el.textContent === program)
+    expect(code).toHaveClass('studio-verbatim')
+    unmount()
+    render(<I18nProvider><ApprovalWaitNotice slotKey="s1" tool="Creating sample-tasks.json" repoId="r_s3"
+      repos={repos} toolInput={diff} /></I18nProvider>)
+    expect(screen.getByText((_, el) => el?.tagName === 'CODE' && el.textContent === diff)).toHaveClass('studio-verbatim')
+    expect(screen.getByText('Creating sample-tasks.json')).toBeInTheDocument()
+  })
+
   it('says when a waiting call stays inside its repository', () => {
     const repos = [{ repo_id: 'r_s3', label: 'local-s3', canonical_path: '/work/local-s3' }] as RepoRecord[]
     render(<I18nProvider><ApprovalWaitNotice slotKey="s1" tool="" repoId="r_s3" repos={repos}
       toolInput={JSON.stringify({ command: 'bun .kiro/tools/aidlc.ts engine now > /dev/null' })} /></I18nProvider>)
     expect(screen.getByText('It names no path outside this repository.')).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveAttribute('data-tone', 'warn')
+  })
+
+  it('offers no Allow once, and vouches for no reach, on a call shown only in part', () => {
+    // 2026-11-04: a 907-character `python3 -c` program was cut at 500, and the notice still said it named no path
+    // outside the repository and offered Allow once for what it did not show.
+    setApiRoutes({})
+    const repos = [{ repo_id: 'r_s3', label: 'local-s3', canonical_path: '/work/local-s3' }] as RepoRecord[]
+    render(<I18nProvider><ApprovalWaitNotice slotKey="s1" tool="Running: python3 -c" toolInput={'python3 -c "print(1)"'}
+      toolInputTruncated repoId="r_s3" repos={repos}
+      target={{ request_id: 'tool-1', request_mid: 'mid-7', origin: 'native' }} /></I18nProvider>)
+    expect(screen.getByText(/^This call is longer than Studio can show/)).toBeInTheDocument()
+    expect(screen.queryByText('It names no path outside this repository.')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Allow once' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument()
+  })
+
+  it('answers a native request here with the host’s own call, once, and says it was taken', async () => {
+    setApiRoutes({ ['POST /api/chat/slots/aidlc%20studio%2F1/approve']: () => ({ ok: true }) })
+    const answered = vi.fn()
+    render(<I18nProvider><ApprovalWaitNotice slotKey="aidlc studio/1" tool="" toolInput="go test ./..."
+      target={{ request_id: 'tool-1', request_mid: 'mid-7', origin: 'native' }} onAnswered={answered} /></I18nProvider>)
+    expect(screen.getByText(/^Allow once lets just this call run; Reject refuses it/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Allow once' }))
+    expect(apiCalls.filter((call) => call.path.endsWith('/approve'))).toEqual([{
+      method: 'POST', path: '/api/chat/slots/aidlc%20studio%2F1/approve',
+      body: { origin: 'native', request_id: 'tool-1', request_mid: 'mid-7', action: 'approved' },
+    }])
+    expect(await screen.findByText('Allowed once. The conversation carries on.')).toBeInTheDocument()
+    expect(answered).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: 'Allow once' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
+  })
+
+  it('rejects only this call, and reads a request answered elsewhere as gone', async () => {
+    setApiRoutes({ ['POST /api/chat/slots/s1/approve']: () => {
+      throw new StubApiError(404, { error: 'no pending approval', code: 'approval_not_pending' })
+    } })
+    render(<I18nProvider><ApprovalWaitNotice slotKey="s1" tool="" toolInput="rm -rf build"
+      target={{ request_id: 'tool-2', request_mid: 'mid-8', origin: 'native' }} /></I18nProvider>)
+    await userEvent.click(screen.getByRole('button', { name: 'Reject' }))
+    expect((apiCalls.at(-1)?.body as { action: string }).action).toBe('rejected_once')
+    expect(await screen.findByText(/^This request no longer waits/)).toBeInTheDocument()
+  })
+
+  it('leaves a sub-agent’s request, or one the host names no row for, to the conversation', () => {
+    for (const target of [{ request_id: 'a', request_mid: 'b', origin: 'coordinator' }, { request_id: 'a', origin: 'native' },
+      undefined]) {
+      const { unmount } = render(<I18nProvider><ApprovalWaitNotice slotKey="s1" tool="" toolInput="ls" target={target} />
+      </I18nProvider>)
+      expect(screen.queryByRole('button', { name: 'Allow once' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Open the conversation' })).toBeInTheDocument()
+      expect(screen.getByText(/^In the conversation, Allow once/)).toBeInTheDocument()
+      unmount()
+    }
   })
 
   it('names the intent when the wait is listed away from its row', () => {

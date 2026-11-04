@@ -434,6 +434,22 @@ def test_a_finished_workflow_carries_no_stale_directive_note(ev):
     assert "directive_state_digest_mismatch" not in _codes(ev(done, intent_dir=F.DEVDELTA_POC, directive=stale))
 
 
+def test_an_open_gate_carries_no_stale_directive_note(ev):
+    """Opening the gate rewrote the state after the note; AI-DLC writes a new note only after the person answers,
+    so the note would be on every gate card (enterprise run, 2026-11-04). Mid-stage it is still reported."""
+    running = F.real_state(F.DEVDELTA, F.DEVDELTA_POC).replace("**Status**: Completed", "**Status**: Running", 1)
+    stage = json.loads((F.state_path(F.DEVDELTA, F.DEVDELTA_POC).parent / ".aidlc-active-directive.json")
+                       .read_text("utf-8"))["stage"]
+    row = f"- [x] {stage} — EXECUTE"
+    assert row in running
+    for mark, reported in (("?", False), ("-", True)):
+        state = running.replace(row, f"- [{mark}] {stage} — EXECUTE", 1)
+        stale = _directive_of(F.DEVDELTA, F.DEVDELTA_POC, state)
+        assert stale.matches_state is False
+        codes = _codes(ev(state, intent_dir=F.DEVDELTA_POC, directive=stale))
+        assert ("directive_state_digest_mismatch" in codes) is reported, (mark, codes)
+
+
 def test_phase_stage_disagreement(ev, make_facts, gate_state):
     """The real 2.1.1 record is the positive; the real v7 in-flight record is the negative."""
     facts = make_facts(engine_state_version=7)

@@ -180,6 +180,54 @@ async def test_start_degrades_instead_of_failing_when_the_payload_manifest_is_un
         await services.stop()
 
 
+class _RecordingHealth:
+    def __init__(self) -> None:
+        self.marks: list[str] = []
+
+    def mark_degraded(self, reason: str) -> None:
+        self.marks.append(reason)
+
+
+@aio
+async def test_only_a_start_that_failed_is_reported_to_the_host_as_degraded(
+        studio, fake_ctx, fake_host, clock, ids, fake_bun, fake_git, tmp_path):
+    """KiroCrew 0.11 answers a degraded mark by stopping the app and starting it again: a payload no restart repairs
+    stays Studio's own issue, and only a start that raised asks for the retry."""
+    fake_ctx.health = _RecordingHealth()
+    services = build(studio, fake_ctx, clock, ids, fake_bun, fake_git, tmp_path / "no-payload-here", lambda path: None)
+    try:
+        await services.start()
+        assert "payload_manifest_unreadable" in services.startup_issues
+        assert fake_ctx.health.marks == []
+    finally:
+        await services.stop()
+
+    services = build(studio, fake_ctx, clock, ids, fake_bun, fake_git, APP_ROOT, lambda path: "1.1.42")
+
+    async def boom():
+        raise RuntimeError("reconcile failed")
+
+    services.reconciler.startup = boom
+    try:
+        await services.start()
+        assert fake_ctx.health.marks == ["aidlc-studio: startup_failed:RuntimeError"]
+    finally:
+        await services.stop()
+
+
+@aio
+async def test_a_second_start_keeps_the_running_services(studio, fake_ctx, fake_host, clock, ids, fake_bun, fake_git):
+    """A gateway boot may run the app's startup again on the container it already started: one store, one loop."""
+    services = build(studio, fake_ctx, clock, ids, fake_bun, fake_git, APP_ROOT, lambda path: "1.1.42")
+    try:
+        await services.start()
+        first, started = list(services.background), services.started_at
+        await services.start()
+        assert services.background == first and services.started_at == started
+    finally:
+        await services.stop()
+
+
 # ---- diagnostics ---- #
 
 _DIAGNOSTICS_KEYS = {

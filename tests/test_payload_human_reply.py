@@ -1,9 +1,10 @@
 """The bundled engine records a KiroCrew reply as the choice the person sent, in their own words.
 
 KiroCrew hands kiro-cli every turn inside its own context frame. AI-DLC 2.11 reads the person's turn after the
-last `[CURRENT USER REQUEST]` header (`hostEnvelopeTurnText`), keeps their exact words, and records a choice
-only for an exact pick of an offered option; any other reply is the conversation's agent to read. Studio relies
-on both: its exact replies are recorded at once, and a change request with feedback reaches the agent verbatim.
+last `[CURRENT USER REQUEST]` header (`hostEnvelopeTurnText`) and keeps their exact words; from 2.11.2 a typed reply
+at the plan question or a protected checkpoint is the conductor's to read and record ("your reply is read in any
+words against the choices shown"), so the hook keeps the words and infers no choice. Studio relies on that: its
+exact replies and a change request with feedback both reach the agent verbatim.
 These run the real payload hooks with bun, so they skip without it.
 """
 
@@ -95,7 +96,7 @@ def recorded(repo: Path, name: str = "response") -> str | None:
     return (response(repo, name) or {}).get("choice")
 
 
-@pytest.mark.parametrize(("prompt", "choice"), [
+@pytest.mark.parametrize(("prompt", "words"), [
     (framed("Approve Plan"), "Approve Plan"),
     (framed("Approve Plan", dash="—"), "Approve Plan"),
     (framed("Request Changes"), "Request Changes"),
@@ -103,10 +104,13 @@ def recorded(repo: Path, name: str = "response") -> str | None:
     # 2.11 reads every host frame, not only the dashboard's: KiroCrew scrubs the header from what it splices in.
     (framed("Approve Plan", runtime="KiroCrew cron job"), "Approve Plan"),
 ], ids=["approve", "em-dash-header", "request-changes", "unframed", "cron-frame"])
-def test_a_dashboard_reply_answers_the_plan_approval(repo, prompt, choice):
+def test_a_dashboard_reply_reaches_the_plan_approval_in_the_persons_words(repo, prompt, words):
+    """2.11.2's hook keeps that the person replied and their exact words, out of the frame; a typed reply is the
+    conductor's to read and record (2.11.0 recorded an exact label as the choice here)."""
     plan_challenge(repo)
     send(repo, prompt)
-    assert recorded(repo) == choice
+    kept = response(repo)
+    assert kept is not None and kept.get("words") == words and "choice" not in kept
 
 
 @pytest.mark.parametrize("reply", [
@@ -123,13 +127,15 @@ def test_a_reply_that_is_not_one_exact_choice_reaches_the_agent_in_the_persons_w
     assert kept is not None and kept.get("words") == reply and "choice" not in kept
 
 
-@pytest.mark.parametrize(("reply", "choice"), [
-    ("Approve", "Approve"),
-    ("1", "Approve"),
-    ("Request Changes: keep the old command", None),
-    ("Approve Plan", None),
+@pytest.mark.parametrize("reply", [
+    "Approve", "1", "Request Changes: keep the old command", "Approve Plan",
 ], ids=["approve", "number", "request-changes-with-reason", "other-label"])
-def test_a_protected_checkpoint_takes_one_exact_choice_by_label_or_number(repo, reply, choice):
+def test_a_protected_checkpoint_keeps_the_reply_for_the_conductor(repo, reply):
+    """2.11.2 reads a reply at a protected checkpoint "in any words against the choices shown": the hook keeps the
+    person's words and the message they came in, and the conductor records the choice (2.11.0 took only an exact
+    label or number here)."""
     protected_question(repo)
     send(repo, framed(reply))
-    assert recorded(repo, "protected-question-response") == choice
+    kept = response(repo, "protected-question-response")
+    assert kept is not None and kept.get("words") == reply and "choice" not in kept
+    assert [entry["words"] for entry in kept["replies"]] == [reply]

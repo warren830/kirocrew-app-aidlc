@@ -112,9 +112,10 @@ def test_the_engine_keeps_an_other_answer_as_the_persons_words(repo):
     assert out["emitted"] == "QUESTION_ANSWERED"
     [receipt] = rows(repo, "QUESTION_ANSWERED")
     assert receipt["Details"] == details
-    # The hook kept the person's reply as Studio sent it, the Other marker beside their words.
-    assert receipt["Person Reply"].startswith(
-        "Q1: X. Other (please specify): Just me: a single person who keeps a personal task list and misses deadlines")
+    # The receipt names the person's own turn that answered it: 2.11.2 keeps the reply's words in its message store,
+    # outside the committed record, and binds the answer to that message by id (2.11.0 copied them in as Person Reply).
+    [turn] = rows(repo, "HUMAN_TURN")
+    assert (turn["Origin"], receipt["Message Id"]) == ("person", turn["Message Id"])
 
     paired = json.loads(bun(repo, ".kiro/tools/aidlc.ts", "engine", "log", "answers", "--stage", STAGE).stdout)
     assert [(a["question"], a["answer"]) for a in paired["answered"]] == [("Q1-Q5 intent capture questions", details)]

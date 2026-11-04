@@ -78,7 +78,9 @@ export function DetailHeader({ card, onOpenCurrent }: DetailHeaderProps) {
   // Sent and not settled: it waits on AI-DLC now, so neither its urgency nor its age is the person's.
   const sent = card.status === 'Delivering' || card.status === 'Delivered'
   const reviewClass = card.evidence.review?.review_class ?? null
-  const revision = card.evidence.state?.revision_count ?? null
+  // This stage's own revisions (its attempt less one; a team Unit gate's attempt is that Unit's). The state file's
+  // Revision Count is workflow-global: after one stage was sent back, every later card read "revision 1".
+  const revision = card.stage && card.captured.stage_attempt != null ? card.captured.stage_attempt - 1 : null
 
   return (
     <header className="studio-detail-head">

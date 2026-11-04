@@ -53,7 +53,7 @@ export const ADVISOR_CARDLESS_KINDS: readonly AdvisorCardlessKind[] = ["plan_dra
 export const LIVE_ACTION_STATUS: readonly ActionStatus[] = ["Queued", "Delivering", "Delivered", "ReconciliationRequired", "NotDelivered", "Failed"]
 export const TERMINAL_ACTION_STATUS: readonly ActionStatus[] = ["StateChanged", "ResolvedNoTransition", "Cancelled"]
 
-export const ACCEPT_AS_IS_MIN_ATTEMPT = 4
+export const ACCEPT_AS_IS_REVISION_CYCLES = 3
 export const DEEP_LINK_BASE = "/apps/aidlc-studio-v2"
 /** The name `app.json` installs this tree under: running as it, Studio is not a side copy. */
 export const MANIFEST_APP_NAME = "aidlc-studio-v2"
@@ -65,3 +65,6 @@ export const PER_UNIT_STAGES: readonly string[] = ["functional-design", "nfr-req
  *  question's first option. A question asked in them is the ritual's. */
 export const LEARNINGS_ADD_PROMPTS: readonly string[] = ["Anything to add for next time?", "Learnings: anything to add?"]
 export const LEARNINGS_KEEP_NONE_LABEL = "Keep none of these"
+/** 2.11.2's learnings question, one per correction: "You asked me to …. Keep that for next time?" */
+export const LEARNINGS_CORRECTION_ASK = "Keep that for next time?"
+export const LEARNINGS_CORRECTION_CHOICES: readonly string[] = ["Yes, for this project", "Yes, for the team", "No"]

@@ -14,6 +14,7 @@ import json
 import os
 import re
 import time
+import unicodedata
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable, Sequence
@@ -42,8 +43,11 @@ AUDIT_DIRNAME = "audit"
 DIRECTIVE_FILENAME = ".aidlc-active-directive.json"
 #: Marker versions ``parse_directive`` trusts: 2.6.2 writes 1, 2.7.1 writes 2 and keeps an existing 1.
 DIRECTIVE_VERSIONS = frozenset({1, 2})
-#: The ``kind`` values a version-2 marker may carry; any other shape names no running stage.
-DIRECTIVE_KINDS = frozenset({"run-stage", "load-steering", "invoke-swarm"})
+#: The ``kind`` values a version-2 marker may carry; any other shape names no running stage. ``ask`` is 2.11.2's
+#: question to the person (aidlc-directive.ts ``AskDirective``): the one that names a stage and Unit, the code
+#: plan's approval (``ask_type: plan-approval``), is where the work stands while unit-major Construction keeps
+#: ``Current Stage`` on functional-design. An ask naming no stage (a scope question) still names none.
+DIRECTIVE_KINDS = frozenset({"run-stage", "load-steering", "invoke-swarm", "ask"})
 RECOVERY_FILENAME = ".aidlc-recovery.md"
 GOAL_STOP_FILENAME = ".aidlc-goal-stop"
 HUMAN_TURN_FILENAME = ".aidlc-human-turn"
@@ -149,7 +153,7 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _VERDICT_RE = re.compile(r"^\s*\*{0,2}Verdict\*{0,2}\s*:\s*\*{0,2}\s*(NOT-READY|READY)\b", re.IGNORECASE)
 _REVIEW_HEADING_RE = re.compile(r"^##\s+Review\s*$", re.IGNORECASE)
 _H2_RE = re.compile(r"^##(?!#)\s*(.*?)\s*$")
-_QUESTION_H3_RE = re.compile(r"^### Q(?:uestion)?[ \t]*(\d+)(?:[.:]|[ \t]+[—–-])?[ \t]+(.*)$")
+_QUESTION_H3_RE = re.compile(r"^### (?:[A-Z]{1,4})?Q(?:uestion)?[ \t]*(\d+)(?:[.:]|[ \t]+[—–-])?[ \t]+(.*)$")
 _QUESTION_SECTION_END_RE = re.compile(r"^#{1,6}(?:[ \t]+|$)")
 _QUESTION_CODE_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 # "(select all that apply)" is the engine's one marker (stage-protocol.md §3 Step 1); the others are spellings real
@@ -536,7 +540,8 @@ class Directive(WireRecord):
     state_sha256: str
     matches_state: bool
     #: ``None`` on version 1 (no such field); on version 2 one of ``DIRECTIVE_KINDS``, where only
-    #: ``run-stage`` and ``invoke-swarm`` (the unitless code-generation shape) execute a stage.
+    #: ``run-stage`` and ``invoke-swarm`` (the unitless code-generation shape) execute a stage, and ``ask`` waits
+    #: on the person at the stage it names.
     kind: str | None = None
     #: The multi-unit form of ``unit`` (``invoke-swarm``); empty on every version-1 marker.
     units: tuple[str, ...] = ()
@@ -1062,7 +1067,7 @@ def parse_learning_candidates(text: str) -> tuple[LearningCandidate, ...]:
 @dataclass(frozen=True, slots=True)
 class Question(WireRecord):
     _wire_keys = ("index", "prompt", "context", "options", "multi_select", "answer", "answered", "raw",
-                  "learning_candidates?", "learnings_memory?")
+                  "learning_candidates?", "learnings_memory?", "label?")
     index: int
     prompt: str
     options: tuple[QuestionOption, ...]
@@ -1075,6 +1080,8 @@ class Question(WireRecord):
     #: the diary they came from. ``None`` for every other question.
     learning_candidates: tuple[LearningCandidate, ...] | None = None
     learnings_memory: str | None = None
+    #: The file's own name for a prefixed question (``RMQ1``); ``None`` for a plain ``Q<n>``.
+    label: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1101,7 +1108,7 @@ class QuestionsFile(WireRecord):
     _wire_keys = (
         "relpath", "sha256", "questions", "summary_confirmation", "plan_approval", "assumption_confirmation?",
         "pending_count", "unsupported_pending_count", "pending_checkpoint", "source_language_hint", "origin?",
-        "answer_mode_pending?",
+        "answer_mode_pending?", "preamble?",
     )
     relpath: str
     sha256: str
@@ -1121,6 +1128,10 @@ class QuestionsFile(WireRecord):
     #: ``True`` while the engine's mode question, asked with this file, is the stage's open decision: the reply that
     #: answers the file answers it too (``answer_mode_pending``). ``None`` otherwise, and for an audit question.
     answer_mode_pending: bool | None = None
+    #: What the file says before its first question or checkpoint, title left out: data, shown as written. 2.11.2's
+    #: sheets put there what their options point at ("the outline above shows them": a user-stories sheet's story
+    #: plan). ``None`` when there is none, and for an audit question.
+    preamble: str | None = None
 
 
 # These are the bundled aidlc-log.ts / aidlc-lib.ts handshake and attempt boundaries.
@@ -1132,6 +1143,10 @@ _AUDIT_QUESTION_FLOORS = frozenset(
     ("STAGE_STARTED", "STAGE_REVISING", "STAGE_AWAITING_APPROVAL", "GATE_REJECTED",
      "STAGE_COMPLETED", "GATE_APPROVED", "WORKFLOW_STARTED", "STAGE_JUMPED")
 )
+#: The floors a stage's own gate writes: presenting it, and a change request's rejection and revision. None of them
+#: reopens the stage's answered sheet. 2.11.2's learnings step asks about the change before ``report --result revised``
+#: (stage-protocol-learnings.md "When to run"), so that question comes after them and the sheet's receipt before them.
+_AUDIT_GATE_ROUND_FLOORS = frozenset(("STAGE_AWAITING_APPROVAL", "GATE_REJECTED", "STAGE_REVISING"))
 #: aidlc-lib.ts ``DECISION_CLOSING_EVENTS``: each closes whichever decision is open.
 _DECISION_CLOSING_EVENTS = _AUDIT_QUESTION_ANSWERS | {"VERIFICATION_COMMAND_RECORDED", "CONSTRUCTION_POLICY_RECORDED"}
 
@@ -1179,6 +1194,21 @@ def _audit_question_floor(event: AuditEvent, stage: str, unit: str | None) -> bo
     return event.event in ("WORKFLOW_STARTED", "STAGE_JUMPED") or event.fields.get("Stage") == stage
 
 
+def _closes_this_round(
+    receipt: AuditEvent, floors: Sequence[AuditEvent], history: Sequence[AuditEvent], stage: str, unit: str | None,
+) -> bool:
+    """Did ``receipt`` close the sheet in the round the open decision belongs to? It did when it follows every latest
+    floor, or when only the stage's own gate floors came after it. Measured on a feature run (2026-11-04): after
+    Request changes at the market-research gate, the learnings question came after STAGE_REVISING, the sheet's summary
+    receipt came before the gate, and the question reached the queue only as a conversation reply."""
+    if all(_audit_follows(receipt, floor) is True for floor in floors):
+        return True
+    opened = _audit_frontier([
+        e for e in history if _audit_question_floor(e, stage, unit) and e.event not in _AUDIT_GATE_ROUND_FLOORS
+    ])
+    return bool(opened) and all(_audit_follows(receipt, floor) is True for floor in opened)
+
+
 def _audit_question_history(audit: AuditBundle, stage: str, unit: str | None) -> list[AuditEvent]:
     return [
         e for e in audit.events
@@ -1188,19 +1218,55 @@ def _audit_question_history(audit: AuditBundle, stage: str, unit: str | None) ->
     ]
 
 
+def folder_repo_name(folder: str) -> str:
+    """aidlc-lib.ts ``folderRepoName`` (2.11.2): a folder's name as the engine keys its code knowledge base by. A name
+    that is already a repository name stays; otherwise accents go (NFKD, combining marks dropped), every run of other
+    characters becomes ``-``, and anything before the first letter or digit and any trailing ``-`` go ("portal app" is
+    portal-app). Empty when no letter or digit is left: the caller names its fallback (``project``)."""
+    if _REPO_NAME_RE.match(folder):
+        return folder
+    marked = unicodedata.normalize("NFKD", folder)
+    text = "".join(ch for ch in marked if not unicodedata.category(ch).startswith("M"))
+    text = re.sub(r"[^A-Za-z0-9._-]+", "-", text)
+    return re.sub(r"-+$", "", re.sub(r"^[^A-Za-z0-9]+", "", text))
+
+
+def audit_options_list(text: str | None) -> list[str]:
+    """aidlc-lib.ts ``optionsList``: the choices an audit row's ``Options`` lists, in order and trimmed. A list that
+    starts with ``|`` separates its choices with ``|``, so a choice may hold a comma (2.11.2 logs every learnings
+    question that way); any other list is split on commas. Empty pieces are kept: callers judge them."""
+    value = (text or "").lstrip()
+    return [option.strip() for option in (value[1:].split("|") if value.startswith("|") else value.split(","))]
+
+
+def _question_kind(event: AuditEvent) -> str | None:
+    """The engine's own name for which of its questions a decision row is (2.11.2); ``None`` on an older row."""
+    return event.fields.get(C.AUDIT_QUESTION_KIND_FIELD)
+
+
 def _is_answer_mode_decision(event: AuditEvent) -> bool:
-    """aidlc-lib.ts ``isAnswerModeDecision``: the mode question, by the wording the protocol logs or its three ways."""
+    """aidlc-lib.ts ``isAnswerModeDecision``: its Question Kind says so, or, on a row logged before that field, it
+    offers exactly the three ways to answer. Its wording never decides: a stage's own question may start the same way
+    ("How would you like to answer support tickets?")."""
     if event.event != "DECISION_RECORDED" or "Checkpoint" in event.fields:
         return False
-    if event.fields.get("Decision", "").strip().startswith(C.ANSWER_MODE_QUESTION_PREFIX):
-        return True
+    kind = _question_kind(event)
+    if kind is not None:
+        return kind == C.ANSWER_MODE_QUESTION_KIND
 
     def plain(text: str) -> str:
         return text.strip().replace("\u2019", "'").lower()
 
-    offered = [option for option in map(plain, event.fields.get("Options", "").split(",")) if option]
+    offered = [option for option in map(plain, audit_options_list(event.fields.get("Options"))) if option]
     labels = [plain(label) for label in C.ANSWER_MODE_LABELS]
     return len(offered) == len(labels) and all(label in offered for label in labels)
+
+
+def _is_learnings_correction_question(prompt: str, labels: Sequence[str]) -> bool:
+    """2.11.2's learnings question about one correction: "You asked me to \u2026. Keep that for next time?" with exactly its
+    three choices. Single choice, and only those choices: the person's pick is the only thing the step asks."""
+    return list(labels) == list(C.LEARNINGS_CORRECTION_CHOICES) and prompt.rstrip().endswith(
+        " " + C.LEARNINGS_CORRECTION_ASK)
 
 
 def answers_mode_question(audit: AuditBundle, answer: AuditEvent, stage: str, unit: str | None) -> bool | None:
@@ -1251,12 +1317,13 @@ def audit_question_accepts_text(questions: QuestionsFile | None) -> bool:
 
 def audit_questions(
     audit: AuditBundle, record_rel: str, stage: str, unit: str | None,
-    *, generation: str | None = None,
+    *, generation: str | None = None, summary_owed: bool = True,
 ) -> QuestionsFile | None:
     """Project one provably pending main-workflow decision; audit text remains data throughout.
 
     Missing/partial history, an ambiguous frontier, hidden exact choices and malformed enums have no
-    actionable projection. A newer unusable decision still supersedes its predecessor.
+    actionable projection. A newer unusable decision still supersedes its predecessor. ``summary_owed=False``
+    (summary confirmation is off now): the summary checkpoint's own decision is owed no reply either.
     """
     if not audit.complete:
         return None
@@ -1267,6 +1334,10 @@ def audit_questions(
     if len(decisions) != 1:
         return None
     decision = decisions[0]
+    if not summary_owed and decision.fields.get("Checkpoint") == C.SUMMARY_CONFIRMATION_HEADING:
+        # Measured on an enterprise run: the summary was skipped once the setting went off, the conductor removed its
+        # section from the file, and this decision, never to be answered, came back as a card offering Looks correct.
+        return None
     floors = _audit_frontier([e for e in history if _audit_question_floor(e, stage, unit)])
     if not floors or any(_audit_follows(decision, floor) is not True for floor in floors):
         return None
@@ -1307,7 +1378,7 @@ def audit_questions(
             sort_keys=True, ensure_ascii=False,
         ))
         questions = tuple(
-            _batch_question(n, p, ls, e.raw)
+            replace(_batch_question(n, p, ls, e.raw), context=_audit_decision_context(e))
             for n, (e, (p, ls)) in enumerate(_in_asked_order(list(zip(batch, parsed))), start=1)
         )
     else:
@@ -1317,6 +1388,7 @@ def audit_questions(
                 chr(65 + i), label, len(labels) == 1 and is_audit_text_label(label),
             ) for i, label in enumerate(labels)),
             multi_select=False, answer=None, answered=False, raw=decision.raw,
+            context=_audit_decision_context(decision),
         ),)
     return QuestionsFile(
         relpath=f"{record_rel}/{AUDIT_DIRNAME}/{decision.shard}",
@@ -1325,6 +1397,18 @@ def audit_questions(
         summary_confirmation=None, plan_approval=None, pending_count=len(questions), pending_checkpoint=None,
         source_language_hint=None, origin=origin,
     )
+
+
+def _audit_decision_context(decision: AuditEvent) -> str:
+    """What an audit decision is about, when the row names it: the Construction verification command's
+    ``Command Label`` (the command the person approves for every completed Unit). Data, shown in a fence long enough
+    for any backticks it holds. Measured on a feature run (2026-11-04): the card asked "Use this command to verify each
+    completed Unit?" and showed no command."""
+    command = (decision.fields.get("Command Label") or "").strip()
+    if not command:
+        return ""
+    fence = "`" * max(3, 1 + max((len(run) for run in re.findall(r"`+", command)), default=0))
+    return f"{fence}sh\n{command}\n{fence}"
 
 
 def _is_learnings_add_prompt(prompt: str) -> bool:
@@ -1359,10 +1443,18 @@ def answer_mode_pending(
 def _batch_question(index: int, prompt: str, labels: list[str], raw: str) -> Question:
     """One question of a same-turn batch, with the choices the engine's chat offers (FORMAT-NOTES §11.8).
 
-    The ritual's two questions keep exactly the engine's labels: "anything to add?" is single choice and keeps the
-    harness's ``Other`` escape §13 names; the keep question, opened by the engine's own "Keep none of these", takes
-    any subset and nothing else. Any other row asked alongside gets Studio's "None of these" and ``Other``.
+    2.11.2's learnings question about a correction is single choice with exactly its three labels, however many
+    corrections are asked together. The 2.11.0 ritual's two questions keep exactly the engine's labels too: "anything
+    to add?" is single choice and keeps the harness's ``Other`` escape §13 named; the keep question, opened by the
+    engine's own "Keep none of these", takes any subset and nothing else. Any other row asked alongside gets Studio's
+    "None of these" and ``Other``.
     """
+    if _is_learnings_correction_question(prompt, labels):
+        return Question(
+            index=index, prompt=prompt,
+            options=tuple(QuestionOption(chr(65 + i), label, False) for i, label in enumerate(labels)),
+            multi_select=False, answer=None, answered=False, raw=raw,
+        )
     single = _is_learnings_add_prompt(prompt)
     keep = not single and C.LEARNINGS_KEEP_NONE_LABEL in labels
     texts = labels if keep else [label for label in labels if label.lower() != C.AUDIT_OTHER_LABEL.lower()]
@@ -1380,7 +1472,7 @@ def _batch_question(index: int, prompt: str, labels: list[str], raw: str) -> Que
 def _audit_decision_labels(decision: AuditEvent) -> tuple[str, list[str]] | None:
     prompt = decision.fields.get("Decision", "")
     raw_options = decision.fields.get("Options", "")
-    labels = [label.strip() for label in raw_options.split(",")]
+    labels = audit_options_list(raw_options)
     if (
         not prompt.strip() or not 1 <= len(labels) <= 26 or not all(labels)
         or len(set(labels)) != len(labels) or "[protected exact choices]" in raw_options
@@ -1391,20 +1483,45 @@ def _audit_decision_labels(decision: AuditEvent) -> tuple[str, list[str]] | None
     return prompt, labels
 
 
+#: aidlc-lib.ts ``DECISION_PAIRING_EVENTS``: the only rows the engine's question menu reads.
+_DECISION_PAIRING_EVENTS = _DECISION_CLOSING_EVENTS | {"DECISION_RECORDED", "GATE_APPROVED", "GATE_REJECTED"}
+
+
 def _same_turn_decisions(
     audit: AuditBundle, decision: AuditEvent, stage: str, unit: str | None,
 ) -> list[AuditEvent]:
-    """The unbroken run of this stage's decision rows ending at ``decision``: they were asked together."""
+    """The engine's open menu ending at ``decision`` (aidlc-lib.ts ``openDecisionMenu``): this stage's questions logged
+    since the last row that answered one, oldest first, which one reply answers together. Rows the menu does not read
+    never split it: 2.11.2 writes a question holding quotes or a ``$`` to a file first, and the write hook logs that as
+    ``ARTIFACT_CREATED`` between the questions. An answer, a gate row or a stage boundary ends it."""
     shard = sorted((e for e in audit.events if e.shard == decision.shard), key=lambda e: e.pos)
     index = next(i for i, e in enumerate(shard) if e.pos == decision.pos)
     run = [decision]
     for event in reversed(shard[:index]):
-        if event.event != "DECISION_RECORDED" or not _audit_question_scope(event, stage, unit):
+        if _audit_question_floor(event, stage, unit):
+            break
+        if event.event not in _DECISION_PAIRING_EVENTS or not _audit_question_scope(event, stage, unit):
+            continue
+        if event.event != "DECISION_RECORDED":
             break
         if (event.fields.get("Attempt Generation") or None) != (decision.fields.get("Attempt Generation") or None):
             break
         run.insert(0, event)
     return run
+
+
+def recorded_details_match(recorded: str | None, expected: str) -> bool:
+    """Is ``recorded`` (an audit row's value) our ``expected`` text as the engine writes it? 2.11.2's
+    ``renderAuditBlock`` masks anything shaped like a key or password (``maskSecretShapes``) before the shard keeps
+    it, so each ``[masked]`` in the row stands for a non-empty run of ours; every other character must be equal."""
+    if recorded is None:
+        return False
+    if recorded == expected:
+        return True
+    if C.AUDIT_SECRET_MASK not in recorded:
+        return False
+    pattern = ".+?".join(re.escape(part) for part in recorded.split(C.AUDIT_SECRET_MASK))
+    return re.fullmatch(pattern, expected, re.S) is not None
 
 
 def audit_question_answer(
@@ -1436,7 +1553,8 @@ def audit_question_answer(
     if batch:
         # The engine records the grouped reply without Studio's delivery instruction (A37).
         expected = expected.removesuffix(C.WIRE_AUDIT_GROUPED_ANSWER_SUFFIX)
-    if batch or is_audit_text_label(captured.fields.get("Options", "")):
+    offered = audit_options_list(captured.fields.get("Options"))
+    if batch or (len(offered) == 1 and is_audit_text_label(offered[0])):
         # Mirror redactProjectDirPrefix + renderAuditBlock on our known message.
         # Never unescape untrusted audit rows or weaken the question/presence binding.
         if project_dir:
@@ -1460,7 +1578,7 @@ def audit_question_answer(
             and (event.fields.get("Attempt Generation") or None) == generation
             and event.fields.get("Checkpoint") == captured.fields.get("Checkpoint")
             and event.fields.get("Questions File") == captured.fields.get("Questions File")
-            and event.fields.get("Details") == expected
+            and recorded_details_match(event.fields.get("Details"), expected)
             and event.timestamp >= since
             and _audit_follows(event, captured) is True
             and all(_audit_follows(blocker, event) is True for blocker in blockers)
@@ -1514,7 +1632,7 @@ def _closed_question_receipts(
             e for e in history if e.event == "QUESTION_ANSWERED" and _audit_question_scope(e, stage, unit)
             and (e.fields.get("Attempt Generation") or None) == generation
             and _audit_follows(decision, e) is True
-            and all(_audit_follows(e, floor) is True for floor in floors)
+            and _closes_this_round(e, floors, history, stage, unit)
         ])
         if len(answered) != 1 or not (answered[0].fields.get("Details") or "").strip():
             return None
@@ -1566,7 +1684,7 @@ def _closed_question_receipts(
             or receipt.fields.get("Checkpoint") not in checkpoint_names
             or receipt.fields.get("Details") != answer
             or _audit_follows(decision, receipt) is not True
-            or any(_audit_follows(receipt, floor) is not True for floor in floors)
+            or not _closes_this_round(receipt, floors, history, stage, unit)
         ):
             return None
         scope = receipt.fields.get("Hash Scope")
@@ -1632,6 +1750,9 @@ _CHECKPOINT_KINDS = {
 }
 
 
+_ANSWER_MODE_STAMP_RE = re.compile(r"^\*\*Mode:\*\*\s")
+
+
 def _answer_from(lines: list[str], tag_index: int, *, plain_continuation: bool = False) -> str:
     """The tag remainder plus its continuing paragraph or bullets (multi-line, FORMAT-NOTES §7, §11.8)."""
     head = C.ANSWER_TAG_RE.match(lines[tag_index])
@@ -1640,6 +1761,10 @@ def _answer_from(lines: list[str], tag_index: int, *, plain_continuation: bool =
     for line in lines[tag_index + 1:]:
         stripped = line.strip()
         if not stripped or stripped == _FRONTMATTER_FENCE or stripped.startswith("#"):
+            break
+        if _ANSWER_MODE_STAMP_RE.match(stripped):
+            # The conductor's bookkeeping under a chat-mode answer (stage-protocol §3: "the decided value, timestamp,
+            # and **Mode:** chat"), not the person's answer: shown with it, it read "A, B **Mode:** chat (answered …)".
             break
         bullet = bool(C.ANSWER_CONTINUATION_RE.match(line))
         if not bullet and (not plain_continuation or bullets):
@@ -1798,10 +1923,12 @@ def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile:
             while context_end > context_start and not raw_lines[start + context_end - 1].strip():
                 context_end -= 1
             context = "\n".join(raw_lines[start + context_start:start + context_end])
+            prefix = C.QUESTION_LABEL_PREFIX_RE.match(lines[start])
             questions.append(Question(
                 index=int(match.group(1)), prompt=prompt, options=tuple(options),
                 multi_select=_question_multi_select(prompt, body[context_start:context_end]),
                 answer=answer, answered=answered, raw="\n".join(raw_lines[start:end]).strip("\n"), context=context,
+                label=f"{prefix.group(1)}Q{int(match.group(1))}" if prefix else None,
             ))
             continue
         checkpoint_kind = _CHECKPOINT_KINDS.get(match.group(1))
@@ -1847,7 +1974,28 @@ def parse_questions_file(text: str, relpath: str, sha256: str) -> QuestionsFile:
         source_language_hint=None,
         unsupported_pending_count=unsupported_pending_count,
         assumption_confirmation=assumptions,
+        preamble=_questions_preamble(raw_lines, lines, next(
+            (start for start, kind, _ in starts if kind in ("question", "checkpoint")), None)),
     )
+
+
+def _questions_preamble(raw_lines: list[str], visible: list[str], first: int | None) -> str | None:
+    """The file's text before its first question or checkpoint, without its ``#`` title, as written. Only a file
+    with a question or checkpoint has one; a file with neither is not a questions sheet the card can show."""
+    if first is None:
+        return None
+    start = 0
+    while start < first and not visible[start].strip():
+        start += 1
+    if start < first and re.match(r"^#\s", visible[start]):
+        start += 1
+    text = "\n".join(raw_lines[start:first]).strip("\n")
+    if not text.strip():
+        return None
+    if len(text) > C.MAX_QUESTIONS_PREAMBLE_CHARS:
+        cut = text.rfind("\n", 0, C.MAX_QUESTIONS_PREAMBLE_CHARS)
+        text = text[:cut if cut > 0 else C.MAX_QUESTIONS_PREAMBLE_CHARS].rstrip() + "\n\n…"
+    return text
 
 
 def question_digest(data: bytes | None) -> str | None:
@@ -2246,6 +2394,31 @@ def stage_attempt(events: list[AuditEvent], stage: str) -> int:
     return 1 + sum(
         1 for event in events if event.event == "STAGE_REVISING" and event.fields.get("Stage") == stage
     )
+
+
+def _gate_stages(event: AuditEvent) -> list[str]:
+    """aidlc-lib.ts ``gateStagesFromBlock``: the row's ``Gate Stages`` list, else its ``Stage``."""
+    named = event.fields.get("Gate Stages")
+    if named:
+        return [value.strip() for value in named.split(",") if value.strip()]
+    stage = event.fields.get("Stage")
+    return [stage] if stage else []
+
+
+def stage_revision_cycles(events: Sequence[AuditEvent], stage: str, unit: str | None = None) -> int:
+    """aidlc-lib.ts ``stageRevisionCycles``: the person's change requests at this stage's gate (one Unit's, when a Unit
+    is named) since that gate was last approved or the stage was freshly reopened. A rejection with ``Reopen`` set to
+    anything but ``change`` (a jump or a redo) starts over, as an approval does. The engine offers Accept as-is from
+    the third (``ACCEPT_AS_IS_REVISION_CYCLES``)."""
+    cycles = 0
+    for event in sorted(events, key=lambda e: e.sort_key):
+        if event.event not in ("GATE_APPROVED", "GATE_REJECTED") or stage not in _gate_stages(event):
+            continue
+        if (event.fields.get("Unit") or None) != unit:
+            continue
+        reopen = event.fields.get("Reopen")
+        cycles = cycles + 1 if event.event == "GATE_REJECTED" and (reopen is None or reopen == "change") else 0
+    return cycles
 
 
 def evidence_digest(
@@ -2754,7 +2927,7 @@ class AidlcReader:
         recorded = dict.fromkeys(name for name in (row.repos if row is not None else ()) if _REPO_NAME_RE.match(name))
         if recorded:
             return tuple(f"{codekb}/{name}" for name in recorded)
-        name = _main_checkout_name(repo) or repo.name
+        name = folder_repo_name(_main_checkout_name(repo) or repo.name) or "project"
         moved = _moved_folder_store(repo, codekb, _json_loads(data), rows, row, name)
         return (f"{codekb}/{moved or name}",)
 
@@ -3019,8 +3192,20 @@ class AidlcReader:
             directive and directive.matches_state and directive.stage == stage
             and directive.zero_unit_run and unit is None and state.active_unit is None
         )
+        summary = ceremony_setting(state, C.SUMMARY_CONFIRMATION_FIELD)
+        summary_off = summary is not None and summary.value == "off"
 
         def file_or_audit(found: QuestionsFile) -> QuestionsFile:
+            if found.pending_checkpoint == "summary_confirmation" and summary_off:
+                # 2.11's `summaryConfirmationOwed` reads the setting as it is now: once the person turns it off, a
+                # summary already asked is owed nothing and the stage writes its files. Measured on an enterprise
+                # run, the card kept asking for `Looks correct` while AI-DLC said the step was skipped and waited
+                # on its own question in the conversation, which no card showed.
+                found = replace(found, pending_checkpoint=next((
+                    kind for kind in C.QUESTION_CHECKPOINT_KINDS
+                    if kind != "summary_confirmation" and getattr(found, kind, None) is not None
+                    and not getattr(found, kind).answered
+                ), None))
             # Pending file content owns the interaction, including unsupported answer sections
             # that require the conversation. Closed content can yield to a later audit decision
             # only with a current, file-bound checkpoint receipt.
@@ -3042,6 +3227,7 @@ class AidlcReader:
                 return found
             pending = self._with_learning_candidates(repo, space, intent_dir, stage, row, audit_questions(
                 audit, self.record_rel(space, intent_dir), stage, unit, generation=generation,
+                summary_owed=not summary_off,
             ))
             if pending is None:
                 return found
@@ -3103,7 +3289,8 @@ class AidlcReader:
             if readable:
                 return (
                     self._with_learning_candidates(repo, space, intent_dir, stage, row, audit_questions(
-                        audit, self.record_rel(space, intent_dir), stage, unit, generation=generation
+                        audit, self.record_rel(space, intent_dir), stage, unit, generation=generation,
+                        summary_owed=not summary_off,
                     )),
                     False,
                 )

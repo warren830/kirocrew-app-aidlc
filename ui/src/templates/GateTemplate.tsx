@@ -9,7 +9,8 @@
  * Three things this template deliberately does not do:
  *
  *  - **It never offers `Accept as-is` on its own.** Every control comes from `card.decisions`, which the
- *    broker only grows that entry in from the fourth revision (`ACCEPT_AS_IS_MIN_ATTEMPT`). A gate where
+ *    broker only grows that entry in from the engine's third change request at the gate
+ *    (`ACCEPT_AS_IS_REVISION_CYCLES`). A gate where
  *    Studio invented the escape hatch would let a reviewer bypass a blocker on attempt one.
  *  - **It never edits the artifact.** `Request changes` sends the reviewer's words to the canonical
  *    session (FR-ART-006); the artifact pane is the artifacts area's read-only viewer.
@@ -115,8 +116,9 @@ export function GateTemplate({ card, detail, draft, setDraft, refreshing, api, r
               error={body.error}
               anchor={route.anchor || undefined}
               headerExtra={
-                card.evidence.state && card.evidence.state.revision_count > 0 ? (
-                  <Chip mono>{t('review.iteration', { n: card.evidence.state.revision_count })}</Chip>
+                // This stage's revisions, not the workflow-global Revision Count every later stage would show.
+                (card.captured.stage_attempt ?? 1) > 1 ? (
+                  <Chip mono>{t('detail.revision', { n: (card.captured.stage_attempt ?? 1) - 1 })}</Chip>
                 ) : null
               }
             >

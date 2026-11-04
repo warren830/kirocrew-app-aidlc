@@ -4,7 +4,7 @@
 
 This guide takes you from a machine with nothing installed to a finished AI-DLC intent, and then
 describes every page of Studio. It covers **AI-DLC Studio v2** (`aidlc-studio-v2`, 2.0.0 beta), which
-bundles AI-DLC **2.11.0** and needs KiroCrew **0.8.0** or newer.
+bundles AI-DLC **2.11.2** and needs KiroCrew **0.11.0** or newer.
 
 > [!IMPORTANT]
 > **Install Bun before you do anything else.** AI-DLC's engine and the hooks inside every AI-DLC
@@ -39,7 +39,7 @@ bundles AI-DLC **2.11.0** and needs KiroCrew **0.8.0** or newer.
 | | |
 |---|---|
 | **Bun** | Required. Install it first: [Step 0](#step-0-install-bun-first) |
-| KiroCrew | 0.8.0 or newer, running |
+| KiroCrew | 0.11.0 or newer, running |
 | Platform | macOS or Linux. On Windows, run it in WSL 2: [Windows](#windows-run-it-in-wsl-2) |
 | `kiro-cli` | Signed in, as the same operating-system user that runs the gateway |
 | Kiro plan | A paid plan for the models AI-DLC expects |
@@ -327,7 +327,7 @@ managed path, who will own it, and what happens to it. Nothing has been written 
   install, with its diff. There is no force option: move the file aside yourself, or leave the repository
   as it is.
 
-Click **Install AI-DLC 2.11.0** to confirm. The transaction drawer shows each step: acquire the admin
+Click **Install AI-DLC 2.11.2** to confirm. The transaction drawer shows each step: acquire the admin
 lease, stage and verify the payload, back up, write, merge fragments, validate, commit the receipt. A
 failure restores the starting state. If the repository changed while you read the preview, nothing is
 written and the preview is re-read for you to check again.

@@ -107,10 +107,13 @@ def test_the_intent_and_its_cards_show_the_line_as_written(sv, routes, fake_host
     assert status == 200
     assert body["intent"]["disk"]["summary_confirmation"] == {"value": "off", "source": "set by you",
                                                               "line": "off (set by you)"}
+    # Off, a summary in the file is owed nothing and raises no card (test_summary_confirmation_message.py); a card
+    # shows the line as written while it is on.
+    _write_state(scene, _state("on (set by a command)"))
     (_record_dir(scene.root) / QUESTIONS_REL).parent.mkdir(parents=True, exist_ok=True)
     (_record_dir(scene.root) / QUESTIONS_REL).write_text(SUMMARY_QUESTIONS)
     card = _summary_card(sv, routes, fake_host, scene)
-    assert card["evidence"]["state"]["summary_confirmation"]["line"] == "off (set by you)"
+    assert card["evidence"]["state"]["summary_confirmation"]["line"] == "on (set by a command)"
 
 
 # --- the request: a command card, nothing sent ---

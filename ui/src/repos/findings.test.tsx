@@ -86,6 +86,22 @@ describe('the findings on a card', () => {
     ).toBeInTheDocument()
     expect(within(unknown!).getByText('some_future_check')).toBeInTheDocument()
   })
+
+  it('renders a stored finding that carries no evidence list instead of failing the whole view', () => {
+    // An answered question's card on 2026-11-04: the reconciler stored only `{code, params}`, and the Action
+    // Center failed with "Cannot read properties of undefined (reading 'length')".
+    const base = actionCard({ type: 'question' })
+    const stored = { code: 'human_presence_anomaly', severity: 'blocking', params: { human_turn_delta: 2 } }
+    const card = actionCard({
+      type: 'question',
+      evidence: { ...base.evidence, findings: [stored as unknown as Finding] },
+    })
+    render(<ConsistencyFindings card={card} title="What disagrees" />)
+
+    const [item] = Array.from(document.querySelectorAll<HTMLElement>('.studio-finding'))
+    expect(item).toHaveAttribute('data-code', 'human_presence_anomaly')
+    expect(item!.querySelector('ul')).toBeNull()
+  })
 })
 
 describe('findingCopy', () => {
