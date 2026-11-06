@@ -1489,13 +1489,17 @@ class Projection:
         recorded answer, and Construction's per-unit `UNIT_*` rows, which are how a unit of a stage
         starts and finishes — `STAGE_COMPLETED` only comes once every unit is done, so without them a
         burst in the first Construction stage stayed a failure through every later stage of the unit.
+        A swarm writes no `UNIT_*` row: its `SWARM_UNIT_CONVERGED` names the unit in `Unit name` and runs
+        with no unit selected, so it clears that unit's errors and, then, the ones naming no unit.
+        A decision logged after the errors is the conductor's halt-and-ask: it handed them to the person,
+        and the question, not Retry now, is what AI-DLC waits on.
         """
         stage = snap.stage
         workflow_boundaries = {"WORKFLOW_STARTED", "WORKFLOW_COMPLETED"}
         stage_boundaries = {
             "STAGE_STARTED", "STAGE_REVISING", "STAGE_JUMPED",
             "STAGE_COMPLETED", "STAGE_SKIPPED", "STAGE_AWAITING_APPROVAL",
-            "UNIT_STARTED", "UNIT_RESUMED", "UNIT_COMPLETED",
+            "UNIT_STARTED", "UNIT_RESUMED", "UNIT_COMPLETED", "SWARM_UNIT_CONVERGED", "DECISION_RECORDED",
             *C.RESOLUTION_EVENTS,
         }
         boundaries = [
@@ -1511,11 +1515,13 @@ class Projection:
                 return boundary_unit is None
             boundary_stage = boundary.fields.get("Stage")
             error_unit = error.fields.get("Unit") or None
-            return (
-                bool(boundary_stage)
-                and boundary_unit in ({error_unit} if error_unit else {None, snap.unit})
-                and error.fields.get("Stage") in (None, "", boundary_stage)
-            )
+            if boundary.event == "SWARM_UNIT_CONVERGED":
+                # Measured on a Feature run: a unit's `aidlc-log review` refusals, merged back from its worktree
+                # with no Stage or Unit, kept a red card up while AI-DLC asked to merge the converged unit.
+                owns = (error_unit or snap.unit) in (None, boundary.fields.get("Unit name") or None)
+            else:
+                owns = boundary_unit in ({error_unit} if error_unit else {None, snap.unit})
+            return bool(boundary_stage) and owns and error.fields.get("Stage") in (None, "", boundary_stage)
 
         scopes: dict[tuple[str | None, str | None], list[AuditEvent]] = {}
         for event in snap.audit.events:

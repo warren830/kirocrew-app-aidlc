@@ -6,7 +6,9 @@ from datetime import datetime, timedelta, timezone
 import fixtures as F
 import pytest
 
-from test_projection import ActionStub, BreakerStub, SlotStub, proj_mod, projection, repo_record  # noqa: F401
+from test_projection import (  # noqa: F401
+    ActionStub, BreakerStub, SessionStub, SlotStub, proj_mod, projection, repo_record,
+)
 
 INTENT = "260910-error-lifecycle"
 STAGE = "code-generation"
@@ -60,6 +62,9 @@ def failure(projection, snap, **overrides):
     "STAGE_COMPLETED", "GATE_APPROVED", "STAGE_SKIPPED", "STAGE_JUMPED",
     # The conductor got past the errors itself: the stage reached its gate or an answer was recorded.
     "STAGE_AWAITING_APPROVAL", "QUESTION_ANSWERED", "PLAN_APPROVAL_RECORDED",
+    # Or it halted and asked the person about them (measured on a Feature run: three refused merges, then "the
+    # merge is stuck, how should I handle it?"), and Retry now would send a turn into that question.
+    "DECISION_RECORDED",
 ])
 def test_proven_lifecycle_boundary_retires_an_older_burst(snapshot, projection, kind, bound_stage):
     barrier = event(kind, 40, **({} if kind.startswith("WORKFLOW_") else {"Stage": STAGE}))
@@ -67,7 +72,7 @@ def test_proven_lifecycle_boundary_retires_an_older_burst(snapshot, projection, 
     assert failure(projection, snap) is None
 
 
-@pytest.mark.parametrize("kind", ["STAGE_STARTED", "STAGE_COMPLETED", "WORKFLOW_COMPLETED"])
+@pytest.mark.parametrize("kind", ["STAGE_STARTED", "STAGE_COMPLETED", "WORKFLOW_COMPLETED", "DECISION_RECORDED"])
 def test_new_errors_after_a_boundary_remain_a_failure(snapshot, projection, kind):
     snap = snapshot([*errors(), event(kind, 35, **({} if kind.startswith("WORKFLOW_") else {"Stage": STAGE})),
                      *errors(seconds=(40, 50, 60), stage=STAGE)],
@@ -156,6 +161,33 @@ def test_construction_unit_progress_resolves_the_selected_units_unscoped_errors(
 def test_another_units_progress_leaves_unscoped_errors_of_the_selected_unit(snapshot, projection):
     snap = snapshot([*errors(), event("UNIT_COMPLETED", 40, Stage=STAGE, Unit="unit-b")], unit="unit-a")
     assert failure(projection, snap) is not None
+
+
+def converged(second, unit):
+    return event("SWARM_UNIT_CONVERGED", second, **{"Batch number": "1", "Unit name": unit, "Stage": STAGE})
+
+
+def test_a_converged_swarm_unit_resolves_the_errors_merged_back_with_it(snapshot, projection):
+    # Measured on a Feature run: a swarm unit's three `aidlc-log review` refusals were merged back from its worktree
+    # with no Stage or Unit, the unit converged, and AI-DLC asked in the conversation whether to merge it. The red
+    # card stood in for that question, and Retry now would have sent a turn into it.
+    snap = snapshot([event("STAGE_STARTED", 0, Stage=STAGE), *errors(),
+                     event("REVIEW_COMPLETED", 35, Stage=STAGE, Unit="unit-a"), converged(40, "unit-a"),
+                     event("SWARM_COMPLETED", 40, **{"Batch number": "1", "Converged count": "1"})])
+    asked = SlotStub(has_options=True, options=("Merge now", "Wait for review"), last_turn_ts="2026-09-10T00:00:50Z")
+    result = cards(projection, snap, slot=asked, binding=SessionStub())
+    assert [(card.type, card.reason) for card in result] == [("missing_input", "conversation_reply")]
+
+
+@pytest.mark.parametrize("rows,options,resolved", [
+    pytest.param([*errors(**UNIT_A), converged(40, "unit-a")], {}, True, id="its_own_units_errors"),
+    pytest.param([*errors(**UNIT_A), converged(40, "unit-b")], {}, False, id="not_another_units_errors"),
+    pytest.param([*errors(), converged(40, "unit-b")], {"unit": "unit-a"}, False,
+                 id="not_the_selected_units_unscoped_errors"),
+    pytest.param([converged(5, "unit-a"), *errors()], {}, False, id="not_errors_logged_after_it"),
+])
+def test_a_converged_swarm_unit_resolves_only_its_own_errors(snapshot, projection, rows, options, resolved):
+    assert (failure(projection, snapshot(rows, **options)) is None) is resolved
 
 
 @pytest.mark.parametrize("running,status", [(True, None), (False, "Delivering"), (False, "Delivered")])
