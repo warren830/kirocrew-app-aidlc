@@ -398,12 +398,14 @@ class ConsistencyEngine:
     def _unit_findings(self, snap: "IntentSnapshot") -> list[Finding]:
         """A per-unit stage whose executing unit no source names (FORMAT-NOTES §12.3)."""
         stage = (_attr(snap, "stage") or "").strip()
-        if stage not in C.PER_UNIT_STAGES or _attr(snap, "unit"):
+        if stage not in C.PER_UNIT_STAGES or _attr(snap, "unit") or _attr(snap, "gate_units", ()):
+            # An open gate over every Unit (`gate_units`) is about the whole stage, not one executing Unit.
             return []
         directive = _attr(snap, "directive")
-        if (_attr(directive, "kind") == "invoke-swarm" and _attr(directive, "matches_state", False)
-                and _attr(directive, "stage") == stage and _attr(directive, "units", ())):
-            # A swarm builds a batch of units at once and names every one; no single unit is meant to be executing.
+        if (_attr(directive, "matches_state", False) and _attr(directive, "stage") == stage
+                and _attr(directive, "units", ())):
+            # A swarm builds a batch of units at once, and a grouped Plan Approval asks about a batch at once; both
+            # name every unit, so no single unit is meant to be executing.
             return []
         units = sorted(unit for unit in (_attr(snap, "units", ()) or ()) if unit)
         if len(units) < 2:

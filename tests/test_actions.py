@@ -772,6 +772,31 @@ async def test_blocking_findings_refuse_the_decision_with_the_evidence(world, E,
 
 
 @aio
+@pytest.mark.parametrize("also", [None, "gate_without_audit_row"])
+async def test_a_missing_output_still_lets_the_person_ask_ai_dlc_to_write_it(world, E, studio, monkeypatch, also):
+    """A stage missing a declared output is what Request Changes is for: refusing it left only "acknowledge", which a
+    rescan undoes. Approval stays refused, and so does every request while anything else contradicts."""
+    def finding(code, **params):
+        return studio.consistency.Finding(code=code, severity="blocking", message_key=f"finding.{code}",
+                                          params=params, evidence=())
+    findings = [finding("missing_required_artifact", artifact="requirements")]
+    if also:
+        findings.append(finding(also))
+    monkeypatch.setattr(world.consistency, "evaluate_intent", lambda *a, **k: findings)
+    gate = await bound_card(world)
+    with refused(E, "state_inconsistent"):
+        await submit(world, gate)
+    ask = {"decision": "request_changes", "feedback": "write requirements.md"}
+    if also:
+        with refused(E, "state_inconsistent") as exc:
+            await submit(world, gate, payload=ask, wire="Request Changes: write requirements.md")
+        assert [f["code"] for f in exc.value.details["findings"]] == ["missing_required_artifact", also]
+    else:
+        receipt = await submit(world, gate, payload=ask, wire="Request Changes: write requirements.md")
+        assert (await world.broker.get(receipt.action_id)).status == "Delivering"
+
+
+@aio
 async def test_a_client_cannot_choose_the_text_that_is_sent(world, E):
     gate = await bound_card(world)
     with refused(E, "invalid_decision") as exc:

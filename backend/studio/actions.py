@@ -212,6 +212,8 @@ _DISPATCH_BLOCKS = (
     ("archived", "intent_archived", "this intent is archived in Studio"),
     ("paused", "intent_paused", "this intent is paused; resume it before sending anything"),
 )
+#: Decisions that ask AI-DLC to rework the stage rather than accept it.
+_CHANGE_REQUESTS = frozenset({"request_changes", "request_plan_changes"})
 #: Row fields read as "absent" when empty.
 _OPTIONAL_COLUMNS = (
     "resolved_repo_identity", "intent_uuid", "stage", "unit", "payload_digest", "human_text", "wire_text",
@@ -1112,7 +1114,7 @@ class HumanActionBroker:
             _refuse("invalid_decision", "the text the browser displayed is not the text this decision sends",
                     decision=decision, expected=wire_text)
 
-        await self._assert_consistent(repo, snap, binding)
+        await self._assert_consistent(repo, snap, binding, decision=decision)
         slot_key = binding.slot_key
         if not slot_key:
             _refuse("session_unbound", "this intent has no bound chat slot", intent_key=rec.intent_key)
@@ -1863,11 +1865,17 @@ class HumanActionBroker:
             _refuse("repo_not_found", "no such repository", repo_id=repo_id)
         return RepoRecord.from_row(row)
 
-    async def _assert_consistent(self, repo: RepoRecord, snap: "IntentSnapshot", binding: Any) -> list[Any]:
+    async def _assert_consistent(
+        self, repo: RepoRecord, snap: "IntentSnapshot", binding: Any, *, decision: str | None = None
+    ) -> list[Any]:
         """No blocking finding and a stable read; returns the findings. A ``lease_conflict`` is runtime
-        ownership, not a contradiction between AI-DLC files, so it names the holder as ``repo_busy``."""
+        ownership, not a contradiction between AI-DLC files, so it names the holder as ``repo_busy``. Asking AI-DLC
+        to change the stage is how a missing declared output gets written, so that finding alone does not refuse it."""
         findings = await self._findings(repo, snap, binding)
         blocking = self._consistency.blocking(findings)
+        if decision in _CHANGE_REQUESTS and all(f.code in ("missing_required_artifact", "lease_conflict")
+                                                for f in blocking):
+            blocking = [finding for finding in blocking if finding.code != "missing_required_artifact"]
         disk_findings = [finding for finding in blocking if finding.code != "lease_conflict"]
         if disk_findings:
             _refuse("state_inconsistent", "the intent's files contradict each other",

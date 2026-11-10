@@ -543,7 +543,8 @@ class Directive(WireRecord):
     #: ``run-stage`` and ``invoke-swarm`` (the unitless code-generation shape) execute a stage, and ``ask`` waits
     #: on the person at the stage it names.
     kind: str | None = None
-    #: The multi-unit form of ``unit`` (``invoke-swarm``); empty on every version-1 marker.
+    #: The multi-unit form of ``unit``: a swarm's batch, or the targets of a Plan Approval asked about several Units
+    #: at once (the engine sets ``unit`` only for one target). Empty on every version-1 marker.
     units: tuple[str, ...] = ()
     #: v2 Code Generation ``run-stage`` that omitted both unit fields; a null or malformed field is not this.
     zero_unit_run: bool = False
@@ -619,12 +620,17 @@ def parse_directive(data: bytes, state_sha256: str, engine_digest: str | None = 
     if not isinstance(digest, str) or not _SHA256_RE.match(digest):
         return None
     unit = payload.get("unit")
+    units = _str_tuple(payload.get("units"))
+    plan = payload.get("plan_approval")
+    if not units and kind == "ask" and payload.get("ask_type") == "plan-approval" and isinstance(plan, dict):
+        targets = plan.get("targets")
+        units = _str_tuple([t.get("unit") for t in targets if isinstance(t, dict)] if isinstance(targets, list) else ())
     return Directive(
         version=int(version), stage=stage, unit=str(unit) if isinstance(unit, str) and unit else None,
         state_sha256=digest,
         matches_state=digest == state_sha256 or (engine_digest is not None and digest == engine_digest),
         kind=kind if version != 1 else None,
-        units=_str_tuple(payload.get("units")),
+        units=units,
         zero_unit_run=(version == 2 and kind == "run-stage" and stage == "code-generation"
                        and "unit" not in payload and "units" not in payload),
     )
@@ -2364,7 +2370,8 @@ class BoundaryInputs:
     stage: str | None
     stable: bool
     taken_at: str
-    #: A per-unit stage whose questions several units hold while nothing names the executing one.
+    #: A per-unit stage whose questions several units hold, at least one still waiting, while nothing names the
+    #: executing one.
     #: ``questions`` is then ``None`` on purpose (FORMAT-NOTES §11.10); additive to §1.6.3.
     unit_ambiguous: bool = False
 
@@ -3268,7 +3275,8 @@ class AidlcReader:
                 if found is not None:
                     per_unit.append(found)
             if unit is None and len(per_unit) > 1:
-                return (None, True)
+                # With every Unit's file answered there is no answer to route to a Unit, as at a whole-stage gate.
+                return (None, any(found.pending_count or found.pending_checkpoint for found in per_unit))
             if per_unit:
                 return (file_or_audit(per_unit[0]), False)
         phases = [row.phase] if row and row.phase in C.PHASES else list(C.PHASES)

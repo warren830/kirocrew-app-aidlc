@@ -1571,6 +1571,33 @@ def test_a_swarm_that_names_the_units_it_builds_is_not_ambiguous(reader, studio,
     assert [finding.code for finding in findings if finding.code == "unit_ambiguous"] == ["unit_ambiguous"]
 
 
+GROUPED_PLAN_ASK = {
+    "version": 2, "kind": "ask", "ask_type": "plan-approval", "response_route": "next", "stage": "code-generation",
+    "question": "Approve these 2 code plans?", "state_sha256": "AUTO",
+    "plan_approval": {"targets": [{"unit": "unit-a"}, {"unit": "unit-b"}],
+                      "choices": ["Approve all", "Request Changes", "I'll edit the files"], "editing": False},
+}
+
+
+def test_a_grouped_plan_approval_names_the_units_it_asks_about(R):
+    """2.11 asks a swarm batch's plans together: the directive sets ``unit`` only for one target, so its targets are
+    the units it is about."""
+    grouped = marker(R, **{**GROUPED_PLAN_ASK, "state_sha256": "a" * 64})
+    assert (grouped.kind, grouped.unit, grouped.units) == ("ask", None, ("unit-a", "unit-b"))
+    other_ask = marker(R, kind="ask", stage="code-generation", version=2, plan_approval={"targets": [{"unit": "x"}]})
+    assert other_ask.units == ()
+
+
+def test_a_grouped_plan_approval_that_names_its_units_is_not_ambiguous(reader, studio, repo_builder):
+    """Each target writes its own questions file for one question asked about all of them, so two files waiting is
+    the engine's batch, not an executing unit nobody named: nothing is blocked while the person answers it."""
+    _, _, _, findings = two_units(reader, studio, repo_builder, "unit-a", "unit-b", directive=GROUPED_PLAN_ASK)
+    assert [finding.code for finding in findings if finding.code == "unit_ambiguous"] == []
+    stale = {**GROUPED_PLAN_ASK, "state_sha256": "0" * 64}
+    _, _, _, findings = two_units(reader, studio, repo_builder, "unit-a", "unit-b", directive=stale)
+    assert [finding.code for finding in findings if finding.code == "unit_ambiguous"] == ["unit_ambiguous"]
+
+
 # --- artifacts and units ---
 def test_list_artifacts_of_a_real_record(reader, devdelta_repo):
     artifacts = reader.list_artifacts(devdelta_repo, "default", F.DEVDELTA_POC)

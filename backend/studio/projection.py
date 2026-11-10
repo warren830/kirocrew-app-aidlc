@@ -54,6 +54,7 @@ from .aidlc_reader import (
     parse_review_section,
     stage_attempt,
     stage_revision_cycles,
+    state_field,
     unit_gate_token,
 )
 from .errors import StudioError
@@ -348,6 +349,8 @@ class IntentSnapshot:
     #: Evidence for every open boundary row that is NOT `stage`; empty for the usual single-boundary intent.
     other_stage_evidence: "Mapping[str, StageEvidence]" = dataclasses_field(default_factory=dict)
     artifact_dirs_rel: tuple[str, ...] = ()
+    #: The Units an open gate on a per-unit stage covers when no source names one (``_whole_stage_gate_units``).
+    gate_units: tuple[str, ...] = ()
     # Internal read evidence for audit questions, including after the pending question disappears.
     audit_question_attempt: tuple[str | None, bool] | None = None
     #: `Unit Ownership: team` only: what the engine's Unit gate fold reads, and every Unit gate it found.
@@ -773,8 +776,12 @@ class Projection:
         ):
             questions = None
 
+        gate_units = self._whole_stage_gate_units(
+            root, space, intent_dir, state_snap, state, stage, unit, units,
+            ambiguous=bool(inputs is not None and inputs.unit_ambiguous))
         current = self._read_stage_evidence(
-            root, engine_dir, space, intent_dir, state, graph, stage, unit, questions, audit.events
+            root, engine_dir, space, intent_dir, state, graph, stage, unit, questions, audit.events,
+            gate_units=gate_units,
         )
         # Every other open boundary gets the same read, so a gate card never shows another stage's evidence.
         # Usually empty: an intent normally has one open boundary, and it is the current stage.
@@ -805,10 +812,25 @@ class Projection:
             canonical_path=repo.canonical_path, engine_dir=engine_dir, stage=stage, unit=unit,
             stage_dir_rel=current.stage_dir_rel, units=units, cursor=cursor, active_space=active_space,
             layout=self._reader.layout(root), acceptance_criteria=current.acceptance_criteria,
-            other_stage_evidence=others, artifact_dirs_rel=current.artifact_dirs_rel,
+            other_stage_evidence=others, artifact_dirs_rel=current.artifact_dirs_rel, gate_units=gate_units,
             audit_question_attempt=audit_question_attempt, unit_gate_scope=unit_gate_scope, unit_gates=unit_gates,
             unit_gate_evidence=unit_gate_evidence, checkbox_reverted=checkbox_reverted,
         )
+
+    def _whole_stage_gate_units(
+        self, root: Path, space: str, intent_dir: str, state_snap: Snapshot | None, state: StateFile | None,
+        stage: str | None, unit: str | None, units: Sequence[str], *, ambiguous: bool,
+    ) -> tuple[str, ...]:
+        """The Units an open gate on a per-unit stage covers when nothing names one: stage-major Construction, a swarm
+        with human approval, unit-major with checkpoints off. The engine's gate reads every Unit's directory for the
+        stage (``producesDirsForStage``). Team-owned Units have gates of their own, and a Unit still owed an answer
+        leaves the choice of Unit open."""
+        row = state.row(stage) if state is not None and stage else None
+        if (unit is not None or ambiguous or stage not in C.PER_UNIT_STAGES or row is None or row.mark != "?"
+                or state_snap is None or state_field(state_snap.text, "Unit Ownership") == "team"):
+            return ()
+        dirs = ((name, root / self._reader.stage_dir(space, intent_dir, "construction", stage, name)) for name in units)
+        return tuple(name for name, path in dirs if path.is_dir() and not path.is_symlink())
 
     def _harness(self, root: Path, preferred: str) -> "HarnessDir | None":
         """The registered harness, else the first with a `tools/` tree: a repository can hold two, and the wrong one
@@ -835,7 +857,7 @@ class Projection:
     def _read_stage_evidence(
         self, root: Path, engine_dir: str, space: str, intent_dir: str, state: "StateFile | None",
         graph: Sequence[StageNode], slug: str | None, unit: str | None, questions: "QuestionsFile | None",
-        events: Sequence[AuditEvent] = (),
+        events: Sequence[AuditEvent] = (), *, gate_units: Sequence[str] = (),
     ) -> StageEvidence:
         """One stage directory's artifacts, verdict, questions and criteria.
 
@@ -851,6 +873,9 @@ class Projection:
         artifact_dirs_rel = (stage_dir_rel,)
         if C.artifact_output_location(node) == "codekb":
             artifact_dirs_rel = self._reader.codekb_stores(root, space, intent_dir)
+        elif gate_units and slug:
+            artifact_dirs_rel = tuple(self._reader.stage_dir(space, intent_dir, "construction", slug, name)
+                                      for name in gate_units)
         artifacts, artifacts_capped = _capped(lambda: tuple(
             meta for rel in artifact_dirs_rel for meta in self._reader.stage_artifacts(root, rel, node)), ())
         review, review_capped = _capped(
