@@ -11,7 +11,7 @@ argument-hint: ""
 user-invocable: true
 ---
 
-# AI-DLC Stage Runner — practices-discovery
+# AI-DLC Stage Runner - practices-discovery
 
 Run the `practices-discovery` stage on its own. This is opt-in packaging over
 `/aidlc --stage practices-discovery --single`; the same stage is always reachable via
@@ -56,6 +56,6 @@ that flag without this skill.
    ```
 
    This records a STAGE_STARTED / STAGE_COMPLETED pair under a synthetic workflow
-   id and stops. It NEVER writes the main workflow's `Current Stage` — a
+   id and stops. It NEVER writes the main workflow's `Current Stage` - a
    single-stage run is isolated by design (the tool refuses to advance the main
    workflow).

@@ -3,7 +3,7 @@
   "distribution": "kiro",
   "productName": "Kiro CLI",
   "choiceName": "Kiro CLI (V2)",
-  "configNextStep": "run `kiro-cli chat`, then `/aidlc --doctor`",
+  "configNextStep": "run `kiro-cli --v2` (Kiro CLI 2.21.4 or later; for an older one, see the AI-DLC Kiro CLI guide), then `/aidlc --doctor`",
   "harnessDir": ".kiro",
   "onboarding": ".kiro/steering/aidlc-onboarding.md",
   "managedDirectories": [

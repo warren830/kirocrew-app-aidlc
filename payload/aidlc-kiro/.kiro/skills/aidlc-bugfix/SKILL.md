@@ -2,14 +2,14 @@
 name: aidlc-bugfix
 generated-by: aidlc-runner-gen
 description: >
-  Run the AI-DLC workflow with the bugfix scope baked in — no scope
+  Run the AI-DLC workflow with the bugfix scope baked in - no scope
   detection. Fix a specific bug. Packaging over `/aidlc --scope bugfix`, which works
   without this skill.
 argument-hint: "[description | --status | --stage <slug|#> | --phase <name|#>]"
 user-invocable: true
 ---
 
-# AI-DLC — bugfix scope
+# AI-DLC - bugfix scope
 
 Drive the AI-DLC engine with the **bugfix** scope fixed. This is the same
 deterministic forwarding loop the `/aidlc` orchestrator runs, with `--scope
@@ -60,7 +60,7 @@ ahead of that run-stage. Adopt it for the whole run.
    Legacy Plan Approval recovery keeps its explicit bare-`next` choice.
    Never use `report` as a fallback for an engine ask answer; a selected guard
    remedy may still explicitly name a stage report.
-3. `bun .kiro/tools/aidlc-orchestrate.ts report --stage <directive.stage> --result <outcome> [--user-input "<text>"]` only after acting on a stage directive. A redo, jump, or start-fresh request on re-entry is the sole non-stage report round-trip and uses `report --result resumed --choice <redo|jump|fresh>`.
+3. `bun .kiro/tools/aidlc-orchestrate.ts report --stage <directive.stage> --result <outcome> [--user-input '<text>']` only after acting on a stage directive. A redo, jump, or start-fresh request on re-entry is the sole non-stage report round-trip and uses `report --result resumed --choice <redo|jump|fresh>`.
 4. Pass `$ARGUMENTS` only to the first `next` in step 1: every later pass runs
    bare `bun .kiro/tools/aidlc-orchestrate.ts next`, with no `--scope` and no
    `$ARGUMENTS` (repeating them would redo a jump or a setting the person
@@ -108,11 +108,11 @@ preserving any `--request` id rather than rebuilding the request.
   new-work text:
 
   ```bash
-  bun .kiro/tools/aidlc.ts engine orchestrate next --new-intent --scope <the confirmed scope> "<the new-work description>"
+  bun .kiro/tools/aidlc.ts engine orchestrate next --new-intent --scope <the confirmed scope> '<the new-work description>'
   ```
 
   The engine returns a `print` directive naming the `intent-create` command
-  (with the `--label "<2-3 word kebab essence>"` placeholder). Act on it exactly
+  (with the `--label '<2-3 word kebab essence>'` placeholder). Act on it exactly
   as the loop's `print` handling describes: create the intent, then re-run
   `next` and carry on into the new work's first stage in this chat. Say the
   narration's line about starting it in a clean chat once: it is an option for

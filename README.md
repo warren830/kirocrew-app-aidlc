@@ -240,11 +240,12 @@ lifecycle progress.
 
 ## Bundled AI-DLC
 
-`payload/aidlc-kiro/` holds the AI-DLC Workflows Kiro CLI distribution, version **2.11.2** (the
-copy-runtime release asset of the `v2.11.2` tag, `10a9bc9d`), under the MIT No Attribution licence
-(`payload/AIDLC-LICENSE`). Three Studio-maintained local patches are kept: the requirement traceability
-sensor, the Kiro adapter hook reading a KiroCrew turn sent without its context envelope, and one sentence of
-the onboarding steering that keeps each tool call a command of its own. All three are documented in
+`payload/aidlc-kiro/` holds the AI-DLC Workflows Kiro CLI distribution, version **2.11.3** (the
+copy-runtime release asset of the `v2.11.3` tag, `a8721be3`), under the MIT No Attribution licence
+(`payload/AIDLC-LICENSE`). Four Studio-maintained local patches are kept: the requirement traceability
+sensor, the Kiro adapter hook reading a KiroCrew turn sent without its context envelope, the engine reading
+a KiroCrew host notice as the host's turn rather than the person's, and one sentence of the onboarding
+steering that keeps each tool call a command of its own. All four are documented in
 `THIRD_PARTY_NOTICES.md`. Every file is inventoried with its SHA-256 in `payload/manifest.json`, which is
 also what the installer verifies before and after writing. Studio's own version and the bundled AI-DLC
 version are shown separately in Settings. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
@@ -295,10 +296,10 @@ never submits anything. It analyses an evidence package Studio passes to it and 
 cd ui && npm run check      # tsc --noEmit && vitest run && vite build
 
 # regenerate the bundled payload inventory after changing payload/aidlc-kiro/
-python3 scripts/build_payload_manifest.py --version 2.11.2 \
-  --source-ref "v2.11.2 @ 10a9bc9d + Studio requirement-traceability, KiroCrew host-turn and onboarding patches" \
-  --source-commit 10a9bc9d85395a601de2624cf5bdd35292c10db4 \
-  --dist-path "aidlc-copy-runtime-2.11.2.tar.gz:runtime/kiro" --state-versions 8
+python3 scripts/build_payload_manifest.py --version 2.11.3 \
+  --source-ref "v2.11.3 @ a8721be3 + Studio requirement-traceability, KiroCrew host-turn, KiroCrew host-notice and onboarding patches" \
+  --source-commit a8721be3631e6a254cf524ea57e5932aa56b4149 \
+  --dist-path "aidlc-copy-runtime-2.11.3.tar.gz:runtime/kiro" --state-versions 8
 ```
 
 Keep `--source-commit` pinned to the upstream base and describe local patches in `--source-ref`

@@ -2,7 +2,7 @@
 name: aidlc-init
 generated-by: aidlc-runner-gen
 description: >
-  Start an AI-DLC workflow — run the whole Initialization phase (mint the
+  Start an AI-DLC workflow - run the whole Initialization phase (mint the
   intent, detect the workspace, build state) in one step, without typing a
   stage. The engine normally auto-creates the first intent; this is opt-in
   packaging over that move. Pass `--scope <name>` to seed the initial scope. A freeform description without a scope first gets the same plan offer as `/aidlc`, then continues as `/aidlc` does.
@@ -15,7 +15,7 @@ user-invocable: true
 Start a fresh AI-DLC workflow. The workspace shell ships in `dist/` (no setup
 command), and the engine auto-creates the first intent when you describe what to
 build - this skill is opt-in packaging over that creation move. Initialization is a
-PHASE, not a single stage — it mints the intent, detects the workspace
+PHASE, not a single stage - it mints the intent, detects the workspace
 (greenfield/brownfield), and builds `aidlc-state.md` together, in one
 deterministic call. There is no per-init-stage runner because an init stage has
 no standalone meaning.
@@ -28,7 +28,7 @@ no standalone meaning.
 
 2. **The user named a scope** with `--scope <name>`: create the intent (run
    the initialization phase). Forward the recognized flags as-is, and pass any
-   freeform description text via `--arguments "<text>"` (`intent-create` reads
+   freeform description text via `--arguments '<text>'` (`intent-create` reads
    the description from the `--arguments` flag, NOT a positional: forwarding
    it bare would silently drop it). ALSO derive a short **`--label`**: a 2-3
    word kebab-case essence of what's being built (`"I would like to build a
@@ -37,7 +37,7 @@ no standalone meaning.
    the full `--arguments` text is preserved separately in the audit + state:
 
    ```bash
-   bun .kiro/tools/aidlc.ts engine intent create --scope <scope> --arguments "<description>" --label "<2-3 word essence>"
+   bun .kiro/tools/aidlc.ts engine intent create --scope <scope> --arguments '<description>' --label '<2-3 word essence>'
    ```
 
    Print the tool's output and stop. This does not advance a stage; run

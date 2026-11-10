@@ -5,17 +5,20 @@ AI-DLC Studio is licensed under the Apache License 2.0 (see `LICENSE`).
 ## Bundled AI-DLC Workflows distribution
 
 `payload/aidlc-kiro/` is the Kiro CLI tree (`runtime/kiro`) of the manual-copy release asset
-`aidlc-copy-runtime-2.11.2.tar.gz` of **AI-DLC Workflows 2.11.2** by Amazon.com, Inc. or its
+`aidlc-copy-runtime-2.11.3.tar.gz` of **AI-DLC Workflows 2.11.3** by Amazon.com, Inc. or its
 affiliates, licensed under the **MIT No Attribution (MIT-0)** license. The full license text is
 `payload/AIDLC-LICENSE`. From 2.8.0 the upstream repository no longer commits `dist/<harness>/`;
-the copy-runtime asset is its Bun-based equivalent. The bundled copy includes three Studio-maintained
+the copy-runtime asset is its Bun-based equivalent. The bundled copy includes four Studio-maintained
 local changes and is not byte-identical to upstream.
 
 - Upstream project: https://github.com/awslabs/aidlc-workflows
-- Vendored version: `2.11.2` (`AIDLC_VERSION` in `.kiro/tools/aidlc-version.ts`)
-- Upstream base: `10a9bc9d85395a601de2624cf5bdd35292c10db4`, the commit tagged `v2.11.2`; the asset's
-  published SHA-256 sidecar (`11329a62…5862a80`) was verified before extraction, and the extracted
-  `runtime/kiro` differs from the bundle only in the three patched files named below
+- Vendored version: `2.11.3` (`AIDLC_VERSION` in `.kiro/tools/aidlc-version.ts`)
+- Upstream base: `a8721be3631e6a254cf524ea57e5932aa56b4149`, the commit tagged `v2.11.3`; the asset's
+  published SHA-256 sidecar (`948a54b0…be9935d8`) was verified before extraction, and the extracted
+  `runtime/kiro` differs from the bundle only in the four patched files named below. Upstream's own
+  `bun scripts/package.ts` at that commit builds a `dist/kiro` equal to the extracted tree, apart from the
+  five files the copy runtime leaves out (`AGENTS.md`, `.gitignore`, `aidlc/active-space` and the team's
+  two memory files)
 - File inventory and SHA-256 digests: `payload/manifest.json`
 - Local compatibility patches are identified in the manifest's `source.ref`; `source.commit` and
   `engineVersion` continue to identify the upstream base. `scripts/build_payload_manifest.py`
@@ -33,17 +36,19 @@ code-generation apply an existing requirement map to the current unit; a unit ma
 unit's requirement as `N/A`. Without a map, or with a map that has no requirement rows, both keep the
 existing every-requirement fallback. Existing story maps still resolve to acceptance-criterion IDs.
 Missing mappings, wrong units, and IDs outside the selected source remain failures. No US stories
-are synthesized. This is a Studio vendored fix re-applied on top of upstream 2.11.2's own version of the
-same file, which reads Requirements Analysis's recorded requirement IDs and already scopes FR/NFR rows to a
-unit. With such a record the record is the source; without one, units-generation and a map-scoped
-functional-design or code-generation take only the `FR1`/`NFR1`-shaped IDs `requirements.md` names (not
-2.11.2's "the table as written"), and units-generation still reports gaps. As upstream does since 2.11.1, a
-requirement with sub-requirements is traced through them: the parent is no gap of its own and may be listed
-beside the unit's own sub-requirements. Code generation scopes NFR rows to the unit too, so a unit with only NFR
-rows passes and one with none fails. NFR assignment in nfr-requirements reads the map with the same ID-column
-rule. Upstream's `tests/unit/t281-sensor-traceability.test.ts` at `10a9bc9d` passes against the patched file (68
-tests), as do `t-traceability-at-gate` (14), `t-engine-subcommand-help` (118),
-`t290-code-gen-unit-test-instructions-coverage` (10) and `t-sensor-script-path` (7).
+are synthesized. This is a Studio vendored fix re-applied on top of upstream's own version of the same
+file (2.11.3 ships it unchanged from 2.11.2), which reads Requirements Analysis's recorded requirement IDs and
+already scopes FR/NFR rows to a unit. With such a record the record is the source; without one,
+units-generation and a map-scoped functional-design or code-generation take only the `FR1`/`NFR1`-shaped
+IDs `requirements.md` names (not upstream's "the table as written"), and units-generation still reports gaps.
+As upstream does since 2.11.1, a requirement with sub-requirements is traced through them: the parent is no
+gap of its own and may be listed beside the unit's own sub-requirements. Code generation scopes NFR rows to
+the unit too, so a unit with only NFR rows passes and one with none fails. NFR assignment in nfr-requirements
+reads the map with the same ID-column rule. With the patched file in upstream's `core/tools/` at `a8721be3`
+and `dist/` rebuilt by `bun scripts/package.ts`, upstream's `tests/unit/t281-sensor-traceability.test.ts`
+passes (68 tests), as do `t-traceability-at-gate` (14), `t-engine-subcommand-help` (118),
+`t290-code-gen-unit-test-instructions-coverage` (10) and `t-sensor-script-path` (7), the same counts as
+unpatched upstream.
 
 The local KiroCrew host-turn patch changes `payload/aidlc-kiro/.kiro/hooks/aidlc-kiro-adapter.ts`. KiroCrew
 wraps a dashboard turn in its context envelope, and `hostEnvelopeTurnText` reads the person's text after
@@ -51,14 +56,26 @@ the envelope's `[CURRENT USER REQUEST -- respond to this]` header. A turn KiroCr
 no header and instead trails its reply-format rules (`\n\n(If presenting choices, end with [OPTIONS:`…)
 after the typed text, so a command sent that way (`/aidlc --version`) was not recognised. The patch cuts
 those trailing rules from a prompt that has no header before the hooks read it; a prompt with the header,
-or without the rules, is unchanged. Upstream 2.11.2's `hostEnvelopeTurnText` still handles only the header.
+or without the rules, is unchanged. Upstream 2.11.3 ships the adapter unchanged from 2.11.2, and its
+`hostEnvelopeTurnText` still handles only the header.
+
+The local KiroCrew host-notice patch changes `payload/aidlc-kiro/.kiro/tools/aidlc-lib.ts`. KiroCrew steers a
+notice of its own into a running turn ("[Kiro Crew host notice] You have made the same tool call 3 times this
+turn …"), one `<user_message>` block each, several joined when they queue, and kiro-cli's chat record keeps
+it inside a tool result, so nothing in that record tells it from the person's message. The patch adds a
+`kiro crew host notice` entry to `KIRO_CLI_HOST_TEMPLATES`: a prompt made only of such blocks is the host's
+turn, which the prompt hook records as `HOST_TURN` with nothing of the person's on it, and a prompt holding
+anything else beside them stays the person's. Upstream 2.11.3's `kiroTurnOrigin` still reads the chat record
+first and then those templates, as 2.11.2 did. `tests/test_payload_host_notice.py` runs the bundled prompt
+hook with Bun against the patched file.
 
 The local onboarding patch adds one sentence to the Permissions line of
 `payload/aidlc-kiro/.kiro/steering/aidlc-onboarding.md`: run each tool call as written, as a command of its
 own (a `PATH` export, a `cd` or any other command before it on the same line is not the pre-approved
 spelling, so every such call prompts), and if `bun` is not found, say so instead of editing `PATH`. It keeps
 a conversation started by a desktop gateway, whose `PATH` may not hold `bun`, from turning every engine call
-into an approval prompt.
+into an approval prompt. 2.11.3 rewrote the Activation and Project writes lines beside it; the Permissions line
+the sentence joins is unchanged from 2.11.2.
 
 The KiroCrew-reply patches carried with 2.10.0 were retired. The adapter patch
 (`.kiro/hooks/aidlc-kiro-adapter.ts`) handed the core human-turn hook only the text after the last
@@ -71,7 +88,7 @@ the conversation's agent, which asks the plan-approval question again through th
 `tests/test_payload_human_reply.py` now pins that upstream behaviour by running the bundled hooks with
 Bun against a temporary install.
 
-2.11's copy runtime (2.11.0 through 2.11.2) ships no `AGENTS.md`, `.gitignore`, `aidlc/active-space` or team memory files,
+2.11's copy runtime (2.11.0 through 2.11.3) ships no `AGENTS.md`, `.gitignore`, `aidlc/active-space` or team memory files,
 and its `.kiro/settings/cli.json` carries only `chat.defaultAgent`. AI-DLC adds its own marked part
 of `AGENTS.md` and `.gitignore` (`<!-- BEGIN AI-DLC:agents -->`, `# BEGIN AI-DLC:gitignore`, from
 `.kiro/tools/data/root-blocks/`) at the next session start, so a fresh Studio install writes neither

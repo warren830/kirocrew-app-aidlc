@@ -37,7 +37,7 @@ p > img + img { margin-left: 16px; }
 <h1>AI-DLC Studio 使用指南</h1>
 <p><a href="https://github.com/warren830/kirocrew-app-aidlc/blob/v2/docs/user-guide.md">English</a> | <strong>简体中文</strong></p>
 <p>本指南从一台什么都没装的机器开始，一路带你跑完一个 AI-DLC 意图，然后逐页说明 Studio 的每个功能。适用于
-<strong>AI-DLC Studio v2</strong>（<code>aidlc-studio-v2</code>，2.0.0 测试版），内置 AI-DLC <strong>2.11.2</strong>，需要 KiroCrew <strong>0.11.0</strong>
+<strong>AI-DLC Studio v2</strong>（<code>aidlc-studio-v2</code>，2.0.0 测试版），内置 AI-DLC <strong>2.11.3</strong>，需要 KiroCrew <strong>0.11.0</strong>
 或更新版本。</p>
 <blockquote class="callout"><p class="callout-title">重要</p><p><strong>在一切开始之前，先安装 Bun。</strong> AI-DLC 的引擎，以及每个 AI-DLC 会话里的 hook，都是由 Bun 运行的
 TypeScript 程序。没有 Bun，Studio 页面虽然能打开，但无法给仓库安装 AI-DLC、无法新建意图、无法计算计划、
@@ -353,7 +353,7 @@ AI-DLC 的版本和状态布局、剩余空间、写权限，以及各项警告�
 <li>Studio 不写 <code>AGENTS.md</code> 和 <code>.gitignore</code>；创建第一个意图时，AI-DLC 会在这两个文件里加上它自己带标记的段落。</li>
 <li><strong>阻止本次操作的冲突</strong> 列出受管路径上与 Studio 将要安装的内容不同的文件，并附差异。没有强制覆盖选项：请自己把文件挪开，或者保持仓库现状。</li>
 </ul>
-<p>点击 <strong>安装 AI-DLC 2.11.2</strong> 确认。事务抽屉会显示每一步：获取管理租约、暂存并校验载荷、备份、写入、合并片段、
+<p>点击 <strong>安装 AI-DLC 2.11.3</strong> 确认。事务抽屉会显示每一步：获取管理租约、暂存并校验载荷、备份、写入、合并片段、
 校验、提交凭据。失败会恢复到开始前的状态。如果你看预览期间仓库发生了变化，不会写入任何内容，预览会重新读取，请再核对一遍。</p>
 <h3>3. 新建意图</h3>
 <p>点击 <strong>新建意图</strong>。向导共四步，点 <strong>创建</strong> 之前不会写入任何东西。</p>

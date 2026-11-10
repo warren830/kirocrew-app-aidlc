@@ -40,7 +40,7 @@ APP_VERSION = "2.0.0-beta.1"
 #: loader already registered the app's parent packages, which lets ``backend/routes.py`` import ``studio``.)
 MIN_KIROCREW_VERSION = "0.11.0"
 #: Must equal ``payload/manifest.json`` ``engineVersion``.
-BUNDLED_ENGINE_VERSION = "2.11.2"
+BUNDLED_ENGINE_VERSION = "2.11.3"
 #: State-file versions the parsers accept: wider than what the bundled engine writes, because a registered repo may
 #: run an older AI-DLC and refusing to read it would hide work the user can still see on disk.
 SUPPORTED_STATE_VERSIONS = (7, 8)

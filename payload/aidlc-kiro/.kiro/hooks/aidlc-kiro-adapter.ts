@@ -279,7 +279,7 @@ function nativePreloadError(projectDir: string, agents: string[]): PreloadFailur
 // envelope; hostEnvelopeTurnText reads the person's text after the `[CURRENT USER REQUEST …]` header. A
 // context-free host turn has no header and instead trails the same reply-format rules after the typed text,
 // so a terminal command sent that way ("/aidlc --version\n\n(If presenting choices, …") was not recognised.
-// Studio patch to the bundled harness (2.11.0, carried to 2.11.2); a prompt with the header, or without the
+// Studio patch to the bundled harness (2.11.0, carried to 2.11.3); a prompt with the header, or without the
 // rules, is unchanged.
 const HOST_TRAILING_RULES = "\n\n(If presenting choices, end with [OPTIONS:";
 
