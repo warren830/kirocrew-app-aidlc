@@ -9,11 +9,12 @@ never around it.
 
 ![The Action Center with an approval gate and its evidence](assets/screenshots/action-center-gate.png)
 
-> **This is the v2 branch (2.0.0 beta).** Same features as 1.x on a backend 40% smaller, for KiroCrew 0.8+.
-> It installs next to 1.x as **AI-DLC Studio v2** (`aidlc-studio-v2`) and keeps its own database: install this
-> folder from KiroCrew's Apps page. Because the two do not share install
-> receipts, upgrade or uninstall the repositories 1.x installed from 1.x, and answer each intent's decisions in one
-> Studio only (each opens its own conversation). Progress and what changed: [`docs/plan.md`](docs/plan.md).
+> **This is the v2 branch (2.0.0 beta).** Same features as 1.x on a backend 40% smaller, for KiroCrew 0.11.0 or
+> newer. It keeps 1.x's name, `aidlc-studio`, so it updates a 1.x install in place: on its first start Studio
+> migrates its database and keeps your activity, install receipts and settings, so the repositories 1.x installed
+> upgrade and uninstall from it. If you installed the beta from a folder as **AI-DLC Studio v2**
+> (`aidlc-studio-v2`), that stays a separate app with its own data. Don't drive one repository from both Studios,
+> because each opens its own conversation for an intent. Progress and what changed: [`docs/plan.md`](docs/plan.md).
 
 > [!IMPORTANT]
 > **Install [Bun](#1-install-bun-first) before anything else**, on the machine running the KiroCrew Gateway.
@@ -94,7 +95,7 @@ Studio removes that cost without weakening the method.
 
 | | |
 |---|---|
-| **Bun** | **Install it first, before anything else** ([below](#1-install-bun-first)), on the gateway's machine |
+| **Bun** | **Install it first, before anything else** ([below](#1-install-bun-first)), on the gateway's machine. 1.4.4 or newer is recommended: AI-DLC 2.11.3's release notes ask copy-channel installs, such as Studio's bundle, to update Bun to 1.4.4 for CVE-2026-111497. Studio does not enforce it |
 | KiroCrew | 0.11.0 or newer (`minKiroCrewVersion`) |
 | Platform | macOS or Linux. KiroCrew also runs on Windows, but Studio does not yet: on Windows, run the gateway in WSL 2 ([guide](docs/user-guide.md#windows-run-it-in-wsl-2)), not yet validated end to end |
 | For running AI-DLC in a repository | a signed-in `kiro-cli`, and a paid Kiro plan for the models AI-DLC expects |
@@ -135,13 +136,16 @@ pwd
 ```
 
 Then in KiroCrew, **Discover → Add source → Install from Path**, paste the `pwd` output, **Install**, then
-**Library → AI-DLC Studio v2 → Enable** (grant trust to this app only if asked).
+**Library → AI-DLC Studio → Enable** (grant trust to this app only if asked).
+
+If 1.x is already installed, update it instead, because KiroCrew refuses a second install under the same
+name ("already installed"). See [Updating from 1.x](docs/user-guide.md#updating-from-1x).
 
 The repository includes the built UI, so installing needs neither Node.js nor npm.
 
 ### 3. Check Bun from Studio
 
-Open **AI-DLC Studio v2 → Settings → About → Bun executable**. It must show Bun's path and version, and
+Open **AI-DLC Studio → Settings → About → Bun executable**. It must show Bun's path and version, and
 **AI-DLC conversations can run Bun**:
 
 - Only a **Checked:** list and no path, meaning Bun was not found: click **Detect Bun again**, or paste the output of `command -v bun` into
@@ -151,7 +155,7 @@ Open **AI-DLC Studio v2 → Settings → About → Bun executable**. It must sho
   includes; delete it to undo. A desktop-launched gateway gives conversations a `PATH` without
   `~/.bun/bin`, and without this link AI-DLC records no human turn and refuses every decision.
 
-To update later, `git pull --ff-only` in the clone, then **Library → AI-DLC Studio v2 → ⋯ → Sync**.
+To update later, `git pull --ff-only` in the clone, then **Library → AI-DLC Studio → ⋯ → Sync**.
 See the [user guide](docs/user-guide.md#update-rebuild-or-uninstall-studio).
 
 ## First run

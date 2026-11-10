@@ -19,9 +19,9 @@ APP_JSON = APP_ROOT / "app.json"
 ADVISOR_JSON = APP_ROOT / "agents" / "advisor.json"
 PAYLOAD_MANIFEST = APP_ROOT / "payload" / "manifest.json"
 
-#: v2 installs beside the 1.x Studio (``aidlc-studio``) instead of replacing it, so it has a name of its own:
-#: KiroCrew refuses to install a folder whose manifest names an app that is already installed.
-APP_NAME = "aidlc-studio-v2"
+#: 1.x's own name: KiroCrew updates an installed app only from a manifest of the same name, so 2.x replaces a 1.x
+#: install in place, and the catalog entry 1.x is listed under can point at it.
+APP_NAME = "aidlc-studio"
 # §4.3 verbatim, compared as equality: an added prefix is as much a finding as a missing one. The last two are the
 # host's model catalogue and effort levels, GET-only routes with nothing beneath them, read so a new AI-DLC
 # conversation and the Advisor can run on a model the person picked.
@@ -51,6 +51,7 @@ def test_identity_matches_the_constants_module(raw, studio):
     C = studio.constants
     assert (raw["name"], raw["version"], raw["minKiroCrewVersion"]) == (C.APP_NAME, C.APP_VERSION,
                                                                         C.MIN_KIROCREW_VERSION)
+    assert raw["name"] == C.DEFAULT_APP_NAME == APP_NAME, "the shipped name is not a side copy's"
     assert C.MIN_KIROCREW_VERSION == "0.11.0"
 
 

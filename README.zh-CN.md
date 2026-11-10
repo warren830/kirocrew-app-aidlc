@@ -8,11 +8,11 @@ AI-DLC 自己的会话送回去，从不绕过它。
 
 ![待办中心：一个审批关卡和它的证据](assets/screenshots/action-center-gate.png)
 
-> **这是 v2 分支（2.0.0 测试版）。** 功能与 1.x 相同，后端代码少了 40%，需要 KiroCrew 0.8+。
-> 它以 **AI-DLC Studio v2**（`aidlc-studio-v2`）的名字与 1.x 并排安装，用自己的数据库：在 KiroCrew 的应用页
-> 直接从这个文件夹安装。两者不共享安装凭据，所以 1.x 装过的仓库
-> 请在 1.x 里升级或卸载；同一个 intent 的决定只在一个 Studio 里回答（各自会开自己的会话）。进展与改动见
-> [`docs/plan.md`](docs/plan.md)。
+> **这是 v2 分支（2.0.0 测试版）。** 功能与 1.x 相同，后端代码少了 40%，需要 KiroCrew 0.11.0 或更新版本。
+> 它沿用 1.x 的名字 `aidlc-studio`，所以会原地更新已装的 1.x：第一次启动时迁移数据库，保留活动记录、安装凭据
+> 和设置，1.x 装过的仓库照旧在它里面升级和卸载。如果你从文件夹装过测试版 **AI-DLC Studio v2**
+> （`aidlc-studio-v2`），它仍是另一个应用，用自己的数据。不要用两个 Studio 操作同一个仓库，因为两者会各自为
+> 同一个 intent 开会话。进展与改动见 [`docs/plan.md`](docs/plan.md)。
 
 > [!IMPORTANT]
 > **在一切开始之前，先在 KiroCrew Gateway 所在机器上[安装 Bun](#install-bun-first)。** AI-DLC 靠它运行，没有它，
@@ -74,7 +74,7 @@ Studio 去掉了这些代价，同时不削弱这套方法本身。
 
 ## 快速开始
 
-需要：KiroCrew 0.11.0 或更新版本，macOS 或 Linux（KiroCrew 也能装在 Windows 上，但 Studio 暂不支持原生 Windows，请在 WSL 2 里运行，见[使用指南](docs/user-guide.zh-CN.md#windows)，尚未在 Windows 上做过端到端验证）。要在仓库里运行 AI-DLC，还需要已登录的 `kiro-cli`，以及支持所用模型的
+需要：KiroCrew 0.11.0 或更新版本，Bun（建议 1.4.4 或更新版本：AI-DLC 2.11.3 的发布说明要求 copy 通道的安装，也就是 Studio 内置的这种，把 Bun 升到 1.4.4 以修复 CVE-2026-111497；Studio 不强制检查），macOS 或 Linux（KiroCrew 也能装在 Windows 上，但 Studio 暂不支持原生 Windows，请在 WSL 2 里运行，见[使用指南](docs/user-guide.zh-CN.md#windows)，尚未在 Windows 上做过端到端验证）。要在仓库里运行 AI-DLC，还需要已登录的 `kiro-cli`，以及支持所用模型的
 Kiro 订阅。以下命令都在运行 KiroCrew Gateway 的机器上、以运行 Gateway 的同一系统用户执行。
 
 <a id="install-bun-first"></a>
@@ -106,11 +106,13 @@ pwd
 然后在 KiroCrew 里安装并启用：
 
 1. **Discover → Add source**，把上面的路径填入 **Install from Path**，点 **Install**。
-2. **Library → AI-DLC Studio v2 → Enable**。如果提示授予信任，只为这个应用授予即可。
+2. **Library → AI-DLC Studio → Enable**。如果提示授予信任，只为这个应用授予即可。
+
+已经装了 1.x 时，KiroCrew 会拒绝再装一个同名应用，请改为更新它，见[从 1.x 更新](docs/user-guide.zh-CN.md#updating-from-1x)。
 
 ### 3. 在 Studio 里确认 Bun
 
-打开 **AI-DLC Studio v2 → 设置 → 关于 → Bun 可执行文件**，必须显示 Bun 的路径和版本，以及 **AI-DLC 对话可以运行 Bun**：
+打开 **AI-DLC Studio → 设置 → 关于 → Bun 可执行文件**，必须显示 Bun 的路径和版本，以及 **AI-DLC 对话可以运行 Bun**：
 
 - 只有 **已检查：** 列表、没有路径，说明找不到 Bun：点 **重新探测 Bun**，或把 `command -v bun` 的输出填入 **Bun 的绝对路径**，点 **保存并校验路径**。
 - 显示 **AI-DLC 对话无法运行 Bun**：点 **让对话可以使用 Bun** 并确认。Studio 只创建一个符号链接 `~/.local/bin/bun`，

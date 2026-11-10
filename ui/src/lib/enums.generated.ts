@@ -57,9 +57,7 @@ export const LIVE_ACTION_STATUS: readonly ActionStatus[] = ["Queued", "Deliverin
 export const TERMINAL_ACTION_STATUS: readonly ActionStatus[] = ["StateChanged", "ResolvedNoTransition", "Cancelled"]
 
 export const ACCEPT_AS_IS_REVISION_CYCLES = 3
-export const DEEP_LINK_BASE = "/apps/aidlc-studio-v2"
-/** The name `app.json` installs this tree under: running as it, Studio is not a side copy. */
-export const MANIFEST_APP_NAME = "aidlc-studio-v2"
+export const DEEP_LINK_BASE = "/apps/aidlc-studio"
 
 /** The first engine whose `intent-create` takes each creation flag; an older one does not honor it. */
 export const SUMMARY_CONFIRMATION_CREATE_MIN_ENGINE: readonly number[] = [2, 10]

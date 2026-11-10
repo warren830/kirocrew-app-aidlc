@@ -29,12 +29,6 @@ describe('TopBar instance marker', () => {
 
   it('shows nothing extra for the shipped Studio', () => {
     renderBar()
-    expect(screen.queryByText(/aidlc-studio-next/)).toBeNull()
-  })
-
-  it('shows nothing extra under the name app.json installs this tree as', () => {
-    appName.value = 'aidlc-studio-v2'
-    renderBar()
     expect(screen.queryByText(/Test copy/)).toBeNull()
   })
 

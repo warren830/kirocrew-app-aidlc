@@ -17,7 +17,6 @@ import { useI18n } from '../i18n'
 import { plural } from '../lib/format'
 import { DEFAULT_TAB, type Navigate, type StudioRoute, type View } from '../lib/route'
 import { APP_NAME, DEFAULT_APP_NAME } from '../lib/app'
-import { MANIFEST_APP_NAME } from '../lib/enums.generated'
 import { Chip } from './Chip'
 import { Icon, type IconName } from './Icon'
 
@@ -70,7 +69,7 @@ export function TopBar({ route, go, queueCount, showBack, onBack }: TopBarProps)
         </span>
         <span className="studio-brand-name">{t('shell.brand')}</span>
         {/* A side-by-side copy looks identical but owns nothing the shipped Studio installed: say so. */}
-        {APP_NAME !== DEFAULT_APP_NAME && APP_NAME !== MANIFEST_APP_NAME ? (
+        {APP_NAME !== DEFAULT_APP_NAME ? (
           <Chip tone="warn" title={t('shell.instanceHint')}>{t('shell.instance', { name: APP_NAME })}</Chip>
         ) : null}
       </span>

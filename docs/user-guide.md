@@ -3,7 +3,7 @@
 **English** | [简体中文](user-guide.zh-CN.md)
 
 This guide takes you from a machine with nothing installed to a finished AI-DLC intent, and then
-describes every page of Studio. It covers **AI-DLC Studio v2** (`aidlc-studio-v2`, 2.0.0 beta), which
+describes every page of Studio. It covers **AI-DLC Studio** (`aidlc-studio`, 2.0.0 beta), which
 bundles AI-DLC **2.11.3** and needs KiroCrew **0.11.0** or newer.
 
 > [!IMPORTANT]
@@ -38,7 +38,7 @@ bundles AI-DLC **2.11.3** and needs KiroCrew **0.11.0** or newer.
 
 | | |
 |---|---|
-| **Bun** | Required. Install it first: [Step 0](#step-0-install-bun-first) |
+| **Bun** | Required. Install it first: [Step 0](#step-0-install-bun-first). 1.4.4 or newer is recommended: AI-DLC 2.11.3's release notes ask copy-channel installs, such as Studio's bundle, to update Bun to 1.4.4 for CVE-2026-111497. Studio does not enforce it |
 | KiroCrew | 0.11.0 or newer, running |
 | Platform | macOS or Linux. On Windows, run it in WSL 2: [Windows](#windows-run-it-in-wsl-2) |
 | `kiro-cli` | Signed in, as the same operating-system user that runs the gateway |
@@ -216,17 +216,18 @@ built UI, so installing needs neither Node.js nor npm.
 
    ![Install from Path in the External Registries panel](images/install/install-from-path.png)
 
-3. Open **Library**, find **AI-DLC Studio v2** and click **Enable**. If it is not listed, check whether
+3. Open **Library**, find **AI-DLC Studio** and click **Enable**. If it is not listed, check whether
    **Show enabled only** is on. Once enabled, its **⋯** menu also offers **Sync** (for updates),
    **Disable** and **Uninstall**.
 
-   ![AI-DLC Studio v2 enabled in Library, with its ⋯ menu open](images/install/library-enable.png)
+   ![AI-DLC Studio enabled in Library, with its ⋯ menu open](images/install/library-enable.png)
 
 4. If KiroCrew opens the app's details and asks for trust, grant it to this app only. Blanket third-party
    trust is not needed.
-5. **AI-DLC Studio v2** now appears in the sidebar. You can also open it from **Library → Open**.
+5. **AI-DLC Studio** now appears in the sidebar. You can also open it from **Library → Open**.
 
-The path must be a directory on the gateway's machine.
+The path must be a directory on the gateway's machine. If 1.x is already installed, KiroCrew refuses a
+second install under the same name, so update it instead, as [Updating from 1.x](#updating-from-1x) says.
 
 ### Option B: The GitHub registry (installs 1.x, not v2)
 
@@ -236,15 +237,37 @@ is the 1.x **AI-DLC Studio** (`aidlc-studio`). To install 1.x this way, add
 Add Registry**, then **Discover → AI-DLC Studio → Install**. The gateway clones the registry itself,
 without your shell's proxy variables, so it needs direct access to GitHub.
 
-### Running v1 and v2 side by side
+<a id="updating-from-1x"></a>
 
-v2 installs next to 1.x under its own name and keeps its own database. The two do not share install
-receipts, so upgrade or uninstall a repository from the Studio that installed it, and answer each
-intent's decisions in one Studio only: each Studio opens its own conversation for an intent.
+### Updating from 1.x
+
+2.0.0 keeps 1.x's name, `aidlc-studio`, so it replaces a 1.x install in place instead of installing beside
+it. It needs KiroCrew 0.11.0 or newer, so update KiroCrew first. Then update Studio from where you installed it:
+
+- **From a folder:** put the clone on the `v2` branch and sync it.
+
+  ```bash
+  git fetch origin
+  git checkout -B v2 origin/v2
+  ```
+
+  Then use **Library → AI-DLC Studio → ⋯ → Sync**.
+- **From Discover:** take the update KiroCrew offers for AI-DLC Studio once that source lists 2.0.0.
+
+On its first start, 2.0.0 migrates Studio's database. Your activity, install receipts, install
+transactions and settings are kept, so the repositories 1.x installed AI-DLC into upgrade and uninstall
+from 2.0.0 as before. The tables 2.0.0 no longer reads are dropped. Because 2.0.0 bundles a newer AI-DLC,
+those repositories then show **Upgrade available** on the Repos page. Upgrade each one when you choose.
+
+If you installed the 2.0.0 beta from a folder as **AI-DLC Studio v2** (`aidlc-studio-v2`), it stays a
+separate app with its own database, and 2.0.0 does not merge its data. KiroCrew refuses to sync it from a
+folder that now names `aidlc-studio`. Upgrade or uninstall the repositories it installed AI-DLC into from
+that app, because their install receipts are in its storage. Don't drive one repository from both Studios,
+because each opens its own conversation for an intent.
 
 ## Step 2: Check the installation
 
-Open **AI-DLC Studio v2 → Settings** and scroll to **About**.
+Open **AI-DLC Studio → Settings** and scroll to **About**.
 
 ![The Bun executable row in Settings → About, with Bun found and reachable from conversations](images/guide/bun-setting.png)
 
@@ -271,7 +294,7 @@ Open **AI-DLC Studio v2 → Settings** and scroll to **About**.
 From a terminal you can check the same health without changing anything:
 
 ```bash
-bash scripts/kcapi.sh GET /api/apps/aidlc-studio-v2/health
+bash scripts/kcapi.sh GET /api/apps/aidlc-studio/health
 ```
 
 ## A tour of the interface
@@ -697,7 +720,7 @@ Update when no Studio operation is running. Pull the new code into your clone fi
 git pull --ff-only
 ```
 
-Then use **Library → AI-DLC Studio v2 → ⋯ → Sync**. KiroCrew re-syncs from the directory and reloads the
+Then use **Library → AI-DLC Studio → ⋯ → Sync**. KiroCrew re-syncs from the directory and reloads the
 backend.
 
 A new Studio may bundle a newer AI-DLC. Repositories then show **Upgrade available** on the Repos page;
@@ -711,13 +734,13 @@ Only after editing the UI source. The locked Vite dependency needs Node.js `^20.
 (cd ui && npm ci && npm run build)   # builds ui/dist/index.mjs
 ```
 
-Then use **Library → AI-DLC Studio v2 → ⋯ → Sync**.
+Then use **Library → AI-DLC Studio → ⋯ → Sync**.
 
 ### Uninstall
 
 To remove AI-DLC from a repository too, use **Repos → Uninstall harness** first: the install receipts that
 make a safe uninstall possible are kept in Studio's own storage. Then use
-**Library → AI-DLC Studio v2 → ⋯ → Uninstall**.
+**Library → AI-DLC Studio → ⋯ → Uninstall**.
 
 ## Troubleshooting
 
@@ -729,7 +752,7 @@ make a safe uninstall possible are kept in Studio's own storage. Then use
 | **AI-DLC conversations cannot run Bun**, or every approval is refused | **Make Bun available to conversations → Create the link** |
 | "~/.local/bin is not on this gateway's conversation PATH" | Add Bun's directory to KiroCrew's agent environment (`agent.env` `PATH`) and restart the gateway |
 | Install from Path says `source is not a directory` | Use the absolute path of the clone on the gateway's machine (`pwd` in the clone) |
-| Enable in Library opens the app's details | Grant trust to AI-DLC Studio v2 there; click **Enable** again if needed |
+| Enable in Library opens the app's details | Grant trust to AI-DLC Studio there; click **Enable** again if needed |
 | **New intent** cannot choose a repository | Install AI-DLC in it, or complete its install recovery, on the Repos page |
 | A decision is refused: "This intent has no conversation bound yet" | **Intents → Bind a conversation** |
 | "Another operation holds this repository" | Wait for the install, doctor or turn to finish, then send again. Nothing was sent |

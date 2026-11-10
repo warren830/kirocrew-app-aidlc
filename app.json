@@ -1,7 +1,7 @@
 {
-  "name": "aidlc-studio-v2",
+  "name": "aidlc-studio",
   "version": "2.0.0-beta.1",
-  "displayName": "AI-DLC Studio v2",
+  "displayName": "AI-DLC Studio",
   "description": "The visual operating surface for AI-DLC Workflows: one Action Center for every approval gate, question and recovery decision across your repositories, with the evidence beside each decision. Studio reads AI-DLC's own files and sends every decision through the intent's own conversation; it never edits AI-DLC state.",
   "author": "ychchen",
   "license": "Apache-2.0",
@@ -47,8 +47,8 @@
     "entry": "dist/index.mjs",
     "pages": [
       {
-        "route": "/apps/aidlc-studio-v2",
-        "label": "AI-DLC Studio v2",
+        "route": "/apps/aidlc-studio",
+        "label": "AI-DLC Studio",
         "icon": "GitBranch",
         "iconUrl": "icon.svg"
       }
@@ -60,15 +60,15 @@
   },
   "permissions": {
     "api": [
-      "/api/apps/aidlc-studio-v2",
+      "/api/apps/aidlc-studio",
       "/api/chat",
       "/api/models",
       "/api/effort-levels"
     ],
     "events": [
-      "aidlc-studio-v2:action",
-      "aidlc-studio-v2:repo",
-      "aidlc-studio-v2:transaction"
+      "aidlc-studio:action",
+      "aidlc-studio:repo",
+      "aidlc-studio:transaction"
     ],
     "mcpTools": [],
     "storage": true,

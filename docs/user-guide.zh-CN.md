@@ -3,7 +3,7 @@
 [English](user-guide.md) | **简体中文**
 
 本指南从一台什么都没装的机器开始，一路带你跑完一个 AI-DLC 意图，然后逐页说明 Studio 的每个功能。适用于
-**AI-DLC Studio v2**（`aidlc-studio-v2`，2.0.0 测试版），内置 AI-DLC **2.11.3**，需要 KiroCrew **0.11.0**
+**AI-DLC Studio**（`aidlc-studio`，2.0.0 测试版），内置 AI-DLC **2.11.3**，需要 KiroCrew **0.11.0**
 或更新版本。
 
 > [!IMPORTANT]
@@ -39,7 +39,7 @@
 
 | | |
 |---|---|
-| **Bun** | 必需，并且要最先安装：[第 0 步](#step-0) |
+| **Bun** | 必需，并且要最先安装：[第 0 步](#step-0)。建议用 1.4.4 或更新版本：AI-DLC 2.11.3 的发布说明要求 copy 通道的安装（Studio 内置的就是）把 Bun 升到 1.4.4，以修复 CVE-2026-111497。Studio 不强制检查 |
 | KiroCrew | 0.11.0 或更新版本，并已启动 |
 | 平台 | macOS 或 Linux。Windows 请在 WSL 2 里运行，见 [Windows](#windows) |
 | `kiro-cli` | 已登录，且登录用户与运行 Gateway 的系统用户相同 |
@@ -211,15 +211,16 @@ pwd
 
    ![External Registries 面板下方的 Install from Path](images/install/install-from-path.png)
 
-3. 打开 **Library**，找到 **AI-DLC Studio v2**，点击 **Enable**。列表里没有时，检查是否开启了
+3. 打开 **Library**，找到 **AI-DLC Studio**，点击 **Enable**。列表里没有时，检查是否开启了
    **Show enabled only**。启用后，**⋯** 菜单里还有 **Sync**（更新时使用）、**Disable** 和 **Uninstall**。
 
-   ![Library 中已启用的 AI-DLC Studio v2 及其 ⋯ 菜单](images/install/library-enable.png)
+   ![Library 中已启用的 AI-DLC Studio 及其 ⋯ 菜单](images/install/library-enable.png)
 
 4. 如果 KiroCrew 打开应用详情并要求授予信任，只为这个应用授予即可，无需开启第三方应用的全局信任。
-5. 启用后，**AI-DLC Studio v2** 会出现在侧栏，也可以在 **Library → Open** 打开。
+5. 启用后，**AI-DLC Studio** 会出现在侧栏，也可以在 **Library → Open** 打开。
 
-路径必须是 Gateway 所在机器上的目录。
+路径必须是 Gateway 所在机器上的目录。已经装了 1.x 时，KiroCrew 会拒绝再装一个同名应用，请按
+[从 1.x 更新](#updating-from-1x) 更新它。
 
 ### 方式二：添加 GitHub registry（装的是 1.x，不是 v2）
 
@@ -228,16 +229,37 @@ pwd
 `https://github.com/warren830/kirocrew-app-aidlc`，分支填 `release`，然后在 **Discover → AI-DLC Studio →
 Install**。Gateway 会自己克隆 registry，不继承终端里的代理变量，所以它需要能直接访问 GitHub。
 
-### v1 与 v2 并存
+<a id="updating-from-1x"></a>
 
-v2 以自己的名字与 1.x 并排安装，使用自己的数据库。两者不共享安装凭据，所以哪个 Studio 装的仓库就在哪个
-Studio 里升级或卸载；同一个意图的决定只在一个 Studio 里回答，因为两个 Studio 会各自为它开会话。
+### 从 1.x 更新
+
+2.0.0 沿用 1.x 的名字 `aidlc-studio`，所以是原地替换 1.x，而不是装在它旁边。它需要 KiroCrew 0.11.0
+或更新版本，请先升级 KiroCrew。然后按当初的安装方式更新 Studio：
+
+- **从文件夹安装的：** 把克隆目录切到 `v2` 分支再同步。
+
+  ```bash
+  git fetch origin
+  git checkout -B v2 origin/v2
+  ```
+
+  然后 **Library → AI-DLC Studio → ⋯ → Sync**。
+- **从 Discover 安装的：** 等这个来源列出 2.0.0 后，接受 KiroCrew 为 AI-DLC Studio 提供的更新。
+
+2.0.0 第一次启动时会迁移 Studio 的数据库。活动记录、安装凭据、安装事务和设置都会保留，所以 1.x 装过
+AI-DLC 的仓库照旧可以在 2.0.0 里升级和卸载。2.0.0 不再读取的几张表会被删除。因为 2.0.0 内置了更新的
+AI-DLC，这些仓库随后会在仓库页显示 **有可用升级**，可以按需逐个升级。
+
+如果你从文件夹装过 2.0.0 测试版 **AI-DLC Studio v2**（`aidlc-studio-v2`），它仍是另一个应用，用自己的
+数据库，2.0.0 不会合并它的数据。这个文件夹现在的清单名是 `aidlc-studio`，KiroCrew 会拒绝用它同步那个应用。
+它装过 AI-DLC 的仓库，安装凭据在它自己的存储里，请在它里面升级或卸载。不要用两个 Studio 操作同一个仓库，
+因为两个 Studio 会各自为同一个意图开会话。
 
 <a id="step-2"></a>
 
 ## 第 2 步：检查安装结果
 
-打开 **AI-DLC Studio v2 → 设置**，滚动到 **关于**。
+打开 **AI-DLC Studio → 设置**，滚动到 **关于**。
 
 ![设置 → 关于 中的 Bun 可执行文件一行：已找到 Bun，会话也能运行 Bun](images/guide/bun-setting.png)
 
@@ -259,7 +281,7 @@ Studio 里升级或卸载；同一个意图的决定只在一个 Studio 里回�
 也可以在终端里只读地检查同样的健康状态：
 
 ```bash
-bash scripts/kcapi.sh GET /api/apps/aidlc-studio-v2/health
+bash scripts/kcapi.sh GET /api/apps/aidlc-studio/health
 ```
 
 <a id="tour"></a>
@@ -634,7 +656,7 @@ Studio 没有无人值守模式。对 AI-DLC 来说，任何往会话里发文�
 git pull --ff-only
 ```
 
-然后 **Library → AI-DLC Studio v2 → ⋯ → Sync**，KiroCrew 会从原目录重新同步并重新加载后端。
+然后 **Library → AI-DLC Studio → ⋯ → Sync**，KiroCrew 会从原目录重新同步并重新加载后端。
 
 新版 Studio 可能内置更新的 AI-DLC，这时仓库页会显示 **有可用升级**，可以按需逐个升级。
 
@@ -646,12 +668,12 @@ git pull --ff-only
 (cd ui && npm ci && npm run build)   # 构建 ui/dist/index.mjs
 ```
 
-然后 **Library → AI-DLC Studio v2 → ⋯ → Sync**。
+然后 **Library → AI-DLC Studio → ⋯ → Sync**。
 
 ### 卸载
 
 如果也想把 AI-DLC 从仓库中移除，请先在 **仓库 → 卸载引擎** 中操作：安全卸载所依赖的安装凭据保存在 Studio 自己的存储里。
-然后再 **Library → AI-DLC Studio v2 → ⋯ → Uninstall**。
+然后再 **Library → AI-DLC Studio → ⋯ → Uninstall**。
 
 <a id="troubleshooting"></a>
 
@@ -665,7 +687,7 @@ git pull --ff-only
 | 显示 **AI-DLC 对话无法运行 Bun**，或所有批准都被拒绝 | **让对话可以使用 Bun → 创建链接** |
 | 提示“~/.local/bin 不在本 gateway 的对话 PATH 里” | 把 Bun 所在目录加入 KiroCrew 的 agent 环境（`agent.env` 的 `PATH`），然后重启 Gateway |
 | Install from Path 提示 `source is not a directory` | 填写 Gateway 机器上克隆目录的绝对路径（在克隆目录中运行 `pwd`） |
-| 在 Library 点 Enable 后跳到应用详情 | 在详情中为 AI-DLC Studio v2 授予信任；必要时再点一次 **Enable** |
+| 在 Library 点 Enable 后跳到应用详情 | 在详情中为 AI-DLC Studio 授予信任；必要时再点一次 **Enable** |
 | **新建意图** 里选不了某个仓库 | 到仓库页给它安装 AI-DLC，或完成安装恢复 |
 | 决定被拒绝：“该意图尚未绑定会话” | **意图 → 绑定会话** |
 | 提示“另一操作正占用该仓库” | 等安装、doctor 或回合结束后重新发送。没有任何内容被发出 |

@@ -142,8 +142,6 @@ def gen_enums() -> str:
         "",
         f"export const ACCEPT_AS_IS_REVISION_CYCLES = {C.ACCEPT_AS_IS_REVISION_CYCLES}",
         f"export const DEEP_LINK_BASE = {ts_string(C.DEEP_LINK_BASE)}",
-        "/** The name `app.json` installs this tree under: running as it, Studio is not a side copy. */",
-        f"export const MANIFEST_APP_NAME = {ts_string(C.APP_NAME)}",
         "",
     ]
     lines += [

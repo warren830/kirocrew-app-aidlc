@@ -237,7 +237,7 @@ describe('a gate the audit opened but the state file does not show', () => {
       headline: { key: 'action.recovery.headline', params: { stage: 'rough-mockups', codes: ['audit_gate_without_checkbox'] } },
       evidence: { ...base.evidence, findings: [finding(params)],
         session: { ...(base.evidence.session ?? { slot_key: 's1', session_key: 'k', stop_state: 'idle', last_turn_ts: null,
-          queue_depth: 0, busy_reasons: [] }), slot_key: 'aidlc-studio-v2-r_1-261103-x', running } },
+          queue_depth: 0, busy_reasons: [] }), slot_key: 'aidlc-studio-r_1-261103-x', running } },
     } as Partial<ActionCard>
   }
 
@@ -248,7 +248,7 @@ describe('a gate the audit opened but the state file does not show', () => {
       .toBeInTheDocument()
     navigations.length = 0
     await userEvent.click(screen.getByRole('button', { name: 'Open the conversation' }))
-    expect(navigations).toEqual(['/chat?sid=aidlc-studio-v2-r_1-261103-x'])
+    expect(navigations).toEqual(['/chat?sid=aidlc-studio-r_1-261103-x'])
   })
 
   it('without the write log it still sends the person to the idle conversation', async () => {

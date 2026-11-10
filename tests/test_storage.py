@@ -279,6 +279,103 @@ def test_the_whole_ladder_takes_a_version_1_file_to_the_schema_a_fresh_file_has(
         fresh.close()
 
 
+def test_a_1x_database_updates_in_place_with_its_history(S, db_path, tmp_path, clock):
+    """2.x installs over 1.x under the same name and opens 1.x's own file: version 2, built from ``SCHEMA_V1`` and
+    ``SCHEMA_V2`` exactly as 1.x ships them. Decisions, activity, install receipts and settings come through; only
+    the retired action statuses are renamed, and the tables nothing reads any more are gone."""
+    raw = legacy_file(S, db_path, 2)
+    raw_insert(raw, "schema_meta", key="created_at", value="2026-08-01T00:00:00Z")
+    raw_insert(raw, "schema_meta", key="migrated_at", value="2026-08-01T00:00:00Z")
+    raw_insert(raw, "intent_bindings", binding_key="r_1:default:260904-gate-demo", repo_id="r_1", space="default",
+               intent_dir="260904-gate-demo", canonical_session_key="dashboard:aidlc-studio-r_1-260904-gate-demo",
+               slot_key="aidlc-studio-r_1-260904-gate-demo", binding_generation=3, created_at=TS, updated_at=TS)
+
+    def old_action(action_id, status, **over):
+        raw_insert(raw, "actions", action_id=action_id, type="gate", risk_class="human_lane", repo_id="r_1",
+                   intent_dir="260904-gate-demo", space="default", status=status, created_at=TS, updated_at=TS,
+                   waiting_since=TS, **over)
+
+    old_action("a_done", "StateChanged", human_text="Approve and continue", wire_text="APPROVE", dedupe_key="k0",
+               delivered_at=TS, resolved_at=TS, resolution_json='{"evidence": "GATE_APPROVED"}')
+    old_action("a_ran", "Processing", delivered_at="2026-09-04T10:01:00Z", evidence_json='{"receipt": {"ok": true}}',
+               dedupe_key="k1")
+    old_action("a_unsure", "DeliveryUncertain", dedupe_key="k2")
+    old_action("a_draft", "Draft")
+    old_action("a_open", "Queued", dedupe_key="k3")
+    for action_id, from_status, to_status in (("a_done", "Queued", "Delivering"), ("a_done", "Delivering", "Delivered"),
+                                              ("a_done", "Delivered", "Processing"),
+                                              ("a_done", "Processing", "StateChanged"),
+                                              ("a_unsure", "Delivering", "DeliveryUncertain"),
+                                              ("a_draft", "Draft", "Queued")):
+        raw_insert(raw, "action_transitions", action_id=action_id, from_status=from_status, to_status=to_status,
+                   generation=1, at=TS, reason="observed")
+    raw_insert(raw, "activity", at=TS, source="studio", kind="action.submitted", severity="info", repo_id="r_1",
+               intent_dir="260904-gate-demo", space="default", action_id="a_done",
+               message_key="activity.action.submitted", params_json="{}", human_text="Approve and continue",
+               evidence_json='[{"kind": "audit", "ref": "audit.md#12", "detail": "GATE_APPROVED"}]')
+    raw_insert(raw, "activity", at=TS, source="studio", kind="repo.installed", severity="info", repo_id="r_1",
+               message_key="activity.repo.installed", params_json='{"engine": "2.7.1"}')
+    raw_insert(raw, "install_transactions", transaction_id="tx_1", repo_id="r_1", kind="install", status="committed",
+               studio_version="1.1.7", engine_version="2.7.1", payload_digest="d" * 64, started_at=TS,
+               finished_at=TS, steps_json='[{"step": "commit", "ok": true}]')
+    raw_insert(raw, "install_receipts", receipt_id="rc_1", repo_id="r_1", studio_version="1.1.7",
+               engine_version="2.7.1", payload_digest="d" * 64, committed_at=TS, transaction_id="tx_1",
+               files_json='[{"path": ".kiro/tools/aidlc-lib.ts", "sha256": "' + "a" * 64 + '"}]', status="current")
+    raw_insert(raw, "preferences", key="settings", value_json='{"values": {"locale": "zh-CN"}, "updated_at": "%s"}' % TS,
+               updated_at=TS)
+    raw_insert(raw, "preferences", key="runtime.bun", value_json='{"path": "/opt/bun/bin/bun"}', updated_at=TS)
+    raw_insert(raw, "admin_leases", resolved_repo_identity="1:r_1", repo_id="r_1", operation_type="install",
+               acquired_at=TS, heartbeat_at=TS, generation=1, boot_id="boot-1x")
+    raw_insert(raw, "events", at=TS, type="repo.updated", payload_json="{}")
+    raw.commit()
+    kept = ("repos", "intent_bindings", "activity", "install_transactions", "install_receipts", "preferences")
+    before = {table: raw.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall() for table in kept}
+    raw.close()
+
+    clock.advance(3600)
+    store = opened(S, db_path, clock)
+    fresh = opened(S, tmp_path / "fresh" / "studio.sqlite3", clock)
+    try:
+        assert schema_of(db_path) == schema_of(fresh.path)
+        other = sqlite3.connect(str(db_path))
+        try:
+            assert {table: other.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall() for table in kept} == before
+        finally:
+            other.close()
+        assert {r["action_id"]: r["status"] for r in store.select("actions")} == {
+            "a_done": "StateChanged", "a_ran": "Delivered", "a_unsure": "ReconciliationRequired", "a_draft": "Queued",
+            "a_open": "Queued"}
+        done = store.get("actions", "a_done")
+        assert (done["human_text"], done["resolution_json"]) == ("Approve and continue", {"evidence": "GATE_APPROVED"})
+        assert store.get("actions", "a_ran")["evidence_json"] == {"receipt": {"ok": True},
+                                                                   "turn_started_at": "2026-09-04T10:01:00Z"}
+        assert [(t["action_id"], t["from_status"], t["to_status"])
+                for t in store.select("action_transitions", order_by="id ASC")] == [
+            ("a_done", "Queued", "Delivering"), ("a_done", "Delivering", "Delivered"),
+            ("a_done", "Delivered", "Processing"), ("a_done", "Processing", "StateChanged"),
+            ("a_unsure", "Delivering", "ReconciliationRequired"), ("a_draft", "Queued", "Queued")]
+
+        history = store.activity_query(S.ActivityQuery(repo_id="r_1"))[0]
+        assert [(r.kind, r.human_text) for r in history] == [("repo.installed", None),
+                                                             ("action.submitted", "Approve and continue")]
+        assert history[1].evidence == (S.EvidenceRef(kind="audit", ref="audit.md#12", detail="GATE_APPROVED"),)
+        (receipt,) = store.select("install_receipts", {"repo_id": "r_1", "status": "current"})
+        assert (receipt["transaction_id"], receipt["studio_version"], receipt["files_json"]) == (
+            "tx_1", "1.1.7", [{"path": ".kiro/tools/aidlc-lib.ts", "sha256": "a" * 64}])
+        assert store.pref_get("settings") == {"values": {"locale": "zh-CN"}, "updated_at": TS}
+        assert store.pref_get("runtime.bun") == {"path": "/opt/bun/bin/bun"}
+
+        meta = {r["key"]: r["value"] for r in store.select("schema_meta")}
+        assert meta == {"schema_version": str(S.SCHEMA_VERSION), "created_at": "2026-08-01T00:00:00Z",
+                        "migrated_at": clock.iso()}
+        assert store.integrity_check() == []
+        with pytest.raises(sqlite3.IntegrityError):  # the converted card still holds its boundary
+            action(store, "a_twin", status="Queued", dedupe_key="k1")
+    finally:
+        store.close()
+        fresh.close()
+
+
 def test_pragmas_are_in_force_on_the_connection(store, C):
     p = store.pragmas()
     assert p["journal_mode"] == "wal"
