@@ -248,7 +248,7 @@ Install**。Gateway 会自己克隆 registry，不继承终端里的代理变量
 
 这次更新比 1.x 多要两项权限：`/api/models` 和 `/api/effort-levels`，Studio 的模型和推理强度选择器要读取它们。
 KiroCrew 里 AI-DLC Studio 的应用页会提示 **此版本的 AI-DLC Studio 请求了新权限**，在你点 **批准新权限** 之前，
-KiroCrew 不开放这两项，Studio 照常启用，选择器只提供默认选项。
+KiroCrew 不开放这两项。这期间 Studio 照常启用，但选择器可能只提供默认选项。
 
 2.0.0 第一次启动时会迁移 Studio 的数据库。活动记录、安装凭据、安装事务和设置都会保留，所以 1.x 装过
 AI-DLC 的仓库照旧可以在 2.0.0 里升级和卸载。2.0.0 不再读取的几张表会被删除。因为 2.0.0 内置了更新的

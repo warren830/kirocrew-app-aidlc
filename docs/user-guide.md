@@ -255,9 +255,9 @@ it. It needs KiroCrew 0.11.0 or newer, so update KiroCrew first. Then update Stu
 - **From Discover:** take the update KiroCrew offers for AI-DLC Studio once that source lists 2.0.0.
 
 The update asks for two permissions 1.x did not have, `/api/models` and `/api/effort-levels`, which Studio's
-model and effort pickers read. KiroCrew keeps them off, with Studio still enabled and its pickers offering only
-the default, until you click **Approve new permissions** under **This version of AI-DLC Studio asks for new
-permissions** on AI-DLC Studio's page in KiroCrew.
+model and effort pickers read. KiroCrew holds them until you click **Approve new permissions** under **This
+version of AI-DLC Studio asks for new permissions** on AI-DLC Studio's page in KiroCrew. Studio stays enabled
+in the meantime, though its pickers may offer only the default.
 
 On its first start, 2.0.0 migrates Studio's database. Your activity, install receipts, install
 transactions and settings are kept, so the repositories 1.x installed AI-DLC into upgrade and uninstall

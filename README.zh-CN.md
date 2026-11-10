@@ -110,7 +110,7 @@ pwd
 
 已经装了 1.x 时，KiroCrew 会拒绝再装一个同名应用，请改为更新它，见[从 1.x 更新](docs/user-guide.zh-CN.md#updating-from-1x)。
 这次更新比 1.x 多要两项权限：`/api/models` 和 `/api/effort-levels`。请在 KiroCrew 里 AI-DLC Studio 的应用页点
-**批准新权限**；批准之前 Studio 照常运行，只是模型和推理强度选择器只提供默认选项。
+**批准新权限**；批准之前 Studio 照常运行，但模型和推理强度选择器可能只提供默认选项。
 
 ### 3. 在 Studio 里确认 Bun
 

@@ -141,8 +141,8 @@ Then in KiroCrew, **Discover → Add source → Install from Path**, paste the `
 If 1.x is already installed, update it instead, because KiroCrew refuses a second install under the same
 name ("already installed"). See [Updating from 1.x](docs/user-guide.md#updating-from-1x). The update asks
 for two permissions 1.x did not have, `/api/models` and `/api/effort-levels`. Approve them with **Approve new
-permissions** on AI-DLC Studio's page in KiroCrew; until then Studio keeps running and its model and effort
-pickers offer only the default.
+permissions** on AI-DLC Studio's page in KiroCrew. Studio keeps running in the meantime, though its model and
+effort pickers may offer only the default until you do.
 
 The repository includes the built UI, so installing needs neither Node.js nor npm.
 
