@@ -139,7 +139,10 @@ Then in KiroCrew, **Discover → Add source → Install from Path**, paste the `
 **Library → AI-DLC Studio → Enable** (grant trust to this app only if asked).
 
 If 1.x is already installed, update it instead, because KiroCrew refuses a second install under the same
-name ("already installed"). See [Updating from 1.x](docs/user-guide.md#updating-from-1x).
+name ("already installed"). See [Updating from 1.x](docs/user-guide.md#updating-from-1x). The update asks
+for two permissions 1.x did not have, `/api/models` and `/api/effort-levels`. Approve them with **Approve new
+permissions** on AI-DLC Studio's page in KiroCrew; until then Studio keeps running and its model and effort
+pickers offer only the default.
 
 The repository includes the built UI, so installing needs neither Node.js nor npm.
 
@@ -269,7 +272,7 @@ reason, and is no longer Studio's. The 2.10 model default Studio wrote to `.kiro
 |---|---|
 | `api: /api/apps/aidlc-studio` | its own backend routes |
 | `api: /api/chat` | the human-submission lane: your browser session creates the intent's canonical session and sends your confirmed decision text to it |
-| `api: /api/ask-question` | reads pending structured question cards when the host has any, so a question can be answered without leaving Studio |
+| `api: /api/models`, `api: /api/effort-levels` | read-only: the models and reasoning-effort levels your KiroCrew account offers, for the pickers on a new conversation and on the Advisor (new in 2.0.0) |
 | `events` | three Studio event names for live queue updates |
 | `storage` | Studio's own registry, action records, receipts and preferences |
 | `spawn` | the AI Advisor, an on-demand read-only agent with `thinking` as its only tool |

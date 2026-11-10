@@ -313,6 +313,10 @@ git checkout -B v2 origin/v2
 <p><strong>From Discover:</strong> take the update KiroCrew offers for AI-DLC Studio once that source lists 2.0.0.</p>
 </li>
 </ul>
+<p>The update asks for two permissions 1.x did not have, <code>/api/models</code> and <code>/api/effort-levels</code>, which Studio's
+model and effort pickers read. KiroCrew keeps them off, with Studio still enabled and its pickers offering only
+the default, until you click <strong>Approve new permissions</strong> under <strong>This version of AI-DLC Studio asks for new
+permissions</strong> on AI-DLC Studio's page in KiroCrew.</p>
 <p>On its first start, 2.0.0 migrates Studio's database. Your activity, install receipts, install
 transactions and settings are kept, so the repositories 1.x installed AI-DLC into upgrade and uninstall
 from 2.0.0 as before. The tables 2.0.0 no longer reads are dropped. Because 2.0.0 bundles a newer AI-DLC,
