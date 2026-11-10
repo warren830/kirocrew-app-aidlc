@@ -3,7 +3,7 @@
 **English** | [简体中文](user-guide.zh-CN.md)
 
 This guide takes you from a machine with nothing installed to a finished AI-DLC intent, and then
-describes every page of Studio. It covers **AI-DLC Studio** (`aidlc-studio`, 2.0.0 beta), which
+describes every page of Studio. It covers **AI-DLC Studio** (`aidlc-studio`, 2.0.0), which
 bundles AI-DLC **2.11.3** and needs KiroCrew **0.11.0** or newer.
 
 > [!IMPORTANT]

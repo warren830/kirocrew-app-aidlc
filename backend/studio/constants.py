@@ -33,7 +33,7 @@ def _installed_name(module_name: str) -> str:
 
 APP_NAME = _installed_name(__name__)
 #: Must equal ``app.json`` ``version`` (pinned by tests/test_manifest.py).
-APP_VERSION = "2.0.0-beta.1"
+APP_VERSION = "2.0.0"
 #: Must equal ``app.json`` ``minKiroCrewVersion``. 0.11 is the host Studio is built and verified against: a tool
 #: approval answered from Studio names the row the person saw (``origin: native`` + ``request_mid``), a conversation
 #: may carry its own turn limit, the embedded chat takes ``hide``, and a degraded mark means "restart the app". (0.8's

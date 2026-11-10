@@ -9,7 +9,7 @@ never around it.
 
 ![The Action Center with an approval gate and its evidence](assets/screenshots/action-center-gate.png)
 
-> **This is the v2 branch (2.0.0 beta).** Same features as 1.x on a backend 40% smaller, for KiroCrew 0.11.0 or
+> **This is the v2 branch (2.0.0).** Same features as 1.x on a backend 40% smaller, for KiroCrew 0.11.0 or
 > newer. It keeps 1.x's name, `aidlc-studio`, so it updates a 1.x install in place: on its first start Studio
 > migrates its database and keeps your activity, install receipts and settings, so the repositories 1.x installed
 > upgrade and uninstall from it. If you installed the beta from a folder as **AI-DLC Studio v2**
