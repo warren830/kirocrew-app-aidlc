@@ -436,6 +436,80 @@ def _team_gate_open(snap: IntentSnapshot) -> bool:
     return any(gate.status == "awaiting-approval" for gate in snap.unit_gates)
 
 
+_WORKFLOW_BOUNDARIES = frozenset({"WORKFLOW_STARTED", "WORKFLOW_COMPLETED"})
+_STAGE_BOUNDARIES = frozenset({
+    "STAGE_STARTED", "STAGE_REVISING", "STAGE_JUMPED",
+    "STAGE_COMPLETED", "STAGE_SKIPPED", "STAGE_AWAITING_APPROVAL",
+    "UNIT_STARTED", "UNIT_RESUMED", "UNIT_COMPLETED", "SWARM_UNIT_CONVERGED", "DECISION_RECORDED",
+    "QUESTION_ASKED", "QUESTION_SHOWN",
+    *C.RESOLUTION_EVENTS,
+})
+
+
+def unretired_errors(snap: IntentSnapshot, errors: Sequence[AuditEvent]) -> list[AuditEvent]:
+    """``errors`` less those a lifecycle boundary written after them retired, using audit causality rather than
+    age. The failure card and the reconciler's failure verdict both ask this, so neither can call an error burst
+    a failure once AI-DLC has moved past it.
+
+    Only complete history can prove that a later lifecycle boundary retired old errors. Same-shard
+    append order is authoritative; cross-shard timestamp ties cannot prove resolution. Unit-scoped
+    boundaries never clear another unit's errors. An error row without a unit belongs to the selected
+    unit, so that unit's own boundaries clear it.
+
+    Progress the conductor made after the errors is a boundary too: the stage reaching its gate, a
+    recorded answer, and Construction's per-unit `UNIT_*` rows, which are how a unit of a stage
+    starts and finishes — `STAGE_COMPLETED` only comes once every unit is done, so without them a
+    burst in the first Construction stage stayed a failure through every later stage of the unit.
+    A swarm writes no `UNIT_*` row: its `SWARM_UNIT_CONVERGED` names the unit in `Unit name` and runs
+    with no unit selected, so it clears that unit's errors and, then, the ones naming no unit.
+    A decision logged after the errors is the conductor's halt-and-ask: it handed them to the person,
+    and the question, not Retry now, is what AI-DLC waits on. From 2.11.3 the engine also records a question
+    it hands out itself (`QUESTION_ASKED`: one `next` puts to the person, the code plan question, the go-ahead
+    for a system package install it held), and `QUESTION_SHOWN` when an open question, a gate or a logged
+    decision included, reaches a chat that had not seen it.
+    """
+    if not snap.audit.complete:
+        return list(errors)
+    boundaries = [
+        event for event in snap.audit.events
+        if event.event in _WORKFLOW_BOUNDARIES | _STAGE_BOUNDARIES
+        and event.fields.get("Workflow") in (None, "", "main")
+        and _epoch(event.timestamp) is not None
+    ]
+
+    def applies(boundary: AuditEvent, error: AuditEvent) -> bool:
+        boundary_unit = boundary.fields.get("Unit") or None
+        if boundary.event in _WORKFLOW_BOUNDARIES:
+            return boundary_unit is None
+        boundary_stage = boundary.fields.get("Stage")
+        error_unit = error.fields.get("Unit") or None
+        if boundary.event == "SWARM_UNIT_CONVERGED":
+            # Measured on a Feature run: a unit's `aidlc-log review` refusals, merged back from its worktree
+            # with no Stage or Unit, kept a red card up while AI-DLC asked to merge the converged unit.
+            owns = (error_unit or snap.unit) in (None, boundary.fields.get("Unit name") or None)
+        else:
+            owns = boundary_unit in ({error_unit} if error_unit else {None, snap.unit})
+        return bool(boundary_stage) and owns and error.fields.get("Stage") in (None, "", boundary_stage)
+
+    remaining = list(errors)
+    for boundary in boundaries:
+        # A tied error makes this boundary unusable as resolution proof for these errors.
+        if any(
+            applies(boundary, error) and error.shard != boundary.shard
+            and _epoch(error.timestamp) == _epoch(boundary.timestamp)
+            for error in errors
+        ):
+            continue
+        remaining = [
+            error for error in remaining
+            if not applies(boundary, error) or not (
+                boundary.pos > error.pos if boundary.shard == error.shard
+                else _epoch(boundary.timestamp) > _epoch(error.timestamp)
+            )
+        ]
+    return remaining
+
+
 @dataclass(frozen=True, slots=True)
 class StableBoundary(WireRecord):
     """Whether this intent sits still enough for a decision (PRD §12.2). All five conditions are evaluated and the
@@ -1492,55 +1566,9 @@ class Projection:
 
     @staticmethod
     def _error_burst(snap: IntentSnapshot) -> str | None:
-        """Newest unresolved burst in the current scope, using audit causality rather than age.
-
-        Only complete history can prove that a later lifecycle boundary retired old errors. Same-shard
-        append order is authoritative; cross-shard timestamp ties cannot prove resolution. Unit-scoped
-        boundaries never clear another unit's errors, and separate units never combine into a burst.
-        An error row without a unit belongs to the selected unit, so that unit's own boundaries clear it.
-
-        Progress the conductor made after the errors is a boundary too: the stage reaching its gate, a
-        recorded answer, and Construction's per-unit `UNIT_*` rows, which are how a unit of a stage
-        starts and finishes — `STAGE_COMPLETED` only comes once every unit is done, so without them a
-        burst in the first Construction stage stayed a failure through every later stage of the unit.
-        A swarm writes no `UNIT_*` row: its `SWARM_UNIT_CONVERGED` names the unit in `Unit name` and runs
-        with no unit selected, so it clears that unit's errors and, then, the ones naming no unit.
-        A decision logged after the errors is the conductor's halt-and-ask: it handed them to the person,
-        and the question, not Retry now, is what AI-DLC waits on. From 2.11.3 the engine also records a question
-        it hands out itself (`QUESTION_ASKED`: one `next` puts to the person, the code plan question, the go-ahead
-        for a system package install it held), and `QUESTION_SHOWN` when an open question, a gate or a logged
-        decision included, reaches a chat that had not seen it.
-        """
+        """Newest unresolved burst in the current scope: the errors no later lifecycle boundary retired
+        (``unretired_errors``), dense enough inside the window. Separate units never combine into a burst."""
         stage = snap.stage
-        workflow_boundaries = {"WORKFLOW_STARTED", "WORKFLOW_COMPLETED"}
-        stage_boundaries = {
-            "STAGE_STARTED", "STAGE_REVISING", "STAGE_JUMPED",
-            "STAGE_COMPLETED", "STAGE_SKIPPED", "STAGE_AWAITING_APPROVAL",
-            "UNIT_STARTED", "UNIT_RESUMED", "UNIT_COMPLETED", "SWARM_UNIT_CONVERGED", "DECISION_RECORDED",
-            "QUESTION_ASKED", "QUESTION_SHOWN",
-            *C.RESOLUTION_EVENTS,
-        }
-        boundaries = [
-            event for event in snap.audit.events
-            if snap.audit.complete and event.event in workflow_boundaries | stage_boundaries
-            and event.fields.get("Workflow") in (None, "", "main")
-            and _epoch(event.timestamp) is not None
-        ]
-
-        def applies(boundary: AuditEvent, error: AuditEvent) -> bool:
-            boundary_unit = boundary.fields.get("Unit") or None
-            if boundary.event in workflow_boundaries:
-                return boundary_unit is None
-            boundary_stage = boundary.fields.get("Stage")
-            error_unit = error.fields.get("Unit") or None
-            if boundary.event == "SWARM_UNIT_CONVERGED":
-                # Measured on a Feature run: a unit's `aidlc-log review` refusals, merged back from its worktree
-                # with no Stage or Unit, kept a red card up while AI-DLC asked to merge the converged unit.
-                owns = (error_unit or snap.unit) in (None, boundary.fields.get("Unit name") or None)
-            else:
-                owns = boundary_unit in ({error_unit} if error_unit else {None, snap.unit})
-            return bool(boundary_stage) and owns and error.fields.get("Stage") in (None, "", boundary_stage)
-
         scopes: dict[tuple[str | None, str | None], list[AuditEvent]] = {}
         for event in snap.audit.events:
             if (
@@ -1556,23 +1584,7 @@ class Projection:
 
         bursts: list[AuditEvent] = []
         for candidates in scopes.values():
-            remaining = candidates
-            for boundary in boundaries:
-                # A tied error makes this boundary unusable as resolution proof for the scope.
-                if any(
-                    applies(boundary, error) and error.shard != boundary.shard
-                    and _epoch(error.timestamp) == _epoch(boundary.timestamp)
-                    for error in candidates
-                ):
-                    continue
-                remaining = [
-                    error for error in remaining
-                    if not applies(boundary, error) or not (
-                        boundary.pos > error.pos if boundary.shard == error.shard
-                        else _epoch(boundary.timestamp) > _epoch(error.timestamp)
-                    )
-                ]
-            rows = sorted(remaining, key=lambda event: event.sort_key)
+            rows = sorted(unretired_errors(snap, candidates), key=lambda event: event.sort_key)
             for start in range(len(rows) - ERROR_BURST_COUNT, -1, -1):
                 window = rows[start:start + ERROR_BURST_COUNT]
                 first, last = _epoch(window[0].timestamp), _epoch(window[-1].timestamp)

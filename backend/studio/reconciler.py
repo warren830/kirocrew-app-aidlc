@@ -55,7 +55,10 @@ from .aidlc_reader import (
 )
 from .consistency import RepoFacts
 from .errors import IllegalTransition, StaleGeneration, StudioError
-from .projection import UNCERTAIN_STATUSES, breaker_key, run_unavailable_reason
+from .projection import (
+    ERROR_BURST_COUNT, ERROR_BURST_WINDOW_SECS, UNCERTAIN_STATUSES, breaker_key, run_unavailable_reason,
+    unretired_errors,
+)
 from .repo_registry import RepoScan
 from .wire import WireRecord
 
@@ -111,11 +114,6 @@ PRESENCE_COMPARED_FIELDS: tuple[str, ...] = (
     "audit_tail_sha256",
     "state_sha256",
 )
-
-#: New ``ERROR_LOGGED`` rows inside the window that count as a failure rather than a conductor mistake: single
-#: rows are routine (FORMAT-NOTES §6), so one must never fail an action.
-_ERROR_BURST_COUNT = 3
-_ERROR_BURST_WINDOW_SECS = 600
 
 #: Ordered failure classification (§1.13.1): first match wins, so a throttled ACP stream is ``rate_limit``,
 #: not ``transport``.
@@ -1639,14 +1637,17 @@ class Reconciler:
         return f"{cls}.{_slug_of(normalised)}:{digest}", cls, f"template.failure.{cls}"
 
     def _classified_failure(self, rec: Any, snap: Any) -> Resolution | None:
-        """A host error on the receipt, or a burst of new ``ERROR_LOGGED`` rows; a single row is the conductor
-        correcting itself (FORMAT-NOTES §6), and failing on it would turn self-correction into a breaker."""
+        """A host error on the receipt, or a burst of new ``ERROR_LOGGED`` rows inside the window from delivery; a
+        single row is the conductor correcting itself (FORMAT-NOTES §6), and failing on it would turn
+        self-correction into a breaker. Rows a later lifecycle boundary retired do not count, by the failure card's
+        own rule: once AI-DLC hands the person a question after its errors, the question is what it waits on."""
         receipt = rec.evidence.get("receipt") or {}
         host_error = receipt.get("error") if isinstance(receipt, Mapping) else None
-        errors = [event for event in self._new_events(rec, snap, (C.ERROR_EVENT,), None)
-                  if (gap := _elapsed(rec.delivering_at, _attr(event, "timestamp"))) is None
-                  or gap <= _ERROR_BURST_WINDOW_SECS]
-        if not host_error and len(errors) < _ERROR_BURST_COUNT:
+        errors = unretired_errors(snap, [
+            event for event in self._new_events(rec, snap, (C.ERROR_EVENT,), None)
+            if (gap := _elapsed(rec.delivering_at, _attr(event, "timestamp"))) is None
+            or gap <= ERROR_BURST_WINDOW_SECS])
+        if not host_error and len(errors) < ERROR_BURST_COUNT:
             return None
         return Resolution("failed", "host_error" if host_error else "error_burst", {
             "host_error": host_error, "audit_error_events": errors, "audit_errors": [_json_of(e) for e in errors]})

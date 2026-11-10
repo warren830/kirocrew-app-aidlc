@@ -393,6 +393,36 @@ def test_an_approval_whose_turn_ends_in_a_guard_burst_fails_and_counts_toward_th
     assert [card["action_id"] != delivered.action_id for card in gates] == [True]
 
 
+@pytest.mark.parametrize(("asked", "status", "breakers", "red_cards"), [
+    (None, "Failed", [(1, "template.failure.guard", True)], {"circuit_breaker", "failure"}),
+    ("QUESTION_ASKED", "ResolvedNoTransition", [], set()),
+    ("QUESTION_SHOWN", "ResolvedNoTransition", [], set()),
+    ("DECISION_RECORDED", "ResolvedNoTransition", [], set()),
+])
+def test_a_guard_burst_the_engine_answers_with_a_question_fails_nothing_and_opens_no_breaker(
+    sv, routes, fake_host, scene, delivered, asked, status, breakers, red_cards
+):
+    """The same guard burst, then AI-DLC hands the person a question: 2.11.3's ``QUESTION_ASKED`` or
+    ``QUESTION_SHOWN``, or the conductor's ``DECISION_RECORDED``. The question, not Retry now, is what it waits on, so
+    the decision settles unverified like a single refusal, no breaker opens, and no red card sits beside the gate.
+    Without the question the burst is still the failure that opens the breaker."""
+    ts = "2026-09-04T10:00:20Z"
+    shard = _shard(scene.root)
+    question = F.audit_text(F.audit_block(asked, "2026-09-04T10:02:40Z", Stage=STAGE)) if asked else ""
+    shard.write_text(shard.read_text() + F.audit_text(F.audit_block("HUMAN_TURN", ts))
+                     + F.error_burst_audit(ts="2026-09-04T10:00:21Z", count=3, error="Refusing to complete: guard")
+                     + question)
+    stamp_human_turn(_record_dir(scene.root), ts, ns=time.time_ns())
+    _finish_the_turn(fake_host, scene.slot_key)
+    asyncio.run(sv.reconciler.tick())
+    asyncio.run(sv.reconciler.tick())
+    row = _row(sv, delivered.action_id)
+    assert row["status"] == status, row["resolution_json"]
+    assert [(b["count"], b["reason"], bool(b["opened_at"])) for b in sv.storage.select("breakers")] == breakers
+    queued = {card["type"] for card in _queue(sv, routes, fake_host) if card["status"] == "Queued"}
+    assert (queued & {"circuit_breaker", "failure"}, "gate" in queued) == (red_cards, True), queued
+
+
 def test_a_delivered_approval_no_human_turn_explains_is_closed_by_the_person_and_unblocks_the_intent(
     sv, routes, fake_host, scene, delivered
 ):

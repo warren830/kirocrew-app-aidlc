@@ -1959,6 +1959,7 @@ class Reconciler:
     async def reconcile_action(self, rec: ActionRecord, snap: IntentSnapshot | None = None) -> ActionRecord
         # applies the §1.12 resolution table (incl. presence and cursor rules); on resolution (which ends the execution lease): retire the derived card
         # whose boundary is gone; on evidence of ERROR_LOGGED burst or host error row → record_failure with fingerprint classification (§1.13.1);
+        # the burst counts only the rows no later lifecycle boundary retired (projection.unretired_errors, the failure card's own rule);
         # human_presence_anomaly / cursor_moved / wrong_slot → ReconciliationRequired with the finding stored on the action + Activity row
     async def reconcile_now(self, action_id: str) -> ActionRecord     # POST /actions/{id}/reconcile
     def classify_failure(self, *, host_error: str | None, audit_errors: list[AuditEvent]) -> tuple[str, str, str]
