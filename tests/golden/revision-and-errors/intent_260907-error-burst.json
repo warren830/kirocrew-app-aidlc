@@ -223,7 +223,7 @@
    "engine": {
     "dir": ".kiro",
     "engine_state_version": 8,
-    "engine_version": "2.11.2",
+    "engine_version": "2.11.3",
     "harness_name": "kiro",
     "has_utility": true,
     "rules_subdir": "steering",
