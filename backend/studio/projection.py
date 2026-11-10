@@ -1506,7 +1506,10 @@ class Projection:
         A swarm writes no `UNIT_*` row: its `SWARM_UNIT_CONVERGED` names the unit in `Unit name` and runs
         with no unit selected, so it clears that unit's errors and, then, the ones naming no unit.
         A decision logged after the errors is the conductor's halt-and-ask: it handed them to the person,
-        and the question, not Retry now, is what AI-DLC waits on.
+        and the question, not Retry now, is what AI-DLC waits on. From 2.11.3 the engine also records a question
+        it hands out itself (`QUESTION_ASKED`: one `next` puts to the person, the code plan question, the go-ahead
+        for a system package install it held), and `QUESTION_SHOWN` when an open question, a gate or a logged
+        decision included, reaches a chat that had not seen it.
         """
         stage = snap.stage
         workflow_boundaries = {"WORKFLOW_STARTED", "WORKFLOW_COMPLETED"}
@@ -1514,6 +1517,7 @@ class Projection:
             "STAGE_STARTED", "STAGE_REVISING", "STAGE_JUMPED",
             "STAGE_COMPLETED", "STAGE_SKIPPED", "STAGE_AWAITING_APPROVAL",
             "UNIT_STARTED", "UNIT_RESUMED", "UNIT_COMPLETED", "SWARM_UNIT_CONVERGED", "DECISION_RECORDED",
+            "QUESTION_ASKED", "QUESTION_SHOWN",
             *C.RESOLUTION_EVENTS,
         }
         boundaries = [

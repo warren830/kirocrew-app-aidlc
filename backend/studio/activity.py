@@ -81,6 +81,11 @@ _EXTRA_AUDIT_EVENTS: tuple[str, ...] = (
     "HOST_TURN", "SUBAGENT_DISPATCHED", "SENSOR_COULD_NOT_RUN", "STAGE_OUTPUT_AMENDED", "STATE_TRANSITION_BLOCKED",
     "STAGE_RULES_BLOCKED", "REVIEW_VERDICT_DICTATED", "STAGE_DEFINITION_CHANGED", "SOURCE_WORK_NOT_FOUND",
     "INTENT_REPOS_CHANGED", "INTENT_CHECKOUTS_CHANGED",
+    # AI-DLC 2.11.3: a question the engine hands out itself and an open question reaching a chat that had not seen
+    # it, a system package install held for the person's go-ahead or let through on their turn, and a change they
+    # asked for in the main checkout while the Units were built side by side.
+    "QUESTION_ASKED", "QUESTION_SHOWN", "SYSTEM_INSTALL_BLOCKED", "SYSTEM_INSTALL_ALLOWED",
+    "MAIN_CHECKOUT_CHANGE_ALLOWED",
 )
 
 #: Every event with an ``audit.<EVENT>`` key, derived from the engine taxonomy so the catalog cannot lag it.
@@ -92,7 +97,7 @@ _AUDIT_EVENT_SET = frozenset(AUDIT_EVENTS)
 UNKNOWN_AUDIT_MESSAGE_KEY = "audit.unknown_event"
 
 _ATTENTION_AUDIT_EVENTS = frozenset({C.ERROR_EVENT, "SENSOR_FAILED", "SENSOR_COULD_NOT_RUN", "STATE_TRANSITION_BLOCKED",
-                                     "STAGE_RULES_BLOCKED", "REVIEW_VERDICT_DICTATED"})
+                                     "STAGE_RULES_BLOCKED", "REVIEW_VERDICT_DICTATED", "SYSTEM_INSTALL_BLOCKED"})
 
 #: Per-value cap for an audit field in ``params``: a ``Feedback`` value has no bound, and the full block is in
 #: ``raw`` for the Evidence drawer.

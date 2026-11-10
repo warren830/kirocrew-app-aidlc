@@ -65,6 +65,9 @@ def failure(projection, snap, **overrides):
     # Or it halted and asked the person about them (measured on a Feature run: three refused merges, then "the
     # merge is stuck, how should I handle it?"), and Retry now would send a turn into that question.
     "DECISION_RECORDED",
+    # Or, from 2.11.3, the engine handed out a question of its own after them, or showed an open one in a new chat:
+    # that question, not Retry now, is what AI-DLC waits on.
+    "QUESTION_ASKED", "QUESTION_SHOWN",
 ])
 def test_proven_lifecycle_boundary_retires_an_older_burst(snapshot, projection, kind, bound_stage):
     barrier = event(kind, 40, **({} if kind.startswith("WORKFLOW_") else {"Stage": STAGE}))
@@ -72,7 +75,9 @@ def test_proven_lifecycle_boundary_retires_an_older_burst(snapshot, projection, 
     assert failure(projection, snap) is None
 
 
-@pytest.mark.parametrize("kind", ["STAGE_STARTED", "STAGE_COMPLETED", "WORKFLOW_COMPLETED", "DECISION_RECORDED"])
+@pytest.mark.parametrize("kind", [
+    "STAGE_STARTED", "STAGE_COMPLETED", "WORKFLOW_COMPLETED", "DECISION_RECORDED", "QUESTION_ASKED",
+])
 def test_new_errors_after_a_boundary_remain_a_failure(snapshot, projection, kind):
     snap = snapshot([*errors(), event(kind, 35, **({} if kind.startswith("WORKFLOW_") else {"Stage": STAGE})),
                      *errors(seconds=(40, 50, 60), stage=STAGE)],

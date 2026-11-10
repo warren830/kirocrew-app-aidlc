@@ -271,5 +271,10 @@
   "audit.STAGE_DEFINITION_CHANGED": "A stage's definition changed during the work.",
   "audit.SOURCE_WORK_NOT_FOUND": "The source work a step referred to was not found.",
   "audit.INTENT_REPOS_CHANGED": "The repositories this work covers changed.",
-  "audit.INTENT_CHECKOUTS_CHANGED": "The checkouts this work's code lives in changed."
+  "audit.INTENT_CHECKOUTS_CHANGED": "The checkouts this work's code lives in changed.",
+  "audit.QUESTION_ASKED": "AI-DLC asked one of its own questions.",
+  "audit.QUESTION_SHOWN": "A question still open was shown again in another conversation.",
+  "audit.SYSTEM_INSTALL_BLOCKED": "AI-DLC held a system package install nobody asked for; it runs once the person says so.",
+  "audit.SYSTEM_INSTALL_ALLOWED": "A system package install went ahead on the person's own message.",
+  "audit.MAIN_CHECKOUT_CHANGE_ALLOWED": "A change the person asked for in the main checkout was let in while the Units were built."
 }

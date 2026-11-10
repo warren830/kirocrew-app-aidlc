@@ -271,5 +271,10 @@
   "audit.STAGE_DEFINITION_CHANGED": "工作进行中，某个阶段的定义发生了变化。",
   "audit.SOURCE_WORK_NOT_FOUND": "某一步提到的源工作没有找到。",
   "audit.INTENT_REPOS_CHANGED": "这项工作涉及的仓库发生了变化。",
-  "audit.INTENT_CHECKOUTS_CHANGED": "这项工作代码所在的检出目录发生了变化。"
+  "audit.INTENT_CHECKOUTS_CHANGED": "这项工作代码所在的检出目录发生了变化。",
+  "audit.QUESTION_ASKED": "AI-DLC 提出了它自己的一个问题。",
+  "audit.QUESTION_SHOWN": "一个还没回答的问题在另一个对话里再次出现。",
+  "audit.SYSTEM_INSTALL_BLOCKED": "AI-DLC 拦下了一次没人要求的系统软件包安装，本人同意后才会执行。",
+  "audit.SYSTEM_INSTALL_ALLOWED": "一次系统软件包安装凭本人自己的消息放行了。",
+  "audit.MAIN_CHECKOUT_CHANGE_ALLOWED": "各 Unit 并行构建期间，本人要求的主检出目录改动被放行。"
 }

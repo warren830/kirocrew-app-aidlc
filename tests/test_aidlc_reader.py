@@ -659,6 +659,19 @@ def test_questions_summary_confirmation_checkpoint(pq):
     assert checkpoint.options == ("Looks correct", "Request changes") and parsed.pending_checkpoint is None
 
 
+def test_questions_asked_after_a_confirmed_summary_are_the_next_round(pq):
+    """2.11.3 (stage-protocol-summary.md): a later round goes after the confirmed summary as new numbered questions,
+    then the one summary is rewritten with its tag blanked and confirmed again."""
+    confirmed = F.real_questions(*DEV_RA)
+    q5 = "\n## Q5. 是否同时导出已归档的账本？\nA. 是\nB. 否\nX. Other (please specify)\n\n[Answer]:{}\n"
+    asked = pq(confirmed + q5.format(""))
+    assert [(q.index, q.answered) for q in asked.questions][-2:] == [(4, True), (5, False)]
+    assert (asked.pending_count, asked.pending_checkpoint) == (1, None)
+    reopened = pq(confirmed.replace("[Answer]: Looks correct", "[Answer]:") + q5.format(" B"))
+    assert (reopened.pending_count, reopened.pending_checkpoint) == (0, "summary_confirmation")
+    assert reopened.questions[-1].answer == "B"
+
+
 def test_questions_plan_approval_checkpoint(pq):
     parsed = pq(F.real_questions(*DEV_CG))
     plan = parsed.plan_approval

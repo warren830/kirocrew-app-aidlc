@@ -1496,8 +1496,9 @@ def _same_turn_decisions(
 ) -> list[AuditEvent]:
     """The engine's open menu ending at ``decision`` (aidlc-lib.ts ``openDecisionMenu``): this stage's questions logged
     since the last row that answered one, oldest first, which one reply answers together. Rows the menu does not read
-    never split it: 2.11.2 writes a question holding quotes or a ``$`` to a file first, and the write hook logs that as
-    ``ARTIFACT_CREATED`` between the questions. An answer, a gate row or a stage boundary ends it."""
+    never split it: a question or its choices holding a quote, ``$``, a backtick or another shell character go to a
+    file first (2.11.2 did this for the learnings question, 2.11.3 does it for every question), and the write hook logs
+    each file as ``ARTIFACT_CREATED`` between the questions. An answer, a gate row or a stage boundary ends it."""
     shard = sorted((e for e in audit.events if e.shard == decision.shard), key=lambda e: e.pos)
     index = next(i for i, e in enumerate(shard) if e.pos == decision.pos)
     run = [decision]

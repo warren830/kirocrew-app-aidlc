@@ -636,6 +636,35 @@ Audit-backed questions (a decision the engine asked in the chat, with no open qu
 - **Accept as-is** is offered from the third `GATE_REJECTED` at a gate (one Unit's, for a Unit gate) since its last
   `GATE_APPROVED`, a rejection with `Reopen` other than `change` starting over (`stageRevisionCycles`).
 
+#### 11.8.2 AI-DLC 2.11.3
+
+- **Question records.** Every row that asks the person something carries `**Question Id**:` (eight hex digits),
+  `**Question Type**:` and `**Question Shows**:` (`sha256:` over what it shows), and `**Question Chat**:` when the
+  command names the chat: the gate's `STAGE_AWAITING_APPROVAL`, every `DECISION_RECORDED` (`stage-question` unless a
+  checkpoint or Question Kind names it), and a new `QUESTION_ASKED` for each of the engine's own asks that has no row
+  of its own (the code plan question, `guard-recovery`, `scope-confirm`, `repo-scope` and the other `next` asks,
+  `system-install`), whose `Options` is a JSON list. `QUESTION_SHOWN` names an open question shown again in another
+  chat. A person's `HUMAN_TURN` adds `Open Questions` (the ids open where they replied) and, when the stage has a
+  questions file, `Questions Digest`. The engine reads none of these to decide anything yet. Studio reads
+  `QUESTION_ASKED` and `QUESTION_SHOWN` as Activity rows and as the conductor's halt-and-ask that ends an error
+  burst; the question itself still reaches the queue as before (the questions file, an audit decision, or the
+  conversation reply).
+- **Shell characters.** A question or a choice holding `$`, a backtick, a quote, `%`, `&`, `|`, `<`, `>`, `^`, `!` or
+  a line break goes through `--decision-file` and `--options-file`
+  (`<record>/.aidlc-engine/answer-text/question.txt` and `options.txt`, one choice a line), which the engine reads and
+  deletes; the write hook logs each file as `ARTIFACT_CREATED` between the decisions. `Options` keeps 2.11.2's
+  grammar (`|`-separated once a choice holds a comma), as does a repeated `--option`, and the record keeps the text
+  as written (`"$0.00"`, `` `free` ``).
+- **System install hold.** An OS package manager install (`apt-get install`, `brew install`, `winget install` and
+  the like) with no standing turn of the person's and no approved plan naming it is refused by the plan-approval
+  guard at any stage: `SYSTEM_INSTALL_BLOCKED` (`Guard`, `Reason` `system-install`, `Tool`, `Target`, `Stage`,
+  `Session`), then `QUESTION_ASKED` with `Question Type` `system-install`. No questions file or directive changes:
+  the agent asks in the conversation. The person's next turn lets the retry through, as
+  `SYSTEM_INSTALL_ALLOWED` (`Command`, `Message Id`, `Person Reply`).
+- **Main checkout changes.** Under a strict Guard Policy, while the Units are built side by side, a change the
+  person asks for in the main checkout is let in as `MAIN_CHECKOUT_CHANGE_ALLOWED` (`Paths` as a JSON list,
+  `Message Id`, `Person Reply`).
+
 ### 11.9 Review sections
 
 `parse_review_section` reads the LAST `## Review` section, because a re-reviewed artifact accumulates sections and
