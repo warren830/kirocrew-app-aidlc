@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { I18nProvider, makeI18n } from '../i18n'
-import { actionCard } from '../test/fixtures'
+import { actionCard, confirmedLate } from '../test/fixtures'
 import type { ActionCard } from '../lib/types'
 import { DeliveryStrip, statusTone } from './DeliveryStrip'
 
@@ -38,6 +38,33 @@ describe('delivery outcomes describe observed progress', () => {
     expect(strip.querySelectorAll('.studio-dstep')[2]).toHaveTextContent(
       locale === 'en-US' ? 'Reconcile workflow' : '核对工作流',
     )
+  })
+
+  it('reads a send proven undelivered that the host later took as sent, with no time it never recorded', () => {
+    const i18n = makeI18n('en-US')
+    render(<I18nProvider><DeliveryStrip card={confirmedLate()} /></I18nProvider>)
+    const strip = screen.getByRole('region', { name: i18n.t('delivery.label') })
+    expect([...strip.querySelectorAll('.studio-dstep')].map((step) => step.getAttribute('data-state')))
+      .toEqual(['done', 'done', 'now', 'future'])
+    expect(within(strip).getByRole('alert')).toHaveTextContent(i18n.t('delivery.confirmed'))
+    expect(strip).toHaveTextContent(i18n.t('enum.actionStatus.ReconciliationRequired'))
+    expect(strip.querySelector('.studio-dsent pre')?.textContent).toBe('Approve')
+    expect(strip.querySelector('.studio-dat')).toBeNull()
+    expect(strip).not.toHaveTextContent(i18n.t('enum.actionStatus.NotDelivered'))
+  })
+
+  it('reads a copy withdrawn because its first send was delivered as that, never as not sent', () => {
+    const i18n = makeI18n('en-US')
+    const base = actionCard()
+    render(<I18nProvider><DeliveryStrip card={actionCard({
+      status: 'Cancelled', decisions: [], primary: null,
+      resolution: { kind: 'cancelled', reason: 'original_delivered', resolved_at: '2026-09-04T09:12:00Z', evidence: null },
+      delivery: { ...base.delivery, delivery_confirmed: true },
+    })} /></I18nProvider>)
+    const strip = screen.getByRole('region', { name: i18n.t('delivery.label') })
+    expect(strip).toHaveTextContent(i18n.t('delivery.originalDelivered'))
+    expect(strip).not.toHaveTextContent(i18n.t('enum.actionStatus.NotDelivered'))
+    expect(strip).not.toHaveTextContent(i18n.t('delivery.sentText'))
   })
 
   it('keeps the uncertainty warning without confirmed delivery', () => {
@@ -144,6 +171,22 @@ describe('delivery outcomes describe observed progress', () => {
     expect(strip).not.toHaveTextContent(i18n.t('enum.actionStatus.ResolvedNoTransition'))
   })
 
+  it.each([
+    ['reply_not_recorded', 'Reply not recorded', 'AI-DLC received this reply, but its turn ended without recording it'],
+    ['acknowledged', 'Closed without a record', 'You closed this after reading the evidence'],
+    ['gate_approved_without_row', 'Approval recorded, stage still open', 'its state file still shows the stage open'],
+  ])('reads a reply AI-DLC did not carry through (%s) as unverified, never as answered', (reason, status, body) => {
+    document.documentElement.lang = 'en-US'
+    const card = actionCard({ status: 'ResolvedNoTransition', resolution: {
+      kind: 'no_transition', reason, evidence: null, resolved_at: null,
+    } })
+    render(<I18nProvider><DeliveryStrip card={card} /></I18nProvider>)
+    const strip = screen.getByRole('region', { name: 'Delivery state' })
+    expect(strip).toHaveTextContent(status)
+    expect(strip).not.toHaveTextContent('Answered')
+    expect(screen.getByRole('alert')).toHaveTextContent(body)
+  })
+
   it.each(['en-US', 'zh-CN'] as const)('says AI-DLC refused the answers, never that it recorded them (%s)', (locale) => {
     // Live 2026-11-02: the engine refused the answers' receipt and the conversation wrote them into the file anyway.
     document.documentElement.lang = locale
@@ -201,6 +244,29 @@ describe('delivery outcomes describe observed progress', () => {
       'cancelled', 'future', 'future', 'future',
     ])
     expect(strip.querySelector('[data-state="now"]')).toBeNull()
+  })
+
+  it('does not call the text of a decision proven never delivered sent, or say its outcome is being read', () => {
+    const i18n = makeI18n('en-US')
+    const base = actionCard()
+    const delivery = { ...base.delivery, delivery_id: 'dl_1', delivering_at: '2026-09-04T09:01:00Z',
+      wire_text: 'Request Changes: Cover the decline path.' }
+    const { unmount } = render(<I18nProvider><DeliveryStrip card={actionCard({ status: 'Delivered',
+      delivery: { ...delivery, outcome: 'delivered', delivered_at: '2026-09-04T09:01:01Z' } })} /></I18nProvider>)
+    const delivered = screen.getByRole('region', { name: i18n.t('delivery.label') })
+    expect(delivered).toHaveTextContent(i18n.t('delivery.sentText'))
+    expect(delivered).toHaveTextContent(i18n.t('delivery.watchingDisk'))
+    unmount()
+
+    for (const status of ['NotDelivered', 'Queued', 'Cancelled'] as const) {
+      const { unmount: close } = render(<I18nProvider><DeliveryStrip card={actionCard({ status,
+        delivery: { ...delivery, outcome: status === 'NotDelivered' ? 'not_delivered' : null } })} /></I18nProvider>)
+      const strip = screen.getByRole('region', { name: i18n.t('delivery.label') })
+      expect(strip).toHaveTextContent(i18n.t(`enum.actionStatus.${status}`))
+      expect(strip).not.toHaveTextContent(i18n.t('delivery.sentText'))
+      expect(strip).not.toHaveTextContent(i18n.t('delivery.watchingDisk'))
+      close()
+    }
   })
 })
 

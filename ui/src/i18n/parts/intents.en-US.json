@@ -174,6 +174,8 @@
   "intents.approval.inside": "It names no path outside this repository.",
   "intents.approval.partial": "This call is longer than Studio can show, so it is shown in part and Studio cannot say where all of it reaches. Read it whole in the conversation; Allow once is offered there.",
   "intents.approval.outside": "It also names paths outside this repository: {paths}",
+  "intents.approval.unplaced": "Studio cannot tell where these paths lead, so it cannot say the call stays in this repository: {paths}",
+  "intents.approval.unread": "Studio cannot tell what this call works on, so it cannot say it stays in this repository.",
   "intents.approval.otherRepo": "It reaches into another registered repository: {repos}. This intent does not need that project's files; reject it unless you mean to share them.",
   "intents.approval.purpose": "What it is for, in its own words: {purpose}",
   "intents.approval.where": "In the conversation, Allow once lets just this call run. Trust stops asking about this command or this conversation, and YOLO stops asking in every conversation on this computer. Reject refuses it, and AI-DLC carries on without it.",

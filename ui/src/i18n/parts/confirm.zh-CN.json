@@ -14,6 +14,7 @@
   "confirm.blocked.sessionUnbound": "决定会作为真实的用户回合发送到该意图的会话，而该意图尚未绑定任何会话。请在 KiroCrew 中为该仓库打开一个使用 aidlc agent的会话，并把它绑定到该意图；在此之前 Studio 没有可以发送的目标。",
   "confirm.openSession": "去绑定会话",
   "confirm.consequence.acknowledge": "Studio 会在自己的记录中关闭该事件。AI-DLC 的文件不会被改动；如果证据仍然矛盾，条目会再次出现。",
+  "confirm.consequence.acknowledgeUnrecorded": "Studio 会在自己的记录中把这次投递关闭为“已收到但未记录”。不会重新发送任何内容，AI-DLC 的文件也不会被改动。如果 AI-DLC 仍在等你，会出现一张新卡片。",
   "confirm.consequence.force_stop": "将请求 KiroCrew 停止该会话中正在运行的回合。不会写入 AI-DLC 的任何文件，也不会向会话追加消息。",
   "confirm.consequence.keep_paused": "该意图保持暂停。在你取消暂停之前，不会为它派发任何工作。",
   "confirm.consequence.mark_not_delivered": "Studio 会记录会话从未收到该消息。它会先复核自己的证明，若无法证明则拒绝。",
@@ -30,7 +31,6 @@
   "confirm.labelSendsBelow": "按钮：{label} → 原样发送下面的文字：",
   "confirm.deliveryNote": "最后一段是 Studio 写给 AI-DLC 的投递说明：请它把你的回答记录为一次回复。它也是发送内容的一部分。",
   "confirm.answerModeNote": "以“Studio answer mode”开头的那一段告诉 AI-DLC：在这里作答，也就回答了它关于“你想怎样回答这些问题”的提问，选择是 Chat。没有这一段，AI-DLC 会把这条回复只当作那个选择，你的回答就不会被记录。它也是发送内容的一部分。",
-  "confirm.mismatch": "KiroCrew 记录的文本与本页显示的不一致。下面是实际发送的内容。",
   "confirm.noWireText": "暂无内容",
   "confirm.routing": "将作为你本人的消息发送到 {repo}/{intent} 的会话。AI-DLC 会把它记录为你的回复，并自行完成变更。Studio 不会修改 aidlc-state.md，也不会绕过 AI-DLC 的任何检查。",
   "confirm.routingUnbound": "会作为你本人的消息发送到 {repo}/{intent} 的会话（需要先绑定会话）。AI-DLC 会把它记录为你的回复，并自行完成变更。Studio 不会修改 aidlc-state.md，也不会绕过 AI-DLC 的任何检查。",
@@ -39,6 +39,7 @@
   "confirm.studioOnlyHint": "这不会发送消息。Studio 会记录你的选择，并继续读取磁盘上的文件。",
   "confirm.title.accept_as_is": "确认按现状接受该阶段",
   "confirm.title.acknowledge": "确认你已阅读该事件",
+  "confirm.title.acknowledgeUnrecorded": "关闭，不重新发送",
   "confirm.title.answers": "确认发送到该意图会话的答案",
   "confirm.title.approve": "确认发送到该意图会话的原文",
   "confirm.title.approve_plan": "确认发送到该意图会话的计划批准",
@@ -88,5 +89,7 @@
   "confirm.blocked.questionsUnavailable": "请在原会话中回答此题组。",
   "confirm.retry.slot_busy": "什么都没有发出：会话当时正忙。等它这一回合结束后再发送。",
   "confirm.retry.session_busy": "什么都没有发出：会话当时正在进行一个回合。等它结束后再发送。",
-  "confirm.retry.repo_busy": "什么都没有发出：另一个操作当时占用着这个仓库。等它完成后再发送。"
+  "confirm.retry.ackDeadlinePending": "什么都没有发出：KiroCrew 可能仍会回应第一次发送。{at} 之后才能再次发送。",
+  "confirm.retry.repo_busy": "什么都没有发出：另一个操作当时占用着这个仓库。等它完成后再发送。",
+  "confirm.retry.host_unavailable": "什么都没有发出：Studio 当时无法读取这个会话。请稍后再试。"
 }

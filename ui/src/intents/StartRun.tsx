@@ -9,7 +9,7 @@
 
 import { useCallback, useState } from 'react'
 
-import { useSubmit } from '../actions/useSubmit'
+import { recordedOutcome, useSubmit } from '../actions/useSubmit'
 import { Icon } from '../shell/Icon'
 import { useI18n } from '../i18n'
 import { StudioApiError, type StudioApi } from '../lib/api'
@@ -62,7 +62,8 @@ export function useStartRun(api: StudioApi, onSettled?: () => void) {
       try {
         const queued = await api.run(intent.repo_id, intent.intent_key, which)
         setQueueing(false)
-        await submit({ card: queued.action, payload: { decision: which }, clientWireText: startText(which) })
+        await submit({ card: queued.action, captured: queued.action.captured, payload: { decision: which },
+          clientWireText: startText(which) })
       } catch (caught) {
         setFailure(caught instanceof StudioApiError ? caught : new StudioApiError('internal_error', String(caught), {}, 0))
       } finally {
@@ -91,10 +92,11 @@ export function StartStatus({ run, continuing = false }: { run: StartRun; contin
     return <Line icon="clock" text={t('intents.start.sending', { text })} />
   }
   if (stage === 'settled' && attempt) {
-    if (attempt.outcome === 'delivered' && attempt.reported) {
+    const outcome = recordedOutcome(attempt)
+    if (outcome === 'delivered' && attempt.reported) {
       return <Line tone="ok" icon="check" text={t(continuing && run.kind === 'run' ? 'intents.start.sentContinue' : 'intents.start.sent', { text })} />
     }
-    if (attempt.outcome === 'not_delivered') {
+    if (outcome === 'not_delivered') {
       const why = attempt.receipt?.error ?? attempt.receipt?.code ?? ''
       return <Line tone="warn" icon="warn" text={t('intents.start.notSent', { text, reason: why, action: actionId ?? '' })} />
     }

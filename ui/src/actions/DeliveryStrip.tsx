@@ -28,8 +28,13 @@ type StepState = 'done' | 'now' | 'future' | 'failed' | 'unchanged' | 'cancelled
 
 const STEP_KEYS = ['delivery.step.queued', 'delivery.step.delivered', 'delivery.step.processing', 'delivery.step.stateChanged'] as const
 
-/** Statuses where nothing has been handed to the host yet. */
-const BEFORE_SEND: readonly ActionStatus[] = ['Queued', 'Cancelled']
+/** Statuses where nothing reached the conversation: not handed to the host yet, or proven never delivered. */
+const NOT_SENT: readonly ActionStatus[] = ['Queued', 'NotDelivered', 'Cancelled']
+
+/** Whether the card's text was handed to the host. Never for a Cancelled one: only Queued and NotDelivered lead there. */
+export function wasSent(status: ActionStatus): boolean {
+  return !NOT_SENT.includes(status)
+}
 /** Statuses the outcome is settled in: nothing more is being read from disk. */
 const SETTLED_STATUSES: readonly ActionStatus[] = ['StateChanged', 'ResolvedNoTransition', 'Failed', 'Cancelled']
 /** Statuses where Studio cannot prove what happened. */
@@ -80,6 +85,27 @@ export function statusTone(status: ActionStatus): ChipTone {
 }
 
 /**
+ * Replies AI-DLC received but did not carry through, settled unverified and never resent: the status each reads as,
+ * and what it means for the person.
+ */
+const UNVERIFIED: Readonly<Record<string, { status: string; body: string }>> = {
+  // AI-DLC put the same plan to the person again.
+  plan_reply_not_recorded: { status: 'delivery.planReplyNotRecorded', body: 'delivery.planReplyNotRecordedBody' },
+  // The turn ended with no receipt for it.
+  reply_not_recorded: { status: 'delivery.planReplyNotRecorded', body: 'delivery.replyNotRecordedBody' },
+  // The person closed a delivery the conversation confirmed and Studio could not settle from disk.
+  acknowledged: { status: 'delivery.closedUnrecorded', body: 'delivery.acknowledgedBody' },
+  // GATE_APPROVED is in the audit trail, but the state file still shows the stage open.
+  gate_approved_without_row: { status: 'delivery.gateApprovedWithoutRow', body: 'delivery.gateApprovedWithoutRowBody' },
+}
+
+export function unverifiedReply(
+  status: ActionStatus, reason: string | null | undefined,
+): { status: string; body: string } | null {
+  return status === 'ResolvedNoTransition' && reason ? UNVERIFIED[reason] ?? null : null
+}
+
+/**
  * A status in words. The backend folds the running turn into `Delivered` and records its start as
  * `delivery.turn_started_at`; pass it, and a turn that is running reads "being processed" as it always did.
  */
@@ -98,10 +124,10 @@ export function statusLabel(
   }
   // AI-DLC received the reply and refused to record it: its own refusal is on disk.
   if (status === 'ResolvedNoTransition' && reason === 'answer_refused') return i18n.t('delivery.answerRefused')
-  // AI-DLC recorded nothing for this reply and put the same plan to the person again.
-  if (status === 'ResolvedNoTransition' && reason === 'plan_reply_not_recorded') {
-    return i18n.t('delivery.planReplyNotRecorded')
-  }
+  // Send it again's copy, withdrawn unsent because the first send turned out delivered.
+  if (status === 'Cancelled' && reason === 'original_delivered') return i18n.t('delivery.originalDelivered')
+  const unverified = unverifiedReply(status, reason)
+  if (unverified) return i18n.t(unverified.status)
   return i18n.t(status === 'ResolvedNoTransition' && reason === 'answer_requires_text'
     ? 'delivery.answerNeedsText' : `enum.actionStatus.${status}`)
 }
@@ -154,6 +180,7 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
   const answerNotVerified = noTransition && (atNewGate || card.resolution.reason === 'answer_not_verified')
   const planReset = noTransition && card.resolution.reason === 'plan_approval_recorded_before_reset'
   const planAskedAgain = noTransition && card.resolution.reason === 'plan_reply_not_recorded'
+  const unverified = unverifiedReply(status, card.resolution.reason)
   // The engine refused the reply's receipt; the conversation may have carried on as if it had been recorded.
   const answerRefused = noTransition && card.resolution.reason === 'answer_refused'
   const stoppedOnError = noTransition && card.resolution.reason === 'turn_stopped_on_error'
@@ -168,7 +195,7 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
     : planAskedAgain ? 'delivery.planAskedAgainReview'
     : answerRefused ? 'delivery.answerRefusedReview'
     : answerNotVerified ? unverifiedLabel : 'delivery.noTransition'
-  const sent = !BEFORE_SEND.includes(status)
+  const sent = wasSent(status)
 
   return (
     <section className="studio-delivery" aria-label={t('delivery.label')}>
@@ -247,10 +274,10 @@ export function DeliveryStrip({ card }: DeliveryStripProps) {
           </div>
         </div>
       ) : null}
-      {planAskedAgain ? (
+      {unverified ? (
         <div className="studio-banner studio-dwarn" data-tone="warn" role="alert">
           <Icon name="warn" size={15} />
-          <p>{t('delivery.planReplyNotRecordedBody')}</p>
+          <p>{t(unverified.body)}</p>
         </div>
       ) : null}
       {answerRefused ? (

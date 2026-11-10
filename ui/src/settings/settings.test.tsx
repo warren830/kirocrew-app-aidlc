@@ -15,13 +15,14 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { apiCalls, setApiRoutes, StubApiError } from '../test/stubs/app-sdk'
 import { EMPTY_ROUTE } from '../lib/route'
 import { STUDIO_LOCALE_KEY } from '../lib/host'
-import type { HealthResponse, RepoRecord, SettingsResponse } from '../lib/types'
+import { BusContext, type StreamEvent } from '../lib/sse'
+import type { HealthResponse, RepoRecord, SettingsResponse, StudioEventType } from '../lib/types'
 import { SettingsView } from './SettingsView'
 
 const SETTINGS: SettingsResponse = {
@@ -78,6 +79,19 @@ const REPO = {
   label: 'checkout-web',
   canonical_path: '/Users/x/work/checkout-web',
 } as unknown as RepoRecord
+
+/** Still registered, so restorable; the registry lists it only to a read that asks for archived repositories. */
+const ARCHIVED_REPO = {
+  repo_id: 'r_old',
+  label: 'checkout-legacy',
+  canonical_path: '/Users/x/work/checkout-legacy',
+  archived: true,
+} as unknown as RepoRecord
+
+function registry(_body: unknown, path: string) {
+  const repos = new URLSearchParams(path.split('?')[1] ?? '').get('include_archived') ? [REPO, ARCHIVED_REPO] : [REPO]
+  return { repos, totals: { repos: 1, unavailable: 0, open_actions: 0 } }
+}
 
 /** The same settings with a different advisor leaf; the grant list is the server's, never local state. */
 function advisorSettings(grants: string[], enabled = true, model = ''): SettingsResponse {
@@ -275,6 +289,41 @@ describe('Advisor', () => {
     expect(within(grant).getByRole('checkbox', { name: 'Draft ahead in checkout-web' })).toBeDisabled()
   })
 
+  it('lets a grant on an archived repository, named as archived, be withdrawn but never added', async () => {
+    const puts = routes({
+      'GET /api/apps/aidlc-studio/settings': () => advisorSettings(['r_old']),
+      'GET /api/apps/aidlc-studio/repos*': registry,
+    })
+    await renderSettings()
+
+    const grant = row('Draft ahead, per repository')
+    const box = await within(grant).findByRole('checkbox', { name: 'Draft ahead in checkout-legacy' })
+    expect(box).toBeChecked()
+    expect(box).toBeEnabled()
+    expect(within(grant).getByText('Archived. Untick to withdraw the grant; restore the repository first to grant it again.'))
+      .toBeInTheDocument()
+    expect(within(grant).queryByText(/no longer registered/)).toBeNull()
+    await userEvent.click(box)
+    await waitFor(() => expect(puts).toEqual([{ advisor: { auto_draft_repo_ids: [] } }]))
+    // Withdrawn, the archived repository has nothing left to show here, so there is no box to tick it back with.
+    await waitFor(() => expect(within(grant).queryByRole('checkbox', { name: 'Draft ahead in checkout-legacy' })).toBeNull())
+    expect(within(grant).getByRole('checkbox', { name: 'Draft ahead in checkout-web' })).not.toBeChecked()
+  })
+
+  it('keeps an archived repository\'s grant withdrawable while the Advisor is switched off, as an orphan\'s is', async () => {
+    const puts = routes({
+      'GET /api/apps/aidlc-studio/settings': () => advisorSettings(['r_old'], false),
+      'GET /api/apps/aidlc-studio/repos*': registry,
+    })
+    await renderSettings()
+
+    const grant = row('Draft ahead, per repository')
+    const box = await within(grant).findByRole('checkbox', { name: 'Draft ahead in checkout-legacy' })
+    expect(within(grant).getByRole('checkbox', { name: 'Draft ahead in checkout-web' })).toBeDisabled()
+    await userEvent.click(box)
+    await waitFor(() => expect(puts).toEqual([{ advisor: { auto_draft_repo_ids: [] } }]))
+  })
+
   it('offers no live grant while the Advisor itself is switched off', async () => {
     routes({
       'GET /api/apps/aidlc-studio/settings': () => advisorSettings([], false),
@@ -292,6 +341,47 @@ describe('Slack', () => {
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Mute checkout-web' }))
     await waitFor(() => expect(puts).toEqual([{ slack: { muted_repo_ids: ['r_1'] } }]))
+  })
+
+  it('keeps a mute on an archived repository, named as archived, and calls only an unregistered one an orphan', async () => {
+    const puts = routes({
+      'GET /api/apps/aidlc-studio/settings': () => ({
+        ...SETTINGS, settings: { ...SETTINGS.settings, slack: { enabled: true, muted_repo_ids: ['r_old', 'r_gone'] } },
+      }),
+      'GET /api/apps/aidlc-studio/repos*': registry,
+    })
+    await renderSettings()
+
+    const mute = row('Muted repositories')
+    const box = await within(mute).findByRole('checkbox', { name: 'Mute checkout-legacy' })
+    expect(box).toBeChecked()
+    expect(box).toBeDisabled()
+    expect(within(mute).getByText('Archived. The mute is kept; restore the repository to change it.')).toBeInTheDocument()
+    expect(within(mute).queryByText('r_old is muted but no longer registered.')).toBeNull()
+    await userEvent.click(box)
+    expect(puts).toEqual([])
+
+    // A repository that is really gone is still named, and its mute removed deliberately.
+    expect(within(mute).getByText('r_gone is muted but no longer registered.')).toBeInTheDocument()
+    await userEvent.click(within(mute).getByRole('checkbox', { name: 'Mute r_gone' }))
+    await waitFor(() => expect(puts).toEqual([{ slack: { muted_repo_ids: ['r_old'] } }]))
+  })
+
+  it('does not call a live mute an orphan while the repository list is unread', async () => {
+    routes({
+      'GET /api/apps/aidlc-studio/settings': () => ({
+        ...SETTINGS, settings: { ...SETTINGS.settings, slack: { enabled: true, muted_repo_ids: ['r_1'] } },
+      }),
+      'GET /api/apps/aidlc-studio/repos*': () => {
+        throw new StubApiError(503, { error: 'the registry read failed', code: 'unavailable' })
+      },
+    })
+    await renderSettings()
+
+    const mute = row('Muted repositories')
+    expect(within(mute).queryByText(/no longer registered/)).toBeNull()
+    expect(within(mute).queryByRole('checkbox')).toBeNull()
+    expect(within(mute).getByText('Loading…')).toBeInTheDocument()
   })
 
   it('states that quick actions are unavailable and offers no control', async () => {
@@ -341,6 +431,35 @@ describe('Slack', () => {
       within(quick).getByText('Unavailable — KiroCrew gave a reason this version of Studio does not recognise'),
     ).toBeInTheDocument()
     expect(within(quick).queryByText(/some_future_reason/)).toBeNull()
+  })
+})
+
+describe('The registry read', () => {
+  it('re-reads the repositories for a change to the registry, and for no other event', async () => {
+    routes({ 'GET /api/apps/aidlc-studio/repos*': registry })
+    const handlers = new Set<(event: StreamEvent) => void>()
+    const bus = { subscribe: (h: (event: StreamEvent) => void) => (handlers.add(h), () => void handlers.delete(h)) }
+    const emit = (type: StudioEventType, seq: number) => {
+      const event: StreamEvent = { type, seq, payload: {} }
+      act(() => [...handlers].forEach((handler) => handler(event)))
+    }
+    const registryReads = () => apiCalls.filter((call) => call.method === 'GET' && call.path.startsWith('/api/apps/aidlc-studio/repos')).length
+    render(
+      <BusContext.Provider value={bus}>
+        <SettingsView route={{ ...EMPTY_ROUTE, view: 'settings' }} go={vi.fn()} />
+      </BusContext.Provider>,
+    )
+    await screen.findByRole('checkbox', { name: 'Mute checkout-web' })
+    expect(registryReads()).toBe(1)
+
+    // The busiest events on a working install: none of them changes a label, a path or an archived flag.
+    const busy: StudioEventType[] = ['action.updated', 'intent.updated', 'activity.appended', 'lease.updated', 'health.updated']
+    busy.forEach((type, index) => emit(type, index + 1))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(registryReads()).toBe(1)
+
+    emit('repo.updated', busy.length + 1)
+    await waitFor(() => expect(registryReads()).toBe(2))
   })
 })
 

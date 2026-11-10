@@ -51,6 +51,23 @@ def test_archive_refuses_live_lease_but_rename_is_available(sv, routes, fake_hos
         asyncio.run(sv.scheduler.release(grant))
 
 
+def test_archive_waits_for_an_install_staged_before_its_lease(sv, routes, fake_host, tmp_path):
+    (tmp_path / "bare").mkdir()
+    repo = sv.repos.add(str(tmp_path / "bare"))
+    plan = sv.installer.preview(repo, "install")
+    staged = asyncio.run(sv.installer.begin(repo, "install", plan_digest=plan.digest()))
+    path = f"/repos/{repo.repo_id}/metadata"
+    status, body = invoke(sv, routes, fake_host, "PUT", path, {"archived": True})
+    assert (status, body.get("code")) == (409, "transaction_in_progress")
+    assert body["details"]["transaction_id"] == staged.transaction_id
+    assert not sv.repos.get(repo.repo_id).archived
+    assert invoke(sv, routes, fake_host, "PUT", path, {"label": "Installing"})[0] == 200
+    done = asyncio.run(sv.installer.run(repo, "install", plan_digest=plan.digest(),
+                                        transaction_id=staged.transaction_id))
+    assert done.status == "committed"
+    assert invoke(sv, routes, fake_host, "PUT", path, {"archived": True})[0] == 200
+
+
 def test_directory_picker_lists_only_directories_without_registration(sv, routes, fake_host, tmp_path):
     root = tmp_path / "choose"
     for name in ("repo two", "repo one", "repo one/nested"):

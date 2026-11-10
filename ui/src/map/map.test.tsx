@@ -499,6 +499,29 @@ describe('the workflow map', () => {
     expect(screen.getByText(/Per-unit state is presentational/)).toBeInTheDocument()
   })
 
+  it.each([
+    ['its own card, not the first card of the stage', [['a_unit1', 'unit-1-guest-cart'], ['a_unit2', 'unit-2-payment']], 'a_unit2'],
+    ['a card the stage raised for no unit in particular', [['a_stage', null]], 'a_stage'],
+    ['no operation when only another unit has a card', [['a_unit1', 'unit-1-guest-cart']], null],
+  ] as const)('offers a selected unit %s', async (_case, cards, opens) => {
+    installRoutes()
+    mount({
+      search: `?view=map&repo=${REPO}&intent=${INTENT}&stage=code-generation&unit=unit-2-payment`,
+      cards: cards.map(([id, unit]) => gateCard({
+        action_id: id, type: 'question', queue_type: 'question',
+        stage: { slug: 'code-generation', number: '3.5', name: null, phase: 'construction', unit },
+      })),
+    })
+    const inspector = await screen.findByRole('complementary', { name: 'Stage inspector' })
+    if (opens) {
+      await userEvent.click(await within(inspector).findByRole('button', { name: 'Open the Question in Action Center' }))
+      expect(navigations.at(-1)).toContain(`action=${opens}&`)
+    } else {
+      expect(await within(inspector).findByRole('button', { name: /No eligible operation/ })).toBeDisabled()
+      expect(within(inspector).queryByRole('button', { name: /^Open the Question/ })).toBeNull()
+    }
+  })
+
   it('becomes phase accordions below 900px, with the inspector inline instead of hidden', async () => {
     setViewport(true)
     installRoutes()

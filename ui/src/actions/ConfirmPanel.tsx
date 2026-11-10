@@ -17,19 +17,20 @@
  *    to the conversation but they do change what Studio believes happened, so they require an explicit
  *    acknowledgement that the delivery evidence above was read.
  *
- * After a send, the panel shows the wire text the SERVER recorded. If that differs from what was
- * displayed — which the byte comparison should make impossible — the difference is surfaced
- * assertively rather than smoothed over.
+ * From Send until the outcome is recorded the panel shows the bytes the request carries, not a fresh
+ * derivation from the draft or the card. The server compares those bytes and refuses any other text before a
+ * receipt exists, so what this panel showed is what the conversation received.
  */
 
 import { useEffect, useRef } from 'react'
 import { Btn } from '@kirocrew/app-sdk/ui'
 
 import { Icon } from '../shell/Icon'
-import { useI18n } from '../i18n'
+import { useI18n, type TranslateParams } from '../i18n'
 import type { ActionCard, DecisionSpec, ResolvePayload, SubmitPayload } from '../lib/types'
+import { decisionCopy } from '../lib/actionQueue'
 import { WIRE } from '../lib/wire.generated'
-import { beforeSend, type SubmitState } from './useSubmit'
+import { beforeSend, type InFlight, type SubmitState } from './useSubmit'
 
 /** The panel's DOM id, so the control that opened it can point at it with `aria-controls`. */
 export const CONFIRM_PANEL_ID = 'studio-confirm-panel'
@@ -45,15 +46,21 @@ export interface PendingDecision {
   wire: string | null
   /** i18n key explaining why `wire` is null, or why this cannot be sent. */
   blockedKey: string | null
-  /** i18n key of a line that does not block the send: the last attempt was refused for a reason that passes. */
-  noteKey?: string | null
+  /** A line that does not block the send: the last attempt was refused for a reason that passes. */
+  note?: ConfirmNote | null
+}
+
+export interface ConfirmNote {
+  key: string
+  params?: TranslateParams
 }
 
 export interface ConfirmPanelProps {
   card: ActionCard
   pending: PendingDecision
   submit: SubmitState
-  busy: boolean
+  /** What holds this card's action in flight, whichever pane sent it, or `null`. */
+  inFlight: InFlight | null
   /** True while the card's evidence is being re-read: nothing may be submitted against it. */
   refreshing: boolean
   /** Whether the user has ticked the acknowledgement, when one is required. */
@@ -70,13 +77,14 @@ export interface ConfirmPanelProps {
 const INLINE_WIRE_MAX = 80
 
 export function ConfirmPanel({
-  card, pending, submit, busy, refreshing, acknowledged, onAcknowledge, onSend, onCancel, onOpenBlockingAction,
+  card, pending, submit, inFlight, refreshing, acknowledged, onAcknowledge, onSend, onCancel, onOpenBlockingAction,
   onOpenSession,
 }: ConfirmPanelProps) {
   const { t } = useI18n()
   const heading = useRef<HTMLParagraphElement | null>(null)
   const decision = pending.spec.decision
   const label = t(`decision.${decision}.label`)
+  const copy = decisionCopy(card, decision)
   // Only the two decisions that change what Studio believes about a possibly-delivered message.
   // `requires: ['confirm']` on `confirm_summary` means "needs a confirmation step", which is this panel
   // — a second checkbox there would be friction that teaches people to click past it.
@@ -99,30 +107,30 @@ export function ConfirmPanel({
     const onKey = (event: KeyboardEvent) => {
       // Only while nothing has been handed to the host. Once a send is in flight there is nothing to
       // cancel, and letting Escape dismiss the panel would hide the outcome.
-      if (event.key === 'Escape' && beforeSend(submit.stage) && !busy) {
+      if (event.key === 'Escape' && beforeSend(submit.stage) && inFlight === null) {
         event.stopPropagation()
         onCancel()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [busy, onCancel, submit.stage])
+  }, [inFlight, onCancel, submit.stage])
+
+  // In flight, the request's own text: the draft and the card may still move, the bytes on the wire cannot.
+  const wire = submit.actionId === card.action_id && submit.request ? submit.request.client_wire_text : pending.wire
 
   const blocked =
     refreshing ? 'confirm.blocked.refreshing'
       : pending.blockedKey ? pending.blockedKey
-        : sendsWire && pending.wire === null ? 'confirm.blocked.noWireText'
+        : sendsWire && wire === null ? 'confirm.blocked.noWireText'
           : needsAck && !acknowledged ? 'confirm.blocked.acknowledge'
             : null
 
-  const settled = submit.stage === 'settled' && submit.actionId === card.action_id
-  const serverWire = submit.receipt?.wire_text ?? null
-  const mismatch = settled && sendsWire && serverWire !== null && serverWire !== pending.wire
   // The label line quotes a short text; a long one is shown once, in full, in the block under it.
-  const inline = pending.wire !== null && pending.wire.length <= INLINE_WIRE_MAX && !pending.wire.includes('\n')
-  const deliveryNote = pending.wire !== null &&
-    [WIRE.GROUPED_ANSWER_SUFFIX, WIRE.AUDIT_GROUPED_ANSWER_SUFFIX].some((suffix) => pending.wire?.endsWith(suffix))
-  const answerModeNote = pending.wire?.includes(WIRE.ANSWER_MODE_CHAT_NOTE) === true
+  const inline = wire !== null && wire.length <= INLINE_WIRE_MAX && !wire.includes('\n')
+  const deliveryNote = wire !== null &&
+    [WIRE.GROUPED_ANSWER_SUFFIX, WIRE.AUDIT_GROUPED_ANSWER_SUFFIX].some((suffix) => wire.endsWith(suffix))
+  const answerModeNote = wire?.includes(WIRE.ANSWER_MODE_CHAT_NOTE) === true
 
   return (
     <section className="studio-confirm" id={CONFIRM_PANEL_ID} role="group" aria-label={t('confirm.label')}>
@@ -130,20 +138,20 @@ export function ConfirmPanel({
       <div className="studio-confirm-body">
         <p className="studio-ch" ref={heading} tabIndex={-1}>
           <Icon name="send" size={14} />
-          {t(`confirm.title.${decision}`)}
+          {t(`confirm.title.${copy}`)}
         </p>
 
         {sendsWire ? (
           <>
             <p className="studio-confirm-label">
-              {pending.wire === null || inline
-                ? t('confirm.labelSends', { label, wire: pending.wire ?? t('confirm.noWireText') })
+              {wire === null || inline
+                ? t('confirm.labelSends', { label, wire: wire ?? t('confirm.noWireText') })
                 : t('confirm.labelSendsBelow', { label })}
             </p>
-            {pending.wire === null ? null : (
+            {wire === null ? null : (
               // `<pre>`, not a paragraph: every byte matters and collapsed whitespace would hide a
               // difference the conductor will not forgive.
-              <pre className="studio-sendtext studio-wrap-any">{pending.wire}</pre>
+              <pre className="studio-sendtext studio-wrap-any">{wire}</pre>
             )}
             {deliveryNote ? <p className="studio-muted">{t('confirm.deliveryNote')}</p> : null}
             {answerModeNote ? <p className="studio-muted">{t('confirm.answerModeNote')}</p> : null}
@@ -162,7 +170,7 @@ export function ConfirmPanel({
                 repo: card.repo.label || card.repo.repo_id,
                 intent: card.intent.slug || card.intent.intent_dir,
               })
-            : t(`confirm.consequence.${decision}`)}
+            : t(`confirm.consequence.${copy}`)}
         </p>
 
         {blocked ? (
@@ -170,10 +178,10 @@ export function ConfirmPanel({
             <Icon name="warn" size={13} />
             {t(blocked)}
           </p>
-        ) : pending.noteKey ? (
+        ) : pending.note ? (
           <p className="studio-route" data-tone="warn" role="status">
             <Icon name="info" size={13} />
-            {t(pending.noteKey)}
+            {t(pending.note.key, pending.note.params)}
           </p>
         ) : null}
         {blocked === 'confirm.blocked.sessionUnbound' && onOpenSession ? (
@@ -190,23 +198,11 @@ export function ConfirmPanel({
             <input
               type="checkbox"
               checked={acknowledged}
-              disabled={!beforeSend(submit.stage) || busy}
+              disabled={!beforeSend(submit.stage) || inFlight !== null}
               onChange={(event) => onAcknowledge(event.currentTarget.checked)}
             />
             <span>{t(`confirm.acknowledge.${decision}`)}</span>
           </label>
-        ) : null}
-
-        {mismatch ? (
-          // Assertive: what was sent is not what this browser displayed. The user must see the server's
-          // record, not ours.
-          <div className="studio-banner" data-tone="danger" role="alert">
-            <Icon name="warn" size={15} />
-            <div className="studio-grow">
-              <p>{t('confirm.mismatch')}</p>
-              <pre className="studio-sendtext studio-wrap-any">{serverWire}</pre>
-            </div>
-          </div>
         ) : null}
       </div>
 
@@ -216,7 +212,7 @@ export function ConfirmPanel({
           type="button"
           // Disabled while in flight, and never re-enabled by this panel after a settle: the send is
           // at-most-once, so the only path back is a fresh decision.
-          disabled={blocked !== null || busy || !beforeSend(submit.stage)}
+          disabled={blocked !== null || inFlight !== null || !beforeSend(submit.stage)}
           onClick={onSend}
         >
           <Icon name="check" size={14} />
@@ -224,7 +220,7 @@ export function ConfirmPanel({
         </Btn>
         {/* Disabled while anything is open: mutations are deliberately not cancellable (a submit that
             returned has already committed a `Delivering` record), so a Cancel here would only hide it. */}
-        <Btn type="button" disabled={busy} onClick={onCancel}>
+        <Btn type="button" disabled={inFlight !== null} onClick={onCancel}>
           {t('common.cancel')}
         </Btn>
         <span className="studio-hint studio-muted">

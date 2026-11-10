@@ -10,18 +10,20 @@
  *  2. **Muting is per repo, and a mute for a repo that is gone is still shown.** `muted_repo_ids` can name a
  *     repository the user has since unregistered. Dropping it silently would quietly re-enable Slack for
  *     that path if it were ever re-registered under the same id, so the orphan is listed with the reason and
- *     can be removed deliberately.
+ *     can be removed deliberately. A mute on an archived repository is kept as it is: that repository is
+ *     still registered, and its mute changes once it is restored.
  */
 
 import { useI18n } from '../i18n'
 import { plural } from '../lib/format'
 import type { RepoRecord } from '../lib/types'
 import { Icon } from '../shell/Icon'
-import { SettingRow, UnavailableChip, type SettingsControl } from './SettingsView'
+import { repoRows, SettingRow, UnavailableChip, type SettingsControl } from './SettingsView'
 
 export interface SlackSettingProps {
   control: SettingsControl
-  repos: RepoRecord[]
+  /** Every registered repository, archived ones included; `null` while the list has not been read. */
+  repos: RepoRecord[] | null
 }
 
 export function SlackSetting({ control, repos }: SlackSettingProps) {
@@ -30,8 +32,7 @@ export function SlackSetting({ control, repos }: SlackSettingProps) {
   const capability = control.capabilities.slack
   const slackAvailable = capability?.available !== false
   const muted = control.values.slack.muted_repo_ids
-  const known = new Set(repos.map((repo) => repo.repo_id))
-  const orphans = muted.filter((id) => !known.has(id))
+  const rows = repoRows(repos, muted)
 
   const setMuted = (repoId: string, mute: boolean) => {
     const next = mute ? [...muted, repoId] : muted.filter((id) => id !== repoId)
@@ -76,18 +77,20 @@ export function SlackSetting({ control, repos }: SlackSettingProps) {
       >
         {(describedBy) => (
           <div className="studio-col" aria-describedby={describedBy}>
-            {repos.length === 0 && orphans.length === 0 ? (
+            {rows === null ? (
+              <span className="studio-muted">{t('common.loading')}</span>
+            ) : rows.listed.length === 0 && rows.orphans.length === 0 ? (
               <span className="studio-muted">{t('settings.slack.mute.none')}</span>
             ) : (
               <>
                 <ul className="studio-mutelist">
-                  {repos.map((repo) => (
+                  {rows.listed.map((repo) => (
                     <li key={repo.repo_id}>
                       <label className="studio-check">
                         <input
                           type="checkbox"
                           checked={muted.includes(repo.repo_id)}
-                          disabled={control.busy || !slackAvailable}
+                          disabled={control.busy || !slackAvailable || repo.archived}
                           onChange={(event) => setMuted(repo.repo_id, event.target.checked)}
                           aria-label={t('settings.slack.mute.label', { repo: repo.label })}
                         />
@@ -96,10 +99,13 @@ export function SlackSetting({ control, repos }: SlackSettingProps) {
                         <span className="studio-mono studio-muted studio-small studio-trunc">
                           {repo.canonical_path}
                         </span>
+                        {repo.archived ? (
+                          <span className="studio-muted studio-small">{t('settings.slack.mute.archived')}</span>
+                        ) : null}
                       </label>
                     </li>
                   ))}
-                  {orphans.map((id) => (
+                  {rows.orphans.map((id) => (
                     <li key={id}>
                       <label className="studio-check">
                         <input

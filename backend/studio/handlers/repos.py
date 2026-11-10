@@ -27,7 +27,8 @@ from ..leases import lease_view
 from ..projection import SCHEDULING_FINDINGS
 from ..source_changes import intent_written_paths
 from .common import (
-    body_choice, intent_view, json_ok, query_bool, read_json, repo_or_404, summarize_intent, without_archived,
+    body_choice, finish_shielded, intent_view, json_ok, query_bool, read_json, repo_or_404, summarize_intent,
+    without_archived,
 )
 
 _LOG = logging.getLogger("kirocrew.app.aidlc-studio")
@@ -169,7 +170,8 @@ async def update_metadata(services: Any, request: web.Request) -> web.Response:
 
 async def remove_repo(services: Any, request: web.Request) -> web.Response:
     """Unregister; the repository is never touched (FR-REP-007). Refused under a live lease: bindings and
-    actions cascade away with the row, and a decision still on the wire would become unaccountable."""
+    actions cascade away with the row, and a decision still on the wire would become unaccountable. The registry
+    also refuses while an installer transaction has not settled (``transaction_in_progress``)."""
     repo = await repo_or_404(services, request.match_info["repo_id"])
     held = await services.scheduler.get(repo.resolved_identity) if repo.resolved_identity else None
     if held is not None:
@@ -215,15 +217,19 @@ async def doctor(services: Any, request: web.Request) -> web.Response:
     repo = await repo_or_404(services, request.match_info["repo_id"])
     if services.engine.bun_path is None:
         raise StudioError("bun_missing", "bun is required to run AI-DLC's own tools")
+    result = await finish_shielded(_doctor(services, repo))
+    return json_ok({"ok": True, "result": result.to_json()})
+
+
+async def _doctor(services: Any, repo: Any) -> Any:
     grant = await services.scheduler.acquire_admin(repo, operation_type="doctor", transaction_id=None)
     try:
         # `explicit_user_only`: the runner refuses the verb without `_confirmed`, set only after the check above.
-        result = await services.engine.run("utility.doctor", Path(repo.canonical_path),
-                                           repo.engine_dir or C.STUDIO_HARNESS_DIR, repo_id=repo.repo_id,
-                                           lease_generation=grant.generation, _confirmed=True)
+        return await services.engine.run("utility.doctor", Path(repo.canonical_path),
+                                         repo.engine_dir or C.STUDIO_HARNESS_DIR, repo_id=repo.repo_id,
+                                         lease_generation=grant.generation, _confirmed=True)
     finally:
         await services.scheduler.release(grant)
-    return json_ok({"ok": True, "result": result.to_json()})
 
 
 # --------------------------------------------------------------------------- #

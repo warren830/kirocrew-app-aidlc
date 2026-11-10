@@ -4,7 +4,7 @@ import asyncio
 
 import fixtures as F
 import pytest
-from _helpers_a import stamp_human_turn
+from _helpers_a import dispatches, stamp_human_turn
 from test_audit_questions import (  # noqa: F401
     repo_dir, question_card, answer_payload, append, start_audit, decision, activate_unit,
 )
@@ -81,3 +81,27 @@ def test_unverified_reply_releases_only_after_a_scoped_receipt(sv, routes, fake_
     assert row["wire_text"] == wire
     assert len(fake_host.get_slot(scene.slot_key).messages) == 2
     assert _tree_digest(scene.root) == before
+
+
+def test_an_audit_answer_whose_turn_died_unrecorded_settles_and_frees_the_repository(sv, routes, fake_host, scene):
+    """The turn stopped on a KiroCrew error with no receipt and no question left in the conversation: the answer
+    settles unverified, saying why, and the repository is free for whatever AI-DLC still waits on. Nothing is resent."""
+    wire = "Persist none"
+    _shard(scene.root).write_text(start_audit() + decision(
+        Decision="Persist learning candidates?", Options="Persist none,Persist selected candidates"))
+    card = question_card(sv, routes, fake_host, scene)
+    status, receipt = _submit(sv, routes, fake_host, card, payload=answer_payload(), wire_text=wire)
+    assert status == 200
+    _finish_the_turn(fake_host, scene.slot_key, wire_text=wire)
+    fake_host.get_slot(scene.slot_key).messages.append({
+        "role": "error", "content": "The model backend hit a transient error (HTTP 5xx).", "cls": "msg msg-e",
+        "ts": "2026-09-04T10:00:26Z", "meta": {}})
+    assert _report(sv, routes, fake_host, card["action_id"], receipt)[0] == 200
+    append(scene, F.audit_block("HUMAN_TURN", "2026-09-04T10:00:20Z"))
+    stamp_human_turn(_record_dir(scene.root), "2026-09-04T10:00:20Z")
+    asyncio.run(sv.reconciler.reconcile_now(card["action_id"]))
+    row = _row(sv, card["action_id"])
+    assert (row["status"], row["resolution_json"]["reason"]) == ("ResolvedNoTransition", "turn_stopped_on_error")
+    assert row["resolution_json"]["evidence"]["answer_verified"] is False
+    assert not sv.scheduler.live()
+    assert dispatches(sv.storage, card["action_id"]) == 1

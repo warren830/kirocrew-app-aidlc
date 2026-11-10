@@ -733,15 +733,25 @@ def test_a_recovery_card_does_not_keep_its_own_finding_alive(engine, poc_snap, m
 
 
 def test_cursor_mismatch(engine, poc_snap, make_facts):
-    refused = poc_action(cursor_readback=CursorReadbackView(ok=False, mismatch=("dir_name",)))
+    refused = poc_action(status="Delivering", cursor_readback=CursorReadbackView(ok=False, mismatch=("dir_name",)))
     finding = _one(engine.evaluate_intent(poc_snap, make_facts(live_actions=[refused])), "cursor_mismatch")
     assert finding.severity == "blocking" and finding.params["mismatch"] == ["dir_name"]
     accepted = replace(refused, cursor_readback=CursorReadbackView(ok=True))
     assert "cursor_mismatch" not in _codes(engine.evaluate_intent(poc_snap, make_facts(live_actions=[accepted])))
     # reported once when it is also stored on the action
-    both = poc_action(evidence={"findings": ["cursor_mismatch"]},
+    both = poc_action(status="Delivering", evidence={"findings": ["cursor_mismatch"]},
                       cursor_readback=CursorReadbackView(ok=False, mismatch=("uuid",)))
     assert _codes(engine.evaluate_intent(poc_snap, make_facts(live_actions=[both]))).count("cursor_mismatch") == 1
+
+
+@pytest.mark.parametrize("status", ["Queued", "NotDelivered", "Failed"])
+def test_a_verdict_stored_on_a_row_no_longer_in_flight_does_not_block(engine, poc_snap, make_facts, status):
+    """The reconciler's findings judge a delivery while it is being judged. A resubmitted card's copy, or the row a
+    resend replaced (``Failed``), or one proven undelivered, is history: lifted, it blocked the intent for good."""
+    judged = poc_action(status=status, evidence={"findings": [{"code": "wrong_slot", "params": {"slot_key": "x"}}]},
+                        cursor_readback=CursorReadbackView(ok=False, mismatch=("dir_name",)))
+    codes = _codes(engine.evaluate_intent(poc_snap, make_facts(live_actions=[judged])))
+    assert "wrong_slot" not in codes and "cursor_mismatch" not in codes
 
 
 def test_legacy_layout(engine, make_facts, C):

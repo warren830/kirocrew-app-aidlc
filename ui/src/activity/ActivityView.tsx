@@ -84,6 +84,11 @@ export function ActivityView({ route, go }: ActivityViewProps) {
     setSelected(null)
   }, [route.repo, route.intent, route.space, filters])
 
+  // The type control is disabled in the merged timeline, so a type picked in Studio rows is dropped there.
+  useEffect(() => {
+    if (merged) setFilters((f) => (f.type ? { ...f, type: '' } : f))
+  }, [merged])
+
   const query = useMemo<ActivityFilter>(() => {
     const base: ActivityFilter = { limit: PAGE_LIMIT }
     if (route.repo) base.repo = route.repo
@@ -97,7 +102,7 @@ export function ActivityView({ route, go }: ActivityViewProps) {
     if (filters.source) base.source = filters.source
     if (filters.stage) base.stage = filters.stage
     if (filters.kind) base.kind = filters.kind
-    if (filters.type) base.type = filters.type
+    if (filters.type && !merged) base.type = filters.type
     if (filters.severity) base.severity = filters.severity
     const since = isoOf(filters.since)
     const until = isoOf(filters.until)
@@ -105,7 +110,7 @@ export function ActivityView({ route, go }: ActivityViewProps) {
     if (until) base.until = until
     if (cursor) base.cursor = cursor
     return base
-  }, [route.repo, route.intent, route.space, filters, cursor])
+  }, [route.repo, route.intent, route.space, merged, filters, cursor])
 
   const key = `activity:${JSON.stringify(query)}`
   const activity = useResource<ActivityResponse>(

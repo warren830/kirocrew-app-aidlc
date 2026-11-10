@@ -137,10 +137,18 @@ def test_a_turn_still_running_keeps_the_lease(sv, routes, fake_host, scene, cloc
     assert reconcile(sv, card)["status"] == "Delivered"
 
 
-@pytest.mark.parametrize("ending", ["tool_row", "stopped_on_error", "foreign_receipt"])
-def test_a_turn_that_did_not_end_on_ai_dlcs_reply_alone_keeps_waiting(sv, routes, fake_host, scene, clock, ending):
-    """Nothing AI-DLC said follows the delivery, the turn stopped on an error after it, or a receipt Studio cannot
-    match to this question may be its record: nothing shows the answer went unrecorded, so the deadline decides."""
+@pytest.mark.parametrize("ending,outcome", [
+    ("tool_row", ("ResolvedNoTransition", "reply_not_recorded")),
+    ("stopped_on_error", ("ResolvedNoTransition", "turn_stopped_on_error")),
+    ("foreign_receipt", ("Delivered", None)),
+])
+def test_a_turn_that_did_not_end_on_ai_dlcs_reply_alone_asks_nothing_in_the_conversation(
+    sv, routes, fake_host, scene, clock, ending, outcome
+):
+    """Nothing AI-DLC said follows the delivery, or the turn stopped on an error after it: there is no question in the
+    conversation to hand the person, and the whole record, read after the turn, holds no receipt, so the answer
+    settles unverified and the decision gets a card of its own. A receipt Studio cannot match to this question may be
+    its record: that one waits, and the deadline decides."""
     card = deliver_q1(sv, routes, fake_host, scene, clock)
     if ending == "tool_row":
         ai_dlc_replies_in_chat(scene, clock, reply={**REPLY, "role": "tool", "content": "🔧 bun .kiro/tools/aidlc.ts"})
@@ -153,7 +161,11 @@ def test_a_turn_that_did_not_end_on_ai_dlcs_reply_alone_keeps_waiting(sv, routes
         shard = F.chat_only_reply_record(scene.root) / "audit" / F.CHAT_ONLY_REPLY_SHARD
         shard.write_text(shard.read_text() + F.audit_text(F.audit_block(
             "QUESTION_ANSWERED", "2026-11-02T07:09:25Z", Stage="intent-capture", Unit="another-unit", Details="Q1")))
-    assert reconcile(sv, card)["status"] == "Delivered"
+    row = reconcile(sv, card)
+    assert (row["status"], (row["resolution_json"] or {}).get("reason")) == outcome
+    if row["status"] == "ResolvedNoTransition":
+        assert [(c["type"], c["action_id"] != card["action_id"]) for c in cards(sv, routes, fake_host, scene)] == [
+            ("question", True)]
 
 
 def test_a_turn_that_ran_and_stopped_inside_the_dispatchs_own_second_still_ran(sv, routes, fake_host, scene, clock):

@@ -49,10 +49,10 @@ def strip_uninstall_metadata(h, receipt) -> None:
     h.store.update("install_receipts", receipt.receipt_id, {"files_json": files})
 
 
-def interrupted_uninstall(h, repo):
-    """``(plan, failed)``: an uninstall whose removal and then its own restore failed."""
+def interrupted_uninstall(h, repo, at: str = "after:remove_files"):
+    """``(plan, failed)``: an uninstall that failed ``at`` a removal step and then at its own restore."""
     plan = h.installer.preview(repo, "uninstall")
-    h.fault.at("after:remove_files", "before:restore_backups")
+    h.fault.at(at, "before:restore_backups")
     failed = run(h.installer.uninstall(repo, confirm_digest=plan.digest()))
     h.fault.markers.clear()
     return plan, failed
@@ -181,7 +181,7 @@ def test_failure_at_every_uninstall_step_is_atomic(studio, h, installed, marker)
         assert h.store.get("repos", repo.repo_id)["receipt_version"] == receipt.receipt_id
         assert (Path(result.failed_dir) / "transaction.json").is_file()
     if h.lease() is not None:
-        assert result.status in studio.leases.TRANSACTION_SETTLED_STATUS
+        assert result.status in studio.constants.TRANSACTION_SETTLED_STATUS
 
 
 def test_mid_file_removal_failure_restores_bytes_and_modes(h, installed):
@@ -645,31 +645,24 @@ def test_two_late_invocations_of_one_reserved_id_cannot_overwrite_commit(h, inst
     repo = installed[1]
     plan = h.installer.preview(repo, "uninstall")
     pending = run(h.installer.begin(repo, "uninstall", plan_digest=plan.digest()))
-    original_refuse = h.installer._refuse_if_busy
     original_acquire = h.installer._scheduler.acquire_admin
 
     async def race():
         arrived = 0
-        acquiring = 0
         both = asyncio.Event()
         first_done = asyncio.Event()
 
-        async def barrier(record):
-            nonlocal arrived
-            await original_refuse(record)
-            arrived += 1
-            if arrived == 2:
-                both.set()
-            await both.wait()
-
         async def delayed(record, **kwargs):
-            nonlocal acquiring
-            acquiring += 1
-            if acquiring == 2:
+            nonlocal arrived
+            arrived += 1
+            turn = arrived
+            if turn == 2:
+                both.set()
+            await both.wait()  # both read the row as `staged` before either holds the lease
+            if turn == 2:
                 await first_done.wait()
             return await original_acquire(record, **kwargs)
 
-        monkeypatch.setattr(h.installer, "_refuse_if_busy", barrier)
         monkeypatch.setattr(h.installer._scheduler, "acquire_admin", delayed)
 
         async def invoke():

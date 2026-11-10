@@ -40,6 +40,7 @@ import { Icon } from '../shell/Icon'
 import { useShellData } from '../shell/StudioApp'
 import { useI18n } from '../i18n'
 import { StudioApiError } from '../lib/api'
+import { PROJECT_TYPE_CREATE_MIN_ENGINE, SUMMARY_CONFIRMATION_CREATE_MIN_ENGINE } from '../lib/enums.generated'
 import { DEFAULT_SPACE, type Navigate, type StudioRoute } from '../lib/route'
 import type {
   EffectivePlan, IntentCreateResponse, IntentsResponse, PlanDepth, PlanIssue, PlanRequest, PlanScopesResponse,
@@ -59,23 +60,33 @@ export type WizardStep = (typeof WIZARD_STEPS)[number]
 export type ReviewCap = 'none' | 'advisory' | 'adversarial'
 export type SummaryChoice = 'on' | 'off'
 
-/**
- * The first engine whose `intent-create` takes `--summary-confirmation` (2.7.1 has no per-work ceremony
- * switches; 2.10.0 does). The backend refuses the flag below it, so the choice is not offered there.
- */
-const SUMMARY_FLAG_MIN_ENGINE = [2, 10] as const
-
-/** Whether this repository's installed AI-DLC can take a summary-confirmation choice at creation. */
-export function summaryFlagSupported(repo: RepoRecord | null): boolean {
+/** Whether this repository's installed AI-DLC is at least `minimum`; an unreadable version is not. */
+function engineAtLeast(repo: RepoRecord | null, minimum: readonly number[]): boolean {
   const parts = (repo?.installed_engine_version ?? '').split('.').map((chunk) => /^\d+/.exec(chunk)?.[0])
   if (parts.length === 0 || parts.some((part) => part === undefined)) return false
   const version = parts.map(Number)
-  for (let i = 0; i < SUMMARY_FLAG_MIN_ENGINE.length; i += 1) {
+  for (let i = 0; i < minimum.length; i += 1) {
     const have = version[i] ?? 0
-    const need = SUMMARY_FLAG_MIN_ENGINE[i] ?? 0
+    const need = minimum[i] ?? 0
     if (have !== need) return have > need
   }
   return true
+}
+
+/**
+ * Whether this repository's installed AI-DLC can take a summary-confirmation choice at creation. The backend refuses
+ * the flag below its floor, so the choice is not offered there.
+ */
+export function summaryFlagSupported(repo: RepoRecord | null): boolean {
+  return engineAtLeast(repo, SUMMARY_CONFIRMATION_CREATE_MIN_ENGINE)
+}
+
+/**
+ * Whether this repository's installed AI-DLC can take a declared project type at creation. Older engines ignore the
+ * flag silently, so the backend refuses a declared type there and the choice is not offered.
+ */
+export function projectTypeSupported(repo: RepoRecord | null): boolean {
+  return engineAtLeast(repo, PROJECT_TYPE_CREATE_MIN_ENGINE)
 }
 
 export interface WizardState {
@@ -89,11 +100,17 @@ export interface WizardState {
   depth: PlanDepth
   testStrategy: PlanDepth | null
   reviewCap: ReviewCap | null
-  /** AI-DLC's per-stage summary confirmation for this work; `null` sends nothing, so the scope's default applies. */
-  summaryConfirmation: SummaryChoice | null
+  /**
+   * AI-DLC's per-stage summary confirmation for this work; `null` sends nothing, so the scope's default applies.
+   * `undefined` until the person picks: Settings → New intents decides until then.
+   */
+  summaryConfirmation: SummaryChoice | null | undefined
   /** Only the stages the user moved away from the scope's own selection. */
   overrides: Record<string, boolean>
 }
+
+/** The fields a request is built from, with the summary choice resolved. */
+export type ResolvedWizardState = WizardState & { summaryConfirmation: SummaryChoice | null }
 
 export const EMPTY_WIZARD: WizardState = {
   repo: '',
@@ -106,7 +123,7 @@ export const EMPTY_WIZARD: WizardState = {
   depth: 'Standard',
   testStrategy: null,
   reviewCap: null,
-  summaryConfirmation: null,
+  summaryConfirmation: undefined,
   overrides: {},
 }
 
@@ -142,7 +159,7 @@ function norm(value: string): string | null {
  * plan, so leaving them out means typing a sentence never issues a request that reads the repository.
  * They are restored for Create, and `digestRequest` puts them back into the digest.
  */
-export function planBody(state: WizardState, space: string, withText: boolean): PlanRequest {
+export function planBody(state: ResolvedWizardState, space: string, withText: boolean): PlanRequest {
   return {
     space: space || DEFAULT_SPACE,
     scope: state.scope,
@@ -286,19 +303,18 @@ export function WizardView({ route, go }: WizardViewProps) {
   // here. A repository whose engine cannot take the flag gets no choice at all, so nothing is sent there.
   const summarySupported = summaryFlagSupported(repo)
   const summaryDefault = settings.data?.settings.new_intent?.summary_confirmation ?? 'scope'
-  const summaryTouched = useRef(false)
-  useEffect(() => {
-    setState((current) => {
-      const next: SummaryChoice | null = !summarySupported
-        ? null
-        : summaryTouched.current ? current.summaryConfirmation : summaryDefault === 'scope' ? null : summaryDefault
-      return next === current.summaryConfirmation ? current : { ...current, summaryConfirmation: next }
-    })
-  }, [summarySupported, summaryDefault])
-  const pickSummary = useCallback((summaryConfirmation: SummaryChoice | null) => {
-    summaryTouched.current = true
+  const summaryConfirmation = !summarySupported ? null
+    : state.summaryConfirmation !== undefined ? state.summaryConfirmation
+    : summaryDefault === 'scope' ? null : summaryDefault
+  // A type picked for a repository whose engine takes it is not carried to one whose engine would refuse it.
+  const projectTypeOffered = projectTypeSupported(repo)
+  const projectType = projectTypeOffered ? state.projectType : ''
+  const resolved = useMemo<ResolvedWizardState>(
+    () => ({ ...state, summaryConfirmation, projectType }), [state, summaryConfirmation, projectType],
+  )
+  const pickSummary = useCallback((pick: SummaryChoice | null) => {
     setCreateError(null)
-    setState((current) => ({ ...current, summaryConfirmation }))
+    setState((current) => ({ ...current, summaryConfirmation: pick }))
   }, [])
 
   // Spaces and the cursor's own space. `intent-create` has no --space flag, so the active space is not a
@@ -327,8 +343,8 @@ export function WizardView({ route, go }: WizardViewProps) {
   // The preview body excludes the objective, the label and the context: they are not inputs to a plan, so
   // typing a sentence must not fire a request that reads the repository on every keystroke.
   const previewBody = useMemo(
-    () => (repo && !blocked ? planBody(state, activeSpace, false) : null),
-    [repo, blocked, state, activeSpace],
+    () => (repo && !blocked ? planBody(resolved, activeSpace, false) : null),
+    [repo, blocked, resolved, activeSpace],
   )
   const previewKey = previewBody ? canonicalJson({ repo: state.repo, body: previewBody }) : ''
   // Keep the last matrix visible during recompute, but only the matching request can supply defaults or confirm.
@@ -413,7 +429,7 @@ export function WizardView({ route, go }: WizardViewProps) {
     locale: i18n.locale,
     objective: state.objective,
     context: state.context,
-    projectType: state.projectType,
+    projectType,
     current: picks,
   })
   const { dismiss: dismissProposal } = planAdvisor
@@ -555,7 +571,7 @@ export function WizardView({ route, go }: WizardViewProps) {
     setCreating(true)
     setCreateError(null)
     try {
-      const body = { ...planBody(state, activeSpace, true), confirm_plan_digest: digest }
+      const body = { ...planBody(resolved, activeSpace, true), confirm_plan_digest: digest }
       const answer = await api.createIntent(repo.repo_id, body)
       setCreated(answer)
       // The consumed draft must not outlive the intent it informed (FR-NEW-004): the next wizard starts clean.
@@ -579,7 +595,7 @@ export function WizardView({ route, go }: WizardViewProps) {
     } finally {
       setCreating(false)
     }
-  }, [api, currentPlan, repo, state, activeSpace, digest, workComplete, presetComplete, previewing, creating, dismissProposal])
+  }, [api, currentPlan, repo, resolved, activeSpace, digest, workComplete, presetComplete, previewing, creating, dismissProposal])
 
   if (partialCreated) {
     const compositionFailed = partialCreated.failedPhase === 'plan_composition'
@@ -715,6 +731,7 @@ export function WizardView({ route, go }: WizardViewProps) {
             state={state}
             repos={repos}
             repo={repo}
+            projectTypeOffered={projectTypeOffered}
             blocked={blocked}
             spaces={spaces}
             activeSpace={activeSpace}
@@ -732,7 +749,7 @@ export function WizardView({ route, go }: WizardViewProps) {
 
         {step === 'preset' ? (
           <StepPreset
-            state={state}
+            state={resolved}
             scopes={mergeScopes(catalog.data?.scopes.map((row) => row.name) ?? [], scopes)}
             catalog={catalog.data ?? null}
             meta={meta}

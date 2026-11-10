@@ -17,7 +17,7 @@ import { useShellDataOrNull } from '../shell/StudioApp'
 import { useI18n } from '../i18n'
 import { StudioApiError, useStudioApi } from '../lib/api'
 import type { RepoRecord } from '../lib/types'
-import { approvalCommand, approvalPurpose, approvalReach } from './approvalReach'
+import { approvalCommand, approvalPurpose, approvalReach, approvalTargets } from './approvalReach'
 
 /** Which waiting request the host would resolve: its id, the row instance the person saw, and who asked. */
 export interface ApprovalTarget { request_id?: string; request_mid?: string; origin?: string }
@@ -30,6 +30,8 @@ export interface ApprovalWaitNoticeProps {
   toolInputTruncated?: boolean
   /** What the model says the call is for (the host's `tool_purpose`). */
   purpose?: string
+  /** The host's kind of call, as ACP states it (`execute`, `edit`, …): which text names where it reaches. */
+  toolKind?: string | null
   /** The repository the conversation works in, to tell its paths from everyone else's. */
   repoId?: string
   /** Which intent is waiting, where the surrounding view does not already say (the queue). */
@@ -49,8 +51,13 @@ export function answerableHere(target: ApprovalTarget | undefined): target is Re
   return target?.origin === 'native' && !!target.request_id && !!target.request_mid
 }
 
-export function ApprovalWaitNotice(
-  { slotKey, tool, toolInput, toolInputTruncated, purpose, repoId, label, repos: given, target, onAnswered }: ApprovalWaitNoticeProps,
+/** An answer settles one request, so the conversation's next one starts unanswered even where the slot stays the same. */
+export function ApprovalWaitNotice(props: ApprovalWaitNoticeProps) {
+  return <RequestNotice key={JSON.stringify([props.slotKey, props.target?.request_id, props.target?.request_mid])} {...props} />
+}
+
+function RequestNotice(
+  { slotKey, tool, toolInput, toolInputTruncated, purpose, toolKind, repoId, label, repos: given, target, onAnswered }: ApprovalWaitNoticeProps,
 ) {
   const { t } = useI18n()
   const navigate = useNavigate()
@@ -59,12 +66,15 @@ export function ApprovalWaitNotice(
   const repos = given ?? shellRepos ?? []
   const [busy, setBusy] = useState<Answer | null>(null)
   const [outcome, setOutcome] = useState<{ tone: 'done' | 'gone' | 'error'; text: string } | null>(null)
-  const command = approvalCommand(toolInput)
+  const command = approvalCommand(toolInput, toolKind)
   const why = approvalPurpose(purpose, toolInput)
   const partial = toolInputTruncated === true
+  const targets = approvalTargets(toolInput, toolKind)
   // Where a call reaches is read from its text; from part of it, "names no path outside" could be false.
-  const reach = !partial && repoId && repos.length ? approvalReach(`${command}\n${tool}`, repoId, repos) : null
+  const reach = !partial && repoId && repos.length
+    ? approvalReach({ commands: [...targets.commands, tool], paths: targets.paths }, repoId, repos) : null
   const crosses = reach !== null && reach.otherRepos.length > 0
+  const inside = reach !== null && targets.whole && !crosses && reach.outside.length === 0 && reach.unplaced.length === 0
   // The host titles a shell call "Running: <command>": the command below already says it.
   const title = tool && !(command && tool.includes(command)) ? tool : ''
   const answerable = answerableHere(target)
@@ -113,10 +123,14 @@ export function ApprovalWaitNotice(
             {t('intents.approval.outside', { paths: reach.outside.join(', ') })}
           </strong>
         ) : null}
-        {partial ? <strong className="studio-wrap-any">{t('intents.approval.partial')}</strong> : null}
-        {reach && !crosses && reach.outside.length === 0 ? (
-          <span className="studio-muted">{t('intents.approval.inside')}</span>
+        {reach && reach.unplaced.length > 0 ? (
+          <strong className="studio-wrap-any">
+            {t('intents.approval.unplaced', { paths: reach.unplaced.join(', ') })}
+          </strong>
         ) : null}
+        {reach && !targets.whole ? <strong className="studio-wrap-any">{t('intents.approval.unread')}</strong> : null}
+        {partial ? <strong className="studio-wrap-any">{t('intents.approval.partial')}</strong> : null}
+        {inside ? <span className="studio-muted">{t('intents.approval.inside')}</span> : null}
         <span className="studio-muted">{t(answerable ? 'intents.approval.whereHere' : 'intents.approval.where')}</span>
         {outcome ? (
           <span className={outcome.tone === 'error' ? 'studio-error' : 'studio-muted'} role={outcome.tone === 'error' ? 'alert' : undefined}>

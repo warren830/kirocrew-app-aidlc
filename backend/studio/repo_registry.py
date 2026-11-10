@@ -65,10 +65,10 @@ PREFLIGHT_WARNING_SEVERITY = {"legacy_layout": "warn", "engine_version_unknown":
                               # (``engine.ConversationBun``).
                               "bun_not_on_conversation_path": "warn"}
 
-#: What a rebind rewrites; label, archive flag, history and ``receipt_version`` stay as they were.
+#: What a rebind rewrites; label, archive flag and history stay as they were.
 _REBIND_COLUMNS = ("canonical_path", "resolved_identity", "git_common_dir_identity", "platform",
                    "last_seen", "availability", "availability_detail", "install_status",
-                   "installed_engine_version", "engine_dir")
+                   "installed_engine_version", "engine_dir", "receipt_version")
 
 
 # ---- records ----
@@ -253,6 +253,28 @@ class RepoScan(WireRecord):
     scanned_at: str
 
 
+@dataclass(frozen=True, slots=True)
+class OrphanedInstall:
+    """The install rows an unregistered registration left for its directory. Unregistering touches neither the
+    tree nor these rows, so they still describe it; the next registration of the same identity takes them back."""
+
+    receipts: tuple[dict[str, Any], ...] = ()
+    #: Newest first.
+    transactions: tuple[dict[str, Any], ...] = ()
+
+    @property
+    def current_receipt(self) -> dict[str, Any] | None:
+        return next((row for row in self.receipts if row["status"] == "current"), None)
+
+    @property
+    def recovery_required(self) -> bool:
+        """Whether the directory was left needing recovery: only a commit clears that, while a rollback or a
+        failure leaves the repository as the transaction found it."""
+        decisive = next((row["status"] for row in self.transactions
+                         if row["status"] in ("committed", "recovery_required")), None)
+        return decisive == "recovery_required"
+
+
 def _renumbered(stored: str, identity: ResolvedIdentity) -> bool:
     """``stored`` names this directory under an older device number: same inode, different ``st_dev``. macOS
     renumbers volumes across reboots, and a path that still resolves to the same inode is the same directory."""
@@ -373,32 +395,40 @@ class RepoRegistry:
     # ---- registry mutations ----
 
     def add(self, path: str, label: str | None = None) -> RepoRecord:
-        """Register a directory; nothing is stored unless every check passes. An unprovable identity is
-        stored as ``identity_unprovable`` without ``resolved_identity``: no lease keys on it (FR-REP-005)."""
+        """Register a directory; nothing is stored unless every check passes, and the checks and the insert are
+        one SQLite transaction, so of two registrations of one directory at once the second is a
+        ``duplicate_identity``. An unprovable identity is stored as ``identity_unprovable`` without
+        ``resolved_identity``: no lease keys on it (FR-REP-005). A directory registered before takes back the
+        install rows its last registration left (``OrphanedInstall``)."""
         root = security.validate_repo_root(path)
         identity = self._identity_for(root)
-        self._refuse_duplicate(identity)
-        count = len(self._storage.select("repos"))
-        if count >= C.MAX_REPOS:
-            raise StudioError("too_many_repos", "the repository registry is full",
-                              details={"max": C.MAX_REPOS, "count": count})
+        orphaned = self._orphaned_install(identity)
         record = RepoRecord(
             repo_id=self._ids.new("r"),
             label=((label or "").strip() or root.name or str(root))[: C.MAX_LABEL_CHARS],
             added_at=self._clock.iso(), **self._located_at(identity), archived=False,
-            install_status="not_installed", installed_engine_version=None, engine_dir=None,
-            receipt_version=None,
+            install_status="recovery_required" if orphaned.recovery_required else "not_installed",
+            installed_engine_version=None, engine_dir=None, receipt_version=None,
         )
-        record = self._with_install(record, self.detect_install(record))
+        record = self._with_install(record, self.detect_install(record, orphaned.current_receipt))
         row = {**record.to_json(), "archived": int(record.archived)}
         row["id"] = row.pop("repo_id")
-        self._storage.insert("repos", row)
+        with self._storage._txn():
+            self._refuse_duplicate(identity)
+            count = len(self._storage.select("repos"))
+            if count >= C.MAX_REPOS:
+                raise StudioError("too_many_repos", "the repository registry is full",
+                                  details={"max": C.MAX_REPOS, "count": count})
+            self._storage.insert("repos", row)
+            self._adopt(orphaned, record.repo_id)
         return record
 
     def remove(self, repo_id: str) -> None:
         """Unregister; never touches disk (FR-REP-007). Bindings and actions cascade with the row."""
-        self.get(repo_id)
-        self._storage.delete("repos", repo_id)
+        with self._storage._txn():
+            self.get(repo_id)
+            self._refuse_while_transacting(repo_id)
+            self._storage.delete("repos", repo_id)
 
     def update_metadata(self, repo_id: str, patch: Mapping[str, Any]) -> RepoRecord:
         """Change display metadata, preserving the registration and all of its children."""
@@ -416,7 +446,10 @@ class RepoRegistry:
             if not isinstance(patch["archived"], bool):
                 raise StudioError("bad_body", "archived must be a boolean")
             values["archived"] = int(patch["archived"])
-        self._storage.update("repos", repo_id, values)
+        with self._storage._txn():
+            if values.get("archived"):
+                self._refuse_while_transacting(repo_id)
+            self._storage.update("repos", repo_id, values)
         return self.get(repo_id)
 
     def rebind(self, repo_id: str, new_path: str) -> RepoRecord:
@@ -433,10 +466,17 @@ class RepoRegistry:
                               "only a moved, unavailable or unreadable repository can be rebound",
                               details={"availability": availability, "repo_id": repo_id})
         identity = self.resolve_identity(new_path)
-        self._refuse_duplicate(identity, exclude=repo_id)
+        receipt = self.current_receipt_row(repo_id)
+        # A registration with a receipt of its own keeps it: taking another back would make two current.
+        orphaned = OrphanedInstall() if receipt is not None else self._orphaned_install(identity)
         moved = replace(record, **self._located_at(identity))
-        moved = self._with_install(moved, self.detect_install(moved, self.current_receipt_row(repo_id)))
-        self._storage.update("repos", repo_id, {name: getattr(moved, name) for name in _REBIND_COLUMNS})
+        if orphaned.recovery_required:
+            moved = replace(moved, install_status="recovery_required")
+        moved = self._with_install(moved, self.detect_install(moved, receipt or orphaned.current_receipt))
+        with self._storage._txn():
+            self._refuse_duplicate(identity, exclude=repo_id)
+            self._storage.update("repos", repo_id, {name: getattr(moved, name) for name in _REBIND_COLUMNS})
+            self._adopt(orphaned, repo_id)
         return moved
 
     # ---- reads ----
@@ -486,7 +526,8 @@ class RepoRegistry:
                        receipt: "Receipt | Mapping[str, Any] | None" = None) -> InstallHealth:
         """Install status from the repository's own bytes plus Studio's receipt (§1.5); runs no engine verb.
 
-        No harness → ``not_installed``; a stored ``recovery_required`` stays (FR-INST-013); a changed
+        A stored ``recovery_required`` stays until the installer clears it (FR-INST-013), harness or not: an
+        interrupted operation can remove every marker first. Otherwise no harness → ``not_installed``; a changed
         receipt-owned file → ``drift``; else ``installed`` for ANY harness (a ``.claude`` repository is
         drivable), so "is ours installed" is ``own_engine_version``. An unreadable root (an unmounted
         volume) keeps the stored state rather than claiming ``not_installed``."""
@@ -507,10 +548,10 @@ class RepoRegistry:
         own = next((h for h in harness_dirs if h.dir == C.STUDIO_HARNESS_DIR), None)
         engine = own or next(iter(harness_dirs), None)  # the harness Studio reads and dispatches through
         drift_count = self._drift_count(root, receipt) if receipt is not None else 0
-        if not harness_dirs:
-            status = "not_installed"
-        elif rec.install_status == "recovery_required":
+        if rec.install_status == "recovery_required":
             status = "recovery_required"
+        elif not harness_dirs:
+            status = "not_installed"
         else:
             status = "drift" if drift_count else "installed"
         return InstallHealth(
@@ -556,7 +597,8 @@ class RepoRegistry:
 
     def current_receipt_row(self, repo_id: str) -> dict[str, Any] | None:
         """The current receipt row, or ``None``. Storage read only — no file hashing."""
-        rows = self._storage.select("install_receipts", {"repo_id": repo_id, "status": "current"}, limit=1)
+        rows = self._storage.select("install_receipts", {"repo_id": repo_id, "status": "current"},
+                                    order_by=C.RECEIPT_ORDER, limit=1)
         return rows[0] if rows else None
 
     def current_receipt_summary(self, repo_id: str) -> ReceiptSummary | None:
@@ -712,6 +754,39 @@ class RepoRegistry:
         if duplicate:
             raise StudioError("duplicate_identity", "another registered repository resolves to this identity",
                               details={"repo_id": duplicate, "identity": identity.identity_str})
+
+    def _refuse_while_transacting(self, repo_id: str) -> None:
+        """An installer transaction that has not settled may still write the repository. Its row exists before its
+        worker takes the admin lease, so a live lease alone does not show it."""
+        rows = self._storage.select("install_transactions", {"repo_id": repo_id},
+                                    order_by=C.TRANSACTION_ORDER)
+        pending = next((row for row in rows if row["status"] not in C.TRANSACTION_SETTLED_STATUS), None)
+        if pending is not None:
+            raise StudioError("transaction_in_progress", "an installer transaction has not finished in this repository",
+                              details={"repo_id": repo_id, "transaction_id": pending["transaction_id"],
+                                       "kind": pending["kind"], "status": pending["status"]})
+
+    def _orphaned_install(self, identity: ResolvedIdentity) -> OrphanedInstall:
+        """The rows of the newest unregistered registration that installed into this identity: one registration's,
+        so two old receipts never both come back as current."""
+        if not identity.provable:
+            return OrphanedInstall()
+        registered = {str(row["id"]) for row in self._storage.select("repos")}
+        transactions = [row for row in self._storage.select("install_transactions",
+                                                            {"resolved_repo_identity": identity.identity_str},
+                                                            order_by=C.TRANSACTION_ORDER)
+                        if row["repo_id"] not in registered]
+        if not transactions:
+            return OrphanedInstall()
+        where = {"repo_id": transactions[0]["repo_id"], "resolved_repo_identity": identity.identity_str}
+        return OrphanedInstall(tuple(self._storage.select("install_receipts", where, order_by=C.RECEIPT_ORDER)),
+                               tuple(row for row in transactions if row["repo_id"] == where["repo_id"]))
+
+    def _adopt(self, orphaned: OrphanedInstall, repo_id: str) -> None:
+        for row in orphaned.receipts:
+            self._storage.update("install_receipts", row["receipt_id"], {"repo_id": repo_id})
+        for row in orphaned.transactions:
+            self._storage.update("install_transactions", row["transaction_id"], {"repo_id": repo_id})
 
     def _identity_elsewhere(self, rec: RepoRecord) -> str | None:
         """Another registered path whose live identity equals this record's stored one: a renamed

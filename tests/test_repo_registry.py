@@ -19,6 +19,8 @@ from types import SimpleNamespace
 import pytest
 
 import fixtures as F
+from test_installer import do, h, make_harness, payload_v1, payload_v2, run, tree  # noqa: F401 - fixtures
+from test_installer_uninstall import interrupted_uninstall
 
 TS = "2026-09-04T10:00:00Z"
 UNKNOWN = "r_000000000099"
@@ -277,6 +279,60 @@ def test_remove_cascades_bindings_and_actions(registry, store, tmp_path):
     assert store.select("intent_bindings") == []
 
 
+def test_re_adding_a_directory_takes_back_the_receipt_and_history_it_left(h, make_harness, payload_v2, repo_builder):
+    """Unregistering leaves the tree as it was, so the receipt still describes its ``.kiro``: without it Studio's own
+    files block an upgrade and nothing authorizes an uninstall."""
+    root = repo_builder.with_git().build()
+    first = h.registry.add(str(root))
+    installed = do(h, first, "install")
+    assert installed.status == "committed"
+    h.registry.remove(first.repo_id)
+
+    again = h.registry.add(str(root))
+    receipt = h.installer.current_receipt(again.repo_id)
+    assert (again.receipt_version, receipt and receipt.receipt_id) == (installed.receipt_id, installed.receipt_id)
+    assert again.repo_id != first.repo_id and again.install_status == "installed"
+    assert [tx.transaction_id for tx in h.installer.transactions(again.repo_id)] == [installed.transaction_id]
+    assert not make_harness(payload_v2).installer.preview(again, "upgrade").blocking
+    assert not h.installer.preview(again, "uninstall").blocking
+
+
+def test_re_adding_a_directory_whose_uninstall_was_interrupted_offers_its_recovery_again(h, repo_builder):
+    """A removal is allowed once the uninstall has settled, even as ``recovery_required``: refusing it would keep a
+    registration whose directory is gone forever. Re-adding the directory brings the journal back within reach."""
+    root = repo_builder.with_git().build()
+    first = h.registry.add(str(root))
+    assert do(h, first, "install").status == "committed"
+    before = tree(root)
+    failed = interrupted_uninstall(h, first, at="before:uninstall_path:AGENTS.md")[1]
+    assert failed.status == "recovery_required"
+    h.registry.remove(first.repo_id)
+
+    again = h.registry.add(str(root))
+    assert again.install_status == "recovery_required"
+    recovery = h.installer.preview(again, "recovery")
+    assert recovery.recovery_transaction_id == failed.transaction_id and not recovery.blocking
+    assert run(h.installer.run(again, "recovery", plan_digest=recovery.digest())).status == "rolled_back"
+    assert tree(root) == before and h.registry.get(again.repo_id).install_status == "installed"
+
+
+def test_rebinding_onto_a_directory_an_unregistered_entry_installed_takes_back_its_receipt(h, repo_builder,
+                                                                                            tmp_path):
+    root = repo_builder.with_git().build()
+    first = h.registry.add(str(root))
+    installed = do(h, first, "install")
+    h.registry.remove(first.repo_id)
+    (tmp_path / "gone").mkdir()
+    moving = h.registry.add(str(tmp_path / "gone"))
+    (tmp_path / "gone").rmdir()
+
+    rebound = h.registry.rebind(moving.repo_id, str(root))
+    receipt = h.installer.current_receipt(moving.repo_id)
+    assert (h.registry.get(moving.repo_id).receipt_version, receipt and receipt.receipt_id) == (
+        installed.receipt_id, installed.receipt_id)
+    assert rebound.install_status == "installed" and not h.installer.preview(rebound, "uninstall").blocking
+
+
 # --- availability ---
 def test_availability_of_a_healthy_a_vanished_and_a_replaced_path(registry, tmp_path):
     root = plain_repo(tmp_path)
@@ -496,10 +552,19 @@ def test_detect_install_ignores_fragment_entries(registry, repo_builder, K):
     assert (health.status, health.drift_count) == ("installed", 0)
 
 
-def test_detect_install_keeps_a_stored_recovery_required(registry, store, repo_builder):
-    record = registry.add(str(engine_repo(repo_builder, "payload")), None)
+@pytest.mark.parametrize("markers", ["present", "gone"])
+def test_detect_install_and_a_rescan_keep_a_stored_recovery_required(registry, store, repo_builder, K, markers):
+    """An uninstall or install interrupted between its file steps can leave no marker behind; only the installer's
+    recovery may clear the flag, or the journal it would restore from becomes unreachable."""
+    root = engine_repo(repo_builder, "payload")
+    record = registry.add(str(root), None)
     store.update("repos", record.repo_id, {"install_status": "recovery_required"})
+    if markers == "gone":
+        shutil.rmtree(root / K.STUDIO_HARNESS_DIR / "tools")
     assert registry.detect_install(registry.get(record.repo_id), None).status == "recovery_required"
+    scan = registry.rescan(record.repo_id)
+    stored = store.get("repos", record.repo_id)["install_status"]
+    assert (scan.install.status, stored) == ("recovery_required", "recovery_required")
 
 
 def test_detect_install_on_an_unreadable_root_keeps_what_was_stored(registry, store, repo_builder):
@@ -526,6 +591,25 @@ def test_detect_install_uses_the_stored_receipt_when_none_is_passed(registry, st
     health = registry.detect_install(record)
     assert (health.status, health.drift_count) == ("drift", 1)
     assert registry.current_receipt_summary(record.repo_id).files == 1
+
+
+def test_with_two_current_receipts_the_registry_and_the_installer_read_the_same_newest_one(h, repo_builder, K):
+    """A commit that died between its writes could leave two receipts ``current``: the install badge and the
+    installer's plans must still describe one receipt, the newest (``receipt_id`` breaks only a same-second tie)."""
+    root = engine_repo(repo_builder, "payload")
+    record = h.registry.add(str(root))
+    rel = f"{K.STUDIO_HARNESS_DIR}/tools/aidlc-version.ts"
+    for receipt_id, committed_at in (("rc_0000000000000001", "2026-09-04T10:00:00Z"),
+                                     ("rc_0000000000000002", "2026-09-04T10:00:05Z"),
+                                     ("rc_0000000000000003", "2026-09-04T10:00:05Z")):
+        store_receipt(h.store, {**receipt_for(root, [rel]), "receipt_id": receipt_id, "committed_at": committed_at},
+                      record.repo_id)
+    assert h.registry.current_receipt_summary(record.repo_id).receipt_id == "rc_0000000000000003"
+    assert h.installer.current_receipt(record.repo_id).receipt_id == "rc_0000000000000003"
+    store_receipt(h.store, {**receipt_for(root, [rel]), "receipt_id": "rc_0000000000000000",
+                            "committed_at": "2026-09-04T10:00:06Z"}, record.repo_id)
+    assert h.registry.current_receipt_summary(record.repo_id).receipt_id == "rc_0000000000000000"
+    assert h.installer.current_receipt(record.repo_id).receipt_id == "rc_0000000000000000"
 
 
 # --- preflight ---

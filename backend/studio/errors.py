@@ -32,7 +32,7 @@ _CODES_BY_STATUS: dict[int, str] = {
         "state_version_migration_unconfirmed payload_degraded session_unbound slot_mismatch slot_busy "
         "conversation_bun_missing session_busy unstable_read breaker_open intent_paused intent_archived "
         "cancel_not_safe delivery_ack_invalid not_delivered_unproven cursor_mismatch plan_invalid "
-        "recompose_not_allowed legacy_layout rebind_not_allowed retry_not_allowed"
+        "recompose_not_allowed legacy_layout rebind_not_allowed retry_not_allowed transaction_in_progress"
     ),
     413: "too_large",
     429: "too_many_repos rate_limited",

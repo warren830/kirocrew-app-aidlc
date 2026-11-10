@@ -79,6 +79,7 @@ __all__ = [
     "QuestionsView",
     "SEVERITY_RANK",
     "StableBoundary",
+    "breaker_key",
     "dedupe_key",
     "intent_key_for",
     "priority_group_for",
@@ -144,8 +145,6 @@ SCHEDULING_FINDINGS: frozenset[str] = frozenset({"lease_conflict"})
 #: these make an intent `Queued` (review P08).
 COMMAND_ACTION_TYPES: frozenset[str] = frozenset(
     {"run", "resume", "prepare_commit", "set_summary_confirmation", "set_learnings", "force_stop"})
-#: A question card in these is a reply AI-DLC has received or may be recording.
-_ANSWER_IN_FLIGHT_STATUSES: frozenset[str] = frozenset({"Delivering", "Delivered", "ReconciliationRequired"})
 #: A question card the person can still answer: one open for the stage keeps its place while a turn runs.
 _QUESTION_OPEN_STATUSES: frozenset[str] = frozenset({"Queued", "NotDelivered", "Draft"})
 
@@ -196,6 +195,20 @@ def dedupe_key(action_type: str, repo_id: str, intent_key: str, stage: str | Non
     underneath it instead of being retired and re-created on every scan.
     """
     return f"{action_type}:{repo_id}:{intent_key}:{stage or '-'}:{token or '-'}"
+
+
+def breaker_key(repo_id: str, intent_key: str, fingerprint: str = "") -> str:
+    """A `breakers` row's key, `repo_id:intent_key:fingerprint` (§0.1); with no fingerprint, the prefix every row of
+    the intent shares. A fingerprint holds a colon of its own (`guard.refusing-to:abc123`), so it is read back past
+    this prefix, never split off the end."""
+    return f"{repo_id}:{intent_key}:{fingerprint}"
+
+
+def breaker_card_key(repo_id: str, intent_key: str, fingerprint: str) -> str:
+    """The dedupe key of a breaker's card, for the broker that opens it and the scan that derives it alike: one card per
+    `breakers` row, so it names what the row does and never a stage, which differs between the failed decision and
+    the state a later scan reads."""
+    return dedupe_key("circuit_breaker", repo_id, intent_key, None, fingerprint)
 
 
 def queue_type_for(action_type: str, status: str) -> str:
@@ -1269,7 +1282,7 @@ class Projection:
         held: CardSeed | None = None
         answering = any(
             str(_attr(action, "type", "")) == "question" and str(_attr(action, "stage", "") or "") == (snap.stage or "")
-            and str(_attr(action, "status", "")) in _ANSWER_IN_FLIGHT_STATUSES for action in live_actions
+            and str(_attr(action, "status", "")) in C.DISPATCHED_ACTION_STATUS for action in live_actions
         )
         if questions is not None and not answering and (
                 questions.pending_count or questions.pending_checkpoint or needs_input):
@@ -1359,13 +1372,13 @@ class Projection:
             # Keyed on the fingerprint: the breaker outlives the boundary that opened it, and a card re-created on
             # every boundary move would reset the human's context on the very failure they are studying.
             key = str(_attr(breaker, "key", "") or "")
-            fingerprint = str(_attr(breaker, "fingerprint", "") or key.rsplit(":", 1)[-1])
+            fingerprint = key.removeprefix(breaker_key(snap.repo_id, snap.intent_key))
             seeds.append(self._seed(
                 snap, "circuit_breaker", snap.stage, {**base, "breaker": _json_of(breaker) or {"key": key}},
                 str(_attr(breaker, "opened_at")), ("retry_now", "keep_paused"),
                 {"stage": snap.stage, "count": int(_attr(breaker, "count", 0) or 0),
                  "fingerprint_class": _attr(breaker, "fingerprint_class")},
-                token=fingerprint or "breaker", reason=fingerprint or None,
+                key=breaker_card_key(snap.repo_id, snap.intent_key, fingerprint), reason=fingerprint or None,
             ))
 
         if install is not None and str(_attr(install, "status", "")) == "recovery_required":
@@ -1394,11 +1407,12 @@ class Projection:
         decisions: Sequence[str], headline_params: Mapping[str, Any], *, token: str | None = None,
         fallback: str | None = None, consequence: str | None = "__default__", risk_class: str | None = None,
         reason: str | None = None, related_action_id: str | None = None, space_wide: bool = False,
-        unit: str | None = None,
+        unit: str | None = None, key: str | None = None,
     ) -> CardSeed:
         """A seed with its type's table defaults. `token` tells this boundary from the next in the dedupe key
-        (`None`: the boundary token, else `fallback`); `space_wide` keys a space-level fact on the space; `unit`
-        names the team-owned Unit whose gate this is."""
+        (`None`: the boundary token, else `fallback`); `key` is the whole dedupe key of a card whose identity is no
+        boundary's; `space_wide` keys a space-level fact on the space; `unit` names the team-owned Unit whose gate
+        this is."""
         severity, default_risk, default_variant = _SEED_TABLE[action_type]
         captured = self.captured(snap, stage, unit=unit)
         intent_key = f"{snap.space}~*" if space_wide else snap.intent_key
@@ -1410,7 +1424,7 @@ class Projection:
             captured=captured,
             # a copy per seed: several share one derivation, and one card's blob must not rewrite another's
             evidence=dict(evidence),
-            dedupe_key=dedupe_key(
+            dedupe_key=key or dedupe_key(
                 action_type, snap.repo_id, intent_key, stage, token or captured["boundary_token"] or fallback
             ),
             waiting_since=waiting_since, decisions=tuple(decisions), headline_params=dict(headline_params),

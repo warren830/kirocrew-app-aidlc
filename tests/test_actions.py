@@ -16,7 +16,7 @@ import pytest
 
 import fixtures as F
 from conftest import APP_NAME
-from _helpers_a import aio, refused
+from _helpers_a import aio, dispatches, illegal_edges, refused, unreadable_slots
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 
@@ -176,8 +176,8 @@ async def seed(w, intent_dir: str = INTENT) -> list[Any]:
     snap = snapshot(w, intent_dir)
     binding = await w.binder.get(REPO_ID, "default", intent_dir)
     live = await w.broker.list_live(repo_id=REPO_ID, space="default", intent_dir=intent_dir, include_revision=True)
-    breakers = [SimpleNamespace(**row) for row in w.store.select("breakers")
-                if str(row["key"]).startswith(f"{REPO_ID}:{intent_dir}:")]
+    prefix = w.S.projection.breaker_key(REPO_ID, snap.intent_key)
+    breakers = [SimpleNamespace(**row) for row in w.store.select("breakers") if str(row["key"]).startswith(prefix)]
     seeds = w.projection.derive_cards(snap, findings=[], binding=binding, install=None, breakers=breakers,
                                       live_actions=live, slot=w.host.slot(SLOT))
     return await w.broker.upsert_derived(seeds)
@@ -222,6 +222,19 @@ async def uncertain(w):
     after, _ = await report(w, rec, receipt, "uncertain", None, None)
     assert after.status == "ReconciliationRequired"
     return after
+
+
+def past_the_ack_deadline(w) -> None:
+    """The host can no longer answer the first send, so Send it again is open."""
+    w.clock.advance(w.S.constants.DELIVERY_ACK_DEADLINE_SECS + 1)
+
+
+async def resend(w, rec):
+    """Send it again from ``rec``'s uncertain card past the ack deadline, echoing the evidence hash the card showed."""
+    past_the_ack_deadline(w)
+    digest = (await w.broker.card(rec, None))["acknowledged_evidence_sha256"]
+    return await w.broker.resolve(rec.action_id, decision="resubmit", user="owner-1",
+                                  payload={"acknowledged_evidence_sha256": digest})
 
 
 async def _row_in(w, status: str):
@@ -1279,6 +1292,30 @@ async def test_a_late_delivered_report_marks_the_decision_confirmed_and_blocks_r
 
 
 @aio
+async def test_a_late_delivered_report_turns_a_not_delivered_card_into_a_confirmed_delivery(world, E, C):
+    """The host's late ok proves the absence proof wrong. The card stops saying "Not sent": it is the confirmed delivery
+    every other late report makes, offering only what works, and it is never sent again."""
+    rec, receipt = await delivering(world)
+    proven, _ = await report(world, rec, receipt, "not_delivered", 409, {"error": REFUSAL})
+    assert proven.status == "NotDelivered"
+    late, idempotent = await report(world, proven, receipt, "delivered", 200, {"ok": True, "slot": SLOT})
+    assert (late.status, idempotent) == ("ReconciliationRequired", False)
+    card = await world.broker.card(late, snapshot(world))
+    assert (card["queue_type"], card["delivery"]["outcome"], card["delivery"]["delivery_confirmed"]) == (
+        "delivery_uncertain", "delivered", True)
+    assert card["delivery"]["delivery_id"] == receipt.delivery_id
+    assert [d["decision"] for d in card["decisions"]] == ["reconcile", "acknowledge"]
+    with refused(E, "action_not_submittable"):
+        await submit(world, late)
+    with refused(E, "retry_not_allowed"):
+        await world.broker.retry(late.action_id, user="owner-1")
+    closed, _ = await world.broker.resolve(late.action_id, decision="acknowledge", payload={}, user="owner-1")
+    assert (closed.status, closed.resolution["reason"]) == ("ResolvedNoTransition", "acknowledged")
+    assert illegal_edges(world.store, rec.action_id, C.ALLOWED_TRANSITIONS) == []
+    assert dispatches(world.store, rec.action_id) == 1
+
+
+@aio
 async def test_a_late_not_delivered_report_needs_a_4xx_and_all_four_checks(world, E):
     """From ``ReconciliationRequired`` only the host's own 4xx proves absence, and only with all four checks."""
     rec, receipt = await delivering(world)
@@ -1304,6 +1341,17 @@ async def test_a_late_not_delivered_report_needs_a_4xx_and_all_four_checks(world
 
 
 @aio
+async def test_the_same_words_in_another_conversation_do_not_unprove_a_refused_send(world):
+    """In another conversation of the repository only this delivery's own id proves it arrived: a plain "Approve"
+    there is anyone's, so the host's refusal still proves this one never left."""
+    rec, receipt = await delivering(world)
+    world.fake_host.add_slot("hand-opened", project=str(world.root), agent="aidlc", app="")
+    world.fake_host.append_user_row("hand-opened", "Approve", TS)
+    proven, _ = await report(world, rec, receipt, "not_delivered", 409, {"error": REFUSAL})
+    assert proven.status == "NotDelivered" and proven.evidence["checks"]["row_absent"] is True
+
+
+@aio
 async def test_an_evidence_patch_writes_only_what_changed(world):
     """An unchanged re-stamp must not bump the generation (a quiet card would go stale every scan); a change must."""
     rec = await uncertain(world)
@@ -1326,6 +1374,7 @@ async def test_an_evidence_patch_writes_only_what_changed(world):
 @aio
 async def test_resubmit_needs_the_evidence_hash_the_ui_displayed(world, E):
     rec = await uncertain(world)
+    past_the_ack_deadline(world)
     with refused(E, "action_stale") as exc:
         await world.broker.resolve(rec.action_id, decision="resubmit",
                                    payload={"acknowledged_evidence_sha256": "0" * 64}, user="owner-1")
@@ -1335,10 +1384,7 @@ async def test_resubmit_needs_the_evidence_hash_the_ui_displayed(world, E):
 @aio
 async def test_resubmit_supersedes_the_old_row_and_keeps_one_live_card_per_boundary(world):
     rec = await uncertain(world)
-    card = await world.broker.card(rec, None)
-    old, created = await world.broker.resolve(
-        rec.action_id, decision="resubmit", user="owner-1",
-        payload={"acknowledged_evidence_sha256": card["acknowledged_evidence_sha256"]})
+    old, created = await resend(world, rec)
     assert old.status == "Failed" and old.resolution["reason"] == "superseded_by_resubmit"
     assert created is not None and created.action_id != old.action_id
     assert created.status == "Queued"
@@ -1347,6 +1393,57 @@ async def test_resubmit_supersedes_the_old_row_and_keeps_one_live_card_per_bound
     live = [r for r in await world.broker.list_live(repo_id=REPO_ID, intent_dir=INTENT)
             if r.dedupe_key == old.dedupe_key and r.status != "Failed"]
     assert [r.action_id for r in live] == [created.action_id]
+
+
+@aio
+async def test_a_resubmitted_card_starts_without_the_verdicts_on_the_attempt_it_replaces(world):
+    """The reconciler's findings judged the old attempt, which is history once resent: carried over, a wrong-slot
+    verdict refused the resent card and every later decision for the intent."""
+    rec = await world.broker.patch_evidence(await uncertain(world), {
+        "wrong_slot": "hand-opened", "findings": [{"code": "wrong_slot", "params": {"slot_key": "hand-opened"}}]})
+    _, created = await resend(world, rec)
+    assert "wrong_slot" not in created.evidence
+    assert "wrong_slot" not in {f.get("code") for f in created.evidence.get("findings") or []}
+    [resent] = [card for card in await seed(world) if card.type == "gate" and card.status == "Queued"]
+    assert resent.action_id == created.action_id
+    assert (await submit(world, resent)).status == "Delivering"
+
+
+@aio
+async def test_send_it_again_is_refused_while_the_first_send_may_still_be_answered(world, E, C):
+    """The browser gives up on the host after 20 s, the host may still answer until the ack deadline: a resend before
+    it could put the decision in the conversation twice. The refusal says when the resend opens."""
+    rec, receipt = await delivering(world)
+    after, _ = await report(world, rec, receipt, "uncertain", None, {"ok": False, "code": "send_timeout"})
+    digest = (await world.broker.card(after, None))["acknowledged_evidence_sha256"]
+    with refused(E, "not_delivered_unproven") as exc:
+        await world.broker.resolve(after.action_id, decision="resubmit", user="owner-1",
+                                   payload={"acknowledged_evidence_sha256": digest})
+    assert exc.value.details["reason"] == "ack_deadline_pending"
+    ack_deadline = C.iso_from_epoch(C.epoch_from_iso(rec.delivering_at) + C.DELIVERY_ACK_DEADLINE_SECS)
+    assert exc.value.details["ack_deadline_at"] == receipt.expires_at == ack_deadline, "the browser's lock ends then"
+    assert (await world.broker.get(after.action_id)).status == "ReconciliationRequired"
+    old, created = await resend(world, after)
+    assert (old.status, created.status) == ("Failed", "Queued")
+
+
+@aio
+async def test_a_late_delivered_report_after_send_it_again_withdraws_the_resent_card(world, E):
+    """The host answers the first send after the person resent it: the decision reached the conversation, so the resent
+    card is withdrawn without ever being sent, and the gate still on disk gets a card of its own."""
+    rec, receipt = await delivering(world)
+    after, _ = await report(world, rec, receipt, "uncertain", None, {"ok": False, "code": "send_timeout"})
+    _, created = await resend(world, after)
+    late, _ = await report(world, rec, receipt, "delivered", 200, {"ok": True, "mid": "late"})
+    assert late.evidence["delivery_confirmed"] is True
+    resent = await world.broker.get(created.action_id)
+    assert (resent.status, resent.resolution["reason"]) == ("Cancelled", "original_delivered")
+    assert (await world.broker.card(resent, None))["delivery"]["delivery_confirmed"] is True
+    with refused(E, "action_not_submittable"):
+        await submit(world, resent)
+    assert dispatches(world.store, created.action_id) == 0
+    gates = [card for card in await seed(world) if card.type == "gate" and card.status == "Queued"]
+    assert len(gates) == 1 and gates[0].action_id not in (rec.action_id, created.action_id)
 
 
 @aio
@@ -1383,6 +1480,24 @@ async def test_mark_not_delivered_accepts_the_reconcilers_four_proofs(world):
                                             "disk_baseline_unchanged": True, "boot_id_unchanged": True})
     after, _ = await world.broker.resolve(rec.action_id, decision="mark_not_delivered", payload={}, user="owner-1")
     assert after.status == "NotDelivered"
+
+
+@aio
+async def test_sending_a_proven_non_delivery_again_walks_only_the_declared_edges(world, E, C):
+    """Submit takes a NotDelivered row back through Queued (a retry) to Delivering, as Retry does, so the stored history
+    is a path of the declared machine; a submit refused on the way leaves the row as it found it."""
+    rec, receipt = await delivering(world)
+    proven, _ = await report(world, rec, receipt, "not_delivered", 409, {"error": REFUSAL})
+    with refused(E, "action_stale"):
+        await submit(world, proven, captured=captured_of(proven, world.S.actions, state_hash="0" * 64))
+    assert (await world.broker.get(rec.action_id)).status_generation == proven.status_generation
+    again = await submit(world, await world.broker.get(rec.action_id))
+    assert again.status == "Delivering" and again.delivery_id != receipt.delivery_id
+    edges = [(row["from_status"], row["to_status"])
+             for row in world.store.select("action_transitions", {"action_id": rec.action_id})]
+    assert edges == [("Queued", "Delivering"), ("Delivering", "NotDelivered"), ("NotDelivered", "Queued"),
+                     ("Queued", "Delivering")]
+    assert illegal_edges(world.store, rec.action_id, C.ALLOWED_TRANSITIONS) == []
 
 
 @aio
@@ -1446,6 +1561,85 @@ async def test_force_stop_commits_delivering_with_the_stop_call_and_no_lease(wor
     assert world.scheduler.live() == []
     again = await force_stop(world)
     assert again.action_id == receipt.action_id and again.delivery_id == receipt.delivery_id
+
+
+async def _refused_stop(w):
+    """A stop the host refused, proven undelivered: its card offers Force stop again."""
+    await bind(w)
+    receipt = await force_stop(w)
+    refused_stop, _ = await report(w, receipt, receipt, "not_delivered", 404, {"error": "stop refused"})
+    assert refused_stop.status == "NotDelivered"
+    return receipt
+
+
+@aio
+async def test_a_force_stop_proven_undelivered_is_sent_again_as_a_new_delivery(world):
+    """Pressed again, the stop is a new delivery whose report the row takes, as a retried decision's is."""
+    first = await _refused_stop(world)
+    again = await force_stop(world)
+    assert (again.action_id, again.status) == (first.action_id, "Delivering")
+    assert again.delivery_id != first.delivery_id and again.host.path == f"/api/chat/slots/{SLOT}/stop"
+    sending = await world.broker.card(await world.broker.get(again.action_id), None)
+    assert sending["delivery"]["outcome"] is None, "the refused attempt's outcome is not this one's"
+    after, late = await report(world, again, again, "delivered", 200, {"ok": True})
+    assert (after.status, late) == ("Delivered", False)
+
+
+@aio
+async def test_pressing_force_stop_after_a_stop_the_host_may_not_have_taken_sends_a_new_one(world):
+    """A stop whose send failed on the network can never be proven either way. A later press stops the turn running
+    now as a new delivery, as Send it again would, in the cooperative form: the host decides by its own stop state."""
+    await bind(world)
+    first = await force_stop(world)
+    rec, _ = await report(world, first, first, "uncertain", None, None)
+    assert rec.status == "ReconciliationRequired" and not rec.evidence.get("delivery_confirmed")
+    world.fake_host.get_slot(SLOT).running = True
+    again = await force_stop(world)
+    assert again.action_id != first.action_id
+    assert (again.status, again.host.path) == ("Delivering", f"/api/chat/slots/{SLOT}/stop")
+    superseded = await world.broker.get(first.action_id)
+    assert (superseded.status, superseded.resolution["reason"]) == ("Failed", "superseded_by_resubmit")
+    assert superseded.evidence["resubmitted_as"] == again.action_id
+    assert dispatches(world.store, first.action_id) == 1
+
+
+@aio
+async def test_a_refused_stop_a_later_report_confirmed_is_never_sent_again(world):
+    """The confirmed stop's own call is never handed out again: the next press settles it and sends its own."""
+    first = await _refused_stop(world)
+    await report(world, first, first, "delivered", 200, {"ok": True})
+    again = await force_stop(world)
+    assert again.action_id != first.action_id and again.host.path.endswith("/stop?force=true")
+    settled = await world.broker.get(first.action_id)
+    assert (settled.status, settled.resolution["reason"]) == ("ResolvedNoTransition", "stopped_again")
+    assert dispatches(world.store, first.action_id) == 1
+
+
+@aio
+async def test_a_stop_card_pressed_after_its_boundary_moved_is_sent_under_its_own_record(world):
+    """Force stop is pressed on a stop card, and the browser reports the delivery under that card's id. A stop that
+    never left is therefore sent again as itself whatever boundary it was pressed at, or its report could never land."""
+    first = await _refused_stop(world)
+    for shard in (world.builder.record(INTENT) / "audit").glob("*.md"):
+        shard.write_text(shard.read_text() + F.audit_text(
+            F.audit_block("HUMAN_TURN", F._plus(TS, 60)),
+            F.audit_block("STAGE_AWAITING_APPROVAL", F._plus(TS, 61), Stage=STAGE)))
+    again = await force_stop(world)
+    assert (again.action_id, again.status) == (first.action_id, "Delivering")
+    assert again.delivery_id != first.delivery_id
+    card = await world.broker.get(first.action_id)
+    after, _ = await report(world, card, again, "delivered", 200, {"ok": True})
+    assert after.status == "Delivered"
+
+
+@aio
+async def test_a_resubmitted_force_stop_sends_the_new_card_not_the_superseded_one(world):
+    await bind(world)
+    receipt = await force_stop(world)
+    rec, _ = await report(world, receipt, receipt, "uncertain", None, None)
+    _, created = await resend(world, rec)
+    again = await force_stop(world)
+    assert (again.action_id, again.status) == (created.action_id, "Delivering")
 
 
 @aio
@@ -1549,6 +1743,36 @@ async def test_a_deterministic_failure_opens_the_breaker_immediately(world):
     assert len(world.notifications.sent) == 1
     card = world.notifications.sent[0]
     assert card["failure"]["fingerprint_class"] == "guard" and card["severity"] == "attention"
+
+
+@aio
+async def test_a_breaker_opening_is_one_card_however_often_the_scan_derives_it(world):
+    """The scan's seed names the card the opening raised: a fingerprint holds a colon of its own."""
+    _, opened = await _fail(world, await _running_command(world), "guard.refusing-to:abc123", "guard")
+    assert opened is True
+    for _ in range(2):
+        live = await seed(world)
+    cards = [rec for rec in live if rec.type == "circuit_breaker"]
+    assert [rec.action_id for rec in cards] == [world.notifications.sent[0]["action_id"]]
+    card = await world.broker.card(cards[0], snapshot(world))
+    assert card["failure"]["fingerprint"] == "guard.refusing-to:abc123"
+
+
+@aio
+async def test_a_breaker_opened_at_another_stage_than_the_scan_reads_is_still_one_card(world):
+    """A breaker is the intent's, named by its fingerprint. The failed decision ran at one stage while the intent's
+    state names the next: the card the opening raised and notified is still the one every scan derives."""
+    rec = await _running_command(world)
+    (world.builder.record(INTENT) / "aidlc-state.md").write_text(F.state_text(
+        marks={STAGE: "x", SECOND_STAGE: "-"},
+        fields={"Current Stage": SECOND_STAGE, "Status": "Running", "Lifecycle Phase": "INCEPTION"}))
+    _, opened = await _fail(world, rec, "guard.refusing-to:abc123", "guard")
+    assert opened is True
+    [notified] = [card["action_id"] for card in world.notifications.sent]
+    for _ in range(2):
+        live = await seed(world)
+    assert [card.action_id for card in live if card.type == "circuit_breaker"] == [notified]
+    assert (await world.broker.get(notified)).status == "Queued"
 
 
 @pytest.mark.parametrize("repo_options", [{"runnable": True}])
@@ -1978,7 +2202,61 @@ async def test_an_uncertain_card_is_retyped_and_offers_the_uncertain_decisions(w
 async def test_confirmed_delivery_does_not_offer_undelivered_or_resubmit(world):
     rec = await world.broker.patch_evidence(await uncertain(world), {"delivery_confirmed": True})
     card = await world.broker.card(rec, snapshot(world))
-    assert [d["decision"] for d in card["decisions"]] == ["reconcile"]
+    assert [d["decision"] for d in card["decisions"]] == ["reconcile", "acknowledge"]
+
+
+@aio
+async def test_a_confirmed_delivery_closes_on_acknowledge_once_its_turn_is_over_and_is_never_resent(world, E):
+    """A delivery Studio cannot settle from disk (no human turn it can count, a cursor that moved) is the person's to
+    close after reading the evidence: unverified, never resent, and not while the conversation may still act on it."""
+    rec = await world.broker.patch_evidence(await uncertain(world), {"delivery_confirmed": True})
+    world.fake_host.get_slot(SLOT).running = True
+    with refused(E, "slot_busy"):
+        await world.broker.resolve(rec.action_id, decision="acknowledge", payload={}, user="owner-1")
+    assert (await world.broker.get(rec.action_id)).status == "ReconciliationRequired"
+    world.fake_host.get_slot(SLOT).running = False
+    closed, created = await world.broker.resolve(rec.action_id, decision="acknowledge", payload={}, user="owner-1")
+    assert created is None
+    assert (closed.status, closed.resolution["reason"]) == ("ResolvedNoTransition", "acknowledged")
+    assert closed.resolution["evidence"]["answer_verified"] is False and closed.delivery_id == rec.delivery_id
+    assert dispatches(world.store, rec.action_id) == 1
+
+
+@aio
+async def test_acknowledging_a_confirmed_force_stop_records_the_interruption_it_caused(world):
+    """Closing a stop the host took is settling it, so it leaves what every settled stop leaves: the interruption a
+    manual takeover needs (C28/P17), exactly as the reconciler's own settle does."""
+    await bind(world)
+    receipt = await force_stop(world)
+    rec, _ = await report(world, receipt, receipt, "uncertain", None, None)
+    rec, _ = await report(world, rec, receipt, "delivered", 200, {"ok": True})
+    card = await world.broker.card(rec, snapshot(world))
+    assert [d["decision"] for d in card["decisions"]] == ["reconcile", "acknowledge"]
+    closed, _ = await world.broker.resolve(rec.action_id, decision="acknowledge", payload={}, user="owner-1")
+    assert (closed.status, closed.resolution["reason"]) == ("ResolvedNoTransition", "acknowledged")
+    assert (await world.binder.get(REPO_ID, "default", INTENT)).interrupted_at is not None
+    assert "intent.force_stop" in {row["kind"] for row in world.store.select("activity")}
+
+
+@aio
+async def test_acknowledge_waits_while_the_conversation_cannot_be_read(world, E, monkeypatch):
+    """`slot_busy` guards closing a delivery the conversation may still act on; a slot table Studio cannot read is no
+    evidence that it is idle."""
+    rec = await world.broker.patch_evidence(await uncertain(world), {"delivery_confirmed": True})
+    world.fake_host.get_slot(SLOT).running = True
+    unreadable_slots(monkeypatch, world.fake_host)
+    with refused(E, "host_unavailable"):
+        await world.broker.resolve(rec.action_id, decision="acknowledge", payload={}, user="owner-1")
+    assert (await world.broker.get(rec.action_id)).status == "ReconciliationRequired"
+
+
+@aio
+async def test_an_unconfirmed_delivery_is_not_closed_by_acknowledge(world, E):
+    """Unconfirmed, it is proven undelivered or resent: closing it unread would be a decision with no evidence."""
+    rec = await uncertain(world)
+    with refused(E, "invalid_decision"):
+        await world.broker.resolve(rec.action_id, decision="acknowledge", payload={}, user="owner-1")
+    assert (await world.broker.get(rec.action_id)).status == "ReconciliationRequired"
 
 
 @aio
@@ -2069,6 +2347,36 @@ async def test_an_approval_in_flight_is_not_shadowed_by_a_fresh_gate_card(world)
     gates = [rec for rec in await seed(world) if rec.type == "gate"]
     assert [rec.action_id for rec in gates] == [receipt.action_id]
     assert gates[0].status not in ("Queued", "NotDelivered")
+
+
+@aio
+async def test_a_failed_approval_does_not_hide_the_gate_aidlc_presents_again(world):
+    """A failed decision is history, not a delivery on its way: once the conductor puts the gate to the person again,
+    the queue must let them answer it."""
+    gate = await bound_card(world)
+    receipt = await submit(world, gate)
+    rec, _ = await report(world, await world.broker.get(receipt.action_id), receipt, "delivered", 200,
+                          {"ok": True, "slot": receipt.slot_key})
+    await world.broker.record_failure(rec, fingerprint="guard.refusing-to:abc123", fingerprint_class="guard",
+                                      summary="template.failure.guard", evidence={})
+    for shard in (world.builder.record(INTENT) / "audit").glob("*.md"):
+        shard.write_text(shard.read_text() + F.audit_text(
+            F.audit_block("HUMAN_TURN", F._plus(TS, 60)),
+            F.audit_block("STAGE_AWAITING_APPROVAL", F._plus(TS, 61), Stage=STAGE)))
+    gates = [rec for rec in await seed(world) if rec.type == "gate" and rec.status == "Queued"]
+    assert len(gates) == 1 and gates[0].action_id != receipt.action_id
+
+
+@pytest.mark.parametrize("repo_options", [{"team": "A2-open"}])
+@aio
+async def test_one_units_approval_in_flight_does_not_hide_another_units_gate(world):
+    """The same stage's gate is a separate decision for each team Unit: one Unit's approval on the wire speaks for
+    that Unit's gate alone."""
+    gate = await team_gate(world)
+    receipt = await submit(world, gate)
+    team_rows(world, MAIN_SHARD, "unit-b", "STAGE_AWAITING_APPROVAL")
+    others = [rec for rec in await seed(world, TEAM) if rec.type == "gate" and rec.unit == "unit-b"]
+    assert [rec.status for rec in others] == ["Queued"], (receipt.status, gate.unit)
 
 
 @pytest.mark.parametrize("stored", [

@@ -24,7 +24,8 @@ import type {
 } from '../lib/types'
 import type { Resource } from '../lib/useResource'
 import {
-  EMPTY_WIZARD, canonicalJson, planBody, planDigest, sha256Hex, slugifyObjective, summaryFlagSupported, WizardView,
+  EMPTY_WIZARD, canonicalJson, planBody, planDigest, projectTypeSupported, sha256Hex, slugifyObjective, summaryFlagSupported,
+  WizardView,
 } from './WizardView'
 import { StepWork } from './StepWork'
 
@@ -283,6 +284,7 @@ interface PreviewBody {
   depth: string | null
   test_strategy: string | null
   review_cap: string | null
+  project_type?: string | null
   overrides?: Record<string, boolean>
 }
 
@@ -1529,6 +1531,7 @@ function workStep(bunSearched: string[]) {
         state={{ ...EMPTY_WIZARD, repo: 'r_1', objective: OBJECTIVE }}
         repos={REPOS.repos}
         repo={REPOS.repos[0] ?? null}
+        projectTypeOffered={false}
         blocked={null}
         spaces={['default']}
         activeSpace="default"
@@ -1595,7 +1598,8 @@ describe('summary confirmation at creation', () => {
   })
 
   it('leaves the request as it was when the scope decides', () => {
-    expect(planBody({ ...EMPTY_WIZARD, scope: 'feature' }, 'default', false)).not.toHaveProperty('summary_confirmation')
+    expect(planBody({ ...EMPTY_WIZARD, scope: 'feature', summaryConfirmation: null }, 'default', false))
+      .not.toHaveProperty('summary_confirmation')
     expect(planBody({ ...EMPTY_WIZARD, scope: 'feature', summaryConfirmation: 'off' }, 'default', false))
       .toMatchObject({ summary_confirmation: 'off' })
   })
@@ -1642,5 +1646,80 @@ describe('summary confirmation at creation', () => {
     await continueToCreate()
     await waitFor(() => expect(creates()).toHaveLength(1))
     expect(creates()[0]?.body).not.toHaveProperty('summary_confirmation')
+  })
+
+  it.each([
+    ['left at the Settings default', null, ['off', 'off']],
+    ['picked by the person', /^On/, ['on', 'off']],
+  ] as const)('starts the next intent from the Settings default again when the first was %s', async (_case, pick, sent) => {
+    repo.installed_engine_version = '2.11.0'
+    withDefault('off')
+    installRoutes()
+    mount()
+    await toPreset()
+    await pickScope('feature')
+    if (pick) await userEvent.click(within(group() as HTMLElement).getByRole('button', { name: pick }))
+    await continueToCreate()
+    await userEvent.click(screen.getByRole('button', { name: 'Create another intent' }))
+    await toPreset()
+    await pickScope('feature')
+    expect(within(group() as HTMLElement).getByRole('button', { name: /^Off/ })).toHaveAttribute('aria-pressed', 'true')
+    await continueToCreate()
+    await waitFor(() => expect(creates()).toHaveLength(2))
+    expect(creates().map((call) => (call.body as PlanRequest).summary_confirmation)).toEqual(sent)
+  })
+})
+
+// ---- project type at creation ---- //
+
+describe('project type at creation', () => {
+  const [first, second] = REPOS.repos as unknown as { installed_engine_version?: string | null }[]
+  const creates = () => apiCalls.filter((call) => call.method === 'POST' && call.path === `${BASE}/repos/r_1/intents`)
+  const projectType = () => screen.queryByLabelText('Project type')
+
+  afterEach(() => {
+    delete first?.installed_engine_version
+    delete second?.installed_engine_version
+  })
+
+  it('is taken only by engines from 2.11 on, and an unreadable version is not new enough', () => {
+    const at = (version: string | null) => projectTypeSupported({ installed_engine_version: version } as never)
+    expect([at('2.11.0'), at('2.11.2'), at('3.0'), at('2.11.0-beta.1')]).toEqual([true, true, true, true])
+    expect([at('2.10.0'), at('2.7.1'), at(null), at(''), at('next')]).toEqual([false, false, false, false, false])
+    expect(projectTypeSupported(null)).toBe(false)
+  })
+
+  it('is offered where the engine takes it, and sent with the preview and with Create', async () => {
+    if (first) first.installed_engine_version = '2.11.2'
+    installRoutes()
+    mount()
+    await userEvent.selectOptions(await screen.findByLabelText('Repository'), 'r_1')
+    await userEvent.selectOptions(screen.getByLabelText('Project type'), 'Brownfield')
+    await toPreset()
+    await pickScope('feature')
+    await waitFor(() => expect(previewBodies().at(-1)).toMatchObject({ project_type: 'Brownfield' }))
+    await continueToCreate()
+    await waitFor(() => expect(creates()).toHaveLength(1))
+    expect(creates()[0]?.body).toMatchObject({ project_type: 'Brownfield' })
+  })
+
+  it('is not offered below 2.11, and a type picked for another repository is not sent there', async () => {
+    if (first) first.installed_engine_version = '2.10.0'
+    if (second) second.installed_engine_version = '2.11.2'
+    installRoutes({
+      [`GET ${BASE}/repos/r_2/intents`]: () => ({ intents: [], spaces: ['default'], active_space: 'default' }),
+    })
+    mount()
+    await userEvent.selectOptions(await screen.findByLabelText('Repository'), 'r_2')
+    await userEvent.selectOptions(screen.getByLabelText('Project type'), 'Brownfield')
+    await userEvent.selectOptions(screen.getByLabelText('Repository'), 'r_1')
+    expect(projectType()).not.toBeInTheDocument()
+    await toPreset()
+    await pickScope('feature')
+    await waitFor(() => expect(previewBodies().length).toBeGreaterThan(0))
+    expect(previewBodies().map((body) => body.project_type)).not.toContain('Brownfield')
+    await continueToCreate()
+    await waitFor(() => expect(creates()).toHaveLength(1))
+    expect(creates()[0]?.body).toMatchObject({ project_type: null })
   })
 })

@@ -785,6 +785,9 @@ class AdvisorBroker:
         if self._settings is None or not self._enabled():
             return 0
         granted = self._granted()
+        if granted:
+            archived = await asyncio.to_thread(self._storage.select, "repos", {"archived": 1})
+            granted -= {str(row.get("id") or "") for row in archived}
         if not granted:
             return 0
         inflight = await self._auto_inflight()

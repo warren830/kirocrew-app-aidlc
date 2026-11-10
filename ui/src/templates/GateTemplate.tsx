@@ -72,7 +72,7 @@ export function ranReview(review: ActionEvidence['review']): ActionEvidence['rev
   return empty ? null : review
 }
 
-export function GateTemplate({ card, detail, draft, setDraft, refreshing, api, route, go }: TemplateProps) {
+export function GateTemplate({ card, detail, draft, setDraft, refreshing, sending = false, api, route, go }: TemplateProps) {
   const i18n = useI18n()
   const { t } = i18n
   const advisor = useAdvisor(card, api, detail?.drafts)
@@ -103,7 +103,7 @@ export function GateTemplate({ card, detail, draft, setDraft, refreshing, api, r
 
   return (
     <section className="studio-template" data-type={card.type} aria-label={templateLabel(i18n, card)}>
-      <DecisionBrief card={card} />
+      <DecisionBrief card={card} go={go} />
       <AcceptanceCriteria card={card} />
 
       <Block title={t('template.gate.compare')} icon="review">
@@ -224,7 +224,7 @@ export function GateTemplate({ card, detail, draft, setDraft, refreshing, api, r
       <AdvisorBlock
         card={card}
         advisor={advisor}
-        {...(offersChanges ? { onUseFeedback: (text: string) => setDraft({ feedback: text }) } : {})}
+        {...(offersChanges && !sending ? { onUseFeedback: (text: string) => setDraft({ feedback: text }) } : {})}
       />
 
       {offersChanges ? (
@@ -235,7 +235,7 @@ export function GateTemplate({ card, detail, draft, setDraft, refreshing, api, r
             label={t('template.gate.feedbackLabel')}
             placeholder={t('template.gate.feedbackPlaceholder')}
             routing={t('template.gate.feedbackRouting')}
-            disabled={refreshing}
+            disabled={refreshing || sending}
           />
           {refreshing ? (
             <p className="studio-advisor-copy" data-tone="warn" role="status">

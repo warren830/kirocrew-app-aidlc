@@ -28,6 +28,9 @@ export const LEASE_KINDS: readonly LeaseKind[] = ["execution", "admin"]
 export type InstallStatus = "not_installed" | "installed" | "drift" | "recovery_required"
 export const INSTALL_STATUSES: readonly InstallStatus[] = ["not_installed", "installed", "drift", "recovery_required"]
 
+export type TransactionSettledStatus = "committed" | "rolled_back" | "recovery_required" | "failed"
+export const TRANSACTION_SETTLED_STATUS: readonly TransactionSettledStatus[] = ["committed", "rolled_back", "recovery_required", "failed"]
+
 export type Availability = "available" | "moved" | "permission_denied" | "unavailable" | "identity_unprovable"
 export const AVAILABILITIES: readonly Availability[] = ["available", "moved", "permission_denied", "unavailable", "identity_unprovable"]
 
@@ -57,6 +60,10 @@ export const ACCEPT_AS_IS_REVISION_CYCLES = 3
 export const DEEP_LINK_BASE = "/apps/aidlc-studio-v2"
 /** The name `app.json` installs this tree under: running as it, Studio is not a side copy. */
 export const MANIFEST_APP_NAME = "aidlc-studio-v2"
+
+/** The first engine whose `intent-create` takes each creation flag; an older one does not honor it. */
+export const SUMMARY_CONFIRMATION_CREATE_MIN_ENGINE: readonly number[] = [2, 10]
+export const PROJECT_TYPE_CREATE_MIN_ENGINE: readonly number[] = [2, 11]
 
 /** Stages run once per Construction unit: the map's unit lanes for a stage the graph does not know. */
 export const PER_UNIT_STAGES: readonly string[] = ["functional-design", "nfr-requirements", "nfr-design", "infrastructure-design", "code-generation"]

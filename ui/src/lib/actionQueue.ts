@@ -1,9 +1,19 @@
-import type { ActionCard, ActionsResponse } from './types'
+import type { ActionCard, ActionsResponse, Decision } from './types'
 
 const CLOSED: ReadonlySet<ActionCard['status']> = new Set(['StateChanged', 'ResolvedNoTransition', 'Cancelled'])
 
 export function isClosedAction(card: Pick<ActionCard, 'status'>): boolean {
   return CLOSED.has(card.status)
+}
+
+/**
+ * The copy a decision's hint and confirmation read from. `acknowledge` on a delivery the conversation confirmed
+ * closes it as received but never recorded, without resending, which is not the incident it closes elsewhere.
+ */
+export function decisionCopy(card: Pick<ActionCard, 'status' | 'delivery'>, decision: Decision): string {
+  return decision === 'acknowledge' && card.status === 'ReconciliationRequired' && card.delivery.delivery_confirmed === true
+    ? 'acknowledgeUnrecorded'
+    : decision
 }
 
 /** Older cached responses lack repository health; current responses always carry it. */

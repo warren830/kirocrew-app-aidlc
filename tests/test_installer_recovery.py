@@ -10,7 +10,7 @@ import pytest
 from _helpers_c import die_in_child
 from test_installer import h, make_harness, payload_v1, payload_v2, run, store, tree  # noqa: F401 - fixtures
 from test_installer_rollback import upgraded
-from test_installer_uninstall import installed
+from test_installer_uninstall import installed, interrupted_uninstall
 
 
 @pytest.fixture(params=["uninstall", "rollback"])
@@ -174,3 +174,19 @@ def test_process_death_during_generic_recovery_can_use_the_same_application_flow
     result = run(harness.installer.run(repo, "recovery", plan_digest=again.digest()))
     assert result.status == "rolled_back" and result.transaction_id == failed.transaction_id
     assert tree(root) == before
+
+
+def test_an_uninstall_interrupted_after_the_harness_went_stays_recoverable_across_a_scan(h, installed):
+    """Every reconciler tick rescans; a scan that read "no harness" as ``not_installed`` stranded the journal."""
+    root, repo = installed
+    before = tree(root)
+    failed = interrupted_uninstall(h, repo, at="before:uninstall_path:AGENTS.md")[1]
+    assert failed.status == "recovery_required"
+    scan = h.registry.rescan(repo.repo_id)
+    assert (scan.install.harness_dirs, scan.install.status) == ((), "recovery_required")
+    repo = h.registry.get(repo.repo_id)
+    recovery = h.installer.preview(repo, "recovery")
+    assert recovery.recovery_transaction_id == failed.transaction_id and not recovery.blocking
+    assert run(h.installer.run(repo, "recovery", plan_digest=recovery.digest())).status == "rolled_back"
+    assert tree(root) == before
+    assert h.registry.rescan(repo.repo_id).install.status == "installed"

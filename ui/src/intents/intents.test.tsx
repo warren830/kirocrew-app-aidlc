@@ -18,7 +18,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { I18nProvider, makeI18n } from '../i18n'
 import { StudioApiError, useStudioApi, type StudioApi } from '../lib/api'
 import { buildRoute, parseRoute } from '../lib/route'
-import type { ChatFolder, IntentSummary, RepoRecord, SlotView } from '../lib/types'
+import type { ChatFolder, IntentSummary, RecomposeProposal, RepoRecord, SlotView } from '../lib/types'
 import { StudioApp } from '../shell/StudioApp'
 import { API_BASE, actionCard, shellRoutes } from '../test/fixtures'
 import { apiCalls, navigations, setApiRoutes, StubApiError } from '../test/stubs/app-sdk'
@@ -387,10 +387,29 @@ describe('the intents inventory', () => {
 
   it('says when a waiting call stays inside its repository', () => {
     const repos = [{ repo_id: 'r_s3', label: 'local-s3', canonical_path: '/work/local-s3' }] as RepoRecord[]
-    render(<I18nProvider><ApprovalWaitNotice slotKey="s1" tool="" repoId="r_s3" repos={repos}
+    render(<I18nProvider><ApprovalWaitNotice slotKey="s1" tool="" repoId="r_s3" repos={repos} toolKind="execute"
       toolInput={JSON.stringify({ command: 'bun .kiro/tools/aidlc.ts engine now > /dev/null' })} /></I18nProvider>)
     expect(screen.getByText('It names no path outside this repository.')).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveAttribute('data-tone', 'warn')
+  })
+
+  it('vouches for no reach through ~, a variable or a .. above the repository, and still offers Allow once', () => {
+    setApiRoutes({})
+    const repos = [
+      { repo_id: 'r_v2', label: 'v2-feature', canonical_path: '/work/v2-feature' },
+      { repo_id: 'r_s3', label: 'local-s3', canonical_path: '/work/local-s3' },
+    ] as RepoRecord[]
+    for (const path of ['../local-s3/aidlc/spaces/default/intents', '~/work/local-s3/aidlc/audit/x.md', '$HOME/work/local-s3/.env']) {
+      const command = `grep -rn GATE_APPROVED ${path}`
+      const { unmount } = render(<I18nProvider><ApprovalWaitNotice slotKey="s1" tool={`Running: ${command}`}
+        toolInput={JSON.stringify({ command })} repoId="r_v2" repos={repos}
+        target={{ request_id: 'tool-1', request_mid: 'mid-7', origin: 'native' }} /></I18nProvider>)
+      expect(screen.queryByText('It names no path outside this repository.')).not.toBeInTheDocument()
+      expect(screen.getByText(`Studio cannot tell where these paths lead, so it cannot say the call stays in this repository: ${path}`))
+        .toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Allow once' })).toBeInTheDocument()
+      unmount()
+    }
   })
 
   it('offers no Allow once, and vouches for no reach, on a call shown only in part', () => {
@@ -433,6 +452,38 @@ describe('the intents inventory', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Reject' }))
     expect((apiCalls.at(-1)?.body as { action: string }).action).toBe('rejected_once')
     expect(await screen.findByText(/^This request no longer waits/)).toBeInTheDocument()
+  })
+
+  it('offers the conversation\'s next request its own answer, however the last one was answered', async () => {
+    const notice = (id: string, command: string) => (
+      <I18nProvider><ApprovalWaitNotice slotKey="s1" tool={`Running: ${command}`} toolInput={JSON.stringify({ command })}
+        target={{ request_id: id, request_mid: `mid-${id}`, origin: 'native' }} /></I18nProvider>
+    )
+    const answers = [
+      [() => ({ ok: true }), 'Allowed once. The conversation carries on.'],
+      [() => { throw new StubApiError(404, { error: 'no pending approval', code: 'approval_not_pending' }) }, /^This request no longer waits/],
+    ] as const
+    for (const [host, outcome] of answers) {
+      setApiRoutes({ ['POST /api/chat/slots/s1/approve']: host })
+      const view = render(notice('tool-1', 'ls -la'))
+      await userEvent.click(screen.getByRole('button', { name: 'Allow once' }))
+      expect(await screen.findByText(outcome)).toBeInTheDocument()
+      // A re-read that still lists the request just answered keeps that answer, and offers no second one.
+      view.rerender(notice('tool-1', 'ls -la'))
+      expect(screen.getByText(outcome)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Allow once' })).not.toBeInTheDocument()
+      // The next request on the same conversation, here a different command, is its own question.
+      view.rerender(notice('tool-2', 'rm -rf build'))
+      expect(screen.getByText('rm -rf build')).toBeInTheDocument()
+      expect(screen.queryByText(outcome)).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: 'Allow once' }))
+      expect(apiCalls.map((call) => call.body)).toEqual([
+        { origin: 'native', request_id: 'tool-1', request_mid: 'mid-tool-1', action: 'approved' },
+        { origin: 'native', request_id: 'tool-2', request_mid: 'mid-tool-2', action: 'approved' },
+      ])
+      view.unmount()
+    }
   })
 
   it('leaves a sub-agent’s request, or one the host names no row for, to the conversation', () => {
@@ -668,6 +719,72 @@ describe('the conversation panel, opened from one row and then another', () => {
     // Kept from A, the slot made "Open conversation" open A's chat from B's panel.
     expect(within(panelB).queryByText('slot-of-a')).toBeNull()
     expect(within(panelB).getByRole('button', { name: 'Create and bind the conversation' })).toBeInTheDocument()
+  })
+})
+
+describe('the plan-change panel, opened from one row and then another', () => {
+  /** The engine's preview of one movable stage, turned off when the request skips it. */
+  function preview(intentKey: string, body: unknown): { proposal: RecomposeProposal; proposal_digest: string } {
+    const { skip } = body as { skip: string[] }
+    const turns = { low: 1, high: 2, unit: 'turns', source: 'rule_band', confidence: 'low' } as const
+    return {
+      proposal: {
+        intent_key: intentKey, current_stage: '2.3 functional-design', skip, add: [],
+        plan: {
+          request: { space: 'default', scope: 'feature', depth: 'Standard', test_strategy: null, review_cap: null,
+            project_type: null, overrides: {}, objective: null, label: null, context: null },
+          scope_meta: null,
+          stages: [{ slug: 'nfr-requirements', number: '2.4', name: 'nfr-requirements', phase: 'inception',
+            execution: 'ALWAYS', in_grid: true, enabled: !skip.includes('nfr-requirements'), locked: false,
+            lock_reason: null, gate: true, review_class: null, reviewer: null, per_unit: false, produces: [],
+            consumes: [], depends_on: [], conditional_on: null, state: 'not_started' }],
+          exact: { stages: 1, gates: 1, artifacts: 0, review_intensity: { none: 1, advisory: 0, adversarial: 0 }, assumes_units: 1 },
+          estimate: { turns, active_secs: { ...turns, unit: 'secs' }, elapsed_secs: null, credits: null,
+            credits_status: 'unavailable', source: 'rule_band', confidence: 'low', samples: 0, dominant: [], coverage_lost: [] },
+          diff: [], issues: [], valid: true, products: [], graph_stage_count: 3, engine_version: '2.11.0',
+        },
+        argv_preview: ['aidlc-utility.ts', 'recompose', ...(skip.length ? ['--skip', skip.join(',')] : []), '--dir', intentKey],
+        allowed: skip.length > 0, refusals: [],
+      },
+      proposal_digest: `digest-${intentKey}-${skip.join(',')}`,
+    }
+  }
+
+  it('previews the second intent\'s own plan, with neither the first one\'s change nor its confirmation', async () => {
+    const first = { ...INTENT, intent_dir: '250901-a', intent_key: '250901-a', title: 'First' } as IntentSummary
+    const second = { ...first, intent_dir: '250902-b', intent_key: '250902-b', title: 'Second' } as IntentSummary
+    setApiRoutes({
+      ...shellRoutes([]),
+      ...oneRepo(2),
+      [`GET ${API_BASE}/repos/r_1/intents`]: () => ({ intents: [first, second], spaces: ['default'], active_space: 'default' }),
+      [`POST ${API_BASE}/repos/r_1/intents/250901-a/recompose/preview`]: (body) => preview('250901-a', body),
+      [`POST ${API_BASE}/repos/r_1/intents/250902-b/recompose/preview`]: (body) => preview('250902-b', body),
+    })
+    window.history.replaceState(null, '', buildRoute({ view: 'intents' }))
+    render(<I18nProvider><StudioApp /></I18nProvider>)
+    const changeThePlanOf = async (title: string) =>
+      within((await screen.findByText(title)).closest('tr, li') as HTMLElement).getByRole('button', { name: 'Change the plan' })
+    const previewsOfSecond = () =>
+      apiCalls.filter((call) => call.path.endsWith('/250902-b/recompose/preview')).map((call) => call.body)
+
+    await userEvent.click(await changeThePlanOf('First'))
+    const panelA = await screen.findByRole('region', { name: 'Change the plan of 250901-a' })
+    const stageOfA = await within(panelA).findByRole('checkbox', { name: /nfr-requirements/ })
+    await waitFor(() => expect(stageOfA).toBeEnabled())
+    await userEvent.click(stageOfA)
+    const applyToA = within(panelA).getByRole('button', { name: /Apply the change/ })
+    await waitFor(() => expect(applyToA).toBeEnabled())
+    await userEvent.click(applyToA)
+    expect(within(panelA).getByRole('button', { name: 'Run it' })).toBeInTheDocument()
+
+    await userEvent.click(await changeThePlanOf('Second'))
+    const panelB = await screen.findByRole('region', { name: 'Change the plan of 250902-b' })
+    await waitFor(() => expect(previewsOfSecond()).not.toEqual([]))
+    // Kept from A, the skip was previewed on B, and its "Run it" applied `--skip nfr-requirements` to B.
+    expect(previewsOfSecond()).toEqual([{ skip: [], add: [] }])
+    expect(within(panelB).queryByRole('button', { name: 'Run it' })).toBeNull()
+    await waitFor(() => expect(within(panelB).getByRole('checkbox', { name: /nfr-requirements/ })).toBeChecked())
+    expect(within(panelB).getByRole('button', { name: /Apply the change/ })).toBeDisabled()
   })
 })
 
@@ -1254,5 +1371,161 @@ describe('the sidebar folder an intent is filed under', () => {
     const withIntent = [...tree, folder({ id: 'i', name: '250901-guest-checkout', parent_id: 'top_early' })]
     expect(intentFolder(withIntent, 'top_early', '250901-guest-checkout')?.id).toBe('i')
     expect(intentFolder(withIntent, 'top_late', '250901-guest-checkout')).toBeNull()
+  })
+})
+
+describe('the start status after Studio could not prove the host refused the run', () => {
+  it('says Studio cannot confirm it reached the conversation, never that it was not sent', async () => {
+    const en = makeI18n('en-US')
+    const runnable = { ...INTENT, operational_state: 'Idle' as const, counts: { ...INTENT.counts, awaiting_approval: 0 } }
+    const card = actionCard({ action_id: 'a_9', type: 'run' })
+    const api = {
+      run: vi.fn(async () => ({ ok: true as const, action_id: 'a_9', status: 'Queued' as const, action: card })),
+      submitAction: vi.fn(async () => ({
+        ok: true, action_id: 'a_9', status: 'Delivering', lane: 'human_lane', delivery_id: 'dl_9',
+        slot_key: 'aidlc-r1-guest', session_key: 'ses_1', wire_text: '/aidlc', expires_at: '', lease_generation: 3,
+        host: { method: 'POST', path: '/api/chat?ws=1', body: { message: '/aidlc' } },
+      })),
+      listSlots: vi.fn(async () => [{ key: 'aidlc-r1-guest', project: card.repo.canonical_path, agent: 'aidlc', running: false }]),
+      // The host's own 4xx, which reads as not delivered.
+      sendToHost: vi.fn(async () => {
+        throw new StudioApiError('internal_error', 'slot is busy', {}, 409, { error: 'slot is busy', code: 'turn_in_flight' })
+      }),
+      // The slot ran a turn since, so the broker cannot prove it and recorded the send as uncertain.
+      reportDelivery: vi.fn(async () => {
+        throw new StudioApiError('not_delivered_unproven', 'this decision cannot be proven undelivered', {}, 409)
+      }),
+    } as unknown as StudioApi
+    render(
+      <I18nProvider>
+        <IntentActions api={api} intent={runnable} onGo={() => {}} onQueued={() => {}} onChanged={() => {}} onRecompose={() => {}} onSession={() => {}} />
+      </I18nProvider>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Run to next checkpoint' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Send /aidlc' }))
+    expect(await screen.findByText(en.t('intents.start.uncertain', { text: '/aidlc', action: 'a_9' }))).toBeInTheDocument()
+    expect(screen.queryByText(/was not sent/)).toBeNull()
+    expect(api.sendToHost).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the approval notice, read by the kind of call the host says it is', () => {
+  const repos = [
+    { repo_id: 'r_v2', label: 'v2-feature', canonical_path: '/work/v2-feature' },
+    { repo_id: 'r_s3', label: 'local-s3', canonical_path: '/work/local-s3' },
+  ] as RepoRecord[]
+  const notice = (toolInput: string, toolKind?: string | null, tool = '') => {
+    setApiRoutes({})
+    return render(<I18nProvider><ApprovalWaitNotice slotKey="s1" tool={tool} toolInput={toolInput} toolKind={toolKind}
+      repoId="r_v2" repos={repos} target={{ request_id: 'tool-1', request_mid: 'mid-7', origin: 'native' }} /></I18nProvider>)
+  }
+  const shown = (text: string) => screen.getByText((_, el) => el?.tagName === 'CODE' && el.textContent === text)
+  const intoS3 = /^It reaches into another registered repository: local-s3 \(\/work\/local-s3\)/
+  const inside = 'It names no path outside this repository.'
+  const unread = 'Studio cannot tell what this call works on, so it cannot say it stays in this repository.'
+  // The host's input for a write: difflib.unified_diff(fromfile=path, tofile=path) over ACP's absolute path.
+  const MCP_WRITE = [
+    '--- /work/local-s3/.kiro/settings/mcp.json',
+    '+++ /work/local-s3/.kiro/settings/mcp.json',
+    '@@ -1,3 +1,8 @@',
+    ' {',
+    '   "mcpServers": {',
+    '+    "fetch": {',
+    '+      "command": "npx",',
+    '+      "args": ["-y", "@modelcontextprotocol/server-fetch"]',
+    '+    }',
+    '   }',
+    ' }',
+  ].join('\n')
+
+  it('names the repository a command reaches into through a variable, in the danger tone', () => {
+    for (const command of ['grep -rn GATE_APPROVED /work/local-s3/aidlc/spaces/default/intents/$INTENT',
+      'cat /work/local-s3/aidlc/spaces/default/intents/${DIR}/audit.md']) {
+      const { unmount } = notice(JSON.stringify({ command }), 'execute', `Running: ${command}`)
+      expect(screen.getByRole('status')).toHaveAttribute('data-tone', 'danger')
+      expect(screen.getByText(intoS3)).toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('reads a write by the file it writes, not by a value in that file or by its edit verb', () => {
+    const { unmount } = notice(MCP_WRITE, 'edit', 'Edit file')
+    expect(shown(MCP_WRITE)).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveAttribute('data-tone', 'danger')
+    expect(screen.getByText(intoS3)).toBeInTheDocument()
+    unmount()
+    // An append derives no diff on the host, so its input stays the JSON arguments: `command` is the verb.
+    const append = JSON.stringify({ command: 'append', path: '/work/local-s3/aidlc/audit/audit.md', newStr: '\n## Human answer\nQ1: A\n' }, null, 2)
+    notice(append, 'edit', 'Edit file')
+    expect(shown(append)).toBeInTheDocument()
+    expect(screen.queryByText(inside)).not.toBeInTheDocument()
+    expect(screen.getByText(intoS3)).toBeInTheDocument()
+  })
+
+  it('says a write in this repository stays in it, whatever the text it writes holds', () => {
+    const artifact = [
+      '--- /work/v2-feature/aidlc/spaces/default/intents/251110-x/inception/plans/unit-of-work.md',
+      '+++ /work/v2-feature/aidlc/spaces/default/intents/251110-x/inception/plans/unit-of-work.md',
+      '@@ -0,0 +1,4 @@',
+      '+# Units of work',
+      '+Estimated effort: ~3 days per unit, see [the requirements](../requirements/requirements.md).',
+      '+- Unit 1: API client (`${baseUrl}/v1`)',
+      "+- Unit 2: reuse `import { api } from '../lib/api'` and /work/local-s3's notes",
+    ].join('\n')
+    for (const input of [artifact, JSON.stringify({ command: 'append', path: 'aidlc/audit/audit.md', newStr: '\n../../local-s3 ~/x $F\n' })]) {
+      const { unmount } = notice(input, 'edit', 'Edit file')
+      expect(screen.getByText(inside)).toBeInTheDocument()
+      expect(screen.queryByText(/^Studio cannot tell/)).not.toBeInTheDocument()
+      expect(screen.getByRole('status')).toHaveAttribute('data-tone', 'warn')
+      unmount()
+    }
+  })
+
+  it('vouches for no call whose kind the host does not say, and keeps every warning its text gives', () => {
+    for (const toolKind of [undefined, null, '', 'spawn', 'other']) {
+      const { unmount } = notice(JSON.stringify({ command: 'bun .kiro/tools/aidlc.ts engine now' }), toolKind)
+      expect(screen.queryByText(inside), String(toolKind)).not.toBeInTheDocument()
+      expect(screen.getByText(unread)).toBeInTheDocument()
+      unmount()
+    }
+    // A kind whose target the input does not carry: an MCP tool reported as `execute`, a write naming no file.
+    for (const [input, toolKind] of [[{ tool_id: 'probe::run', arguments: { text: 'go' } }, 'execute'], [{ text: 'x' }, 'edit']] as const) {
+      const { unmount } = notice(JSON.stringify(input), toolKind)
+      expect(screen.queryByText(inside), toolKind).not.toBeInTheDocument()
+      expect(screen.getByText(unread)).toBeInTheDocument()
+      unmount()
+    }
+    const { unmount } = notice(MCP_WRITE, null, 'Edit file')
+    expect(shown(MCP_WRITE)).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveAttribute('data-tone', 'danger')
+    expect(screen.getByText(intoS3)).toBeInTheDocument()
+    expect(screen.getByText(unread)).toBeInTheDocument()
+    unmount()
+    notice(JSON.stringify({ command: 'bun .kiro/tools/aidlc.ts engine now' }), 'execute')
+    expect(screen.getByText(inside)).toBeInTheDocument()
+    expect(screen.queryByText(unread)).not.toBeInTheDocument()
+  })
+
+  it('reads an intent row’s waiting call by the kind the host gives its session', async () => {
+    const command = 'go test ./...'
+    const waiting = (intentDir: string, title: string, toolKind: string | null) => ({
+      ...INTENT, intent_dir: intentDir, intent_key: intentDir, title, operational_state: 'Idle',
+      session: { ...INTENT.session!, running: true, waiting_approval: true,
+        approval: { tool: `Running: ${command}`, tool_input: JSON.stringify({ command }), tool_kind: toolKind } },
+    }) as IntentSummary
+    setApiRoutes({
+      ...shellRoutes([]),
+      ...oneRepo(2),
+      [`GET ${API_BASE}/repos/r_1/intents`]: () => ({
+        intents: [waiting('250901-a', 'First', 'execute'), waiting('250902-b', 'Second', null)], spaces: ['default'],
+        active_space: 'default',
+      }),
+    })
+    window.history.replaceState(null, '', buildRoute({ view: 'intents' }))
+    render(<I18nProvider><StudioApp /></I18nProvider>)
+    const row = async (title: string) => (await screen.findByText(title)).closest('tr, li') as HTMLElement
+    expect(within(await row('First')).getByText(inside)).toBeInTheDocument()
+    expect(within(await row('Second')).getByText(unread)).toBeInTheDocument()
+    expect(within(await row('Second')).queryByText(inside)).toBeNull()
   })
 })

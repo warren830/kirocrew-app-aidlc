@@ -10,6 +10,7 @@ from typing import Any
 
 from aiohttp import web
 
+from .. import constants as C
 from .. import security
 from ..errors import StudioError
 from ..sessions import busy_reasons
@@ -18,7 +19,7 @@ from .common import finish_shielded, json_ok, read_json, repo_and_snapshot, repo
 # The engine slugifies to 48 characters and prefixes a non-letter start with "intent-": accept only names it
 # keeps byte-for-byte, and none of its routing words.
 SPACE_NAME_RE = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
-RESERVED_SPACE_NAMES = frozenset({"help", "list", "switch", "create", "archive", "rename", "show", "birth"})
+RESERVED_SPACE_NAMES = C.RESERVED_RECORD_NAMES | {"rename", "show", "birth"}
 
 
 async def list_spaces(services: Any, request: web.Request) -> web.Response:

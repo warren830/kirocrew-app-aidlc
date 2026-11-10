@@ -79,7 +79,7 @@ export interface GitObservation { available: boolean; reason: string | null; bra
 export interface LeaseView { kind: LeaseKind; repo_id: string; resolved_repo_identity: string; generation: number; acquired_at: string; heartbeat_at: string; intent_uuid: string | null; intent_key: string | null; session_key: string | null; action_id: string | null; operation_type: string | null; transaction_id: string | null; observed_busy_state: string | null; orphaned: boolean }
 export interface StableBoundary { stable: boolean; reasons: string[]; stage: string | null; marker: string | null; boundary_token: string | null; recorded_at: string }
 /** `waiting_approval`: the conversation is parked on a host tool approval; `approval` says what it asks. */
-export interface SessionRef { slot_key: string; session_key: string; running: boolean; bound_at: string; waiting_approval?: boolean; approval?: { tool: string; tool_input: string; /** Longer than Studio shows: the notice offers no Allow once. */ tool_input_truncated?: boolean; purpose?: string; request_id?: string; request_mid?: string; origin?: string } | null; stopped_on_error?: StoppedOnError | null }
+export interface SessionRef { slot_key: string; session_key: string; running: boolean; bound_at: string; waiting_approval?: boolean; approval?: { tool: string; tool_input: string; /** Longer than Studio shows: the notice offers no Allow once. */ tool_input_truncated?: boolean; purpose?: string; request_id?: string; request_mid?: string; origin?: string; tool_kind?: string | null } | null; stopped_on_error?: StoppedOnError | null }
 /** The host error an idle conversation's last turn stopped on; `kind` is the host's row kind, often empty. */
 export interface StoppedOnError { at: string; text: string; kind: string }
 /**
@@ -230,7 +230,7 @@ export interface ActionEvidence {
   conversation_reply?: { text: string; ts: string | null } | null
 }
 export interface Delivery { lane: Lane | null; delivery_id: string | null; slot_key: string | null; session_key: string | null; wire_text: string | null; host: HostCall | null; delivering_at: string | null; delivered_at: string | null; queued_at: string | null; turn_started_at?: string; deadline_at: string | null; receipt: Record<string, unknown> | null; outcome: 'delivered' | 'not_delivered' | 'uncertain' | null; delivery_confirmed: boolean; boot_id_unchanged: boolean | null; transcript_row: { slot_key: string; ts: string; role: string } | null; slot_ran_since: boolean | null; disk_baseline_unchanged: boolean | null }
-export interface Resolution { kind: 'state_changed' | 'no_transition' | 'failed' | 'cancelled' | null; resolved_at: string | null; evidence: { events?: unknown[]; rows?: unknown[]; presence: PresenceCheck | null; is_active: boolean | null; new_commit?: { sha: string; at: string; subject: string } | null; host_error?: StoppedOnError | null; answers_in_file?: boolean } | null; reason: string | null }
+export interface Resolution { kind: 'state_changed' | 'no_transition' | 'failed' | 'cancelled' | null; resolved_at: string | null; evidence: { events?: unknown[]; rows?: unknown[]; presence: PresenceCheck | null; is_active: boolean | null; new_commit?: { sha: string; at: string; subject: string } | null; host_error?: StoppedOnError | null; answers_in_file?: boolean; delivered_by?: string } | null; reason: string | null }
 /** DRIFT: `_failure_json` defaults `summary_key` and `fingerprint_class` to `null`. */
 export interface FailureInfo { fingerprint: string; fingerprint_class: string | null; summary_key: string | null; count: number; breaker_open: boolean; history: { at: string; outcome: string; backoff_secs: number }[]; stderr_excerpt: string | null }
 export interface InstallInfo { receipt_id: string | null; engine_version: string | null; bundled_engine_version: string; drift: PreviewEntry[]; transaction_id: string | null }
@@ -252,7 +252,7 @@ export interface ActionCard {
 }
 export interface ActionGroup { key: string; label_key: string; action_ids: string[] }
 /** A bound conversation parked on a host tool approval (architecture A31). Answered in the chat, not here. */
-export interface ApprovalWait { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; slot_key: string; tool: string; tool_input: string; tool_input_truncated?: boolean; purpose?: string; request_id?: string; request_mid?: string; origin?: string }
+export interface ApprovalWait { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; slot_key: string; tool: string; tool_input: string; tool_input_truncated?: boolean; purpose?: string; request_id?: string; request_mid?: string; origin?: string; tool_kind?: string | null }
 export interface StoppedTurn extends StoppedOnError { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; slot_key: string }
 export interface ActionsResponse { actions: ActionCard[]; organize: Organize; groups: ActionGroup[]; counts: { total: number; critical: number; blocking: number; attention: number; info: number }; approval_waits?: ApprovalWait[]; stopped_turns?: StoppedTurn[]; generated_at: string }
 export interface ActionTransition { from_status: ActionStatus | null; to_status: ActionStatus; generation: number; at: string; reason: string | null; evidence: Record<string, unknown> }

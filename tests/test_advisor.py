@@ -790,6 +790,18 @@ def test_only_a_granted_repository_draws_a_draft_nobody_asked_for(wiring, A):
     assert wiring.ctx.spawn.spawned[0]["agent"] == A.ADVISOR_AGENT_NAME
 
 
+def test_an_archived_repository_draws_no_draft_nobody_asked_for(wiring, A):
+    """Archiving sets the repository aside; its standing grant drafts again only once it is back."""
+    grant(wiring, REPO)
+    card(wiring, "a_auto1")
+    wiring.store.update("repos", REPO, {"archived": 1})
+    assert autodraft(wiring) == 0
+    assert drafts_of(wiring) == [] and wiring.ctx.spawn.spawned == []
+    wiring.store.update("repos", REPO, {"archived": 0})
+    assert autodraft(wiring) == 1
+    assert [row["action_id"] for row in drafts_of(wiring)] == ["a_auto1"]
+
+
 def test_an_automatic_draft_carries_the_flag_and_is_recorded_as_automatic(wiring, A):
     """``auto`` is what licenses the UI's pre-fill; no owner is named, since an id would read like a click."""
     grant(wiring, REPO)

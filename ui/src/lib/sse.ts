@@ -111,24 +111,27 @@ export function EventStreamProvider({ poll, enabled = true, children }: EventStr
     let source: EventSource | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let pollTimer: ReturnType<typeof setTimeout> | null = null
+    // Bumped whenever polling stops. A poll still on the wire then belongs to a loop that has ended: the
+    // stream that stopped it resumes from the same cursor, so its answer is dropped and it does not re-arm.
+    let pollLoop = 0
     let attempts = 0
 
     const setMode = (mode: StreamMode) =>
       setStatus({ mode, cursor: cursor.current, attempts })
 
     const stopPolling = () => {
+      pollLoop += 1
       if (pollTimer !== null) clearTimeout(pollTimer)
       pollTimer = null
     }
 
-    const pollOnce = async () => {
-      if (stopped) return
+    const pollOnce = async (loop: number) => {
       // A hidden tab is not looked at; draining the ring into it wastes the gateway's time and the
       // user's battery, and the next visible poll catches up from the same cursor anyway.
       if (typeof document === 'undefined' || !document.hidden) {
         try {
           const body = await poll(cursor.current)
-          if (stopped) return
+          if (loop !== pollLoop) return
           if (body.reset) {
             cursor.current = body.cursor
             emit({ type: 'reset', seq: -1, payload: { oldest_seq: body.oldest_seq, cursor: body.cursor } })
@@ -143,12 +146,13 @@ export function EventStreamProvider({ poll, enabled = true, children }: EventStr
           // the next tick retries. Throwing here would take the whole page down with it.
         }
       }
-      if (!stopped) pollTimer = setTimeout(pollOnce, POLL_INTERVAL_MS)
+      if (loop === pollLoop) pollTimer = setTimeout(() => void pollOnce(loop), POLL_INTERVAL_MS)
     }
 
     const startPolling = () => {
       if (pollTimer !== null) return
-      pollTimer = setTimeout(pollOnce, 0)
+      const loop = pollLoop
+      pollTimer = setTimeout(() => void pollOnce(loop), 0)
     }
 
     const scheduleReconnect = () => {

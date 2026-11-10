@@ -23,7 +23,7 @@ from .wire import WireRecord
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .activity import ActivityProjector
-    from .aidlc_reader import AidlcReader, ScopeMeta, StageNode, StageRow
+    from .aidlc_reader import AidlcReader, ScopeMeta, StageNode, StageRow, StateFile
     from .consistency import Finding
     from .engine import EngineResult, EngineRunner
     from .events import EventLog
@@ -56,12 +56,16 @@ PLAN_ISSUE_CODES = ("dependency_missing", "required_stage_disabled", "unknown_st
                     "frozen_stage", "scope_unknown", "depth_invalid", "recompose_not_allowed", "skeleton_anchor")
 #: The phase whose first selected stage anchors the walking-skeleton gate.
 _ANCHOR_PHASE = "construction"
+_PROJECT_TYPES = ("greenfield", "brownfield")
 DIFF_REASON_OVERRIDE = "override"
 #: A label becomes the record's directory name: two or three kebab-case words (§1.15).
 LABEL_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+){0,2}$")
 MAX_LABEL_WORDS = 3
 #: ``recompose`` needs a Running intent that is not in autonomous construction (the plan could move under it).
 RECOMPOSE_REQUIRED_STATUS = "Running"
+#: The first engine known to restart finished work on a scope change; 2.1.1's leaves Status and the cursor alone,
+#: and Studio has no source for the releases between.
+SCOPE_CHANGE_REOPENS_FROM = (2, 11, 2)
 AUTONOMOUS_MODE = "autonomous"
 OP_INTENT_CREATE, OP_RECOMPOSE = "intent_create", "recompose"
 OP_SCOPE_CHANGE, OP_CONFIG_CHANGE = "scope_change", "config_change"
@@ -388,6 +392,9 @@ class PlanService:
             known = [s.name for s in scopes] or sorted(grid)
             issues.append(PlanIssue.of("scope_unknown", scope=scope, known=known))
         depth = self._resolve_depth(req, scope_meta, issues)
+        if req.test_strategy and req.test_strategy not in TEST_STRATEGIES:
+            issues.append(PlanIssue.of("depth_invalid", field="test_strategy", value=req.test_strategy,
+                                       allowed=list(TEST_STRATEGIES)))
         request_cap = self._resolve_cap(req.review_cap, "review_cap", issues)
         scope_cap = self._resolve_cap(scope_meta.review_cap if scope_meta else None, None, issues)
         stages = self._build_stages(
@@ -483,7 +490,7 @@ class PlanService:
                               details={"reason": "plan_digest_mismatch", "expected": plan.digest()})
         label = self._require_label(req)
         arguments = self._require_arguments(req)
-        self._require_summary_flag(repo, req)
+        self._require_creation_flags(repo, req)
 
         transaction_id = self._ids.new("tx")
         grant = await self._scheduler.acquire_admin(
@@ -496,7 +503,8 @@ class PlanService:
             result = await self.engine.run(
                 "utility.intent_create", root, engine_dir, scope=req.scope, arguments=arguments, label=label,
                 depth=req.depth or "", test_strategy=req.test_strategy or "", review=req.review_cap or "",
-                summary_confirmation=req.summary_confirmation or "", **lease,
+                summary_confirmation=req.summary_confirmation or "",
+                project_type=_declared_project_type(req.project_type) or "", **lease,
             )
             self.require_engine_ok(result)
             intent_dir, verified = await asyncio.to_thread(self._verify_created, root, space, before)
@@ -614,7 +622,8 @@ class PlanService:
         self, repo: "RepoRecord", snap: "IntentSnapshot", changes: Mapping[str, Any]
     ) -> dict[str, Any]:
         """Preview ``scope-change``/``config-change``, including the engine's row rebuild: 2.7.1 cannot keep
-        gate/revision marks across a scope change, so those are refused before the engine touches the record."""
+        gate/revision marks across a scope change, so those are refused before the engine touches the record.
+        ``reopens`` names the stage a scope change restarts finished work at."""
         self.require_ready(repo)
         unknown = set(changes) - {"scope", "depth", "test_strategy"}
         if unknown:
@@ -667,6 +676,11 @@ class PlanService:
                     refusals.append("current_stage_removed")
                 if node.slug == state.current_stage and selected and not target:
                     refusals.append("current_stage_removed")
+        reopens = _reopened_by_scope_change(state, snap.graph, grid, current.project_type) if changing_scope else None
+        version = _version_tuple((snap.engine.engine_version if snap.engine is not None else None)
+                                 or repo.installed_engine_version)
+        if reopens is not None and (version is None or version < SCOPE_CHANGE_REOPENS_FROM):
+            refusals.append("reopen_unsupported")
         if before == after:
             refusals.append("no_changes")
         verb = "utility.scope_change" if changing_scope else "utility.config_change"
@@ -678,7 +692,7 @@ class PlanService:
         )
         proposal = {
             "repo_id": repo.repo_id, "intent_key": snap.intent_key,
-            "before": before, "after": after, "stages": stages,
+            "before": before, "after": after, "stages": stages, "reopens": reopens,
             "scopes": sorted(snap.grid), "allowed": not refusals,
             "refusals": list(dict.fromkeys(refusals)), "argv_preview": argv,
             "verb_key": verb,
@@ -746,10 +760,11 @@ class PlanService:
             state = observed[1]
             actual = {"scope": state.project.get("Scope"), "depth": state.scope_config.get("Depth"),
                       "test_strategy": state.scope_config.get("Test Strategy")}
-            preserved = all(
-                state.row(row.slug) is not None and state.row(row.slug).state == row.state
-                for row in fresh.state.stages
-            )
+            expected = {row.slug: row.state for row in fresh.state.stages}
+            if proposal["reopens"] is not None:
+                expected[proposal["reopens"]] = "in_progress"
+            preserved = all(state.row(slug) is not None and state.row(slug).state == mark
+                            for slug, mark in expected.items())
             selections_match = all(
                 (state.row(row["slug"]) is not None and _row_selected(state.row(row["slug"])) == row["after"])
                 or (proposal["verb_key"] == "utility.config_change"
@@ -788,6 +803,11 @@ class PlanService:
             base[node.slug] = selected
             locks[node.slug] = self._base_lock(node, row, index, current_index, selected)
             entries.append((node, row, node.slug))
+        if snap is None:
+            # Creation applies the overrides once `intent-create` has started this stage, and the engine never
+            # recomposes a stage in progress.
+            for slug in _creation_starts(graph, base, req.project_type):
+                locks[slug] = locks[slug] or LOCK_CURRENT
         graph_slugs = {node.slug for node in graph}
         for slug, row in rows.items():
             if slug not in graph_slugs:
@@ -1012,19 +1032,22 @@ class PlanService:
                                    "stderr": result.stderr[-2000:]})
 
     @staticmethod
-    def _require_summary_flag(repo: "RepoRecord", req: PlanRequest) -> None:
-        """Refuse a summary-confirmation choice the installed engine's ``intent-create`` would not take, before
-        the lease: an unknown flag fails the creation after nothing useful happened."""
-        if req.summary_confirmation is None:
-            return
+    def _require_creation_flags(repo: "RepoRecord", req: PlanRequest) -> None:
+        """Refuse a choice the installed engine's ``intent-create`` would not take, before the lease: an older
+        engine does not honor the flag, so the intent it creates would not be the one confirmed."""
         version = _version_tuple(repo.installed_engine_version)
-        if version is None or version < C.SUMMARY_CONFIRMATION_CREATE_MIN_ENGINE:
-            raise StudioError(
-                "bad_param", "this repository's AI-DLC cannot set summary confirmation when creating an intent",
-                details={"key": "summary_confirmation", "reason": "engine_too_old",
-                         "engine_version": repo.installed_engine_version,
-                         "minimum": ".".join(str(n) for n in C.SUMMARY_CONFIRMATION_CREATE_MIN_ENGINE)},
-            )
+        for key, chosen, minimum, what in (
+            ("summary_confirmation", req.summary_confirmation is not None, C.SUMMARY_CONFIRMATION_CREATE_MIN_ENGINE,
+             "set summary confirmation"),
+            ("project_type", _declared_project_type(req.project_type) is not None, C.PROJECT_TYPE_CREATE_MIN_ENGINE,
+             "take a project type"),
+        ):
+            if chosen and (version is None or version < minimum):
+                raise StudioError(
+                    "bad_param", f"this repository's AI-DLC cannot {what} when creating an intent",
+                    details={"key": key, "reason": "engine_too_old", "engine_version": repo.installed_engine_version,
+                             "minimum": ".".join(str(n) for n in minimum)},
+                )
 
     @staticmethod
     def require_ready(repo: "RepoRecord") -> None:
@@ -1062,6 +1085,9 @@ class PlanService:
         if len(label) > C.MAX_LABEL_CHARS or not LABEL_RE.match(label):
             raise StudioError("bad_body", f"a label is at most {MAX_LABEL_WORDS} lowercase kebab-case words",
                               details={"key": "label", "value": label})
+        if _record_slug(label) in C.RESERVED_RECORD_NAMES:
+            raise StudioError("bad_body", f'"{label}" is a name AI-DLC keeps for its own commands; pick a label that '
+                              "describes the work", details={"key": "label", "value": label})
         return label
 
     @staticmethod
@@ -1177,6 +1203,43 @@ def _row_selected(row: "StageRow") -> bool:
     return not (row.suffix or "").strip().upper().startswith("SKIP")
 
 
+def _reopened_by_scope_change(state: "StateFile", graph: Sequence["StageNode"], grid: Mapping[str, Any],
+                              project_type: str | None) -> str | None:
+    """``stageReopenedByScopeChange``: finished work restarts at the first stage after its cursor that the new
+    scope runs and that is neither done nor skipped, a new project's Reverse Engineering excepted."""
+    marks = {row.slug: row.state for row in state.stages}
+    cursor = (state.current_stage or "").strip()
+    if (state.status or "").strip() != "Completed" or marks.get(cursor) not in ("completed", "skipped"):
+        return None
+    at = next((index for index, node in enumerate(graph) if node.slug == cursor), None)
+    if at is None:
+        return None
+    greenfield = (project_type or "Greenfield").lower() == "greenfield"
+    return next((node.slug for node in graph[at + 1:] if marks.get(node.slug) not in ("completed", "skipped")
+                 and not (greenfield and node.slug == "reverse-engineering")
+                 and str(grid.get(node.slug, "")).upper() == "EXECUTE"), None)
+
+
+def _declared_project_type(value: str | None) -> str | None:
+    """The engine's spelling of a declared project type (``declaredProjectType``), ``None`` when none is declared."""
+    kind = (value or "").strip().lower()
+    return kind.capitalize() if kind in _PROJECT_TYPES else None
+
+
+def _creation_starts(graph: Sequence["StageNode"], selected: Mapping[str, bool], project_type: str | None) -> set[str]:
+    """The stage ``intent-create`` starts on: the first post-Initialization stage the plan runs, past a new
+    project's Reverse Engineering (``handleIntentCreateStateBuild``). Undeclared, the engine's own workspace scan
+    picks the project type, so each type's first stage counts."""
+    declared = (project_type or "").strip().lower()
+    starts: set[str] = set()
+    for kind in (declared,) if declared in _PROJECT_TYPES else _PROJECT_TYPES:
+        start = next((node.slug for node in graph if node.phase != "initialization" and selected.get(node.slug)
+                      and not (kind == "greenfield" and node.slug == "reverse-engineering")), None)
+        if start is not None:
+            starts.add(start)
+    return starts
+
+
 def _best_lock(reasons: Sequence[str | None]) -> str | None:
     present = [r for r in reasons if r]
     if not present:
@@ -1288,6 +1351,14 @@ def _recompose_argv(skip: Sequence[str], add: Sequence[str]) -> tuple[str, ...]:
 
 def _slugify(text: str) -> str:
     return "-".join(re.findall(r"[a-z0-9]+", (text or "").lower())[:MAX_LABEL_WORDS])
+
+
+def _record_slug(label: str) -> str:
+    """aidlc-lib.ts ``slugify(label, 24)``: the name ``intent-create`` gives the new record."""
+    slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")[:24].rstrip("-")
+    if not slug[:1].isalpha():
+        slug = f"intent-{slug}".rstrip("-")
+    return slug
 
 
 def _opt_str(value: Any) -> str | None:

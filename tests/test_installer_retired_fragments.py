@@ -119,6 +119,21 @@ def test_upgrade_takes_studios_part_out_of_the_users_own_files(studio, h, up, re
     assert not {AGENTS, IGNORE} & set(up.installer.current_receipt(repo.repo_id).by_path())
 
 
+def test_taking_studios_part_out_keeps_the_mode_and_never_follows_a_planted_link(studio, h, up, repo_builder,
+                                                                                tmp_path):
+    root, repo = install(studio, h, repo_builder, agents=HOUSE_AGENTS, ignore=HOUSE_IGNORE)
+    victim = tmp_path / "outside"
+    victim.write_bytes(b"precious\n")
+    for path in (AGENTS, IGNORE):
+        (root / path).chmod(0o600)
+        (root / f".{path}.aidlc-studio.tmp").symlink_to(victim)
+    result = do(up, repo, "upgrade")
+    assert victim.read_bytes() == b"precious\n", "taking the part out followed the link"
+    assert result.status == "committed"
+    assert (root / AGENTS).read_bytes() == HOUSE_AGENTS and (root / IGNORE).read_bytes() == HOUSE_IGNORE
+    assert {path: (root / path).stat().st_mode & 0o777 for path in (AGENTS, IGNORE)} == {AGENTS: 0o600, IGNORE: 0o600}
+
+
 @pytest.mark.parametrize("edit, path", [
     pytest.param(lambda text: text.replace("Run /aidlc to begin.", "Run /aidlc to begin, then ask Sam."), AGENTS,
                  id="block-edited"),
@@ -198,7 +213,7 @@ def test_a_fault_at_any_step_leaves_the_previous_installation(studio, h, up, rep
     result = run(up.installer.run(repo, "upgrade", plan_digest=up.installer.preview(repo, "upgrade").digest()))
     assert marker in up.fault.seen
     step = marker.partition(":")[2]
-    if step == "release_lease":  # the receipt is already durable
+    if marker == "after:commit_receipt" or step == "release_lease":  # the receipt is already durable
         assert result.status == "committed"
         assert (root / AGENTS).read_bytes() == HOUSE_AGENTS and (root / IGNORE).read_bytes() == HOUSE_IGNORE
         return
@@ -303,8 +318,7 @@ def test_upgrade_keeps_what_a_legacy_receipt_cannot_prove(studio, h, up, repo_bu
 
 
 @pytest.mark.parametrize("users_files", [False, True], ids=["studio-created", "users-own"])
-@pytest.mark.parametrize("marker", ["before:merge_fragments", "before:post_write_validate", "before:commit_receipt",
-                                    "after:commit_receipt"])
+@pytest.mark.parametrize("marker", ["before:merge_fragments", "before:post_write_validate", "before:commit_receipt"])
 def test_a_later_step_failing_after_the_retire_restores_the_bytes(studio, h, up, repo_builder, users_files, marker):
     root, repo = install(studio, h, repo_builder, **({"agents": HOUSE_AGENTS, "ignore": HOUSE_IGNORE}
                                                      if users_files else {}))

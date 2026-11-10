@@ -16,6 +16,7 @@
   "decision.rebind_session.hint": "Binds this intent to a fresh conversation and re-verifies from the last stable boundary.",
   "decision.mark_not_delivered.hint": "Records that the decision never reached the session, so you can send it again.",
   "decision.acknowledge.hint": "Records that you have read the contradiction and are parking it for manual review.",
+  "decision.acknowledgeUnrecorded.hint": "Closes this delivery without sending it again: AI-DLC received the message and recorded nothing for it. Anything AI-DLC still waits on gets a card of its own.",
   "decision.reconcile.hint": "Re-reads state, audit and the session, and resolves this item from what they say.",
   "decision.resubmit.hint": "Sends the same decision once more. Available only after you have read the delivery evidence.",
   "decision.retry_now.hint": "Resets the failure count for this intent and dispatches one turn.",

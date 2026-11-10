@@ -1044,6 +1044,25 @@ def test_session_ref_and_the_queue_see_a_conversation_parked_on_a_tool_approval(
     assert run(binder.waiting_approvals()) == []
 
 
+@pytest.mark.parametrize("info, kind", [
+    ({"origin": "native", "tool": "Edit file", "tool_input": "--- /work/s3/mcp.json\n+++ /work/s3/mcp.json\n",
+      "tool_kind": "edit"}, "edit"),
+    ({"origin": "native", "tool": "Running: ls /work/s3", "tool_input": '{"command": "ls /work/s3"}',
+      "tool_kind": "execute"}, "execute"),
+    ({"origin": "coordinator", "tool": "Spawn dev", "tool_input": "go test ./...", "tool_kind": "spawn"}, "spawn"),
+    ({"origin": "native", "tool": "Running: ls", "tool_input": "ls", "tool_kind": ""}, ""),
+    ({"origin": "native", "tool": "Running: ls", "tool_input": "ls"}, None),
+])
+def test_a_waiting_call_carries_the_tool_kind_the_host_states(binder, bridge, registered, repo_dir, info, kind):
+    """A write's input is its unified diff and a command's is its command line: the notice reads the target by the
+    kind, which the host relays from ACP as is, and which is null when the host sends none."""
+    slot = attach_slot(bridge, repo_dir, pending_approval_info={**info, "request_id": "req-1"})
+    slot._approval_futures = {"req-1": SimpleNamespace(done=lambda: False)}
+    binding = bind(binder, registered, uuid="u-1")
+    assert run(binder.session_ref(binding)).to_json()["approval"]["tool_kind"] == kind
+    assert [w["tool_kind"] for w in run(binder.waiting_approvals())] == [kind]
+
+
 # --- SessionBinder: bind ---
 
 

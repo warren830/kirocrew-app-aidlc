@@ -14,6 +14,7 @@
   "confirm.blocked.sessionUnbound": "A decision is injected into this intent's conversation as a real user turn, and this intent has none bound. Open a KiroCrew chat on this repository with the aidlc agent and bind it to this intent; until then there is nothing for Studio to send into.",
   "confirm.openSession": "Bind a conversation",
   "confirm.consequence.acknowledge": "Studio closes this incident in its own records. The AI-DLC files are untouched, and the item returns if the evidence still disagrees.",
+  "confirm.consequence.acknowledgeUnrecorded": "Studio closes this delivery in its own records as received but not recorded. Nothing is sent again, and the AI-DLC files are untouched. If AI-DLC is still waiting on you, a new card opens for it.",
   "confirm.consequence.force_stop": "KiroCrew is asked to stop the turn that is running in this conversation. Nothing is written to AI-DLC’s files, and no message is added to the conversation.",
   "confirm.consequence.keep_paused": "The intent stays paused. No dispatch happens for it until you unpause it.",
   "confirm.consequence.mark_not_delivered": "Studio records that the conversation never received the message. It re-checks its own proof first and refuses if it cannot show that.",
@@ -30,7 +31,6 @@
   "confirm.labelSendsBelow": "Button: {label} → sends the text below, exactly:",
   "confirm.deliveryNote": "The last paragraph is Studio's delivery note to AI-DLC: it asks the agent to record your answers as one reply. It is part of the text sent.",
   "confirm.answerModeNote": "The paragraph that starts “Studio answer mode” tells AI-DLC that answering here also answers its question of how you would like to answer: Chat. Without it, AI-DLC would take this reply for that choice alone and leave your answers unrecorded. It is part of the text sent.",
-  "confirm.mismatch": "KiroCrew recorded different text from what this page displayed. What was actually sent is below.",
   "confirm.noWireText": "nothing yet",
   "confirm.routing": "Sent as your own message in the {repo}/{intent} conversation. AI-DLC records it as your reply and makes the change itself. Studio does not edit aidlc-state.md or bypass any of AI-DLC's checks.",
   "confirm.routingUnbound": "Sent as your own message in the {repo}/{intent} conversation, once one is bound. AI-DLC records it as your reply and makes the change itself. Studio does not edit aidlc-state.md or bypass any of AI-DLC's checks.",
@@ -39,6 +39,7 @@
   "confirm.studioOnlyHint": "This sends no message. Studio records your choice and keeps reading the files on disk.",
   "confirm.title.accept_as_is": "Confirm accepting this stage as it stands",
   "confirm.title.acknowledge": "Confirm you have read this incident",
+  "confirm.title.acknowledgeUnrecorded": "Close it without resending",
   "confirm.title.answers": "Confirm the answers sent to this intent's conversation",
   "confirm.title.approve": "Confirm the exact text sent to this intent's conversation",
   "confirm.title.approve_plan": "Confirm the plan approval sent to this intent's conversation",
@@ -88,5 +89,7 @@
   "confirm.blocked.questionsUnavailable": "Answer this question group in the intent's conversation.",
   "confirm.retry.slot_busy": "Nothing was sent: the conversation was busy. Send again once its turn ends.",
   "confirm.retry.session_busy": "Nothing was sent: the conversation was in a turn. Send again once it ends.",
-  "confirm.retry.repo_busy": "Nothing was sent: another operation held this repository. Send again once it finishes."
+  "confirm.retry.ackDeadlinePending": "Nothing was sent: KiroCrew may still answer the first send. Send it again opens at {at}.",
+  "confirm.retry.repo_busy": "Nothing was sent: another operation held this repository. Send again once it finishes.",
+  "confirm.retry.host_unavailable": "Nothing was sent: Studio could not read the conversation just then. Try again in a moment."
 }

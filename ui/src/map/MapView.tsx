@@ -214,9 +214,11 @@ export function MapPage({ api, route, go, cards }: MapPageProps) {
     () => cards.filter((card) => card.intent.intent_key === intent),
     [cards, intent],
   )
+  // A unit's inspector never offers another unit's card; one the stage raised for no unit is still the stage's.
   const stageAction = useMemo(
-    () => (selected ? intentCards.find((card) => card.stage?.slug === selected.slug) ?? null : null),
-    [intentCards, selected],
+    () => (selected ? intentCards.find((card) => card.stage?.slug === selected.slug
+      && (!selectedUnit || !card.stage.unit || card.stage.unit === selectedUnit.unit)) ?? null : null),
+    [intentCards, selected, selectedUnit],
   )
   const recoveryCard = useMemo(
     () => intentCards.find((card) => RECOVERY_TYPES.has(card.queue_type)) ?? null,

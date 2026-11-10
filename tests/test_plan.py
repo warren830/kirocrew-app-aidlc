@@ -303,6 +303,44 @@ def test_a_row_the_installed_graph_does_not_know_is_locked_not_in_graph(studio, 
     assert plan.valid, [i.to_json() for i in plan.issues]  # an engine-generation skew is not the user's error
 
 
+@pytest.mark.parametrize("scope, project_type, first", [
+    ("classic", "Greenfield", "practices-discovery"),
+    ("infra", "Greenfield", "practices-discovery"),
+    ("workshop", "Greenfield", "practices-discovery"),
+    ("bugfix", "Brownfield", "reverse-engineering"),
+    # With no declared type the engine's own workspace scan picks the project type, so either stage may start.
+    ("classic", None, "practices-discovery"),
+    ("bugfix", None, "reverse-engineering"),
+])
+def test_the_stage_intent_create_starts_on_cannot_be_turned_off_before_creation(studio, P, deps, errors, scope,
+                                                                                project_type, first):
+    """The overrides are applied after ``intent-create`` has started that stage, and the engine never recomposes a
+    stage in progress: refused in the preview, so nothing is created."""
+    repo = engine_only_repo(studio, deps, "payload")
+    plan = plan_for(P, deps, repo, scope, project_type=project_type, overrides={first: False})
+    assert not plan.valid
+    assert [(i.code, i.slugs, i.params["lock_reason"]) for i in plan.issues] == [
+        ("frozen_stage", (first,), P.LOCK_CURRENT)]
+    assert plan.stage(first).enabled and plan.stage(first).lock_reason == P.LOCK_CURRENT
+    with pytest.raises(errors.StudioError) as excinfo:
+        run(deps.svc.create_intent(repo, request(P, scope, project_type=project_type, overrides={first: False})))
+    assert excinfo.value.code == "plan_invalid"
+    nothing_created(deps, repo)
+
+
+def test_a_stage_the_new_work_does_not_start_on_stays_adjustable(P, deps, shipped):
+    brownfield = plan_for(P, deps, shipped, "classic", project_type="Brownfield",
+                          overrides={"practices-discovery": False})
+    assert brownfield.valid, [i.to_json() for i in brownfield.issues]
+    assert not brownfield.stage("practices-discovery").enabled
+    assert brownfield.stage("reverse-engineering").lock_reason == P.LOCK_CURRENT
+    greenfield = plan_for(P, deps, shipped, "bugfix", project_type="Greenfield",
+                          overrides={"reverse-engineering": False})
+    assert greenfield.valid and not greenfield.stage("reverse-engineering").locked
+    # An always-run first stage keeps the reason the person can act on.
+    assert plan_for(P, deps, shipped, "poc").stage("intent-capture").lock_reason == P.LOCK_ALWAYS
+
+
 # ---- overrides and validation ---- #
 
 
@@ -360,6 +398,20 @@ def test_unknown_scope_and_invalid_depth(P, deps, shipped):
     bad_depth = plan_for(P, deps, shipped, "poc", depth="Deep")
     assert "depth_invalid" in [i.code for i in bad_depth.issues]
     assert not bad_depth.valid
+
+
+@pytest.mark.parametrize("test_strategy", ["very thorough", "Minimal x", "Deep"])
+def test_a_test_strategy_the_engine_does_not_take_is_refused_like_a_depth(P, deps, fresh_repo, errors, test_strategy):
+    """Refused before the admin lease, where the engine argv grammar raised a bare ValueError (a 500)."""
+    assert plan_for(P, deps, fresh_repo, "poc", test_strategy="Comprehensive").valid
+    plan = plan_for(P, deps, fresh_repo, "poc", test_strategy=test_strategy)
+    assert not plan.valid
+    assert [(i.code, i.params) for i in plan.issues] == [
+        ("depth_invalid", {"field": "test_strategy", "value": test_strategy, "allowed": list(P.TEST_STRATEGIES)})]
+    with pytest.raises(errors.StudioError) as excinfo:
+        run(deps.svc.create_intent(fresh_repo, request(P, "poc", test_strategy=test_strategy)))
+    assert excinfo.value.code == "plan_invalid"
+    nothing_created(deps, fresh_repo)
 
 
 def test_from_json_refuses_a_malformed_override_map(P, errors):
@@ -584,6 +636,49 @@ def test_create_intent_refuses_a_summary_choice_an_older_engine_would_not_take(
     assert excinfo.value.code == "bad_param"
     assert excinfo.value.details["reason"] == "engine_too_old"
     nothing_created(deps, repo)
+
+
+@pytest.mark.parametrize("declared, sent", [("Greenfield", "Greenfield"), ("Brownfield", "Brownfield"), (None, None)])
+def test_create_intent_passes_the_declared_project_type_to_the_engine(P, deps, current_repo, declared, sent):
+    """The type the person declared is the one the engine starts from, and the creation lock is computed from."""
+    argv = list(run(deps.svc.create_intent(current_repo, request(P, "poc", project_type=declared))).engine.argv)
+    assert (argv[argv.index("--project-type") + 1] if "--project-type" in argv else None) == sent
+
+
+@pytest.mark.parametrize("version", ["2.10.0", "2.7.1", None, "unknown"])
+def test_create_intent_refuses_a_project_type_an_older_engine_would_not_take(
+    studio, P, deps, repo_builder, errors, version,
+):
+    """Before 2.11 ``intent-create`` ignores the flag and starts where its own scan says, not where the preview
+    locked."""
+    repo = repo_row(studio, deps.store, repo_builder.with_engine("payload").with_workspace().build(),
+                    engine_version=version)
+    with pytest.raises(errors.StudioError) as excinfo:
+        run(deps.svc.create_intent(repo, request(P, "poc", project_type="Brownfield")))
+    assert excinfo.value.code == "bad_param"
+    assert (excinfo.value.details["key"], excinfo.value.details["reason"]) == ("project_type", "engine_too_old")
+    nothing_created(deps, repo)
+
+
+def test_a_label_the_engine_reserves_is_refused_before_the_lease(studio, P, deps, fresh_repo, monkeypatch, errors):
+    """``intent-create`` refuses a record named like one of its routing words (``slugify(label, 24)``), typed or
+    derived from the objective: refused as the label's own error while nothing is held, not as a 409 under the
+    admin lease."""
+    taken = []
+    acquire = deps.scheduler.acquire_admin
+
+    async def spy(*args, **kwargs):
+        taken.append(kwargs.get("operation_type"))
+        return await acquire(*args, **kwargs)
+
+    monkeypatch.setattr(deps.scheduler, "acquire_admin", spy)
+    asked = [{"label": name} for name in sorted(studio.constants.RESERVED_RECORD_NAMES)]
+    for over in [*asked, {"label": None, "objective": "List"}, {"label": None, "objective": "Add repo"}]:
+        with pytest.raises(errors.StudioError) as excinfo:
+            run(deps.svc.create_intent(fresh_repo, request(P, "poc", **over)))
+        assert (excinfo.value.code, excinfo.value.details.get("key")) == ("bad_body", "label"), over
+    assert taken == []
+    nothing_created(deps, fresh_repo)
 
 
 def test_a_summary_choice_is_on_off_or_absent(P, errors):

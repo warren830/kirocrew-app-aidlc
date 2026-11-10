@@ -566,7 +566,10 @@ class ConsistencyEngine:
                      "stage": _attr(rec, "stage")},
                     (EvidenceRef("studio", f"action:{action_id}", status),),
                 ))
-            out += self._stored_action_findings(rec)
+            # The reconciler's findings judge a delivery while it is being judged; settled, failed or never sent, they
+            # are history.
+            if status in C.DISPATCHED_ACTION_STATUS:
+                out += self._stored_action_findings(rec)
         return out
 
     def _stored_action_findings(self, rec: Any) -> list[Finding]:

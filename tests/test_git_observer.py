@@ -211,6 +211,20 @@ def test_a_nul_byte_in_an_argument_is_refused(G, E):
         G.GitObserver.check_argv(["log", "--", "a\x00b"])
 
 
+def test_only_a_path_after_the_separator_may_be_spelled_like_a_write_verb(G, E):
+    assert G.GitObserver.check_argv(["log", "--format=%H", "--", "notes", "tag"])[-2:] == ("notes", "tag")
+    for argv in (["log", "notes", "--"], ["log", "tag"]):
+        with pytest.raises(E.StudioError):
+            G.GitObserver.check_argv(argv)
+
+
+def test_only_a_path_after_the_separator_may_be_spelled_like_a_forbidden_option(G, E):
+    assert G.GitObserver.check_argv(["diff", "--no-color", "--", "--output=x", "-c"])[-2:] == ("--output=x", "-c")
+    for argv in (["diff", "--output=x", "--", "a"], ["log", "-c", "--", "a"], ["diff", "--", "-c", "a\x00b"]):
+        with pytest.raises(E.StudioError):
+            G.GitObserver.check_argv(argv)
+
+
 def test_the_shared_checker_reads_the_argv_the_way_this_module_spawns_it(studio, E):
     """The shared checker takes the argv without the binary (§1.3), so ``-C / status`` never reads as ``status``."""
     check = studio.security.assert_git_argv_readonly

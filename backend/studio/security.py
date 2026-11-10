@@ -250,8 +250,9 @@ def assert_git_argv_readonly(argv: Sequence[str]) -> None:
 
     ``argv`` excludes the binary. Global options are where the dangerous ones live (``-c core.fsmonitor=…``
     runs a command, ``-C``/``--git-dir`` point elsewhere, ``--output`` writes), so a leading ``-`` is refused
-    rather than parsed and every token is scanned, ``--flag=value`` spellings included. A write verb is refused
-    wherever it appears: rejecting an argument that happens to be spelled ``add`` is the safe direction.
+    rather than parsed and every token before ``--`` is scanned, ``--flag=value`` spellings included. A write verb
+    is refused there too: rejecting an argument that happens to be spelled ``add`` is the safe direction. After
+    ``--`` git reads only paths, and a file may be named ``notes`` or ``-c``; a NUL is refused in every token.
     """
     tokens = [str(token) for token in argv]
     if not tokens:
@@ -263,9 +264,12 @@ def assert_git_argv_readonly(argv: Sequence[str]) -> None:
         raise StudioError("internal_error", f"git write verb {verb!r} is never permitted")
     if verb not in C.GIT_READ_VERBS:
         raise StudioError("internal_error", f"git verb {verb!r} is not on the read allowlist")
-    for token in tokens:
+    paths_from = tokens.index("--") if "--" in tokens else len(tokens)
+    for index, token in enumerate(tokens):
         if "\x00" in token:
             raise StudioError("internal_error", "git argument contains a NUL byte")
+        if index >= paths_from:
+            continue
         if token in C.GIT_FORBIDDEN_TOKENS or token.startswith(C.GIT_FORBIDDEN_PREFIXES):
             raise StudioError("internal_error", f"git option {token!r} is never permitted")
         if token in C.GIT_WRITE_VERBS:

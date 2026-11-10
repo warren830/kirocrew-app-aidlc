@@ -59,8 +59,6 @@ STEPS = (
     "post_write_validate", "commit_receipt", "release_lease",
 )
 ROLLBACK_STEPS = ("restore_backups", "delete_created", "reverify_old_receipt")
-#: Where a transaction can stop; pinned equal to ``leases.TRANSACTION_SETTLED_STATUS`` by a test.
-_SETTLED_STATUS = frozenset({"committed", "rolled_back", "recovery_required", "failed"})
 CANCELLABLE_KINDS = frozenset({"install", "upgrade", "recovery"})
 #: Abandoned here, a transaction had only staged the payload and taken the lease.
 _ABANDONED_WROTE_NOTHING = frozenset({"staged", "leased"})
@@ -452,8 +450,6 @@ class _Journal:
     retired: list[str] = field(default_factory=list)
     receipt_id: str | None = None
     prior_receipt_id: str | None = None
-    prior_repo: dict[str, Any] = field(default_factory=dict)
-    receipt_inserted: bool = False
     cancelling: bool = False
     lease_generation: int | None = None
 
@@ -678,22 +674,13 @@ def _unified_diff(rel: str, old: bytes | None, new: bytes | None) -> str | None:
     return security.redact("".join(out)) if out else None
 
 
-def _atomic_write(target: Path, data: bytes) -> None:
-    """Same-directory temporary file, ``fsync``, ``os.replace``; the temporary file (in the user's repository)
-    is removed on every failure path."""
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.parent / f".{target.name}.aidlc-studio.tmp"
-    try:
-        fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
-        try:
-            os.write(fd, data)
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-        os.replace(str(tmp), str(target))
-    except BaseException:
-        tmp.unlink(missing_ok=True)  # `missing_ok`: `os.open` itself may be what failed
-        raise
+def _creation_mode() -> int:
+    """The mode any other tool gives a new file: ``0o666`` less this process's umask. The umask can only be read by
+    setting it, process-wide, so read it once; the ``0o077`` held meanwhile can only make a file another thread
+    creates in that instant too private, never too open."""
+    umask = os.umask(0o077)
+    os.umask(umask)
+    return 0o666 & ~umask
 
 
 def _durable_write(target: Path, data: bytes, mode: int = 0o600) -> None:
@@ -1083,6 +1070,7 @@ class Installer:
         self.fault_injector = fault_injector
         # `installer.run_doctor_after_install` has no other source: absent settings mean doctor never runs.
         self._settings = settings
+        self._new_file_mode = _creation_mode()
 
     @property
     def manifest(self) -> PayloadManifest:
@@ -1438,6 +1426,17 @@ class Installer:
             if target.is_symlink():
                 raise StudioError("bad_path", "uninstall path is a symlink", details={"path": rel})
         return target
+
+    @classmethod
+    def _proved_digest(cls, root: Path, rel: str) -> str | None:
+        """What ``root/rel`` itself holds, for a proof: a regular file's digest, or ``None`` when nothing is there. A
+        link at any component, an unreadable file or any other kind of file refuses the proof."""
+        target = cls._safe_path(root, rel)
+        data, unreadable = _live_bytes(target)
+        if unreadable or (data is None and os.path.lexists(target)):
+            raise StudioError("install_recovery_required", "a managed path is not a readable regular file",
+                              details={"path": rel})
+        return _digest_of(data)
 
     @staticmethod
     def _uninstall_owned_path(rf: ReceiptFile) -> bool:
@@ -1877,11 +1876,12 @@ class Installer:
     # ---- receipts and history ---- #
 
     def current_receipt(self, repo_id: str) -> Receipt | None:
-        rows = self._storage.select("install_receipts", {"repo_id": repo_id, "status": "current"}, limit=1)
+        rows = self._storage.select("install_receipts", {"repo_id": repo_id, "status": "current"},
+                                    order_by=C.RECEIPT_ORDER, limit=1)
         return Receipt.from_row(rows[0]) if rows else None
 
     def receipts(self, repo_id: str) -> list[Receipt]:
-        rows = self._storage.select("install_receipts", {"repo_id": repo_id}, order_by="committed_at DESC")
+        rows = self._storage.select("install_receipts", {"repo_id": repo_id}, order_by=C.RECEIPT_ORDER)
         return [Receipt.from_row(row) for row in rows]
 
     def receipt(self, receipt_id: str) -> Receipt:
@@ -1898,9 +1898,8 @@ class Installer:
         return self._as_result(row)
 
     def transactions(self, repo_id: str, limit: int = 20) -> list[TransactionResult]:
-        # The id tiebreak keeps "the last N" exact when two transactions share a second.
         rows = self._storage.select("install_transactions", {"repo_id": repo_id},
-                                    order_by="started_at DESC, transaction_id DESC", limit=limit)
+                                    order_by=C.TRANSACTION_ORDER, limit=limit)
         return [self._as_result(row) for row in rows]
 
     def _as_result(self, row: Mapping[str, Any]) -> TransactionResult:
@@ -1971,7 +1970,7 @@ class Installer:
                 raise StudioError("install_conflict", "transaction repository identity changed")
             if row["kind"] not in CANCELLABLE_KINDS:
                 raise StudioError("cancel_not_safe", "this transaction kind cannot be cancelled")
-            if row["status"] not in _SETTLED_STATUS and row["status"] != "rolling_back":
+            if row["status"] not in C.TRANSACTION_SETTLED_STATUS and row["status"] != "rolling_back":
                 self._storage.update("install_transactions", txid, {"error": "cancel_requested"})
             return self.transaction(txid)
 
@@ -2040,7 +2039,7 @@ class Installer:
                 raise StudioError("transaction_not_found", "no such repository transaction")
             if row.get("resolved_repo_identity") != repo.resolved_identity:
                 raise StudioError("install_conflict", "transaction repository identity changed")
-            if row["status"] in _SETTLED_STATUS:
+            if row["status"] in C.TRANSACTION_SETTLED_STATUS:
                 return await asyncio.to_thread(self.transaction, transaction_id)
             if row["status"] != "staged":
                 raise StudioError("install_recovery_required", "an interrupted install needs recovery")
@@ -2051,7 +2050,7 @@ class Installer:
         status, error, failed_dir = "staged", None, None
         try:
             plan = await asyncio.to_thread(self._plan_for_run, repo, kind, plan_digest)
-            await asyncio.to_thread(self._open_journal, journal, repo, txid)
+            await asyncio.to_thread(self._open_journal, journal, txid)
             await self._step(steps, txid, repo, "stage_payload", self._stage_payload, journal)
             await self._step(steps, txid, repo, "verify_staging", self._verify_staging, journal)
             grant = await self._lease_step(steps, txid, repo, kind)
@@ -2067,7 +2066,10 @@ class Installer:
             # Not BaseException: a shutdown cancellation cannot complete a rollback and needs none, because the
             # old receipt still describes the tree; drift detection and recovery repair it.
             error = self._error_text(exc)
-            if steps and steps[-1].name in ROLLBACK_TRIGGERING_STEPS:
+            current = await asyncio.to_thread(self._storage.get, "install_transactions", txid)
+            if current["status"] == "committed":  # the atomic receipt commit is the point of no return
+                status, error = "committed", None
+            elif steps and steps[-1].name in ROLLBACK_TRIGGERING_STEPS:
                 status, failed_dir = await self._rollback(steps, txid, repo, journal, error)
             else:
                 status = "failed"
@@ -2137,14 +2139,13 @@ class Installer:
         row, confirmation = await asyncio.to_thread(self._receipt_row, repo, kind, txid, digest)
         if kind == "rollback" and target_receipt_id not in (None, confirmation["target_receipt_id"]):
             raise StudioError("install_conflict", "rollback target does not match confirmation")
-        if row["status"] in _SETTLED_STATUS:
+        if row["status"] in C.TRANSACTION_SETTLED_STATUS:
             return await asyncio.to_thread(self.transaction, txid)
         if row["status"] != "staged":
             raise StudioError("install_recovery_required", f"an interrupted {kind} needs recovery")
         steps = list(TransactionResult.from_row(row).steps)
         if any(s.name == "confirm_recovery" for s in steps):
             raise StudioError("install_recovery_required", "this transaction is reserved for restoration")
-        await self._refuse_if_busy(repo)
         journal = self._journal(txid, checked=True)
         grant: "LeaseGrant | None" = None
         snapshot = None
@@ -2217,7 +2218,7 @@ class Installer:
                     _durable_write(self._safe_path(backup, "rollback-after/" + entry.path), after)
             files.append({"path": entry.path, "action": entry.action, "before": entry.live_sha256,
                           "after": entry.payload_sha256,
-                          "mode": stat.S_IMODE(path.stat().st_mode) if before is not None else 0o644})
+                          "mode": stat.S_IMODE(path.stat().st_mode) if before is not None else self._new_file_mode})
         row = self._storage.get("repos", repo.repo_id)
         snapshot = {
             "version": 1, "transaction_id": journal.txid, "repo_id": repo.repo_id, "root": repo.canonical_path,
@@ -2248,7 +2249,7 @@ class Installer:
                 current = self.current_receipt(repo.repo_id)
                 root, owned, chain_ok = Path(repo.canonical_path), (current.by_path() if current else {}), True
             if (not chain_ok or current is None or snapshot["version"] != 1 or snapshot["transaction_id"] != txid
-                    or snapshot["repo_id"] != repo.repo_id or snapshot["root"] != repo.canonical_path
+                    or snapshot["root"] != repo.canonical_path
                     or snapshot["repo_identity"] != repo.resolved_identity
                     or snapshot["receipt_id"] != current.receipt_id or row["prior_receipt_id"] != current.receipt_id
                     or _canonical_json_digest(snapshot["plan"]) != snapshot["confirm_digest"]
@@ -2507,8 +2508,8 @@ class Installer:
         uninstall/rollback) → ``recovery_required``, unfinished commits finished; a row whose admin lease this
         process holds is live. Returns the ids settled."""
         rows = await asyncio.to_thread(self._storage.select, "install_transactions")
-        candidates = [row for row in rows
-                      if str(row.get("status") or "") not in _SETTLED_STATUS or row.get("status") == "committed"]
+        candidates = [row for row in rows if str(row.get("status") or "") not in C.TRANSACTION_SETTLED_STATUS
+                      or row.get("status") == "committed"]
         if not candidates:
             return []
         mine = {rec.transaction_id for rec in await self._scheduler.list() if rec.kind == "admin"} - {None}
@@ -2602,14 +2603,19 @@ class Installer:
         return plan
 
     def _insert_transaction(self, txid: str, repo: "RepoRecord", kind: str) -> None:
-        prior = self.current_receipt(repo.repo_id)
-        self._storage.insert("install_transactions", {
-            "transaction_id": txid, "repo_id": repo.repo_id, "resolved_repo_identity": repo.resolved_identity,
-            "kind": kind, "status": "staged", "studio_version": C.APP_VERSION,
-            "engine_version": self._manifest.engine_version, "payload_digest": self._manifest.payload_digest,
-            "started_at": self._clock.iso(), "staging_dir": str(self._data_dir / C.STAGING_DIRNAME / txid),
-            "backup_dir": str(self._data_dir / C.BACKUP_DIRNAME / txid),
-            "prior_receipt_id": prior.receipt_id if prior else None, "steps_json": []})
+        """Insert the staged row in the SQLite transaction that proves the repository is still registered: once the
+        row exists, removing the repository is refused instead."""
+        with self._storage._txn():
+            if self._storage.get("repos", repo.repo_id) is None:
+                raise StudioError("repo_not_found", "no such repository", details={"repo_id": repo.repo_id})
+            prior = self.current_receipt(repo.repo_id)
+            self._storage.insert("install_transactions", {
+                "transaction_id": txid, "repo_id": repo.repo_id, "resolved_repo_identity": repo.resolved_identity,
+                "kind": kind, "status": "staged", "studio_version": C.APP_VERSION,
+                "engine_version": self._manifest.engine_version, "payload_digest": self._manifest.payload_digest,
+                "started_at": self._clock.iso(), "staging_dir": str(self._data_dir / C.STAGING_DIRNAME / txid),
+                "backup_dir": str(self._data_dir / C.BACKUP_DIRNAME / txid),
+                "prior_receipt_id": prior.receipt_id if prior else None, "steps_json": []})
 
     def _journal(self, txid: str, *, checked: bool = False) -> _Journal:
         """This transaction's own staging and backup paths (``checked``: refusing symlinks and bad ids)."""
@@ -2618,15 +2624,12 @@ class Installer:
                             self._failure_path(C.BACKUP_DIRNAME, txid))
         return _Journal(txid, self._data_dir / C.STAGING_DIRNAME / txid, self._data_dir / C.BACKUP_DIRNAME / txid)
 
-    def _open_journal(self, journal: _Journal, repo: "RepoRecord", txid: str) -> None:
-        """Record the prior receipt and repository fields before anything moves; a rollback restores them."""
+    def _open_journal(self, journal: _Journal, txid: str) -> None:
+        """Record the prior receipt before anything moves: the commit supersedes exactly that one."""
         row = self._storage.get("install_transactions", txid)
         if row is None:
             raise StudioError("transaction_not_found", "no such transaction", details={"transaction_id": txid})
         journal.prior_receipt_id = row.get("prior_receipt_id")
-        repo_row = self._storage.get("repos", repo.repo_id) or {}
-        journal.prior_repo = {key: repo_row.get(key) for key in _REPO_FIELDS}
-        journal.prior_repo["install_status"] = str(journal.prior_repo["install_status"] or "not_installed")
 
     # ---- step plumbing ---- #
 
@@ -2685,7 +2688,8 @@ class Installer:
         try:  # the caller cannot see the grant until this returns, so a failure in the tail hands it back here
             if receipt_op:
                 row = await asyncio.to_thread(self._storage.get, "install_transactions", txid)
-                if row["status"] in _SETTLED_STATUS and not (recovery and row["status"] == "recovery_required"):
+                if (row["status"] in C.TRANSACTION_SETTLED_STATUS
+                        and not (recovery and row["status"] == "recovery_required")):
                     await self._scheduler.release(grant)
                     return None
                 if not recovery and row["status"] != "staged":
@@ -2804,7 +2808,7 @@ class Installer:
                 raise StudioError("payload_degraded", "a staged payload file vanished", details={"path": rel})
             if live is None:
                 journal.created.append(rel)
-            _atomic_write(target, data)
+            _durable_write(target, data, journal.backup_modes.get(rel, self._new_file_mode))
             journal.written[rel] = security.sha256_bytes(data)
             written += 1
         for entry in plan.entries:
@@ -2844,7 +2848,7 @@ class Installer:
         if after is None:
             target.unlink()
         else:
-            _atomic_write(target, after)
+            _durable_write(target, after, journal.backup_modes.get(entry.path, self._new_file_mode))
             journal.written[entry.path] = security.sha256_bytes(after)
         journal.retired.append(entry.path)
         return True
@@ -2875,7 +2879,7 @@ class Installer:
             data = handler.merged_bytes(before, receipt_digest=entry.receipt_sha256)
             if before is None:
                 journal.created.append(rel)
-            _atomic_write(target, data)
+            _durable_write(target, data, journal.backup_modes.get(rel, self._new_file_mode))
             journal.written[rel] = security.sha256_bytes(data)
             merged += 1
         return {"merged": merged}
@@ -2931,17 +2935,21 @@ class Installer:
             "files_json": [f.to_json() for f in files], "status": "current"})
 
     def _commit_receipt(self, journal: _Journal, plan: PreviewPlan, repo: "RepoRecord") -> dict:
-        """Insert the receipt, supersede the prior one and point the repo row at it: the last write."""
+        """Insert the receipt, supersede the prior one, point the repo row at it and mark the transaction
+        ``committed``, all in one SQLite transaction: the last write, and the point a cancellation no longer reaches."""
         receipt_id = self._ids.new("rc")
         files = self._receipt_files(plan, journal, Path(repo.canonical_path))
-        self._insert_receipt(receipt_id, repo, self._manifest.engine_version, self._manifest.payload_digest,
-                             journal.prior_receipt_id, journal.txid, files, self._clock.iso())
-        journal.receipt_id, journal.receipt_inserted = receipt_id, True
-        if journal.prior_receipt_id:
-            self._storage.update("install_receipts", journal.prior_receipt_id, {"status": "superseded"})
-        self._storage.update("repos", repo.repo_id, {
-            "install_status": "installed", "installed_engine_version": self._manifest.engine_version,
-            "engine_dir": ENGINE_DIR, "receipt_version": receipt_id})
+        with self._storage._txn():
+            self._raise_if_cancelled(journal.txid)
+            self._insert_receipt(receipt_id, repo, self._manifest.engine_version, self._manifest.payload_digest,
+                                 journal.prior_receipt_id, journal.txid, files, self._clock.iso())
+            if journal.prior_receipt_id:
+                self._storage.update("install_receipts", journal.prior_receipt_id, {"status": "superseded"})
+            self._storage.update("repos", repo.repo_id, {
+                "install_status": "installed", "installed_engine_version": self._manifest.engine_version,
+                "engine_dir": ENGINE_DIR, "receipt_version": receipt_id})
+            self._storage.update("install_transactions", journal.txid, {"status": "committed"})
+        journal.receipt_id = receipt_id
         return {"receipt_id": receipt_id, "files": len(files)}
 
     def _receipt_files(self, plan: PreviewPlan, journal: _Journal, root: Path) -> list[ReceiptFile]:
@@ -3028,13 +3036,13 @@ class Installer:
 
     async def _rollback(self, steps: list[StepRecord], txid: str, repo: "RepoRecord", journal: _Journal,
                         error: str) -> tuple[str, str | None]:
-        """Retract Studio's records, undo every change and prove it by re-hashing; returns ``(status, failed_dir)``.
-        No committed receipt ever describes a half-restored tree: without proof the repo is ``recovery_required``."""
+        """Undo every change and prove it by re-hashing; returns ``(status, failed_dir)``. Reached only before the
+        receipt commit, so no receipt ever describes a half-restored tree: without proof the repo is
+        ``recovery_required``."""
         journal.cancelling = error == "cancelled"
         await asyncio.to_thread(self._storage.update, "install_transactions", txid,
                                 {"status": "rolling_back", "error": error, "steps_json": _steps_json(steps)})
         await self._publish(txid, repo.repo_id, "rolling_back")
-        await asyncio.to_thread(self._retract_records, journal, repo)
         rollback_error: str | None = None
         for name in ROLLBACK_STEPS:  # each step runs the method of the same name
             try:
@@ -3069,10 +3077,7 @@ class Installer:
             if data is None or security.sha256_bytes(data) != digest:
                 raise StudioError("install_recovery_required", "a backup copy is missing or corrupt",
                                   details={"path": rel})
-            if journal.cancelling:
-                _durable_write(self._safe_path(root, rel), data, journal.backup_modes[rel])
-            else:
-                _atomic_write(security.resolve_inside(root, rel), data)
+            _durable_write(self._safe_path(root, rel), data, journal.backup_modes[rel])
             restored += 1
         return {"restored": restored}
 
@@ -3085,7 +3090,7 @@ class Installer:
                 continue
             if journal.cancelling:
                 self._guard_cancel_restore(journal, repo, rel)
-            target = security.resolve_inside(root, rel)
+            target = self._safe_path(root, rel)
             if security.is_regular_file(target):
                 target.unlink()
                 removed += 1
@@ -3102,39 +3107,32 @@ class Installer:
             raise StudioError("install_recovery_required", "user edited a cancellation rollback target",
                               details={"path": rel})
 
-    def _retract_records(self, journal: _Journal, repo: "RepoRecord") -> None:
-        """Put Studio's own rows back to the pre-transaction story, before any byte moves back."""
-        if not (journal.receipt_inserted and journal.receipt_id):
-            return
-        self._storage.update("install_receipts", journal.receipt_id, {"status": "rolled_back"})
-        if journal.prior_receipt_id:
-            self._storage.update("install_receipts", journal.prior_receipt_id, {"status": "current"})
-        self._storage.update("repos", repo.repo_id, journal.prior_repo)
-
     def _reverify_old_receipt(self, journal: _Journal, repo: "RepoRecord") -> dict:
-        """Prove the repository is exactly the previous installation: every file the standing receipt owns hashes
-        to its digest, every changed path is back to its backup (merge targets are proved by backup bytes, not
-        by re-deriving a fragment with another payload), and nothing this transaction created remains."""
+        """Prove the repository is exactly the previous installation: every file the standing receipt owns holds the
+        bytes it had before this transaction (not always its receipt digest: the engine rewrites framework-mutable
+        files and a person may delete one), every changed path is back to its backup (merge targets are proved by
+        backup bytes, not by re-deriving a fragment with another payload), and nothing this transaction created
+        remains."""
         root = Path(repo.canonical_path)
         checked = fragments = 0
         receipt = self.current_receipt(repo.repo_id)
-        if receipt is not None and receipt.receipt_id != journal.receipt_id:
+        if receipt is not None:
             for rf in receipt.files:
                 if rf.kind == "fragment":
                     fragments += 1
-                elif rf.sha256 is not None:
-                    if _digest_of(_read_bytes(security.resolve_inside(root, rf.path))) != rf.sha256:
+                elif rf.path in journal.backups:
+                    if self._proved_digest(root, rf.path) != journal.backups[rf.path]:
                         raise StudioError("install_recovery_required", "a receipt-owned file did not come back",
                                           details={"path": rf.path})
                     checked += 1
         changed = set(journal.written) | set(journal.retired)  # an untouched path may hold an edit made meanwhile
         restored = [(rel, digest) for rel, digest in journal.backups.items() if digest is not None and rel in changed]
         for rel, digest in restored:
-            if _digest_of(_read_bytes(security.resolve_inside(root, rel))) != digest:
+            if self._proved_digest(root, rel) != digest:
                 raise StudioError("install_recovery_required", "a replaced file was not restored",
                                   details={"path": rel})
         for rel in journal.created:
-            if journal.backups.get(rel) is None and security.is_regular_file(security.resolve_inside(root, rel)):
+            if journal.backups.get(rel) is None and self._proved_digest(root, rel) is not None:
                 raise StudioError("install_recovery_required", "a created file was not removed", details={"path": rel})
         return {"receipt_paths_verified": checked, "fragments_proved_by_backup": fragments,
                 "restored_verified": len(restored)}

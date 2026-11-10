@@ -24,14 +24,13 @@ import { PreviewFlow } from './InstallPreview'
 /**
  * The recovery evidence path for a repository, from its transaction history.
  *
- * The newest transaction that recorded a `failed_dir` wins. `transactions` arrives newest-first from
- * `GET /repos/{id}` (last 5), and a transaction that rolled back cleanly also keeps its evidence, so
- * the search is for the recovery-required one first and any failure second.
+ * The newest recovery-required transaction that recorded a `failed_dir` (`transactions` arrives newest-first
+ * from `GET /repos/{id}`, last 5). Only that state counts: a transaction that rolled back cleanly keeps its
+ * evidence too, and naming it here would present an unrelated failure as the one this repository needs
+ * recovering from.
  */
 export function recoveryEvidencePath(transactions: TransactionResult[]): string | null {
-  const required = transactions.find((tx) => tx.status === 'recovery_required' && tx.failed_dir)
-  if (required?.failed_dir) return required.failed_dir
-  return transactions.find((tx) => tx.failed_dir)?.failed_dir ?? null
+  return transactions.find((tx) => tx.status === 'recovery_required' && tx.failed_dir)?.failed_dir ?? null
 }
 
 export interface RecoveryBannerProps {

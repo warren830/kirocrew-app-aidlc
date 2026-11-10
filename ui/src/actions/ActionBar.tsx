@@ -12,9 +12,12 @@
  *    nothing here autofocuses; pressing a decision only OPENS the confirmation, which is a separate
  *    deliberate action (FR-GATE-001). There is no form, so Enter cannot submit anything.
  *  - **In flight means locked.** While a submit is running for this action every control is disabled,
- *    including the one that was pressed, and after it settles the bar shows what happened instead of
+ *    including the one that was pressed (a send that outlived its timeout runs until the host answers it,
+ *    or until its delivery deadline), and after it settles the bar shows what happened instead of
  *    re-offering the same decision. The item clears when AI-DLC's own state moves, not when the HTTP
- *    call returned (FR-ACT-007/FR-GATE-007), and the hint says exactly that.
+ *    call returned (FR-ACT-007/FR-GATE-007), and the hint says exactly that. A newer card that offers
+ *    decisions again (a send proven never delivered, an uncertain one to reconcile) is the server's next
+ *    question, so the bar offers those; so is any card a studio-only decision is answered with.
  */
 
 import { Btn } from '@kirocrew/app-sdk/ui'
@@ -24,7 +27,7 @@ import { useI18n } from '../i18n'
 import { isClosedAction, isRepositoryUnavailable } from '../lib/actionQueue'
 import type { ActionCard, Decision, DecisionSpec } from '../lib/types'
 import { CONFIRM_PANEL_ID, type PendingDecision } from './ConfirmPanel'
-import type { SubmitState } from './useSubmit'
+import type { InFlight, SubmitState } from './useSubmit'
 
 /** Decisions that undo, refuse or stop something. Rendered in the host's danger treatment. */
 const DANGEROUS: readonly Decision[] = ['request_changes', 'request_plan_changes', 'mark_not_delivered', 'force_stop']
@@ -60,7 +63,8 @@ const DECISION_ICON: Partial<Record<Decision, IconName>> = {
 export interface ActionBarProps {
   card: ActionCard
   submit: SubmitState
-  busy: boolean
+  /** What holds this card's action in flight, whichever pane sent it, or `null`. */
+  inFlight: InFlight | null
   refreshing: boolean
   pending: PendingDecision | null
   onChoose: (spec: DecisionSpec) => void
@@ -70,7 +74,7 @@ export interface ActionBarProps {
 }
 
 export function ActionBar({
-  card, submit, busy, refreshing, pending, onChoose, onBackToQueue, blockedFor,
+  card, submit, inFlight, refreshing, pending, onChoose, onBackToQueue, blockedFor,
 }: ActionBarProps) {
   const { t } = useI18n()
   const unavailable = isRepositoryUnavailable(card)
@@ -82,8 +86,12 @@ export function ActionBar({
   const ordered = [...decisions.filter((spec) => spec.decision !== primary), ...decisions.filter((spec) => spec.decision === primary)]
 
   const settled = submit.stage === 'settled' && submit.actionId === card.action_id
+  // After a send, only a card past its generation: the copy from before the send still lists the decision just sent.
+  // A studio-only decision makes no delivery attempt, and the card it was answered with is the server's.
+  const offeredAgain = decisions.length > 0 && (submit.attempt === null
+    || (submit.generation !== null && card.status_generation > submit.generation))
 
-  if (settled && !closed) {
+  if (settled && !closed && !offeredAgain) {
     return (
       <div className="studio-actionbar">
         <span className="studio-hint studio-muted">
@@ -110,6 +118,8 @@ export function ActionBar({
           ? t('detail.bar.refreshing')
           : decisions.length === 0
             ? t('detail.bar.noDecisions')
+            : inFlight === 'awaitingHost'
+            ? t('detail.bar.awaitingHost')
             : pending
             ? t('detail.bar.confirmOpen')
             : t('detail.bar.hint')}
@@ -124,7 +134,7 @@ export function ActionBar({
             type="button"
             primary={spec.decision === primary}
             danger={DANGEROUS.includes(spec.decision)}
-            disabled={busy || (refreshing && spec.lane !== 'studio_only') || (blocked !== null && !open)}
+            disabled={inFlight !== null || (refreshing && spec.lane !== 'studio_only') || (blocked !== null && !open)}
             aria-expanded={open}
             aria-controls={open ? CONFIRM_PANEL_ID : undefined}
             // The blocked reason is the accessible description, so a disabled control still explains

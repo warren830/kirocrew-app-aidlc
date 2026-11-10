@@ -7,7 +7,7 @@ import contextlib
 import functools
 import os
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any, Callable, Iterator, Mapping, Sequence
 
 import pytest
 
@@ -50,3 +50,25 @@ def truncate_audit(monkeypatch: pytest.MonkeyPatch, reader: Any, tail_bytes: int
     """Every audit read keeps only a ``tail_bytes`` tail, so the reader sees a partial audit."""
     read = reader.read_audit
     monkeypatch.setattr(reader, "read_audit", lambda *a, **kw: read(*a, tail_bytes=tail_bytes))
+
+
+def dispatches(storage: Any, action_id: str) -> int:
+    """How many times an action was ever dispatched: its edges into ``Delivering``."""
+    return [row["to_status"] for row in storage.select("action_transitions", {"action_id": action_id})].count(
+        "Delivering")
+
+
+def illegal_edges(storage: Any, action_id: str, allowed: Mapping[str, Sequence[str]]) -> list[tuple[str, str]]:
+    """The action's recorded transitions that ``allowed`` (``ALLOWED_TRANSITIONS``) does not declare."""
+    edges = ((row["from_status"], row["to_status"])
+             for row in storage.select("action_transitions", {"action_id": action_id}))
+    return [edge for edge in edges if edge[1] not in allowed[edge[0]]]
+
+
+def unreadable_slots(monkeypatch: pytest.MonkeyPatch, host: Any) -> None:
+    """A slot table Studio cannot read (§7.0 drift): every ``get_slot`` raises."""
+
+    def unreadable(name: str) -> Any:
+        raise TypeError("get_slot moved")
+
+    monkeypatch.setattr(host, "get_slot", unreadable)

@@ -192,6 +192,19 @@ def test_rollback_does_not_need_the_bundled_payload(upgraded, tmp_path):
     assert rollback(up, repo).status == "committed"
 
 
+def test_a_file_the_rollback_brings_back_gets_the_mode_the_umask_studio_started_under_gives(upgraded, make_harness,
+                                                                                           payload_v2):
+    root, repo, _, _ = upgraded
+    assert not (root / OWNED).exists(), "the upgrade retired it"
+    old = os.umask(0o077)
+    try:
+        private = make_harness(payload_v2)
+    finally:
+        os.umask(old)
+    assert rollback(private, repo).status == "committed"
+    assert (root / OWNED).stat().st_mode & 0o777 == 0o600
+
+
 @pytest.mark.parametrize("kind", ["execution", "admin"])
 def test_rollback_never_preempts_an_existing_lease(studio, upgraded, kind):
     root, repo, up, _ = upgraded
@@ -205,6 +218,30 @@ def test_rollback_never_preempts_an_existing_lease(studio, upgraded, kind):
     assert tree(root) == before
     assert run(up.scheduler.get(repo.resolved_identity)).generation == grant.generation
     run(up.scheduler.release(grant))
+
+
+@pytest.mark.parametrize("lease", ["turn", "doctor"])
+@pytest.mark.parametrize("kind", ["uninstall", "rollback"])
+def test_a_worker_a_lease_beat_to_the_repository_still_settles_the_row_it_was_handed(upgraded, kind, lease):
+    """``begin`` refuses a busy repository, but a turn or a doctor run can take it between the route's 202 and its
+    worker: the worker must end the row it holds (``failed``, never ``staged`` with no worker left), or removing and
+    archiving the repository stay refused until Studio restarts."""
+    root, repo, up, _ = upgraded
+    before = tree(root)
+    plan = up.installer.preview(repo, kind)
+    pending = run(up.installer.begin(repo, kind, plan_digest=plan.digest()))
+    if lease == "doctor":
+        grant = run(up.scheduler.acquire_admin(repo, operation_type="doctor", transaction_id=None))
+    else:
+        grant = run(up.scheduler.acquire_execution(repo, intent_uuid=None, session_key="dashboard:x", action_id="a_1"))
+    result = run(up.installer.run(repo, kind, plan_digest=plan.digest(), transaction_id=pending.transaction_id))
+    run(up.scheduler.release(grant))
+    assert (result.transaction_id, result.status, result.error) == (pending.transaction_id, "failed", "repo_busy")
+    assert result.finished_at is not None
+    listed = next(tx for tx in up.installer.transactions(repo.repo_id) if tx.transaction_id == result.transaction_id)
+    assert listed.to_json() == result.to_json()
+    assert tree(root) == before
+    up.registry.remove(repo.repo_id)
 
 
 def test_rollback_record_commit_is_atomic(upgraded, monkeypatch):

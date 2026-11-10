@@ -145,10 +145,11 @@ def test_unit_revision_return_accepts_solo_rows_and_ignores_other_units(sv, rout
 
 @pytest.mark.parametrize("truncated", ["never", "now", "at_capture"])
 def test_a_truncated_boundary_shard_drops_only_its_position_floor(studio, truncated):
-    """Tail windows renumber blocks, so a position from one cannot bound rows from another read."""
+    """Tail windows renumber blocks, so a position from one cannot bound rows from another read. Another shard's rows
+    follow the boundary by time alone, whatever their file's name: a same-second row there is unordered."""
     reconciler = object.__new__(studio.reconciler.Reconciler)
     rec = SimpleNamespace(delivering_at="2026-09-04T10:00:00Z", evidence={"audit": {
-        "boundary_event": {"shard": "b.md", "pos": 42},
+        "boundary_event": {"shard": "b.md", "pos": 42, "ts": "2026-09-04T10:00:00Z"},
         "shards": [{"relpath": "x/audit/b.md", "size": 1, "truncated": truncated == "at_capture"}],
     }})
 
@@ -157,14 +158,13 @@ def test_a_truncated_boundary_shard_drops_only_its_position_floor(studio, trunca
                                shard=shard, shard_index=index, pos=pos, sort_key=(ts, index, pos))
 
     earlier_shard, renumbered, stale = row("a.md", 0, 99), row("b.md", 1, 3), row("b.md", 1, 1, "2026-09-04T09:00:00Z")
+    tied = row("a.md", 0, 100, "2026-09-04T10:00:00Z")
     snap = SimpleNamespace(audit=SimpleNamespace(
-        events=[earlier_shard, stale, renumbered],
+        events=[earlier_shard, tied, stale, renumbered],
         shards=[SimpleNamespace(relpath="x/audit/a.md", truncated=False),
                 SimpleNamespace(relpath="x/audit/b.md", truncated=truncated == "now")]))
     new = reconciler._new_events(rec, snap, ("GATE_APPROVED",), STAGE)
     if truncated == "never":
-        assert reconciler._boundary_order(rec, snap) == (1, 42)
-        assert new == []
+        assert new == [earlier_shard]
     else:
-        assert reconciler._boundary_order(rec, snap) == (1, -1)
-        assert new == [renumbered]    # the timestamp rule still refuses the old row
+        assert new == [earlier_shard, renumbered]    # the timestamp rule still refuses the old row

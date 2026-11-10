@@ -15,6 +15,7 @@ import hashlib
 import importlib.util
 import inspect
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -22,6 +23,7 @@ from typing import Any, Mapping, Sequence
 import pytest
 
 import fixtures as F
+from _helpers_c import after as patch_after, die_in_child
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 REAL_PAYLOAD = APP_ROOT / "payload"
@@ -887,7 +889,7 @@ def test_install_writes_exactly_the_managed_set_and_nothing_else(h, fresh):
     for pf in h.installer.manifest.files:
         if pf.ownership != "merge":  # merged files are not copied byte-for-byte
             assert after[pf.path] == pf.sha256, pf.path
-    assert not [rel for rel in after if ".aidlc-studio.tmp" in rel]
+    assert not [rel for rel in after if ".aidlc-studio" in rel]
 
 
 def test_install_commits_the_receipt_last_and_updates_the_repo_row(studio, h, fresh):
@@ -1030,6 +1032,20 @@ def test_begin_creates_the_row_before_the_run(h, fresh):
     assert len(h.installer.transactions("r_1")) == 1
 
 
+@pytest.mark.parametrize("entry", ["begin", "run"])
+def test_a_repository_removed_after_the_preflight_gets_no_transaction(studio, h, fresh, monkeypatch, entry):
+    """A removal committed between the checks and the row's insert must not leave a transaction that writes into a
+    directory Studio no longer manages; once the row exists, the removal is the one refused."""
+    root, repo = fresh
+    plan = h.installer.preview(repo, "install")
+    patch_after(monkeypatch, h.installer, "_preflight_transaction", lambda: h.store.delete("repos", "r_1"))
+    with pytest.raises(studio.errors.StudioError) as exc:
+        run(getattr(h.installer, entry)(repo, "install", plan_digest=plan.digest()))
+    assert exc.value.code == "repo_not_found"
+    assert h.installer.transactions("r_1") == []
+    assert tree(root) == {}
+
+
 def test_repo_busy_fails_without_touching_the_repository(h, fresh):
     root, repo = fresh
     grant = run(h.scheduler.acquire_execution(repo, intent_uuid=None, session_key="dashboard:x", action_id="a_1"))
@@ -1091,18 +1107,19 @@ def test_fault_at_every_step_leaves_one_complete_installation(studio, upgrade_sc
     held = h.lease()
     if held is not None:
         status = h.store.get("install_transactions", held.transaction_id)["status"]
-        assert status in studio.leases.TRANSACTION_SETTLED_STATUS, (
+        assert status in studio.constants.TRANSACTION_SETTLED_STATUS, (
             f"{marker} left the admin lease held on an unsettled transaction ({status})"
         )
     row = h.store.get("repos", "r_1")
     current = h.installer.current_receipt("r_1")
     after = tree(upgrade_scene["root"])
     if marker == "after:commit_receipt":
-        assert result.status == "rolled_back"  # the inserted receipt is retracted by the rollback
+        assert result.status == "committed"  # the receipt commit is the point of no return
     if result.status == "committed":
-        # Only a fault around `release_lease` can leave a committed transaction: the receipt is already durable.
-        assert marker in ("before:release_lease", "after:release_lease")
+        # Only a fault after the receipt commit can leave a committed transaction: the receipt is already durable.
+        assert marker in ("after:commit_receipt", "before:release_lease", "after:release_lease")
         assert current.engine_version == "2.7.0"
+        assert len(h.store.select("install_receipts", {"repo_id": "r_1", "status": "current"})) == 1
         return
     assert result.status in ("failed", "rolled_back", "recovery_required"), result.status
     if result.status == "recovery_required":
@@ -1168,6 +1185,35 @@ def test_rollback_failure_marks_recovery_required_with_a_finding_and_a_card(stud
     seeds = projection.derive_cards(projection.snapshot(repo, "default", "260904-none"), findings=[], binding=None,
                                     install=health, breakers=[], live_actions=[])
     assert [s.type for s in seeds if s.type == "install_conflict"] == ["install_conflict"]
+
+
+@pytest.mark.parametrize("drift", ["engine_rewrote_its_agent", "user_deleted_a_framework_file"])
+def test_a_failed_upgrade_rolls_back_to_the_tree_it_found_not_to_the_receipt(upgrade_scene, drift):
+    """AI-DLC rewrites ``.kiro/agents/*.json`` (framework-mutable) and a user may delete a file: the rollback proves
+    the bytes the upgrade found, so a drift the repository already had does not leave it ``recovery_required``."""
+    h: Harness = upgrade_scene["h"]
+    repo, root = upgrade_scene["repo"], upgrade_scene["root"]
+    if drift == "engine_rewrote_its_agent":
+        (root / ".kiro/agents/aidlc.json").write_text('{"name": "aidlc", "resources": ["aidlc/spaces/other/memory"]}\n')
+    else:
+        (root / SKILL).unlink()
+    before = tree(root)
+    h.fault.at("before:commit_receipt")
+    result = run(h.installer.run(repo, "upgrade", plan_digest=h.installer.preview(repo, "upgrade").digest()))
+    assert result.status == "rolled_back", [(s.name, s.detail) for s in result.steps if s.ok is False]
+    assert tree(root) == before
+    assert h.store.get("repos", "r_1")["install_status"] == "installed"
+    assert h.installer.current_receipt("r_1").receipt_id == upgrade_scene["receipt_id"]
+
+
+def test_a_rollback_that_left_a_file_unrestored_still_requires_recovery(upgrade_scene):
+    h: Harness = upgrade_scene["h"]
+    repo, root = upgrade_scene["repo"], upgrade_scene["root"]
+    h.fault.at("before:commit_receipt").on("before:reverify_old_receipt",
+                                            lambda: (root / SKILL).write_text("# AI-DLC skill v2\n"))
+    result = run(h.installer.run(repo, "upgrade", plan_digest=h.installer.preview(repo, "upgrade").digest()))
+    assert result.status == "recovery_required"
+    assert h.store.get("repos", "r_1")["install_status"] == "recovery_required"
 
 
 def test_failed_transaction_keeps_diagnostics_without_an_identical_payload_copy(h, fresh):
@@ -1253,11 +1299,85 @@ def test_a_settled_transaction_is_left_alone(h, fresh):
     assert h.store.get("install_transactions", "tx_dead")["status"] == "committed"
 
 
-def test_the_settled_status_set_agrees_with_the_lease_module(studio):
-    """Two modules name the same set from opposite sides; a drift would strand a lease again."""
-    assert studio.installer._SETTLED_STATUS == studio.leases.TRANSACTION_SETTLED_STATUS
-    assert studio.installer._SETTLED_STATUS <= set(studio.installer.TransactionStatus)
+def test_every_settled_status_is_one_a_transaction_can_reach(studio):
+    """The one settled set gates removal, archiving and the page's write lock: a status the installer never writes
+    would hold them forever."""
+    assert set(studio.constants.TRANSACTION_SETTLED_STATUS) <= set(studio.installer.TransactionStatus)
     assert studio.installer._ABANDONED_WROTE_NOTHING <= set(studio.installer.TransactionStatus)
+
+
+def _die_upgrading(h: Harness, repo, arm: Any) -> str:
+    """Run an upgrade in a forked child that ``arm()`` makes die with ``os._exit``; returns its transaction id."""
+    plan = h.installer.preview(repo, "upgrade")
+    pending = run(h.installer.begin(repo, "upgrade", plan_digest=plan.digest()))
+
+    def child():
+        h.store.close()
+        h.store.open()
+        arm()
+        run(h.installer.run(repo, "upgrade", plan_digest=plan.digest(), transaction_id=pending.transaction_id))
+
+    die_in_child(child)
+    return pending.transaction_id
+
+
+def test_a_process_death_inside_the_receipt_commit_leaves_one_current_receipt(studio, upgrade_scene):
+    """The new receipt, the prior one's ``superseded``, the repository row and ``committed`` are one SQLite
+    transaction: a death between them leaves the prior receipt the only current one, before and after recovery."""
+    h: Harness = upgrade_scene["h"]
+    update = h.store.update
+
+    def die_superseding(table, key, values):
+        if table == "install_receipts" and values.get("status") == "superseded":
+            os._exit(77)
+        return update(table, key, values)
+
+    txid = _die_upgrading(h, upgrade_scene["repo"], lambda: setattr(h.store, "update", die_superseding))
+    current = h.store.select("install_receipts", {"repo_id": "r_1", "status": "current"})
+    assert [r["receipt_id"] for r in current] == [upgrade_scene["receipt_id"]]
+    assert run(h.installer.settle_abandoned()) == [txid]
+    repo = reload_repo(studio, h.store)
+    assert repo.install_status == "recovery_required"  # the upgrade's files were already written
+    plan = h.installer.preview(repo, "recovery")
+    assert run(h.installer.run(repo, "recovery", plan_digest=plan.digest())).status == "committed"
+    current = h.store.select("install_receipts", {"repo_id": "r_1", "status": "current"})
+    assert [r["receipt_id"] for r in current] == [h.store.get("repos", "r_1")["receipt_version"]]
+
+
+def test_a_process_death_right_after_the_receipt_commit_settles_as_committed(upgrade_scene):
+    """The restart finds the commit, so it finishes the upgrade instead of asking for a recovery."""
+    h: Harness = upgrade_scene["h"]
+    txid = _die_upgrading(h, upgrade_scene["repo"], lambda: h.fault.on("after:commit_receipt", lambda: os._exit(77)))
+    assert run(h.installer.settle_abandoned()) == [txid]
+    assert h.installer.transaction(txid).status == "committed"
+    row = h.store.get("repos", "r_1")
+    assert (row["install_status"], row["installed_engine_version"]) == ("installed", "2.7.0")
+    assert h.installer.current_receipt("r_1").receipt_id == row["receipt_version"]
+
+
+def test_a_failure_after_the_receipt_commit_finishes_the_upgrade_instead_of_undoing_it(upgrade_scene, monkeypatch):
+    """The commit is the point of no return: a write that fails after it (here the step record) must not move the
+    files back under rows that already say the new engine is installed."""
+    h: Harness = upgrade_scene["h"]
+    update = h.store.update
+    failed: list[str] = []
+
+    def fail_once_after_the_commit(table, key, values):
+        if table == "install_transactions" and values.get("status") == "committed" and "steps_json" in values:
+            if not failed:
+                failed.append(key)
+                raise OSError("disk I/O error")
+        return update(table, key, values)
+
+    monkeypatch.setattr(h.store, "update", fail_once_after_the_commit)
+    result = do(h, upgrade_scene["repo"], "upgrade")
+    assert failed, "the failure point was never reached"
+    assert (result.status, result.error) == ("committed", None)
+    row = h.store.get("repos", "r_1")
+    assert (row["install_status"], row["installed_engine_version"]) == ("installed", "2.7.0")
+    current = h.store.select("install_receipts", {"repo_id": "r_1", "status": "current"})
+    assert [r["receipt_id"] for r in current] == [row["receipt_version"]]
+    assert (upgrade_scene["root"] / SKILL).read_text() == "# AI-DLC skill v2\n"
 
 
 def test_a_failure_between_the_acquire_and_its_bookkeeping_hands_the_lease_back_at_once(h, fresh):
@@ -1269,8 +1389,8 @@ def test_a_failure_between_the_acquire_and_its_bookkeeping_hands_the_lease_back_
     assert tree(root) == {}, "nothing was written, so nothing should have to be recovered"
 
 
-def test_a_failed_atomic_write_leaves_no_temp_file_in_the_repository(tmp_path, I):
-    """A failure at fsync (the temp file certainly exists then) must not leave ``.<name>.aidlc-studio.tmp``."""
+def test_a_failed_write_leaves_no_temp_file_in_the_repository(tmp_path, I):
+    """A failure at fsync (the temp file certainly exists then) must not leave ``.aidlc-studio-*.tmp`` behind."""
     target = tmp_path / "nested" / "AGENTS.md"
 
     def boom(_fd: int) -> None:
@@ -1279,9 +1399,102 @@ def test_a_failed_atomic_write_leaves_no_temp_file_in_the_repository(tmp_path, I
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(I.os, "fsync", boom)
         with pytest.raises(OSError):
-            I._atomic_write(target, b"x")
-    assert not (target.parent / f".{target.name}.aidlc-studio.tmp").exists(), "the temp file survived"
-    assert not target.exists()
+            I._durable_write(target, b"x", 0o644)
+    assert list(target.parent.iterdir()) == [], "the temp file survived"
+
+
+def test_a_link_planted_at_a_temporary_name_never_redirects_a_write(I, h, fresh, tmp_path):
+    """A cloned repository can ship ``.<name>.aidlc-studio.tmp`` beside a managed file, the temporary name Studio
+    once wrote through, pointing at a file outside the repository."""
+    root, repo = fresh
+    victim = tmp_path / "outside" / "dotfile"
+    victim.parent.mkdir()
+    victim.write_bytes(b"precious, outside the repository\n")
+    write_json(root / MCP, {"mcpServers": {"mine": {"command": "npx"}}})
+    written = [e.path for e in h.installer.preview(repo, "install").entries if e.action in I.WRITING_ACTIONS]
+    traps = [(root / rel).parent / f".{Path(rel).name}.aidlc-studio.tmp" for rel in written]
+    for trap in traps:
+        trap.parent.mkdir(parents=True, exist_ok=True)
+        trap.symlink_to(victim)
+    h.fault.at("before:commit_receipt")
+    failed = do(h, repo, "install")
+    assert victim.read_bytes() == b"precious, outside the repository\n", "a write or a restore followed the link"
+    assert failed.status == "rolled_back"
+    h.fault.markers.clear()
+    assert do(h, repo, "install").status == "committed"
+    assert victim.read_bytes() == b"precious, outside the repository\n"
+    assert all(trap.is_symlink() for trap in traps)
+    assert not [rel for rel in written if (root / rel).is_symlink()]
+
+
+@pytest.mark.parametrize("rel", [SKILL, ".kiro/skills/aidlc/STAGES.md"], ids=["written", "created"])
+def test_a_rollback_never_writes_or_deletes_through_a_link_swapped_in_at_a_managed_path(upgrade_scene, rel):
+    """A failed upgrade puts back each file it wrote and deletes each one it created: a link swapped in at one of those
+    paths meanwhile stops it (``recovery_required``) instead of overwriting or deleting the user's file it points at."""
+    h: Harness = upgrade_scene["h"]
+    root = upgrade_scene["root"]
+    victim = root / "src/app.py"
+
+    def swap():
+        (root / rel).unlink()
+        (root / rel).symlink_to(victim)
+
+    h.fault.at("before:commit_receipt").on("before:restore_backups", swap)
+    result = do(h, upgrade_scene["repo"], "upgrade")
+    assert victim.is_file() and victim.read_text() == "print('hello')\n", "the rollback followed the link"
+    assert result.status == "recovery_required"
+
+
+def test_a_rollback_never_proves_the_old_installation_by_reading_through_a_link(upgrade_scene):
+    """``rolled_back`` claims every path holds its old bytes itself: a link to a copy of those bytes is not that."""
+    h: Harness = upgrade_scene["h"]
+    root = upgrade_scene["root"]
+    copy = root / "src/skill-copy.md"
+
+    def swap():
+        copy.write_bytes((root / SKILL).read_bytes())
+        (root / SKILL).unlink()
+        (root / SKILL).symlink_to(copy)
+
+    h.fault.at("before:commit_receipt").on("before:reverify_old_receipt", swap)
+    assert do(h, upgrade_scene["repo"], "upgrade").status == "recovery_required"
+
+
+def test_a_replaced_file_keeps_its_mode_and_a_created_one_gets_the_default(studio, h, fresh, make_harness,
+                                                                           payload_v2, tmp_path):
+    """A private settings file holding a token stays private through a merge and through a failed install's
+    restore; a framework file keeps the mode its owner gave it across an upgrade."""
+    root, repo = fresh
+    write_json(root / MCP, {"mcpServers": {"internal": {"command": "x", "env": {"TOKEN": "sk-live-abc123"}}}})
+    (root / MCP).chmod(0o600)
+    h.fault.at("before:commit_receipt")
+    assert do(h, repo, "install").status == "rolled_back"
+    assert (root / MCP).stat().st_mode & 0o777 == 0o600, "restored by the failed install"
+    h.fault.markers.clear()
+    assert do(h, repo, "install").status == "committed"
+    assert (root / MCP).stat().st_mode & 0o777 == 0o600, "merged by the committed install"
+    by_hand = tmp_path / "created-by-hand"
+    by_hand.write_text("x")
+    assert (root / SKILL).stat().st_mode & 0o777 == by_hand.stat().st_mode & 0o777, "created as any tool creates"
+    (root / SKILL).chmod(0o751)
+    assert do(make_harness(payload_v2), reload_repo(studio, h.store), "upgrade").status == "committed"
+    assert (root / SKILL).read_text() == "# AI-DLC skill v2\n"
+    assert (root / SKILL).stat().st_mode & 0o777 == 0o751
+
+
+def test_a_file_studio_creates_gets_the_mode_the_umask_it_started_under_gives(studio, make_harness, payload_v1,
+                                                                              repo_builder):
+    """Writes set an exact mode, so a new file must be handed the one any other tool would give it (``0o666`` less
+    the umask): a person who runs with umask 077 keeps the files Studio adds private too."""
+    root = repo_builder.with_git().build()
+    old = os.umask(0o077)
+    try:
+        private = make_harness(payload_v1)
+    finally:
+        os.umask(old)
+    assert do(private, insert_repo(studio, private.store, root), "install").status == "committed"
+    created = (SKILL, MCP, "AGENTS.md")
+    assert {rel: (root / rel).stat().st_mode & 0o777 for rel in created} == dict.fromkeys(created, 0o600)
 
 
 # ---- a file Studio cannot read is not a file that is not there ---- #

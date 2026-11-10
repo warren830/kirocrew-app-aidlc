@@ -174,6 +174,8 @@
   "intents.approval.inside": "它没有涉及本仓库以外的路径。",
   "intents.approval.partial": "这次调用太长，Studio 只显示了前面一部分，也无法判断它完整的作用范围。请到会话里看完整内容再决定；Allow once 只在会话里提供。",
   "intents.approval.outside": "它还涉及本仓库以外的路径：{paths}",
+  "intents.approval.unplaced": "Studio 判断不了这些路径实际指向哪里，所以无法确认这次调用只在本仓库内：{paths}",
+  "intents.approval.unread": "Studio 判断不了这次调用要操作什么，所以无法确认它只在本仓库内。",
   "intents.approval.otherRepo": "这条命令会碰另一个已注册的仓库：{repos}。这个 intent 用不到那个项目的文件，除非你本来就想让它看，否则建议拒绝。",
   "intents.approval.purpose": "它自己说的用途：{purpose}",
   "intents.approval.where": "在会话里：「允许一次」只放行这一次调用；「信任」以后不再询问这条命令或这个会话；YOLO 对这台电脑上的所有会话都不再询问；「拒绝」则不让它运行，AI-DLC 会绕开继续。",

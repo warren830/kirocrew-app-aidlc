@@ -1357,8 +1357,8 @@ Who may touch one repository: one turn at a time, and none during admin work. No
 ```python
 ADMIN_OPERATION_TYPES = ("install", "upgrade", "recovery", "intent_create", "recompose", "scope_change",
                          "config_change", "cursor_switch", "doctor", "repo_metadata")
-IN_FLIGHT_ACTION_STATUS = frozenset({"Delivering", "Delivered"})
-TRANSACTION_SETTLED_STATUS = frozenset({"committed", "rolled_back", "recovery_required", "failed"})
+IN_FLIGHT_ACTION_STATUS = ("Delivering", "Delivered")                                     # constants.py
+TRANSACTION_SETTLED_STATUS = ("committed", "rolled_back", "recovery_required", "failed")  # constants.py
 RETRY_AFTER_SECS = 15
 
 @dataclass(frozen=True, slots=True)
@@ -1562,14 +1562,17 @@ ALLOWED_TRANSITIONS: dict[str, frozenset[str]] = {
     "Delivering":             frozenset({"Delivered", "NotDelivered", "ReconciliationRequired"}),
     "Delivered":              frozenset({"StateChanged", "ResolvedNoTransition", "ReconciliationRequired", "Failed"}),
     "ReconciliationRequired": frozenset({"StateChanged", "ResolvedNoTransition", "NotDelivered", "Failed"}),
-    "NotDelivered":           frozenset({"Queued", "Cancelled"}),
+    "NotDelivered":           frozenset({"Queued", "Cancelled", "ReconciliationRequired"}),
     "StateChanged": frozenset(), "ResolvedNoTransition": frozenset(), "Failed": frozenset(), "Cancelled": frozenset(),
 }
 # PRD §11.1 plus Queued→Cancelled (PRD §11.1 rules: "provably safe in Draft/Queued"), with Processing folded into
 # Delivered and DeliveryUncertain into ReconciliationRequired (§0.5): every edge is a PRD edge or two of them joined
 # through a folded state. `Failed` is terminal: retire_stale never touches it (review P07). The "user row found" case is
 # ReconciliationRequired with evidence.delivery_confirmed = true; the reconciler then resolves it → StateChanged/
-# ResolvedNoTransition from disk evidence.
+# ResolvedNoTransition from disk evidence. NotDelivered → ReconciliationRequired is the one edge the PRD lacks: the
+# host's own late `delivered` report contradicting the absence proof, so the decision is reconciled as confirmed and
+# never sent again. A resend of a NotDelivered row walks NotDelivered → Queued ("retry") → Delivering, for submit and
+# force_stop alike.
 
 DECISIONS: dict[str, tuple[str, ...]] = {   # action type → allowed decision kinds
     "gate":              ("approve", "request_changes", "accept_as_is"),   # accept_as_is is OFFERED (card.decisions) only when
@@ -1578,7 +1581,10 @@ DECISIONS: dict[str, tuple[str, ...]] = {   # action type → allowed decision k
                           "approve_plan", "request_plan_changes", "resume"),   # offered per pending checkpoint (§1.8; A36); resume: a plan asked in a replaced session
     "missing_input":     ("provide_input", "pick_intent"),
     "recovery":          ("rebind_session", "mark_not_delivered", "acknowledge"),
-    "delivery_uncertain":("reconcile", "mark_not_delivered", "resubmit"),
+    "delivery_uncertain":("reconcile", "mark_not_delivered", "resubmit", "acknowledge"),   # confirmed delivery: reconcile, acknowledge
+                                                                           # (settles ResolvedNoTransition `acknowledged`, answer_verified
+                                                                           # false, never resent; slot_busy while the turn runs);
+                                                                           # unconfirmed: reconcile, mark_not_delivered, resubmit
     "failure":           ("retry_now", "keep_paused"),
     "circuit_breaker":   ("retry_now", "keep_paused"),
     "install_conflict":  (),                       # navigation only (Repos page)
@@ -1695,7 +1701,14 @@ class HumanActionBroker:
         # call, CASes Queued → Delivering with delivery_id, slot_key, session_key, delivering_at, deadline_at = now + DELIVERY_ACK_DEADLINE_SECS,
         # boot_id, host = HostCall("POST", f"/api/chat/slots/{slot_key}/stop", {}). No execution lease, no cursor switch, no wire_text,
         # no presence baseline (nothing is sent to the model). Returns SubmitReceipt(lane="host_control", wire_text=None, lease_generation=None).
-        # Idempotent: a live force_stop for the intent is returned as-is.
+        # One press, one stop call. A Delivering force_stop for the intent is returned with its own receipt. Otherwise every stop the host
+        # took or may have taken is closed first, whatever boundary it was pressed at: a Delivered one, or a ReconciliationRequired one
+        # with delivery_confirmed, settles ResolvedNoTransition (reason "stopped_again") and records the interruption, and the press is
+        # then sent as KiroCrew's second press, host = HostCall("POST", f"/api/chat/slots/{slot_key}/stop?force=true", {}) (stop_slot_turn
+        # hard-kills a cooperative stop still pending on a second call); an unconfirmed ReconciliationRequired one → Failed
+        # ("superseded_by_resubmit", evidence.resubmitted_as = the new action). A Queued or NotDelivered stop is the card the press came
+        # from (the browser reports under that card's id), so it is sent again as itself (NotDelivered → Queued reason "retry" →
+        # Delivering with a fresh delivery_id); with none, a new action is inserted. A superseded Failed row is never picked.
 
     # ---- two-phase submit (human lane) ----
     async def submit(self, action_id: str, *, captured: dict, payload: dict, client_wire_text: str, user: str, source: str = "studio") -> SubmitReceipt
@@ -1756,9 +1769,14 @@ class HumanActionBroker:
         #                 (evidence.authoritative_4xx) and not_delivered_unproven is raised with the checks. A client preflight code counts
         #                 only while Delivering.
         #   uncertain   : unchanged, idempotent=True.
-        # From NotDelivered or a terminal status: unchanged, idempotent=True (recorded in evidence.late_reports; a late delivered also sets
-        # evidence.delivery_confirmed, which closes retry). record_delivery never raises illegal_transition for a repeated report with the
-        # same delivery_id and outcome.
+        # From NotDelivered: delivered → ReconciliationRequired (reason "delivery_report_delivered", evidence.delivery_confirmed = true,
+        # receipt, outcome "delivered"), idempotent=False: the reconciler settles it from disk (a force_stop as a delivered stop, with the
+        # interruption) and its card offers reconcile and acknowledge; not_delivered/uncertain as for a terminal status.
+        # From a terminal status: unchanged, idempotent=True (recorded in evidence.late_reports; a late delivered also sets
+        # evidence.delivery_confirmed). A late delivered on a row a resubmit superseded (evidence.resubmitted_as) also withdraws each
+        # resend that never left (Queued/NotDelivered → Cancelled, reason "original_delivered"), marks one already sent
+        # delivery_confirmed, and records the interruption of a force_stop. record_delivery never raises illegal_transition for a
+        # repeated report with the same delivery_id and outcome.
     async def retry(self, action_id: str, *, user: str) -> ActionRecord
         # NotDelivered → Queued (same action id; at-most-once preserved because nothing was enqueued);
         # Failed run/resume/prepare_commit: resets breakers row(s) for the intent and creates a NEW action of the same type (new
@@ -1776,10 +1794,15 @@ class HumanActionBroker:
         #                         AND evidence.boot_id_unchanged); else not_delivered_unproven. → NotDelivered.
         #   acknowledge         → recovery card → Cancelled (reason "acknowledged") after the user reviewed the evidence; when the card's
         #                         finding is `interrupted_session` it also calls SessionBinder.set_interrupted(None) (review P17); every other
-        #                         finding stays until disk changes.
+        #                         finding stays until disk changes. On a ReconciliationRequired action whose delivery is confirmed it
+        #                         settles the action ResolvedNoTransition (reason "acknowledged", answer_verified false) without resending,
+        #                         refused slot_busy while the bound conversation runs, host_unavailable while its slot table cannot be
+        #                         read, and invalid_decision when delivery is unconfirmed; a force_stop so settled records the interruption.
         #   reconcile           → Reconciler.reconcile_now
         #   resubmit            → ONLY from ReconciliationRequired. Refuses not_delivered_unproven when evidence.delivery_confirmed == true (a
-        #                         delivered decision is never replayed — the reconciler resolves it from disk; PRD §11.1/§12.1). Requires
+        #                         delivered decision is never replayed — the reconciler resolves it from disk; PRD §11.1/§12.1), and
+        #                         while the first send is within its ack deadline (delivering_at + DELIVERY_ACK_DEADLINE_SECS, the
+        #                         receipt's expires_at: details.reason "ack_deadline_pending", details.ack_deadline_at). Requires
         #                         payload.acknowledged_evidence_sha256 == sha256(canonical json of {card.delivery, card.evidence.audit,
         #                         card.evidence.presence}) — the evidence the UI displayed; mismatch → action_stale with the refreshed card.
         #                         Creates a NEW Queued action (new action_id, same dedupe_key — legal because the old row is superseded
@@ -1810,30 +1833,41 @@ Resolution contracts (what the reconciler needs to see once the turn has started
 `turn_started_at`, or `ReconciliationRequired` with delivery confirmed; evaluated in `reconciler.py` using data
 from this table). Rules that apply to every row:
 
-- **"new X"** means an audit event of type X whose `ts >= delivering_at` **and** whose `(shard_index, pos)` sorts after
-  `captured.boundary_event` (the engine writes `GATE_APPROVED` and `STAGE_COMPLETED` in the same second as the human's
-  turn, so `>` on second-precision timestamps would miss them; review P23).
+- **"new X"** means an audit event of type X whose `ts >= delivering_at` **and** that follows
+  `captured.boundary_event` by the reader's `audit_follows` rule: position inside the boundary's own shard, a strictly
+  later timestamp in any other shard (shard names carry no execution order). The engine writes `GATE_APPROVED` and
+  `STAGE_COMPLETED` in the same second as the human's turn, so `>` on second-precision timestamps alone would miss
+  them (review P23). A same-second row in another shard is unordered: it never proves a decision landed, and it keeps a
+  "nothing was recorded" conclusion open (`possible` receipts).
 - **presence** (FR-SES-010, §18 journey 2; review P04): for every `human_lane` action, `StateChanged` and
   `ResolvedNoTransition` additionally require exactly **one** new `HUMAN_TURN` since `presence_baseline`
   (`human_turn_events` delta == 1, or — when the baseline was partial — at least one new row in the tail; and
   `.aidlc-human-turn` `mtime_ns` advanced). Zero, or more than one, → `ReconciliationRequired` with finding
   `human_presence_anomaly` stored on the action and an Activity row (`severity: critical`). `host_control` and
-  `studio_only` decisions have no presence requirement (nothing was sent to the model).
+  `studio_only` decisions have no presence requirement (nothing was sent to the model). In `ReconciliationRequired`
+  with a complete audit any new turn counts (delta >= 1), so later turns cannot strand a decision that landed, except
+  on a row that carries `human_presence_anomaly`: it never settles on presence again and waits for the person's
+  `acknowledge`, because later turns can make any count come out right.
 - **cursor** (review R01): at resolution `snap.is_active` must still be true for the action's intent; otherwise
   `ReconciliationRequired` with finding `cursor_moved`.
 - **turn ended** = the bound slot's `running` went True → False after `delivered_at` (or a `user`/`queued` row equal to
-  the wire text is followed by an `assistant` row and the slot is idle).
+  the wire text is followed by an `assistant` row and the slot is idle), **and** the snapshot's read began after Studio
+  first saw that (`AuditBundle.read_started_ns`, monotonic, against the reconciler's first idle reading of the
+  delivery's slot; dropped whenever the slot reads busy again). AI-DLC writes its receipt and then ends the turn, so a
+  read begun earlier can miss it: every turn-end outcome below is read from exactly what the turn left. The reconciler
+  reads an action's slot before its snapshot, so this costs no tick unless the turn ends during the read.
 
 | type / decision | `StateChanged` when | `ResolvedNoTransition` when |
 |---|---|---|
-| gate / approve, accept_as_is | new `GATE_APPROVED` (Stage == stage) AND (row for stage is `[x]` OR `Current Stage` != stage) | never |
-| gate / request_changes | new `GATE_REJECTED` AND `STAGE_REVISING` for stage AND row is `[R]` | never |
+| gate / approve, accept_as_is | new `GATE_APPROVED` (Stage == stage) AND (row for stage is `[x]` OR `Current Stage` != stage) | not recorded (see the row below); or `gate_approved_without_row` (`answer_verified: false`): new `GATE_APPROVED` but the state still shows the stage open once the turn ended, under the same read, failure and presence rules. The engine writes the audit before the state file, so mid-turn this waits; after the turn no read can bring the row, the stage is never claimed moved, and the gate the state still shows open gets a fresh card |
+| gate / request_changes | new `GATE_REJECTED` AND `STAGE_REVISING` for stage AND row is `[R]` | not recorded (see the row below) |
 | question / answers | — | (`question_digest` changed AND no blank tag for the answered indices) OR new `QUESTION_ANSWERED` for stage; AND turn ended |
 | question / confirm_summary | — | new `SUMMARY_CONFIRMATION_RECORDED` for stage, OR (`question_digest` changed AND `summary_confirmation.answered`); AND turn ended |
 | question / accept_assumptions, convert_assumptions | — | (`question_digest` changed AND `assumption_confirmation.answered` AND its answer starts with the chosen option) OR new `QUESTION_ANSWERED` for stage whose `Details` starts with it; AND turn ended (A36) |
 | question / answers (audit origin, `batch_size` > 1) | — | new `QUESTION_ANSWERED` after the batch whose `Details` equals the `Q<n>:` lines (newlines escaped, suffix removed), else any scoped receipt as `answer_not_verified`; AND turn ended (A37) |
 | question / approve_plan | — | `question_digest` changed AND `plan_approval.answered` AND `plan_approval.answer` starts with `WIRE_APPROVE_PLAN`; AND turn ended |
 | question / request_plan_changes | — | `question_digest` changed AND (`plan_approval` tag now holds a `Request Changes…` answer OR was cleared for revision), OR a new plan-approval `QUESTION_ANSWERED` whose `Details` is `Request Changes`; AND turn ended |
+| gate (stage or team Unit) / approve, accept_as_is, request_changes; question / answers (file or audit origin), confirm_summary, accept_assumptions, convert_assumptions, approve_plan, request_plan_changes; missing_input / provide_input (scope) (not recorded) | — | `reply_not_recorded` (`answer_verified: false`), or `turn_stopped_on_error` when a KiroCrew error ended the turn: turn ended AND nothing on disk that is, or may be, this reply's record (a receipt row, one the ordering rule leaves unordered, a plan receipt naming this plan's approval or change request, or the questions file the card showed now written to: for file answers, holding any of the answered indices) AND the read is stable with a complete audit AND the turn's errors are not a classified failure (a burst or host error fails the action first, and counts toward the breaker). AI-DLC refused the reply (a sensor, a missing native-tool write) or asked something else; settling frees the lease and whatever is still open gets a fresh card. Presence is still required, nothing is approved and the reply is never resent |
 | question / approve_plan, request_plan_changes (refused) | — | `plan_reply_not_recorded` (`ResolvedNoTransition`, `answer_verified: false`): no new plan-approval receipt (`PLAN_APPROVAL_RECORDED` / `QUESTION_ANSWERED`) AND either a new `DECISION_RECORDED` for the same plan (checkpoint, unit, questions file) or an `ERROR_LOGGED` refusing the Plan Approval; AND turn ended. AI-DLC 2.10 records a plan reply only when it equals an offered choice, in the session that asked; settling frees the boundary for a fresh card. Nothing is approved and the reply is never resent |
 | question / resume (plan asked in an earlier session) | — | `plan_asked_again` when a new plan `DECISION_RECORDED` follows, else `resumed_without_reask`; AND turn ended. Offered instead of `approve_plan`/`request_plan_changes` when the session that asked is gone (`plan_session_stale`): the newest plan decision names a session that a later `SESSION_STARTED`/`HUMAN_TURN` has replaced, or the host dropped the idle session (`slot.session_live is False`) (consequence `plan_session_stale`). Submit checks that rule, not the command Run rule (whose `question_pending` would retire the card): a Resume while the session is back, or an `approve_plan`/`request_plan_changes` while it is gone, refuses `action_stale` (`fields: ["plan_session"]`) and leaves the card `Queued` |
 | missing_input / provide_input | scope: `Scope` field == scope | free_text: turn ended |
@@ -1905,6 +1939,9 @@ class Reconciler:
     async def scan_repo(self, repo: RepoRecord) -> RepoScan
         # RepoScan{repo_id, availability, install: InstallHealth, intents: list[IntentSummary], findings: list[Finding], took_ms, truncated}
         # per intent: snapshot → findings → derive_cards → upsert_derived/retire_stale → summary; publishes "intent.updated" only when the summary changed
+        # derive_cards/upsert_derived/retire_stale are skipped (every card stays as it is) while the bound slot cannot be read, and while the
+        # snapshot is unstable (state file missing or rewritten mid-read) until its state_unreadable finding turns blocking after
+        # STATE_UNREADABLE_GRACE_SECS; a state file that stays gone leaves the listing and is retired by the intent_missing grace.
         # notifications (§1.19), never for an archived intent and never raised into the scan:
         #   a host tool approval on the bound slot → notify("tool_approval", …), once per approval;
         #   every Queued gate/question card this scan derived → notify("action", actions.card(rec, snap)) unless
@@ -2260,7 +2297,11 @@ class EstimateService:                          # stateless: calibration history
 
 Plan rules: a stage is `locked` when `execution == "ALWAYS"` (`always`), when an enabled stage lists it in
 `requires_stage` (`required_by:<slug>`), or — with a live intent — its row is `[x]`/`[S]` (`completed`), `[-]`
-(`current`), `[?]`/`[R]` (`at_gate`), or its number is ≤ the current stage's number (`behind_cursor`). Enabling a
+(`current`), `[?]`/`[R]` (`at_gate`), or its number is ≤ the current stage's number (`behind_cursor`). Before
+creation, the stage `intent-create` starts on is locked `current` as well: the first selected post-Initialization stage,
+past Reverse Engineering for a greenfield project, and each type's first stage when no project type is declared (the
+engine's workspace scan decides then), because the overrides are applied by `recompose` after the engine marked it
+`[-]`. Enabling a
 stage requires every `requires_stage` to be enabled or completed (`dependency_missing`). `exact.gates` = enabled
 stages with `phase != initialization`; `exact.artifacts` = Σ `len(produces)` over enabled stages, per-unit stages ×
 `units` (DAG units when known, else 1 with `assumes_units = 1`); `exact.review_intensity` counts enabled stages per
@@ -3440,7 +3481,7 @@ export interface ArtifactMeta { artifact_id: string; relpath: string; name: stri
 export interface GitObservation { available: boolean; reason: string | null; branch: string | null; detached: boolean; head: string | null; head_subject: string | null; dirty: boolean; dirty_files: number; ahead: number | null; behind: number | null; upstream: string | null; observed_at: string; took_ms: number }
 export interface LeaseView { kind: 'execution' | 'admin'; repo_id: string; resolved_repo_identity: string; generation: number; acquired_at: string; heartbeat_at: string; intent_uuid: string | null; intent_key: string | null; session_key: string | null; action_id: string | null; operation_type: string | null; transaction_id: string | null; observed_busy_state: string | null; orphaned: boolean }
 export interface StableBoundary { stable: boolean; reasons: string[]; stage: string | null; marker: string | null; boundary_token: string | null; recorded_at: string }
-export interface SessionRef { slot_key: string; session_key: string; running: boolean; bound_at: string; waiting_approval?: boolean; approval?: { tool: string; tool_input: string } | null; stopped_on_error?: StoppedOnError | null }
+export interface SessionRef { slot_key: string; session_key: string; running: boolean; bound_at: string; waiting_approval?: boolean; approval?: { tool: string; tool_input: string; tool_kind?: string | null } | null; stopped_on_error?: StoppedOnError | null }
 /** The host error an idle conversation's last turn stopped on (architecture A38). */
 export interface StoppedOnError { at: string; text: string; kind: string }
 export interface SlotView { key: string; running: boolean; project: string; agent: string; app: string; queue_depth: number; pending_approval: boolean; needs_input: boolean; waiting_for_input: boolean; stop_state: 'idle' | 'soft_pending' | 'killing'; interrupted: boolean; last_ts: string; last_turn_ts: string; linked_session_key: string; session_key: string; messages: number; has_options: boolean; options: string[]; slack_linked: boolean; title: string; stopping: boolean; wait_state: Record<string, unknown> | null; in_stage_execution: boolean; approvals_pending: number; subagents_running: number; subagents_queued: number; deliveries_inflight: number }
@@ -3523,7 +3564,10 @@ export interface ActionCard {
   deep_link: string; dedupe_key: string | null; human_text_present: boolean; acknowledged_evidence_sha256: string | null
 }
 export interface ActionsResponse { actions: ActionCard[]; organize: Organize; groups: { key: string; label_key: string; action_ids: string[] }[]; counts: { total: number; critical: number; blocking: number; attention: number; info: number }; approval_waits?: ApprovalWait[]; stopped_turns?: StoppedTurn[]; generated_at: string }
-export interface ApprovalWait { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; slot_key: string; tool: string; tool_input: string }
+export interface ApprovalWait { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; slot_key: string; tool: string; tool_input: string; tool_kind?: string | null }
+// tool_kind: the host's value as is (ACP toolCall.kind for a native request: "edit" = a file write whose tool_input is a
+// unified diff or the JSON args, "execute" = a shell command, …; "spawn" for a coordinator request; "" when unstated;
+// null when the host sends none). Agent-influenced: it picks how to read the target, never whether to warn.
 export interface StoppedTurn extends StoppedOnError { repo_id: string; repo_label: string; space: string; intent_dir: string; intent_key: string; slot_key: string }
 export interface AnswerInput { index: number; option_letters: string[]; free_text: string | null }
 export type SubmitPayload =

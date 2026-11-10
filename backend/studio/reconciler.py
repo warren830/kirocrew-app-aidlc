@@ -10,10 +10,10 @@ the reconciler reads disk, reads the host, and moves Studio's own rows.
 
 Four kinds of care run through the whole module.
 
-**Ordering is evidence.** "New" audit rows are ``ts >= delivering_at`` *and* positioned after the
-boundary event the card captured, because the engine writes ``GATE_APPROVED`` in the same second as
-the human's turn (review P23); second-precision ``>`` would miss exactly the row that proves the
-decision landed.
+**Ordering is evidence.** "New" audit rows are ``ts >= delivering_at`` *and* after the boundary event
+the card captured: positioned after it in its own shard, stamped after it in any other (shard names carry
+no order), because the engine writes ``GATE_APPROVED`` in the same second as the human's turn (review
+P23); second-precision ``>`` would miss exactly the row that proves the decision landed.
 
 **Presence is required.** An in-flight human-lane resolution needs exactly one new ``HUMAN_TURN``
 since the baseline the submit recorded. Zero or multiple turns escalate as ``human_presence_anomaly``
@@ -40,6 +40,7 @@ import functools
 import hashlib
 import logging
 import re
+import time
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,13 +48,14 @@ from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from . import constants as C
 from . import sessions as _sessions
-from .actions import ABSENCE_PROOF
+from .actions import ABSENCE_PROOF, record_interruption
 from .aidlc_reader import (
-    answers_mode_question, audit_question_accepts_text, audit_question_answer, ceremony_setting, plan_approval_choice,
+    AuditEvent, answers_mode_question, audit_follows, audit_question_accepts_text, audit_question_answer,
+    ceremony_setting, plan_approval_choice,
 )
 from .consistency import RepoFacts
 from .errors import IllegalTransition, StaleGeneration, StudioError
-from .projection import UNCERTAIN_STATUSES, run_unavailable_reason
+from .projection import UNCERTAIN_STATUSES, breaker_key, run_unavailable_reason
 from .repo_registry import RepoScan
 from .wire import WireRecord
 
@@ -66,7 +68,6 @@ __all__ = [
     "FINGERPRINT_RULES",
     "PRESENCE_COMPARED_FIELDS",
     "REPO_SCAN_MIN_INTERVAL_SECS",
-    "RECONCILABLE_STATUS",
     "STARTUP_STATUS",
     "Reconciler",
     "Resolution",
@@ -87,10 +88,6 @@ _attr = C.attr
 #: A repository with no open action is not re-walked more often than this (§1.13 tick step 1). One with
 #: an open action is always re-walked: its evidence is what a human is waiting on.
 REPO_SCAN_MIN_INTERVAL_SECS: float = 2.0
-
-#: Statuses ``reconcile_action`` has something to say about: ``Queued``/``NotDelivered`` are the human's to
-#: move, and the terminal four are done.
-RECONCILABLE_STATUS: tuple[str, ...] = ("Delivering", "Delivered", "ReconciliationRequired")
 
 #: In flight when the previous process stopped, so re-read by ``startup()`` before any loop or scan runs
 #: (§1.13): every later decision — a derived card, a delivery report — must see that re-reading first.
@@ -392,6 +389,9 @@ class Reconciler:
         #: ``action_id -> True`` once the bound slot was observed busy after ``delivering_at``. The host
         #: keeps no history of "was it running": if this process does not remember, nobody can say.
         self._ran: dict[str, bool] = {}
+        #: ``delivery_id -> time.monotonic_ns()`` of the first slot read that showed that delivery's turn over, dropped
+        #: whenever one shows it running again. Only a disk read that began after it can say what the turn left.
+        self._ended_seen: dict[str, int] = {}
         #: ``(repo_id, space, intent_dir) -> monotonic`` first time a scan found live cards for an intent
         #: whose directory was not on disk. Only this component sees consecutive scans, so only it can
         #: tell a branch switch in progress from an intent that is gone (§1.13 step 1b).
@@ -764,6 +764,11 @@ class Reconciler:
             # and deriving from that read retired the cards that need the slot to be seen, all undone a tick later.
             # The cards stay exactly as they are until the conversation can be read.
             keys: set[str] = set()
+        elif not snap.stable and "state_unreadable" not in {f.code for f in self._s.consistency.blocking(findings)}:
+            # A read that missed the state file or saw it change proves no boundary closed either: a checkout rewriting
+            # the file mid-scan retired every card of the intent, minted again under new ids a tick later. Unreadable
+            # past its grace, the state is believed, and the recovery card becomes the intent's one card.
+            keys = set()
         else:
             seeds = await self._in_pool(functools.partial(
                 self._s.projection.derive_cards, snap, findings=findings, binding=binding, install=install,
@@ -875,7 +880,7 @@ class Reconciler:
         return isinstance(resolution, Mapping) and resolution.get("reason") == "answer_not_recorded"
 
     async def _breakers_for(self, repo_id: str, intent_key: str) -> list[dict]:
-        prefix = f"{repo_id}:{intent_key}:"
+        prefix = breaker_key(repo_id, intent_key)
         rows = await self._to_thread(self._s.storage.select, "breakers")
         return [row for row in rows if str(row.get("key") or "").startswith(prefix)]
 
@@ -943,7 +948,7 @@ class Reconciler:
     async def _reconcile_open_actions(self) -> int:
         """Reconcile every action the host might still be working on, one snapshot per intent."""
         rows = await self._to_thread(
-            self._s.storage.select, "actions", {"status": list(RECONCILABLE_STATUS)}, order_by="created_at ASC"
+            self._s.storage.select, "actions", {"status": list(C.DISPATCHED_ACTION_STATUS)}, order_by="created_at ASC"
         )
         done = 0
         snapshots: dict[tuple[str, str, str], Any] = {}
@@ -963,6 +968,9 @@ class Reconciler:
         return done
 
     async def _snapshot_for(self, rec: Any) -> Any | None:
+        """The action's intent read from disk, its slot looked at first: a turn seen over then ended before this read
+        began, so the read shows everything that turn left (``_turn_ended``)."""
+        self._observe_turn(rec, self._slot_for(rec))
         try:
             repo = await self._to_thread(self._s.repos.get, rec.repo_id)
             return await self._in_pool(functools.partial(
@@ -982,7 +990,7 @@ class Reconciler:
         retire when its purpose expires; no terminal or undelivered record is reopened."""
         if rec.status == "Queued" and rec.type in ("run", "resume"):
             return await self._retire_obsolete_run(rec, snap if snap is not None else await self._snapshot_for(rec))
-        if rec.status not in RECONCILABLE_STATUS:
+        if rec.status not in C.DISPATCHED_ACTION_STATUS:
             return rec
         if snap is None and rec.status != "Delivering":
             snap = await self._snapshot_for(rec)
@@ -1111,7 +1119,16 @@ class Reconciler:
                         and row.outcome == "state_changed")
         if unrecordable:
             evidence["presence_unrecorded"] = True
-        if human and presence.get("ok") is not True and not unrecordable:
+        # A presence anomaly once found is the person's to judge, and they close it with `acknowledge`: later turns can
+        # make any count come out right, so reconciliation's "any new turn" never settles a row that carries one.
+        held = rec.status == "ReconciliationRequired" and "human_presence_anomaly" in {
+            _attr(finding, "code") for finding in rec.evidence.get("findings") or ()}
+        # Turn totals from a read that raced an append or read only a tail are not totals. Such a read may not raise the
+        # anomaly that `held` then keeps for good, so it waits for a complete read.
+        uncounted = presence.get("partial") is False and _attr(_attr(snap, "audit"), "complete", False) is not True
+        if human and uncounted and presence.get("ok") is not True and not unrecordable:
+            return Resolution("pending", "audit_incomplete", evidence)
+        if human and (held or presence.get("ok") is not True) and not unrecordable:
             code, params = "human_presence_anomaly", presence
         elif human and _attr(snap, "is_active") is False:
             code, params = "cursor_moved", {"cursor": _attr(snap, "cursor"), "intent_dir": _attr(snap, "intent_dir")}
@@ -1171,11 +1188,15 @@ class Reconciler:
         if action_type == "gate" and decision in ("approve", "accept_as_is"):
             approved = self._newest_new(rec, snap, ("GATE_APPROVED",), stage)
             if approved is None:
-                return Resolution("pending", "no_gate_approved", seen)
+                return self._unrecorded_reply(rec, snap, seen, "no_gate_approved", self._new_events(
+                    rec, snap, ("GATE_APPROVED",), stage, possible=True))
             seen["gate_approved"] = _json_of(approved)
             if self._row_completed(snap, stage) or self._current_stage(snap) != stage:
                 return Resolution("state_changed", "gate_approved", seen)
-            return Resolution("pending", "gate_approved_without_row", seen)
+            # The engine writes GATE_APPROVED before the state file: mid-turn the row may still land; once the turn is
+            # over it never will, and the stage the state still shows open is a card of its own.
+            return self._unrecorded_reply(rec, snap, seen, "gate_approved_without_row", (),
+                                          settled="gate_approved_without_row")
 
         if action_type == "gate" and decision == "request_changes":
             rejected = self._newest_new(rec, snap, ("GATE_REJECTED",), stage)
@@ -1187,7 +1208,8 @@ class Reconciler:
             if returned is not None:
                 seen["returned_gate"] = _json_of(returned)
                 return Resolution("state_changed", "gate_revision_returned", seen)
-            return Resolution("pending", "no_gate_rejected", seen)
+            return self._unrecorded_reply(rec, snap, seen, "no_gate_rejected", self._new_events(
+                rec, snap, ("GATE_REJECTED", "STAGE_REVISING"), stage, possible=True))
 
         if action_type == "question":
             return self._question_row(rec, snap, decision, stage, ended, seen)
@@ -1199,7 +1221,7 @@ class Reconciler:
             seen["scope"] = current = self._scope_of(snap)
             if current and current == str(payload.get("scope") or "").strip():
                 return Resolution("state_changed", "scope_recorded", seen)
-            return Resolution("pending", "scope_unchanged", seen)
+            return self._unrecorded_reply(rec, snap, seen, "scope_unchanged", ())
 
         if action_type in ("run", "resume"):
             movement = self._newest_new(rec, snap, C.MOVEMENT_EVENTS, None)
@@ -1245,6 +1267,8 @@ class Reconciler:
             return Resolution("no_transition", f"{setting}_unchanged", seen)
 
         if action_type == "force_stop":
+            if slot is None and not self._slots_readable():
+                return Resolution("pending", "slot_unreadable", seen)
             if slot is None:
                 # Nothing runs in a slot that is gone; `set_interrupted` still fires, because the user asked
                 # for a stop and the durable record must say it took effect (C28).
@@ -1261,24 +1285,28 @@ class Reconciler:
         so the stage rule would hold an approval that landed at `gate_approved_without_row` forever."""
         stage, unit, scope = rec.stage, rec.unit, snap.unit_gate_scope
 
-        def newest(event_type: str) -> Any:
-            rows = [event for event in self._new_events(rec, snap, (event_type,), None)
+        def scoped(*types: str, possible: bool = False) -> list[Any]:
+            return [event for event in self._new_events(rec, snap, types, None, possible=possible)
                     if scope.matches(event, stage, unit)]
-            return max(rows, key=lambda event: event.sort_key, default=None)
+
+        def newest(event_type: str) -> Any:
+            return max(scoped(event_type), key=lambda event: event.sort_key, default=None)
 
         gate = snap.unit_gate(stage, unit)
         seen["unit_gate"] = {"unit": unit, "status": gate.status if gate is not None else "pending"}
         if decision in ("approve", "accept_as_is"):
             approved = newest("GATE_APPROVED")
             if approved is None:
-                return Resolution("pending", "no_gate_approved", seen)
+                return self._unrecorded_reply(rec, snap, seen, "no_gate_approved",
+                                              scoped("GATE_APPROVED", possible=True))
             seen["gate_approved"] = _json_of(approved)
             return Resolution("state_changed", "gate_approved", seen)
         if decision == "request_changes":
             rejected, revising = newest("GATE_REJECTED"), newest("STAGE_REVISING")
             seen.update(gate_rejected=_json_of(rejected), stage_revising=_json_of(revising))
             if rejected is None or revising is None:
-                return Resolution("pending", "no_gate_rejected", seen)
+                return self._unrecorded_reply(rec, snap, seen, "no_gate_rejected",
+                                              scoped("GATE_REJECTED", "STAGE_REVISING", possible=True))
             # The conductor may finish the revision and reopen the gate in the same turn: the rejection is the
             # outcome either way, and the reopened gate is a card of its own.
             returned = gate is None or gate.status != "revising"
@@ -1328,7 +1356,9 @@ class Reconciler:
                 return Resolution("no_transition", "answer_refused", seen)
             if digest_changed and self._answers_filled(rec, questions):
                 return Resolution("no_transition", "answers_recorded", seen)
-            return Resolution("pending", "answers_not_recorded", seen)
+            return self._unrecorded_reply(rec, snap, seen, "answers_not_recorded", [
+                *self._file_answers(rec, snap, stage, possible=True),
+                *(file for file in self._written_questions(rec, snap) if self._answers_filled(rec, file, any))])
 
         if decision == "confirm_summary":
             recorded = self._newest_new(rec, snap, ("SUMMARY_CONFIRMATION_RECORDED",), stage)
@@ -1336,7 +1366,8 @@ class Reconciler:
             answered = bool(_attr(_attr(questions, "summary_confirmation"), "answered", False))
             if recorded is not None or (digest_changed and answered):
                 return Resolution("no_transition", "summary_confirmed", seen)
-            return Resolution("pending", "summary_not_confirmed", seen)
+            return self._unrecorded_reply(rec, snap, seen, "summary_not_confirmed", self._new_events(
+                rec, snap, ("SUMMARY_CONFIRMATION_RECORDED",), stage, possible=True))
 
         if decision in ("accept_assumptions", "convert_assumptions"):
             # The engine fills the tag with the chosen option and logs a QUESTION_ANSWERED (intent-capture Step 5);
@@ -1351,7 +1382,9 @@ class Reconciler:
             if answered is not None and details.startswith(chosen):
                 seen["question_answered"] = _json_of(answered)
                 return Resolution("no_transition", "assumptions_recorded", seen)
-            return Resolution("pending", "assumptions_not_recorded", seen)
+            return self._unrecorded_reply(rec, snap, seen, "assumptions_not_recorded", [
+                event for event in self._new_events(rec, snap, ("QUESTION_ANSWERED",), stage, possible=True)
+                if str((_attr(event, "fields", {}) or {}).get("Details") or "").strip().startswith(chosen)])
 
         if decision == "approve_plan":
             return self._plan_approval_row(rec, snap, questions, stage, digest_changed, seen)
@@ -1374,15 +1407,19 @@ class Reconciler:
                 return Resolution("no_transition", "plan_changes_requested", seen)
             # 2.10 records a Request Changes choice as a plan-approval QUESTION_ANSWERED, then may revise nothing
             # the questions file shows before asking again.
-            receipt = next((event for event in self._plan_rows(rec, snap, stage, "QUESTION_ANSWERED")
-                            if (_attr(event, "fields", {}) or {}).get("Details") == C.PLAN_REQUEST_CHANGES_CHOICE), None)
+            def changes_requested(possible: bool = False) -> list[Any]:
+                return [event for event in self._plan_rows(rec, snap, stage, "QUESTION_ANSWERED", possible=possible)
+                        if (_attr(event, "fields", {}) or {}).get("Details") == C.PLAN_REQUEST_CHANGES_CHOICE]
+
+            receipt = next(iter(changes_requested()), None)
             if receipt is not None:
                 return Resolution("no_transition", "plan_changes_requested",
                                   {**seen, "plan_changes_recorded": _json_of(receipt)})
             refused = self._plan_asked_again(rec, snap, stage)
             if refused is not None:
                 return Resolution("no_transition", "plan_reply_not_recorded", {**seen, **refused})
-            return Resolution("pending", "plan_unchanged", seen)
+            return self._unrecorded_reply(rec, snap, seen, "plan_unchanged",
+                                          [*changes_requested(possible=True), *self._written_questions(rec, snap)])
 
         return Resolution("pending", "no_contract_row", seen)
 
@@ -1417,15 +1454,15 @@ class Reconciler:
                 # held open, a delivery-uncertain block would sit in front of the re-ask the conductor offers next.
                 seen.update(answer_verified=False, answer_refused=_json_of(refused))
                 return Resolution("no_transition", "answer_refused", seen)
-            if (_attr(_attr(snap, "audit"), "complete", False) is True
-                    and not self._new_events(rec, snap, ("QUESTION_ANSWERED",), stage) and self._asks_in_chat(rec)):
+            receipts = self._new_events(rec, snap, ("QUESTION_ANSWERED",), stage, possible=True)
+            if _attr(_attr(snap, "audit"), "complete", False) is True and not receipts and self._asks_in_chat(rec):
                 # The turn ended on a new question in the conversation without recording this answer (a host tool
                 # prompt was declined, say): "processing" would hide the open decision and the reply awaited. Only
                 # when nothing on disk could be its record: a receipt Studio cannot match (another unit or attempt,
                 # an order it cannot prove) or history it cannot read in full leaves the answer's fate open.
                 seen.update(answer_verified=False, conversation_asks=True)
                 return Resolution("no_transition", "answer_not_recorded", seen)
-            return Resolution("pending", "answers_not_recorded", seen)
+            return self._unrecorded_reply(rec, snap, seen, "answers_not_recorded", receipts)
         # A receipt for this question that does not verify our reply retires the lease, whether AI-DLC then opened
         # a gate or asked a follow-up — never a replay, and never an "answered" claim.
         gate = self._next_gate(rec, snap, stage, origin.get("unit"))
@@ -1494,15 +1531,20 @@ class Reconciler:
         refused = self._plan_asked_again(rec, snap, stage)
         if refused is not None:
             return Resolution("no_transition", "plan_reply_not_recorded", {**seen, **refused})
-        return Resolution("pending", "plan_not_approved", seen)
+        return self._unrecorded_reply(rec, snap, seen, "plan_not_approved", [
+            *(event for event in self._plan_rows(rec, snap, stage, "PLAN_APPROVAL_RECORDED", "QUESTION_ANSWERED",
+                                                 possible=True)
+              if plan_approval_choice((_attr(event, "fields", {}) or {}).get("Details")).startswith(
+                  C.WIRE_APPROVE_PLAN)),
+            *self._written_questions(rec, snap)])
 
-    def _plan_rows(self, rec: Any, snap: Any, stage: Any, *types: str) -> list[Any]:
+    def _plan_rows(self, rec: Any, snap: Any, stage: Any, *types: str, possible: bool = False) -> list[Any]:
         """This dispatch's audit rows of the given types for the plan this card showed: same checkpoint, unit and
         questions file."""
         unit = rec.unit or None
         relpath = (rec.evidence.get("questions") or {}).get("relpath")
         return [
-            event for event in self._new_events(rec, snap, types, stage)
+            event for event in self._new_events(rec, snap, types, stage, possible=possible)
             if (fields := _attr(event, "fields", {}) or {}).get("Checkpoint") in C.PLAN_APPROVAL_AUDIT_CHECKPOINTS
             and (fields.get("Unit") or None) == unit and (not relpath or fields.get("Questions File") == relpath)
         ]
@@ -1512,7 +1554,7 @@ class Reconciler:
         offered choice, in the session that asked) or put the plan to the person again. Settling the card lets the
         next scan open a fresh one for what is waiting — another approval, or a resume when the question belongs to
         an earlier session; the reply is never resent and nothing is approved."""
-        if self._plan_rows(rec, snap, stage, "PLAN_APPROVAL_RECORDED", "QUESTION_ANSWERED"):
+        if self._plan_rows(rec, snap, stage, "PLAN_APPROVAL_RECORDED", "QUESTION_ANSWERED", possible=True):
             return None
         asked = self._plan_rows(rec, snap, stage, "DECISION_RECORDED")
         refusals = [event for event in self._new_events(rec, snap, (C.ERROR_EVENT,), None)
@@ -1525,6 +1567,24 @@ class Reconciler:
             "refusal": _error_text(max(refusals, key=_event_order)) if refusals else None,
         }
 
+    def _unrecorded_reply(self, rec: Any, snap: Any, seen: dict[str, Any], pending: str, receipts: Sequence[Any],
+                          *, settled: str = "reply_not_recorded") -> Resolution:
+        """A reply the disk does not show taking effect: ``pending`` until a read begun after Studio saw its turn over
+        (``_read_after_turn``), while one of ``receipts`` (what on disk could still be its record: a row whose order
+        Studio cannot prove, the questions file AI-DLC wrote to) leaves its fate open, while the read is unstable or
+        partial, or while the turn's errors are a failure the failure path records. Otherwise ``settled``
+        (``turn_stopped_on_error`` when a KiroCrew error ended the turn), unverified: the lease goes, nothing is resent
+        or approved, whatever AI-DLC still waits on gets a card of its own, and presence still applies."""
+        whole = _attr(snap, "stable", False) is True and _attr(_attr(snap, "audit"), "complete", False) is True
+        if (not self._read_after_turn(rec, snap) or receipts or not whole
+                or self._classified_failure(rec, snap) is not None):
+            return Resolution("pending", pending, seen)
+        stopped = self._stopped_after(rec)
+        if stopped is not None:
+            return Resolution("no_transition", "turn_stopped_on_error",
+                              {**seen, "answer_verified": False, "host_error": stopped})
+        return Resolution("no_transition", settled, {**seen, "answer_verified": False})
+
     # ---- resolution outcome and failure classification -------------------- #
 
     async def _settle(self, rec: Any, snap: Any, resolution: Resolution) -> Any:
@@ -1533,10 +1593,7 @@ class Reconciler:
         to_status = "StateChanged" if resolution.outcome == "state_changed" else "ResolvedNoTransition"
         rec = await self._transition(rec, to_status, reason=resolution.reason, evidence=resolution.evidence)
         if rec.type == "force_stop":
-            # A resolved force stop is a durable interruption (C28/P17), cleared only by the recovery card's
-            # `acknowledge`: PRD §11.2 requires a manual takeover after a mid-stage interruption.
-            await self._s.sessions.set_interrupted(rec.repo_id, rec.space, rec.intent_dir, self._s.clock.iso())
-            await self._record("intent.force_stop", severity="attention", rec=rec, params={"slot_key": rec.slot_key})
+            await record_interruption(self._s.sessions, self._s.activity, self._s.clock, rec)
         self._forget(rec)
         return rec
 
@@ -1631,7 +1688,7 @@ class Reconciler:
         }
 
     def _search_other_slots(self, rec: Any) -> tuple[Any, str | None, bool]:
-        """A matching row in another slot of the repository, its slot, and whether every read succeeded (R08). A
+        """This delivery's row in another slot of the repository, its slot, and whether every read succeeded (R08). A
         row elsewhere is ``wrong_slot``: it reached the host, not the captured session, so nothing is automatic."""
         try:
             repo = self._s.repos.get(rec.repo_id)
@@ -1644,7 +1701,7 @@ class Reconciler:
             if view.key == str(rec.slot_key or ""):
                 continue
             found = host.find_delivery_row(view.key, since_ts=str(rec.delivering_at or ""),
-                                           delivery_id=str(rec.delivery_id or ""), wire_text=str(rec.wire_text or ""))
+                                           delivery_id=str(rec.delivery_id or ""), wire_text="")
             readable = host.can_prove_absence() and readable
             if found is not None:
                 return found, view.key, readable
@@ -1736,15 +1793,40 @@ class Reconciler:
         return row is not None and self._assistant_after(rec, row)
 
     def _turn_ended(self, rec: Any, slot: Any, snap: Any) -> bool:
-        """Did the turn finish? The slot is idle *and* a turn visibly happened (we watched it run, or a reply
-        follows the delivery row): a slot that never started is idle too. Disk movement proves work, not an
-        end, so without a live slot reading the lease is kept."""
+        """Had the turn finished when ``snap`` was read? ``slot`` shows it over, and the read began after Studio first
+        saw it over: AI-DLC writes its receipt and then ends the turn, so a read begun before the end can miss what the
+        turn left, and every turn-end outcome (nothing recorded, no movement, a failure) is read from exactly that."""
+        return self._observe_turn(rec, slot) is not None and self._read_after_turn(rec, snap)
+
+    def _observe_turn(self, rec: Any, slot: Any) -> int | None:
+        """When Studio first saw this delivery's turn over, or ``None`` while ``slot`` does not show it over."""
+        key = self._turn_key(rec)
+        if not self._turn_over(rec, slot):
+            self._ended_seen.pop(key, None)
+            return None
+        return self._ended_seen.setdefault(key, time.monotonic_ns())
+
+    def _turn_over(self, rec: Any, slot: Any) -> bool:
+        """The slot is idle *and* a turn visibly happened (we watched it run, or a reply follows the delivery row): a
+        slot that never started is idle too. Disk movement proves work, not an end, so without a live slot reading
+        the lease is kept."""
         if not self._slots_readable() or slot is None or _busy_reasons(slot):
             return False
         if self._ran.get(rec.action_id):
             return True
         row = self._delivery_row(rec)
         return row is not None and (self._assistant_after(rec, row) or _iso_gt(_attr(slot, "last_turn_ts"), row.ts))
+
+    def _read_after_turn(self, rec: Any, snap: Any) -> bool:
+        """Did ``snap``'s read begin after Studio first saw this delivery's turn over? A snapshot that does not say
+        when its read began never did."""
+        seen = self._ended_seen.get(self._turn_key(rec))
+        began = _attr(_attr(snap, "audit"), "read_started_ns")
+        return seen is not None and isinstance(began, int) and began > seen
+
+    @staticmethod
+    def _turn_key(rec: Any) -> str:
+        return str(rec.delivery_id or rec.action_id)
 
     def _delivery_row(self, rec: Any) -> Any:
         if not rec.slot_key or not rec.delivering_at:
@@ -1768,6 +1850,7 @@ class Reconciler:
 
     def _forget(self, rec: Any) -> None:
         self._ran.pop(rec.action_id, None)
+        self._ended_seen.pop(self._turn_key(rec), None)
 
     # ---- disk predicates -------------------------------------------------- #
 
@@ -1855,7 +1938,7 @@ class Reconciler:
         cannot hide it) and the matching revision increase. This never approves the gate."""
         at_gate = self._current_stage(snap) == stage and self._row_mark(snap, stage) == "?"
         if (not (at_gate or self._row_completed(snap, stage)) or not _attr(_attr(snap, "audit"), "complete", False)
-                or self._boundary_order(rec, snap) is None):
+                or self._boundary(rec, snap) is None):
             return None
         shard = ((rec.evidence.get("audit") or {}).get("boundary_event") or {}).get("shard")
         unit = rec.unit or None
@@ -1915,13 +1998,26 @@ class Reconciler:
         return None
 
     def _file_answer_receipt(self, rec: Any, snap: Any, stage: Any) -> Any:
-        """The newest new ``QUESTION_ANSWERED`` in this stage that can be a file's answers: not the answer to the
-        engine's mode question, which says how the person answers the file and not what. The same reply may close
-        both, mode first; a mode answer alone is no receipt for the answers this delivery carried."""
+        """The newest of ``_file_answers``."""
+        return max(self._file_answers(rec, snap, stage), key=lambda e: _attr(e, "sort_key", ("", 0, 0)), default=None)
+
+    def _file_answers(self, rec: Any, snap: Any, stage: Any, *, possible: bool = False) -> list[Any]:
+        """New ``QUESTION_ANSWERED`` rows in this stage that can be a file's answers: not the answer to the engine's
+        mode question, which says how the person answers the file and not what. The same reply may close both, mode
+        first; a mode answer alone is no receipt for the answers this delivery carried."""
         audit, unit = _attr(snap, "audit"), rec.unit or None
-        answers = [event for event in self._new_events(rec, snap, ("QUESTION_ANSWERED",), stage)
-                   if answers_mode_question(audit, event, str(stage), unit) is not True]
-        return max(answers, key=lambda e: _attr(e, "sort_key", ("", 0, 0))) if answers else None
+        return [event for event in self._new_events(rec, snap, ("QUESTION_ANSWERED",), stage, possible=possible)
+                if answers_mode_question(audit, event, str(stage), unit) is not True]
+
+    def _written_questions(self, rec: Any, snap: Any) -> list[Any]:
+        """The questions file this card showed, when this snapshot reads it (open, or closed behind a later prompt) and
+        it changed since the capture: AI-DLC wrote to it during the reply, which may hold the reply in a form Studio
+        cannot match."""
+        relpath = (rec.evidence.get("questions") or {}).get("relpath")
+        questions = _attr(snap, "questions")
+        return [file for file in (questions, _attr(questions, "closed_file"))
+                if relpath and file is not None and _attr(file, "relpath") == relpath
+                and _attr(file, "sha256") != _attr(rec.captured, "question_digest")]
 
     def _unverified_receipt(self, rec: Any, snap: Any, origin: Mapping[str, Any], stage: Any) -> Any:
         """A new receipt for exactly this audit question whose recorded text is not our reply."""
@@ -1942,29 +2038,34 @@ class Reconciler:
                  if _unit_scoped(event, unit, snap)]
         return max(gates, key=lambda e: _attr(e, "sort_key", ("", 0, 0))) if gates else None
 
-    def _new_events(self, rec: Any, snap: Any, types: Sequence[str], stage: Any) -> list[Any]:
+    def _new_events(self, rec: Any, snap: Any, types: Sequence[str], stage: Any, *,
+                    possible: bool = False) -> list[Any]:
         """Audit rows of *this* dispatch (P23): at or after ``delivering_at`` (second precision, hence ``>=``)
-        *and* after the captured boundary event. Time alone would accept the row that opened the gate; position
-        alone, a row from a previous session in a shard that happens to sort late."""
+        *and* after the captured boundary event, as the engine orders rows: by position in the boundary's shard,
+        by time in any other. Time alone would accept the row that opened the gate; position alone, a row from a
+        previous session in a shard that happens to sort late, or none from a shard that sorts early. ``possible``
+        adds the rows whose order the engine leaves open (another shard, the boundary's second): they cannot prove
+        the decision landed, nor that it did not."""
         if snap is None:
             return []
-        since, wanted, floor = rec.delivering_at, set(types), self._boundary_order(rec, snap)
+        since, wanted, boundary = rec.delivering_at, set(types), self._boundary(rec, snap)
+        follows = (True, None) if possible else (True,)
         return [
             event for event in list(_attr(_attr(snap, "audit"), "events", ()) or ())
             if _attr(event, "event") in wanted
             and (stage is None or (_attr(event, "fields", {}) or {}).get("Stage") == stage)
             and (not since or _iso_ge(_attr(event, "timestamp"), since))
-            and (floor is None or _event_order(event) > floor)
+            and (boundary is None or audit_follows(event, boundary) in follows)
         ]
 
     def _newest_new(self, rec: Any, snap: Any, types: Sequence[str], stage: Any) -> Any:
         events = self._new_events(rec, snap, types, stage)
         return max(events, key=lambda e: _attr(e, "sort_key", ("", 0, 0))) if events else None
 
-    def _boundary_order(self, rec: Any, snap: Any) -> tuple[int, int] | None:
-        """``(shard_index, pos)`` of the captured boundary event in today's bundle, or ``None``: a vanished shard
-        leaves the timestamp rule alone. A truncated window numbers blocks from wherever it starts, so a position
-        read from one (at capture or now) names another row once the file grows: inside it, time decides alone."""
+    def _boundary(self, rec: Any, snap: Any) -> AuditEvent | None:
+        """The captured boundary event placed in today's bundle, or ``None``: a vanished shard leaves the timestamp
+        rule alone. A truncated window numbers blocks from wherever it starts, so a position read from one (at
+        capture or now) names another row once the file grows: inside it, time decides alone."""
         audit = rec.evidence.get("audit") or {}
         boundary = audit.get("boundary_event") if isinstance(audit, Mapping) else None
         if not isinstance(boundary, Mapping):
@@ -1979,7 +2080,10 @@ class Reconciler:
         )
         for index, meta in enumerate(list(_attr(_attr(snap, "audit"), "shards", ()) or ())):
             if str(_attr(meta, "relpath", "")).rsplit("/", 1)[-1] == shard:
-                return (index, -1) if captured_truncated or _attr(meta, "truncated", False) else (index, pos)
+                truncated = captured_truncated or _attr(meta, "truncated", False)
+                return AuditEvent(shard=shard, shard_index=index, pos=-1 if truncated else pos,
+                                  timestamp=str(boundary.get("ts") or ""), event=str(boundary.get("type") or ""),
+                                  fields={}, raw="")
         return None
 
     def _state_moved(self, rec: Any, snap: Any) -> bool:
@@ -1991,14 +2095,14 @@ class Reconciler:
     def _digest_changed(self, rec: Any, snap: Any) -> bool:
         return _attr(rec.captured, "question_digest") != _attr(_attr(snap, "questions"), "sha256")
 
-    def _answers_filled(self, rec: Any, questions: Any) -> bool:
-        """Is every index the submit answered now non-blank in the file?"""
+    def _answers_filled(self, rec: Any, questions: Any, test: Callable[[Any], bool] = all) -> bool:
+        """Is every (``test=any``: some) index the submit answered now non-blank in the file?"""
         indices = {int(a.get("index")) for a in ((rec.payload or {}).get("answers") or [])
                    if isinstance(a, Mapping) and isinstance(a.get("index"), int)}
         if not indices or questions is None:
             return False
         by_index = {int(_attr(q, "index", 0)): q for q in _attr(questions, "questions", ()) or ()}
-        return all(bool(_attr(by_index.get(i), "answered", False)) for i in indices)
+        return test(bool(_attr(by_index.get(i), "answered", False)) for i in indices)
 
     def _row_mark(self, snap: Any, stage: Any) -> str | None:
         state = _attr(snap, "state")

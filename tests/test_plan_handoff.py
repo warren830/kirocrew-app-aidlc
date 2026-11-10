@@ -94,8 +94,21 @@ def test_plan_settles_after_questions_handoff_without_answering_learnings(sv, ro
     assert live[0]["delivery"]["delivery_id"] is None
 
 
-@pytest.mark.parametrize("mismatch", ["old_receipt", "different_file", "different_unit", "different_prompt"])
-def test_handoff_receipt_must_belong_to_the_submitted_plan(sv, routes, fake_host, scene, mismatch):
+def reconciler_read(sv, rec):
+    """The intent as the reconciler reads it for ``rec``: after looking at the conversation, so a turn over by then is
+    one this read can speak for."""
+    return asyncio.run(sv.reconciler._snapshot_for(rec))
+
+
+@pytest.mark.parametrize("mismatch,outcome", [
+    ("old_receipt", ("pending", "plan_not_approved")),
+    ("different_file", ("no_transition", "reply_not_recorded")),
+    ("different_unit", ("pending", "plan_not_approved")),
+    ("different_prompt", ("pending", "plan_not_approved")),
+])
+def test_handoff_receipt_must_belong_to_the_submitted_plan(sv, routes, fake_host, scene, mismatch, outcome):
+    """A receipt that is not this plan's never approves it. While the plan file the card showed reads written to, the
+    reply's fate stays open; a card whose file AI-DLC never touched settles as a reply it did not record."""
     card, _ = approved_then_learnings(
         sv, routes, fake_host, scene, wrong_prompt=mismatch == "different_prompt",
         receipt_at="2026-09-04T09:59:00Z" if mismatch == "old_receipt" else "2026-09-04T10:00:20Z")
@@ -106,10 +119,10 @@ def test_handoff_receipt_must_belong_to_the_submitted_plan(sv, routes, fake_host
             **rec.evidence["questions"], "relpath": "aidlc/another-plan-questions.md"}})
     elif mismatch == "different_unit":
         rec = replace(rec, unit="another-unit")
-    snap = sv.projection.snapshot(sv.repos.get(scene.repo_id), "default", INTENT)
+    snap = reconciler_read(sv, rec)
     assert snap.questions.origin["kind"] == "audit"
     resolution = sv.reconciler.evaluate_resolution(rec, snap, sv.host.slot(scene.slot_key))
-    assert not resolution.resolved and resolution.reason == "plan_not_approved"
+    assert (resolution.outcome, resolution.reason) == outcome
 
 
 def test_handoff_receipt_repeats_the_engines_blanked_prompt_digest(sv, routes, fake_host, scene):
@@ -189,18 +202,24 @@ def test_plan_settles_once_aidlc_has_moved_on_from_its_file(sv, routes, fake_hos
     """Construction builds unit by unit, so when the turn ends AI-DLC can be asking the next unit's plan. Held
     open, the card kept the repository in flight and the next plan never got a card of its own."""
     rec = approved_then_moved_on(sv, routes, fake_host, scene)
-    snap = moved_on(sv.projection.snapshot(sv.repos.get(scene.repo_id), "default", INTENT), next_prompt)
+    snap = moved_on(reconciler_read(sv, rec), next_prompt)
     resolution = sv.reconciler.evaluate_resolution(rec, snap, sv.host.slot(scene.slot_key))
     assert resolution.resolved and resolution.reason == "plan_approved"
     assert resolution.evidence["approved_questions_file"] == rec.evidence["questions"]["relpath"]
 
 
-@pytest.mark.parametrize("receipt", [
-    {"Details": "Request Changes"}, {"Unit": "another-unit"}, {"Prompt SHA-256": "0" * 64},
-    {"Intent": "01a19cd3-0000-7000-8000-000000000000"}, {"Questions File": "aidlc/another-plan-questions.md"},
+@pytest.mark.parametrize("receipt,outcome", [
+    ({"Details": "Request Changes"}, ("no_transition", "reply_not_recorded")),
+    ({"Unit": "another-unit"}, ("no_transition", "reply_not_recorded")),
+    ({"Prompt SHA-256": "0" * 64}, ("pending", "plan_not_approved")),
+    ({"Intent": "01a19cd3-0000-7000-8000-000000000000"}, ("pending", "plan_not_approved")),
+    ({"Questions File": "aidlc/another-plan-questions.md"}, ("no_transition", "reply_not_recorded")),
 ], ids=["another-choice", "another-unit", "another-prompt", "another-intent", "another-file"])
-def test_a_moved_on_plan_settles_only_on_its_own_approval(sv, routes, fake_host, scene, receipt):
+def test_a_moved_on_plan_settles_only_on_its_own_approval(sv, routes, fake_host, scene, receipt, outcome):
+    """Never approved on another plan's receipt. An approval of this plan Studio cannot match (another prompt or intent)
+    may still be the reply's, so it waits; another choice, unit or file recorded nothing for this reply, so the ended
+    turn settles it unverified."""
     rec = approved_then_moved_on(sv, routes, fake_host, scene, **receipt)
-    snap = moved_on(sv.projection.snapshot(sv.repos.get(scene.repo_id), "default", INTENT), "next_units_plan")
+    snap = moved_on(reconciler_read(sv, rec), "next_units_plan")
     resolution = sv.reconciler.evaluate_resolution(rec, snap, sv.host.slot(scene.slot_key))
-    assert not resolution.resolved and resolution.reason == "plan_not_approved"
+    assert (resolution.outcome, resolution.reason) == outcome

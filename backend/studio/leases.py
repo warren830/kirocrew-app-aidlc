@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
+from . import constants as C
 from .errors import LeaseHeld, StudioError
 from .wire import WireRecord
 
@@ -33,10 +34,6 @@ if TYPE_CHECKING:  # pragma: no cover - typing only; these modules are never imp
 #: Operation types an admin lease may be taken for (§1.10); the scheduler is the one enforcement point.
 ADMIN_OPERATION_TYPES = ("install", "upgrade", "recovery", "intent_create", "recompose", "scope_change",
                          "config_change", "cursor_switch", "doctor", "repo_metadata")
-#: A dispatch is or may still be on the wire: an action in one of these holds its repository.
-IN_FLIGHT_ACTION_STATUS = frozenset({"Delivering", "Delivered"})
-#: ``install_transactions.status`` values that prove an admin operation has stopped touching the repo.
-TRANSACTION_SETTLED_STATUS = frozenset({"committed", "rolled_back", "recovery_required", "failed"})
 #: ``retry_after_secs`` on a refusal: a turn or an admin operation rarely ends sooner.
 RETRY_AFTER_SECS = 15
 
@@ -209,7 +206,7 @@ class RepoScheduler:
 
     def _in_flight(self, excluding: str | None = None) -> list[dict]:
         """Rows holding an execution lease, newest first. Sync: callers on the loop use ``to_thread``."""
-        rows = self._storage.select("actions", {"status": sorted(IN_FLIGHT_ACTION_STATUS)},
+        rows = self._storage.select("actions", {"status": sorted(C.IN_FLIGHT_ACTION_STATUS)},
                                     order_by="delivering_at DESC")
         return [r for r in rows if r.get("lease_generation") is not None and r.get("action_id") != excluding]
 

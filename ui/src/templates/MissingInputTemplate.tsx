@@ -86,7 +86,7 @@ export function wrapQuotedFences(text: string): string {
     .join('\n')
 }
 
-export function MissingInputTemplate({ card, detail, draft, setDraft, api, go }: TemplateProps) {
+export function MissingInputTemplate({ card, detail, draft, setDraft, sending = false, api, go }: TemplateProps) {
   const i18n = useI18n()
   const { t } = i18n
   const advisor = useAdvisor(card, api, detail?.drafts)
@@ -143,7 +143,7 @@ export function MissingInputTemplate({ card, detail, draft, setDraft, api, go }:
 
   return (
     <section className="studio-template" data-type={card.type} aria-label={templateLabel(i18n, card)}>
-      <DecisionBrief card={card} />
+      <DecisionBrief card={card} go={go} />
 
       {reply?.text ? (
         // The question itself replaces the explanation that it can only be read in the conversation.
@@ -226,6 +226,7 @@ export function MissingInputTemplate({ card, detail, draft, setDraft, api, go }:
                         name={`studio-reply-${card.action_id}`}
                         value={String(position)}
                         checked={checked}
+                        disabled={sending}
                         onChange={() => choose(position)}
                       />
                       <span className="studio-opt-body">
@@ -256,6 +257,7 @@ export function MissingInputTemplate({ card, detail, draft, setDraft, api, go }:
             label={t(`template.missingInput.input.${kind}`)}
             placeholder={t(`template.missingInput.placeholder.${kind}`)}
             routing={t('template.missingInput.routing')}
+            disabled={sending}
           />
         </Block>
       ) : null}

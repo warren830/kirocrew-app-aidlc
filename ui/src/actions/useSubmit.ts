@@ -7,7 +7,7 @@
  *
  * The sequence, and why each step is where it is:
  *
- *  1. `POST /actions/{id}/submit` with the evidence captured on the card and the wire text the user
+ *  1. `POST /actions/{id}/submit` with the capture the user confirmed against and the wire text they
  *     confirmed. The server recomputes the wire text and refuses a mismatch, so a UI can never choose
  *     the bytes that land in someone's audit trail. A `409 action_stale` carries the refreshed card;
  *     the caller must show it and require a *fresh* confirmation.
@@ -20,7 +20,11 @@
  *     timeout, a 200 that does not say ok) → uncertain.
  *  4. `POST /actions/{id}/delivery`. This one *is* retried — it is idempotent per `delivery_id` and
  *     the backend needs the outcome to release the lease — but only on a failure that proves the
- *     report never landed (network, 5xx). A 4xx answer is the backend's decision and is final.
+ *     report never landed (network, 5xx). The broker's own refusal is its decision and is final; any
+ *     other 4xx never reached it, and leaves the outcome unrecorded.
+ *     A send reported `uncertain` because it outlived the timeout is reported again when the host
+ *     answers, under the same `delivery_id`: a late `delivered` closes Send it again on the backend.
+ *     Until that answer, or the receipt's `expires_at`, the action is still in flight.
  *
  * Step 3 is never re-run for the same `delivery_id`. There is no automatic retry of a send anywhere in
  * this module, and a second `submit()` for an action id that is already in flight is refused by a
@@ -28,13 +32,14 @@
  * across a re-render, must not be able to produce two `Delivering` records.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
 import { StudioApiError, type StudioApi } from '../lib/api'
+import type { ErrorCode } from '../lib/errorCodes.generated'
 import { WIRE } from '../lib/wire.generated'
 import type {
-  ActionCard, AnswerInput, HostChatReceipt, HostSlot, Question, QuestionsView, ResolvePayload,
-  SubmitPayload, SubmitReceipt,
+  ActionCard, AnswerInput, Captured, HostChatReceipt, HostSlot, Question, QuestionsView, ResolvePayload,
+  SubmitPayload, SubmitReceipt, SubmitRequest,
 } from '../lib/types'
 
 // --------------------------------------------------------------------------- //
@@ -259,18 +264,41 @@ export type SubmitStage =
 
 export interface DeliveryAttempt {
   outcome: DeliveryOutcome
+  /** False when the preflight stopped the send: nothing reached the host, whatever `outcome` could prove. */
+  hostCalled: boolean
   httpStatus: number | null
   receipt: HostChatReceipt | null
-  /** True once `POST …/delivery` returned. False means Studio does not yet know the outcome. */
+  /**
+   * True once the backend answered `POST …/delivery`: with its record, or with one of the broker's own refusals.
+   * False while the report is on the wire, and for good once it never reached the broker: retries spent, or a 4xx
+   * from something else (`reportError` says which).
+   */
   reported: boolean
-  /** The report's own final failure, if it never landed. The send is NOT retried because of it. */
+  /** The backend's refusal, or the report's own last failure if it never landed. The send is NOT retried for it. */
   reportError: StudioApiError | null
+}
+
+/**
+ * The outcome as Studio recorded it. The browser's `not_delivered` is a claim the broker re-proves, and its
+ * `not_delivered_unproven` answer records the send as uncertain instead.
+ */
+export function recordedOutcome(attempt: DeliveryAttempt): DeliveryOutcome {
+  return attempt.outcome === 'not_delivered' && attempt.reportError?.code === 'not_delivered_unproven'
+    ? 'uncertain' : attempt.outcome
 }
 
 export interface SubmitState {
   stage: SubmitStage
   /** Which action this state describes; `null` in `idle`. */
   actionId: string | null
+  /** The status generation of the card this attempt started from: a server card past it reflects the attempt. */
+  generation: number | null
+  /**
+   * Exactly what `POST …/submit` carried, fixed when Send was pressed: until the outcome is recorded the
+   * confirmation shows these bytes, whatever the draft or the card does meanwhile. `null` for a decision with no
+   * prompt, and again once a refusal hands the confirmation back with nothing sent.
+   */
+  request: SubmitRequest | null
   receipt: SubmitReceipt | null
   attempt: DeliveryAttempt | null
   /** The canonical card the server last returned. Never a locally patched copy. */
@@ -280,7 +308,8 @@ export interface SubmitState {
 }
 
 export const IDLE: SubmitState = {
-  stage: 'idle', actionId: null, receipt: null, attempt: null, card: null, refusal: null, staleCard: null,
+  stage: 'idle', actionId: null, generation: null, request: null, receipt: null, attempt: null, card: null,
+  refusal: null, staleCard: null,
 }
 
 /** True while nothing has been handed to the host yet, so a Cancel is still honest. */
@@ -288,21 +317,35 @@ export function beforeSend(stage: SubmitStage): boolean {
   return stage === 'idle' || stage === 'submitting' || stage === 'preflight' || stage === 'refused' || stage === 'stale'
 }
 
-export interface SubmitArgs {
+/** A prompt: the bytes the person confirmed, and the capture of the evidence they confirmed them against. */
+export interface PromptSubmit {
   card: ActionCard
   /**
-   * `null` only together with `begin`: the host-control lane sends no prompt, so there is no payload and
-   * no wire text to compare (`wire_text_for` answers `None` for `force_stop`).
+   * What the person was shown when they confirmed: a confirmation left open while its card is refreshed passes
+   * the capture it was opened against, and a card queued by the click that sends it passes its own. Only that
+   * capture lets the server refuse a moved one as `action_stale`.
    */
-  payload: SubmitPayload | null
+  captured: Captured
+  payload: SubmitPayload
   /** What the confirmation panel displayed. The server refuses anything else. */
   clientWireText: string
-  /**
-   * Phase 1 override. `force_stop` is the same two-phase machine, but it starts at
-   * `POST /repos/{id}/intents/{key}/force-stop` and its `receipt.host` points at the stop endpoint.
-   */
-  begin?: () => Promise<SubmitReceipt>
+  begin?: undefined
 }
+
+/**
+ * `force_stop`: the same two-phase machine, started at `POST /repos/{id}/intents/{key}/force-stop`, whose
+ * `receipt.host` points at the stop endpoint. No prompt, so no payload, no wire text (`wire_text_for` answers
+ * `None` for it) and no capture to assert.
+ */
+export interface HostControlSubmit {
+  card: ActionCard
+  begin: () => Promise<SubmitReceipt>
+  captured?: undefined
+  payload?: undefined
+  clientWireText?: undefined
+}
+
+export type SubmitArgs = PromptSubmit | HostControlSubmit
 
 export interface ResolveArgs {
   card: ActionCard
@@ -311,10 +354,8 @@ export interface ResolveArgs {
 
 export interface Submitter {
   state: SubmitState
-  /** True while any phase of any action is running in this hook. */
+  /** True while any phase of any action is running in this hook. It names no card: lock one on `useInFlight`. */
   busy: boolean
-  /** True while THIS action id has a submit in flight anywhere in the page. */
-  isBusy: (actionId: string) => boolean
   submit: (args: SubmitArgs) => Promise<void>
   /** Studio-only decisions. One request, no host call, no delivery report. */
   resolve: (args: ResolveArgs) => Promise<void>
@@ -336,16 +377,36 @@ export interface UseSubmitOptions {
 }
 
 /**
- * Action ids with a submit in flight, module-wide.
+ * What holds an action in flight: its submit or resolve is running, or its send outlived the timeout and the
+ * host may still answer it, until the receipt's `expires_at`.
+ */
+export type InFlight = 'running' | 'awaitingHost'
+
+/**
+ * Action ids with a decision in flight, module-wide.
  *
  * Not component state: the queue and the detail pane are separate trees, a route change remounts the
  * detail, and React 18 may hold two copies of a component alive at once. A guard that lived in a
- * `useRef` would be defeated by any of those, and the cost is a duplicate `Delivering` record.
+ * `useRef` would be defeated by any of those, and the cost is a duplicate `Delivering` record. The
+ * same holds for the lock a person sees, so every pane reads this map through `useInFlight`.
  */
-const inFlight = new Set<string>()
+const inFlight = new Map<string, InFlight>()
+const inFlightListeners = new Set<() => void>()
 
-export function isSubmitInFlight(actionId: string): boolean {
-  return inFlight.has(actionId)
+function setInFlight(actionId: string, why: InFlight | null): void {
+  if (why) inFlight.set(actionId, why)
+  else inFlight.delete(actionId)
+  for (const listener of inFlightListeners) listener()
+}
+
+function subscribeInFlight(listener: () => void): () => void {
+  inFlightListeners.add(listener)
+  return () => inFlightListeners.delete(listener)
+}
+
+/** What holds this action in flight, whichever pane sent it, or `null`. Re-renders when that changes. */
+export function useInFlight(actionId: string): InFlight | null {
+  return useSyncExternalStore(subscribeInFlight, () => inFlight.get(actionId) ?? null)
 }
 
 const DEFAULT_SEND_TIMEOUT_MS = 20_000
@@ -354,10 +415,24 @@ const DEFAULT_REPORT_BACKOFF_MS = 700
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
+/** Milliseconds until an ISO instant: `0` once it has passed, or when it does not parse. */
+function msUntil(iso: string): number {
+  const ms = Date.parse(iso) - Date.now()
+  return ms > 0 ? ms : 0
+}
+
 /** A report failure that proves nothing landed, so re-reporting is safe (§3.6). */
 function reportRetriable(error: StudioApiError): boolean {
   return error.status === 0 || error.status >= 500
 }
+
+/**
+ * `record_delivery`'s own refusals: the broker read the report and decided, and asking again cannot change its
+ * mind. Any other 4xx (the dashboard session gone, the gateway's 404 or 429) never reached it.
+ */
+const BROKER_ANSWERS: readonly string[] = [
+  'not_delivered_unproven', 'delivery_ack_invalid', 'illegal_transition', 'action_not_found', 'bad_param',
+] satisfies readonly ErrorCode[]
 
 /**
  * The host's own body for a 4xx, or the least-wrong stand-in.
@@ -408,26 +483,43 @@ export function preflightRefusal(
   return null
 }
 
+/** How a promise ended. Never a rejection, so a late failure cannot surface as an unhandled one. */
+type Settled<T> = { value: T } | { error: unknown }
+
 /**
  * Race a promise the caller may not cancel.
  *
  * `POST /api/chat` cannot be aborted safely — the host may already be enqueuing the turn — so the
- * timeout only decides what we *say*, never whether the request continues. The losing promise's
- * rejection is swallowed so a late failure does not surface as an unhandled rejection minutes later.
+ * timeout only decides what we *say* now, never whether the request continues. A timed-out race
+ * hands back the request's own ending as `late`, because the host still answers for that turn.
  */
-async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<{ timedOut: true } | { timedOut: false; value: T } | { timedOut: false; error: unknown }> {
+async function withTimeout<T>(
+  promise: Promise<T>, ms: number,
+): Promise<({ timedOut: false } & Settled<T>) | { timedOut: true; late: Promise<Settled<T>> }> {
   let timer: ReturnType<typeof setTimeout> | null = null
-  const guard = new Promise<{ timedOut: true }>((resolve) => {
-    timer = setTimeout(() => resolve({ timedOut: true }), ms)
+  const guard = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms)
   })
-  const settled = promise.then(
-    (value) => ({ timedOut: false as const, value }),
-    (error: unknown) => ({ timedOut: false as const, error }),
-  )
-  const result = await Promise.race([settled, guard])
+  const settled = promise.then((value): Settled<T> => ({ value }), (error: unknown): Settled<T> => ({ error }))
+  const first = await Promise.race([settled, guard])
   if (timer !== null) clearTimeout(timer)
-  if (result.timedOut) void promise.catch(() => {})
-  return result
+  return first === null ? { timedOut: true, late: settled } : { timedOut: false, ...first }
+}
+
+/** What one host answer means: `ok:true` delivered, the host's own 4xx not delivered, anything else uncertain. */
+function classify(answer: Settled<HostChatReceipt>): Omit<DeliveryAttempt, 'reported' | 'reportError'> {
+  if ('error' in answer) {
+    const error = answer.error instanceof StudioApiError ? answer.error : new StudioApiError('internal_error', String(answer.error), {}, 0)
+    // The host validates the slot and the agent before it touches the queue, so its own 4xx
+    // is proof the turn was never enqueued.
+    const refused = error.status >= 400 && error.status <= 499
+    return { outcome: refused ? 'not_delivered' : 'uncertain', hostCalled: true, httpStatus: error.status || null,
+      receipt: hostErrorReceipt(error) }
+  }
+  const receipt = answer.value ?? null
+  // A 200 that does not say `ok` is not a delivery and not a refusal. Calling it undelivered
+  // would invite a resend of a turn the host may have taken.
+  return { outcome: receipt?.ok === true ? 'delivered' : 'uncertain', hostCalled: true, httpStatus: null, receipt }
 }
 
 export function useSubmit(options: UseSubmitOptions): Submitter {
@@ -456,10 +548,11 @@ export function useSubmit(options: UseSubmitOptions): Submitter {
     }
   }, [])
 
-  const patch = useCallback((next: Partial<SubmitState>) => {
+  const patch = useCallback((actionId: string, next: Partial<SubmitState>) => {
     // An unmounted pane must not set state, but the flow itself continues: the send and the report
-    // are the user's decision, not this component's lifetime.
-    if (mounted.current) setState((current) => ({ ...current, ...next }))
+    // are the user's decision, not this component's lifetime. Nor may a flow write over the attempt of
+    // another action this pane went on to decide while it was still in flight.
+    if (mounted.current) setState((current) => (current.actionId === actionId ? { ...current, ...next } : current))
   }, [])
 
   const publish = useCallback((card: ActionCard | null) => {
@@ -484,8 +577,8 @@ export function useSubmit(options: UseSubmitOptions): Submitter {
         } catch (caught) {
           const error = caught instanceof StudioApiError ? caught : new StudioApiError('internal_error', String(caught), {}, 0)
           lastError = error
-          // `not_delivered_unproven` and `delivery_ack_invalid` are answers, not failures: the backend
-          // has already recorded the uncertainty and repeating the call cannot change its mind.
+          // An answer, not a failure: `not_delivered_unproven` has already recorded the uncertainty.
+          if (BROKER_ANSWERS.includes(error.code)) return { ...attempt, reported: true, reportError: error }
           if (!reportRetriable(error) || tries === reportRetries) break
           if (reportBackoffMs > 0) await sleep(reportBackoffMs * (tries + 1))
         }
@@ -496,55 +589,56 @@ export function useSubmit(options: UseSubmitOptions): Submitter {
   )
 
   const submit = useCallback(
-    async ({ card, payload, clientWireText, begin }: SubmitArgs): Promise<void> => {
+    async (args: SubmitArgs): Promise<void> => {
+      const { card, payload } = args
       const actionId = card.action_id
       // The one guard that makes a double send impossible. Checked and set in the same synchronous
       // step, before the first `await`.
       if (inFlight.has(actionId)) return
-      inFlight.add(actionId)
+      setInFlight(actionId, 'running')
       setBusy(true)
-      setState({ ...IDLE, stage: 'submitting', actionId })
+      let request: SubmitRequest | null = null
+      let start: () => Promise<SubmitReceipt>
+      if (args.begin) {
+        start = args.begin
+      } else {
+        const { captured } = args
+        const body: SubmitRequest = {
+          captured: {
+            state_hash: captured.state_hash,
+            boundary_token: captured.boundary_token,
+            question_digest: captured.question_digest,
+            stage_attempt: captured.stage_attempt,
+            evidence_digest: captured.evidence_digest,
+            is_active: captured.is_active,
+          },
+          payload: args.payload,
+          client_wire_text: args.clientWireText,
+        }
+        request = body
+        start = () => latest.current.api.submitAction(actionId, body)
+      }
+      setState({ ...IDLE, stage: 'submitting', actionId, generation: card.status_generation, request })
 
       try {
         let receipt: SubmitReceipt
         try {
-          if (begin) {
-            receipt = await begin()
-          } else if (payload) {
-            receipt = await latest.current.api.submitAction(actionId, {
-              captured: {
-                state_hash: card.captured.state_hash,
-                boundary_token: card.captured.boundary_token,
-                question_digest: card.captured.question_digest,
-                stage_attempt: card.captured.stage_attempt,
-                evidence_digest: card.captured.evidence_digest,
-                is_active: card.captured.is_active,
-              },
-              payload,
-              client_wire_text: clientWireText,
-            })
-          } else {
-            // Neither a payload nor a phase-1 override: there is nothing to submit. Refusing here rather
-            // than sending an empty body keeps the failure inside Studio.
-            patch({ stage: 'refused', refusal: new StudioApiError('invalid_decision', 'no payload to submit', {}, 0) })
-            latest.current.onSettled?.()
-            return
-          }
+          receipt = await start()
         } catch (caught) {
           const error = caught instanceof StudioApiError ? caught : new StudioApiError('internal_error', String(caught), {}, 0)
           if (error.code === 'action_stale') {
             const refreshed = error.details['card']
             const stale = refreshed && typeof refreshed === 'object' ? (refreshed as ActionCard) : null
             publish(stale)
-            patch({ stage: 'stale', refusal: error, staleCard: stale })
+            patch(actionId, { stage: 'stale', refusal: error, staleCard: stale, request: null })
           } else {
-            patch({ stage: 'refused', refusal: error })
+            patch(actionId, { stage: 'refused', refusal: error, request: null })
           }
           latest.current.onSettled?.()
           return
         }
 
-        patch({ receipt, stage: 'preflight' })
+        patch(actionId, { receipt, stage: 'preflight' })
 
         // ---- 1b. slot preflight (human lane only) -------------------------- //
         let refused: HostChatReceipt | null = null
@@ -558,9 +652,10 @@ export function useSubmit(options: UseSubmitOptions): Submitter {
             // is sent (the host would create an unknown slot silently), and the honest outcome for
             // "we cannot tell" is `uncertain` — `not_delivered` would be a claim we cannot support.
             const attempt = await report(actionId, receipt.delivery_id, {
-              outcome: 'uncertain', httpStatus: null, receipt: { ok: false, code: 'preflight_unavailable' },
+              outcome: 'uncertain', hostCalled: false, httpStatus: null,
+              receipt: { ok: false, code: 'preflight_unavailable' },
             })
-            patch({ stage: 'settled', attempt })
+            patch(actionId, { stage: 'settled', attempt })
             latest.current.onSettled?.()
             return
           }
@@ -568,52 +663,48 @@ export function useSubmit(options: UseSubmitOptions): Submitter {
         if (refused) {
           const attempt = await report(actionId, receipt.delivery_id, {
             outcome: refused.code === 'answer_session_busy_preflight' ? 'uncertain' : 'not_delivered',
-            httpStatus: null, receipt: refused,
+            hostCalled: false, httpStatus: null, receipt: refused,
           })
-          patch({ stage: 'settled', attempt })
+          patch(actionId, { stage: 'settled', attempt })
           latest.current.onSettled?.()
           return
         }
 
         // ---- 2. the send. Exactly once, body verbatim. --------------------- //
-        patch({ stage: 'sending' })
+        patch(actionId, { stage: 'sending' })
         const raced = await withTimeout(
           latest.current.api.sendToHost(receipt.host.path, receipt.host.body),
           sendTimeoutMs,
         )
-
-        let outcome: DeliveryOutcome
-        let httpStatus: number | null = null
-        let hostReceipt: HostChatReceipt | null = null
-        if (raced.timedOut) {
-          outcome = 'uncertain'
-          hostReceipt = { ok: false, code: 'send_timeout' }
-        } else if ('error' in raced) {
-          const error = raced.error instanceof StudioApiError ? raced.error : new StudioApiError('internal_error', String(raced.error), {}, 0)
-          httpStatus = error.status || null
-          if (error.status >= 400 && error.status <= 499) {
-            // The host validates the slot and the agent before it touches the queue, so its own 4xx
-            // is proof the turn was never enqueued.
-            outcome = 'not_delivered'
-            hostReceipt = hostErrorReceipt(error)
-          } else {
-            outcome = 'uncertain'
-            hostReceipt = hostErrorReceipt(error)
-          }
-        } else {
-          hostReceipt = raced.value ?? null
-          // A 200 that does not say `ok` is not a delivery and not a refusal. Calling it undelivered
-          // would invite a resend of a turn the host may have taken.
-          outcome = hostReceipt?.ok === true ? 'delivered' : 'uncertain'
-        }
+        const sent: Omit<DeliveryAttempt, 'reported' | 'reportError'> = raced.timedOut
+          ? { outcome: 'uncertain', hostCalled: true, httpStatus: null, receipt: { ok: false, code: 'send_timeout' } }
+          : classify(raced)
 
         // ---- 3. report it ------------------------------------------------- //
-        patch({ stage: 'reporting', attempt: { outcome, httpStatus, receipt: hostReceipt, reported: false, reportError: null } })
-        const attempt = await report(actionId, receipt.delivery_id, { outcome, httpStatus, receipt: hostReceipt })
-        patch({ stage: 'settled', attempt })
+        patch(actionId, { stage: 'reporting', attempt: { ...sent, reported: false, reportError: null } })
+        const attempt = await report(actionId, receipt.delivery_id, sent)
+        patch(actionId, { stage: 'settled', attempt })
         latest.current.onSettled?.()
+        if (raced.timedOut) {
+          // After the first report, so the backend reads them in order. Another `uncertain` would say nothing new.
+          const { delivery_id: deliveryId } = receipt
+          const late = raced.late.then(async (answer) => {
+            const sentLate = classify(answer)
+            if (sentLate.outcome === 'uncertain') return
+            const recorded = await report(actionId, deliveryId, sentLate)
+            // This can land after the hold, when a later decision on the card owns the state: only the delivery
+            // id still names this attempt.
+            if (mounted.current) {
+              setState((current) => (current.receipt?.delivery_id === deliveryId ? { ...current, attempt: recorded } : current))
+            }
+          })
+          // The host may still take this turn: until it answers, or the receipt's ack deadline passes, the action
+          // stays in flight and nothing may send it again.
+          setInFlight(actionId, 'awaitingHost')
+          await withTimeout(late, msUntil(receipt.expires_at))
+        }
       } finally {
-        inFlight.delete(actionId)
+        setInFlight(actionId, null)
         if (mounted.current) setBusy(false)
       }
     },
@@ -624,25 +715,25 @@ export function useSubmit(options: UseSubmitOptions): Submitter {
     async ({ card, payload }: ResolveArgs): Promise<void> => {
       const actionId = card.action_id
       if (inFlight.has(actionId)) return
-      inFlight.add(actionId)
+      setInFlight(actionId, 'running')
       setBusy(true)
-      setState({ ...IDLE, stage: 'submitting', actionId })
+      setState({ ...IDLE, stage: 'submitting', actionId, generation: card.status_generation })
       try {
         const answer = await latest.current.api.resolveAction(actionId, payload)
         publish(answer.action)
-        patch({ stage: 'settled', card: answer.action })
+        patch(actionId, { stage: 'settled', card: answer.action })
       } catch (caught) {
         const error = caught instanceof StudioApiError ? caught : new StudioApiError('internal_error', String(caught), {}, 0)
         if (error.code === 'action_stale') {
           const refreshed = error.details['card']
           const stale = refreshed && typeof refreshed === 'object' ? (refreshed as ActionCard) : null
           publish(stale)
-          patch({ stage: 'stale', refusal: error, staleCard: stale })
+          patch(actionId, { stage: 'stale', refusal: error, staleCard: stale })
         } else {
-          patch({ stage: 'refused', refusal: error })
+          patch(actionId, { stage: 'refused', refusal: error })
         }
       } finally {
-        inFlight.delete(actionId)
+        setInFlight(actionId, null)
         if (mounted.current) setBusy(false)
         latest.current.onSettled?.()
       }
@@ -653,7 +744,7 @@ export function useSubmit(options: UseSubmitOptions): Submitter {
   const reset = useCallback(() => setState(IDLE), [])
 
   return useMemo<Submitter>(
-    () => ({ state, busy, isBusy: isSubmitInFlight, submit, resolve, reset }),
+    () => ({ state, busy, submit, resolve, reset }),
     [state, busy, submit, resolve, reset],
   )
 }

@@ -1533,7 +1533,7 @@ CONTRACT_DECISIONS = {
                  "request_plan_changes", "resume"),
     "missing_input": ("provide_input", "pick_intent"),
     "recovery": ("rebind_session", "mark_not_delivered", "acknowledge"),
-    "delivery_uncertain": ("reconcile", "mark_not_delivered", "resubmit"),
+    "delivery_uncertain": ("reconcile", "mark_not_delivered", "resubmit", "acknowledge"),
     "failure": ("retry_now", "keep_paused"),
     "circuit_breaker": ("retry_now", "keep_paused"),
     "install_conflict": (),

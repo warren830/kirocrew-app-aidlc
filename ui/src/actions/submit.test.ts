@@ -8,13 +8,15 @@
  */
 
 import { act, renderHook } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { apiCalls, setApiRoutes, StubApiError } from '../test/stubs/app-sdk'
 import { useStudioApi } from '../lib/api'
 import { WIRE } from '../lib/wire.generated'
-import type { ActionCard, Question, QuestionsView, HostSlot, SubmitReceipt } from '../lib/types'
-import { answerText, AUDIT_NONE_LABEL, preflightRefusal, useSubmit, wireTextFor } from './useSubmit'
+import type { ActionCard, DeliveryReport, Question, QuestionsView, HostSlot, SubmitReceipt } from '../lib/types'
+import {
+  answerText, AUDIT_NONE_LABEL, preflightRefusal, useInFlight, useSubmit, wireTextFor, type UseSubmitOptions,
+} from './useSubmit'
 // The 2026-11-02 sheets whose Other answers AI-DLC wrote as option A; `test_actions.py` builds the same lines.
 import vectors from '../../../tests/fixtures/other-answer-mapped/wire-vectors.json'
 
@@ -45,6 +47,9 @@ function card(actionId: string, over: Partial<ActionCard> = {}): ActionCard {
   } as unknown as ActionCard
 
 }
+
+/** A card and the capture its confirmation was opened against: the card's own, unless a test moves it. */
+const confirmed = (value: ActionCard) => ({ card: value, captured: value.captured })
 
 function receipt(actionId: string, over: Partial<SubmitReceipt> = {}): SubmitReceipt {
   return {
@@ -87,10 +92,10 @@ function routes(actionId: string, over: Record<string, (body: unknown, path: str
   })
 }
 
-function mount() {
+function mount(options: Partial<UseSubmitOptions> = {}) {
   return renderHook(() => {
     const api = useStudioApi()
-    return useSubmit({ api, reportBackoffMs: 0 })
+    return useSubmit({ api, reportBackoffMs: 0, ...options })
   })
 }
 
@@ -358,7 +363,7 @@ describe('the two-phase submit', () => {
     routes(id, { 'GET /api/chat/slots': () => [slot({ needs_input: true })] })
     const { result } = mount()
     await act(async () => {
-      await result.current.submit({ card: card(id), payload: { decision: 'answers',
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'answers',
         answers: [{ index: 1, option_letters: ['A'], free_text: null }] }, clientWireText: 'A' })
     })
     expect(sends()).toHaveLength(0)
@@ -373,7 +378,7 @@ describe('the two-phase submit', () => {
     const { result } = mount()
 
     await act(async () => {
-      await result.current.submit({ card: card(id), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
     })
 
     expect(apiCalls.map((call) => `${call.method} ${call.path}`)).toEqual([
@@ -397,7 +402,7 @@ describe('the two-phase submit', () => {
     routes(id)
     const { result } = mount()
     await act(async () => {
-      await result.current.submit({ card: card(id), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
     })
     const body = apiCalls.find((call) => call.path.endsWith('/submit'))?.body as Record<string, unknown>
     expect(body['client_wire_text']).toBe('Approve')
@@ -407,18 +412,95 @@ describe('the two-phase submit', () => {
     })
   })
 
+  it('asserts the capture its confirmation was opened against, not the one a refresh gave the card since', async () => {
+    const id = nextId()
+    routes(id)
+    const { result } = mount()
+    const opened = card(id).captured
+    const refreshed = card(id, { captured: { ...opened, evidence_digest: 'sha-ev-refreshed' } } as Partial<ActionCard>)
+
+    await act(async () => {
+      await result.current.submit({ card: refreshed, captured: opened, payload: { decision: 'approve' },
+        clientWireText: WIRE.APPROVE })
+    })
+
+    const body = apiCalls.find((call) => call.path.endsWith('/submit'))?.body as Record<string, unknown>
+    expect(body['captured']).toMatchObject({ evidence_digest: 'sha-ev' })
+  })
+
   it('sends exactly once when submit is called twice for the same action', async () => {
     const id = nextId()
     routes(id)
     const { result } = mount()
 
     await act(async () => {
-      const args = { card: card(id), payload: { decision: 'approve' as const }, clientWireText: WIRE.APPROVE }
+      const args = { ...confirmed(card(id)), payload: { decision: 'approve' as const }, clientWireText: WIRE.APPROVE }
       await Promise.all([result.current.submit(args), result.current.submit(args)])
     })
 
     expect(sends()).toHaveLength(1)
     expect(apiCalls.filter((call) => call.path.endsWith('/submit'))).toHaveLength(1)
+  })
+
+  it('sends once when two panes decide the same action in the same tick', async () => {
+    const id = nextId()
+    routes(id)
+    const one = mount()
+    const two = mount()
+    const args = { ...confirmed(card(id)), payload: { decision: 'approve' as const }, clientWireText: WIRE.APPROVE }
+
+    await act(async () => {
+      await Promise.all([
+        one.result.current.submit(args),
+        two.result.current.submit(args),
+        two.result.current.resolve({ card: card(id), payload: { decision: 'acknowledge' } }),
+      ])
+    })
+
+    expect(apiCalls.filter((call) => call.path.endsWith('/submit'))).toHaveLength(1)
+    expect(sends()).toHaveLength(1)
+    expect(apiCalls.some((call) => call.path.endsWith('/resolve'))).toBe(false)
+  })
+
+  it('keeps an action’s outcome out of the attempt of another action the same pane sent meanwhile', async () => {
+    const first = nextId()
+    const second = nextId()
+    const answers = new Map<string, (value: unknown) => void>()
+    setApiRoutes({
+      [`POST ${BASE}/actions/${first}/submit`]: () => receipt(first),
+      [`POST ${BASE}/actions/${second}/submit`]: () => receipt(second),
+      'GET /api/chat/slots': () => [slot()],
+      [`POST ${SEND_PATH}`]: (body) => new Promise((resolve) => {
+        answers.set((body as { meta: { studio_action_id: string } }).meta.studio_action_id, resolve)
+      }),
+      [`POST ${BASE}/actions/${first}/delivery`]: () => ({ ok: true, action: card(first, { status: 'Delivered' }), idempotent: false }),
+      [`POST ${BASE}/actions/${second}/delivery`]: () => ({ ok: true, action: card(second, { status: 'Delivered' }), idempotent: false }),
+    })
+    const { result } = mount()
+    const approve = (id: string) => ({ ...confirmed(card(id)), payload: { decision: 'approve' as const }, clientWireText: WIRE.APPROVE })
+
+    let firstDone!: Promise<void>
+    let secondDone!: Promise<void>
+    await act(async () => {
+      firstDone = result.current.submit(approve(first))
+      await vi.waitFor(() => expect(answers.has(first)).toBe(true))
+      secondDone = result.current.submit(approve(second))
+      await vi.waitFor(() => expect(answers.has(second)).toBe(true))
+    })
+    await act(async () => {
+      answers.get(first)?.({ ok: true, slot: 'aidlc-r1-guest', mid: 'm_1' })
+      await firstDone
+    })
+    expect(reports(first)).toHaveLength(1)
+    expect(result.current.state).toMatchObject({ actionId: second, stage: 'sending', attempt: null })
+
+    await act(async () => {
+      answers.get(second)?.({ ok: true, slot: 'aidlc-r1-guest', mid: 'm_2' })
+      await secondDone
+    })
+    expect(result.current.state).toMatchObject({
+      actionId: second, stage: 'settled', attempt: { outcome: 'delivered', reported: true },
+    })
   })
 
   it('never sends when the slot is missing, and reports the preflight code', async () => {
@@ -427,7 +509,7 @@ describe('the two-phase submit', () => {
     const { result } = mount()
 
     await act(async () => {
-      await result.current.submit({ card: card(id), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
     })
 
     expect(sends()).toHaveLength(0)
@@ -442,7 +524,7 @@ describe('the two-phase submit', () => {
     const { result } = mount()
 
     await act(async () => {
-      await result.current.submit({ card: card(id), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
     })
 
     expect(sends()).toHaveLength(0)
@@ -459,7 +541,7 @@ describe('the two-phase submit', () => {
     const { result } = mount()
 
     await act(async () => {
-      await result.current.submit({ card: card(id), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
     })
 
     expect(reports(id)[0]?.body).toEqual({
@@ -476,7 +558,7 @@ describe('the two-phase submit', () => {
     const { result } = mount()
 
     await act(async () => {
-      await result.current.submit({ card: card(id), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
     })
 
     expect(sends()).toHaveLength(1)
@@ -489,7 +571,7 @@ describe('the two-phase submit', () => {
     const { result } = mount()
 
     await act(async () => {
-      await result.current.submit({ card: card(id), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
     })
 
     expect(reports(id)[0]?.body).toMatchObject({ outcome: 'uncertain', http_status: null })
@@ -501,10 +583,146 @@ describe('the two-phase submit', () => {
     const { result } = mount()
 
     await act(async () => {
-      await result.current.submit({ card: card(id), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
     })
 
     expect(reports(id)[0]?.body).toMatchObject({ outcome: 'delivered', receipt: { ok: true, queued: true } })
+  })
+
+  it('reports the host\'s answer to a send that outlived the timeout, under the same delivery id', async () => {
+    const id = nextId()
+    let answer!: (value: unknown) => void
+    routes(id, { [`POST ${SEND_PATH}`]: () => new Promise((resolve) => { answer = resolve }) })
+    const { result } = mount({ sendTimeoutMs: 30 })
+
+    await act(async () => {
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+    })
+    const reported = () => reports(id).map((call) => call.body as DeliveryReport)
+    expect(reported().map((report) => report.outcome)).toEqual(['uncertain'])
+
+    // The host took the turn after all; the backend keeps that for the same delivery and closes Send it again.
+    await act(async () => {
+      answer({ ok: true, slot: 'aidlc-r1-guest', mid: 'm_1' })
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(reported().map((report) => [report.outcome, report.delivery_id])).toEqual([
+      ['uncertain', `d_${id}`], ['delivered', `d_${id}`],
+    ])
+    expect(reported()[1]?.receipt).toEqual({ ok: true, slot: 'aidlc-r1-guest', mid: 'm_1' })
+    expect(sends()).toHaveLength(1)
+  })
+
+  it('keeps a send that outlived the timeout in flight until the host answers it', async () => {
+    const id = nextId()
+    let answer!: (value: unknown) => void
+    routes(id, {
+      [`POST ${BASE}/actions/${id}/submit`]: () => receipt(id, { expires_at: new Date(Date.now() + 60_000).toISOString() }),
+      [`POST ${SEND_PATH}`]: () => new Promise((resolve) => { answer = resolve }),
+    })
+    const { result } = mount({ sendTimeoutMs: 30 })
+    // Another pane on the same card, which sent nothing itself.
+    const held = renderHook(() => useInFlight(id))
+
+    let submitted!: Promise<void>
+    await act(async () => {
+      submitted = result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' },
+        clientWireText: WIRE.APPROVE })
+      await vi.waitFor(() => expect(reports(id)).toHaveLength(1))
+    })
+    expect(result.current.state.stage).toBe('settled')
+    expect(held.result.current).toBe('awaitingHost')
+    expect(result.current.busy).toBe(true)
+    // Send it again, while the host may still take the first turn, goes nowhere.
+    await act(async () => {
+      await result.current.resolve({ card: card(id), payload: { decision: 'resubmit', acknowledged_evidence_sha256: 'sha-ack' } })
+    })
+    expect(apiCalls.some((call) => call.path.endsWith('/resolve'))).toBe(false)
+
+    await act(async () => {
+      answer({ ok: true, slot: 'aidlc-r1-guest', mid: 'm_1' })
+      await submitted
+    })
+    expect(reports(id).map((call) => (call.body as DeliveryReport).outcome)).toEqual(['uncertain', 'delivered'])
+    expect(held.result.current).toBeNull()
+    expect(result.current.busy).toBe(false)
+  })
+
+  it('holds a send the host never answers until the receipt’s ack deadline, and not a moment longer', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-09-04T10:00:00Z'))
+      const id = nextId()
+      routes(id, {
+        // The backend's ack deadline, 90 s after the submit.
+        [`POST ${BASE}/actions/${id}/submit`]: () => receipt(id, { expires_at: '2026-09-04T10:01:30Z' }),
+        [`POST ${SEND_PATH}`]: () => new Promise(() => {}),
+      })
+      const { result } = mount()
+      const held = renderHook(() => useInFlight(id))
+
+      await act(async () => {
+        void result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+        await vi.advanceTimersByTimeAsync(20_000)
+      })
+      expect(reports(id).map((call) => (call.body as DeliveryReport).outcome)).toEqual(['uncertain'])
+      expect(held.result.current).toBe('awaitingHost')
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(69_999) })
+      expect(new Date().toISOString()).toBe('2026-09-04T10:01:29.999Z')
+      expect(held.result.current).toBe('awaitingHost')
+      expect(result.current.busy).toBe(true)
+      await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+      expect(held.result.current).toBeNull()
+      expect(result.current.busy).toBe(false)
+      expect(reports(id)).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('gives a late answer’s unrecorded report to the attempt that sent it, not to a decision made since', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-09-04T10:00:00Z'))
+      const id = nextId()
+      let answer!: (value: unknown) => void
+      let failLateReport!: (error: unknown) => void
+      routes(id, {
+        [`POST ${BASE}/actions/${id}/submit`]: () => receipt(id, { expires_at: '2026-09-04T10:01:30Z' }),
+        [`POST ${SEND_PATH}`]: () => new Promise((resolve) => { answer = resolve }),
+        [`POST ${BASE}/actions/${id}/delivery`]: () => (reports(id).length === 1
+          ? { ok: true, action: card(id, { status: 'ReconciliationRequired' }), idempotent: false }
+          : new Promise((_, reject) => { failLateReport = reject })),
+        [`POST ${BASE}/actions/${id}/resolve`]: () => ({
+          ok: true, action: card(id, { status: 'ReconciliationRequired' }), created_action_id: null,
+        }),
+      })
+      const { result } = mount()
+
+      await act(async () => {
+        void result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+        await vi.advanceTimersByTimeAsync(20_000)
+      })
+      // The host answers 5 s before the ack deadline, and its report is still on the wire when the hold ends.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(65_000)
+        answer({ ok: true, slot: 'aidlc-r1-guest', mid: 'm_1' })
+        await vi.advanceTimersByTimeAsync(5_000)
+      })
+      expect(reports(id)).toHaveLength(2)
+      await act(async () => {
+        await result.current.resolve({ card: card(id), payload: { decision: 'reconcile' } })
+      })
+      expect(apiCalls.filter((call) => call.path.endsWith('/resolve'))).toHaveLength(1)
+
+      await act(async () => {
+        failLateReport(new StubApiError(401, { error: 'authentication required', code: 'unauthorized' }))
+      })
+      expect(result.current.state).toMatchObject({ stage: 'settled', attempt: null })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('retries the delivery report but never the send', async () => {
@@ -520,7 +738,7 @@ describe('the two-phase submit', () => {
     const { result } = mount()
 
     await act(async () => {
-      await result.current.submit({ card: card(id), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
     })
 
     expect(attempts).toBe(2)
@@ -541,13 +759,48 @@ describe('the two-phase submit', () => {
     const { result } = mount()
 
     await act(async () => {
-      await result.current.submit({ card: card(id), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
     })
 
     // One attempt: `not_delivered_unproven` is an answer, and repeating the call cannot change it.
     expect(attempts).toBe(1)
-    expect(result.current.state.attempt).toMatchObject({ reported: false })
+    expect(result.current.state.attempt).toMatchObject({ reported: true })
     expect(result.current.state.attempt?.reportError?.code).toBe('not_delivered_unproven')
+  })
+
+  it.each([
+    [409, 'delivery_ack_invalid'], [409, 'illegal_transition'], [404, 'action_not_found'], [400, 'bad_param'],
+  ] as const)('takes the broker’s own %i %s as its answer to the report', async (status, code) => {
+    const id = nextId()
+    routes(id, { [`POST ${BASE}/actions/${id}/delivery`]: () => { throw new StubApiError(status, { error: 'refused', code }) } })
+    const { result } = mount()
+
+    await act(async () => {
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+    })
+
+    expect(reports(id)).toHaveLength(1)
+    expect(result.current.state.attempt).toMatchObject({ reported: true })
+    expect(result.current.state.attempt?.reportError?.code).toBe(code)
+  })
+
+  it.each([
+    [401, { error: 'authentication required', code: 'unauthorized' }],
+    [403, { error: 'forbidden', code: 'app_token_forbidden' }],
+    [404, { error: 'not found' }],
+    [429, { error: 'slow down' }],
+  ] as const)('keeps a report the broker never read unrecorded: %i %j', async (status, body) => {
+    const id = nextId()
+    routes(id, { [`POST ${BASE}/actions/${id}/delivery`]: () => { throw new StubApiError(status, body) } })
+    const { result } = mount()
+
+    await act(async () => {
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+    })
+
+    // Not retried (only a 5xx or a network failure is), and not taken for the backend's word either.
+    expect(reports(id)).toHaveLength(1)
+    expect(result.current.state.attempt).toMatchObject({ outcome: 'delivered', reported: false })
   })
 
   it('shows the refreshed card and sends nothing when the evidence moved', async () => {
@@ -561,7 +814,7 @@ describe('the two-phase submit', () => {
     const { result } = mount()
 
     await act(async () => {
-      await result.current.submit({ card: card(id), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
     })
 
     expect(sends()).toHaveLength(0)
@@ -580,7 +833,7 @@ describe('the two-phase submit', () => {
     const { result } = mount()
 
     await act(async () => {
-      await result.current.submit({ card: card(id), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
+      await result.current.submit({ ...confirmed(card(id)), payload: { decision: 'approve' }, clientWireText: WIRE.APPROVE })
     })
 
     expect(sends()).toHaveLength(0)
@@ -604,8 +857,6 @@ describe('the two-phase submit', () => {
     await act(async () => {
       await result.current.submit({
         card: card(id, { type: 'force_stop', queue_type: 'force_stop' }),
-        payload: null,
-        clientWireText: '',
         begin: () => Promise.resolve(stop),
       })
     })

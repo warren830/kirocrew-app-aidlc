@@ -9,7 +9,8 @@ TOOL, TOOL_INPUT = "Locate the load-steering instructions", "grep -n steering .k
 PURPOSE = "Find where the skill says to steer the load"
 PERMISSION = {"role": "permission", "ts": "2026-09-04T10:00:30Z", "content": TOOL,
               "cls": '{"tool_input": "grep -n steering .kiro/skills/aidlc/SKILL.md", '
-                     '"tool_purpose": "Find where the skill says to steer the load", "approval_id": "req-1"}'}
+                     '"tool_purpose": "Find where the skill says to steer the load", "tool_kind": "execute", '
+                     '"approval_id": "req-1"}'}
 
 
 class Pending:
@@ -45,7 +46,9 @@ def test_the_queue_lists_a_parked_conversation_with_what_it_asks(sv, routes, fak
         # Shown whole, so the notice may offer Allow once and say where it reaches.
         "tool_input_truncated": False, "purpose": PURPOSE,
         # What the notice's Allow once / Reject answer, as the host's own card does (KiroCrew 0.11).
-        "request_id": "req-1", "request_mid": "mid-req-1", "origin": "native"}]
+        "request_id": "req-1", "request_mid": "mid-req-1", "origin": "native",
+        # The ACP kind the host relays as is: the notice reads a command's target from its command line.
+        "tool_kind": "execute"}]
     # The queue's own filter applies: another repository's queue does not show it.
     status, body = _get(sv, routes, fake_host, "/actions", repo="r_other")
     assert status == 200 and body["approval_waits"] == []
@@ -53,7 +56,8 @@ def test_the_queue_lists_a_parked_conversation_with_what_it_asks(sv, routes, fak
     session = next(i for i in body["intents"] if i["intent_dir"] == INTENT)["session"]
     assert session["waiting_approval"] is True
     assert session["approval"] == {"tool": TOOL, "tool_input": TOOL_INPUT, "tool_input_truncated": False, "purpose": PURPOSE,
-                                   "request_id": "req-1", "request_mid": "mid-req-1", "origin": "native"}
+                                   "request_id": "req-1", "request_mid": "mid-req-1", "origin": "native",
+                                   "tool_kind": "execute"}
 
 
 def test_a_scan_notifies_once_per_approval_with_a_link_to_the_conversation(sv, routes, fake_host, scene):

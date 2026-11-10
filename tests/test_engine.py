@@ -186,10 +186,11 @@ GOLDEN = {
     "utility.space_create": ({"slug": "alt"}, ["space-create", "alt"]),
     "utility.intent_create": (
         {"scope": "poc", "arguments": "Ship the ledger export", "label": "ledger-export", "depth": "Standard",
-         "test_strategy": "Minimal", "review": "advisory", "repos": "api,web", "summary_confirmation": "off"},
+         "test_strategy": "Minimal", "review": "advisory", "repos": "api,web", "summary_confirmation": "off",
+         "project_type": "Brownfield"},
         ["intent-create", "--scope", "poc", "--arguments", "Ship the ledger export", "--label", "ledger-export",
          "--depth", "Standard", "--test-strategy", "Minimal", "--review", "advisory", "--repos", "api,web",
-         "--summary-confirmation", "off"]),
+         "--summary-confirmation", "off", "--project-type", "Brownfield"]),
     # The mutating verbs name their record explicitly: omitted, 2.7.1 resolves it from the session binding first.
     "utility.recompose": (
         {"skip": "nfr-design", "add": "user-stories", "dir_name": ALPHA, "slug": "default"},
@@ -222,6 +223,13 @@ def test_summary_confirmation_is_only_the_engines_two_words(engine_mod, runner, 
     with pytest.raises(ValueError):
         runner.build_argv(engine_mod.ENGINE_ALLOWLIST["utility.intent_create"], repo, ".kiro", scope="poc",
                           arguments="x", label="a-b", summary_confirmation=value)
+
+
+@pytest.mark.parametrize("value", ["greenfield", "Legacy", "Brownfield ", "Greenfield,Brownfield"])
+def test_project_type_is_only_the_engines_two_words(engine_mod, runner, repo, value):
+    with pytest.raises(ValueError):
+        runner.build_argv(engine_mod.ENGINE_ALLOWLIST["utility.intent_create"], repo, ".kiro", scope="poc",
+                          arguments="x", label="a-b", project_type=value)
 
 
 def test_optional_flags_are_omitted_when_absent_or_empty(engine_mod, runner, repo):

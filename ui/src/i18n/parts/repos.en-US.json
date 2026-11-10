@@ -135,6 +135,7 @@
   "repos.lede": "Every repository here was added deliberately. Browse directories or enter a path; Studio never registers repositories automatically.",
   "repos.maintenance.note": "Maintenance work appears here and in notifications. It never enters the blocking workflow queue.",
   "repos.maintenance.title": "Maintenance",
+  "repos.maintenance.waitForTransaction": "Unregistering or archiving waits until the {kind} transaction {id} finishes, since it may still write to this repository.",
   "repos.preflight.aidlc": "AI-DLC on disk",
   "repos.preflight.bun": "bun",
   "repos.preflight.bunFound": "{version} at {path}",

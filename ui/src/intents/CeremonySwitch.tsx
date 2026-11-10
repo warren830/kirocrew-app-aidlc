@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { useSubmit } from '../actions/useSubmit'
+import { recordedOutcome, useSubmit } from '../actions/useSubmit'
 import { useI18n } from '../i18n'
 import { StudioApiError, type StudioApi } from '../lib/api'
 import type { ActionCard, CeremonySetting, CommandResponse, IntentSummary } from '../lib/types'
@@ -104,6 +104,7 @@ export function useCeremonySwitch(ceremony: Ceremony, api: StudioApi, onSettled?
         setQueueing(false)
         await submit({
           card: queued.action,
+          captured: queued.action.captured,
           payload: { decision: spec.decision, value: which },
           clientWireText: spec.text[which],
         })
@@ -240,10 +241,11 @@ export function CeremonySwitchStatus({ ceremony, sw }: { ceremony: Ceremony; sw:
   if (sw.failure) return <Line tone="warn" icon="warn" text={t(`${keys}.status.refused`, { text, reason: reason(sw.failure) })} />
   if (sw.busy && stage !== 'settled') return <Line icon="clock" text={t(`${keys}.status.sending`, { text })} />
   if (stage === 'settled' && attempt) {
-    if (attempt.outcome === 'delivered' && attempt.reported) {
+    const outcome = recordedOutcome(attempt)
+    if (outcome === 'delivered' && attempt.reported) {
       return <Line tone="ok" icon="check" text={t(`${keys}.status.sent.${sw.value}`, { text })} />
     }
-    if (attempt.outcome === 'not_delivered') {
+    if (outcome === 'not_delivered') {
       const why = attempt.receipt?.error ?? attempt.receipt?.code ?? ''
       return <Line tone="warn" icon="warn" text={t(`${keys}.status.notSent`, { text, reason: why, action: actionId ?? '' })} />
     }

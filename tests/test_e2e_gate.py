@@ -13,7 +13,7 @@ import pytest
 
 import conftest as CT
 import fixtures as F
-from _helpers_a import stamp_human_turn
+from _helpers_a import dispatches, stamp_human_turn
 from test_handlers_auth import APP_ROOT, BOOT, call, common, routes, sv  # noqa: F401 - fixtures
 
 INTENT = "260904-gate-demo"
@@ -344,6 +344,75 @@ def test_an_approval_that_nobody_was_present_for_is_not_a_resolution(sv, fake_ho
     assert "human_presence_anomaly" in {str(f.get("code")) for f in findings if isinstance(f, dict)}
 
 
+def test_an_approval_aidlc_refuses_frees_the_repository_and_the_open_gate_gets_a_fresh_card(
+    sv, routes, fake_host, scene, delivered
+):
+    """The engine refuses to complete the stage and the conductor ends its turn at the open gate: the delivery settles
+    unverified at once, the lease goes, and the gate still waiting is a card the person can answer again."""
+    ts = "2026-09-04T10:00:20Z"
+    shard = _shard(scene.root)
+    shard.write_text(shard.read_text() + F.audit_text(F.audit_block("HUMAN_TURN", ts), F.audit_block(
+        "ERROR_LOGGED", ts, Tool="aidlc-state", Command=f"aidlc-state approve --stage {STAGE}",
+        Error=f'Refusing to complete "{STAGE}": artifact has no recorded native-tool write after the human\'s '
+              "consolidated summary confirmation.")))
+    stamp_human_turn(_record_dir(scene.root), ts, ns=time.time_ns())
+    _finish_the_turn(fake_host, scene.slot_key)
+    asyncio.run(sv.reconciler.tick())
+    row = _row(sv, delivered.action_id)
+    assert row["status"] == "ResolvedNoTransition", row["status"]
+    resolution = dict(row["resolution_json"] or {})
+    assert (resolution["reason"], resolution["evidence"]["answer_verified"]) == ("reply_not_recorded", False)
+    assert _get(sv, routes, fake_host, f"/repos/{scene.repo_id}")[1]["repo"]["leases"]["execution"] is None
+    asyncio.run(sv.reconciler.tick())
+    fresh = _gate_card(sv, routes, fake_host)
+    assert fresh["action_id"] != delivered.action_id and fresh["status"] == "Queued"
+    status, body = _get(sv, routes, fake_host, f"/repos/{scene.repo_id}/intents/{INTENT}")
+    assert status == 200 and body["intent"]["operational_state"] == "WaitingForYou"
+    status, receipt = _submit(sv, routes, fake_host, fresh)
+    assert status == 200, receipt
+    assert dispatches(sv.storage, delivered.action_id) == 1, "the refused reply itself is never sent again"
+
+
+def test_an_approval_whose_turn_ends_in_a_guard_burst_fails_and_counts_toward_the_breaker(
+    sv, routes, fake_host, scene, delivered
+):
+    """AI-DLC's guard refuses the approval three times and the turn ends at the open gate: the decision fails naming
+    the refusal, the breaker counts the deterministic failure, and the gate still waiting gets a card of its own."""
+    ts = "2026-09-04T10:00:20Z"
+    shard = _shard(scene.root)
+    shard.write_text(shard.read_text() + F.audit_text(F.audit_block("HUMAN_TURN", ts))
+                     + F.error_burst_audit(ts="2026-09-04T10:00:21Z", count=3, error="Refusing to complete: guard"))
+    stamp_human_turn(_record_dir(scene.root), ts, ns=time.time_ns())
+    _finish_the_turn(fake_host, scene.slot_key)
+    asyncio.run(sv.reconciler.tick())
+    row = _row(sv, delivered.action_id)
+    assert row["status"] == "Failed", row["resolution_json"]
+    assert [(b["count"], b["reason"]) for b in sv.storage.select("breakers")] == [(1, "template.failure.guard")]
+    asyncio.run(sv.reconciler.tick())
+    gates = [card for card in _queue(sv, routes, fake_host) if card["type"] == "gate" and card["status"] == "Queued"]
+    assert [card["action_id"] != delivered.action_id for card in gates] == [True]
+
+
+def test_a_delivered_approval_no_human_turn_explains_is_closed_by_the_person_and_unblocks_the_intent(
+    sv, routes, fake_host, scene, delivered
+):
+    """AI-DLC's prompt hook recorded no turn for the reply, so Studio can neither settle it from disk nor resend it.
+    The card offers to close it once the turn is over; closing it frees the intent for its next decision."""
+    _finish_the_turn(fake_host, scene.slot_key)
+    asyncio.run(sv.reconciler.tick())
+    card = next(c for c in _queue(sv, routes, fake_host) if c["action_id"] == delivered.action_id)
+    assert card["status"] == "ReconciliationRequired" and card["delivery"]["delivery_confirmed"] is True
+    assert [d["decision"] for d in card["decisions"]] == ["reconcile", "acknowledge"]
+    status, body = _post(sv, routes, fake_host, f"/actions/{delivered.action_id}/resolve",
+                         {"decision": "acknowledge", "payload": {}})
+    assert status == 200 and body["action"]["status"] == "ResolvedNoTransition", body
+    asyncio.run(sv.reconciler.tick())
+    status, body = _get(sv, routes, fake_host, f"/repos/{scene.repo_id}/intents/{INTENT}")
+    assert [f["code"] for f in body["intent"]["findings"] if f["severity"] == "blocking"] == []
+    status, receipt = _submit(sv, routes, fake_host, _gate_card(sv, routes, fake_host))
+    assert status == 200, receipt
+
+
 def test_the_transition_history_is_the_whole_path_and_every_edge_is_legal(
     sv, routes, fake_host, studio, delivered, approved
 ):
@@ -351,6 +420,33 @@ def test_the_transition_history_is_the_whole_path_and_every_edge_is_legal(
     assert status == 200
     path = [(t["from_status"], t["to_status"]) for t in body["transitions"]]
     assert path[0][0] == "Queued" and path[-1][1] == "StateChanged"
+    for source, target in path:
+        assert target in studio.constants.ALLOWED_TRANSITIONS.get(source, ()), (source, target)
+
+
+@pytest.mark.parametrize("way_out", ["sent_again", "late_report"])
+def test_a_history_through_not_delivered_is_a_path_of_the_declared_machine(
+    sv, routes, fake_host, studio, scene, submitted, way_out
+):
+    """A proven non-delivery is left two ways: the decision is sent again, or the host's late report says it arrived
+    after all. Either way the gate is approved once, and every edge the decision walked is one the table declares."""
+    receipt = submitted.receipt
+    status, body = _report(sv, routes, fake_host, submitted.action_id, receipt, outcome="not_delivered",
+                           http_status=409, body={"error": "slot agent mismatch"})
+    assert status == 200 and _row(sv, submitted.action_id)["status"] == "NotDelivered", body
+    if way_out == "sent_again":
+        status, receipt = _submit(sv, routes, fake_host, submitted.card)
+        assert status == 200, receipt
+    fake_host.append_user_row(scene.slot_key, APPROVE, "2026-09-04T10:00:05Z")
+    status, body = _report(sv, routes, fake_host, submitted.action_id, receipt)
+    assert status == 200, body
+    _engine_approves_the_gate(scene.root)
+    _finish_the_turn(fake_host, scene.slot_key)
+    asyncio.run(sv.reconciler.tick())
+    status, body = _get(sv, routes, fake_host, f"/actions/{submitted.action_id}")
+    assert status == 200 and body["action"]["status"] == "StateChanged", body["action"]["status"]
+    path = [(t["from_status"], t["to_status"]) for t in body["transitions"]]
+    assert ("Delivering", "NotDelivered") in path
     for source, target in path:
         assert target in studio.constants.ALLOWED_TRANSITIONS.get(source, ()), (source, target)
 

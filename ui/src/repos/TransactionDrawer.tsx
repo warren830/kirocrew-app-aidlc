@@ -17,15 +17,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n, type I18n } from '../i18n'
 import { decodeError, type StudioApi, type StudioApiError } from '../lib/api'
 import { at as fmtAt } from '../lib/format'
+import { transactionSettled } from '../lib/transactions'
 import { useResource } from '../lib/useResource'
 import type { StepRecord, TransactionResponse, TransactionStatus } from '../lib/types'
 import { Chip, type ChipTone } from '../shell/Chip'
 import { Icon, type IconName } from '../shell/Icon'
 import { Block, ErrorNote, Facts, Note } from './PreflightReport'
 import { RecoveryBanner } from './RecoveryPanel'
-
-/** Statuses that mean the transaction is finished. */
-const TERMINAL: readonly TransactionStatus[] = ['committed', 'rolled_back', 'recovery_required', 'failed']
 
 const STATUS_TONE: Record<TransactionStatus, ChipTone> = {
   staged: 'accent',
@@ -76,6 +74,8 @@ export interface TransactionDrawerProps {
   api: StudioApi
   repoId: string
   repoLabel: string
+  /** One drawer per transaction (the Repos page keys it by this id): what it reported and a cancel it sent
+   *  belong to that transaction. */
   transactionId: string
   onClose: () => void
   /** Called once the transaction reaches a terminal status, so the repository is re-read. */
@@ -107,7 +107,6 @@ export function TransactionDrawer({
   const status = tx?.status ?? null
   const [cancelling, setCancelling] = useState(false)
   const [cancelError, setCancelError] = useState<StudioApiError | null>(null)
-  useEffect(() => { setCancelling(false); setCancelError(null) }, [transactionId])
   const cancel = async () => {
     setCancelling(true)
     setCancelError(null)
@@ -125,7 +124,7 @@ export function TransactionDrawer({
   // turn one install into a steady stream of full repo scans.
   const reported = useRef<string | null>(null)
   useEffect(() => {
-    if (status === null || !TERMINAL.includes(status)) return
+    if (status === null || !transactionSettled(status)) return
     if (reported.current === status) return
     reported.current = status
     onSettled?.(status)
@@ -169,7 +168,7 @@ export function TransactionDrawer({
               },
             ]}
           />
-          {['install', 'upgrade', 'recovery'].includes(tx.kind) && !TERMINAL.includes(tx.status) ? (
+          {['install', 'upgrade', 'recovery'].includes(tx.kind) && !transactionSettled(tx.status) ? (
             <div className="studio-col">
               <Note>{t('install.cancel.explanation')}</Note>
               <button type="button" className="studio-btn" disabled={cancelling || tx.error === 'cancel_requested' || tx.status === 'rolling_back'}

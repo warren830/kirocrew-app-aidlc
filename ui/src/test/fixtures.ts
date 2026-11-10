@@ -11,7 +11,7 @@
 
 import type {
   ActionCard, ActionType, ActionsResponse, ArtifactMeta, DecisionSpec, Decision, HealthCounts, MapInputs, MapNode,
-  ReviewFinding, Severity, SettingsResponse, StageRow, StageState,
+  ReviewFinding, Severity, SettingsResponse, StageRow, StageState, SubmitReceipt,
 } from '../lib/types'
 import type { RouteHandler } from './stubs/app-sdk'
 
@@ -207,6 +207,27 @@ export function actionCard(over: Partial<ActionCard> = {}): ActionCard {
     acknowledged_evidence_sha256: 'sha-ack',
     submitted_answers: null,
     ...over,
+  }
+}
+
+/** The card a late `delivered` report leaves on a NotDelivered row: it never passed through Delivered. */
+export function confirmedLate(): ActionCard {
+  const base = actionCard()
+  return { ...base, status: 'ReconciliationRequired', queue_type: 'delivery_uncertain', severity: 'critical',
+    priority_group: 1, status_generation: 5, updated_at: '2026-09-04T09:10:00Z',
+    decisions: [decisionSpec('reconcile'), decisionSpec('acknowledge')],
+    primary: { decision: 'reconcile', label_key: 'decision.reconcile.label' },
+    delivery: { ...base.delivery, delivery_id: 'dl_1', wire_text: 'Approve', delivering_at: '2026-09-04T09:00:00Z',
+      delivered_at: null, outcome: 'delivered', delivery_confirmed: true, transcript_row: null,
+      receipt: { ok: true, slot: 'aidlc-r1-guest', mid: 'm_1' } } }
+}
+
+/** `POST …/submit`'s answer for `card`: send `wire`, once, to the slot `slotKey`. */
+export function submitReceipt(card: ActionCard, wire: string, slotKey = 'aidlc-r1-guest'): SubmitReceipt {
+  return {
+    ok: true, action_id: card.action_id, status: 'Delivering', lane: 'human_lane', delivery_id: 'dl_1',
+    slot_key: slotKey, session_key: 'ses_1', wire_text: wire, expires_at: '2026-09-04T10:01:30Z', lease_generation: 3,
+    host: { method: 'POST', path: '/api/chat?ws=1', body: { slot: slotKey, message: wire } },
   }
 }
 

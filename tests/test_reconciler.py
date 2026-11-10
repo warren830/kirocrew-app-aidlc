@@ -7,12 +7,14 @@ import logging
 import os
 import re
 import time
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Sequence
 
 import fixtures as F
 import pytest
+from _helpers_a import unreadable_slots
 
 APP_ROOT = Path(__file__).resolve().parent.parent
 GATE_DIR = "260904-gate-demo"
@@ -264,8 +266,8 @@ def approve_on_disk(root: Path, *, human_turns: int = 1, ts: str = "2026-09-04T1
     touch_human_turn(root)
 
 
-def reject_on_disk(root: Path, *, ts: str = "2026-09-04T10:00:00Z") -> None:
-    append_audit(root, F.audit_block("HUMAN_TURN", ts),
+def reject_on_disk(root: Path, *, human_turns: int = 1, ts: str = "2026-09-04T10:00:00Z") -> None:
+    append_audit(root, *[F.audit_block("HUMAN_TURN", ts) for _ in range(human_turns)],
                  F.audit_block("GATE_REJECTED", ts, Stage=GATE_STAGE, Feedback="Spell out the criteria."),
                  F.audit_block("STAGE_REVISING", ts, Stage=GATE_STAGE, Revision_count="1"))
     (_record(root) / "aidlc-state.md").write_text(F.state_text(marks={GATE_STAGE: "R"}, fields={
@@ -288,6 +290,13 @@ def tick(svc) -> None:
 
 def status_of(svc, action_id: str) -> str:
     return str(svc.storage.get("actions", action_id)["status"])
+
+
+def _reconcile(svc, action_id: str, snap=None):
+    async def run():
+        return await svc.reconciler.reconcile_action(await svc.actions.get(action_id), snap)
+
+    return asyncio.run(run())
 
 
 def evidence_of(svc, action_id: str) -> dict:
@@ -547,6 +556,23 @@ def test_gate_approve_resolves_state_changed_from_same_second_rows(svc, scene, f
     assert row["resolution_json"]["evidence"]["presence"]["ok"] is True
 
 
+def test_a_gate_approval_in_a_shard_whose_name_sorts_first_resolves_the_gate(svc, scene, fake_host):
+    """A re-clone writes its rows to a new shard, and shard names carry no order: across shards the engine's own
+    timestamps decide, so the approval counts wherever its file sorts."""
+    action_id = scene.make(status="Delivered")
+    (_record(scene.root) / "audit" / "fixture-host-0000aaaa1111.md").write_text(F.audit_text(
+        F.audit_block("HUMAN_TURN", T0), F.audit_block("GATE_APPROVED", T0, Stage=GATE_STAGE, User_Input="Approve"),
+        F.audit_block("STAGE_COMPLETED", T0, Stage=GATE_STAGE)))
+    (_record(scene.root) / "aidlc-state.md").write_text(F.state_text(marks={GATE_STAGE: "x"}, fields={
+        "Current Stage": "user-stories", "Status": "Running", "Next Stage": "domain-model"}))
+    touch_human_turn(scene.root)
+    finish_turn(fake_host, scene.slot_key)
+    tick(svc)
+    row = svc.storage.get("actions", action_id)
+    assert row["status"] == "StateChanged", row["status"]
+    assert row["resolution_json"]["reason"] == "gate_approved"
+
+
 def test_gate_request_changes_needs_rejected_revising_and_the_r_row(svc, scene, fake_host):
     wire = "Request Changes: Spell out the criteria."
     action_id = scene.make(status="Delivered", decision="request_changes", wire_text=wire)
@@ -556,13 +582,158 @@ def test_gate_request_changes_needs_rejected_revising_and_the_r_row(svc, scene, 
     assert status_of(svc, action_id) == "StateChanged"
 
 
-def test_gate_approve_without_the_audit_row_stays_processing(svc, scene, fake_host):
-    """A finished turn is not a resolution: only the engine's own ``GATE_APPROVED`` closes a gate."""
+def test_gate_approve_without_the_audit_row_or_a_human_turn_waits_for_a_human(svc, scene, fake_host):
+    """A finished turn is not a resolution: only the engine's own ``GATE_APPROVED`` closes a gate, and a reply no
+    human turn shows reaching AI-DLC is the person's to judge."""
     action_id = scene.make(status="Delivered")
     finish_turn(fake_host, scene.slot_key)
     touch_human_turn(scene.root)
     tick(svc)
+    assert status_of(svc, action_id) == "ReconciliationRequired"
+    assert "human_presence_anomaly" in finding_codes(svc, action_id)
+
+
+@pytest.mark.parametrize("make", [
+    pytest.param({"wire_text": "Approve"}, id="gate-approve"),
+    pytest.param({"decision": "accept_as_is", "wire_text": "Accept as-is"}, id="gate-accept-as-is"),
+    pytest.param({"decision": "request_changes", "wire_text": "Request Changes: Spell out the criteria."},
+                 id="gate-request-changes"),
+    pytest.param({"action_type": "question", "decision": "confirm_summary", "wire_text": "Looks correct",
+                  "payload": {"decision": "confirm_summary", "choice": "looks_correct"}}, id="confirm-summary"),
+    pytest.param({"action_type": "question", "decision": "accept_assumptions", "wire_text": "A. Accept assumptions"},
+                 id="accept-assumptions"),
+    pytest.param({"action_type": "question", "decision": "convert_assumptions",
+                  "wire_text": "B. Convert to follow-up questions"}, id="convert-assumptions"),
+    pytest.param({"action_type": "missing_input", "decision": "provide_input", "stage": None,
+                  "wire_text": "/aidlc --scope bugfix",
+                  "payload": {"decision": "provide_input", "kind": "scope", "scope": "bugfix"}}, id="provide-scope"),
+    pytest.param({"status": "ReconciliationRequired", "evidence_extra": {"delivery_confirmed": True},
+                  "wire_text": "Approve"}, id="gate-approve-confirmed-uncertain"),
+    pytest.param({"action_type": "question", "decision": "answers", "wire_text": "Q1: A",
+                  "payload": {"decision": "answers", "answers": [{"index": 1, "option_letters": ["A"]}]}},
+                 id="file-answers"),
+    pytest.param({"action_type": "question", "decision": "approve_plan", "wire_text": "Approve Plan"},
+                 id="approve-plan"),
+    pytest.param({"action_type": "question", "decision": "request_plan_changes",
+                  "wire_text": "Request Changes: Split the plan.",
+                  "payload": {"decision": "request_plan_changes", "feedback": "Split the plan."}},
+                 id="request-plan-changes"),
+])
+def test_a_reply_aidlc_did_not_record_settles_unverified_when_its_turn_ends(svc, scene, fake_host, make):
+    """AI-DLC refused the reply or asked something else, and the turn ended with nothing recorded for it: the card
+    settles unverified and the repository is free for whatever AI-DLC waits on now; nothing is resent. While the
+    turn runs, nothing settles."""
+    action_id = scene.make(lease_generation=7, **{"status": "Delivered", **make})
+    touch_human_turn(scene.root)
+    append_audit(scene.root, F.audit_block("HUMAN_TURN", T0), F.audit_block(
+        "ERROR_LOGGED", T0, Tool="aidlc-state", Command=f"aidlc-state approve --stage {GATE_STAGE}",
+        Error=f'Refusing to complete "{GATE_STAGE}": artifact has no recorded native-tool write after the summary'))
+    scene.slot.running = True
+    tick(svc)
+    assert status_of(svc, action_id) == make.get("status", "Delivered")
+    finish_turn(fake_host, scene.slot_key, wire_text=make["wire_text"])
+    tick(svc)
+    row = svc.storage.get("actions", action_id)
+    assert row["status"] == "ResolvedNoTransition", row["status"]
+    assert row["resolution_json"]["reason"] == "reply_not_recorded"
+    assert row["resolution_json"]["evidence"]["answer_verified"] is False
+    assert asyncio.run(svc.scheduler.get(scene.repo.resolved_identity)) is None
+
+
+def test_an_approval_row_whose_order_cannot_be_told_keeps_the_replys_fate_open(svc, scene, fake_host):
+    """Another shard's ``GATE_APPROVED`` in the second the gate opened may or may not answer this reply: it cannot
+    resolve the gate, and the turn ending cannot call the reply unrecorded either."""
+    action_id = scene.make(status="Delivered", delivering_at="2026-09-04T09:00:03Z")
+    (_record(scene.root) / "audit" / "zz-other-clone.md").write_text(F.audit_text(
+        F.audit_block("GATE_APPROVED", "2026-09-04T09:00:03Z", Stage=GATE_STAGE, User_Input="Approve")))
+    touch_human_turn(scene.root)
+    append_audit(scene.root, F.audit_block("HUMAN_TURN", T0))
+    finish_turn(fake_host, scene.slot_key)
+    tick(svc)
     assert status_of(svc, action_id) == "Delivered"
+
+
+def test_a_reply_studio_read_only_in_part_keeps_its_fate_open(svc, scene, fake_host):
+    """Saying AI-DLC recorded nothing is a reading of the whole record: from a partial read the reply waits."""
+    action_id = scene.make(status="Delivered")
+    touch_human_turn(scene.root)
+    append_audit(scene.root, F.audit_block("HUMAN_TURN", T0))
+    finish_turn(fake_host, scene.slot_key)
+
+    def partial():
+        snap = scene.snapshot()
+        return replace(snap, audit=replace(snap.audit, complete=False))
+
+    assert _reconcile(svc, action_id, partial()).status == "Delivered"
+    assert _reconcile(svc, action_id, partial()).status == "Delivered", "read after the turn was seen over, yet partial"
+    assert _reconcile(svc, action_id, scene.snapshot()).status == "ResolvedNoTransition"
+
+
+@pytest.mark.parametrize("decision,engine,outcome", [
+    pytest.param("approve", approve_on_disk, "gate_approved", id="approve"),
+    pytest.param("request_changes", reject_on_disk, "gate_rejected", id="request-changes"),
+])
+def test_a_reply_recorded_while_studio_was_reading_is_never_settled_as_unrecorded(
+    svc, scene, fake_host, monkeypatch, decision, engine, outcome
+):
+    """AI-DLC records the reply and ends its turn while Studio reads the disk: that read cannot show the receipt, so
+    the turn Studio sees over afterwards cannot make it say nothing was recorded. The next read settles the outcome."""
+    wire = "Approve" if decision == "approve" else "Request Changes: Spell out the criteria."
+    action_id = scene.make(status="Delivered", decision=decision, wire_text=wire)
+    touch_human_turn(scene.root)
+    append_audit(scene.root, F.audit_block("HUMAN_TURN", T0))
+    scene.slot.running = True
+    tick(svc)
+    read = svc.projection.snapshot
+
+    def read_then_aidlc_finishes(*args, **kwargs):
+        snap = read(*args, **kwargs)
+        monkeypatch.setattr(svc.projection, "snapshot", read)
+        engine(scene.root, human_turns=0)
+        finish_turn(fake_host, scene.slot_key, wire_text=wire)
+        return snap
+
+    monkeypatch.setattr(svc.projection, "snapshot", read_then_aidlc_finishes)
+    assert asyncio.run(svc.reconciler.reconcile_now(action_id)).status == "Delivered"
+    settled = asyncio.run(svc.reconciler.reconcile_now(action_id))
+    assert (settled.status, settled.resolution["reason"]) == ("StateChanged", outcome)
+
+
+def test_a_read_from_before_the_turn_ended_cannot_say_nothing_was_recorded(svc, scene, fake_host):
+    """Whoever hands the reconciler a snapshot, one read before Studio saw the turn end proves nothing about what the
+    turn left on disk; a read after it does."""
+    action_id = scene.make(status="Delivered")
+    touch_human_turn(scene.root)
+    append_audit(scene.root, F.audit_block("HUMAN_TURN", T0))
+    scene.slot.running = True
+    early = scene.snapshot()
+    finish_turn(fake_host, scene.slot_key)
+
+    assert _reconcile(svc, action_id, early).status == "Delivered"
+    settled = _reconcile(svc, action_id, scene.snapshot())
+    assert (settled.status, settled.resolution["reason"]) == ("ResolvedNoTransition", "reply_not_recorded")
+
+
+def test_an_approval_the_state_file_never_completed_settles_unverified_once_the_turn_ends(svc, scene, fake_host):
+    """AI-DLC writes ``GATE_APPROVED`` before the state file, so a failed state write leaves the approval with the stage
+    still open. While the turn runs the row may yet land; once it is over the card settles without claiming the stage
+    moved, the repository is free, and the gate the state still shows open gets a card of its own."""
+    action_id = scene.make(status="Delivered", lease_generation=7)
+    touch_human_turn(scene.root)
+    append_audit(scene.root, F.audit_block("HUMAN_TURN", T0),
+                 F.audit_block("GATE_APPROVED", T0, Stage=GATE_STAGE, User_Input="Approve"))
+    scene.slot.running = True
+    tick(svc)
+    assert status_of(svc, action_id) == "Delivered"
+    finish_turn(fake_host, scene.slot_key)
+    tick(svc)
+    row = svc.storage.get("actions", action_id)
+    assert (row["status"], row["resolution_json"]["reason"]) == ("ResolvedNoTransition", "gate_approved_without_row")
+    assert row["resolution_json"]["evidence"]["gate_approved"]["event"] == "GATE_APPROVED"
+    assert asyncio.run(svc.scheduler.get(scene.repo.resolved_identity)) is None
+    tick(svc)
+    gates = [a for a in asyncio.run(svc.actions.list_live(repo_id=scene.repo_id)) if a.type == "gate"]
+    assert [(a.status, a.action_id != action_id) for a in gates] == [("Queued", True)]
 
 
 TEAM = F.TEAM_UNIT_GATE_INTENT
@@ -607,16 +778,19 @@ def team_scene(svc, repo_builder, fake_host):
             "waiting_since": seed.waiting_since, "dedupe_key": seed.dedupe_key})
         return action_id
 
-    def engine_moves_to(moment: str, *, user_ts: str, reply_ts: str, wire_text: str = "Approve") -> None:
-        F.team_unit_gate_tree(root, moment)
+    def touch_human_turn(user_ts: str) -> None:
         marker = F.team_unit_gate_record(root) / ".aidlc-engine" / "human-turn"
         marker.write_text(f"{user_ts}\n")
         stamp = time.time_ns()
         os.utime(marker, ns=(stamp, stamp))
+
+    def engine_moves_to(moment: str, *, user_ts: str, reply_ts: str, wire_text: str = "Approve") -> None:
+        F.team_unit_gate_tree(root, moment)
+        touch_human_turn(user_ts)
         finish_turn(fake_host, slot_key, wire_text=wire_text, user_ts=user_ts, reply_ts=reply_ts)
 
     return SimpleNamespace(root=root, repo=repo, slot_key=slot_key, snapshot=snapshot, make=make,
-                           engine_moves_to=engine_moves_to)
+                           touch_human_turn=touch_human_turn, engine_moves_to=engine_moves_to)
 
 
 @pytest.mark.parametrize("opened,approved,stage,sent,turn", [
@@ -656,17 +830,21 @@ def test_a_claimed_clone_finds_its_approval_behind_a_teammates_later_rows(svc, t
     assert status_of(svc, action_id) == "StateChanged"
 
 
-def test_a_unit_gate_waits_for_its_own_units_approval(svc, team_scene, fake_host):
-    """Another Unit's approval at the same stage is not this card's outcome."""
+def test_another_units_approval_at_the_stage_is_not_a_unit_gates_outcome(svc, team_scene, fake_host):
+    """Another Unit's approval at the same stage is not this card's outcome: its turn ended with nothing recorded for
+    this Unit, so the card settles unverified and this Unit's gate gets a card of its own."""
     action_id = team_scene.make("A2-open", stage="functional-design", delivering_at="2026-11-02T03:32:30Z")
     append_audit_to = F.team_unit_gate_record(team_scene.root) / "audit" / "80a99723a8c8-37870df7b570.md"
     append_audit_to.write_text(append_audit_to.read_text() + F.audit_text(
         F.audit_block("HUMAN_TURN", "2026-11-02T03:32:33Z"),
         F.audit_block("GATE_APPROVED", "2026-11-02T03:32:41Z", Stage="functional-design", Unit="unit-b",
                       Gate_Scope="per-stage", Gate_Stages="functional-design", User_Input="Approve")))
+    team_scene.touch_human_turn("2026-11-02T03:32:33Z")
     finish_turn(fake_host, team_scene.slot_key, user_ts="2026-11-02T03:32:31Z", reply_ts="2026-11-02T03:59:00Z")
     tick(svc)
-    assert status_of(svc, action_id) == "Delivered"
+    row = svc.storage.get("actions", action_id)
+    assert row["status"] == "ResolvedNoTransition", row["status"]
+    assert row["resolution_json"]["reason"] == "reply_not_recorded"
 
 
 def test_request_changes_on_a_unit_gate_resolves_to_revising_and_the_reopened_gate_is_a_new_card(svc, team_scene):
@@ -717,15 +895,18 @@ def test_approve_plan_needs_the_checkpoint_answer_in_the_file(svc, scene, fake_h
     assert status_of(svc, action_id) == "ResolvedNoTransition"
 
 
-@pytest.mark.parametrize("recorded,status", [
-    ("A. Accept assumptions", "ResolvedNoTransition"),
-    ("B. Convert to follow-up questions", "Delivered"),  # the engine recorded the option the human did not pick
+@pytest.mark.parametrize("recorded,reason", [
+    ("A. Accept assumptions", "assumptions_recorded"),
+    # the engine recorded the option the human did not pick
+    ("B. Convert to follow-up questions", "reply_not_recorded"),
 ])
-def test_accept_assumptions_resolves_only_on_the_chosen_option(svc, scene, fake_host, C, recorded, status):
+def test_accept_assumptions_resolves_only_on_the_chosen_option(svc, scene, fake_host, C, recorded, reason):
     _questions_file(scene, ASSUMPTION_QUESTIONS)
     action_id = ended_turn(svc, scene, fake_host, C.WIRE_ACCEPT_ASSUMPTIONS, decision="accept_assumptions",
                            after=ASSUMPTION_QUESTIONS.replace("[Answer]:", f"[Answer]: {recorded}"))
-    assert status_of(svc, action_id) == status
+    row = svc.storage.get("actions", action_id)
+    assert row["status"] == "ResolvedNoTransition", row["status"]
+    assert row["resolution_json"]["reason"] == reason
 
 
 def test_convert_assumptions_resolves_on_its_question_answered_row(svc, scene, fake_host, C):
@@ -795,20 +976,28 @@ def test_resuming_a_plan_from_an_earlier_session_closes_when_the_turn_ends(svc, 
     assert (row["status"], row["resolution_json"]["reason"]) == ("ResolvedNoTransition", reason)
 
 
-@pytest.mark.parametrize("blocks", [
+@pytest.mark.parametrize("blocks,status", [
     pytest.param(lambda scene: (_plan_row(scene, "DECISION_RECORDED"), _plan_row(scene, "PLAN_APPROVAL_RECORDED",
                                                                                   Details="Approve Plan")),
-                 id="asked-again-after-recording-the-answer"),
+                 "Delivered", id="asked-again-after-recording-the-answer"),
     pytest.param(lambda scene: (F.audit_block("DECISION_RECORDED", T0, Stage=GATE_STAGE,
                                               Checkpoint="Code Generation Plan Approval",
                                               **{"Questions File": "elsewhere/code-generation-questions.md"}),),
-                 id="another-plan-asked"),
-    pytest.param(lambda scene: (_plan_row(scene, "DECISION_RECORDED", Unit="unit-b"),), id="another-unit-asked"),
+                 "ResolvedNoTransition", id="another-plan-asked"),
+    pytest.param(lambda scene: (_plan_row(scene, "DECISION_RECORDED", Unit="unit-b"),), "ResolvedNoTransition",
+                 id="another-unit-asked"),
 ])
-def test_a_plan_approval_keeps_waiting_unless_aidlc_asked_this_plan_again_unanswered(svc, scene, fake_host, blocks):
+def test_a_plan_approval_waits_only_while_a_receipt_for_this_plan_leaves_its_fate_open(
+    svc, scene, fake_host, blocks, status
+):
+    """A receipt for this plan that the file does not bear out may still be the reply's: it waits. AI-DLC asking another
+    plan, or another unit's, recorded nothing for this one, so the ended turn settles it unverified."""
     _questions_file(scene, PLAN)
     action_id = ended_turn(svc, scene, fake_host, "Approve Plan", *blocks(scene), decision="approve_plan", after=PLAN)
-    assert status_of(svc, action_id) == "Delivered"
+    row = svc.storage.get("actions", action_id)
+    assert row["status"] == status
+    if status == "ResolvedNoTransition":
+        assert row["resolution_json"]["reason"] == "reply_not_recorded"
 
 
 def test_a_recorded_request_changes_settles_even_when_the_file_reads_as_before(svc, scene, fake_host, C):
@@ -857,12 +1046,18 @@ def test_a_plan_approval_row_is_movement_for_a_run_action(svc, scene, fake_host,
 
 def test_provide_input_scope_resolves_only_when_the_state_records_the_scope(svc, scene, fake_host, C):
     """The turn ending proves nothing (a follow-up question instead of the scope); the field does."""
-    action_id = ended_turn(svc, scene, fake_host, C.WIRE_SCOPE_PREFIX + "bugfix", action_type="missing_input",
-                           decision="provide_input", stage=None,
-                           payload={"decision": "provide_input", "kind": "scope", "scope": "bugfix"})
-    assert status_of(svc, action_id) == "Delivered"
+    wire, payload = C.WIRE_SCOPE_PREFIX + "bugfix", {"decision": "provide_input", "kind": "scope", "scope": "bugfix"}
+    asked = ended_turn(svc, scene, fake_host, wire, action_type="missing_input", decision="provide_input", stage=None,
+                       payload=payload)
+    assert status_of(svc, asked) == "ResolvedNoTransition", status_of(svc, asked)
+    assert svc.storage.get("actions", asked)["resolution_json"]["reason"] == "reply_not_recorded"
+    action_id = scene.make(wire_text=wire, action_type="missing_input", decision="provide_input", stage=None,
+                           payload=payload)
     (_record(scene.root) / "aidlc-state.md").write_text(
         F.state_text(marks={GATE_STAGE: "?"}, fields={"Scope": "bugfix", "Current Stage": GATE_STAGE}))
+    touch_human_turn(scene.root)
+    append_audit(scene.root, F.audit_block("HUMAN_TURN", T0))
+    finish_turn(fake_host, scene.slot_key, wire_text=wire)
     tick(svc)
     assert status_of(svc, action_id) == "StateChanged"
 
@@ -943,6 +1138,17 @@ def test_force_stop_stays_pending_while_the_stop_is_in_progress(svc, scene, fake
     assert status_of(svc, action_id) == "Delivered"
 
 
+def test_force_stop_waits_while_the_slot_table_cannot_be_read(svc, scene, fake_host, monkeypatch):
+    """Nothing runs in a slot that is gone, but a slot table Studio cannot read says nothing about the slot: the stop
+    settles, and its interruption is recorded, only from a reading."""
+    action_id = _force_stop(scene)
+    fake_host.get_slot(scene.slot_key).running = True
+    unreadable_slots(monkeypatch, fake_host)
+    tick(svc)
+    assert status_of(svc, action_id) == "Delivered"
+    assert asyncio.run(svc.sessions.get(scene.repo_id, "default", GATE_DIR)).interrupted_at is None
+
+
 # --- 5. the presence invariant, per dispatch class ---
 
 
@@ -989,9 +1195,11 @@ def test_cursor_moved_between_dispatch_and_resolution_is_an_anomaly(svc, scene, 
 def test_row_found_in_another_slot_is_wrong_slot_and_waits_for_a_human(svc, scene, fake_host, clock):
     """Delivered to another session: neither ``NotDelivered`` nor a disk resolution is safe, a human decides (R08)."""
     action_id = scene.make(status="Delivering", deadline_at=PAST_DEADLINE)
+    delivery_id = svc.storage.get("actions", action_id)["delivery_id"]
     fake_host.add_slot("hand-made", project=str(scene.root), agent="aidlc")
-    fake_host.get_slot("hand-made").messages.append(
-        {"role": "user", "content": "Approve", "cls": "u", "ts": "2026-09-04T09:59:30Z", "meta": {}})
+    fake_host.get_slot("hand-made").messages.append({"role": "user", "content": "Approve", "cls": "u",
+                                                     "ts": "2026-09-04T09:59:30Z",
+                                                     "meta": {"studio_delivery_id": delivery_id}})
     tick(svc)
     assert status_of(svc, action_id) == "ReconciliationRequired"
     assert evidence_of(svc, action_id)["wrong_slot"] == "hand-made"
@@ -999,6 +1207,21 @@ def test_row_found_in_another_slot_is_wrong_slot_and_waits_for_a_human(svc, scen
     tick(svc)
     assert status_of(svc, action_id) == "ReconciliationRequired"
     assert "wrong_slot" in finding_codes(svc, action_id)
+
+
+def test_the_same_words_typed_in_another_conversation_are_not_this_delivery(svc, scene, fake_host, clock):
+    """A plain "Approve" in another conversation of the repository is anyone's message: only this delivery's own id
+    proves it landed there, so a decision that never left is still proven undelivered."""
+    action_id = scene.make(status="Delivering", deadline_at=PAST_DEADLINE)
+    fake_host.add_slot("hand-made", project=str(scene.root), agent="aidlc")
+    fake_host.get_slot("hand-made").messages.append(
+        {"role": "user", "content": "Approve", "cls": "u", "ts": "2026-09-04T09:59:30Z", "meta": {}})
+    tick(svc)
+    assert evidence_of(svc, action_id)["wrong_slot"] is None
+    clock.advance(5)
+    tick(svc)
+    assert status_of(svc, action_id) == "NotDelivered"
+    assert "wrong_slot" not in finding_codes(svc, action_id)
 
 
 # --- 6. stable boundary, retirement, release ---
@@ -1120,6 +1343,59 @@ def test_a_truncated_listing_never_sweeps_cards(svc, scene, clock, C, monkeypatc
     assert "intent_missing" not in svc.actions.retire_reasons
 
 
+def _checkout_after_the_listing(svc, scene, monkeypatch) -> Path:
+    """The state file leaves between the listing and the read, as a git checkout or stash rewrites it mid-scan."""
+    state = _record(scene.root) / "aidlc-state.md"
+    listed = svc.reader.list_intent_dirs
+
+    def listing_then_checkout(root, space):
+        dirs = listed(root, space)
+        state.unlink(missing_ok=True)
+        return dirs
+
+    monkeypatch.setattr(svc.reader, "list_intent_dirs", listing_then_checkout)
+    return state
+
+
+def test_a_state_file_missing_for_one_read_keeps_every_card(svc, scene, monkeypatch):
+    """One read that missed the state file says nothing about the gate: its card stays, and is not minted again."""
+    gate = gate_card_after_a_tick(svc, scene)
+    saved = (_record(scene.root) / "aidlc-state.md").read_bytes()
+    state = _checkout_after_the_listing(svc, scene, monkeypatch)
+    tick(svc)
+    assert status_of(svc, gate.action_id) == "Queued"
+    monkeypatch.undo()
+    state.write_bytes(saved)
+    tick(svc)
+    gates = [a.action_id for a in asyncio.run(svc.actions.list_live(repo_id=scene.repo_id)) if a.type == "gate"]
+    assert gates == [gate.action_id]
+
+
+def test_a_state_file_that_stays_gone_retires_its_cards_after_the_grace(svc, scene, clock, C, monkeypatch):
+    """Gone for good, the intent leaves the listing, and its cards retire on the vanished-intent grace."""
+    gate = gate_card_after_a_tick(svc, scene)
+    _checkout_after_the_listing(svc, scene, monkeypatch)
+    tick(svc)
+    tick(svc)
+    assert status_of(svc, gate.action_id) == "Queued"
+    clock.advance(C.INTENT_MISSING_GRACE_SECS + 1)
+    tick(svc)
+    assert status_of(svc, gate.action_id) == "Cancelled"
+    assert svc.actions.retire_reasons[-1] == "intent_missing"
+
+
+def test_a_state_file_unreadable_past_its_grace_leaves_only_the_recovery_card(svc, scene, clock, C, monkeypatch):
+    """A state file Studio cannot read moves no card inside its grace; past it, the recovery card replaces them."""
+    gate = gate_card_after_a_tick(svc, scene)
+    monkeypatch.setattr(C, "MAX_STATE_BYTES", 16)
+    tick(svc)
+    assert status_of(svc, gate.action_id) == "Queued"
+    clock.advance(C.STATE_UNREADABLE_GRACE_SECS + 1)
+    tick(svc)
+    assert status_of(svc, gate.action_id) == "Cancelled"
+    assert [a.type for a in asyncio.run(svc.actions.list_live(repo_id=scene.repo_id))] == ["recovery"]
+
+
 def test_resolution_releases_the_execution_lease(svc, scene, fake_host):
     """A resolved action gives its repository back: the in-flight row was the lease."""
     action_id = scene.make(status="Delivered", lease_generation=7)
@@ -1162,20 +1438,27 @@ def test_fingerprints_are_stable_across_volatile_detail(svc):
     assert a == b
 
 
-def test_error_burst_fails_the_action_and_a_single_row_does_not(svc, scene, fake_host, clock):
-    """Three ``ERROR_LOGGED`` rows are a failure; one is AI-DLC correcting itself (FORMAT-NOTES §6)."""
+@pytest.mark.parametrize("errors,status", [(1, "ResolvedNoTransition"), (3, "Failed")])
+def test_error_burst_fails_the_action_and_a_single_row_does_not(svc, scene, fake_host, errors, status):
+    """Three ``ERROR_LOGGED`` rows are a failure; one is AI-DLC correcting itself (FORMAT-NOTES §6). The reply's human
+    turn is counted and nothing is recorded for it: while the agent works neither fails it, and once the turn ends
+    the burst fails the decision while a single row lets it settle as a reply AI-DLC did not record."""
     action_id = scene.make(status="Delivered")
-    append_audit(scene.root, F.audit_block("ERROR_LOGGED", "2026-09-04T09:59:30Z", Tool="aidlc-orchestrate.ts",
-                                           Error="ACP stream closed"))
+    touch_human_turn(scene.root)
+    # Explicit error text: the fixture's default ("ACP transport closed") is not a pinned transport string.
+    append_audit(scene.root, F.audit_block("HUMAN_TURN", "2026-09-04T09:59:20Z"),
+                 F.error_burst_audit(ts="2026-09-04T09:59:30Z", count=errors, error="ACP stream closed"))
+    scene.slot.running = True
+    tick(svc)
+    assert status_of(svc, action_id) == "Delivered" and svc.actions.failures == []
     finish_turn(fake_host, scene.slot_key)
     tick(svc)
-    assert status_of(svc, action_id) == "Delivered"
-    # Explicit error text: the fixture's default ("ACP transport closed") is not a pinned transport string.
-    append_audit(scene.root, F.error_burst_audit(ts="2026-09-04T09:59:40Z", count=3, error="ACP stream closed"))
-    clock.advance(5)
-    tick(svc)
-    assert status_of(svc, action_id) == "Failed"
-    assert svc.actions.failures[-1]["class"] == "transport"
+    row = svc.storage.get("actions", action_id)
+    assert row["status"] == status, row["resolution_json"]
+    if status == "Failed":
+        assert svc.actions.failures[-1]["class"] == "transport"
+    else:
+        assert row["resolution_json"]["reason"] == "reply_not_recorded" and svc.actions.failures == []
 
 
 @pytest.mark.parametrize("initial_status", ["Delivered", "ReconciliationRequired"])

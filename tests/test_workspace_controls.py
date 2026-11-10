@@ -1,6 +1,7 @@
 """Workspace controls through owner routes and the real bundled engine in temporary repositories."""
 
 import asyncio
+import re
 import shutil
 from dataclasses import replace
 from pathlib import Path
@@ -15,6 +16,7 @@ from test_installer import tree
 
 INTENT = "260910-workspace-proof"
 BUN = Path("/Users/ychchen/.bun/bin/bun")
+ENGINE_LIB = CT.PAYLOAD / "aidlc-kiro/.kiro/tools/aidlc-lib.ts"
 
 
 @pytest.fixture
@@ -136,6 +138,36 @@ def test_scope_preserves_jump_skips_and_completed_artifacts(post, repo):
     assert artifact.read_text() == "completed evidence, retained"
 
 
+def test_a_scope_that_runs_past_finished_work_reopens_it_as_previewed(sv, post, repo):
+    """AI-DLC restarts finished work at the first stage the new scope runs after its last one."""
+    state = state_path(repo)
+    state.write_text(F.state_text(F.DEVDELTA_POC))
+    status, preview = post(SETTINGS + "/preview", {"scope": "mvp"})
+    assert status == 200 and preview["proposal"]["allowed"], preview
+    status, result = confirm(post, preview, scope="mvp")
+    assert status == 200, result
+    assert preview["proposal"]["reopens"] == "ci-pipeline"
+    after = sv.reader.read_state(Path(repo.canonical_path), "default", INTENT)[1]
+    assert (after.project["Scope"], after.status, after.current_stage) == ("mvp", "Running", "ci-pipeline")
+    assert after.row("ci-pipeline").state == "in_progress"
+    assert "intent.updated" in [record.type for record in asyncio.run(sv.events.since(0))]
+    assert asyncio.run(sv.scheduler.list()) == []
+
+
+def test_reopening_finished_work_is_refused_where_studio_cannot_tell_what_the_engine_does(sv, post, repo):
+    state = state_path(repo)
+    state.write_text(F.state_text(F.DEVDELTA_POC))
+    version = Path(repo.canonical_path) / ".kiro/tools/aidlc-version.ts"
+    version.write_text(re.sub(r'AIDLC_VERSION = "[^"]+"', 'AIDLC_VERSION = "2.10.0"', version.read_text(), count=1))
+    before = state.read_bytes()
+    status, preview = post(SETTINGS + "/preview", {"scope": "mvp"})
+    assert status == 200 and preview["proposal"]["refusals"] == ["reopen_unsupported"], preview
+    status, result = confirm(post, preview, scope="mvp")
+    assert status == 409 and result["code"] == "plan_invalid", result
+    assert state.read_bytes() == before
+    assert asyncio.run(sv.scheduler.list()) == []
+
+
 @pytest.mark.parametrize("when", ["before_request", "after_lease"])
 def test_stale_digest_is_checked_against_disk_inside_the_lease(sv, post, repo, monkeypatch, when):
     _, preview = post(SETTINGS + "/preview", {"depth": "Minimal"})
@@ -181,6 +213,37 @@ def test_space_names_are_validated_before_engine_invocation(sv, post, repo, name
     status, result = post("/spaces", {"name": name})
     assert status == 400, result
     assert sv.reader.list_spaces(Path(repo.canonical_path)) == ["default"]
+    assert asyncio.run(sv.scheduler.list()) == []
+
+
+def engine_reserved_names() -> list[str]:
+    """``RESERVED_RECORD_NAME_LIST`` as the bundled engine builds it, from ``help`` and the verb sets it spreads."""
+    source = ENGINE_LIB.read_text("utf-8")
+    listed = re.search(r"RESERVED_RECORD_NAME_LIST = Object\.freeze\(\s*\[\.\.\.new Set\(\[(.*?)\]\)\]", source, re.S)
+    assert listed, "aidlc-lib.ts no longer builds RESERVED_RECORD_NAME_LIST from literal sets"
+    names: list[str] = []
+    for item in (part.strip() for part in listed.group(1).split(",")):
+        if item.startswith("..."):
+            spread = re.search(rf"export const {re.escape(item[3:])}\b[^=]*=\s*new Set\(\[(.*?)\]\)", source, re.S)
+            assert spread, f"aidlc-lib.ts no longer defines {item[3:]} as a literal set"
+            item = spread.group(1)
+        names += re.findall(r'"([^"]+)"', item)
+    return list(dict.fromkeys(names))
+
+
+def test_every_name_the_bundled_engine_reserves_is_refused_before_it_runs(studio, sv, routes, fake_host,
+                                                                         repo_builder):
+    root = repo_builder.with_engine("payload").with_workspace().with_git().build()
+    repo = sv.repos.add(str(root), "reserved names")
+    reserved = engine_reserved_names()
+    assert {"help", "unarchive", "add-checkout"} <= set(reserved), reserved
+    # One list for spaces and intent labels alike (tests/test_plan.py refuses each as a label).
+    assert set(reserved) == studio.constants.RESERVED_RECORD_NAMES
+    for name in reserved:
+        status, result = request(sv, routes, fake_host, repo, "POST", "/spaces", {"name": name})
+        assert (status, result.get("code"), result.get("details", {}).get("key")) == (400, "bad_body", "name"), (
+            name, result)
+    assert sv.reader.list_spaces(root) == ["default"]
     assert asyncio.run(sv.scheduler.list()) == []
 
 

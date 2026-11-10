@@ -92,6 +92,7 @@ def gen_enums() -> str:
         "RiskClass": C.RISK_CLASS,
         "LeaseKind": C.LEASE_KIND,
         "InstallStatus": C.INSTALL_STATUS,
+        "TransactionSettledStatus": C.TRANSACTION_SETTLED_STATUS,
         "Availability": C.AVAILABILITY,
         "Ownership": C.OWNERSHIP,
         "StageState": C.STAGE_STATE,
@@ -113,6 +114,7 @@ def gen_enums() -> str:
         "RiskClass": "RISK_CLASSES",
         "LeaseKind": "LEASE_KINDS",
         "InstallStatus": "INSTALL_STATUSES",
+        "TransactionSettledStatus": "TRANSACTION_SETTLED_STATUS",
         "Availability": "AVAILABILITIES",
         "Ownership": "OWNERSHIP_KINDS",
         "StageState": "STAGE_STATES",
@@ -142,6 +144,16 @@ def gen_enums() -> str:
         f"export const DEEP_LINK_BASE = {ts_string(C.DEEP_LINK_BASE)}",
         "/** The name `app.json` installs this tree under: running as it, Studio is not a side copy. */",
         f"export const MANIFEST_APP_NAME = {ts_string(C.APP_NAME)}",
+        "",
+    ]
+    lines += [
+        "/** The first engine whose `intent-create` takes each creation flag; an older one does not honor it. */",
+        "export const SUMMARY_CONFIRMATION_CREATE_MIN_ENGINE: readonly number[] = ["
+        + ", ".join(str(n) for n in C.SUMMARY_CONFIRMATION_CREATE_MIN_ENGINE)
+        + "]",
+        "export const PROJECT_TYPE_CREATE_MIN_ENGINE: readonly number[] = ["
+        + ", ".join(str(n) for n in C.PROJECT_TYPE_CREATE_MIN_ENGINE)
+        + "]",
         "",
     ]
     lines += [

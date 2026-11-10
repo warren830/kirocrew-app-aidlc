@@ -23,9 +23,11 @@
 import type { ReactElement } from 'react'
 
 import { useI18n } from '../i18n'
+import { isClosedAction } from '../lib/actionQueue'
 import { at } from '../lib/format'
 import type { ActionCard, ActionType } from '../lib/types'
 import { registerActionTemplate, type TemplateProps } from '../actions/DetailShell'
+import { wasSent } from '../actions/DeliveryStrip'
 import { Chip } from '../shell/Chip'
 import { BudgetStopTemplate } from './BudgetStopTemplate'
 import {
@@ -82,48 +84,51 @@ export { BudgetStopTemplate } from './BudgetStopTemplate'
  * dispatched, into which session, and what the repo lease means for it. It lives here rather than in its
  * own file because it is the registry's completeness guarantee, not one of the six decision templates.
  */
-export function CommandTemplate({ card }: TemplateProps) {
+export function CommandTemplate({ card, go }: TemplateProps) {
   const i18n = useI18n()
   const { t } = i18n
   const session = card.evidence.session
-  // A sent or closed card is a record of a dispatch, not a preview of one.
-  const sent = !['Queued', 'NotDelivered'].includes(card.status)
+  // A sent card is a record of a dispatch and an open one a preview of it; one closed before it was sent is neither.
+  const sent = wasSent(card.status)
+  const dispatch = sent || !isClosedAction(card)
   // A ceremony setting is the intent's, so the stage it captured is only where AI-DLC was when it was asked.
   const setting = card.type === 'set_summary_confirmation' || card.type === 'set_learnings'
   return (
     <section className="studio-template" data-type={card.type} aria-label={templateLabel(i18n, card)}>
-      <DecisionBrief card={card} />
-      <Block title={t(sent ? 'template.command.dispatched' : 'template.command.dispatch')} icon="play">
-        <EvidenceGrid>
-          <Ev
-            src={t('template.command.session')}
-            icon="activity"
-            value={session?.slot_key ?? t('template.command.noSession')}
-            sub={(() => {
-              if (!session) return t('template.command.noSessionSub')
-              const state = session.running ? t('template.recovery.sessionRunning') : t('template.recovery.sessionIdle')
-              // The host does not always report a last turn; "last turn Unavailable" read as a fault.
-              return session.last_turn_ts
-                ? t('template.command.sessionSub', { state, turn: at(i18n, session.last_turn_ts) })
-                : state
-            })()}
-            conflict={!session}
-          />
-          <Ev
-            src={t('template.command.stage')}
-            icon="gate"
-            value={card.stage?.slug ?? t('common.none')}
-            sub={t(card.type === 'prepare_commit' ? 'template.command.stageSubCommit'
-              : setting ? 'template.command.stageSubSetting'
-              : sent ? 'template.command.stageSubSent' : 'template.command.stageSub')}
-          />
-        </EvidenceGrid>
-        <div className="studio-row studio-qmetas">
-          <Chip icon="lock">{t('template.command.lease')}</Chip>
-          <Chip mono>{card.intent.intent_key}</Chip>
-        </div>
-        <Consequence icon="info">{t('template.command.note')}</Consequence>
-      </Block>
+      <DecisionBrief card={card} go={go} />
+      {dispatch ? (
+        <Block title={t(sent ? 'template.command.dispatched' : 'template.command.dispatch')} icon="play">
+          <EvidenceGrid>
+            <Ev
+              src={t('template.command.session')}
+              icon="activity"
+              value={session?.slot_key ?? t('template.command.noSession')}
+              sub={(() => {
+                if (!session) return t('template.command.noSessionSub')
+                const state = session.running ? t('template.recovery.sessionRunning') : t('template.recovery.sessionIdle')
+                // The host does not always report a last turn; "last turn Unavailable" read as a fault.
+                return session.last_turn_ts
+                  ? t('template.command.sessionSub', { state, turn: at(i18n, session.last_turn_ts) })
+                  : state
+              })()}
+              conflict={!session}
+            />
+            <Ev
+              src={t('template.command.stage')}
+              icon="gate"
+              value={card.stage?.slug ?? t('common.none')}
+              sub={t(card.type === 'prepare_commit' ? 'template.command.stageSubCommit'
+                : setting ? 'template.command.stageSubSetting'
+                : sent ? 'template.command.stageSubSent' : 'template.command.stageSub')}
+            />
+          </EvidenceGrid>
+          <div className="studio-row studio-qmetas">
+            <Chip icon="lock">{t('template.command.lease')}</Chip>
+            <Chip mono>{card.intent.intent_key}</Chip>
+          </div>
+          <Consequence icon="info">{t('template.command.note')}</Consequence>
+        </Block>
+      ) : null}
       <OfferedDecisions card={card} title={t('template.command.choices')} />
     </section>
   )

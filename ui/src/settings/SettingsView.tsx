@@ -19,7 +19,7 @@ import { useI18n } from '../i18n'
 import { decodeError, useStudioApi, type DeepPartial } from '../lib/api'
 import type { Navigate, StudioRoute } from '../lib/route'
 import type {
-  Capability, CapabilityName, HealthResponse, ReposResponse, SettingsResponse, SettingsValues,
+  Capability, CapabilityName, HealthResponse, RepoRecord, ReposResponse, SettingsResponse, SettingsValues,
 } from '../lib/types'
 import { useResource } from '../lib/useResource'
 import { Chip } from '../shell/Chip'
@@ -103,6 +103,23 @@ export function UnavailableChip({ capability }: { capability: Capability | undef
       {raw ? t('settings.unavailableWhy', { reason: t(reasonKey(has, raw)) }) : t('settings.unavailable')}
     </Chip>
   )
+}
+
+/**
+ * The rows of a per-repository list (Slack mutes, Advisor grants) for the ids the setting names. An archived
+ * repository is still registered, so an id naming one is no orphan; it is listed only for an id it carries,
+ * since nothing runs there until it is restored. `null` while the registry is unread: compared against
+ * nothing, every live id would read as an orphan, and the orphan row's one action removes it.
+ */
+export function repoRows(
+  repos: RepoRecord[] | null, ids: readonly string[],
+): { listed: RepoRecord[]; orphans: string[] } | null {
+  if (repos === null) return null
+  const known = new Set(repos.map((repo) => repo.repo_id))
+  return {
+    listed: repos.filter((repo) => !repo.archived || ids.includes(repo.repo_id)),
+    orphans: ids.filter((id) => !known.has(id)),
+  }
 }
 
 function reasonKey(has: (key: string) => boolean, raw: string): string {
@@ -198,10 +215,11 @@ export function SettingsView({ go }: SettingsViewProps) {
     useCallback((signal) => api.health({ signal }), [api]),
     { interval: 60_000 },
   )
+  // Only a registry change moves a label, a path or an archived flag, so no other event re-reads it.
   const repos = useResource<ReposResponse>(
-    'repos',
-    useCallback((signal) => api.repos(false, { signal }), [api]),
-    { interval: 60_000 },
+    'repos-with-archived',
+    useCallback((signal) => api.repos(true, { signal }), [api]),
+    { interval: 60_000, revalidateOn: ['repo.updated', 'repo.removed', 'reset'] },
   )
 
   // `refresh` is stable across renders; depending on the whole resource would rebuild `save` (and every
@@ -301,7 +319,7 @@ export function SettingsView({ go }: SettingsViewProps) {
             </SettingsSection>
 
             <SettingsSection title={t('settings.section.notifications')}>
-              <SlackSetting control={control} repos={repos.data?.repos ?? []} />
+              <SlackSetting control={control} repos={repos.data?.repos ?? null} />
             </SettingsSection>
 
             <SettingsSection title={t('settings.section.diagnostics')}>

@@ -38,6 +38,7 @@ function proposal(changes: Partial<IntentSettings> = {}): SettingsPreviewRespons
       verb_key: changes.scope ? 'utility.scope_change' : 'utility.config_change',
       selection: { space: 'default', intent_dir: '260910-proof' },
       stages: [{ slug: 'requirements-analysis', state: 'completed', before: true, after: true }],
+      reopens: null,
     },
   }
 }
@@ -124,6 +125,27 @@ describe('existing intent settings', () => {
     expect(await screen.findByText(en['workspace.refusal.open_boundary'])).toBeInTheDocument()
     expect(screen.getByText('1 completed stages retain their history.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Review and confirm' })).toBeDisabled()
+  })
+
+  it('says a finished intent runs again from the stage the new scope reopens, before Apply', async () => {
+    const client = api()
+    const reopening = proposal({ scope: 'mvp' })
+    reopening.proposal.reopens = 'nfr-requirements'
+    client.intentSettingsPreview.mockImplementation(async (_repo, _key, body) => (
+      body.scope === 'mvp' ? reopening : proposal(body)
+    ))
+    const user = userEvent.setup()
+    render(<IntentSettingsPanel api={client} repoId="r_one" intentKey="260910-proof" />)
+    await waitFor(() => expect(screen.getByLabelText('Depth')).toHaveValue('Standard'))
+    const line = en['workspace.settings.reopens'].replace('{stage}', 'nfr-requirements')
+    expect(screen.queryByText(line)).not.toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('Scope'), 'mvp')
+    await user.click(screen.getByRole('button', { name: 'Preview changes' }))
+    expect(await screen.findByText(line)).toHaveAttribute('role', 'status')
+    await user.click(screen.getByRole('button', { name: 'Review and confirm' }))
+    expect(screen.getByText(line)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Apply settings' })).toBeEnabled()
   })
 })
 

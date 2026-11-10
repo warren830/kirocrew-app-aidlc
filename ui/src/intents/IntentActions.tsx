@@ -324,6 +324,7 @@ export function IntentActions({ api, intent, onGo, onQueued, onChanged, onRecomp
           toolInput={intent.session.approval?.tool_input ?? ''}
           toolInputTruncated={intent.session.approval?.tool_input_truncated === true}
           purpose={intent.session.approval?.purpose ?? ''}
+          toolKind={intent.session.approval?.tool_kind}
           repoId={intent.repo_id}
           target={intent.session.approval ?? undefined}
           onAnswered={() => onChanged()}

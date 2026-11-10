@@ -19,6 +19,7 @@ import type { ReactNode } from 'react'
 import { useI18n } from '../i18n'
 import type { StudioApiError } from '../lib/api'
 import { at as fmtAt, plural, since as fmtSince, unavailable } from '../lib/format'
+import { unsettledTransaction } from '../lib/transactions'
 import type {
   Availability,
   HarnessDir,
@@ -258,6 +259,17 @@ export function repoActions(repo: RepoRecord): RepoAction[] {
 const DESKTOP_ONLY: readonly RepoAction[] = ['install', 'upgrade', 'recover', 'rebind', 'remove', 'doctor', 'rename', 'archive', 'unarchive', 'uninstall', 'cleanup', 'rollback']
 
 /**
+ * What the server refuses while one of the repository's transactions has not settled (`transaction_in_progress`),
+ * because an install that goes on writing `.kiro` must not lose its registration. The other writes wait on the
+ * repository's lease, which refuses for itself (`repo_busy`), or on nothing. A transaction that never settles
+ * therefore leaves them open, and a second uninstall or a recovery stays the way out.
+ */
+export const WAITS_FOR_TRANSACTION: readonly RepoAction[] = ['remove', 'archive']
+
+/** The sentence saying why those wait, which every control they disable points at. */
+export const TRANSACTION_WAIT_NOTE_ID = 'studio-repo-transaction-wait'
+
+/**
  * Studio's bundled files changed while the engine version did not (a same-version payload refresh).
  * "Upgrade to AI-DLC 2.10.0" over an installed 2.10.0 read as a mistake, so the flow says it updates files.
  */
@@ -377,6 +389,8 @@ export function RepoCard({
   const actions = repoActions(repo).filter(
     (action) => (desktop || !DESKTOP_ONLY.includes(action)) && !(installPreviewOpen && action === 'install'),
   )
+  const pending = unsettledTransaction(transactions)
+  const waits = (action: RepoAction) => pending !== null && WAITS_FOR_TRANSACTION.includes(action)
 
   const a11y = t('repos.a11y.repoRow', {
     label: repo.label,
@@ -677,7 +691,8 @@ export function RepoCard({
                   : action === 'remove'
                     ? { 'data-variant': 'danger' }
                     : {})}
-                disabled={busy !== null}
+                disabled={busy !== null || waits(action)}
+                aria-describedby={waits(action) ? TRANSACTION_WAIT_NOTE_ID : undefined}
                 onClick={() => onAction(action, detailed ? 'maintenance' : undefined)}
               >
                 {busy === action && action === 'rescan'
@@ -689,18 +704,30 @@ export function RepoCard({
             ))}
           </div>
         )
+        const waitNote = pending && actions.some(waits) ? (
+          <Note id={TRANSACTION_WAIT_NOTE_ID}>
+            {t('repos.maintenance.waitForTransaction', {
+              kind: t(`install.tx.kind.${pending.kind}`),
+              id: pending.transaction_id,
+            })}
+          </Note>
+        ) : null
         // In detail mode the actions are a named section, because "Maintenance" is what the user came
         // here to find; on a summary card they are just the card's controls.
         return detailed ? (
           <Block title={t('repos.maintenance.title')} icon="settings">
             {buttons}
+            {waitNote}
             {maintenanceFlow}
             {maintenanceFeedback}
             {actions.includes('doctor') ? <Note>{t('repos.action.doctorNote')}</Note> : null}
             <Note>{t('repos.maintenance.note')}</Note>
           </Block>
         ) : (
-          buttons
+          <>
+            {buttons}
+            {waitNote}
+          </>
         )
       })()}
     </article>

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -185,6 +186,33 @@ def test_registering_the_same_directory_twice_names_the_row_that_owns_it(api, de
     assert (status, body["code"], body["details"]["repo_id"]) == (409, "duplicate_identity", demo.repo_id)
 
 
+def test_registering_one_directory_twice_at_once_refuses_the_second(sv, routes, fake_host, bare, monkeypatch):
+    """Both requests have read the registry before either writes; the loser is told who won, never a 500."""
+    entry = next(e for e in routes if (e.method, e.path) == ("POST", "/repos"))
+    detect, seen = sv.repos.detect_install, []
+    both_read = threading.Barrier(2, timeout=10)
+
+    def once_both_have_read(rec, receipt=None):
+        seen.append(rec.repo_id)
+        if len(seen) <= 2:
+            both_read.wait()
+        return detect(rec, receipt)
+
+    monkeypatch.setattr(sv.repos, "detect_install", once_both_have_read)
+
+    async def register_twice() -> list:
+        requests = [CT.owner_request("POST", "/repos", host=fake_host, body={"path": str(bare)}) for _ in range(2)]
+        for request in requests:
+            request.app["ctx"] = sv.ctx
+        return await asyncio.gather(*(entry.handler(request, sv.ctx) for request in requests))
+
+    answers = sorted(((r.status, json.loads(r.body.decode())) for r in asyncio.run(register_twice())),
+                     key=lambda answer: answer[0])
+    assert [(status, body.get("code")) for status, body in answers] == [(201, None), (409, "duplicate_identity")]
+    assert answers[1][1]["details"]["repo_id"] == answers[0][1]["repo"]["repo_id"]
+    assert [r.repo_id for r in sv.repos.list()] == [answers[0][1]["repo"]["repo_id"]]
+
+
 def test_registering_a_protected_directory_is_refused(api):
     ssh = Path.home() / ".ssh"
     if not ssh.is_dir():
@@ -205,6 +233,29 @@ def test_removing_a_registration_is_refused_while_a_lease_is_live(sv, api, demo)
     status, body = api("DELETE", f"/repos/{demo.repo_id}")
     assert (status, body["code"], body["details"]["kind"]) == (409, "repo_busy", "admin")
     assert sv.repos.list() != []
+
+
+def test_removing_a_registration_waits_for_an_install_staged_before_its_lease(sv, api, bare_repo, bare, monkeypatch):
+    """The 202 comes before the worker takes the admin lease: a removal in that window would let the install write
+    ``.kiro`` and commit a receipt for a registration that no longer exists."""
+    plan = sv.installer.preview(bare_repo, "install")
+    worker = sv.installer.run
+
+    async def not_yet_at_the_lease(repo_arg, kind, *, plan_digest, transaction_id=None):
+        return sv.installer.transaction(transaction_id)
+
+    monkeypatch.setattr(sv.installer, "run", not_yet_at_the_lease)
+    txid = begin(api, bare_repo, {"kind": "install", "plan_digest": plan.digest()})[1]["transaction_id"]
+
+    status, body = api("DELETE", f"/repos/{bare_repo.repo_id}")
+    assert (status, body.get("code")) == (409, "transaction_in_progress")
+    assert body["details"]["transaction_id"] == txid
+    assert [r.repo_id for r in sv.repos.list()] == [bare_repo.repo_id]
+
+    finished = asyncio.run(worker(bare_repo, "install", plan_digest=plan.digest(), transaction_id=txid))
+    assert finished.status == "committed"
+    assert api("DELETE", f"/repos/{bare_repo.repo_id}") == (200, {"ok": True, "removed": bare_repo.repo_id})
+    assert (bare / ".kiro").is_dir()
 
 
 def test_rebinding_an_available_repository_is_refused(api, demo, tmp_path):
@@ -233,6 +284,39 @@ def test_doctor_runs_the_engine_verb_under_an_admin_lease_and_releases_it(sv, ap
     assert status == 200 and body["ok"] is True
     assert body["result"]["verb_key"] == "utility.doctor" and body["result"]["ok"] is True
     assert sv.scheduler.live() == []
+
+
+def test_a_disconnected_doctor_request_keeps_the_lease_until_the_verb_has_finished(sv, routes, fake_host, demo,
+                                                                                    monkeypatch):
+    """The verb appends ``HEALTH_CHECKED`` rows from a child process: releasing the lease when the caller goes away
+    would let a turn start while it is still writing."""
+    async def scenario() -> None:
+        started, resume = asyncio.Event(), asyncio.Event()
+        verb = sv.engine.run
+
+        async def still_running(*args, **kwargs):
+            started.set()
+            await resume.wait()
+            return await verb(*args, **kwargs)
+
+        monkeypatch.setattr(sv.engine, "run", still_running)
+        request = CT.owner_request("POST", f"/repos/{demo.repo_id}/doctor", host=fake_host, body={"confirm": True})
+        request.match_info.update(repo_id=demo.repo_id)
+        entry = next(e for e in routes if (e.method, e.path) == ("POST", "/repos/{repo_id}/doctor"))
+        task = asyncio.create_task(entry.handler(request, sv.ctx))
+        await asyncio.wait_for(started.wait(), 5)
+        try:
+            task.cancel()
+            await asyncio.sleep(0)
+            assert await sv.scheduler.get(demo.resolved_identity) is not None
+            assert not task.done()
+        finally:
+            resume.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert await sv.scheduler.get(demo.resolved_identity) is None
+
+    asyncio.run(scenario())
 
 
 # --- installer ---

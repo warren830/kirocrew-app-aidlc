@@ -177,6 +177,37 @@ describe('recovery notices explain the actual cause and lifecycle', () => {
     expect(apiCalls.filter((call) => call.method !== 'GET')).toEqual([])
   })
 
+  it('offers to close a delivery AI-DLC received and never recorded, in words about that and not about an incident', async () => {
+    const base = actionCard()
+    show(false, {
+      status: 'ReconciliationRequired', queue_type: 'delivery_uncertain',
+      headline: { key: 'action.recovery.headline', params: { codes: ['presence_check_failed'] } },
+      decisions: [decisionSpec('reconcile'), decisionSpec('acknowledge')],
+      primary: { decision: 'reconcile', label_key: 'decision.reconcile.label' },
+      delivery: { ...base.delivery, delivery_confirmed: true, outcome: 'uncertain',
+        transcript_row: { slot_key: 'aidlc-r1-guest', ts: '2026-09-14T10:00:00Z', role: 'user' },
+        disk_baseline_unchanged: true },
+    })
+    const choices = await screen.findByText('Closes this delivery without sending it again', { exact: false })
+    expect(choices).toBeInTheDocument()
+    expect(screen.queryByText(/parking it for manual review/)).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Acknowledge' }))
+    const panel = screen.getByRole('group', { name: 'Confirmation' })
+    expect(panel).toHaveTextContent('Close it without resending')
+    expect(panel).toHaveTextContent('Nothing is sent again')
+    expect(panel).not.toHaveTextContent('Confirm you have read this incident')
+    expect(panel).not.toHaveTextContent('the item returns if the evidence still disagrees')
+  })
+
+  it('keeps the incident wording for acknowledging a recovery notice', async () => {
+    show(false)
+    await userEvent.click(await screen.findByRole('button', { name: 'Acknowledge' }))
+    const panel = screen.getByRole('group', { name: 'Confirmation' })
+    expect(panel).toHaveTextContent('Confirm you have read this incident')
+    expect(panel).not.toHaveTextContent('Close it without resending')
+  })
+
   it('shows an acknowledged notice as history and can open the current queue', async () => {
     const { card, go } = show(true)
     const title = await screen.findByRole('heading', { level: 1 })
@@ -185,6 +216,7 @@ describe('recovery notices explain the actual cause and lifecycle', () => {
     expect(within(header).queryByText('Critical')).not.toBeInTheDocument()
     expect(within(header).queryByText(/^waiting /)).not.toBeInTheDocument()
     expect(screen.getByText('This action is closed. Use current actions to see what this intent needs now.')).toBeInTheDocument()
+    expect(screen.queryByText(/recorded nothing for it/)).not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Delivery state' }).querySelector('[data-state="now"]')).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: 'View current actions' }))
     expect(go).toHaveBeenLastCalledWith({

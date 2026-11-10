@@ -22,11 +22,12 @@ import type { ReactNode } from 'react'
 
 import { useI18n, type I18n } from '../i18n'
 import { findingCopy, ref } from '../lib/format'
-import { isClosedAction } from '../lib/actionQueue'
+import { decisionCopy, isClosedAction } from '../lib/actionQueue'
+import { EMPTY_ROUTE, type Navigate } from '../lib/route'
 import type { ActionCard, DecisionSpec, Question } from '../lib/types'
 import { answerText, charCount, MAX_ANSWER_CHARS, MAX_FEEDBACK_CHARS } from '../actions/useSubmit'
 import { stageText } from '../actions/QueueRow'
-import { statusLabel } from '../actions/DeliveryStrip'
+import { statusLabel, unverifiedReply } from '../actions/DeliveryStrip'
 import { Chip } from '../shell/Chip'
 import { Icon, type IconName } from '../shell/Icon'
 import type { ActionDraft } from '../actions/DetailShell'
@@ -244,28 +245,37 @@ export function otherGateChoices(card: ActionCard): string[] {
   })
 }
 
-export function DecisionBrief({ card }: { card: ActionCard }) {
+/** What a closed card's record says, by the reason it closed with. */
+const CLOSED_BODY: Readonly<Record<string, string>> = {
+  answer_requires_text: 'template.questions.textStillRequired',
+  answer_not_verified_at_gate: 'delivery.answerNotVerifiedBody',
+  answer_not_verified: 'delivery.answerNotVerifiedFollowUpBody',
+  plan_approval_recorded_before_reset: 'delivery.previousPlanApprovalBody',
+  command_superseded: 'template.command.superseded',
+  original_delivered: 'template.common.originalDelivered',
+}
+
+/** `go` opens the first send a withdrawn copy names; templates whose cards are never sent again leave it out. */
+export function DecisionBrief({ card, go }: { card: ActionCard; go?: Navigate }) {
   const i18n = useI18n()
   const { t } = i18n
   const lede = ref(i18n, card.headline, 'template.common.headlineFallback')
   const consequence = card.consequence ? ref(i18n, card.consequence, 'template.common.consequenceFallback') : null
   const other = otherGateChoices(card)
+  const original = card.resolution.evidence?.delivered_by
   if (isClosedAction(card)) {
     return (
       <Block title={t('template.common.closedTitle')} icon="doc">
         <Brief>
-          <p>{t(card.resolution.reason === 'answer_requires_text'
-            ? 'template.questions.textStillRequired'
-            : card.resolution.reason === 'answer_not_verified_at_gate'
-              ? 'delivery.answerNotVerifiedBody'
-            : card.resolution.reason === 'answer_not_verified'
-              ? 'delivery.answerNotVerifiedFollowUpBody'
-            : card.resolution.reason === 'plan_approval_recorded_before_reset'
-              ? 'delivery.previousPlanApprovalBody'
-            : card.resolution.reason === 'plan_reply_not_recorded'
-              ? 'delivery.planReplyNotRecordedBody'
-            : card.resolution.reason === 'command_superseded'
-              ? 'template.command.superseded' : 'template.common.closedBody')}</p>
+          <p>{t(unverifiedReply(card.status, card.resolution.reason)?.body
+            ?? CLOSED_BODY[card.resolution.reason ?? ''] ?? 'template.common.closedBody')}</p>
+          {original && go ? (
+            <button type="button" className="studio-btn" onClick={() => go({
+              ...EMPTY_ROUTE, view: 'actions', repo: card.repo.repo_id, action: original,
+            })}>
+              {t('template.common.openOriginal', { action: original })}
+            </button>
+          ) : null}
           <details>
             <summary>{t('template.common.originalNotice')}</summary>
             <p>{lede}</p>
@@ -470,6 +480,7 @@ export function InputBox({
   label,
   placeholder,
   routing,
+  disabled = false,
 }: {
   card: ActionCard
   draft: ActionDraft
@@ -477,6 +488,7 @@ export function InputBox({
   label: string
   placeholder: string
   routing: string
+  disabled?: boolean
 }) {
   const i18n = useI18n()
   const { t } = i18n
@@ -493,6 +505,7 @@ export function InputBox({
         placeholder={placeholder}
         aria-label={label}
         aria-describedby="studio-input-note"
+        disabled={disabled}
         onChange={(event) =>
           setDraft(kind === 'scope' ? { scope: event.target.value, inputKind: 'scope' } : { freeText: event.target.value, inputKind: 'free_text' })
         }
@@ -584,17 +597,18 @@ export function OfferedDecisions({ card, title }: { card: ActionCard; title: str
   return (
     <Block title={title} icon="recovery">
       <ul className="studio-choicelist">
-        {decisions.map((spec) => (
-          <li key={spec.decision}>
-            <Icon name="chevron" size={13} />
-            <span className="studio-choice-body">
-              <span className="studio-choice-label">{t(spec.label_key)}</span>
-              <span className="studio-choice-desc">
-                {has(`decision.${spec.decision}.hint`) ? t(`decision.${spec.decision}.hint`) : ''}
+        {decisions.map((spec) => {
+          const hint = `decision.${decisionCopy(card, spec.decision)}.hint`
+          return (
+            <li key={spec.decision}>
+              <Icon name="chevron" size={13} />
+              <span className="studio-choice-body">
+                <span className="studio-choice-label">{t(spec.label_key)}</span>
+                <span className="studio-choice-desc">{has(hint) ? t(hint) : ''}</span>
               </span>
-            </span>
-          </li>
-        ))}
+            </li>
+          )
+        })}
       </ul>
       <Consequence icon="lock">{t('template.common.noAutoChoice')}</Consequence>
     </Block>

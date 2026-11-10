@@ -126,6 +126,30 @@ def test_a_closed_card_compares_with_the_head_it_captured(read, tmp_path, git_bi
     assert gone["base"] is None and _by_path(gone)["calc.py"]["status"] == "unchanged"
 
 
+def test_a_closed_card_reads_files_named_like_git_write_verbs(read, tmp_path, git_bin):
+    """Each file goes to git after ``--``, where git reads a path, never a verb."""
+    repo = _repo(tmp_path, git_bin)
+    captured = _head(repo, git_bin)
+    (repo / "add").write_text("changed after the decision\n")
+    (repo / "notes").write_text("written by the code stage\n")
+    _manifest(repo, ["add", "notes"])
+    rows = _by_path(read(repo, base=captured))
+    assert (rows["add"]["status"], rows["notes"]["status"]) == ("modified", "added")
+
+
+def test_a_closed_card_reads_files_named_like_forbidden_git_options(read, tmp_path, git_bin):
+    """After ``--`` git reads a path, so a file named like an option it refuses before it is still listed."""
+    repo = _repo(tmp_path, git_bin)
+    captured = _head(repo, git_bin)
+    names = ["--output=report.txt", "-c", "--git-dir"]
+    for name in names:
+        (repo / name).write_text("written by the code stage\n")
+    _manifest(repo, ["calc.py", *names])
+    rows = _by_path(read(repo, base=captured))
+    assert {name: rows[name]["status"] for name in names} == dict.fromkeys(names, "added")
+    assert not (repo / "report.txt").exists()
+
+
 def test_a_closed_card_compares_with_the_head_of_the_moment_it_was_decided(read, tmp_path, git_bin):
     """A card stores no git reading, but its decision time names the commit HEAD was then."""
     repo = tmp_path / "repo"

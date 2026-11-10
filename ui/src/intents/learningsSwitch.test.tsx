@@ -21,7 +21,7 @@ import type { ActionCard, CeremonySetting, IntentSummary, Question, QuestionsVie
 import { WIRE } from '../lib/wire.generated'
 import { IntentSettingsPanel } from '../plan/IntentSettingsPanel'
 import { QuestionsTemplate } from '../templates/QuestionsTemplate'
-import { API_BASE, actionCard, decisionSpec } from '../test/fixtures'
+import { API_BASE, actionCard, decisionSpec, submitReceipt } from '../test/fixtures'
 import { apiCalls, setApiRoutes } from '../test/stubs/app-sdk'
 import {
   LearningsSwitch, cardLearningsSwitchBlockedReason, isLearningsCorrectionQuestion, isLearningsQuestion,
@@ -67,20 +67,12 @@ function commandCard(value: 'on' | 'off'): ActionCard {
   })
 }
 
-function receipt(text: string) {
-  return {
-    ok: true as const, action_id: 'a_ls', status: 'Delivering' as const, lane: 'human_lane' as const,
-    delivery_id: 'd_ls', slot_key: 's1', session_key: 'ses_1', wire_text: text, expires_at: '', lease_generation: 1,
-    host: { method: 'POST', path: '/api/chat?ws=1', body: { slot: 's1', message: text } },
-  }
-}
-
 function fakeApi(value: 'on' | 'off', over: Partial<Record<keyof StudioApi, unknown>> = {}) {
   const card = commandCard(value)
   return {
     learnings: vi.fn(async () => ({ ok: true as const, action_id: 'a_ls', status: 'Queued' as const, action: card })),
     summaryConfirmation: vi.fn(),
-    submitAction: vi.fn(async () => receipt(value === 'off' ? OFF : ON)),
+    submitAction: vi.fn(async () => submitReceipt(card, value === 'off' ? OFF : ON, 's1')),
     listSlots: vi.fn(async () => [slot('s1')]),
     sendToHost: vi.fn(async () => ({ ok: true })),
     reportDelivery: vi.fn(async () => ({ ok: true as const, action: { ...card, status: 'Delivered' }, idempotent: false })),
@@ -178,6 +170,26 @@ describe('the switch', () => {
     await userEvent.click(screen.getByRole('button', { name: `Send ${OFF}` }))
     expect(await screen.findByRole('alert')).toHaveTextContent(en.t('learningsSwitch.already.off'))
     expect(api.sendToHost).not.toHaveBeenCalled()
+  })
+
+  it('says it cannot confirm the switch, never that it was not sent, when Studio could not prove the refusal', async () => {
+    const api = fakeApi('off', {
+      // The host's own 4xx, which reads as not delivered.
+      sendToHost: vi.fn(async () => {
+        throw new StudioApiError('internal_error', 'slot is busy', {}, 409, { error: 'slot is busy', code: 'turn_in_flight' })
+      }),
+      // The slot ran a turn since, so the broker cannot prove it and recorded the send as uncertain.
+      reportDelivery: vi.fn(async () => {
+        throw new StudioApiError('not_delivered_unproven', 'this decision cannot be proven undelivered', {}, 409)
+      }),
+    })
+    mountSwitch(api)
+    await userEvent.click(screen.getByRole('button', { name: en.t('learningsSwitch.action.off') }))
+    await userEvent.click(screen.getByRole('button', { name: `Send ${OFF}` }))
+    expect(await screen.findByText(en.t('learningsSwitch.status.uncertain', { text: OFF, action: 'a_ls' })))
+      .toBeInTheDocument()
+    expect(screen.queryByText(/was not sent/)).toBeNull()
+    expect(api.sendToHost).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -302,7 +314,7 @@ describe('on an open learnings question', () => {
     const card = commandCard('off')
     setApiRoutes({
       [`POST ${INTENT_PATH}/learnings`]: () => ({ ok: true, action_id: 'a_ls', status: 'Queued', action: card }),
-      [`POST ${API_BASE}/actions/a_ls/submit`]: () => receipt(OFF),
+      [`POST ${API_BASE}/actions/a_ls/submit`]: () => submitReceipt(card, OFF, 's1'),
       [`GET ${CHAT}/slots`]: () => [slot('s1')],
       [`POST ${CHAT}?ws=1`]: () => ({ ok: true, slot: 's1' }),
       [`POST ${API_BASE}/actions/a_ls/delivery`]: () => ({ ok: true, action: { ...card, status: 'Delivered' }, idempotent: false }),

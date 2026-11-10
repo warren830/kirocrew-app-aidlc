@@ -536,3 +536,26 @@ describe('a card\'s kind in words', () => {
     expect(typeLabelOf(en, { ...closed, evidence: { ...closed.evidence, questions } })).toBe('Plan approval')
   })
 })
+
+describe('a conversation parked on a tool approval, listed above the queue', () => {
+  it('reads where the call reaches by the kind of call the host says it is', async () => {
+    const command = 'go test ./...'
+    const wait = (intentDir: string, toolKind: string | null) => ({
+      repo_id: 'r_1', repo_label: 'checkout-web', space: 'default', intent_dir: intentDir, intent_key: `default~${intentDir}`,
+      slot_key: `s-${intentDir}`, tool: `Running: ${command}`, tool_input: JSON.stringify({ command }), tool_kind: toolKind,
+      request_id: 'tool-1', request_mid: 'mid-1', origin: 'native',
+    })
+    const response = () => ({
+      actions: [], organize: 'priority', groups: [], counts: { total: 0, critical: 0, blocking: 0, attention: 0, info: 0 },
+      approval_waits: [wait('250901-a', 'execute'), wait('250902-b', null)], generated_at: '2026-09-04T10:00:00Z',
+    })
+    installRoutes([], { [`GET ${BASE}/actions?*`]: response, [`GET ${BASE}/actions`]: response })
+    mount()
+    const notice = async (intentDir: string) => (await screen.findByText(
+      `checkout-web / ${intentDir} is waiting for you to approve a tool call.`)).closest('[role="status"]') as HTMLElement
+    expect(within(await notice('250901-a')).getByText('It names no path outside this repository.')).toBeInTheDocument()
+    expect(within(await notice('250902-b')).getByText(
+      'Studio cannot tell what this call works on, so it cannot say it stays in this repository.')).toBeInTheDocument()
+    expect(within(await notice('250902-b')).queryByText('It names no path outside this repository.')).toBeNull()
+  })
+})

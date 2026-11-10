@@ -20,7 +20,7 @@ import type { ActionCard, CeremonySetting, IntentSummary, QuestionsView, SlotVie
 import { WIRE } from '../lib/wire.generated'
 import { IntentSettingsPanel } from '../plan/IntentSettingsPanel'
 import { QuestionsTemplate } from '../templates/QuestionsTemplate'
-import { API_BASE, actionCard, decisionSpec } from '../test/fixtures'
+import { API_BASE, actionCard, decisionSpec, submitReceipt } from '../test/fixtures'
 import { apiCalls, setApiRoutes } from '../test/stubs/app-sdk'
 import {
   SummaryConfirmationSwitch, cardSummarySwitchBlockedReason, summarySwitchBlockedReason, summarySwitchText,
@@ -64,19 +64,11 @@ function commandCard(value: 'on' | 'off'): ActionCard {
   })
 }
 
-function receipt(text: string) {
-  return {
-    ok: true as const, action_id: 'a_sc', status: 'Delivering' as const, lane: 'human_lane' as const,
-    delivery_id: 'd_sc', slot_key: 's1', session_key: 'ses_1', wire_text: text, expires_at: '', lease_generation: 1,
-    host: { method: 'POST', path: '/api/chat?ws=1', body: { slot: 's1', message: text } },
-  }
-}
-
 function fakeApi(value: 'on' | 'off', over: Partial<Record<keyof StudioApi, unknown>> = {}) {
   const card = commandCard(value)
   return {
     summaryConfirmation: vi.fn(async () => ({ ok: true as const, action_id: 'a_sc', status: 'Queued' as const, action: card })),
-    submitAction: vi.fn(async () => receipt(value === 'off' ? OFF : ON)),
+    submitAction: vi.fn(async () => submitReceipt(card, value === 'off' ? OFF : ON, 's1')),
     listSlots: vi.fn(async () => [slot('s1')]),
     sendToHost: vi.fn(async () => ({ ok: true })),
     reportDelivery: vi.fn(async () => ({ ok: true as const, action: { ...card, status: 'Delivered' }, idempotent: false })),
@@ -255,7 +247,7 @@ describe('on an open summary confirmation', () => {
     const card = commandCard('off')
     setApiRoutes({
       [`POST ${INTENT_PATH}/summary-confirmation`]: () => ({ ok: true, action_id: 'a_sc', status: 'Queued', action: card }),
-      [`POST ${API_BASE}/actions/a_sc/submit`]: () => receipt(OFF),
+      [`POST ${API_BASE}/actions/a_sc/submit`]: () => submitReceipt(card, OFF, 's1'),
       [`GET ${CHAT}/slots`]: () => [slot('s1')],
       [`POST ${CHAT}?ws=1`]: () => ({ ok: true, slot: 's1' }),
       [`POST ${API_BASE}/actions/a_sc/delivery`]: () => ({ ok: true, action: { ...card, status: 'Delivered' }, idempotent: false }),

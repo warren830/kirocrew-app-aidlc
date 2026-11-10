@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from _helpers_c import die_in_child
+from _helpers_c import after, die_in_child
 from test_installer import h, make_harness, payload_v1, payload_v2, run, store, tree  # noqa: F401 - fixtures
 from test_installer_uninstall import OWNED, installed, register
 
@@ -50,7 +50,7 @@ def upgrade(make_harness, payload_v2):
 
 
 @pytest.mark.parametrize("method", [
-    "_stage_payload", "_backup", "_write_files", "_merge_fragments", "_post_write_validate", "_commit_receipt",
+    "_stage_payload", "_backup", "_write_files", "_merge_fragments", "_post_write_validate", "_receipt_files",
 ])
 def test_running_upgrade_cancel_restores_bytes_receipt_and_releases_lease(h, installed, upgrade, monkeypatch,
                                                                          method):
@@ -64,6 +64,42 @@ def test_running_upgrade_cancel_restores_bytes_receipt_and_releases_lease(h, ins
     assert upgrade.installer.current_receipt(repo.repo_id).receipt_id == receipt.receipt_id
     assert upgrade.lease() is None
     assert run(upgrade.installer.cancel(repo, transaction_id=result.transaction_id)) == result
+
+
+def test_a_cancel_after_the_receipt_commit_is_too_late_and_the_upgrade_completes(installed, upgrade, monkeypatch):
+    repo = installed[1]
+    plan = upgrade.installer.preview(repo, "upgrade")
+    pending = run(upgrade.installer.begin(repo, "upgrade", plan_digest=plan.digest()))
+    acks = []
+    after(monkeypatch, upgrade.installer, "_commit_receipt",
+          lambda: acks.append(upgrade.installer._request_cancel(repo, pending.transaction_id)))
+    result = run(upgrade.installer.run(repo, "upgrade", plan_digest=plan.digest(),
+                                       transaction_id=pending.transaction_id))
+    assert [(ack.status, ack.error) for ack in acks] == [("committed", None)]
+    assert (result.status, result.error) == ("committed", None)
+    assert upgrade.installer.current_receipt(repo.repo_id).engine_version == "2.7.0"
+
+
+def test_a_cancel_accepted_while_the_receipt_is_prepared_survives_a_death(installed, upgrade, monkeypatch):
+    """Accepted before the commit, the cancel is observed by it: a death before the rollback starts finds the old
+    receipt current and the transaction needing recovery, never a commit the person asked to stop."""
+    repo = installed[1]
+    receipt = upgrade.installer.current_receipt(repo.repo_id)
+    plan = upgrade.installer.preview(repo, "upgrade")
+    pending = run(upgrade.installer.begin(repo, "upgrade", plan_digest=plan.digest()))
+
+    def child():
+        upgrade.store.close()
+        upgrade.store.open()
+        after(monkeypatch, upgrade.installer, "_receipt_files",
+              lambda: upgrade.installer._request_cancel(repo, pending.transaction_id))
+        monkeypatch.setattr(upgrade.installer, "_rollback", lambda *args: os._exit(77))
+        run(upgrade.installer.run(repo, "upgrade", plan_digest=plan.digest(), transaction_id=pending.transaction_id))
+
+    die_in_child(child)
+    assert run(upgrade.installer.settle_abandoned()) == [pending.transaction_id]
+    assert upgrade.installer.transaction(pending.transaction_id).status == "recovery_required"
+    assert upgrade.installer.current_receipt(repo.repo_id).receipt_id == receipt.receipt_id
 
 
 def test_cancel_before_worker_starts_writes_no_repository_bytes(studio, h, repo_builder):

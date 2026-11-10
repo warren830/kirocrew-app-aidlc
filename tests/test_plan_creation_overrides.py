@@ -11,16 +11,22 @@ from test_plan import P, deps, repo_row, request, run  # noqa: F401
 SKIPPED = {"deployment-execution": False, "observability-setup": False}
 
 
-@pytest.fixture
-def real_plan_repo(studio, deps, repo_builder):
+def real_engine_repo(studio, deps, repo_builder, *, code: bool = True):
+    """A repository on the bundled engine, run by the real Bun; ``code`` puts a source file in it."""
     bun = Path("/Users/ychchen/.bun/bin/bun")
     if not bun.is_file():
         pytest.skip("real Bun is required for creation override regression")
     root = repo_builder.with_engine("payload").with_workspace().build()
-    (root / "main.py").write_text("def clamp(value):\n    return min(1, max(0, value))\n")
-    repo = repo_row(studio, deps.store, root, engine_version="2.7.1")
+    if code:
+        (root / "main.py").write_text("def clamp(value):\n    return min(1, max(0, value))\n")
+    repo = repo_row(studio, deps.store, root, engine_version=studio.constants.BUNDLED_ENGINE_VERSION)
     deps.svc.engine = studio.engine.EngineRunner(bun_path=str(bun), clock=deps.svc._clock, activity=deps.activity)
     return repo
+
+
+@pytest.fixture
+def real_plan_repo(studio, deps, repo_builder):
+    return real_engine_repo(studio, deps, repo_builder)
 
 
 def record_of(deps, root, intent_dir):
@@ -77,6 +83,36 @@ def test_real_creation_applies_confirmed_overrides_before_compile(P, deps, real_
     assert "RECOMPOSED" in audit and "HUMAN_TURN" not in audit
     assert fake_host.notifications == []
     assert not any(slot.messages for slot in fake_host._slots.values())
+
+
+@pytest.mark.parametrize("code, project_type, starts, adjustable", [
+    (False, None, "practices-discovery", "user-stories"),
+    (True, "Brownfield", "reverse-engineering", "practices-discovery"),
+    # The person's word decides the type over the workspace scan, so creation starts where the preview locks.
+    (True, "Greenfield", "practices-discovery", "reverse-engineering"),
+    (False, "Brownfield", "reverse-engineering", "practices-discovery"),
+])
+def test_real_creation_starts_on_the_stage_the_preview_locks(studio, P, deps, repo_builder, tmp_path, monkeypatch,
+                                                             code, project_type, starts, adjustable):
+    """Turning off the stage ``intent-create`` starts on is refused before anything exists; any other stage of the
+    plan is still turned off by the confirmed overrides."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    (tmp_path / "home").mkdir()
+    repo = real_engine_repo(studio, deps, repo_builder, code=code)
+    root = Path(repo.canonical_path)
+
+    with pytest.raises(studio.errors.StudioError) as exc:
+        run(deps.svc.create_intent(repo, request(P, "classic", project_type=project_type, label="first-stage",
+                                                 overrides={starts: False})))
+    assert exc.value.code == "plan_invalid", exc.value.details
+    assert deps.reader.list_intent_dirs(root, "default") == []
+
+    result = run(deps.svc.create_intent(repo, request(P, "classic", project_type=project_type, label="first-stage",
+                                                      overrides={adjustable: False})))
+    state = deps.reader.read_state(root, "default", result.intent_dir)[1]
+    assert state.current_stage == starts
+    assert state.row(adjustable).suffix == "SKIP"
+    assert run(deps.scheduler.get(repo.resolved_identity)) is None
 
 
 @pytest.mark.parametrize("failure", ["exit", "no_change"])

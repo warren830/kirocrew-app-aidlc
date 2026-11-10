@@ -19,6 +19,8 @@ export interface SettingsProposal {
   argv_preview: string[]
   verb_key: 'utility.scope_change' | 'utility.config_change'
   selection: { space: string; intent_dir: string }
+  /** The stage a scope change restarts a finished intent at; `null` when nothing finished is reopened. */
+  reopens: string | null
 }
 export interface SettingsPreviewResponse {
   proposal: SettingsProposal

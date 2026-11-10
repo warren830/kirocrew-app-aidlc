@@ -6,17 +6,18 @@ import { WIRE } from '../lib/wire.generated'
 import { actionCard } from '../test/fixtures'
 import type { DecisionSpec } from '../lib/types'
 import { ConfirmPanel, type PendingDecision } from './ConfirmPanel'
-import { IDLE } from './useSubmit'
+import { IDLE, type SubmitState } from './useSubmit'
 
 const en = makeI18n('en-US')
 
-function show(decision: DecisionSpec['decision'], wire: string) {
+function show(decision: DecisionSpec['decision'], wire: string, submit: SubmitState = IDLE) {
   const spec: DecisionSpec = { decision, label_key: `decision.${decision}.label`, lane: 'human_lane',
     wire_text_template: null, requires: [] }
   const pending: PendingDecision = { spec, payload: { decision: 'approve' }, resolvePayload: null, wire, blockedKey: null }
   render(
     <I18nProvider>
-      <ConfirmPanel card={actionCard()} pending={pending} submit={IDLE} busy={false} refreshing={false}
+      <ConfirmPanel card={actionCard()} pending={pending} submit={submit} inFlight={submit === IDLE ? null : 'running'}
+        refreshing={false}
         acknowledged={false} onAcknowledge={() => {}} onSend={() => {}} onCancel={() => {}} />
     </I18nProvider>,
   )
@@ -46,5 +47,20 @@ describe('the text a confirmation shows', () => {
     show('answers', `Q1: True division\nQ2: Like multiply${WIRE.ANSWER_MODE_CHAT_NOTE}${WIRE.GROUPED_ANSWER_SUFFIX}`)
     expect(screen.getByText(en.t('confirm.deliveryNote'))).toBeInTheDocument()
     expect(screen.getByText(en.t('confirm.answerModeNote'))).toBeInTheDocument()
+  })
+
+  it('shows the bytes in flight from Send on, not the draft as it reads after Send', () => {
+    const sent = 'Request Changes: Cover the decline path.'
+    const card = actionCard()
+    show('request_changes', `${sent} And 3DS.`, {
+      ...IDLE, stage: 'submitting', actionId: card.action_id, generation: card.status_generation,
+      request: {
+        captured: { state_hash: 'sha-state', boundary_token: 'tok', question_digest: null, stage_attempt: 1,
+          evidence_digest: 'sha-ev', is_active: true },
+        payload: { decision: 'request_changes', feedback: 'Cover the decline path.' },
+        client_wire_text: sent,
+      },
+    })
+    expect(document.querySelector('.studio-sendtext')?.textContent).toBe(sent)
   })
 })

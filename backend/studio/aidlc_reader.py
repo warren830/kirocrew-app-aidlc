@@ -15,7 +15,7 @@ import os
 import re
 import time
 import unicodedata
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable, Sequence
 
@@ -738,11 +738,15 @@ class ShardMeta(WireRecord):
 
 @dataclass(frozen=True, slots=True)
 class AuditBundle(WireRecord):
-    """Every shard of one record, merged. ``complete=False`` when any shard was tail-read."""
+    """Every shard of one record, merged. ``complete=False`` when any shard was tail-read. ``read_started_ns`` is
+    ``time.monotonic_ns()`` when the read this bundle belongs to began: what a turn left is only known from a read
+    that began after it ended. Process-local, so not on the wire."""
 
+    _wire_keys = ("events", "shards", "complete")
     events: list[AuditEvent]
     shards: list[ShardMeta]
     complete: bool
+    read_started_ns: int | None = field(default=None, compare=False)
 
 
 def _audit_read_limits(
@@ -1151,7 +1155,7 @@ _AUDIT_GATE_ROUND_FLOORS = frozenset(("STAGE_AWAITING_APPROVAL", "GATE_REJECTED"
 _DECISION_CLOSING_EVENTS = _AUDIT_QUESTION_ANSWERS | {"VERIFICATION_COMMAND_RECORDED", "CONSTRUCTION_POLICY_RECORDED"}
 
 
-def _audit_follows(candidate: AuditEvent, boundary: AuditEvent) -> bool | None:
+def audit_follows(candidate: AuditEvent, boundary: AuditEvent) -> bool | None:
     """Append position orders one shard; equal-second rows in different shards are unordered."""
     if candidate.shard == boundary.shard:
         return candidate.pos > boundary.pos
@@ -1201,12 +1205,12 @@ def _closes_this_round(
     floor, or when only the stage's own gate floors came after it. Measured on a feature run (2026-11-04): after
     Request changes at the market-research gate, the learnings question came after STAGE_REVISING, the sheet's summary
     receipt came before the gate, and the question reached the queue only as a conversation reply."""
-    if all(_audit_follows(receipt, floor) is True for floor in floors):
+    if all(audit_follows(receipt, floor) is True for floor in floors):
         return True
     opened = _audit_frontier([
         e for e in history if _audit_question_floor(e, stage, unit) and e.event not in _AUDIT_GATE_ROUND_FLOORS
     ])
-    return bool(opened) and all(_audit_follows(receipt, floor) is True for floor in opened)
+    return bool(opened) and all(audit_follows(receipt, floor) is True for floor in opened)
 
 
 def _audit_question_history(audit: AuditBundle, stage: str, unit: str | None) -> list[AuditEvent]:
@@ -1279,7 +1283,7 @@ def answers_mode_question(audit: AuditBundle, answer: AuditEvent, stage: str, un
             or (event.event != "DECISION_RECORDED" and event.event not in _DECISION_CLOSING_EVENTS)
         ):
             continue
-        follows = _audit_follows(answer, event)
+        follows = audit_follows(answer, event)
         if follows is None:
             return None
         if follows:
@@ -1339,7 +1343,7 @@ def audit_questions(
         # section from the file, and this decision, never to be answered, came back as a card offering Looks correct.
         return None
     floors = _audit_frontier([e for e in history if _audit_question_floor(e, stage, unit)])
-    if not floors or any(_audit_follows(decision, floor) is not True for floor in floors):
+    if not floors or any(audit_follows(decision, floor) is not True for floor in floors):
         return None
     generation = generation or _audit_question_generation(audit, unit)
     if (decision.fields.get("Attempt Generation") or None) != generation:
@@ -1349,7 +1353,7 @@ def audit_questions(
             continue
         if (event.fields.get("Attempt Generation") or None) != generation:
             continue
-        if _audit_follows(event, decision) is not False:
+        if audit_follows(event, decision) is not False:
             return None
 
     batch = _same_turn_decisions(audit, decision, stage, unit)
@@ -1570,7 +1574,7 @@ def audit_question_answer(
     blockers = [
         e for e in history if e is not captured
         and (e.event == "DECISION_RECORDED" or _audit_question_floor(e, stage, unit))
-        and _audit_follows(e, captured) is not False
+        and audit_follows(e, captured) is not False
     ]
     for event in history:
         if (
@@ -1580,8 +1584,8 @@ def audit_question_answer(
             and event.fields.get("Questions File") == captured.fields.get("Questions File")
             and recorded_details_match(event.fields.get("Details"), expected)
             and event.timestamp >= since
-            and _audit_follows(event, captured) is True
-            and all(_audit_follows(blocker, event) is True for blocker in blockers)
+            and audit_follows(event, captured) is True
+            and all(audit_follows(blocker, event) is True for blocker in blockers)
         ):
             return event
     return None
@@ -1631,7 +1635,7 @@ def _closed_question_receipts(
         answered = _audit_frontier([
             e for e in history if e.event == "QUESTION_ANSWERED" and _audit_question_scope(e, stage, unit)
             and (e.fields.get("Attempt Generation") or None) == generation
-            and _audit_follows(decision, e) is True
+            and audit_follows(decision, e) is True
             and _closes_this_round(e, floors, history, stage, unit)
         ])
         if len(answered) != 1 or not (answered[0].fields.get("Details") or "").strip():
@@ -1683,7 +1687,7 @@ def _closed_question_receipts(
             receipt.fields.get("Questions File") != found.relpath
             or receipt.fields.get("Checkpoint") not in checkpoint_names
             or receipt.fields.get("Details") != answer
-            or _audit_follows(decision, receipt) is not True
+            or audit_follows(decision, receipt) is not True
             or not _closes_this_round(receipt, floors, history, stage, unit)
         ):
             return None
@@ -1710,7 +1714,7 @@ def _closed_question_receipts(
         answered = _audit_frontier([
             e for e in history if e.event == "QUESTION_ANSWERED" and _audit_question_scope(e, stage, unit)
             and (e.fields.get("Attempt Generation") or None) == generation
-            and _audit_follows(e, summary) is True and _audit_follows(decision, e) is True
+            and audit_follows(e, summary) is True and audit_follows(decision, e) is True
         ])
         if len(answered) != 1 or (answered[0].fields.get("Details") or "").strip() != answer:
             return None
@@ -3145,15 +3149,16 @@ class AidlcReader:
         )
 
     def stable_boundary_inputs(self, repo: Path, space: str, intent_dir: str) -> BoundaryInputs:
-        """State, audit, directive and questions as one moment; the state is re-read last (FORMAT-NOTES §11.10)."""
-        taken_at = self._clock.iso()
+        """State, audit, directive and questions as one moment; the state is re-read last (FORMAT-NOTES §11.10). The
+        audit bundle carries the moment this read began, before the first state read."""
+        started, taken_at = time.monotonic_ns(), self._clock.iso()
         first = self.read_state(repo, space, intent_dir)
         if first is None:
             return BoundaryInputs(space=space, intent_dir=intent_dir, state_snap=None, state=None,
-                                  audit=self.read_audit(repo, space, intent_dir), directive=None, questions=None,
-                                  stage=None, stable=False, taken_at=taken_at)
+                                  audit=replace(self.read_audit(repo, space, intent_dir), read_started_ns=started),
+                                  directive=None, questions=None, stage=None, stable=False, taken_at=taken_at)
         snap, state = first
-        audit = self.read_audit(repo, space, intent_dir)
+        audit = replace(self.read_audit(repo, space, intent_dir), read_started_ns=started)
         directive = self.read_directive(repo, space, intent_dir, snap.sha256, engine_state_digest(snap.text))
         stage = (
             directive.stage if directive and directive.matches_state

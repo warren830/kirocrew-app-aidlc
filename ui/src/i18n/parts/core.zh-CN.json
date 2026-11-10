@@ -107,6 +107,7 @@
   "errors.action_stale": "你决定期间情况已变化。请查看刷新后的证据并重新确认。",
   "errors.action_not_submittable": "该条目当前状态无法提交。",
   "errors.repo_busy": "另一操作正占用该仓库，不会被打断。",
+  "errors.transaction_in_progress": "该仓库还有一次安装、升级或卸载没有结束。请等它完成后再试。",
   "errors.illegal_transition": "不允许该状态变更。",
   "errors.stale_generation": "该记录已被其他操作先行修改。",
   "errors.state_inconsistent": "AI-DLC 的文件互相矛盾，解决之前不会发送任何内容。",

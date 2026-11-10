@@ -23,6 +23,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '../i18n'
+import enUS from '../i18n/en-US.json'
 import { StudioApp } from '../shell/StudioApp'
 import { registerView } from '../shell/ViewRouter'
 import { apiCalls, setApiRoutes, StubApiError, type RouteHandler } from '../test/stubs/app-sdk'
@@ -284,6 +285,8 @@ function mount(search = '?view=repos') {
     </I18nProvider>,
   )
 }
+
+const repoReads = () => apiCalls.filter((call) => call.method === 'GET' && call.path === `${BASE}/repos/r_1`).length
 
 beforeEach(() => {
   setViewport(1440)
@@ -1425,6 +1428,25 @@ describe('install recovery required', () => {
     expect(screen.getByRole('button', { name: /Preview the recovery/ })).toBeInTheDocument()
   })
 
+  it("says no evidence path was recorded rather than naming an older transaction's", async () => {
+    // A recovery that found the repository busy settles as recovery_required without archiving anything.
+    const transactions = [
+      transaction({ transaction_id: 'tx_r', kind: 'uninstall', error: 'repo_busy', failed_dir: null }),
+      transaction({ transaction_id: 'tx_old', kind: 'install', status: 'rolled_back', failed_dir: '/studio-data/failed/tx_old' }),
+    ]
+    setApiRoutes({
+      ...shellRoutes(),
+      [`GET ${BASE}/repos`]: () => ({ repos: [broken], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
+      [`GET ${BASE}/repos/r_1`]: () => ({ repo: broken, intents: [], transactions }),
+      [`GET ${BASE}/repos/r_1/git`]: () => ({ git: broken.git, owned_dirty: [], unrelated_dirty: 0 }),
+    })
+    mount('?view=repos&repo=r_1')
+
+    const alert = await screen.findByRole('alert')
+    await waitFor(() => expect(alert).toHaveTextContent('No evidence path was recorded for the failed transaction.'))
+    expect(alert).not.toHaveTextContent('/studio-data/failed/tx_old')
+  })
+
   it('does not offer recovery for a repository Studio cannot read, and points to rebinding it first', async () => {
     const moved = repo({
       availability: 'moved', install: install({ status: 'recovery_required', upgrade_available: false }),
@@ -1504,6 +1526,36 @@ describe('the transaction drawer', () => {
     mount('?view=repos&repo=r_1&tx=tx_9')
     expect(await screen.findByText('OSError: disk full')).toBeInTheDocument()
   })
+
+  it('re-reads the repository when the next transaction settles in the same status as the one before', async () => {
+    const record = repo()
+    let second = 'staged'
+    setApiRoutes({
+      ...shellRoutes(),
+      [`GET ${BASE}/repos`]: () => ({ repos: [record], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
+      [`GET ${BASE}/repos/r_1`]: () => ({ repo: record, intents: [], transactions: [] }),
+      [`GET ${BASE}/repos/r_1/git`]: () => ({ git: record.git, owned_dirty: [], unrelated_dirty: 0 }),
+      [`GET ${BASE}/repos/r_1/transactions/tx_1`]: () => ({
+        transaction: transaction({ transaction_id: 'tx_1', status: 'committed', error: null, failed_dir: null }),
+      }),
+      [`GET ${BASE}/repos/r_1/transactions/tx_2`]: () => ({
+        transaction: transaction({ transaction_id: 'tx_2', status: second, error: null, failed_dir: null }),
+      }),
+    })
+    mount('?view=repos&repo=r_1&tx=tx_1')
+    await screen.findByText('Upgrade transaction tx_1: Committed')
+    await waitFor(() => expect(repoReads()).toBe(2)) // the page's own read, and the one tx_1 settling asked for
+
+    act(() => {
+      window.history.pushState(null, '', '/apps/aidlc-studio?view=repos&repo=r_1&tx=tx_2')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+    await screen.findByText('Upgrade transaction tx_2: Payload staged')
+    expect(repoReads()).toBe(2)
+    second = 'committed'
+    await screen.findByText('Upgrade transaction tx_2: Committed', undefined, { timeout: 5000 })
+    await waitFor(() => expect(repoReads()).toBe(3))
+  }, 10_000)
 })
 
 describe('a confirmation opened from Maintenance', () => {
@@ -1646,5 +1698,186 @@ describe('a late answer from the repository the user left', () => {
 
     expect(screen.queryByText(/Another operation holds this repository/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Rescan' })).toBeEnabled()
+  })
+})
+
+describe('maintenance while an install transaction is in flight', () => {
+  // See WAITS_FOR_TRANSACTION: only Archive and Unregister wait; every other write is left to the repository's lease.
+  const WAITING = ['Archive repository', 'Unregister']
+  const LEASED = ['Upgrade AI-DLC', 'Run AI-DLC doctor', 'Uninstall harness', 'Clean up transaction files',
+    'Rename repository']
+
+  function mountWith(transactions: () => Json[], over: Record<string, RouteHandler> = {}) {
+    const record = repo()
+    setApiRoutes({
+      ...shellRoutes(),
+      [`GET ${BASE}/repos`]: () => ({ repos: [record], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
+      [`GET ${BASE}/repos/r_1`]: () => ({ repo: record, intents: [], transactions: transactions() }),
+      [`GET ${BASE}/repos/r_1/git`]: () => ({ git: record.git, owned_dirty: [], unrelated_dirty: 0 }),
+      ...over,
+    })
+    mount('?view=repos&repo=r_1')
+  }
+
+  async function maintenanceBlock() {
+    return (await screen.findByRole('heading', { name: 'Maintenance' })).closest('section')!
+  }
+
+  it.each([
+    ['staged', true],
+    ['leased', true],
+    ['rolling_back', true],
+    ['committed', false],
+    ['rolled_back', false],
+    ['failed', false],
+    ['recovery_required', false],
+  ])('with the newest transaction %s, Unregister and Archive wait for it: %s', async (status, waiting) => {
+    mountWith(() => [transaction({ transaction_id: 'tx_new', status, error: null, failed_dir: null, finished_at: null })])
+    const maintenance = await maintenanceBlock()
+    await waitFor(() => expect(within(maintenance).getByRole('button', { name: 'Unregister' }))
+      .toHaveProperty('disabled', waiting))
+    const why = 'Unregistering or archiving waits until the Upgrade transaction tx_new finishes, since it may still write to this repository.'
+    for (const name of WAITING) {
+      const button = within(maintenance).getByRole('button', { name })
+      expect(button, name).toHaveProperty('disabled', waiting)
+      if (waiting) expect(button, name).toHaveAccessibleDescription(why)
+    }
+    expect(within(maintenance).queryAllByText(why)).toHaveLength(waiting ? 1 : 0)
+    for (const name of [...LEASED, 'Rescan']) expect(within(maintenance).getByRole('button', { name }), name).toBeEnabled()
+  })
+
+  it('leaves the writes the server takes beside an uninstall that never settles, and says why the other two wait', async () => {
+    mountWith(() => [transaction({
+      transaction_id: 'tx_stuck', kind: 'uninstall', status: 'staged', error: null, failed_dir: null,
+      finished_at: null, steps: [], repo_install_status: 'installed',
+    })])
+    const maintenance = await maintenanceBlock()
+    await waitFor(() => expect(within(maintenance).getByRole('button', { name: 'Unregister' })).toBeDisabled())
+    expect(within(maintenance).getByRole('button', { name: 'Archive repository' })).toBeDisabled()
+    // A second uninstall is accepted beside the stuck row and commits: the page has to offer it.
+    for (const name of LEASED) expect(within(maintenance).getByRole('button', { name }), name).toBeEnabled()
+    expect(within(maintenance).getByText(
+      'Unregistering or archiving waits until the Uninstall transaction tx_stuck finishes, since it may still write to this repository.',
+    )).toBeInTheDocument()
+  })
+
+  it('gives Unregister and Archive back once a re-read shows the transaction settled', async () => {
+    let status = 'staged'
+    mountWith(() => [transaction({ transaction_id: 'tx_new', status, error: null, failed_dir: null })], {
+      [`POST ${BASE}/repos/r_1/rescan`]: () => ({ ok: true }),
+    })
+    const maintenance = await maintenanceBlock()
+    await waitFor(() => expect(within(maintenance).getByRole('button', { name: 'Unregister' })).toBeDisabled())
+    status = 'committed'
+    await userEvent.click(within(maintenance).getByRole('button', { name: 'Rescan' }))
+    await waitFor(() => expect(within(maintenance).getByRole('button', { name: 'Unregister' })).toBeEnabled())
+    for (const name of [...WAITING, ...LEASED]) expect(within(maintenance).getByRole('button', { name }), name).toBeEnabled()
+    expect(within(maintenance).queryByText(/waits until the Upgrade transaction tx_new finishes/)).not.toBeInTheDocument()
+  })
+
+  it('leaves a second recovery to the lease, so a recovery row that never settles cannot shut recovery out', async () => {
+    const broken = repo({ install: install({ status: 'recovery_required', upgrade_available: false }) })
+    setApiRoutes({
+      ...shellRoutes(),
+      [`GET ${BASE}/repos`]: () => ({ repos: [broken], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
+      [`GET ${BASE}/repos/r_1`]: () => ({
+        repo: broken, intents: [],
+        transactions: [
+          transaction({ transaction_id: 'tx_r', kind: 'recovery', status: 'staged', error: null, failed_dir: null, steps: [] }),
+          transaction(),
+        ],
+      }),
+      [`GET ${BASE}/repos/r_1/git`]: () => ({ git: broken.git, owned_dirty: [], unrelated_dirty: 0 }),
+    })
+    mount('?view=repos&repo=r_1')
+
+    const maintenance = await maintenanceBlock()
+    await waitFor(() => expect(within(maintenance).getByRole('button', { name: 'Unregister' })).toBeDisabled())
+    expect(within(maintenance).getByRole('button', { name: 'Install recovery' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /Preview the recovery/ })).toBeEnabled()
+  })
+
+  it.each([
+    { button: 'Unregister', heading: 'Unregister checkout-web?', confirm: 'Yes, unregister it' },
+    { button: 'Archive repository', heading: 'Archive repository', confirm: 'Archive repository' },
+  ])('stops the $button confirmation already open once the page sees a transaction in flight', async ({
+    button, heading, confirm,
+  }) => {
+    let transactions: Json[] = []
+    mountWith(() => transactions, { [`POST ${BASE}/repos/r_1/rescan`]: () => ({ ok: true }) })
+    const maintenance = await maintenanceBlock()
+    await userEvent.click(within(maintenance).getByRole('button', { name: button }))
+    const flow = within(maintenance).getByRole('heading', { name: heading }).closest('section')!
+    expect(within(flow).getByRole('button', { name: confirm })).toBeEnabled()
+
+    transactions = [transaction({ transaction_id: 'tx_new', kind: 'install', status: 'staged', error: null, failed_dir: null })]
+    await userEvent.click(within(maintenance).getByRole('button', { name: 'Rescan' }))
+    const why = 'Unregistering or archiving waits until the Install transaction tx_new finishes, since it may still write to this repository.'
+    await waitFor(() => expect(within(flow).getByRole('button', { name: confirm })).toBeDisabled())
+    expect(within(flow).getByRole('button', { name: confirm })).toHaveAccessibleDescription(why)
+    await userEvent.click(within(flow).getByRole('button', { name: confirm }))
+    expect(apiCalls.filter((call) => call.method === 'DELETE' || call.method === 'PUT')).toEqual([])
+  })
+
+  // Before the transaction takes its admin lease the refusal is `transaction_in_progress`; under the lease, `repo_busy`.
+  it.each([
+    { button: 'Unregister', heading: 'Unregister checkout-web?', confirm: 'Yes, unregister it', route: `DELETE ${BASE}/repos/r_1` },
+    { button: 'Archive repository', heading: 'Archive repository', confirm: 'Archive repository', route: `PUT ${BASE}/repos/r_1/metadata` },
+  ].flatMap((flow) => [
+    { ...flow, code: 'transaction_in_progress', details: { repo_id: 'r_1', transaction_id: 'tx_new', kind: 'install', status: 'staged' } },
+    { ...flow, code: 'repo_busy', details: { repo_id: 'r_1', transaction_id: 'tx_new', kind: 'admin', operation_type: 'install' } },
+  ]))('says in words why $button was refused ($code) for a transaction the page had not seen yet', async ({
+    button, heading, confirm, route, code, details,
+  }) => {
+    const words = (enUS as Record<string, string>)[`errors.${code}`]
+    expect(words, `errors.${code} is in the catalog`).toBeTruthy()
+    mountWith(() => [], {
+      [route]: () => {
+        throw new StubApiError(409, { code, error: 'install transaction tx_new has not settled', details })
+      },
+    })
+    const maintenance = await maintenanceBlock()
+    await userEvent.click(within(maintenance).getByRole('button', { name: button }))
+    const flow = within(maintenance).getByRole('heading', { name: heading }).closest('section')!
+    await userEvent.click(within(flow).getByRole('button', { name: confirm }))
+
+    expect(await within(maintenance).findByText(words!, { exact: false })).toBeInTheDocument()
+    expect(screen.queryByText(/has not settled/)).not.toBeInTheDocument()
+  })
+})
+
+describe('how often an open repository is re-read', () => {
+  // Every read of a repository page runs Git and snapshots each of its intents. Intent changes already re-read it
+  // through `intent.updated`, so only the page's own transaction keeps it on the 2 s pace.
+  const running = {
+    slug: 'checkout-flow', intent_key: '260911-checkout-flow', operational_state: 'Running',
+    disk: { current_stage: 'code-generation' }, open_actions: 0, session: { running: true },
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it.each([
+    { what: 'an intent of it runs', intents: [running], transactions: [], reads: 0 },
+    {
+      what: 'its own transaction is in flight', intents: [], reads: 5,
+      transactions: [transaction({ transaction_id: 'tx_new', status: 'written', error: null, failed_dir: null })],
+    },
+  ])('re-reads it $reads times in 10 s while $what', async ({ intents, transactions, reads }) => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const record = repo()
+    setApiRoutes({
+      ...shellRoutes(),
+      [`GET ${BASE}/repos`]: () => ({ repos: [record], totals: { repos: 1, unavailable: 0, open_actions: 0 } }),
+      [`GET ${BASE}/repos/r_1`]: () => ({ repo: record, intents, transactions }),
+      [`GET ${BASE}/repos/r_1/git`]: () => ({ git: record.git, owned_dirty: [], unrelated_dirty: 0 }),
+    })
+    mount('?view=repos&repo=r_1')
+    await screen.findByRole('heading', { name: 'Maintenance' })
+    const before = repoReads()
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    expect(repoReads() - before).toBe(reads)
   })
 })

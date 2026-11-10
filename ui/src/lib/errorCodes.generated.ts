@@ -66,6 +66,7 @@ export const ERROR_CODES = {
   storage_unavailable: 503,
   too_large: 413,
   too_many_repos: 429,
+  transaction_in_progress: 409,
   transaction_not_found: 404,
   unauthorized: 401,
   unknown_stage: 400,

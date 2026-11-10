@@ -306,6 +306,24 @@ describe('Activity filters', () => {
 
     expect(screen.getByText(/read from one intent's audit shards/)).toBeInTheDocument()
   })
+
+  it('does not carry an action-type pick into an intent timeline, where it would drop every AI-DLC event', async () => {
+    activityRoutes([STUDIO_ROW])
+    const studioOnly = { ...EMPTY_ROUTE, view: 'activity' as const, repo: 'r_1' }
+    const view = render(<ActivityView route={studioOnly} go={vi.fn()} />)
+    await userEvent.selectOptions(await screen.findByLabelText('Action type'), 'gate')
+    await waitFor(() => expect(apiCalls.some((call) => call.path.includes('type=gate'))).toBe(true))
+
+    view.rerender(<ActivityView route={{ ...studioOnly, intent: 'default~250901-a' }} go={vi.fn()} />)
+    const timelineReads = () => apiCalls.map((call) => call.path)
+      .filter((path) => path.includes('/activity?') && path.includes('intent='))
+    await waitFor(() => expect(timelineReads()).not.toHaveLength(0))
+    expect(timelineReads().filter((path) => new URLSearchParams(path.split('?')[1]).has('type'))).toEqual([])
+    const type = screen.getByLabelText('Action type')
+    expect(type).toBeDisabled()
+    expect(type).toHaveValue('')
+    expect(screen.queryByText('1 filter applied')).toBeNull()
+  })
 })
 
 describe('Diagnostic export', () => {

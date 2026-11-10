@@ -93,7 +93,9 @@ function sameAnswer(stored: AnswerDraft | undefined, filled: AnswerDraft): boole
   return stored.option_letters.every((letter, i) => letter === filled.option_letters[i])
 }
 
-export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, api, go, reload }: TemplateProps) {
+export function QuestionsTemplate({
+  card, detail, draft, setDraft, refreshing, sending = false, api, go, reload,
+}: TemplateProps) {
   const i18n = useI18n()
   const { t } = i18n
   const advisor = useAdvisor(card, api, detail?.drafts)
@@ -114,7 +116,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
   // Several questions AI-DLC asked in one turn (A37): answered here together, sent as one reply.
   const sameTurn = view?.origin?.kind === 'audit' && (view.origin.batch_size ?? 1) > 1
   const answerable = ['Queued', 'NotDelivered'].includes(card.status)
-  const editable = answerable && !degraded && !refreshing
+  const editable = answerable && !degraded && !refreshing && !sending
   // A sent card's group is the one captured before the reply: its own answers are what was chosen, not the
   // (empty) form, so a closed card no longer reads "4 of 4 unanswered" with nothing marked.
   const sent = answerable ? null : card.submitted_answers
@@ -281,7 +283,7 @@ export function QuestionsTemplate({ card, detail, draft, setDraft, refreshing, a
 
   return (
     <section className="studio-template" data-type={card.type} aria-label={templateLabel(i18n, card)}>
-      <DecisionBrief card={card} />
+      <DecisionBrief card={card} go={go} />
       {sent ? (
         <Consequence icon="check">{t('template.questions.sentSource')}</Consequence>
       ) : unsent ? (

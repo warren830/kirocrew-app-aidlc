@@ -107,6 +107,7 @@
   "errors.action_stale": "The situation changed while you were deciding. Review the refreshed evidence and confirm again.",
   "errors.action_not_submittable": "This item is not in a state that can be submitted.",
   "errors.repo_busy": "Another operation holds this repository. It will not be interrupted.",
+  "errors.transaction_in_progress": "An install, upgrade or uninstall is still in progress for this repository. Wait for it to finish, then try again.",
   "errors.illegal_transition": "That state change is not permitted.",
   "errors.stale_generation": "Something else changed this record first.",
   "errors.state_inconsistent": "AI-DLC's files disagree with each other, so nothing will be sent until that is resolved.",

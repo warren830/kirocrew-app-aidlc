@@ -135,6 +135,7 @@
   "repos.lede": "这里的每个仓库都由你主动添加。可浏览目录或填写路径，Studio 不会自动注册仓库。",
   "repos.maintenance.note": "维护工作出现在这里和通知中，不会进入阻塞式工作流队列。",
   "repos.maintenance.title": "维护",
+  "repos.maintenance.waitForTransaction": "{kind}事务 {id} 结束之前，不能取消注册或归档该仓库，因为它可能仍在写入这个仓库。",
   "repos.preflight.aidlc": "磁盘上的 AI-DLC",
   "repos.preflight.bun": "bun",
   "repos.preflight.bunFound": "{version}，位于 {path}",

@@ -22,6 +22,7 @@ import { useI18n } from '../i18n'
 import { SpaceControls } from '../intents/SpaceControls'
 import { StudioApiError } from '../lib/api'
 import { EMPTY_ROUTE, type RoutePatch } from '../lib/route'
+import { unsettledTransaction } from '../lib/transactions'
 import type { RepoDetailResponse, RepoRecord, ReposResponse } from '../lib/types'
 import { useResource } from '../lib/useResource'
 import { Icon } from '../shell/Icon'
@@ -33,7 +34,7 @@ import { GitPanel } from './GitPanel'
 import { InstallPreview, PreviewFlow } from './InstallPreview'
 import { Block, ErrorNote, Note } from './PreflightReport'
 import { RecoveryPanel, recoveryEvidencePath } from './RecoveryPanel'
-import { RepoCard, type RepoAction } from './RepoCard'
+import { RepoCard, TRANSACTION_WAIT_NOTE_ID, WAITS_FOR_TRANSACTION, type RepoAction } from './RepoCard'
 import { RepoList } from './RepoList'
 import { TransactionDrawer } from './TransactionDrawer'
 import { MaintenancePanel } from './MaintenancePanel'
@@ -155,7 +156,12 @@ export function ReposView({ route, go }: ViewProps) {
   const detail = useResource<RepoDetailResponse>(
     route.repo ? `repo-detail:${route.repo}` : null,
     useCallback((signal) => api.repo(route.repo, { signal }), [api, route.repo]),
-    { revalidateOn: ['repo.updated', 'repo.removed', 'transaction.updated', 'intent.updated', 'reset'] },
+    {
+      // Each read runs Git and snapshots every intent here, and `intent.updated` already re-reads it when one moves,
+      // so a running intent is no reason for the fast pace. A transaction in flight is: it decides what Maintenance offers.
+      busy: (data) => unsettledTransaction(data.transactions) !== null,
+      revalidateOn: ['repo.updated', 'repo.removed', 'transaction.updated', 'intent.updated', 'reset'],
+    },
   )
 
   // The list never runs Git: it shows the reading a repository page last made. Re-read it whenever this page
@@ -173,6 +179,7 @@ export function ReposView({ route, go }: ViewProps) {
   const selected: RepoRecord | null =
     detail.data?.repo ?? list.find((repo) => repo.repo_id === route.repo) ?? null
   const transactions = detail.data?.transactions ?? []
+  const pending = unsettledTransaction(transactions)
   const doctorFeedback = doctorRun?.repoId === selected?.repo_id ? doctorRun?.feedback : null
 
   // `add` is not about one repository; every other flow is only current while its repository is selected,
@@ -184,6 +191,8 @@ export function ReposView({ route, go }: ViewProps) {
         ? flowState.kind
         : 'none'
   const closeFlow = useCallback(() => setFlowState(NO_FLOW), [])
+  // A confirmation already open when a transaction starts waits with the button that opened it.
+  const flowWaits = pending !== null && WAITS_FOR_TRANSACTION.some((action) => action === flow)
 
   // Opening a confirmation moves focus into it and scrolls it into view, so a keyboard user lands on what opened
   // and a flow whose button is pressed again after scrolling away comes back. Cancel hands focus back.
@@ -397,6 +406,7 @@ export function ReposView({ route, go }: ViewProps) {
   // Built once and placed by `txPlace` / `flowState.place`: above the card, or in its Maintenance block.
   const drawer = route.repo && selected && route.tx ? (
     <TransactionDrawer
+      key={route.tx}
       api={api}
       repoId={selected.repo_id}
       repoLabel={selected.label}
@@ -493,7 +503,8 @@ export function ReposView({ route, go }: ViewProps) {
               type="button"
               className="studio-btn"
               data-variant="danger"
-              disabled={busy !== null}
+              disabled={busy !== null || flowWaits}
+              aria-describedby={flowWaits ? TRANSACTION_WAIT_NOTE_ID : undefined}
               onClick={() => void confirmRemove()}
             >
               {t('repos.remove.confirm')}
@@ -514,7 +525,8 @@ export function ReposView({ route, go }: ViewProps) {
           <div className="studio-repo-actions">
             <button type="button" className="studio-btn" onClick={cancelFlow}>{t('install.cancel')}</button>
             <button type="button" className="studio-btn" data-variant="primary"
-              disabled={busy !== null || (flow === 'rename' && !repoLabel.trim())}
+              disabled={busy !== null || (flow === 'rename' && !repoLabel.trim()) || flowWaits}
+              aria-describedby={flowWaits ? TRANSACTION_WAIT_NOTE_ID : undefined}
               onClick={() => void saveMetadata()}>
               {t(flow === 'rename' ? 'repos.metadata.save' : 'repos.action.archive')}
             </button>

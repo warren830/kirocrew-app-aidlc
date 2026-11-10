@@ -16,6 +16,7 @@
   "decision.rebind_session.hint": "把该意图绑定到新的会话，并从最后一个稳定边界重新校验。",
   "decision.mark_not_delivered.hint": "记录该决策从未到达会话，之后你可以重新发送。",
   "decision.acknowledge.hint": "记录你已阅读该矛盾，并将其搁置以便人工处理。",
+  "decision.acknowledgeUnrecorded.hint": "关闭这次投递，不再重新发送：AI-DLC 收到了这条消息，但没有为它记录任何内容。AI-DLC 仍在等待的事项会各自出现新卡片。",
   "decision.reconcile.hint": "重新读取状态、审计和会话，并按它们的内容结束该事项。",
   "decision.resubmit.hint": "再次发送同一决策。只有在你阅读送达证据之后才可用。",
   "decision.retry_now.hint": "重置该意图的失败计数并派发一轮。",

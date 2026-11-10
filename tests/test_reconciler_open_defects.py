@@ -9,16 +9,9 @@ import fixtures as F
 import pytest
 
 from test_reconciler import (  # noqa: F401 - shared fixtures
-    GATE_DIR, HUMAN_TURN_MARKER, R, SHARD, _record, append_audit, approve_on_disk, finish_turn, scene, svc,
-    touch_human_turn,
+    GATE_DIR, HUMAN_TURN_MARKER, R, SHARD, _reconcile, _record, append_audit, approve_on_disk, finish_turn, scene,
+    svc, touch_human_turn,
 )
-
-
-def _reconcile(svc, action_id, snap=None):
-    async def run():
-        return await svc.reconciler.reconcile_action(await svc.actions.get(action_id), snap)
-
-    return asyncio.run(run())
 
 
 def _partial(svc, scene, tail_bytes: int):
@@ -28,8 +21,12 @@ def _partial(svc, scene, tail_bytes: int):
 
 
 @pytest.mark.parametrize("human_turns", [2, 3])
-def test_confirmed_presence_anomaly_can_finish_without_rebasing_or_replay(svc, scene, fake_host, human_turns):
-    """The frozen count must not strand a completed gate after its anomaly was escalated."""
+def test_a_confirmed_presence_anomaly_waits_for_a_person_and_is_never_rebased_or_replayed(
+    svc, scene, fake_host, human_turns
+):
+    """More human turns than the reply accounts for is the person's to judge, on every later tick too: they close it
+    with ``acknowledge``. Meanwhile the baseline is never rewritten, the reply never resent, and the repository is
+    free."""
     touch_human_turn(scene.root, mtime_ns=1_000_000_000)
     action_id = scene.make(status="Delivered", lease_generation=7)
     original = svc.storage.get("actions", action_id)
@@ -43,17 +40,70 @@ def test_confirmed_presence_anomaly_can_finish_without_rebasing_or_replay(svc, s
     assert required.evidence["delivery_confirmed"] is True
     assert "human_presence_anomaly" in {f["code"] for f in required.evidence["findings"]}
 
-    settled = _reconcile(svc, action_id)
-    assert settled.status == "StateChanged"
-    assert settled.resolution["evidence"]["presence"] == {
-        "human_turn_delta": human_turns, "partial": False, "marker_advanced": True, "ok": True}
-    assert settled.presence_baseline == original["presence_baseline_json"]
-    assert settled.delivery_id == original["delivery_id"]
+    again = _reconcile(svc, action_id)
+    assert (again.status, again.resolution) == ("ReconciliationRequired", None)
+    assert "human_presence_anomaly" in {f["code"] for f in again.evidence["findings"]}
+    assert again.presence_baseline == original["presence_baseline_json"]
+    assert again.delivery_id == original["delivery_id"]
     assert scene.slot.messages == transcript
-    assert [status for _, status, _ in svc.actions.transitions] == ["ReconciliationRequired", "StateChanged"]
+    assert [status for _, status, _ in svc.actions.transitions] == ["ReconciliationRequired"]
     assert asyncio.run(svc.scheduler.get(scene.repo.resolved_identity)) is None
-    assert asyncio.run(svc.actions.list_live(repo_id=scene.repo_id)) == []
-    assert _reconcile(svc, action_id).status_generation == settled.status_generation
+    assert _reconcile(svc, action_id).status_generation == again.status_generation
+
+
+def test_a_reply_that_ran_past_its_deadline_still_settles_on_any_new_turn(svc, scene, fake_host):
+    """Reconciliation for a reason other than presence (the turn ran past its deadline) counts any new human turn
+    against the frozen baseline: later turns must not strand a decision that landed."""
+    touch_human_turn(scene.root, mtime_ns=1_000_000_000)
+    action_id = scene.make(status="Delivered", lease_generation=7, deadline_at="2026-09-04T09:59:30Z")
+    scene.slot.running = True
+    assert _reconcile(svc, action_id).status == "ReconciliationRequired"
+    approve_on_disk(scene.root, human_turns=2)
+    touch_human_turn(scene.root, mtime_ns=2_000_000_000)
+    finish_turn(fake_host, scene.slot_key)
+    settled = _reconcile(svc, action_id)
+    assert (settled.status, settled.resolution["reason"]) == ("StateChanged", "gate_approved")
+    assert settled.resolution["evidence"]["presence"]["human_turn_delta"] == 2
+
+
+@pytest.mark.parametrize("read", ["raced_an_append", "tail_read"])
+def test_an_incomplete_read_never_turns_a_reply_past_its_deadline_into_a_presence_anomaly(svc, scene, fake_host, read):
+    """A read that cannot count every turn (it raced the engine's append, or read only a shard's tail) proves no
+    anomaly against a complete baseline: the next complete read still settles the reply on any new turn."""
+    touch_human_turn(scene.root, mtime_ns=1_000_000_000)
+    action_id = scene.make(status="Delivered", lease_generation=7, deadline_at="2026-09-04T09:59:30Z")
+    scene.slot.running = True
+    assert _reconcile(svc, action_id).status == "ReconciliationRequired"
+    approve_on_disk(scene.root, human_turns=2)
+    touch_human_turn(scene.root, mtime_ns=2_000_000_000)
+    finish_turn(fake_host, scene.slot_key)
+    snap = scene.snapshot()
+    shard = _record(scene.root) / "audit" / SHARD
+    audit = (replace(snap.audit, complete=False) if read == "raced_an_append"
+             else _partial(svc, scene, shard.stat().st_size - 1))
+
+    incomplete = _reconcile(svc, action_id, replace(snap, audit=audit))
+    assert incomplete.status == "ReconciliationRequired"
+    assert "human_presence_anomaly" not in {f["code"] for f in incomplete.evidence.get("findings") or ()}
+    settled = _reconcile(svc, action_id)
+    assert (settled.status, settled.resolution["reason"]) == ("StateChanged", "gate_approved")
+
+
+def test_over_the_history_budget_a_tail_read_still_finds_an_answer_nobody_gave(svc, scene):
+    """When the submit-time read was already partial, every later read is a tail read too: the turns counted after
+    dispatch still decide, so a missing turn is not left waiting for a complete read that never comes."""
+    shard = append_audit(scene.root, *(F.audit_block("HUMAN_TURN", "2026-09-04T09:30:00Z") for _ in range(12)))
+    touch_human_turn(scene.root, mtime_ns=1_000_000_000)
+    snap = scene.snapshot()
+    action_id = scene.make(status="ReconciliationRequired", evidence_extra={"delivery_confirmed": True},
+                           snap=replace(snap, audit=_partial(svc, scene, shard.stat().st_size - 1)))
+    approve_on_disk(scene.root, human_turns=0)
+    touch_human_turn(scene.root, mtime_ns=2_000_000_000)
+
+    rec = _reconcile(svc, action_id, replace(scene.snapshot(), audit=_partial(svc, scene, shard.stat().st_size - 1)))
+    assert rec.presence_baseline["human_turn_events_partial"] is True
+    assert rec.status == "ReconciliationRequired"
+    assert "human_presence_anomaly" in {f["code"] for f in rec.evidence["findings"]}
 
 
 @pytest.mark.parametrize("extra_row,settles", [
@@ -82,6 +132,7 @@ def test_a_prompt_kirocrew_wrote_itself_is_not_a_second_person(svc, scene, fake_
     else:
         assert after.status == "ReconciliationRequired"
         assert "human_presence_anomaly" in {f["code"] for f in after.evidence["findings"]}
+        assert _reconcile(svc, action_id).status == "ReconciliationRequired", "nor does the next tick settle it"
 
 
 def test_extra_turns_with_no_transcript_stay_an_anomaly(svc, scene, fake_host):
@@ -97,7 +148,7 @@ def test_extra_turns_with_no_transcript_stay_an_anomaly(svc, scene, fake_host):
 
 @pytest.mark.parametrize("missing_proof", [
     "human_turn", "marker", "marker_advance", "marker_monotonicity", "baseline", "active_cursor", "gate_resolution",
-    "new_gate_resolution", "complete_audit",
+    "complete_audit",
 ])
 def test_confirmed_recovery_still_requires_presence_and_resolution_proofs(svc, scene, fake_host, missing_proof):
     """Confirmation alone cannot bless a forged approval or incomplete multi-turn history."""
@@ -105,8 +156,7 @@ def test_confirmed_recovery_still_requires_presence_and_resolution_proofs(svc, s
     action_id = scene.make(status="ReconciliationRequired", presence=missing_proof != "baseline",
                            evidence_extra={"delivery_confirmed": True})
     if missing_proof != "gate_resolution":
-        approve_on_disk(scene.root, human_turns=0 if missing_proof == "human_turn" else 2,
-                        ts="2026-09-04T09:58:00Z" if missing_proof == "new_gate_resolution" else "2026-09-04T10:00:00Z")
+        approve_on_disk(scene.root, human_turns=0 if missing_proof == "human_turn" else 2)
     touch_human_turn(scene.root, mtime_ns=3_000_000_000)
     if missing_proof == "marker":
         (_record(scene.root) / HUMAN_TURN_MARKER).unlink()
@@ -127,9 +177,23 @@ def test_confirmed_recovery_still_requires_presence_and_resolution_proofs(svc, s
     assert svc.actions.transitions == []
 
 
-@pytest.mark.parametrize("history", ["new_with_smaller_tail", "old_timestamp", "before_boundary", "stale_marker"])
+def test_a_confirmed_reply_whose_only_approval_predates_it_settles_unverified(svc, scene, fake_host):
+    """An approval stamped before the dispatch is not this reply's receipt, so it never blesses the gate; with the turn
+    over and the human turns counted, the reply settles as one AI-DLC did not record."""
+    touch_human_turn(scene.root, mtime_ns=2_000_000_000)
+    action_id = scene.make(status="ReconciliationRequired", evidence_extra={"delivery_confirmed": True})
+    approve_on_disk(scene.root, human_turns=2, ts="2026-09-04T09:58:00Z")
+    touch_human_turn(scene.root, mtime_ns=3_000_000_000)
+    finish_turn(fake_host, scene.slot_key)
+    rec = _reconcile(svc, action_id)
+    assert (rec.status, rec.resolution["reason"]) == ("ResolvedNoTransition", "reply_not_recorded")
+    assert rec.resolution["evidence"]["answer_verified"] is False
+
+
+@pytest.mark.parametrize("history", ["new_with_smaller_tail", "old_timestamp", "earlier_named_shard", "stale_marker"])
 def test_partial_audit_keeps_dispatch_order_and_marker_requirements(svc, scene, history):
-    """Partial counts are not totals: only a new, ordered event plus the marker can resolve."""
+    """Partial counts are not totals: only a new, ordered event plus the marker can resolve. Across shards the order is
+    the engine's timestamps, whatever the files are named."""
     shard = append_audit(scene.root, *(F.audit_block("HUMAN_TURN", "2026-09-04T09:30:00Z") for _ in range(12)))
     touch_human_turn(scene.root, mtime_ns=1_000_000_000)
     snap = scene.snapshot()
@@ -140,7 +204,7 @@ def test_partial_audit_keeps_dispatch_order_and_marker_requirements(svc, scene, 
     touch_human_turn(scene.root, mtime_ns=1_000_000_000 if history == "stale_marker" else 2_000_000_000)
     if history == "old_timestamp":
         append_audit(scene.root, *(F.audit_block("HUMAN_TURN", "2026-09-04T09:58:00Z") for _ in range(2)))
-    elif history == "before_boundary":
+    elif history == "earlier_named_shard":
         (shard.parent / "000-earlier.md").write_text(
             F.audit_text(*(F.audit_block("HUMAN_TURN", "2026-09-04T10:00:00Z") for _ in range(2))))
     elif history == "new_with_smaller_tail":
@@ -159,6 +223,9 @@ def test_partial_audit_keeps_dispatch_order_and_marker_requirements(svc, scene, 
         presence = rec.resolution["evidence"]["presence"]
         assert presence["human_turn_delta"] < 0
         assert presence["new_human_turns"] == 2 and presence["partial"] is True
+    elif history == "earlier_named_shard":
+        assert rec.status == "StateChanged"
+        assert rec.resolution["evidence"]["presence"]["new_human_turns"] == 2
     else:
         assert rec.status == "ReconciliationRequired"
         presence = {f["code"]: f["params"] for f in rec.evidence["findings"]}["human_presence_anomaly"]
@@ -228,6 +295,7 @@ def test_real_delivery_in_another_slot_survives_a_failed_bound_read(svc, scene, 
     action_id = scene.make(status="ReconciliationRequired")
     other = fake_host.add_slot("other-delivered", project=str(scene.root), agent="aidlc")
     finish_turn(fake_host, other.key)
+    other.messages[0]["meta"] = {"studio_delivery_id": svc.storage.get("actions", action_id)["delivery_id"]}
     _break_transcript(monkeypatch, scene.slot, "unreadable")
     rec = _reconcile(svc, action_id)
     assert rec.status == "ReconciliationRequired"

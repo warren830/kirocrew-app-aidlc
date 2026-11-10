@@ -79,9 +79,9 @@ export function Facts({ rows }: { rows: Fact[] }) {
 }
 
 /** A quiet paragraph that says what Studio does or does not do. `tone` is paired with an icon. */
-export function Note({ children, tone }: { children: ReactNode; tone?: 'danger' | 'warn' }) {
+export function Note({ children, tone, id }: { children: ReactNode; tone?: 'danger' | 'warn'; id?: string }) {
   return (
-    <p className="studio-note" {...(tone ? { 'data-tone': tone } : {})}>
+    <p className="studio-note" id={id} {...(tone ? { 'data-tone': tone } : {})}>
       <Icon name={tone ? 'warn' : 'info'} size={13} /> {children}
     </p>
   )

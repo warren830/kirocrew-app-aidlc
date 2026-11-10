@@ -239,7 +239,10 @@ interface MountResult {
 function mount(
   Template: (props: TemplateProps) => JSX.Element | null,
   cardValue: ActionCard,
-  options: { draft?: Partial<ActionDraft>; refreshing?: boolean; route?: Partial<StudioRoute>; detail?: ActionDetailResponse | null } = {},
+  options: {
+    draft?: Partial<ActionDraft>; refreshing?: boolean; sending?: boolean; route?: Partial<StudioRoute>
+    detail?: ActionDetailResponse | null
+  } = {},
 ): MountResult {
   const patches: RoutePatch[] = []
   const initial: ActionDraft = { ...EMPTY_DRAFT, ...options.draft }
@@ -257,6 +260,7 @@ function mount(
         draft={draft}
         setDraft={(patch) => setDraftState((value) => ({ ...value, ...patch }))}
         refreshing={options.refreshing ?? false}
+        sending={options.sending ?? false}
         api={api}
         route={route}
         go={(patch) => patches.push(patch)}
@@ -664,6 +668,13 @@ describe('gate template', () => {
     first.unmount()
     mount(GateTemplate, card(), { draft: { feedback: '😀'.repeat(8001) } })
     expect(screen.getByText(tooLong)).toBeInTheDocument()
+  })
+
+  it('locks the change-request note while it is being sent', () => {
+    setApiRoutes({})
+    mount(GateTemplate, card({ decisions: [spec('approve'), spec('request_changes', ['feedback'])] }),
+      { draft: { feedback: 'Cover the decline path.' }, sending: true })
+    expect(screen.getByLabelText(en.t('template.gate.feedbackLabel'))).toBeDisabled()
   })
 
   it('offers no change-request box when the card does not offer the decision', () => {
@@ -1173,6 +1184,15 @@ describe('questions template', () => {
     expect(screen.getByText(en.t('template.questions.checkpoint.assumption_confirmation'))).toBeInTheDocument()
     expect(screen.getByText('- The demo covers the extra features [assumption]')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: en.t('advisor.action.question_draft') })).not.toBeInTheDocument()
+  })
+
+  it('locks the answers while they are being sent', () => {
+    setApiRoutes({})
+    mount(QuestionsTemplate, questionCard(), { draft: { answers: { '1': { option_letters: ['A'], free_text: null } } },
+      sending: true })
+    const radios = screen.getAllByRole('radio')
+    expect(radios.length).toBeGreaterThan(0)
+    for (const radio of radios) expect(radio).toBeDisabled()
   })
 
   it('states degraded mode, disables every input and points at the conversation', async () => {
@@ -1720,6 +1740,17 @@ describe('budget and missing input templates', () => {
     expect(draft().inputKind).toBe('scope')
   })
 
+  it('locks the missing scope while it is being sent', () => {
+    setApiRoutes({})
+    mount(MissingInputTemplate, card({
+      type: 'missing_input',
+      headline: { key: 'action.missing_input.headline', params: { reason: 'missing_scope', kind: 'scope' } },
+      decisions: [spec('provide_input', ['feedback'])],
+      primary: { decision: 'provide_input', label_key: 'decision.provide_input.label' },
+    }), { draft: { scope: 'Guest checkout', inputKind: 'scope' }, sending: true })
+    expect(screen.getByLabelText(en.t('template.missingInput.input.scope'))).toBeDisabled()
+  })
+
   it('quotes the question AI-DLC asked in the conversation next to its reply suggestions', async () => {
     setApiRoutes({})
     const base = card()
@@ -1846,6 +1877,15 @@ describe('budget and missing input templates', () => {
     // The radios never claim a send the box will not make: the text is the user's own now.
     expect(screen.getByRole('radio', { name: /^Keep none, nothing to add/ })).not.toBeChecked()
     expect(screen.getByRole('radio', { name: /^Other/ })).toBeChecked()
+  })
+
+  it('locks the reply suggestions and the box while the reply is being sent', () => {
+    setApiRoutes({})
+    mount(MissingInputTemplate, replyCard(), { draft: { freeText: 'Keep 1 and 2, nothing to add' }, sending: true })
+    expect(replyBox()).toBeDisabled()
+    const radios = within(replyGroup()).getAllByRole('radio')
+    expect(radios).toHaveLength(4)
+    for (const radio of radios) expect(radio).toBeDisabled()
   })
 
   it('shows a saved draft that is a suggestion as that suggestion chosen', () => {
@@ -2069,6 +2109,18 @@ describe('advisor block', () => {
     expect(screen.queryByText(en.t('template.command.dispatch'))).toBeNull()
   })
 
+  it.each([
+    ['run', 'command_superseded'], ['set_learnings', 'original_delivered'],
+  ] as const)('claims no dispatch for a %s copy closed before it was sent (%s)', (type, reason) => {
+    setApiRoutes({})
+    mount(DecisionTemplate, card({ type, status: 'Cancelled', decisions: [], primary: null,
+      headline: { key: `action.${type}.headline`, params: { value: 'off' } },
+      resolution: { kind: 'cancelled', reason, evidence: null, resolved_at: null } }))
+    expect(screen.queryByText(en.t('template.command.dispatched'))).toBeNull()
+    expect(screen.queryByText(en.t('template.command.dispatch'))).toBeNull()
+    expect(screen.queryByText(en.t('template.command.stageSubSent'))).toBeNull()
+  })
+
   it('says where a sent run was to resume from, in the past tense', () => {
     setApiRoutes({})
     const run = { type: 'run' as const, decisions: [spec('run')], headline: { key: 'action.run.headline', params: {} } }
@@ -2081,5 +2133,30 @@ describe('advisor block', () => {
     setApiRoutes({})
     mount(DecisionTemplate, card({ type: 'run', decisions: [spec('run')], headline: { key: 'action.run.headline', params: {} } }))
     expect(screen.queryByText(en.t('advisor.notRun'))).toBeNull()
+  })
+})
+
+describe('the record of a closed decision', () => {
+  it.each([
+    ['reply_not_recorded', 'ResolvedNoTransition', 'AI-DLC received this reply, but its turn ended without recording it'],
+    ['acknowledged', 'ResolvedNoTransition', 'You closed this after reading the evidence'],
+    ['acknowledged', 'Cancelled', 'This action is closed. Use current actions to see what this intent needs now.'],
+    ['gate_approved_without_row', 'ResolvedNoTransition', 'its state file still shows the stage open'],
+    ['original_delivered', 'Cancelled', 'reached the conversation after all, so Studio withdrew this copy before sending it'],
+  ] as const)('says what a %s %s close means', (reason, status, body) => {
+    setApiRoutes({})
+    mount(GateTemplate, card({ status, resolution: {
+      kind: status === 'Cancelled' ? 'cancelled' : 'no_transition', reason, evidence: null, resolved_at: null,
+    } }))
+    expect(screen.getByText(body, { exact: false })).toBeInTheDocument()
+  })
+
+  it('opens the first send a withdrawn copy names, in the Action Center', async () => {
+    setApiRoutes({})
+    const { patches } = mount(GateTemplate, card({ status: 'Cancelled', decisions: [], primary: null,
+      resolution: { kind: 'cancelled', reason: 'original_delivered', resolved_at: null,
+        evidence: { presence: null, is_active: null, delivered_by: 'a_first' } } }))
+    await userEvent.click(screen.getByRole('button', { name: en.t('template.common.openOriginal', { action: 'a_first' }) }))
+    expect(patches).toContainEqual({ ...EMPTY_ROUTE, view: 'actions', repo: 'r_1', action: 'a_first' })
   })
 })

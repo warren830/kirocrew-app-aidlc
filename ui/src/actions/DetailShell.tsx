@@ -19,8 +19,8 @@
  *  3. **Drafts survive.** Unsent feedback and answers live in `localStorage` per action id, so
  *     switching to another card and back loses nothing (PRD §10.2). Because nothing is discarded there
  *     is nothing to warn about.
- *  4. **One submit at a time.** `useSubmit` holds the module-level guard; this pane simply never offers
- *     a second control while it is busy.
+ *  4. **One decision per action at a time.** `useSubmit` holds the module-level guard; this pane locks the
+ *     controls of an action in flight, whichever pane sent it, and no other card's.
  */
 
 import {
@@ -36,18 +36,18 @@ import { isClosedAction, isRepositoryUnavailable } from '../lib/actionQueue'
 import { DEFAULT_TAB, EMPTY_ROUTE, type Navigate, type StudioRoute, type Tab } from '../lib/route'
 import { useResource } from '../lib/useResource'
 import type {
-  ActionCard, ActionDetailResponse, ActionTransition, ActionType, Decision, DecisionSpec, ResolvePayload,
+  ActionCard, ActionDetailResponse, ActionTransition, ActionType, Captured, Decision, DecisionSpec, ResolvePayload,
   SubmitPayload,
 } from '../lib/types'
 import { ArtifactsTab } from '../artifacts/ArtifactsTab'
 import { ReviewTab } from '../artifacts/ReviewTab'
 import { ActionBar } from './ActionBar'
-import { ConfirmPanel, type PendingDecision } from './ConfirmPanel'
+import { ConfirmPanel, type ConfirmNote, type PendingDecision } from './ConfirmPanel'
 import { DeliveryStrip, statusLabel } from './DeliveryStrip'
 import { DetailHeader } from './DetailHeader'
 import { DetailTabs, tabsFor } from './DetailTabs'
 import { isRefreshing } from './QueueRow'
-import { IDLE, pendingQuestions, useSubmit, wireTextFor } from './useSubmit'
+import { IDLE, pendingQuestions, useInFlight, useSubmit, wireTextFor, type DeliveryOutcome } from './useSubmit'
 import { APP_NAME } from '../lib/app'
 
 // --------------------------------------------------------------------------- //
@@ -128,6 +128,8 @@ export interface TemplateProps {
   setDraft: (patch: Partial<ActionDraft>) => void
   /** True while the card's evidence is being re-read: show it, do not let it be submitted against. */
   refreshing: boolean
+  /** True while this card's decision is in flight: what is typed now would not be what is being sent. */
+  sending?: boolean
   api: StudioApi
   route: StudioRoute
   go: Navigate
@@ -251,12 +253,15 @@ export function resolvePayloadFor(decision: Decision, card: ActionCard): Resolve
 // the pane
 // --------------------------------------------------------------------------- //
 
-/** Whichever card the server touched most recently. ISO timestamps compare as strings. */
+/**
+ * Whichever card the server touched most recently. ISO timestamps compare as strings. A full tie is the same row
+ * read again, whose live join may still have moved (a stale refusal's refreshed card), so it goes to `b`.
+ */
 function newer(a: ActionCard | null, b: ActionCard | null): ActionCard | null {
   if (!a) return b
   if (!b) return a
   if (a.action_id !== b.action_id) return b
-  if (a.updated_at === b.updated_at) return a.status_generation >= b.status_generation ? a : b
+  if (a.updated_at === b.updated_at) return a.status_generation > b.status_generation ? a : b
   return a.updated_at > b.updated_at ? a : b
 }
 
@@ -274,16 +279,54 @@ export interface DetailShellProps {
   onQueueChanged: () => void
 }
 
-/** Refusals that pass with time: the conversation finishes its turn, the repository lease is released. */
-const PASSING_REFUSALS: ReadonlySet<string> = new Set(['slot_busy', 'session_busy', 'repo_busy'])
+/**
+ * Refusals that pass with time: the conversation finishes its turn, the repository lease is released, the host's
+ * conversations can be read again.
+ */
+const PASSING_REFUSALS: ReadonlySet<string> = new Set(['slot_busy', 'session_busy', 'repo_busy', 'host_unavailable'])
+
+/**
+ * Send it again refused because the host may still answer the first send: it passes at that send's ack deadline. The
+ * same code for any other reason (a delivery confirmed among them) is final.
+ */
+function ackDeadlineNote(i18n: I18n, refusal: StudioApiError): ConfirmNote | null {
+  if (refusal.code !== 'not_delivered_unproven' || refusal.details['reason'] !== 'ack_deadline_pending') return null
+  const deadline = refusal.details['ack_deadline_at']
+  return { key: 'confirm.retry.ackDeadlinePending', params: { at: at(i18n, typeof deadline === 'string' ? deadline : null) } }
+}
+
+/** What to say beside the send about a refusal that passes with time, or `null` for one that will not pass. */
+function passingNote(i18n: I18n, refusal: StudioApiError): ConfirmNote | null {
+  return PASSING_REFUSALS.has(refusal.code) ? { key: `confirm.retry.${refusal.code}` } : ackDeadlineNote(i18n, refusal)
+}
+
+/** What an unrecorded send left with KiroCrew, by what the host answered: only a send it took has the message. */
+const REPORT_FAILED: Readonly<Record<DeliveryOutcome, string>> = {
+  delivered: 'delivery.reportFailed',
+  uncertain: 'delivery.reportFailedUncertain',
+  not_delivered: 'delivery.reportFailedRefused',
+}
+
+/**
+ * An open confirmation: the decision, and the capture of the evidence on screen when it was chosen. Send asserts
+ * that capture, so evidence refreshed under an open panel comes back as the server's `action_stale` and a fresh
+ * confirmation, never as a send of something the person did not look at.
+ */
+interface Confirmation {
+  spec: DecisionSpec
+  captured: Captured
+}
 
 export function DetailShell({
   actionId, queueCard, api, route, go, groupedAnswers, onQueueChanged,
 }: DetailShellProps) {
-  const { t } = useI18n()
+  const i18n = useI18n()
+  const { t } = i18n
   const [override, setOverride] = useState<ActionCard | null>(null)
-  const [chosen, setChosen] = useState<DecisionSpec | null>(null)
-  const [acknowledged, setAcknowledged] = useState(false)
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
+  // "I have read the delivery evidence" is about one reading of it: the `acknowledged_evidence_sha256` it was ticked
+  // for. Evidence that moves (a stale refusal's refreshed card, a refresh under the open panel) is unread again.
+  const [acknowledgement, setAcknowledgement] = useState<{ evidence: string | null } | null>(null)
   const [draft, setDraftState] = useState<ActionDraft>(EMPTY_DRAFT)
 
   const detail = useResource<ActionDetailResponse>(
@@ -296,8 +339,8 @@ export function DetailShell({
   // server-supplied override must not survive it, or the pane would offer to send the old text.
   useEffect(() => {
     setOverride(null)
-    setChosen(null)
-    setAcknowledged(false)
+    setConfirmation(null)
+    setAcknowledgement(null)
     setDraftState(actionId ? readDraft(actionId) : EMPTY_DRAFT)
   }, [actionId])
 
@@ -315,22 +358,30 @@ export function DetailShell({
     [actionId],
   )
 
+  const refreshDetail = detail.refresh
   const submitter = useSubmit({
     api,
     onCard: useCallback((card: ActionCard) => {
       if (card.action_id === actionId) setOverride((current) => newer(current, card))
     }, [actionId]),
-    onSettled: onQueueChanged,
+    // A report the backend refused carries no card, though the refusal itself moved it (`not_delivered_unproven`
+    // records ReconciliationRequired): read it again rather than show the card from before the send.
+    onSettled: () => {
+      onQueueChanged()
+      void refreshDetail()
+    },
   })
   // Keep the in-flight submitter alive across navigation, while showing only this action's result.
-  const { busy } = submitter
   const submit = submitter.state.actionId === actionId ? submitter.state : IDLE
+  // The lock follows the card, whichever pane sent it.
+  const inFlight = useInFlight(actionId)
   const currentDetail = detail.data?.action.action_id === actionId ? detail.data : null
 
+  // On a tie the server's answer to this pane outranks the detail read, which outranks the queue's copy.
   const card = useMemo(
     () => newer(
+      newer(queueCard?.action_id === actionId ? queueCard : null, currentDetail?.action ?? null),
       override?.action_id === actionId ? override : null,
-      newer(currentDetail?.action ?? null, queueCard?.action_id === actionId ? queueCard : null),
     ),
     [override, actionId, currentDetail, queueCard],
   )
@@ -343,7 +394,7 @@ export function DetailShell({
   const cardStatus = card?.status ?? null
   useEffect(() => {
     if (submit.stage !== 'settled' || submit.actionId !== actionId) return
-    setChosen(null)
+    setConfirmation(null)
     const left = cardStatus !== null && !['Queued', 'NotDelivered'].includes(cardStatus)
     if (outcome === 'delivered' || outcome === 'uncertain' || left) clearDraft(actionId)
   }, [submit.stage, submit.actionId, actionId, outcome, cardStatus])
@@ -380,6 +431,7 @@ export function DetailShell({
   }
 
   const refreshing = isRefreshing(card)
+  const sending = inFlight !== null
   const tabs = tabsFor(card, currentDetail)
   const activeTab: Tab = tabs.some((entry) => entry.tab === route.tab) ? route.tab : DEFAULT_TAB
   const Template = templateFor(card.type)
@@ -411,6 +463,11 @@ export function DetailShell({
     return 'confirm.blocked.noWireText'
   }
 
+  // A refusal about the moment, not the decision: nothing was sent, and the same send succeeds once the turn ends,
+  // the lease is free or the first send's ack deadline passes, so it is said beside the button and the button stays live.
+  const refused = submit.stage === 'refused' ? submit.refusal : null
+  const passing = refused ? passingNote(i18n, refused) : null
+
   /**
    * Why the SEND is refused, for the reasons the bar must not be the only place to say.
    *
@@ -441,28 +498,23 @@ export function DetailShell({
     // refuses as `session_unbound`. A slot that is bound but gone or re-pointed (`slot_mismatch`) reads
     // identically to a healthy idle one in this card, so that one is left to the round trip.
     if (spec.lane !== 'studio_only' && !card.evidence.session?.slot_key) return 'confirm.blocked.sessionUnbound'
-    if (submit.stage === 'refused' && submit.actionId === card.action_id && submit.refusal
-      && !PASSING_REFUSALS.has(submit.refusal.code)) {
-      return `errors.${submit.refusal.code}`
-    }
+    if (refused && !passing) return `errors.${refused.code}`
     return null
   }
-  // A refusal about the moment, not the decision: nothing was sent, and the same send succeeds once the turn ends
-  // or the lease is free, so it is said beside the button and the button stays live.
-  const sendNoteFor = (): string | null =>
-    submit.stage === 'refused' && submit.actionId === card.action_id && submit.refusal
-      && PASSING_REFUSALS.has(submit.refusal.code) ? `confirm.retry.${submit.refusal.code}` : null
 
   /*
-   * The confirmation, derived rather than frozen.
+   * The confirmation, derived until Send.
    *
-   * Only the chosen decision is state; the payload and the wire text are recomputed from the current
-   * draft on every render. That is what makes "what you see is what is sent" true even if the user edits
-   * the feedback box while the panel is open — a snapshot taken when the panel opened would display one
-   * string and send it while the box above showed another.
+   * Only the chosen decision and its capture are state; the payload and the wire text are recomputed from the
+   * current draft on every render. That is what makes "what you see is what is sent" true even if the user edits
+   * the feedback box while the panel is open — a snapshot taken when the panel opened would display one string
+   * and send it while the box above showed another. From Send on the panel shows the request itself
+   * (`SubmitState.request`), whatever the card offers meanwhile (a Delivering card offers nothing), and the inputs
+   * stay locked until the outcome is recorded.
    */
+  const chosen = confirmation?.spec ?? null
   const pending: PendingDecision | null = chosen
-    && card.decisions.some((spec) => spec.decision === chosen.decision)
+    && (sending || card.decisions.some((spec) => spec.decision === chosen.decision))
     && !(isRepositoryUnavailable(card) && chosen.lane === 'human_lane')
     ? (() => {
         const payload = chosen.lane === 'studio_only' ? null : payloadFor(chosen.decision, card, draft)
@@ -472,7 +524,7 @@ export function DetailShell({
           resolvePayload: chosen.lane === 'studio_only' ? resolvePayloadFor(chosen.decision, card) : null,
           wire: payload ? wireTextFor(payload, card.evidence.questions, groupedAnswers) : null,
           blockedKey: sendBlockedFor(chosen),
-          noteKey: sendNoteFor(),
+          note: passing,
         }
       })()
     : null
@@ -481,16 +533,16 @@ export function DetailShell({
     // Pressing the same control again closes the confirmation rather than re-opening it: an expanded
     // disclosure whose trigger does nothing is a control that looks broken.
     if (chosen?.decision === spec.decision) {
-      setChosen(null)
+      setConfirmation(null)
       return
     }
     submitter.reset()
-    setAcknowledged(false)
-    setChosen(spec)
+    setAcknowledgement(null)
+    setConfirmation({ spec, captured: card.captured })
   }
 
   const send = () => {
-    if (!pending) return
+    if (!pending || !confirmation) return
     if (pending.spec.lane === 'studio_only') {
       if (pending.resolvePayload) void submitter.resolve({ card, payload: pending.resolvePayload })
       return
@@ -499,20 +551,21 @@ export function DetailShell({
       // The same two-phase machine from a different first endpoint (§1.12): `force-stop` inserts the
       // action and moves it to Delivering in one call, and its `receipt.host` is the stop route. No
       // prompt, therefore no wire text to confirm — only the consequence.
-      void submitter.submit({
-        card,
-        payload: null,
-        clientWireText: '',
-        begin: () => api.forceStop(card.repo.repo_id, card.intent.intent_key),
-      })
+      void submitter.submit({ card, begin: () => api.forceStop(card.repo.repo_id, card.intent.intent_key) })
       return
     }
     if (!pending.payload || pending.wire === null) return
-    void submitter.submit({ card, payload: pending.payload, clientWireText: pending.wire })
+    // A stale refusal put the refreshed card in front of the person and asked them to confirm again: this Send
+    // confirms that card, so its capture is what this confirmation asserts from here on.
+    const captured = submit.stage === 'stale' && submit.staleCard ? submit.staleCard.captured : confirmation.captured
+    setConfirmation({ spec: confirmation.spec, captured })
+    void submitter.submit({ card, captured, payload: pending.payload, clientWireText: pending.wire })
   }
 
   const refusal = submit.refusal
   const staleRefusal = submit.stage === 'stale'
+  // The code's own sentence would say "never resent" of a send that opens again at the deadline.
+  const waitingForAck = refusal ? ackDeadlineNote(i18n, refusal) : null
 
   return (
     <section className="studio-detail" aria-label={t('detail.label')}>
@@ -538,9 +591,9 @@ export function DetailShell({
             <div className="studio-banner" data-tone="danger" role={staleRefusal ? 'alert' : 'status'}>
               <Icon name="warn" size={15} />
               <div className="studio-grow">
-                <p>{t(`errors.${refusal.code}`)}</p>
+                <p>{waitingForAck ? t(waitingForAck.key, waitingForAck.params) : t(`errors.${refusal.code}`)}</p>
                 <p className="studio-muted">{staleRefusal ? t('detail.staleRefused')
-                  : card.delivery.delivered_at || card.delivery.transcript_row
+                  : card.delivery.delivered_at || card.delivery.transcript_row || card.delivery.delivery_confirmed
                     ? t('detail.additionalAttemptBlocked') : t('detail.nothingSent')}</p>
                 <RefusalDetails refusal={refusal} onOpenAction={(action) => go({
                   ...EMPTY_ROUTE, view: 'actions', repo: card.repo.repo_id, action,
@@ -549,12 +602,13 @@ export function DetailShell({
             </div>
           ) : null}
 
-          {submit.attempt && !submit.attempt.reported ? (
-            // The host has the message and Studio could not record the outcome. Assertive: the user must
-            // not close the tab believing nothing happened.
+          {submit.stage === 'settled' && submit.attempt?.reported === false ? (
+            // The report never reached the broker: Studio could not record what happened. Assertive: the user must
+            // not close the tab believing Studio has the outcome.
             <div className="studio-banner" data-tone="warn" role="alert">
               <Icon name="warn" size={15} />
-              <span className="studio-grow">{t('delivery.reportFailed')}</span>
+              <span className="studio-grow">{t(submit.attempt.hostCalled
+                ? REPORT_FAILED[submit.attempt.outcome] : 'delivery.reportFailedNotSent')}</span>
             </div>
           ) : null}
 
@@ -580,6 +634,7 @@ export function DetailShell({
                 draft={draft}
                 setDraft={setDraft}
                 refreshing={refreshing}
+                sending={sending}
                 api={api}
                 route={route}
                 go={go}
@@ -595,6 +650,7 @@ export function DetailShell({
               draft={draft}
               setDraft={setDraft}
               refreshing={refreshing}
+              sending={sending}
               api={api}
               route={route}
               go={go}
@@ -638,12 +694,12 @@ export function DetailShell({
           card={card}
           pending={pending}
           submit={submit}
-          busy={busy}
+          inFlight={inFlight}
           refreshing={refreshing && pending.spec.lane !== 'studio_only'}
-          acknowledged={acknowledged}
-          onAcknowledge={setAcknowledged}
+          acknowledged={acknowledgement !== null && acknowledgement.evidence === card.acknowledged_evidence_sha256}
+          onAcknowledge={(value) => setAcknowledgement(value ? { evidence: card.acknowledged_evidence_sha256 } : null)}
           onSend={send}
-          onCancel={() => setChosen(null)}
+          onCancel={() => setConfirmation(null)}
           onOpenBlockingAction={(action) => go({
             ...EMPTY_ROUTE, view: 'actions', repo: card.repo.repo_id, action,
           })}
@@ -656,7 +712,7 @@ export function DetailShell({
       <ActionBar
         card={card}
         submit={submit}
-        busy={busy}
+        inFlight={inFlight}
         refreshing={refreshing}
         pending={pending}
         onChoose={choose}

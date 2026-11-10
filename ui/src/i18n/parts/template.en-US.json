@@ -7,6 +7,8 @@
   "template.common.brief": "Decision brief",
   "template.common.closedTitle": "Historical record",
   "template.common.closedBody": "This action is closed. Use current actions to see what this intent needs now.",
+  "template.common.originalDelivered": "The first send of this decision reached the conversation after all, so Studio withdrew this copy before sending it. Nothing was sent twice.",
+  "template.common.openOriginal": "Open the first send, {action}",
   "template.common.originalNotice": "Notice when this record was created",
   "template.recovery.sessionMissing": "The recorded conversation was unavailable when this notice was created.",
   "template.recovery.sessionRepair": "Open the intent's conversation settings and bind a new or existing aidlc conversation. Acknowledging only dismisses this notice.",

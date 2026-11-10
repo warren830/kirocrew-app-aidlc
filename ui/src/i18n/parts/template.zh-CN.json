@@ -247,6 +247,8 @@
   "template.questions.summaryChoiceLabel": "你对该检查点的回应",
   "template.common.closedTitle": "历史记录",
   "template.common.closedBody": "该操作已关闭。请查看当前待办，了解任务现在需要处理的事项。",
+  "template.common.originalDelivered": "这项决定的首次发送最终送达了会话，因此 Studio 在发送前撤回了这份副本。没有任何内容被发送两次。",
+  "template.common.openOriginal": "打开首次发送 {action}",
   "template.common.originalNotice": "创建这条记录时的通知",
   "template.recovery.sessionMissing": "创建这条通知时，记录中的会话不可用。",
   "template.recovery.sessionRepair": "请打开任务的会话设置，绑定新的或已有的 aidlc 会话。确认仅关闭这条通知。",

@@ -23,6 +23,7 @@ Threading: async facade (§0.6); SQLite, snapshots and the cursor-switch child r
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import sqlite3
@@ -41,8 +42,8 @@ from .consistency import ACTION_STORED_FINDING_CODES, FINDING_SEVERITIES, RepoFa
 from .engine import CursorReadback, conversation_bun
 from .errors import IllegalTransition, StaleGeneration, StudioError
 from .projection import (
-    SEED_SEVERITY, SEVERITY_RANK, UNCERTAIN_STATUSES, dedupe_key, priority_group_for, queue_type_for,
-    plan_session_stale, reply_excerpt, run_unavailable_reason,
+    SEED_SEVERITY, SEVERITY_RANK, UNCERTAIN_STATUSES, breaker_card_key, breaker_key, dedupe_key, priority_group_for,
+    queue_type_for, plan_session_stale, reply_excerpt, run_unavailable_reason,
 )
 from .repo_registry import RepoRecord
 from .sessions import busy_reasons
@@ -65,7 +66,8 @@ logger = logging.getLogger("aidlc-studio.actions")
 __all__ = [
     "ABSENCE_PROOF", "ALLOWED_TRANSITIONS", "CLIENT_PREFLIGHT_CODES", "COMMAND_ACTION_TYPES", "Captured", "DECISIONS",
     "HOST_CONTROL_DECISIONS", "HUMAN_LANE_DECISIONS", "HostCall", "HumanActionBroker", "STUDIO_ONLY_DECISIONS",
-    "ActionRecord", "PresenceBaseline", "SubmitReceipt", "WIRE_TEXT_TEMPLATES", "lane_for", "wire_text_for",
+    "ActionRecord", "PresenceBaseline", "SubmitReceipt", "WIRE_TEXT_TEMPLATES", "lane_for", "record_interruption",
+    "wire_text_for",
 ]
 
 
@@ -665,18 +667,32 @@ def _human_prose(payload: Mapping[str, Any]) -> str | None:
 
 
 def _host_call(rec: ActionRecord) -> HostCall | None:
-    """The browser's call for a dispatched row: the host's stop endpoint, or the chat send with the server's
-    wire text and the delivery meta the reconciler matches transcript rows by (R08)."""
+    """The browser's call for a dispatched row: the host's stop endpoint (``?force=true`` for a press after a stop the
+    host took, as KiroCrew's own second press sends it), or the chat send with the server's wire text and the
+    delivery meta the reconciler matches transcript rows by (R08)."""
     if not (rec.delivery_id and rec.slot_key):
         return None
     if rec.type == "force_stop":
-        return HostCall("POST", f"{C.HOST_CHAT_SLOTS_PATH}/{rec.slot_key}/stop", {})
+        force = "?force=true" if rec.evidence.get("force") else ""
+        return HostCall("POST", f"{C.HOST_CHAT_SLOTS_PATH}/{rec.slot_key}/stop{force}", {})
     if rec.wire_text is None:
         return None
     return HostCall("POST", C.HOST_CHAT_SEND_PATH, {
         "message": rec.wire_text, "slot": rec.slot_key, "agent": C.AIDLC_AGENT_NAME,
         "meta": {"studio_action_id": rec.action_id, "studio_delivery_id": rec.delivery_id},
     })
+
+
+async def record_interruption(sessions: "SessionBinder", activity: "ActivityProjector", clock: C.Clock,
+                              rec: Any) -> None:
+    """A force stop the host took is a durable interruption (C28/P17), cleared only by the recovery card's
+    ``acknowledge``: PRD §11.2 requires a manual takeover after a mid-stage interruption. The one writer for every
+    way a stop settles."""
+    await sessions.set_interrupted(rec.repo_id, rec.space, rec.intent_dir, clock.iso())
+    with contextlib.suppress(StudioError):
+        await activity.record(kind="intent.force_stop", severity="attention", repo_id=rec.repo_id, space=rec.space,
+                              intent_dir=rec.intent_dir, stage=rec.stage, action_id=rec.action_id,
+                              params={"slot_key": rec.slot_key})
 
 
 def _queue_key(rec: ActionRecord) -> tuple[int, int, str, str]:
@@ -753,20 +769,20 @@ class HumanActionBroker:
         return sorted(out.values(), key=_queue_key)
 
     async def _answered_in_flight(self, seed: "CardSeed") -> bool:
-        """A decision of this kind for this stage is already on its way to AI-DLC.
+        """A decision of this kind for this stage (and team Unit) is already on its way to AI-DLC.
 
         The boundary token moves while the engine applies a decision — ``GATE_APPROVED`` lands a moment
         before the ``[?]`` row clears — so for a few seconds the same open gate derived a *new* card.
         It sat in the queue beside the approval still in flight, inviting a second click on a gate the
-        human had just approved. The in-flight row already speaks for this boundary; once it settles,
-        anything still open on disk derives its card again.
+        human had just approved. The in-flight row already speaks for this boundary; once it settles or
+        fails, anything still open on disk derives its card again.
         """
         for rec in await self.list_live(
             repo_id=seed.repo_id, space=seed.space, intent_dir=seed.intent_dir, include_revision=True
         ):
             if (
-                rec.type == seed.type and rec.stage == seed.stage and rec.dedupe_key != seed.dedupe_key
-                and rec.status not in SUBMITTABLE_STATUSES
+                rec.type == seed.type and rec.stage == seed.stage and (rec.unit or None) == (seed.unit or None)
+                and rec.dedupe_key != seed.dedupe_key and rec.status in C.DISPATCHED_ACTION_STATUS
             ):
                 return True
         return False
@@ -954,21 +970,45 @@ class HumanActionBroker:
     ) -> SubmitReceipt:
         """Commit a force stop and hand the browser the host's stop call (C28, P16). Nothing reaches the model, so
         no wire text, lease, cursor switch or presence baseline; the durable record still comes first (FR-RUN-004),
-        since it becomes the ``Interrupted`` state PRD §11.2's manual takeover requires."""
+        since it becomes the ``Interrupted`` state PRD §11.2's manual takeover requires.
+
+        One press, one stop call: a stop being sent is returned as is. Otherwise the earlier stop is closed first: one
+        the host took settles as its interruption and this press goes out in KiroCrew's force form (``stop_slot_turn``
+        hard-kills a cooperative stop still pending on a second call); one it may have taken is superseded; one that
+        never left is this card, sent again under its own id, which the browser reports against."""
         binding = await self._sessions.get(repo.repo_id, space, intent_dir)
         if not binding.slot_key:
             _refuse("session_unbound", "this intent has no bound chat slot to stop", intent_key=snap.intent_key)
-        lives = await self.list_live(repo_id=repo.repo_id, space=space, intent_dir=intent_dir, include_revision=True)
-        rec = next((live for live in lives if live.type == "force_stop"), None)
+        prior = next((live for live in await self.list_live(repo_id=repo.repo_id, space=space, intent_dir=intent_dir,
+                                                            include_revision=True)
+                      if live.type == "force_stop" and live.status in C.DEDUPE_LIVE_ACTION_STATUS), None)
+        if prior is not None and prior.status == "Delivering":
+            return self._receipt(prior, None)
+        if prior is not None and prior.status == "NotDelivered" and prior.evidence.get("delivery_confirmed"):
+            prior = await self._transition(prior, "ReconciliationRequired", reason="delivery_report_delivered",
+                                           evidence={})
+        force, superseded, rec = False, None, prior
+        if prior is not None and prior.status in ("Delivered", "ReconciliationRequired"):
+            rec = None
+            if prior.status == "Delivered" or prior.evidence.get("delivery_confirmed"):
+                settled = await self._transition(prior, "ResolvedNoTransition", reason="stopped_again", evidence={})
+                await record_interruption(self._sessions, self._activity, self._clock, settled)
+                force = True
+            else:
+                superseded = await self._transition(prior, "Failed", reason="superseded_by_resubmit",
+                                                    evidence={"superseded": True})
         if rec is None:
             rec = await self._command_card("force_stop", repo, space, intent_dir, snap, binding, (), "studio")
-        if not rec.delivery_id:
-            rec = await self._transition(rec, "Delivering", reason="force_stop_committed", evidence={}, values={
-                "delivery_id": self._ids.new("dl"), "slot_key": binding.slot_key,
-                "session_key": binding.session_key or f"dashboard:{binding.slot_key}",
-                "delivering_at": self._clock.iso(), "deadline_at": self._deadline(C.DELIVERY_ACK_DEADLINE_SECS),
-                "boot_id": self._boot_id,
-            })
+        if rec.status == "NotDelivered":
+            rec = await self._transition(rec, "Queued", reason="retry", evidence={}, activity_kind="action.retried")
+        rec = await self._transition(rec, "Delivering", reason="force_stop_committed", values={
+            "delivery_id": self._ids.new("dl"), "slot_key": binding.slot_key,
+            "session_key": binding.session_key or f"dashboard:{binding.slot_key}",
+            "delivering_at": self._clock.iso(), "deadline_at": self._deadline(C.DELIVERY_ACK_DEADLINE_SECS),
+            "boot_id": self._boot_id,
+        }, evidence={"outcome": None, **({"force": True} if force else {})})
+        if superseded is not None:
+            await self.patch_evidence(superseded, {"resubmitted_as": rec.action_id})
         return self._receipt(rec, None)
 
     @staticmethod
@@ -1118,6 +1158,9 @@ class HumanActionBroker:
                                                rec.intent_dir, snap.audit, live_captured.state_hash)
             if file_answer:
                 self._assert_file_answer_session(slot_key)
+            if rec.status == "NotDelivered":
+                rec = await self._transition(rec, "Queued", reason="retry", evidence={"retried_by": user},
+                                             activity_kind="action.retried")
             body = dict(payload)
             generation = await asyncio.to_thread(self._storage.cas_update, _ACTIONS, rec.action_id,
                                                  rec.status_generation, {
@@ -1164,7 +1207,8 @@ class HumanActionBroker:
     ) -> tuple[ActionRecord, bool]:
         """Record what the browser observed when it sent; idempotent per ``delivery_id``. ``delivered`` is believed
         (the host is the authority on its own queue), ``not_delivered`` never is. A late report is kept as
-        evidence, only a proven ``not_delivered`` moves the row, and a late ``delivered`` closes retry (C24, R16)."""
+        evidence and a late ``delivered`` closes retry (C24, R16); only a proven ``not_delivered`` moves the row,
+        and a ``delivered`` one that contradicts a ``NotDelivered`` proof."""
         if outcome not in ("delivered", "not_delivered", "uncertain"):
             _refuse("bad_param", f"unknown delivery outcome {outcome!r}", outcome=outcome)
         rec = await self.get(action_id)
@@ -1199,13 +1243,40 @@ class HumanActionBroker:
                 intent_dir=rec.intent_dir, stage=rec.stage, action_id=rec.action_id,
                 params={"outcome": "delivered", "late": True, "status": rec.status})
             return updated, False
+        if rec.status == "NotDelivered" and outcome == "delivered":
+            return await self._transition(rec, "ReconciliationRequired", reason="delivery_report_delivered", evidence={
+                "delivery_confirmed": True, "receipt": body, "outcome": "delivered",
+                "late_report_at": self._clock.iso()}), False
         # Terminal, or NotDelivered: the report is kept so "the browser said it failed" has an answer.
         late = [*(rec.evidence.get("late_reports") or ()),
                 {"at": self._clock.iso(), "outcome": outcome, "http_status": http_status, "receipt": body}]
         patch: dict[str, Any] = {"late_reports": late[-10:]}
         if outcome == "delivered":
             patch["delivery_confirmed"] = True
-        return await self.patch_evidence(rec, patch), True
+        updated = await self.patch_evidence(rec, patch)
+        if outcome == "delivered" and rec.evidence.get("resubmitted_as"):
+            if rec.type == "force_stop" and not rec.evidence.get("delivery_confirmed"):
+                await record_interruption(self._sessions, self._activity, self._clock, updated)
+            await self._withdraw_resends(updated)
+        return updated, True
+
+    async def _withdraw_resends(self, original: ActionRecord) -> None:
+        """A decision sent again turned out delivered the first time. A resend that never reached the host is withdrawn
+        unsent (whatever AI-DLC still waits on gets a card of its own), and one already sent is never sent a third
+        time."""
+        mark = {"delivery_confirmed": True, "delivered_by": original.action_id}
+        successor_id = original.evidence.get("resubmitted_as")
+        while isinstance(successor_id, str) and successor_id:
+            successor = await self.get(successor_id)
+            if successor.status in SUBMITTABLE_STATUSES:
+                try:
+                    successor = await self._transition(successor, "Cancelled", reason="original_delivered",
+                                                       evidence=mark)
+                except StaleGeneration:
+                    successor = await self.get(successor_id)
+            if successor.status in C.DISPATCHED_ACTION_STATUS:
+                await self.patch_evidence(successor, mark)
+            successor_id = successor.evidence.get("resubmitted_as") if successor.status == "Failed" else None
 
     async def _accept_delivered(self, rec: ActionRecord, receipt: Mapping[str, Any]) -> ActionRecord:
         """``Delivered``. The turn started now unless the host queued the message behind a running turn; then
@@ -1255,14 +1326,14 @@ class HumanActionBroker:
         repo = await self._repo(rec.repo_id)
         slot_key, since = rec.slot_key or "", rec.delivering_at or rec.created_at
 
-        def find(key: str) -> Any:
+        def find(key: str, wire_text: str) -> Any:
             return self._host.find_delivery_row(key, since_ts=since, delivery_id=rec.delivery_id or "",
-                                                wire_text=rec.wire_text or "")
+                                                wire_text=wire_text)
 
-        found = find(slot_key) if slot_key else None
+        found = find(slot_key, rec.wire_text or "") if slot_key else None
         if found is None:
             found = next((row for view in self._host.slots_for_project(repo.canonical_path) if view.key != slot_key
-                          for row in [find(view.key)] if row is not None), None)
+                          for row in [find(view.key, "")] if row is not None), None)
         view = self._host.slot(slot_key) if slot_key else None
         # Asked once, after the reads it qualifies: an unreadable slot table makes `found is None` and
         # `view is None` statements about Studio's eyesight, and the step after NotDelivered is Retry.
@@ -1375,8 +1446,13 @@ class HumanActionBroker:
 
     async def _resolve_resubmit(self, rec: ActionRecord, payload: Mapping[str, Any], user: str) -> Any:
         """Offer the same decision again as a **new** action, after the human read the evidence. The echoed
-        ``acknowledged_evidence_sha256`` makes that checkable: changed evidence is ``action_stale``."""
+        ``acknowledged_evidence_sha256`` makes that checkable: changed evidence is ``action_stale``. Not before the
+        first send's ack deadline: the browser stops waiting for the host long before the host stops answering."""
         self._require_reconciliation(rec, "Queued")
+        deadline = C.iso_from_epoch((C.epoch_from_iso(rec.delivering_at) or 0.0) + C.DELIVERY_ACK_DEADLINE_SECS)
+        if self._clock.iso() <= deadline:
+            _refuse("not_delivered_unproven", "the host may still answer the first send", action_id=rec.action_id,
+                    reason="ack_deadline_pending", ack_deadline_at=deadline)
         card = await self.card(rec, None)
         expected = card["acknowledged_evidence_sha256"]
         if str(payload.get("acknowledged_evidence_sha256") or "") != expected:
@@ -1386,7 +1462,8 @@ class HumanActionBroker:
         # failed insert leaves the boundary cardless for one tick, and `upsert_derived` re-creates it.
         superseded = await self._transition(rec, "Failed", reason="superseded_by_resubmit",
                                             evidence={"superseded": True, "resubmitted_by": user})
-        evidence = {k: v for k, v in rec.evidence.items() if k not in ("receipt", "checks", "late_reports")}
+        evidence = {k: v for k, v in rec.evidence.items()
+                    if k not in ("receipt", "checks", "late_reports", "findings", "finding", "wrong_slot")}
         evidence["superseded_action_id"] = rec.action_id
         created = await self._insert(rec.type, rec, risk_class=rec.risk_class, captured=rec.captured.to_json(),
                                      evidence=evidence, dedupe_key=rec.dedupe_key, waiting_since=rec.waiting_since,
@@ -1404,10 +1481,31 @@ class HumanActionBroker:
         """Close a recovery card the human has read. ``interrupted_at`` is cleared only here and only for the
         interruption (C28, P17): PRD §11.2 requires a takeover after a mid-stage interruption, so a Run that
         cleared it would be the removed one-click way out of ``Interrupted``."""
+        if rec.status == "ReconciliationRequired":
+            return await self._close_confirmed_delivery(rec, user), None
         codes = _finding_codes(rec.evidence)
         if "interrupted_session" in codes or rec.card_meta.get("reason") == "interrupted_session":
             await self._sessions.set_interrupted(rec.repo_id, rec.space, rec.intent_dir, None)
         return await self._cancel_if_open(rec, "acknowledged", {"acknowledged_by": user}), None
+
+    async def _close_confirmed_delivery(self, rec: ActionRecord, user: str) -> ActionRecord:
+        """A confirmed delivery Studio cannot settle from disk, closed by the person once its turn is over: unverified
+        and never resent; a stop closed so records its interruption."""
+        if not rec.evidence.get("delivery_confirmed"):
+            _refuse("invalid_decision", "an unconfirmed delivery is marked undelivered or resent, not acknowledged",
+                    decision="acknowledge", delivery_confirmed=False)
+        view = self._host.slot(rec.slot_key) if rec.slot_key else None
+        if not self._host.can_prove_absence():
+            _refuse("host_unavailable", "the conversation cannot be read, so it may still be acting on this "
+                    "decision", slot_key=rec.slot_key)
+        if view is not None and busy_reasons(view):
+            _refuse("slot_busy", "the conversation may still be acting on this decision", slot_key=rec.slot_key,
+                    reasons=list(busy_reasons(view)))
+        closed = await self._transition(rec, "ResolvedNoTransition", reason="acknowledged", evidence={
+            "answer_verified": False, "acknowledged_by": user})
+        if closed.type == "force_stop":
+            await record_interruption(self._sessions, self._activity, self._clock, closed)
+        return closed
 
     async def _resolve_rebind_session(self, rec: ActionRecord, payload: Mapping[str, Any], user: str) -> Any:
         repo = await self._repo(rec.repo_id)
@@ -1511,7 +1609,7 @@ class HumanActionBroker:
         attempts, a deterministic one opens at once; an opening yields one card and one notification. The strike is
         written only after the status CAS, or a lost race (the tick and a "Reconcile from disk" click) would leave
         a phantom strike that could open the breaker on a healthy intent."""
-        key = f"{rec.repo_id}:{rec.intent_key}:{fingerprint}"
+        key = breaker_key(rec.repo_id, rec.intent_key, fingerprint)
         row = await asyncio.to_thread(self._storage.get, _BREAKERS, key) or {}
         count = int(row.get("count") or 0) + 1
         should_open = fingerprint_class not in C.TRANSIENT_FINGERPRINT_CLASSES or count >= C.BREAKER_TRANSIENT_THRESHOLD
@@ -1714,6 +1812,8 @@ class HumanActionBroker:
             if (uncertain or name in DECISIONS.get(rec.type, ()))
             # A missing workflow receipt does not undo a confirmed message delivery.
             and not (confirmed and name in ("mark_not_delivered", "resubmit"))
+            # Unconfirmed, a delivery is proven undelivered or resent: closing it unread would skip both.
+            and not (uncertain and not confirmed and name == "acknowledge")
             # Refused from every status but ReconciliationRequired (R07); a recovery card is always Queued.
             and not (name == "mark_not_delivered" and rec.status != "ReconciliationRequired")
             # No client sends the `slot_key` it needs; rebinding lives on the session panel (§2.13).
@@ -1878,7 +1978,7 @@ class HumanActionBroker:
     # ---- breakers --------------------------------------------------------- #
 
     async def _breaker_rows(self, repo_id: str, intent_key: str) -> list[dict[str, Any]]:
-        prefix = f"{repo_id}:{intent_key}:"
+        prefix = breaker_key(repo_id, intent_key)
         rows = await asyncio.to_thread(self._storage.select, _BREAKERS)
         return [row for row in rows if str(row.get("key") or "").startswith(prefix)]
 
@@ -1888,7 +1988,7 @@ class HumanActionBroker:
     async def _open_breaker_card(self, rec: ActionRecord, failure: Mapping[str, Any]) -> None:
         """One card and one notification per opening (§11.4): a breaker that shouted on every retry would train
         people to ignore it."""
-        key = dedupe_key("circuit_breaker", rec.repo_id, rec.intent_key, rec.stage, str(failure.get("fingerprint")))
+        key = breaker_card_key(rec.repo_id, rec.intent_key, str(failure.get("fingerprint")))
         if await self._live_for_key(key) is not None:
             return
         evidence = {name: rec.evidence.get(name) for name in EVIDENCE_SNAPSHOT_KEYS}
@@ -2037,7 +2137,8 @@ def _failure_json(rec: ActionRecord) -> dict[str, Any] | None:
         out = dict(failure)
     elif isinstance(breaker, Mapping):
         out = {
-            "fingerprint": breaker.get("fingerprint") or str(breaker.get("key") or "").rsplit(":", 1)[-1],
+            "fingerprint": breaker.get("fingerprint") or str(breaker.get("key") or "").removeprefix(
+                breaker_key(rec.repo_id, rec.intent_key)),
             "fingerprint_class": breaker.get("fingerprint_class"),
             "summary_key": breaker.get("reason") or breaker.get("summary_key"),
             "count": int(breaker.get("count") or 0),

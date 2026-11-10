@@ -41,7 +41,12 @@ interface Applied {
   result: EngineResult
 }
 
-export function RecomposePanel({ api, repoId, intentKey, intentLabel, onClose, onApplied }: RecomposePanelProps) {
+/** Selections and an open confirmation belong to the intent they were made on, so a new intent starts a new editor. */
+export function RecomposePanel(props: RecomposePanelProps) {
+  return <RecomposeEditor key={`${props.repoId}/${props.intentKey}`} {...props} />
+}
+
+function RecomposeEditor({ api, repoId, intentKey, intentLabel, onClose, onApplied }: RecomposePanelProps) {
   const i18n = useI18n()
   const { t } = i18n
   const [skip, setSkip] = useState<string[]>([])

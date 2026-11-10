@@ -180,6 +180,7 @@ function SettingsEditor({
             </table>
             </div>
           ) : null}
+          {proposal.reopens ? <p role="status">{t('workspace.settings.reopens', { stage: proposal.reopens })}</p> : null}
           {proposal.refusals.map((reason) => <p key={reason} role="status">{t(`workspace.refusal.${reason}`)}</p>)}
           <details><summary>{t('workspace.settings.command')}</summary><pre className="studio-sendtext">{JSON.stringify(proposal.argv_preview, null, 2)}</pre></details>
           {!confirming ? (

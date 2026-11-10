@@ -204,6 +204,13 @@ TERMINAL_ACTION_STATUS = ("StateChanged", "ResolvedNoTransition", "Cancelled")
 #: Live statuses that wait on a person. A sent decision (``Delivering``/``Delivered``) waits on AI-DLC: the Action
 #: Center hides it (``ui/src/lib/actionQueue.ts``), so no "waiting for you" count may include it either.
 AWAITING_PERSON_STATUS = ("Queued", "ReconciliationRequired", "NotDelivered", "Failed")
+#: On the wire, or possibly still: such an action holds its repository's execution lease, and rebinding its intent would
+#: send its delivery report to a session that no longer owns it.
+IN_FLIGHT_ACTION_STATUS = ("Delivering", "Delivered")
+#: Handed to the host and not yet accounted for. Such a decision speaks for its boundary (a fresh card of its kind
+#: beside it would invite a second send) and carries the findings the reconciler stores while judging it;
+#: ``NotDelivered`` was proven never to arrive, and ``Failed`` and the terminal statuses are history.
+DISPATCHED_ACTION_STATUS = ("Delivering", "Delivered", "ReconciliationRequired")
 
 INTENT_STATE = (
     "Idle",
@@ -258,6 +265,9 @@ SOURCE = ("studio", "aidlc", "kirocrew", "git", "slack")
 RISK_CLASS = ("read", "studio_only", "human_lane", "admin", "host_control")
 LEASE_KIND = ("execution", "admin")
 INSTALL_STATUS = ("not_installed", "installed", "drift", "recovery_required")
+#: ``install_transactions.status`` values that prove an installer transaction stopped touching its repository. Until
+#: one is reached the registry refuses removal and archiving (``transaction_in_progress``).
+TRANSACTION_SETTLED_STATUS = ("committed", "rolled_back", "recovery_required", "failed")
 AVAILABILITY = ("available", "moved", "permission_denied", "unavailable", "identity_unprovable")
 OWNERSHIP = ("framework", "framework-mutable", "merge", "shell")
 STAGE_STATE = (
@@ -344,7 +354,7 @@ DECISIONS: dict[str, tuple[str, ...]] = {
     ),
     "missing_input": ("provide_input", "pick_intent"),
     "recovery": ("rebind_session", "mark_not_delivered", "acknowledge"),
-    "delivery_uncertain": ("reconcile", "mark_not_delivered", "resubmit"),
+    "delivery_uncertain": ("reconcile", "mark_not_delivered", "resubmit", "acknowledge"),
     "failure": ("retry_now", "keep_paused"),
     "circuit_breaker": ("retry_now", "keep_paused"),
     "install_conflict": (),  # navigation only (Repos page)
@@ -360,12 +370,14 @@ DECISIONS: dict[str, tuple[str, ...]] = {
 
 #: Legal action-state transitions (PRD §11.1, with ``Processing`` folded into ``Delivered`` and
 #: ``DeliveryUncertain`` into ``ReconciliationRequired``). Data, so the state machine and its test read one table.
+#: ``NotDelivered → ReconciliationRequired`` is the host's own late ``delivered`` report contradicting the absence
+#: proof: the decision did arrive, so it is reconciled from disk like any confirmed delivery and never sent again.
 ALLOWED_TRANSITIONS: dict[str, tuple[str, ...]] = {
     "Queued": ("Delivering", "Cancelled"),
     "Delivering": ("Delivered", "NotDelivered", "ReconciliationRequired"),
     "Delivered": ("StateChanged", "ResolvedNoTransition", "ReconciliationRequired", "Failed"),
     "ReconciliationRequired": ("StateChanged", "ResolvedNoTransition", "NotDelivered", "Failed"),
-    "NotDelivered": ("Queued", "Cancelled"),
+    "NotDelivered": ("Queued", "Cancelled", "ReconciliationRequired"),
     "StateChanged": (),
     "ResolvedNoTransition": (),
     "Failed": (),
@@ -490,6 +502,14 @@ ASSUMPTION_OPTION_RE = re.compile(
 
 INTENT_DIR_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 SPACE_RE = INTENT_DIR_RE
+#: Names no new record (an intent or a space) may take: ``help`` and the engine's intent and space verbs, which change
+#: how it reads ``intent <token>`` and ``space <token>`` (aidlc-lib.ts ``RESERVED_RECORD_NAME_LIST``, read from the
+#: bundled engine by tests/test_workspace_controls.py). ``intent-create`` refuses a label whose
+#: ``slugify(label, 24)`` is one of them.
+RESERVED_RECORD_NAMES = frozenset({
+    "help", "list", "switch", "create", "archive", "unarchive", "add-repo", "remove-repo", "set-repos",
+    "add-checkout", "remove-checkout",
+})
 UNIT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 STAGE_SLUG_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 #: A full commit id as `git status --porcelain=v2` prints it (SHA-1, or SHA-256 in a sha256 repository).
@@ -670,8 +690,8 @@ GIT_READ_VERBS = frozenset(
     "rev-parse status log diff show ls-files name-rev describe cat-file rev-list for-each-ref "
     "merge-base".split()
 )
-#: Global options that can point git at another repository, run an arbitrary binary or write a file, refused wherever
-#: they appear: ``cwd``, never ``-C``, is how Studio selects a repository.
+#: Global options that can point git at another repository, run an arbitrary binary or write a file, refused anywhere
+#: before ``--`` (after it git reads only paths): ``cwd``, never ``-C``, is how Studio selects a repository.
 GIT_FORBIDDEN_TOKENS = frozenset(
     {"-c", "-C", "--git-dir", "--work-tree", "--exec-path", "--output", "--namespace",
      "--config-env", "--super-prefix"}
@@ -784,6 +804,9 @@ WIRE_PREPARE_COMMIT = "Please prepare a commit for the current AI-DLC changes. D
 #: (2.7.1 has no per-work ceremony switches; 2.10.0 does). An older engine would refuse the unknown flag.
 SUMMARY_CONFIRMATION_VALUES = ("on", "off")
 SUMMARY_CONFIRMATION_CREATE_MIN_ENGINE = (2, 10)
+#: The first engine whose ``intent-create`` takes ``--project-type``: an older one ignores the flag and starts where
+#: its own workspace scan says, not where the preview locked.
+PROJECT_TYPE_CREATE_MIN_ENGINE = (2, 11)
 WIRE_SUMMARY_CONFIRMATION_OFF = "/aidlc --summary-confirmation off"
 WIRE_SUMMARY_CONFIRMATION_ON = "/aidlc --summary-confirmation on"
 # The same typed switch for the learnings step, by the same path: the conductor's ``next --learnings off`` has it run
@@ -835,6 +858,12 @@ FAILED_DIRNAME = "failed"
 #: process (a gateway still shutting down, an operator's ``sqlite3``) holds the write lock: waiting five seconds is
 #: right, failing the user's decision at once is not.
 SQLITE_BUSY_TIMEOUT_MS = 5000
+
+#: How every read of ``install_receipts`` orders them: newest first, ``receipt_id`` breaking a same-second tie, so
+#: each reader names the same receipt if two are ever ``current`` at once.
+RECEIPT_ORDER = "committed_at DESC, receipt_id DESC"
+#: The same for ``install_transactions``: the id tiebreak keeps "the last N" exact when two share a second.
+TRANSACTION_ORDER = "started_at DESC, transaction_id DESC"
 
 #: Statuses under which ``actions.dedupe_key`` is unique (the ``actions_live_dedupe`` index ``storage.SCHEMA_V3``
 #: builds, and the set ``upsert_derived`` treats as live): ``LIVE_ACTION_STATUS`` minus ``Failed``, because a failed

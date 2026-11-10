@@ -21,7 +21,8 @@
  * named and removed deliberately — and it stays removable even while the Advisor is unavailable, which is
  * exactly when a stale grant would otherwise be stuck on record. Which is why `repos` distinguishes "not
  * read yet" (`null`) from "there are none" (`[]`): with the two conflated, a settings page opened before the
- * repository read lands would present every live grant as an orphan.
+ * repository read lands would present every live grant as an orphan. A grant on an archived repository stays
+ * withdrawable, as an orphan's does: restoring the repository would make it live again.
  */
 
 import { useI18n } from '../i18n'
@@ -29,12 +30,12 @@ import type { StudioApi } from '../lib/api'
 import { plural } from '../lib/format'
 import type { RepoRecord } from '../lib/types'
 import { ModelSelect, useHostModels } from '../shell/ModelSelect'
-import { SettingRow, UnavailableChip, type SettingsControl } from './SettingsView'
+import { repoRows, SettingRow, UnavailableChip, type SettingsControl } from './SettingsView'
 
 export interface AdvisorSettingProps {
   api: StudioApi
   control: SettingsControl
-  /** `null` while the repository list has not been read; `[]` only when there really are none. */
+  /** Every registered repository, archived ones included; `null` while the list has not been read. */
   repos: RepoRecord[] | null
 }
 
@@ -44,12 +45,7 @@ export function AdvisorSetting({ api, control, repos }: AdvisorSettingProps) {
   const capability = control.capabilities.advisor
   const advisorAvailable = capability?.available !== false
   const granted = control.values.advisor.auto_draft_repo_ids
-  const listed = repos ?? []
-  const known = new Set(listed.map((repo) => repo.repo_id))
-  // Only a list that was actually read can say a grant is orphaned. Before it lands there is nothing to
-  // compare against, and calling a live grant "a repository you no longer have" would invite the owner to
-  // revoke a grant that is working — the one action the orphan row offers.
-  const orphans = repos === null ? [] : granted.filter((id) => !known.has(id))
+  const rows = repoRows(repos, granted)
   // Drafting ahead runs through the Advisor and nothing else, so both switches above gate the grant.
   const grantDisabled = control.busy || !advisorAvailable || !control.values.advisor.enabled
   const models = useHostModels(api)
@@ -92,20 +88,20 @@ export function AdvisorSetting({ api, control, repos }: AdvisorSettingProps) {
       >
         {(describedBy) => (
           <div className="studio-col" aria-describedby={describedBy}>
-            {repos === null ? (
+            {rows === null ? (
               <span className="studio-muted">{t('common.loading')}</span>
-            ) : listed.length === 0 && orphans.length === 0 ? (
+            ) : rows.listed.length === 0 && rows.orphans.length === 0 ? (
               <span className="studio-muted">{t('settings.advisor.autoDraft.none')}</span>
             ) : (
               <>
                 <ul className="studio-mutelist">
-                  {listed.map((repo) => (
+                  {rows.listed.map((repo) => (
                     <li key={repo.repo_id}>
                       <label className="studio-check">
                         <input
                           type="checkbox"
                           checked={granted.includes(repo.repo_id)}
-                          disabled={grantDisabled}
+                          disabled={repo.archived ? control.busy : grantDisabled}
                           onChange={(event) => setGranted(repo.repo_id, event.target.checked)}
                           aria-label={t('settings.advisor.autoDraft.label', { repo: repo.label })}
                         />
@@ -114,10 +110,13 @@ export function AdvisorSetting({ api, control, repos }: AdvisorSettingProps) {
                         <span className="studio-mono studio-muted studio-small studio-trunc">
                           {repo.canonical_path}
                         </span>
+                        {repo.archived ? (
+                          <span className="studio-muted studio-small">{t('settings.advisor.autoDraft.archived')}</span>
+                        ) : null}
                       </label>
                     </li>
                   ))}
-                  {orphans.map((id) => (
+                  {rows.orphans.map((id) => (
                     <li key={id}>
                       <label className="studio-check">
                         <input

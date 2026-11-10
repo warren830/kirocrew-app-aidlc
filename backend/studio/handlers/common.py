@@ -330,14 +330,14 @@ async def intent_view(services: Any, repo: Any, snap: Any, *, install: Any = Non
     """What a read needs about one intent: the reconciler's assembly, stopped before its writes — a GET that
     minted a card would make the queue depend on who was looking at it."""
     from ..consistency import RepoFacts
+    from ..projection import breaker_key
 
     repo_id = str(C.attr(repo, "repo_id"))
     binding = await services.sessions.get(repo_id, snap.space, snap.intent_dir)
     slot = services.host.slot(binding.slot_key) if binding.slot_key else None
     live = await services.actions.list_live(repo_id=repo_id, space=snap.space, intent_dir=snap.intent_dir,
                                             include_revision=True)
-    # The reconciler's breaker key rule (§0.1): `<repo_id>:<intent_key>:…`.
-    prefix = f"{repo_id}:{snap.intent_key}:"
+    prefix = breaker_key(repo_id, snap.intent_key)
     breakers = [row for row in await asyncio.to_thread(services.storage.select, "breakers")
                 if str(row.get("key") or "").startswith(prefix)]
     if install is None:

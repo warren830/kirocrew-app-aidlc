@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { isAbort, StudioApiError } from './api'
 import { useStudioEvents, type StreamEvent } from './sse'
+import { transactionSettled } from './transactions'
 import type { StudioEventType } from './types'
 
 /** Poll cadence while something is in flight (§3.6). */
@@ -125,9 +126,7 @@ export function looksBusy(value: unknown): boolean {
   const transaction = record['transaction']
   if (transaction && typeof transaction === 'object') {
     const status = (transaction as Record<string, unknown>)['status']
-    if (typeof status === 'string' && status !== 'committed' && status !== 'rolled_back' && status !== 'failed') {
-      return true
-    }
+    if (typeof status === 'string' && !transactionSettled(status)) return true
   }
   return false
 }
@@ -262,9 +261,11 @@ export function useResource<T>(
 
   useEffect(() => {
     if (key === null || !enabled || period <= 0) return
+    let cancelled = false
     let timer: ReturnType<typeof setTimeout> | null = null
     const tick = async () => {
       if (typeof document === 'undefined' || !document.hidden) await run()
+      if (cancelled) return
       timer = setTimeout(tick, period)
     }
     timer = setTimeout(tick, period)
@@ -275,6 +276,7 @@ export function useResource<T>(
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
+      cancelled = true
       if (timer !== null) clearTimeout(timer)
       document.removeEventListener('visibilitychange', onVisible)
     }

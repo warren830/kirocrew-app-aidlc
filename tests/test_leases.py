@@ -469,10 +469,6 @@ def test_the_real_settings_and_activity_fit_the_scheduler(studio, store, bridge,
     assert rows[-1].params["intent_uuid"] == "u-1" and rows[-1].message_key == "activity.lease.acquired"
 
 
-def test_the_settled_transaction_statuses_exist_in_the_installers_own_tuple(studio, L):
-    assert L.TRANSACTION_SETTLED_STATUS <= set(studio.installer.TransactionStatus)
-
-
 def test_default_busy_reasons_is_taken_from_sessions(studio, L, store, bridge, settings, clock, activity):
     scheduler = L.RepoScheduler(store, bridge, settings, clock, activity)
     idle = SimpleNamespace(running=False, in_stage_execution=False, stop_state="idle", stopping=False,

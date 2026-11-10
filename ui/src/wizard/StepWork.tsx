@@ -42,6 +42,8 @@ export interface StepWorkProps {
   state: WizardState
   repos: RepoRecord[]
   repo: RepoRecord | null
+  /** The repository's AI-DLC takes a declared project type at creation; older ones would be refused it. */
+  projectTypeOffered: boolean
   blocked: 'availability' | 'not_installed' | 'recovery_required' | null
   spaces: string[]
   activeSpace: string
@@ -62,7 +64,7 @@ export interface StepWorkProps {
 }
 
 export function StepWork({
-  state, repos, repo, blocked, spaces, activeSpace, derivedLabel, labelValid, bunMissing, bunSearched,
+  state, repos, repo, projectTypeOffered, blocked, spaces, activeSpace, derivedLabel, labelValid, bunMissing, bunSearched,
   graphStageCount, intentCount, onPatch, onOpenRepos, revealErrors = false,
 }: StepWorkProps) {
   const i18n = useI18n()
@@ -205,20 +207,22 @@ export function StepWork({
         </p>
       </div>
 
-      <div className="studio-field">
-        <label htmlFor="wizard-project-type">{t('wizard.work.projectType')}</label>
-        <p className="studio-help">{t('wizard.work.projectTypeHelp')}</p>
-        <select
-          id="wizard-project-type"
-          value={state.projectType}
-          onChange={(event) => onPatch({ projectType: event.target.value as WizardState['projectType'] })}
-        >
-          <option value="">{t('wizard.work.projectTypeUnset')}</option>
-          {/* AI-DLC's own values: shown verbatim in every locale. */}
-          <option value="Greenfield">Greenfield</option>
-          <option value="Brownfield">Brownfield</option>
-        </select>
-      </div>
+      {projectTypeOffered ? (
+        <div className="studio-field">
+          <label htmlFor="wizard-project-type">{t('wizard.work.projectType')}</label>
+          <p className="studio-help">{t('wizard.work.projectTypeHelp')}</p>
+          <select
+            id="wizard-project-type"
+            value={state.projectType}
+            onChange={(event) => onPatch({ projectType: event.target.value as WizardState['projectType'] })}
+          >
+            <option value="">{t('wizard.work.projectTypeUnset')}</option>
+            {/* AI-DLC's own values: shown verbatim in every locale. */}
+            <option value="Greenfield">Greenfield</option>
+            <option value="Brownfield">Brownfield</option>
+          </select>
+        </div>
+      ) : null}
 
       {repo ? (
         <div className="studio-field">

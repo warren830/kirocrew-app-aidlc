@@ -84,12 +84,6 @@ TURN_ROLES = frozenset({"user", "queued", "inject", "assistant"})
 #: How much of the host's error text a notice repeats; the conversation keeps the whole of it.
 STOPPED_TEXT_CHARS = 400
 
-#: Something may still be on the wire: rebinding would send its delivery report to a session that no longer
-#: owns it. Narrower than ``LIVE_ACTION_STATUS`` because rebinding is itself a recovery decision.
-IN_FLIGHT_ACTION_STATUS = ("Delivering", "Delivered")
-#: The decision may already have reached AI-DLC, so archiving waits for these even on a paused intent.
-ARCHIVE_BLOCKING_STATUS = IN_FLIGHT_ACTION_STATUS + ("ReconciliationRequired",)
-
 #: Why a slot is a takeover candidate. ``current_binding`` classifies the slot §2.3 returns as ``current``.
 TAKEOVER_REASONS = ("project_match", "name_match", "current_binding")
 
@@ -207,7 +201,7 @@ class SlotView(WireRecord):
     subagents_queued: int = 0
     deliveries_inflight: int = 0
     #: The newest unresolved tool approval (``tool``, ``tool_input``, ``request_id``, and from KiroCrew 0.11 the row
-    #: instance ``request_mid`` and ``origin``); not on the wire.
+    #: instance ``request_mid`` and ``origin``, and ``tool_kind`` when the host states one); not on the wire.
     approval: Mapping[str, str] | None = None
     #: Does the host still hold this slot's session? ``False``: it ended an idle one, and the next message starts a
     #: new session, where a reply AI-DLC bound to the old one is refused. ``None`` when it cannot say; not on the wire.
@@ -409,7 +403,9 @@ class HostBridge:
                           wire_text: str) -> TranscriptRow | None:
         """The row proving this delivery reached the host: by ``meta.studio_delivery_id``, then exact text,
         then the pending queue, where a message sent behind a running turn waits without the browser's
-        meta and without a row; reading it as absent would be a proof of ``NotDelivered`` (C24)."""
+        meta and without a row; reading it as absent would be a proof of ``NotDelivered`` (C24). An empty
+        ``wire_text`` matches by id alone, which is how another conversation of the repository is read: the
+        same words there ("Approve") are anyone's message."""
         wanted_id, wanted_text = str(delivery_id or ""), str(wire_text or "")
         rows = [row for row in reversed(self._raw_rows(slot_key)) if isinstance(row, Mapping)
                 and _text(row.get("role")) in DELIVERY_ROLES and _at_or_after(row.get("ts"), since_ts)]
@@ -849,7 +845,7 @@ def _pending_approval(info: Any) -> dict[str, str]:
     text). An approval nothing describes still waits, so the answer is then empty, never ``None``."""
     info = info if isinstance(info, Mapping) else {}
     tool_input = security.redact(_text(info.get("tool_input")))
-    return {
+    approval = {
         "tool": security.redact(_text(info.get("tool")))[:_APPROVAL_TEXT_LIMIT],
         # The whole call, up to a bound: the notice's Allow once answers for every character, and its reach is read
         # from this text. Cut at 500, a 900-character `python3 -c` program showed half and still said it named no
@@ -865,6 +861,12 @@ def _pending_approval(info: Any) -> dict[str, str]:
         "origin": _text(info.get("origin")),
         "request_mid": _text(info.get("request_mid")),
     }
+    kind = info.get("tool_kind")
+    if isinstance(kind, str):
+        # ACP's kind of the call as the host relays it (``edit``: the input is the write's diff, ``execute``: a
+        # command line, ``spawn``: a sub-agent); left out when the host sends none, which the wire says as null.
+        approval["tool_kind"] = security.redact(kind)[:_APPROVAL_TEXT_LIMIT]
+    return approval
 
 
 def _delivery_id(meta: Any) -> str:
@@ -948,7 +950,8 @@ class SessionRef:
             {"tool": self.approval.get("tool", ""), "tool_input": self.approval.get("tool_input", ""),
              "tool_input_truncated": self.approval.get("tool_input_truncated") == "1",
              "purpose": self.approval.get("purpose", ""), "request_id": self.approval.get("request_id", ""),
-             "request_mid": self.approval.get("request_mid", ""), "origin": self.approval.get("origin", "")}
+             "request_mid": self.approval.get("request_mid", ""), "origin": self.approval.get("origin", ""),
+             "tool_kind": self.approval.get("tool_kind")}
             if self.waiting_approval and self.approval is not None else None
         )
         return {"slot_key": self.slot_key, "session_key": self.session_key, "running": self.running,
@@ -1123,7 +1126,7 @@ class SessionBinder:
                 "purpose": _text(approval.get("purpose")),
                 # The target the notice's Allow once / Reject answer; empty when the host names no native row.
                 "request_id": _text(approval.get("request_id")), "request_mid": _text(approval.get("request_mid")),
-                "origin": _text(approval.get("origin")),
+                "origin": _text(approval.get("origin")), "tool_kind": approval.get("tool_kind"),
             })
         return out
 
@@ -1257,7 +1260,7 @@ class SessionBinder:
         want = bool(archived)
         if want:
             await self._refuse(repo_id, space, intent_dir, operation="archive",
-                               statuses=ARCHIVE_BLOCKING_STATUS)
+                               statuses=C.DISPATCHED_ACTION_STATUS)
             if not row.get("paused"):
                 await self._refuse(repo_id, space, intent_dir, operation="archive",
                                    statuses=C.LIVE_ACTION_STATUS, live=True)
@@ -1347,7 +1350,7 @@ class SessionBinder:
         return None
 
     async def _refuse(self, repo_id: str, space: str, intent_dir: str, *, operation: str,
-                      statuses: Sequence[str] = IN_FLIGHT_ACTION_STATUS, live: bool = False) -> None:
+                      statuses: Sequence[str] = C.IN_FLIGHT_ACTION_STATUS, live: bool = False) -> None:
         """Refuse ``operation`` while this intent has actions in ``statuses``: a decision possibly in flight,
         or (``live``) live cards still in the queue."""
         rows = await asyncio.to_thread(self._storage.select, "actions", {
