@@ -5,6 +5,7 @@ migration ladder that keeps every row it should, stable activity paging and a pu
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import sqlite3
 import threading
@@ -80,8 +81,23 @@ def raw_insert(raw, table: str, **cols) -> None:
     raw.execute(f"INSERT INTO {table}({', '.join(cols)}) VALUES({', '.join('?' * len(cols))})", tuple(cols.values()))
 
 
+#: sha256 of the text of ``SCHEMA_V1`` and ``SCHEMA_V2`` in 1.x's ``backend/studio/storage.py``, equal on ``origin/v1``
+#: and at tag ``v1.0.1``. ``legacy_file`` builds its "1.x" database from 2.x's own ``MIGRATIONS``, so without this pin
+#: an edit to either script would change both sides of the in-place update test at once and it would still pass.
+SHIPPED_1X_MIGRATIONS = {
+    1: "98c974098311d7bc4d0908bc903d9049a8bb50792aa57ef1cfea788803d5ca04",
+    2: "25f3f01979bb7e400d0d7d7673f9f7ad38b2bf0da09593a2e7c48bc63c12cd17",
+}
+
+
 def legacy_file(S, db_path, version):
     """A raw connection to a database exactly as ``version`` left it: the ladder up to there, stamped so."""
+    for target, pinned in SHIPPED_1X_MIGRATIONS.items():
+        got = hashlib.sha256(S.MIGRATIONS[target].encode("utf-8")).hexdigest()
+        assert got == pinned, (
+            f"MIGRATIONS[{target}] (SCHEMA_V{target}) is not the text 1.x shipped: sha256 {got}, pinned {pinned}. "
+            f"Every 1.x install built its database from those exact statements, so 2.x must keep them byte for byte; "
+            f"put a schema change in a new migration instead")
     raw = sqlite3.connect(str(db_path))
     for target in range(1, version + 1):
         for statement in S._statements(S.MIGRATIONS[target]):
