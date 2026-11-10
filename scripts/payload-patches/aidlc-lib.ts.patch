@@ -1,0 +1,21 @@
+--- a/.kiro/tools/aidlc-lib.ts
++++ b/.kiro/tools/aidlc-lib.ts
+@@ -2463,8 +2463,18 @@
+ ];
+ // Kiro CLI, reported privately: the prompt Kiro injects after a sub-agent
+ // returns. Its opening is pinned; no capture of the rest exists yet.
++// Kiro Crew 0.11.1 over kiro-cli 3.0.0, captured live (AI-DLC Studio patch): a
++// notice the host steers into a running turn ("[Kiro Crew host notice] You
++// have made the same tool call 3 times this turn …"), one `<user_message>`
++// block each, several joined when they queue. kiro-cli's record keeps it inside
++// a tool result, so only these blocks tell it apart; a prompt holding anything
++// else beside them (the person's own steer) stays the person's.
+ export const KIRO_CLI_HOST_TEMPLATES: readonly HostTurnTemplate[] = [
+   { name: "kiro sub-agent synthesis", pattern: /^\[SYSTEM\] Sub-agent synthesis:/ },
++  {
++    name: "kiro crew host notice",
++    pattern: /^(?:<user_message>\r?\n\[Kiro Crew host notice\] (?:(?!<\/?user_message>)[\s\S])*\r?\n<\/user_message>\s*)+$/,
++  },
+ ];
+ // Claude Code 2.1.280, captured live: the turn it starts when a background task
+ // finishes, one element and nothing else. Claude Code 2.1.310, captured live:

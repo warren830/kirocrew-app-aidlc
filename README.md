@@ -299,12 +299,21 @@ never submits anything. It analyses an evidence package Studio passes to it and 
 # frontend
 cd ui && npm run check      # tsc --noEmit && vitest run && vite build
 
+# rebuild payload/aidlc-kiro from upstream's extracted runtime/kiro plus Studio's patches
+scripts/refresh_payload.sh apply /path/to/aidlc-copy-runtime-2.11.3/runtime/kiro
+
 # regenerate the bundled payload inventory after changing payload/aidlc-kiro/
 python3 scripts/build_payload_manifest.py --version 2.11.3 \
   --source-ref "v2.11.3 @ a8721be3 + Studio requirement-traceability, KiroCrew host-turn, KiroCrew host-notice and onboarding patches" \
   --source-commit a8721be3631e6a254cf524ea57e5932aa56b4149 \
   --dist-path "aidlc-copy-runtime-2.11.3.tar.gz:runtime/kiro" --state-versions 8
 ```
+
+Studio's local changes to the payload live in `scripts/payload-patches/`, one `diff -u` per patched file,
+cut against the upstream release named above. `apply` copies the upstream tree over `payload/aidlc-kiro/`
+and applies every patch with no fuzz. It exits 1 and names any patch that no longer fits. Make that change
+by hand in the payload, then run `scripts/refresh_payload.sh recut <runtime/kiro>` against the same upstream
+tree to rewrite the patches. Delete a patch once upstream ships its change.
 
 Keep `--source-commit` pinned to the upstream base and describe local patches in `--source-ref`
 and `THIRD_PARTY_NOTICES.md`; a local fix is not an upstream release. Regenerate the manifest rather

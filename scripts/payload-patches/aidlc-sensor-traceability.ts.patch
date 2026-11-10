@@ -1,0 +1,373 @@
+--- a/.kiro/tools/aidlc-sensor-traceability.ts
++++ b/.kiro/tools/aidlc-sensor-traceability.ts
+@@ -74,8 +74,20 @@
+   // the table lists them as written.
+   unrecorded: RequirementKind[];
+   requirementsFile: string;
++  /** The whole selected source when `ids` is one unit's share of it. */
++  sourceIds?: Set<string>;
++  // IDs a stage may declare and cover without being required to (2.10.0: NFR rows in a
++  // stories-less units-generation map). Still bounded by what the upstream artifact names.
++  optionalIds?: Set<string>;
+ }
+ 
++interface StoryAssignments {
++  assignments: Map<string, Set<string>>;
++  reason?: string;
++  /** The map was read but maps no source ID to a declared unit. */
++  empty: boolean;
++}
++
+ const ID_PATTERNS = {
+   FR: /\bFR\d+(?:\.\d+)?\b/g,
+   NFR: /\bNFR\d+\b(?!\.\d)/g,
+@@ -211,15 +223,19 @@
+   return /^((?:FR|NFR)\d+)\.\d+$/.exec(id)?.[1];
+ }
+ 
++// A recorded ID's requirement is its `of`; an ID the record does not hold (an
++// NFRx.y from NFR Requirements) is read by its form.
++function requirementOf(id: string, recorded: Map<string, RecordedRequirement> | null): string | undefined {
++  return recorded?.has(id) ? recorded.get(id)?.of : tracedParent(id);
++}
++
+ // A requirement whose sub-requirements are traced too (FR1 beside FR1.1, or at
+ // Code Generation NFR1 beside the Unit's NFR1.1) is traced through them, so it
+-// needs no row of its own; a sub-requirement left out is still reported. A
+-// recorded ID's requirement is its `of`; an ID the record does not hold (an
+-// NFRx.y from NFR Requirements) is read by its form.
++// needs no row of its own; a sub-requirement left out is still reported.
+ function withoutTracedParents(ids: Set<string>, recorded: Map<string, RecordedRequirement> | null = null): Set<string> {
+   const parents = new Set<string>();
+   for (const id of ids) {
+-    const parent = recorded?.has(id) ? recorded.get(id)?.of : tracedParent(id);
++    const parent = requirementOf(id, recorded);
+     if (parent) parents.add(parent);
+   }
+   return new Set([...ids].filter((id) => !parents.has(id)));
+@@ -270,6 +286,15 @@
+   }
+   const ids = [...result.recorded.values()].filter((entry) => kinds.includes(entry.kind)).map((entry) => entry.id);
+   return addSource(result, { ids: new Set(ids) });
++}
++
++// The requirements of one kind a story map may assign to Units: the recorded
++// ones, or without a record the ones the pattern finds in requirements.md, with
++// its reason. A table's own IDs are never among them, so neither the table nor
++// the map can add a requirement that Requirements Analysis did not write.
++function requirementSource(result: UpstreamResolution, kind: RequirementKind): { ids: Set<string>; reason?: string } {
++  if (result.recorded === null) return idsFromFile(result.requirementsFile, [KIND_PATTERN[kind]], "requirements.md");
++  return { ids: new Set([...result.recorded.values()].filter((entry) => entry.kind === kind).map((entry) => entry.id)) };
+ }
+ 
+ // A criterion `AC{g}.{s}.{c}` belongs to the story `US{g}.{s}`.
+@@ -376,6 +401,28 @@
+   return bare === unit || bare.replace(/^u\d+-/i, "") === unit;
+ }
+ 
++function isTableSeparator(line: string): boolean {
++  return line.trimStart().startsWith("|") && line.includes("-") && /^\s*\|?[\s:|-]+\|?\s*$/.test(line);
++}
++
++interface ColumnRoles {
++  ids: number[];
++  units: number[];
++}
++
++// Columns a story-map header names. Notes, rationale and dependency columns mention other IDs and
++// units in passing; they never map one.
++function columnRoles(header: string[]): ColumnRoles | null {
++  const roles: ColumnRoles = { ids: [], units: [] };
++  header.forEach((raw, index) => {
++    const name = raw.replace(/[`*_]/g, " ").trim().toLowerCase();
++    if (/\b(?:notes?|comments?|remarks?|rationale|reasons?|descriptions?|depend\w*|related|see also)\b/.test(name)) return;
++    if (/\b(?:units?|director(?:y|ies))\b/.test(name)) roles.units.push(index);
++    else if (/\b(?:stor(?:y|ies)|requirements?|upstream|ids?|frs?|uss?)\b/.test(name)) roles.ids.push(index);
++  });
++  return roles.ids.length > 0 && roles.units.length > 0 ? roles : null;
++}
++
+ function unitIdMap(unitFile: string, units: string[]): Map<string, string> {
+   const map = new Map<string, string>();
+   const read = readText(unitFile);
+@@ -396,20 +443,46 @@
+   return new RegExp(`(?:^|[\\s,;/])${escaped}(?:$|[\\s,;/])`, "i").test(cell);
+ }
+ 
+-// `idPatterns` follow the stage's source fallback: US rows when stories.md
+-// exists; otherwise FR rows plus any NFR rows the map also carries.
+-function storyAssignments(storyMapPath: string, units: string[], ids: Map<string, string>, idPatterns: RegExp[]): { assignments: Map<string, Set<string>>; reason?: string } {
+-  const read = readText(storyMapPath);
+-  if (read.content === null) return { assignments: new Map(), reason: read.reason };
+-  const assignments = new Map<string, Set<string>>();
+-  for (const line of read.content.split(/\r?\n/)) {
++// `sourceIds` follow the stage's source fallback: the US IDs of stories.md when
++// it exists; otherwise the FR IDs, plus any NFR IDs the map may also carry, of
++// requirements.md or Requirements Analysis' record.
++function storyAssignments(
++  storyMapPath: string,
++  units: string[],
++  ids: Map<string, string>,
++  sourceIds: ReadonlySet<string>,
++): StoryAssignments {
++  const read = readText(storyMapPath);
++  if (read.content === null) return { assignments: new Map(), reason: read.reason, empty: false };
++  const assignments = new Map<string, Set<string>>();
++  const lines = read.content.split(/\r?\n/);
++  let roles: ColumnRoles | null = null;
++  for (let index = 0; index < lines.length; index++) {
++    const line = lines[index];
+     const cells = markdownCells(line);
+-    if (cells.length === 0) continue;
+-    const stories = extractIds(line, idPatterns);
+-    if (stories.size === 0) continue;
++    if (cells.length === 0) {
++      if (!line.trimStart().startsWith("|")) roles = null;
++      continue;
++    }
++    if (isTableSeparator(lines[index + 1] ?? "")) {
++      roles = columnRoles(cells);
++      continue;
++    }
++    // Units may map FRs when user-stories was skipped. Only the selected
++    // upstream artifact can authorize an ID; the map cannot invent one.
++    // Without a recognised header, the first cell naming a source ID is the
++    // row's ID cell, so a later note cannot assign the IDs it mentions.
++    const idCells = roles
++      ? roles.ids.map((column) => cells[column] ?? "")
++      : cells.filter((cell) => [...extractIds(cell, [ID_PATTERNS.US, ID_PATTERNS.FR, ID_PATTERNS.NFR])]
++        .some((id) => sourceIds.has(id))).slice(0, 1);
++    const unitCells = roles ? roles.units.map((column) => cells[column] ?? "") : cells;
++    const stories = [...extractIds(idCells.join(" | "), [ID_PATTERNS.US, ID_PATTERNS.FR, ID_PATTERNS.NFR])]
++      .filter((id) => sourceIds.has(id));
++    if (stories.length === 0) continue;
+     for (const unit of units) {
+       const aliases = [unit, ids.get(unit)].filter((value): value is string => value !== undefined);
+-      if (!cells.some((cell) => aliases.some((alias) => tokenPresent(cell, alias)) || namesUnit(cell, unit))) continue;
++      if (!unitCells.some((cell) => aliases.some((alias) => tokenPresent(cell, alias)) || namesUnit(cell, unit))) continue;
+       for (const story of stories) {
+         const mapped = assignments.get(story) ?? new Set<string>();
+         mapped.add(unit);
+@@ -418,10 +491,18 @@
+     }
+   }
+   return assignments.size === 0
+-    ? { assignments, reason: `unit-of-work-story-map.md contains no story-to-unit mappings: ${storyMapPath}` }
+-    : { assignments };
++    ? {
++      assignments,
++      reason: `unit-of-work-story-map.md contains no upstream-ID-to-unit mappings: ${storyMapPath}`,
++      empty: true,
++    }
++    : { assignments, empty: false };
+ }
+ 
++function unitShare(assignments: Map<string, Set<string>>, unit: string): Set<string> {
++  return new Set([...assignments.entries()].filter(([, units]) => units.has(unit)).map(([id]) => id));
++}
++
+ function resolveUnitContext(
+   projectDir: string,
+   outputPath: string,
+@@ -467,14 +548,40 @@
+ 
+ // Without stories the story map carries FR rows (and optional NFR rows) keyed to
+ // a Unit, the join Units Generation verifies; a Unit's own stage traces exactly
+-// its rows, so another Unit's requirements are never asked of it (#2282). The
+-// requirements-wide set stays for a run with no Unit or no story map.
+-function addUnitRows(result: UpstreamResolution, storyMap: string, context: UnitContext, patterns: RegExp[]): void {
+-  const mapped = storyAssignments(storyMap, context.units, context.unitIds, patterns);
+-  if (mapped.reason) result.reasons.push(mapped.reason);
+-  for (const [id, units] of mapped.assignments) {
+-    if (units.has(context.unitName)) result.ids.add(id);
++// its rows, so another Unit's requirements are never asked of it (#2282), though
++// it may list one N/A. The rows map only requirementSource's IDs, so without a
++// record a requirements.md that is missing, or names no FR, fails the stage
++// instead of the map standing in for it. A map with no FR row (one written
++// before requirement rows were read) scopes nothing: the requirements-wide set
++// stays, as it does for a run with no Unit or no story map.
++function addUnitRows(
++  result: UpstreamResolution,
++  storyMap: string,
++  context: UnitContext,
++  kinds: RequirementKind[],
++  declared: readonly string[],
++): void {
++  const functional = requirementSource(result, "functional");
++  if (functional.reason) {
++    result.reasons.push(functional.reason);
++    return;
+   }
++  const nonFunctional = requirementSource(result, "non-functional").ids;
++  const mapped = storyAssignments(storyMap, context.units, context.unitIds, new Set([...functional.ids, ...nonFunctional]));
++  if (mapped.reason && !mapped.empty) {
++    result.reasons.push(mapped.reason);
++    return;
++  }
++  if (![...mapped.assignments.keys()].some((id) => functional.ids.has(id))) {
++    addRequirements(result, kinds, declared);
++    return;
++  }
++  const traced = kinds.includes("non-functional") ? new Set([...functional.ids, ...nonFunctional]) : functional.ids;
++  result.storyAssignments = mapped.assignments;
++  result.sourceIds = traced;
++  const own = [...unitShare(mapped.assignments, context.unitName)].filter((id) => traced.has(id));
++  if (own.length === 0) result.reasons.push(`no requirements in unit-of-work-story-map.md map to unit "${context.unitName}"`);
++  for (const id of own) result.ids.add(id);
+ }
+ 
+ // NFR Design traces NFR Requirements' NFRx.y IDs; Infrastructure Design traces
+@@ -543,10 +650,13 @@
+     return result;
+   }
+   if (stage === "units-generation") {
++    // The map may assign only IDs its source names: the stories, or without them
++    // the requirements as requirementSource reads them, never the table's own.
+     const hasStories = existsSync(stories);
+-    const sourceIds = hasStories
+-      ? addSource(result, idsFromFile(stories, [ID_PATTERNS.US], "stories.md"))
+-      : addRequirements(result, ["functional"], declared);
++    const sourceIds = addSource(
++      result,
++      hasStories ? idsFromFile(stories, [ID_PATTERNS.US], "stories.md") : requirementSource(result, "functional"),
++    );
+     const dag = resolveBoltDag(projectDir);
+     if (dag.state === "malformed") {
+       result.reasons.push(`unit-of-work-dependency.md is ${dag.reason}: ${dag.detail}`);
+@@ -562,18 +672,18 @@
+       unitIds: unitIdMap(join(docsDir, "inception", "units-generation", "unit-of-work.md"), dag.units),
+     };
+     result.unitContext = context;
+-    // Without stories the required set is FR-only ("otherwise enumerate every
+-    // FR"), but a scope that also traces NFRs must not have its correctly
+-    // mapped NFR rows reported as unmapped targets, so the join accepts both.
+-    const joinPatterns = hasStories ? [ID_PATTERNS.US] : [ID_PATTERNS.FR, ID_PATTERNS.NFR];
+-    const mapped = storyAssignments(storyMap, context.units, context.unitIds, joinPatterns);
++    // Without stories the required set stays FR-only, but a scope that also traces NFRs must not
++    // have its correctly mapped NFR rows reported as unmapped targets (2.10.0), so the join may
++    // also accept the NFR IDs Requirements Analysis wrote. The map still cannot invent one.
++    const optionalIds = hasStories ? new Set<string>() : requirementSource(result, "non-functional").ids;
++    result.optionalIds = optionalIds;
++    const mapped = storyAssignments(storyMap, context.units, context.unitIds, new Set([...sourceIds, ...optionalIds]));
+     if (mapped.reason) result.reasons.push(mapped.reason);
+     result.storyAssignments = mapped.assignments;
+-    // A requirement no Unit implements is a gap only against a list of them.
+-    if (hasStories || result.recorded !== null) {
+-      for (const id of withoutTracedParents(sourceIds, result.recorded)) {
+-        if (!mapped.assignments.has(id)) result.extraGaps.push(id);
+-      }
++    // A requirement no Unit implements is a gap: the source is always a list of
++    // them here, since the table's own IDs are never part of it.
++    for (const id of withoutTracedParents(sourceIds, result.recorded)) {
++      if (!mapped.assignments.has(id)) result.extraGaps.push(id);
+     }
+     return result;
+   }
+@@ -589,14 +699,12 @@
+ 
+   if (stage === "functional-design") {
+     if (existsSync(stories) && existsSync(storyMap)) {
+-      const mapped = storyAssignments(storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds, [ID_PATTERNS.US]);
++      const source = idsFromFile(stories, [ID_PATTERNS.US], "stories.md");
++      if (source.reason) result.reasons.push(source.reason);
++      const mapped = storyAssignments(storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds, source.ids);
+       if (mapped.reason) result.reasons.push(mapped.reason);
+       result.storyAssignments = mapped.assignments;
+-      const unitStories = new Set(
+-        [...mapped.assignments.entries()]
+-          .filter(([, units]) => units.has(unit))
+-          .map(([story]) => story),
+-      );
++      const unitStories = unitShare(mapped.assignments, unit);
+       if (unitStories.size === 0) {
+         result.reasons.push(`no stories in unit-of-work-story-map.md map to unit "${unit}"`);
+         return result;
+@@ -606,10 +714,11 @@
+         result.reasons.push(storyRead.reason ?? `cannot read ${stories}`);
+         return result;
+       }
++      result.sourceIds = extractIds(storyRead.content, [ID_PATTERNS.AC]);
+       for (const ac of criteriaOfStories(storyRead.content, unitStories)) result.ids.add(ac);
+       if (result.ids.size === 0) result.reasons.push(`stories mapped to unit "${unit}" contain no acceptance-criterion IDs`);
+     } else if (unit && existsSync(storyMap)) {
+-      addUnitRows(result, storyMap, resolvedUnit.context, [ID_PATTERNS.FR]);
++      addUnitRows(result, storyMap, resolvedUnit.context, ["functional"], declared);
+     } else {
+       addRequirements(result, ["functional"], declared);
+     }
+@@ -617,12 +726,15 @@
+   }
+   if (stage === "nfr-requirements") {
+     // Without stories the story map may give a Unit its NFR rows, the join Code
+-    // Generation reads. A Unit no NFR row names owes every NFR in requirements.md,
+-    // and marks one that does not apply N/A with its reason.
++    // Generation reads, read as Units Generation joins them (the FR and NFR IDs of
++    // requirementSource). A Unit no NFR row names owes every NFR in
++    // requirements.md, and marks one that does not apply N/A with its reason.
+     if (unit && !existsSync(stories) && existsSync(storyMap)) {
+-      const mapped = storyAssignments(storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds, [ID_PATTERNS.NFR]);
+-      for (const [id, units] of mapped.assignments) {
+-        if (units.has(unit)) result.ids.add(id);
++      const nonFunctional = requirementSource(result, "non-functional").ids;
++      const joined = new Set([...requirementSource(result, "functional").ids, ...nonFunctional]);
++      const mapped = storyAssignments(storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds, joined);
++      for (const id of unitShare(mapped.assignments, unit)) {
++        if (nonFunctional.has(id)) result.ids.add(id);
+       }
+       if (result.ids.size > 0) return result;
+     }
+@@ -636,14 +748,13 @@
+   if (stage === "code-generation") {
+     if (existsSync(stories)) {
+       if (unit && existsSync(storyMap)) {
+-        const mapped = storyAssignments(storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds, [ID_PATTERNS.US]);
++        const mapped = storyAssignments(
++          storyMap, resolvedUnit.context.units, resolvedUnit.context.unitIds,
++          idsFromFile(stories, [ID_PATTERNS.US], "stories.md").ids,
++        );
+         if (mapped.reason) result.reasons.push(mapped.reason);
+         result.storyAssignments = mapped.assignments;
+-        const unitStories = new Set(
+-          [...mapped.assignments.entries()]
+-            .filter(([, units]) => units.has(unit))
+-            .map(([story]) => story),
+-        );
++        const unitStories = unitShare(mapped.assignments, unit);
+         const storyRead = readText(stories);
+         if (storyRead.content !== null) {
+           for (const ac of criteriaOfStories(storyRead.content, unitStories)) result.ids.add(ac);
+@@ -652,7 +763,7 @@
+         addSource(result, idsFromFile(stories, [ID_PATTERNS.AC], "stories.md"));
+       }
+     } else if (unit && existsSync(storyMap)) {
+-      addUnitRows(result, storyMap, resolvedUnit.context, [ID_PATTERNS.FR, ID_PATTERNS.NFR]);
++      addUnitRows(result, storyMap, resolvedUnit.context, ["functional", "non-functional"], declared);
+     } else {
+       addRequirements(result, ["functional", "non-functional"], declared);
+     }
+@@ -1144,6 +1255,25 @@
+ 
+   reasons.push(...upstream.reasons);
+   gaps.push(...upstream.extraGaps);
++  if (stage === "units-generation" || stage === "functional-design") {
++    // Another unit's ID may be listed only as N/A, the way a complete requirement table reads.
++    // A requirement listed beside the unit's own sub-requirements of it is traced through them.
++    const notApplicable = new Set(data.coverage.filter((entry) => entry.status === "N/A").map((entry) => entry.id));
++    const claimed = new Set(data.coverage.filter((entry) => entry.status !== "N/A").map((entry) => entry.id));
++    const traced = new Set([...upstream.ids, ...(upstream.optionalIds ?? [])]);
++    for (const id of upstream.ids) {
++      const parent = requirementOf(id, upstream.recorded);
++      if (parent && upstream.sourceIds?.has(parent)) traced.add(parent);
++    }
++    for (const id of declared) {
++      if (traced.has(id)) continue;
++      if (!upstream.sourceIds?.has(id)) {
++        invalidEntries.push(`upstream_ids:${id}: id is absent from the resolved upstream source`);
++      } else if (!notApplicable.has(id) || claimed.has(id)) {
++        invalidEntries.push(`upstream_ids:${id}: id is mapped to another unit; mark it N/A or remove it`);
++      }
++    }
++  }
+   const missingFromUpstreamIds = [...required].filter((id) => !declared.has(id));
+   if (upstream.ids.size === 0 && upstream.reasons.length === 0) {
+     reasons.push(`upstream ID set is empty for stage "${stage}"`);

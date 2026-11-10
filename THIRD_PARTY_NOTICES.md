@@ -9,7 +9,9 @@ AI-DLC Studio is licensed under the Apache License 2.0 (see `LICENSE`).
 affiliates, licensed under the **MIT No Attribution (MIT-0)** license. The full license text is
 `payload/AIDLC-LICENSE`. From 2.8.0 the upstream repository no longer commits `dist/<harness>/`;
 the copy-runtime asset is its Bun-based equivalent. The bundled copy includes four Studio-maintained
-local changes and is not byte-identical to upstream.
+local changes and is not byte-identical to upstream. Each change is kept as a `diff -u` against upstream
+2.11.3 in `scripts/payload-patches/`, and `scripts/refresh_payload.sh apply <runtime/kiro>` rebuilds
+`payload/aidlc-kiro/` from the extracted asset and those patches byte for byte.
 
 - Upstream project: https://github.com/awslabs/aidlc-workflows
 - Vendored version: `2.11.3` (`AIDLC_VERSION` in `.kiro/tools/aidlc-version.ts`)
@@ -104,8 +106,11 @@ Code Generation plan-approval fingerprint over a projection that resets task mar
 `tests/test_plan_progress_fingerprint.py` now pins that upstream behaviour.
 
 Requirement-traceability coverage lives in `tests/test_traceability_fallback.py` and runs the bundled
-sensor with Bun against temporary fixtures. On a future upstream refresh, reapply the patch or verify
-that upstream supplies the same behavior by running those tests before regenerating the manifest.
+sensor with Bun against temporary fixtures. On a future upstream refresh, run
+`scripts/refresh_payload.sh apply` on the new release's extracted `runtime/kiro`. It names any patch that
+no longer applies. Make that change by hand in the payload, or delete the patch if upstream now supplies the
+same behavior, then run `scripts/refresh_payload.sh recut` against the same tree. Run those tests and
+`tests/test_payload_host_notice.py` before regenerating the manifest.
 
 AI-DLC Studio installs this payload into a repository only when the user explicitly asks for it, and records
 every file it wrote in an install receipt so it can verify, retire, or roll back exactly what it owns.
