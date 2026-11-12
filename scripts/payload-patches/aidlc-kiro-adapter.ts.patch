@@ -1,9 +1,18 @@
 --- a/.kiro/hooks/aidlc-kiro-adapter.ts
 +++ b/.kiro/hooks/aidlc-kiro-adapter.ts
-@@ -275,6 +275,20 @@
+@@ -58,6 +58,7 @@
+   terminalCommandRelay,
+   hookDebug,
+   hostEnvelopeTurnText,
++  hostTemplateOrigin,
+   KIRO_CLI_HOST_TEMPLATES,
+   kiroTurnOrigin,
+   isAidlcAgentFile,
+@@ -274,7 +275,21 @@
+     return failure(workers[0], `cannot resolve the active-space memory glob: ${String(error).replace(/[\r\n]+/g, " ")}`, restore);
    }
  }
- 
++
 +// KiroCrew (AI-DLC Studio's host, itself a kiro-cli client) wraps every dashboard turn in its context
 +// envelope; hostEnvelopeTurnText reads the person's text after the `[CURRENT USER REQUEST …]` header. A
 +// context-free host turn has no header and instead trails the same reply-format rules after the typed text,
@@ -11,7 +20,7 @@
 +// Studio patch to the bundled harness (2.11.0, carried to 2.11.3); a prompt with the header, or without the
 +// rules, is unchanged.
 +const HOST_TRAILING_RULES = "\n\n(If presenting choices, end with [OPTIONS:";
-+
+ 
 +function hostTypedPrompt(prompt: string): string {
 +  if (hostEnvelopeTurnText(prompt) !== prompt) return prompt;
 +  const rules = prompt.indexOf(HOST_TRAILING_RULES);
@@ -21,7 +30,7 @@
  export async function run(
    target: string,
    input: string,
-@@ -288,6 +302,7 @@
+@@ -288,6 +303,7 @@
      return 0; // malformed stdin — advisory hooks fail open
    }
  }
@@ -29,3 +38,26 @@
  
  const projectDirRaw =
    process.env.AIDLC_PROJECT_DIR ?? kiro.cwd ?? process.cwd();
+@@ -1446,8 +1462,11 @@
+ 
+ // A message the person typed while the agent worked reaches no prompt hook on
+ // Kiro CLI (unrecordedKiroCliSteers), so before one of AI-DLC's commands runs
+-// it is recorded as their turn, in their words, each message once. What the
+-// core hook prints stays here: Kiro reads this hook's stdout.
++// it is recorded as their turn, in their words, each message once. Kiro CLI
++// labels every steer "from user", the host's own notices too (Kiro Crew steers
++// one when it declines an approval nobody answered), so only the host's whole
++// sentences make a steer the host's turn. What the core hook prints stays
++// here: Kiro reads this hook's stdout.
+ function recordMessagesTypedWhileWorking(command: string): void {
+   const session = validSessionId(kiro.session_id?.trim());
+   if (!session || !AIDLC_COMMAND.test(command)) return;
+@@ -1457,7 +1476,7 @@
+         hook_event_name: "UserPromptSubmit",
+         session_id: session,
+         prompt: steer.words,
+-        origin: { kind: "person", source: "record" },
++        origin: hostTemplateOrigin(steer.words, KIRO_CLI_HOST_TEMPLATES) ?? { kind: "person", source: "record" },
+         relays_terminal_output: true,
+       });
+       if (turn.code !== 0) return;

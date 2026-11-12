@@ -3,7 +3,7 @@
   "plan": {
    "blockers": [],
    "blocking": false,
-   "bytes_to_write": 12437588,
+   "bytes_to_write": 12437881,
    "counts": {
     "conflict": 0,
     "create": 363,
@@ -1027,9 +1027,9 @@
      "live_sha256": null,
      "ownership": "framework",
      "path": ".kiro/hooks/aidlc-kiro-adapter.ts",
-     "payload_sha256": "f63a242bb3c7afe2bd4d87c977939b5a848f25357d896d127c576023038e3698",
+     "payload_sha256": "6f4e21da9391fdb97c9a97e266e42a37173073a43c5a742afb8183b8f39070b9",
      "receipt_sha256": null,
-     "size": 68835
+     "size": 69128
     },
     {
      "action": "create",
@@ -4502,7 +4502,7 @@
    ],
    "kind": "install",
    "newer_installed": false,
-   "payload_digest": "fd3b27b1b4691a00bb7390f8b01ccb055699ebdd4cf37fad93536689a072ad13",
+   "payload_digest": "4c344a98e1ae1804d010a0b8739ce6b031b765bd60ff47f129a8b676ee69b266",
    "preflight": {
     "aidlc": {
      "intents": 0,
@@ -4544,7 +4544,7 @@
    "studio_version": "2.0.0",
    "warnings": []
   },
-  "plan_digest": "2132fcf36302704b84e1ec501066014c2d92aa87c579f5a9fcd5665a5bd07470"
+  "plan_digest": "a02916fb2deb15dc29d8bab0cb8908bde6f0a9065467c57fc76e936b622b5c02"
  },
  "status": 200
 }

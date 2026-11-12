@@ -58,6 +58,7 @@ import {
   terminalCommandRelay,
   hookDebug,
   hostEnvelopeTurnText,
+  hostTemplateOrigin,
   KIRO_CLI_HOST_TEMPLATES,
   kiroTurnOrigin,
   isAidlcAgentFile,
@@ -1461,8 +1462,11 @@ function runCore(hookFile: string, input: Record<string, unknown>): { stdout: st
 
 // A message the person typed while the agent worked reaches no prompt hook on
 // Kiro CLI (unrecordedKiroCliSteers), so before one of AI-DLC's commands runs
-// it is recorded as their turn, in their words, each message once. What the
-// core hook prints stays here: Kiro reads this hook's stdout.
+// it is recorded as their turn, in their words, each message once. Kiro CLI
+// labels every steer "from user", the host's own notices too (Kiro Crew steers
+// one when it declines an approval nobody answered), so only the host's whole
+// sentences make a steer the host's turn. What the core hook prints stays
+// here: Kiro reads this hook's stdout.
 function recordMessagesTypedWhileWorking(command: string): void {
   const session = validSessionId(kiro.session_id?.trim());
   if (!session || !AIDLC_COMMAND.test(command)) return;
@@ -1472,7 +1476,7 @@ function recordMessagesTypedWhileWorking(command: string): void {
         hook_event_name: "UserPromptSubmit",
         session_id: session,
         prompt: steer.words,
-        origin: { kind: "person", source: "record" },
+        origin: hostTemplateOrigin(steer.words, KIRO_CLI_HOST_TEMPLATES) ?? { kind: "person", source: "record" },
         relays_terminal_output: true,
       });
       if (turn.code !== 0) return;

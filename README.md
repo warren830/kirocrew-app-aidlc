@@ -250,8 +250,9 @@ lifecycle progress.
 `payload/aidlc-kiro/` holds the AI-DLC Workflows Kiro CLI distribution, version **2.11.3** (the
 copy-runtime release asset of the `v2.11.3` tag, `a8721be3`), under the MIT No Attribution licence
 (`payload/AIDLC-LICENSE`). Four Studio-maintained local patches are kept: the requirement traceability
-sensor, the Kiro adapter hook reading a KiroCrew turn sent without its context envelope, the engine reading
-a KiroCrew host notice as the host's turn rather than the person's, and one sentence of the onboarding
+sensor, the Kiro adapter hook reading a KiroCrew turn sent without its context envelope (and a KiroCrew
+notice steered into a running turn as the host's), the engine reading a KiroCrew host notice as the host's
+turn rather than the person's, and one sentence of the onboarding
 steering that keeps each tool call a command of its own. All four are documented in
 `THIRD_PARTY_NOTICES.md`. Every file is inventoried with its SHA-256 in `payload/manifest.json`, which is
 also what the installer verifies before and after writing. Studio's own version and the bundled AI-DLC

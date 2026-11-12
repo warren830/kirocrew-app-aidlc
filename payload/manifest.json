@@ -13,7 +13,7 @@
     8
   ],
   "stageCount": 33,
-  "payloadDigest": "fd3b27b1b4691a00bb7390f8b01ccb055699ebdd4cf37fad93536689a072ad13",
+  "payloadDigest": "4c344a98e1ae1804d010a0b8739ce6b031b765bd60ff47f129a8b676ee69b266",
   "fileCount": 373,
   "mergeTargets": {
     ".kiro/settings/cli.json": {
@@ -564,8 +564,8 @@
     },
     {
       "path": ".kiro/hooks/aidlc-kiro-adapter.ts",
-      "sha256": "f63a242bb3c7afe2bd4d87c977939b5a848f25357d896d127c576023038e3698",
-      "size": 68835,
+      "sha256": "6f4e21da9391fdb97c9a97e266e42a37173073a43c5a742afb8183b8f39070b9",
+      "size": 69128,
       "ownership": "framework"
     },
     {

@@ -61,6 +61,17 @@ those trailing rules from a prompt that has no header before the hooks read it; 
 or without the rules, is unchanged. Upstream 2.11.3 ships the adapter unchanged from 2.11.2, and its
 `hostEnvelopeTurnText` still handles only the header.
 
+The same patch reads a message steered into a running Kiro CLI turn the way the prompt hook reads a prompt.
+Kiro CLI runs no prompt hook for a steer, and the adapter's `recordMessagesTypedWhileWorking` records each
+one before the next AI-DLC command. Upstream records every steer as the person's, but Kiro CLI labels every
+steer "New message from user", KiroCrew's own notices included: KiroCrew steers one when it declines a tool
+approval nobody answered. Measured on KiroCrew 0.11.2, that notice became a person's `HUMAN_TURN`, which let
+a system package install through the hold and stood as the person's presence at the next gate. The patch
+classifies the steer with `hostTemplateOrigin(steer.words, KIRO_CLI_HOST_TEMPLATES)` first, so a steer made
+only of host notices is recorded as `HOST_TURN`, and a steer holding anything else stays the person's.
+`tests/test_payload_kiro_steer_origin.py` runs the bundled adapter and core hooks with Bun against a Kiro
+chat record that holds the two notices captured live.
+
 The local KiroCrew host-notice patch changes `payload/aidlc-kiro/.kiro/tools/aidlc-lib.ts`. KiroCrew steers a
 notice of its own into a running turn ("[Kiro Crew host notice] You have made the same tool call 3 times this
 turn …"), one `<user_message>` block each, several joined when they queue, and kiro-cli's chat record keeps
