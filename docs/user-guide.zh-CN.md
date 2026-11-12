@@ -3,7 +3,7 @@
 [English](user-guide.md) | **简体中文**
 
 本指南从一台什么都没装的机器开始，一路带你跑完一个 AI-DLC 意图，然后逐页说明 Studio 的每个功能。适用于
-**AI-DLC Studio**（`aidlc-studio`，2.0.0），内置 AI-DLC **2.11.3**，需要 KiroCrew **0.11.0**
+**AI-DLC Studio**（`aidlc-studio`，2.0.1），内置 AI-DLC **2.11.3**，需要 KiroCrew **0.11.0**
 或更新版本。
 
 > [!IMPORTANT]
